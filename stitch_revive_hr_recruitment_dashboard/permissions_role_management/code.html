@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Permissions &amp; Role Management - Revive HR</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+          darkMode: "class",
+          theme: {
+            extend: {
+              "colors": {
+                      "tertiary-fixed": "#d8e3fb",
+                      "tertiary": "#515c71",
+                      "primary-container": "#00873a",
+                      "surface-container-low": "#eff4ff",
+                      "surface-container-lowest": "#ffffff",
+                      "on-tertiary-fixed-variant": "#3c475a",
+                      "on-secondary": "#ffffff",
+                      "secondary-fixed-dim": "#c5c6c8",
+                      "surface-container-highest": "#d3e4fe",
+                      "on-error-container": "#93000a",
+                      "on-tertiary": "#ffffff",
+                      "error-container": "#ffdad6",
+                      "on-secondary-fixed-variant": "#444749",
+                      "inverse-primary": "#62df7d",
+                      "on-primary-fixed-variant": "#005320",
+                      "surface": "#f8f9ff",
+                      "on-secondary-fixed": "#191c1e",
+                      "outline": "#6e7b6c",
+                      "on-primary": "#ffffff",
+                      "surface-bright": "#f8f9ff",
+                      "tertiary-fixed-dim": "#bcc7de",
+                      "on-primary-fixed": "#002109",
+                      "surface-container-high": "#dce9ff",
+                      "primary": "#006b2c",
+                      "on-tertiary-container": "#fefcff",
+                      "primary-fixed": "#7ffc97",
+                      "on-error": "#ffffff",
+                      "error": "#ba1a1a",
+                      "surface-tint": "#006e2d",
+                      "secondary-fixed": "#e1e2e4",
+                      "secondary": "#5c5f60",
+                      "primary-fixed-dim": "#62df7d",
+                      "on-background": "#0b1c30",
+                      "on-tertiary-fixed": "#111c2d",
+                      "on-surface": "#0b1c30",
+                      "surface-container": "#e5eeff",
+                      "surface-variant": "#d3e4fe",
+                      "secondary-container": "#dee0e2",
+                      "tertiary-container": "#6a758a",
+                      "background": "#f8f9ff",
+                      "on-surface-variant": "#3e4a3d",
+                      "on-secondary-container": "#606365",
+                      "inverse-surface": "#213145",
+                      "inverse-on-surface": "#eaf1ff",
+                      "on-primary-container": "#f7fff2",
+                      "surface-dim": "#cbdbf5",
+                      "outline-variant": "#bdcaba"
+              },
+              "borderRadius": {
+                      "DEFAULT": "0.25rem",
+                      "lg": "0.5rem",
+                      "xl": "0.75rem",
+                      "full": "9999px"
+              },
+              "spacing": {
+                      "margin-mobile": "16px",
+                      "sm": "8px",
+                      "max-width": "1440px",
+                      "xs": "4px",
+                      "xl": "32px",
+                      "md": "16px",
+                      "margin-desktop": "32px",
+                      "gutter": "24px",
+                      "base": "4px",
+                      "2xl": "48px",
+                      "lg": "24px"
+              },
+              "fontFamily": {
+                      "display-lg": [
+                              "Inter"
+                      ],
+                      "label-sm": [
+                              "Inter"
+                      ],
+                      "label-md": [
+                              "Inter"
+                      ],
+                      "headline-lg": [
+                              "Inter"
+                      ],
+                      "headline-md": [
+                              "Inter"
+                      ],
+                      "body-md": [
+                              "Inter"
+                      ],
+                      "title-lg": [
+                              "Inter"
+                      ],
+                      "body-lg": [
+                              "Inter"
+                      ],
+                      "headline-lg-mobile": [
+                              "Inter"
+                      ]
+              },
+              "fontSize": {
+                      "display-lg": [
+                              "48px",
+                              {
+                                      "lineHeight": "56px",
+                                      "letterSpacing": "-0.02em",
+                                      "fontWeight": "700"
+                              }
+                      ],
+                      "label-sm": [
+                              "11px",
+                              {
+                                      "lineHeight": "14px",
+                                      "fontWeight": "600"
+                              }
+                      ],
+                      "label-md": [
+                              "12px",
+                              {
+                                      "lineHeight": "16px",
+                                      "letterSpacing": "0.01em",
+                                      "fontWeight": "500"
+                              }
+                      ],
+                      "headline-lg": [
+                              "32px",
+                              {
+                                      "lineHeight": "40px",
+                                      "letterSpacing": "-0.01em",
+                                      "fontWeight": "600"
+                              }
+                      ],
+                      "headline-md": [
+                              "24px",
+                              {
+                                      "lineHeight": "32px",
+                                      "fontWeight": "600"
+                              }
+                      ],
+                      "body-md": [
+                              "14px",
+                              {
+                                      "lineHeight": "20px",
+                                      "fontWeight": "400"
+                              }
+                      ],
+                      "title-lg": [
+                              "20px",
+                              {
+                                      "lineHeight": "28px",
+                                      "fontWeight": "600"
+                              }
+                      ],
+                      "body-lg": [
+                              "16px",
+                              {
+                                      "lineHeight": "24px",
+                                      "fontWeight": "400"
+                              }
+                      ],
+                      "headline-lg-mobile": [
+                              "24px",
+                              {
+                                      "lineHeight": "32px",
+                                      "fontWeight": "600"
+                              }
+                      ]
+              }
+      },
+          },
+        }
+      </script>
+</head>
+<body class="bg-background text-on-background font-body-md min-h-screen flex">
+<!-- SideNavBar -->
+<aside class="hidden md:flex bg-surface-container-lowest dark:bg-inverse-surface border-r border-outline-variant dark:border-outline fixed left-0 top-0 h-full w-[280px] flex-col p-md gap-sm z-50">
+<div class="px-md py-lg mb-4">
+<h1 class="font-headline-md text-headline-md font-bold text-primary dark:text-primary-fixed">Revive HR</h1>
+<p class="font-label-md text-label-md text-secondary">Management Suite</p>
+</div>
+<button class="bg-primary text-on-primary font-label-md text-label-md rounded-lg py-sm px-md mb-xl hover:bg-surface-tint transition-colors w-full text-center">Add New Employee</button>
+<nav class="flex-1 space-y-xs">
+<a class="flex items-center gap-md px-md py-sm rounded-lg text-secondary dark:text-secondary-fixed hover:bg-surface-container-low transition-all cursor-pointer active:translate-x-1 font-label-md text-label-md" href="#">
+<span class="material-symbols-outlined">person_search</span>
+                Recruitment
+            </a>
+<a class="flex items-center gap-md px-md py-sm rounded-lg text-secondary dark:text-secondary-fixed hover:bg-surface-container-low transition-all cursor-pointer active:translate-x-1 font-label-md text-label-md" href="#">
+<span class="material-symbols-outlined">group</span>
+                Employees
+            </a>
+<a class="flex items-center gap-md px-md py-sm rounded-lg text-secondary dark:text-secondary-fixed hover:bg-surface-container-low transition-all cursor-pointer active:translate-x-1 font-label-md text-label-md" href="#">
+<span class="material-symbols-outlined">event_available</span>
+                Attendance
+            </a>
+<a class="flex items-center gap-md px-md py-sm rounded-lg text-secondary dark:text-secondary-fixed hover:bg-surface-container-low transition-all cursor-pointer active:translate-x-1 font-label-md text-label-md" href="#">
+<span class="material-symbols-outlined">trending_up</span>
+                Performance
+            </a>
+<a class="flex items-center gap-md px-md py-sm rounded-lg text-secondary dark:text-secondary-fixed hover:bg-surface-container-low transition-all cursor-pointer active:translate-x-1 font-label-md text-label-md" href="#">
+<span class="material-symbols-outlined">payments</span>
+                Payroll
+            </a>
+<a class="flex items-center gap-md px-md py-sm bg-primary-container text-on-primary-container font-semibold rounded-lg hover:bg-surface-container-low transition-all cursor-pointer active:translate-x-1 font-label-md text-label-md" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">admin_panel_settings</span>
+                Permissions
+            </a>
+</nav>
+<div class="mt-auto space-y-xs">
+<a class="flex items-center gap-md px-md py-sm rounded-lg text-secondary dark:text-secondary-fixed hover:bg-surface-container-low transition-all cursor-pointer active:translate-x-1 font-label-md text-label-md" href="#">
+<span class="material-symbols-outlined">settings</span>
+                Settings
+            </a>
+<a class="flex items-center gap-md px-md py-sm rounded-lg text-secondary dark:text-secondary-fixed hover:bg-surface-container-low transition-all cursor-pointer active:translate-x-1 font-label-md text-label-md" href="#">
+<span class="material-symbols-outlined">logout</span>
+                Logout
+            </a>
+</div>
+</aside>
+<!-- Main Content Area -->
+<main class="flex-1 md:ml-[280px] flex flex-col min-h-screen">
+<!-- TopNavBar -->
+<header class="bg-surface-container-lowest dark:bg-inverse-surface shadow-sm dark:shadow-none flex justify-between items-center px-margin-desktop h-16 w-full z-40 sticky top-0">
+<div class="flex items-center">
+<h2 class="md:hidden font-headline-md text-headline-md font-bold text-primary dark:text-primary-fixed">Revive HR</h2>
+</div>
+<div class="flex items-center gap-sm">
+<button class="p-sm text-secondary hover:bg-surface-container-low rounded-full transition-colors cursor-pointer active:scale-95">
+<span class="material-symbols-outlined">notifications</span>
+</button>
+<button class="p-sm text-secondary hover:bg-surface-container-low rounded-full transition-colors cursor-pointer active:scale-95">
+<span class="material-symbols-outlined">help</span>
+</button>
+<button class="p-sm text-secondary hover:bg-surface-container-low rounded-full transition-colors cursor-pointer active:scale-95">
+<span class="material-symbols-outlined">settings</span>
+</button>
+<div class="w-8 h-8 rounded-full bg-surface-variant overflow-hidden ml-sm cursor-pointer border border-outline-variant">
+<img class="w-full h-full object-cover" data-alt="A professional headshot of a corporate employee in modern lighting, white background, conveying reliability. Soft focus, realistic, corporate HR aesthetic." src="https://lh3.googleusercontent.com/aida-public/AB6AXuATbpqQd_wQ9lFboP9XXtpWsc2wwJKlFeg66iQZTwuXrHTI88FC2kQUfnzwLiJ11n5VG5q4g7yLONw4FD1evV81lgjMcn51cDdOpBu_-X-PAGr6DA0sWdHxdIM5df1YMuvF5gWtAI5RihoxBo9ZhpgVSXl0OC7YzgJCkeN--dQAx65yg5b0GcxPQxZd0qxhgz3SbzKymj6-KwHwgnrgMotoUFj9ZSqZ_uP_akKoxSF4j_2sOrWWires"/>
+</div>
+</div>
+</header>
+<!-- Page Content -->
+<div class="flex-1 p-margin-mobile md:p-margin-desktop max-w-max-width mx-auto w-full">
+<!-- Page Header -->
+<div class="flex flex-col md:flex-row justify-between items-start md:items-end mb-xl gap-md">
+<div>
+<h1 class="font-headline-lg text-headline-lg text-on-surface mb-xs">Permissions &amp; Access Control</h1>
+<p class="font-body-md text-body-md text-secondary">Manage employee roles, system permissions, and facility access.</p>
+</div>
+<button class="bg-[#16A34A] text-white font-label-md text-label-md px-lg py-sm rounded-lg hover:bg-opacity-90 transition-colors shadow-sm flex items-center gap-xs">
+<span class="material-symbols-outlined">add</span>
+                    Create New Role
+                </button>
+</div>
+<!-- Stats Grid -->
+<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-gutter mb-xl">
+<!-- Stat Card 1 -->
+<div class="bg-surface-container-lowest rounded-xl p-lg shadow-sm border border-surface-container-highest">
+<div class="flex justify-between items-start mb-sm">
+<p class="font-label-md text-label-md text-secondary uppercase tracking-wider">Total Roles</p>
+<span class="material-symbols-outlined text-primary p-xs bg-surface-container-low rounded-md">badge</span>
+</div>
+<p class="font-headline-lg text-headline-lg text-on-surface">8</p>
+</div>
+<!-- Stat Card 2 -->
+<div class="bg-surface-container-lowest rounded-xl p-lg shadow-sm border border-surface-container-highest">
+<div class="flex justify-between items-start mb-sm">
+<p class="font-label-md text-label-md text-secondary uppercase tracking-wider">Active Admins</p>
+<span class="material-symbols-outlined text-primary p-xs bg-surface-container-low rounded-md">admin_panel_settings</span>
+</div>
+<p class="font-headline-lg text-headline-lg text-on-surface">12</p>
+</div>
+<!-- Stat Card 3 -->
+<div class="bg-surface-container-lowest rounded-xl p-lg shadow-sm border border-surface-container-highest">
+<div class="flex justify-between items-start mb-sm">
+<p class="font-label-md text-label-md text-secondary uppercase tracking-wider">Pending Requests</p>
+<span class="material-symbols-outlined text-error p-xs bg-error-container rounded-md">hourglass_empty</span>
+</div>
+<p class="font-headline-lg text-headline-lg text-on-surface">5</p>
+</div>
+<!-- Stat Card 4 -->
+<div class="bg-surface-container-lowest rounded-xl p-lg shadow-sm border border-surface-container-highest">
+<div class="flex justify-between items-start mb-sm">
+<p class="font-label-md text-label-md text-secondary uppercase tracking-wider">Recent Changes</p>
+<span class="material-symbols-outlined text-tertiary p-xs bg-tertiary-fixed rounded-md">history</span>
+</div>
+<p class="font-headline-lg text-headline-lg text-on-surface">24h</p>
+</div>
+</div>
+<!-- Main Grid Layout -->
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-gutter">
+<!-- Role Management Table (Takes up 2 columns on large screens) -->
+<div class="lg:col-span-2 bg-surface-container-lowest rounded-xl shadow-sm border border-surface-container-highest overflow-hidden">
+<div class="p-lg border-b border-surface-container-highest flex justify-between items-center bg-surface-bright">
+<h3 class="font-title-lg text-title-lg text-on-surface">Role Management</h3>
+<div class="flex items-center bg-surface p-xs rounded-md border border-outline-variant">
+<span class="material-symbols-outlined text-secondary ml-xs text-sm">search</span>
+<input class="bg-transparent border-none text-body-md text-on-surface focus:ring-0 py-xs px-sm w-48" placeholder="Search roles..." type="text"/>
+</div>
+</div>
+<div class="overflow-x-auto">
+<table class="w-full text-left border-collapse">
+<thead>
+<tr class="bg-surface-bright border-b border-surface-container-highest">
+<th class="py-sm px-lg font-label-sm text-label-sm text-secondary uppercase tracking-wider">Role Name</th>
+<th class="py-sm px-lg font-label-sm text-label-sm text-secondary uppercase tracking-wider">Users Assigned</th>
+<th class="py-sm px-lg font-label-sm text-label-sm text-secondary uppercase tracking-wider">Last Updated</th>
+<th class="py-sm px-lg font-label-sm text-label-sm text-secondary uppercase tracking-wider">Status</th>
+<th class="py-sm px-lg font-label-sm text-label-sm text-secondary uppercase tracking-wider text-right">Actions</th>
+</tr>
+</thead>
+<tbody class="font-body-md text-body-md divide-y divide-surface-container-highest">
+<tr class="hover:bg-surface-container-low transition-colors group">
+<td class="py-md px-lg font-medium text-on-surface">HR Manager</td>
+<td class="py-md px-lg text-secondary">4 Users</td>
+<td class="py-md px-lg text-secondary">Oct 24, 2023</td>
+<td class="py-md px-lg">
+<span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-primary-container text-on-primary-fixed bg-opacity-20">Active</span>
+</td>
+<td class="py-md px-lg text-right">
+<button class="text-primary hover:text-surface-tint font-label-md text-label-md px-sm py-xs rounded hover:bg-surface-container-low transition-colors">Edit</button>
+</td>
+</tr>
+<tr class="hover:bg-surface-container-low transition-colors group">
+<td class="py-md px-lg font-medium text-on-surface">Department Head</td>
+<td class="py-md px-lg text-secondary">12 Users</td>
+<td class="py-md px-lg text-secondary">Oct 22, 2023</td>
+<td class="py-md px-lg">
+<span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-primary-container text-on-primary-fixed bg-opacity-20">Active</span>
+</td>
+<td class="py-md px-lg text-right">
+<button class="text-primary hover:text-surface-tint font-label-md text-label-md px-sm py-xs rounded hover:bg-surface-container-low transition-colors">Edit</button>
+</td>
+</tr>
+<tr class="hover:bg-surface-container-low transition-colors group">
+<td class="py-md px-lg font-medium text-on-surface">Employee (Default)</td>
+<td class="py-md px-lg text-secondary">245 Users</td>
+<td class="py-md px-lg text-secondary">Oct 20, 2023</td>
+<td class="py-md px-lg">
+<span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-primary-container text-on-primary-fixed bg-opacity-20">Active</span>
+</td>
+<td class="py-md px-lg text-right">
+<button class="text-primary hover:text-surface-tint font-label-md text-label-md px-sm py-xs rounded hover:bg-surface-container-low transition-colors">Manage</button>
+</td>
+</tr>
+<tr class="hover:bg-surface-container-low transition-colors group">
+<td class="py-md px-lg font-medium text-on-surface text-secondary">Contractor</td>
+<td class="py-md px-lg text-secondary">18 Users</td>
+<td class="py-md px-lg text-secondary">Sep 15, 2023</td>
+<td class="py-md px-lg">
+<span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-surface-container-highest text-secondary">Locked</span>
+</td>
+<td class="py-md px-lg text-right">
+<button class="text-primary hover:text-surface-tint font-label-md text-label-md px-sm py-xs rounded hover:bg-surface-container-low transition-colors">Edit</button>
+</td>
+</tr>
+<tr class="hover:bg-surface-container-low transition-colors group">
+<td class="py-md px-lg font-medium text-on-surface">IT Administrator</td>
+<td class="py-md px-lg text-secondary">3 Users</td>
+<td class="py-md px-lg text-secondary">Oct 25, 2023</td>
+<td class="py-md px-lg">
+<span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-primary-container text-on-primary-fixed bg-opacity-20">Active</span>
+</td>
+<td class="py-md px-lg text-right">
+<button class="text-primary hover:text-surface-tint font-label-md text-label-md px-sm py-xs rounded hover:bg-surface-container-low transition-colors">Edit</button>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<!-- Facility Access Control Panel (Takes up 1 column on large screens) -->
+<div class="lg:col-span-1 bg-surface-container-lowest rounded-xl shadow-sm border border-surface-container-highest flex flex-col">
+<div class="p-lg border-b border-surface-container-highest bg-surface-bright flex justify-between items-center">
+<h3 class="font-title-lg text-title-lg text-on-surface flex items-center gap-sm">
+<span class="material-symbols-outlined text-primary">fitness_center</span>
+                            Facility Access
+                        </h3>
+<button class="text-primary hover:text-surface-tint transition-colors"><span class="material-symbols-outlined">more_vert</span></button>
+</div>
+<div class="p-lg flex-1 overflow-y-auto">
+<p class="font-label-sm text-label-sm text-secondary uppercase tracking-wider mb-md">Gym Facility Assignments</p>
+<div class="space-y-md">
+<!-- Access Item -->
+<div class="flex items-center justify-between p-sm hover:bg-surface-container-low rounded-lg transition-colors border border-transparent hover:border-surface-container-highest">
+<div class="flex items-center gap-md">
+<div class="w-10 h-10 rounded-full bg-surface-variant overflow-hidden border border-outline-variant">
+<img class="w-full h-full object-cover" data-alt="A professional headshot of an employee, smiling, bright modern lighting, corporate environment. Realistic photography." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCDGy8mY3rM99KC4KR-pxw_uFPCZ_rgwVGLNBRO16JlYFYUFnUzxhuYviqWUBWi6ZCDVO7hcJF-TSOH02vxjMESpuxrv0VGR6e0pLkzuHuXnTp2-NHPXRdiDX4ih00MdDGBGCTG8e_HLcFrWL_eNFqeMcH3j8TFRi5ktNVWx_OOO1jv7QVHtvPvK0bx6W8Qz4zsq0FtChdiYIJGt61FtbtPjUIrAwe59a7p4z82M4oQi0ANcpVIOljH"/>
+</div>
+<div>
+<p class="font-body-md text-body-md font-medium text-on-surface">Sarah Jenkins</p>
+<p class="font-label-sm text-label-sm text-secondary">24/7 Premium Access</p>
+</div>
+</div>
+<span class="material-symbols-outlined text-[#16A34A] text-sm">check_circle</span>
+</div>
+<!-- Access Item -->
+<div class="flex items-center justify-between p-sm hover:bg-surface-container-low rounded-lg transition-colors border border-transparent hover:border-surface-container-highest">
+<div class="flex items-center gap-md">
+<div class="w-10 h-10 rounded-full bg-surface-variant overflow-hidden border border-outline-variant">
+<img class="w-full h-full object-cover" data-alt="A professional headshot of a male employee, neutral expression, soft office background, natural lighting." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBtlbsdCmxqwICKo9S9vqSmnpb0UTLOKLmsSNTjwb99c8RljNEAa6Nxq7W4nC9jfuM3TIc1inLpugCAuXEaDy-299wAnxafqqBTrf-JUqriHAS4VD3fy2njsP7dYW4FJqBsqKIm1aKwFPSrHqKPxESzOZZM_kZjWWWbRIvf-PttEBl6AzsQUMhXxgvRxBk6C6wwryqyDX2fSaPAgA9l3j6D0zwps5MhPgaYnE_HWK8APApydk7w8A5c"/>
+</div>
+<div>
+<p class="font-body-md text-body-md font-medium text-on-surface">David Chen</p>
+<p class="font-label-sm text-label-sm text-secondary">Standard Access (9-5)</p>
+</div>
+</div>
+<span class="material-symbols-outlined text-[#16A34A] text-sm">check_circle</span>
+</div>
+<!-- Access Item -->
+<div class="flex items-center justify-between p-sm hover:bg-surface-container-low rounded-lg transition-colors border border-transparent hover:border-surface-container-highest">
+<div class="flex items-center gap-md">
+<div class="w-10 h-10 rounded-full bg-surface-variant overflow-hidden border border-outline-variant">
+<img class="w-full h-full object-cover" data-alt="A professional headshot of a female employee, glasses, looking confident, bright office setting." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAX6Cb9vSzKninEqj2r5R-eFiR_Re3LmqTdWKCaOSuBBhX2cK1HjdYn-B3oXs6GSWPiY2WbcZiRQ-tzoO3qJXbyKzDUFS9-BhAuoiEkaYro7V5e-pdHg32Uos0gPlgRlviSo9y7f3ceQX4U6sMqR7mHqBYMbQlY_-yySZzzREAQjIHslYIZWCwNSoT6WA6ltbpq15rr2L9HccstGYkoVXxop_gQWenbK7LrqPfsD-CiRGRY67Y9Cqj1"/>
+</div>
+<div>
+<p class="font-body-md text-body-md font-medium text-on-surface">Emily Rodriguez</p>
+<p class="font-label-sm text-label-sm text-secondary text-error">Access Revoked</p>
+</div>
+</div>
+<span class="material-symbols-outlined text-error text-sm">block</span>
+</div>
+<!-- Access Item -->
+<div class="flex items-center justify-between p-sm hover:bg-surface-container-low rounded-lg transition-colors border border-transparent hover:border-surface-container-highest">
+<div class="flex items-center gap-md">
+<div class="w-10 h-10 rounded-full bg-surface-variant flex items-center justify-center border border-outline-variant text-secondary font-medium text-sm">
+                                        MJ
+                                    </div>
+<div>
+<p class="font-body-md text-body-md font-medium text-on-surface">Michael Johnson</p>
+<p class="font-label-sm text-label-sm text-secondary">Standard Access (9-5)</p>
+</div>
+</div>
+<span class="material-symbols-outlined text-[#16A34A] text-sm">check_circle</span>
+</div>
+</div>
+</div>
+<div class="p-md border-t border-surface-container-highest bg-surface-bright">
+<button class="w-full bg-transparent border border-[#16A34A] text-[#16A34A] font-label-md text-label-md py-sm rounded-lg hover:bg-[#16A34A] hover:bg-opacity-10 transition-colors">Manage Facility Assignments</button>
+</div>
+</div>
+</div>
+</div>
+</main>
+</body></html>

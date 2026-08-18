@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+
+<html class="h-full bg-background dark:bg-background" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Revive HR - Goal Setting &amp; Management</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "on-tertiary-fixed": "#111c2d",
+                        "secondary": "#5c5f60",
+                        "surface-container-highest": "#d3e4fe",
+                        "surface": "#f8f9ff",
+                        "error": "#ba1a1a",
+                        "tertiary-container": "#6a758a",
+                        "on-surface-variant": "#3e4a3d",
+                        "error-container": "#ffdad6",
+                        "primary-container": "#00873a",
+                        "surface-container-low": "#eff4ff",
+                        "on-secondary": "#ffffff",
+                        "secondary-container": "#dee0e2",
+                        "surface-container-lowest": "#ffffff",
+                        "on-surface": "#0b1c30",
+                        "on-primary-fixed": "#002109",
+                        "primary-fixed-dim": "#62df7d",
+                        "on-background": "#0b1c30",
+                        "tertiary-fixed": "#d8e3fb",
+                        "outline-variant": "#bdcaba",
+                        "on-tertiary": "#ffffff",
+                        "secondary-fixed-dim": "#c5c6c8",
+                        "background": "#f8f9ff",
+                        "on-tertiary-fixed-variant": "#3c475a",
+                        "surface-container": "#e5eeff",
+                        "on-primary-fixed-variant": "#005320",
+                        "outline": "#6e7b6c",
+                        "on-secondary-fixed-variant": "#444749",
+                        "inverse-surface": "#213145",
+                        "surface-container-high": "#dce9ff",
+                        "primary-fixed": "#7ffc97",
+                        "on-error": "#ffffff",
+                        "secondary-fixed": "#e1e2e4",
+                        "surface-bright": "#f8f9ff",
+                        "on-error-container": "#93000a",
+                        "primary": "#006b2c",
+                        "surface-variant": "#d3e4fe",
+                        "surface-dim": "#cbdbf5",
+                        "tertiary": "#515c71",
+                        "inverse-primary": "#62df7d",
+                        "surface-tint": "#006e2d",
+                        "on-tertiary-container": "#fefcff",
+                        "inverse-on-surface": "#eaf1ff",
+                        "on-secondary-fixed": "#191c1e",
+                        "on-secondary-container": "#606365",
+                        "on-primary-container": "#f7fff2",
+                        "on-primary": "#ffffff",
+                        "tertiary-fixed-dim": "#bcc7de"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "md": "16px",
+                        "base": "4px",
+                        "lg": "24px",
+                        "margin-mobile": "16px",
+                        "2xl": "48px",
+                        "sm": "8px",
+                        "margin-desktop": "32px",
+                        "xl": "32px",
+                        "max-width": "1440px",
+                        "xs": "4px",
+                        "gutter": "24px"
+                    },
+                    "fontFamily": {
+                        "title-lg": ["Inter"],
+                        "headline-lg-mobile": ["Inter"],
+                        "body-md": ["Inter"],
+                        "display-lg": ["Inter"],
+                        "body-lg": ["Inter"],
+                        "headline-lg": ["Inter"],
+                        "headline-md": ["Inter"],
+                        "label-sm": ["Inter"],
+                        "label-md": ["Inter"]
+                    },
+                    "fontSize": {
+                        "title-lg": ["20px", { "lineHeight": "28px", "fontWeight": "600" }],
+                        "headline-lg-mobile": ["24px", { "lineHeight": "32px", "fontWeight": "600" }],
+                        "body-md": ["14px", { "lineHeight": "20px", "fontWeight": "400" }],
+                        "display-lg": ["48px", { "lineHeight": "56px", "letterSpacing": "-0.02em", "fontWeight": "700" }],
+                        "body-lg": ["16px", { "lineHeight": "24px", "fontWeight": "400" }],
+                        "headline-lg": ["32px", { "lineHeight": "40px", "letterSpacing": "-0.01em", "fontWeight": "600" }],
+                        "headline-md": ["24px", { "lineHeight": "32px", "fontWeight": "600" }],
+                        "label-sm": ["11px", { "lineHeight": "14px", "fontWeight": "600" }],
+                        "label-md": ["12px", { "lineHeight": "16px", "letterSpacing": "0.01em", "fontWeight": "500" }]
+                    }
+                }
+            }
+        }
+    </script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .material-symbols-outlined[data-weight="fill"] {
+            font-variation-settings: 'FILL' 1;
+        }
+        
+        /* Custom scrollbar for horizontal sections */
+        .hide-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .hide-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+    </style>
+</head>
+<body class="h-full flex flex-col md:flex-row text-on-surface bg-background font-body-md overflow-hidden">
+<!-- SideNavBar (Desktop) -->
+<nav class="hidden md:flex flex-col h-full py-lg px-md bg-surface-container-lowest dark:bg-surface-container-low shadow-sm w-[280px] flex-shrink-0 z-10 relative">
+<div class="mb-xl px-4">
+<h1 class="font-headline-md text-headline-md font-bold text-primary dark:text-primary-fixed-dim">Revive HR</h1>
+<p class="font-label-md text-label-md text-secondary mt-1">Management Portal</p>
+</div>
+<div class="flex-1 overflow-y-auto hide-scrollbar space-y-sm">
+<a class="flex items-center gap-3 px-4 py-3 text-secondary dark:text-secondary-fixed-dim hover:bg-secondary-container dark:hover:bg-on-secondary-fixed-variant transition-all rounded-lg group" href="#">
+<span class="material-symbols-outlined group-hover:text-primary transition-colors">dashboard</span>
+<span class="font-label-md text-label-md">Dashboard</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 text-secondary dark:text-secondary-fixed-dim hover:bg-secondary-container dark:hover:bg-on-secondary-fixed-variant transition-all rounded-lg group" href="#">
+<span class="material-symbols-outlined group-hover:text-primary transition-colors">groups</span>
+<span class="font-label-md text-label-md">Employees</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 bg-primary-container dark:bg-on-primary-fixed-variant text-on-primary-container dark:text-primary-fixed rounded-lg font-bold opacity-80 transition-opacity scale-95 duration-150" href="#">
+<span class="material-symbols-outlined" data-weight="fill">monitoring</span>
+<span class="font-label-md text-label-md">Performance</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 text-secondary dark:text-secondary-fixed-dim hover:bg-secondary-container dark:hover:bg-on-secondary-fixed-variant transition-all rounded-lg group" href="#">
+<span class="material-symbols-outlined group-hover:text-primary transition-colors">payments</span>
+<span class="font-label-md text-label-md">Payroll</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 text-secondary dark:text-secondary-fixed-dim hover:bg-secondary-container dark:hover:bg-on-secondary-fixed-variant transition-all rounded-lg group" href="#">
+<span class="material-symbols-outlined group-hover:text-primary transition-colors">description</span>
+<span class="font-label-md text-label-md">Documents</span>
+</a>
+</div>
+<div class="mt-auto pt-lg border-t border-surface-container">
+<button class="w-full mb-md bg-primary text-on-primary font-label-md text-label-md py-3 rounded-lg hover:bg-surface-tint transition-colors shadow-sm flex items-center justify-center gap-2">
+<span class="material-symbols-outlined text-[18px]">add</span>
+                New Review Cycle
+            </button>
+<a class="flex items-center gap-3 px-4 py-3 text-secondary hover:bg-secondary-container transition-all rounded-lg" href="#">
+<span class="material-symbols-outlined">settings</span>
+<span class="font-label-md text-label-md">Settings</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 text-secondary hover:bg-secondary-container transition-all rounded-lg" href="#">
+<span class="material-symbols-outlined">logout</span>
+<span class="font-label-md text-label-md">Logout</span>
+</a>
+</div>
+</nav>
+<!-- Main Content Area -->
+<main class="flex-1 flex flex-col h-full overflow-hidden bg-background">
+<!-- TopAppBar (Mobile Header) -->
+<header class="md:hidden flex justify-between items-center w-full px-margin-mobile h-16 bg-surface-container-lowest shadow-sm z-10 shrink-0">
+<h1 class="font-headline-md text-headline-md font-bold text-primary">Revive HR</h1>
+<div class="flex items-center gap-md">
+<button class="text-secondary hover:text-primary transition-colors">
+<span class="material-symbols-outlined">notifications</span>
+</button>
+<img alt="Employee Avatar" class="w-8 h-8 rounded-full border border-surface-container object-cover" data-alt="A small circular avatar placeholder image for a generic employee profile picture in a professional modern HR application. The image should be clean, simple, and high quality." src="https://lh3.googleusercontent.com/aida-public/AB6AXuA_EOkbHuOQ_6iL6NSUt-3J6OeGdlJm0zy_adajupC3IHpHZZUYWsDziyg1tF7aJeu05C14zr2BaeXITWDw6PW0JPId9ipxOVqtGXKQ_H15SHSHusR1YJIjgWbXz5IzBkHctus7ijOJFnDCRnmae9fNXMey8dpVGRtgBmT2uDx9VUT4FSk5s0DTC2RK-XjElkf0Ks4VDtAJ97rhDYWp0l8rVp0xaT5-2pGo8FHuIBif7CmpGMXW65aq"/>
+</div>
+</header>
+<!-- TopAppBar (Desktop Search & Actions) -->
+<div class="hidden md:flex justify-between items-center w-full px-margin-desktop h-16 bg-surface-container-lowest shadow-sm shrink-0 z-10 sticky top-0">
+<div class="relative w-96">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-secondary">search</span>
+<input class="w-full pl-10 pr-4 py-2 bg-surface rounded-full border border-surface-container focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary text-body-md font-body-md transition-all" placeholder="Search goals, employees..." type="text"/>
+</div>
+<div class="flex items-center gap-lg">
+<button class="text-secondary hover:text-primary transition-colors relative">
+<span class="material-symbols-outlined">notifications</span>
+<span class="absolute top-0 right-0 w-2 h-2 bg-error rounded-full"></span>
+</button>
+<button class="text-secondary hover:text-primary transition-colors">
+<span class="material-symbols-outlined">help</span>
+</button>
+<div class="w-px h-6 bg-surface-container"></div>
+<div class="flex items-center gap-sm cursor-pointer hover:opacity-80 transition-opacity">
+<img alt="Employee Avatar" class="w-8 h-8 rounded-full border border-surface-container object-cover" data-alt="A professional headshot of a young professional woman used as an avatar in a clean, modern HR dashboard. The lighting is soft and flattering, with a neutral background." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCtSY6TcdtpFRSlsnlEDW0U26ba4oEEVp0wHoo3nHHF-NtXYLYgkSavb4HPTutXjpp5jujpMI2AjOnadiZxTsUfkiEfu1PNSzV8c1eL_dm9wyRGaWHagffyNckgCge-RvkR4yVZFLw4rBqvJmjZHWdDIWvZlVLilVPajsuxCNbQdRJMnGBQvAGyqoGxE6JWx32tMNYUoSjUFDj3NUDZhxny-7_csM3XImuWG0KTvS9AEL6QA_qXs0nO"/>
+<span class="material-symbols-outlined text-secondary">expand_more</span>
+</div>
+</div>
+</div>
+<!-- Scrollable Content Canvas -->
+<div class="flex-1 overflow-y-auto p-margin-mobile md:p-margin-desktop">
+<div class="max-w-[1440px] mx-auto space-y-xl">
+<!-- Page Header -->
+<div class="flex flex-col md:flex-row md:items-center justify-between gap-md">
+<div>
+<h2 class="font-headline-lg-mobile md:font-headline-lg text-headline-lg-mobile md:text-headline-lg text-on-surface">Goal Management</h2>
+<p class="font-body-md text-body-md text-secondary mt-1">Track alignment and progress across the organization.</p>
+</div>
+<div class="flex items-center gap-sm">
+<div class="relative">
+<select class="appearance-none bg-surface border border-surface-container text-on-surface font-label-md text-label-md py-2 pl-4 pr-10 rounded-lg focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary">
+<option>Q3 2024</option>
+<option>Q2 2024</option>
+<option>Q1 2024</option>
+<option>FY 2024</option>
+</select>
+<span class="material-symbols-outlined absolute right-3 top-1/2 -translate-y-1/2 text-secondary pointer-events-none text-[18px]">calendar_today</span>
+</div>
+<button class="bg-primary text-on-primary font-label-md text-label-md py-2 px-4 rounded-lg hover:bg-surface-tint transition-colors shadow-sm flex items-center gap-2 whitespace-nowrap">
+<span class="material-symbols-outlined text-[18px]">add</span>
+                            Create Goal
+                        </button>
+</div>
+</div>
+<!-- Bento Grid Layout -->
+<div class="grid grid-cols-1 md:grid-cols-12 gap-lg">
+<!-- Company Goals Overview (Spans full on mobile, 8 cols on desktop) -->
+<div class="col-span-1 md:col-span-8 bg-surface-container-lowest rounded-xl shadow-sm border border-surface-container p-lg flex flex-col h-[400px]">
+<div class="flex justify-between items-center mb-md">
+<h3 class="font-title-lg text-title-lg text-on-surface flex items-center gap-2">
+<span class="material-symbols-outlined text-primary">domain</span>
+                                Company Objectives
+                            </h3>
+<button class="text-primary font-label-md text-label-md hover:underline">View All</button>
+</div>
+<div class="flex-1 overflow-y-auto pr-2 space-y-md">
+<!-- Goal Item -->
+<div class="bg-surface rounded-lg p-md border border-surface-container hover:border-primary-fixed transition-colors cursor-pointer group">
+<div class="flex justify-between items-start mb-2">
+<h4 class="font-label-md text-label-md text-on-surface font-semibold group-hover:text-primary transition-colors">Expand into European Markets</h4>
+<span class="px-2 py-1 bg-primary-container text-on-primary-fixed-variant rounded-md font-label-sm text-label-sm">On Track</span>
+</div>
+<p class="font-body-md text-body-md text-secondary text-sm mb-4 line-clamp-1">Establish regional headquarters in London and Berlin.</p>
+<div class="space-y-1">
+<div class="flex justify-between font-label-sm text-label-sm text-secondary">
+<span>Progress</span>
+<span>65%</span>
+</div>
+<div class="w-full bg-secondary-container rounded-full h-2">
+<div class="bg-primary h-2 rounded-full" style="width: 65%"></div>
+</div>
+</div>
+<div class="mt-4 flex items-center gap-2 text-secondary font-label-sm text-label-sm">
+<span class="material-symbols-outlined text-[16px]">account_tree</span>
+<span>Aligned with 4 Dept Goals</span>
+</div>
+</div>
+<!-- Goal Item -->
+<div class="bg-surface rounded-lg p-md border border-surface-container hover:border-primary-fixed transition-colors cursor-pointer group">
+<div class="flex justify-between items-start mb-2">
+<h4 class="font-label-md text-label-md text-on-surface font-semibold group-hover:text-primary transition-colors">Achieve 95% Customer Retention</h4>
+<span class="px-2 py-1 bg-surface-container-high text-on-surface-variant rounded-md font-label-sm text-label-sm">At Risk</span>
+</div>
+<p class="font-body-md text-body-md text-secondary text-sm mb-4 line-clamp-1">Improve onboarding flow and proactive support responses.</p>
+<div class="space-y-1">
+<div class="flex justify-between font-label-sm text-label-sm text-secondary">
+<span>Progress</span>
+<span>42%</span>
+</div>
+<div class="w-full bg-secondary-container rounded-full h-2">
+<div class="bg-tertiary-container h-2 rounded-full" style="width: 42%"></div>
+</div>
+</div>
+<div class="mt-4 flex items-center gap-2 text-secondary font-label-sm text-label-sm">
+<span class="material-symbols-outlined text-[16px]">account_tree</span>
+<span>Aligned with 7 Dept Goals</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Alignment Map Summary (Spans full on mobile, 4 cols on desktop) -->
+<div class="col-span-1 md:col-span-4 bg-surface-container-lowest rounded-xl shadow-sm border border-surface-container p-lg flex flex-col h-[400px]">
+<div class="mb-md">
+<h3 class="font-title-lg text-title-lg text-on-surface flex items-center gap-2">
+<span class="material-symbols-outlined text-primary">hub</span>
+                                Alignment Map
+                            </h3>
+<p class="font-body-md text-body-md text-secondary mt-1 text-sm">Overall goal connectivity</p>
+</div>
+<div class="flex-1 flex flex-col items-center justify-center relative">
+<!-- Visual representation of alignment -->
+<div class="w-full max-w-[200px] aspect-square relative">
+<!-- Center node (Company) -->
+<div class="absolute inset-0 m-auto w-16 h-16 bg-primary text-on-primary rounded-full flex items-center justify-center shadow-md z-10 ring-4 ring-surface-container-lowest">
+<span class="material-symbols-outlined">domain</span>
+</div>
+<!-- Orbiting nodes (Depts) -->
+<div class="absolute top-0 left-1/2 -translate-x-1/2 w-10 h-10 bg-tertiary-container text-on-tertiary rounded-full flex items-center justify-center shadow-sm">
+<span class="material-symbols-outlined text-[18px]">group</span>
+</div>
+<div class="absolute bottom-4 right-2 w-10 h-10 bg-tertiary-container text-on-tertiary rounded-full flex items-center justify-center shadow-sm">
+<span class="material-symbols-outlined text-[18px]">code</span>
+</div>
+<div class="absolute bottom-4 left-2 w-10 h-10 bg-tertiary-container text-on-tertiary rounded-full flex items-center justify-center shadow-sm">
+<span class="material-symbols-outlined text-[18px]">campaign</span>
+</div>
+<!-- Connecting lines (SVG) -->
+<svg class="absolute inset-0 w-full h-full -z-0" viewbox="0 0 100 100">
+<path d="M50 50 L50 20" stroke="#dee0e2" stroke-dasharray="4" stroke-width="2"></path>
+<path d="M50 50 L80 80" stroke="#dee0e2" stroke-dasharray="4" stroke-width="2"></path>
+<path d="M50 50 L20 80" stroke="#dee0e2" stroke-dasharray="4" stroke-width="2"></path>
+</svg>
+</div>
+<div class="mt-xl text-center">
+<div class="font-headline-md text-headline-md font-bold text-on-surface">82%</div>
+<div class="font-label-md text-label-md text-secondary">Individual Goals Aligned</div>
+</div>
+</div>
+<button class="w-full mt-auto py-2 bg-surface text-primary border border-surface-container rounded-lg font-label-md text-label-md hover:bg-surface-container-low transition-colors">Explore Map</button>
+</div>
+</div>
+</div>
+</div>
+</main>
+<!-- BottomNavBar (Mobile Only) -->
+<nav class="md:hidden flex justify-around items-center w-full h-16 bg-surface-container-lowest shadow-[0_-1px_3px_rgba(0,0,0,0.05)] shrink-0 z-20 pb-safe">
+<a class="flex flex-col items-center justify-center w-full h-full text-secondary hover:bg-surface-container transition-colors" href="#">
+<span class="material-symbols-outlined mb-1">dashboard</span>
+<span class="font-label-sm text-label-sm">Dashboard</span>
+</a>
+<a class="flex flex-col items-center justify-center w-full h-full text-primary font-bold bg-primary-container/20 border-t-2 border-primary transition-colors" href="#">
+<span class="material-symbols-outlined mb-1" data-weight="fill">monitoring</span>
+<span class="font-label-sm text-label-sm">Performance</span>
+</a>
+<a class="flex flex-col items-center justify-center w-full h-full text-secondary hover:bg-surface-container transition-colors" href="#">
+<span class="material-symbols-outlined mb-1">groups</span>
+<span class="font-label-sm text-label-sm">Employees</span>
+</a>
+<a class="flex flex-col items-center justify-center w-full h-full text-secondary hover:bg-surface-container transition-colors" href="#">
+<span class="material-symbols-outlined mb-1">menu</span>
+<span class="font-label-sm text-label-sm">More</span>
+</a>
+</nav>
+</body></html>

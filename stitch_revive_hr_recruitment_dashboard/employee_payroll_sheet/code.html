@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Revive HR - Employee Payroll Sheet</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+          darkMode: "class",
+          theme: {
+            extend: {
+              "colors": {
+                      "tertiary-fixed": "#d8e3dd",
+                      "surface-container-highest": "#d3dcd2",
+                      "on-secondary-fixed": "#191c1e",
+                      "tertiary-fixed-dim": "#bcc7c0",
+                      "secondary-fixed-dim": "#c5c6c8",
+                      "on-primary-fixed-variant": "#166534",
+                      "on-primary-container": "#14532d",
+                      "on-background": "#13221a",
+                      "on-tertiary": "#ffffff",
+                      "on-secondary-container": "#43474a",
+                      "surface-variant": "#e2e8e0",
+                      "on-secondary": "#ffffff",
+                      "on-tertiary-fixed-variant": "#3c475a",
+                      "outline": "#6e7b6c",
+                      "secondary-container": "#e8e8e8",
+                      "surface-container": "#e9eee8",
+                      "surface-container-low": "#f3f6f2",
+                      "inverse-surface": "#213145",
+                      "on-primary": "#ffffff",
+                      "primary": "#16a34a",
+                      "error": "#ba1a1a",
+                      "on-primary-fixed": "#052e16",
+                      "secondary-fixed": "#e1e2e4",
+                      "primary-fixed-dim": "#4ade80",
+                      "background": "#f7f9f7",
+                      "surface": "#fbfcfa",
+                      "surface-tint": "#16a34a",
+                      "tertiary-container": "#b3c7bc",
+                      "outline-variant": "#c6cdc5",
+                      "tertiary": "#51605a",
+                      "on-tertiary-fixed": "#111c18",
+                      "surface-dim": "#d2dbd1",
+                      "surface-container-lowest": "#ffffff",
+                      "on-error-container": "#93000a",
+                      "on-secondary-fixed-variant": "#444749",
+                      "surface-bright": "#ffffff",
+                      "primary-fixed": "#86efac",
+                      "inverse-on-surface": "#eaf1ff",
+                      "on-surface": "#13221a",
+                      "error-container": "#ffdad6",
+                      "on-surface-variant": "#3f4a41",
+                      "on-tertiary-container": "#1c2a23",
+                      "secondary": "#5c5f60",
+                      "inverse-primary": "#4ade80",
+                      "on-error": "#ffffff",
+                      "primary-container": "#bbf7d0",
+                      "surface-container-high": "#dee5dd"
+              },
+              "borderRadius": { "DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px" },
+              "spacing": {
+                      "max-width": "1440px", "md": "16px", "xs": "4px", "margin-mobile": "16px", "gutter": "24px",
+                      "margin-desktop": "32px", "2xl": "48px", "xl": "32px", "lg": "24px", "sm": "8px", "base": "4px"
+              },
+              "fontFamily": {
+                      "title-lg": ["Inter"], "body-lg": ["Inter"], "headline-md": ["Inter"], "display-lg": ["Inter"],
+                      "headline-lg-mobile": ["Inter"], "body-md": ["Inter"], "headline-lg": ["Inter"], "label-sm": ["Inter"], "label-md": ["Inter"]
+              },
+              "fontSize": {
+                      "title-lg": ["20px", {"lineHeight": "28px", "fontWeight": "600"}],
+                      "body-lg": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+                      "headline-md": ["24px", {"lineHeight": "32px", "fontWeight": "600"}],
+                      "display-lg": ["48px", {"lineHeight": "56px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                      "headline-lg-mobile": ["24px", {"lineHeight": "32px", "fontWeight": "600"}],
+                      "body-md": ["14px", {"lineHeight": "20px", "fontWeight": "400"}],
+                      "headline-lg": ["32px", {"lineHeight": "40px", "letterSpacing": "-0.01em", "fontWeight": "600"}],
+                      "label-sm": ["11px", {"lineHeight": "14px", "fontWeight": "600"}],
+                      "label-md": ["12px", {"lineHeight": "16px", "letterSpacing": "0.01em", "fontWeight": "500"}]
+              }
+            }
+          }
+        }
+    </script>
+<style>
+        .soft-shadow { box-shadow: 0px 1px 3px rgba(0,0,0,0.05); }
+        .hover-shadow:hover { box-shadow: 0px 10px 15px -3px rgba(0,0,0,0.1); transition: all 0.2s ease; }
+    </style>
+</head>
+<body class="bg-background text-on-background font-body-md min-h-screen flex">
+<nav class="fixed h-screen w-[280px] left-0 top-0 bg-surface-container-lowest border-r border-outline-variant shadow-sm flex flex-col p-md z-50 hidden md:flex">
+<div class="mb-xl flex items-center gap-sm">
+<div class="w-10 h-10 rounded-full bg-primary flex items-center justify-center text-on-primary font-bold">R</div>
+<div>
+<h1 class="font-headline-md text-headline-md font-bold text-primary">Revive HR</h1>
+<p class="font-label-sm text-label-sm text-secondary">Payroll Module</p>
+</div>
+</div>
+<div class="flex-1 flex flex-col gap-1 overflow-y-auto">
+<a class="flex items-center gap-md px-md py-sm rounded-lg text-secondary hover:text-on-surface hover:bg-surface-container-high transition-colors" href="../payroll_support_dashboard/code.html">
+<span class="material-symbols-outlined">dashboard</span><span class="font-body-md text-body-md">Payroll Dashboard</span>
+</a>
+<a class="flex items-center gap-md px-md py-sm rounded-lg bg-surface-container-high text-primary font-bold border-r-4 border-primary" href="#">
+<span class="material-symbols-outlined">receipt_long</span><span class="font-body-md text-body-md">Payroll Sheet</span>
+</a>
+<a class="flex items-center gap-md px-md py-sm rounded-lg text-secondary hover:text-on-surface hover:bg-surface-container-high transition-colors" href="../attendance_management_dashboard/code.html">
+<span class="material-symbols-outlined">event_available</span><span class="font-body-md text-body-md">Attendance Input</span>
+</a>
+<a class="flex items-center gap-md px-md py-sm rounded-lg text-secondary hover:text-on-surface hover:bg-surface-container-high transition-colors" href="../leave_management/code.html">
+<span class="material-symbols-outlined">flight_takeoff</span><span class="font-body-md text-body-md">Leaves &amp; Permissions</span>
+</a>
+<a class="flex items-center gap-md px-md py-sm rounded-lg text-secondary hover:text-on-surface hover:bg-surface-container-high transition-colors" href="../employee_profile_single_source_of_truth/code.html">
+<span class="material-symbols-outlined">person_pin</span><span class="font-body-md text-body-md">Employee Profile</span>
+</a>
+</div>
+<div class="border-t border-outline-variant pt-md flex flex-col gap-sm shrink-0">
+<a class="flex items-center gap-md px-md py-sm rounded-lg text-secondary hover:text-on-surface hover:bg-surface-container-high transition-colors" href="../gym_manager_dashboard/code.html">
+<span class="material-symbols-outlined">approval</span><span class="font-body-md text-body-md">Approvals Queue</span>
+</a>
+</div>
+</nav>
+<div class="flex-1 md:ml-[280px] min-h-screen flex flex-col w-full">
+<header class="flex justify-between items-center px-margin-desktop bg-surface-container-lowest fixed top-0 right-0 w-full md:w-[calc(100%-280px)] h-16 shadow-sm z-40">
+<div class="flex items-center gap-sm text-secondary">
+<span class="material-symbols-outlined text-[20px]">calendar_month</span>
+<span class="font-label-md text-label-md">Payroll Period: October 2026</span>
+</div>
+<div class="flex items-center gap-sm">
+<button class="p-sm text-on-surface-variant hover:bg-secondary-container rounded-full"><span class="material-symbols-outlined">notifications</span></button>
+<button class="p-sm text-on-surface-variant hover:bg-secondary-container rounded-full bg-surface-container-high"><span class="material-symbols-outlined">account_circle</span></button>
+</div>
+</header>
+<main class="flex-1 mt-16 p-margin-mobile md:p-margin-desktop max-w-max-width mx-auto w-full flex flex-col gap-lg">
+<div class="flex flex-col md:flex-row justify-between items-start md:items-end gap-md">
+<div>
+<h2 class="font-headline-lg-mobile md:font-headline-lg text-headline-lg-mobile md:text-headline-lg text-on-surface">Employee Payroll Sheet</h2>
+<p class="font-body-md text-body-md text-secondary mt-xs">October 2026 - computed from Attendance, Permissions, Schedule, Leaves and Approvals.</p>
+</div>
+<div class="flex flex-wrap gap-sm">
+<button class="bg-surface border border-outline-variant text-on-surface py-sm px-md rounded-lg font-label-md text-label-md flex items-center gap-xs hover:bg-surface-container-high soft-shadow" onclick="window.print()">
+<span class="material-symbols-outlined text-[18px]">print</span>Print
+</button>
+<button class="bg-surface border border-outline-variant text-on-surface py-sm px-md rounded-lg font-label-md text-label-md flex items-center gap-xs hover:bg-surface-container-high soft-shadow" onclick="showToast('Sheet exported to PDF.')">
+<span class="material-symbols-outlined text-[18px]">picture_as_pdf</span>Export PDF
+</button>
+</div>
+</div>
+<!-- Approval status banner -->
+<div class="bg-surface-container-low rounded-xl border border-outline-variant p-lg flex flex-col md:flex-row items-start md:items-center gap-md">
+<div class="flex items-center gap-md">
+<div class="w-10 h-10 rounded-full bg-primary-container/40 flex items-center justify-center">
+<span class="material-symbols-outlined text-primary">verified</span>
+</div>
+<div>
+<p class="font-body-lg text-body-lg font-semibold text-on-surface">Pending HR Approval</p>
+<p class="font-body-md text-body-md text-secondary mt-xs">Branch Manager approved. HR approval is required before this payroll is locked.</p>
+</div>
+</div>
+<div class="ml-auto flex items-center gap-md">
+<div class="flex flex-col items-center">
+<span class="inline-flex items-center gap-xs bg-primary-container/40 text-on-primary-container px-md py-xs rounded-full font-label-md text-label-md"><span class="material-symbols-outlined text-[16px]">check_circle</span>Branch Manager - Approved</span>
+<p class="font-label-md text-label-md text-secondary mt-xs">Sara Khalil - 04 Nov 2026</p>
+</div>
+<span class="material-symbols-outlined text-secondary">chevron_right</span>
+<div class="flex flex-col items-center">
+<span class="inline-flex items-center gap-xs bg-surface-container-high text-on-surface-variant px-md py-xs rounded-full font-label-md text-label-md"><span class="material-symbols-outlined text-[16px]">hourglass_top</span>HR - Pending</span>
+<button class="font-label-md text-label-md text-primary hover:underline mt-xs" onclick="approvePayroll()">Approve Now</button>
+</div>
+</div>
+</div>
+<!-- Sheet identity -->
+<div class="bg-surface-container-lowest rounded-xl soft-shadow border border-outline-variant p-lg">
+<div class="grid grid-cols-2 lg:grid-cols-4 gap-md">
+<div><p class="font-label-sm text-label-sm text-secondary">Employee Name</p><p class="font-body-lg text-body-lg font-semibold text-on-surface">Alex Rivera</p></div>
+<div><p class="font-label-sm text-label-sm text-secondary">Employee ID</p><p class="font-body-lg text-body-lg font-semibold text-on-surface">REV-EMP-000118</p></div>
+<div><p class="font-label-sm text-label-sm text-secondary">Position</p><p class="font-body-lg text-body-lg font-semibold text-on-surface">Gym Shift Lead</p></div>
+<div><p class="font-label-sm text-label-sm text-secondary">Gym / Branch</p><p class="font-body-lg text-body-lg font-semibold text-on-surface">Downtown Gym</p></div>
+</div>
+</div>
+<!-- Earnings table -->
+<div class="bg-surface-container-lowest rounded-xl soft-shadow border border-outline-variant overflow-hidden">
+<div class="flex items-center justify-between px-lg pt-lg pb-md">
+<h4 class="font-title-lg text-title-lg text-on-surface">Salary Breakdown</h4>
+<span class="font-label-md text-label-md text-secondary">All amounts in EGP</span>
+</div>
+<div class="overflow-x-auto">
+<table class="w-full text-left border-collapse min-w-[680px]">
+<thead>
+<tr class="border-y border-outline-variant bg-surface-container-low">
+<th class="py-sm px-lg font-label-sm text-label-sm text-secondary uppercase tracking-wider">Item</th>
+<th class="py-sm px-lg font-label-sm text-label-sm text-secondary uppercase tracking-wider">Qty / Days</th>
+<th class="py-sm px-lg font-label-sm text-label-sm text-secondary uppercase tracking-wider">Rate</th>
+<th class="py-sm px-lg text-right font-label-sm text-label-sm text-secondary uppercase tracking-wider">Amount</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-outline-variant/60">
+<tr><td class="py-sm px-lg font-body-md text-on-surface">Base Salary</td><td class="py-sm px-lg font-body-md text-on-surface">-</td><td class="py-sm px-lg font-body-md text-on-surface">-</td><td class="py-sm px-lg text-right font-body-md font-semibold text-on-surface">10,000</td></tr>
+<tr><td class="py-sm px-lg font-body-md text-on-surface">Annual Increase (8%)</td><td class="py-sm px-lg font-body-md text-on-surface">-</td><td class="py-sm px-lg font-body-md text-on-surface">-</td><td class="py-sm px-lg text-right font-body-md text-on-surface">+1,000</td></tr>
+<tr><td class="py-sm px-lg font-body-md text-on-surface">Final Salary</td><td class="py-sm px-lg font-body-md text-on-surface">-</td><td class="py-sm px-lg font-body-md text-on-surface">-</td><td class="py-sm px-lg text-right font-body-md font-semibold text-primary">11,000</td></tr>
+<tr><td class="py-sm px-lg font-body-md text-on-surface">Bonuses</td><td class="py-sm px-lg font-body-md text-on-surface">1</td><td class="py-sm px-lg font-body-md text-on-surface">-</td><td class="py-sm px-lg text-right font-body-md text-primary">+800</td></tr>
+<tr><td class="py-sm px-lg font-body-md text-on-surface">Other Adjustments</td><td class="py-sm px-lg font-body-md text-on-surface">-</td><td class="py-sm px-lg font-body-md text-on-surface">-</td><td class="py-sm px-lg text-right font-body-md text-primary">+250</td></tr>
+<tr class="bg-primary-container/20">
+<td class="py-sm px-lg font-body-lg font-semibold text-on-surface">Gross Pay</td>
+<td class="py-sm px-lg"></td>
+<td class="py-sm px-lg"></td>
+<td class="py-sm px-lg text-right font-body-lg font-bold text-on-surface">12,050</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<!-- Attendance & days table -->
+<div class="bg-surface-container-lowest rounded-xl soft-shadow border border-outline-variant overflow-hidden">
+<div class="flex items-center justify-between px-lg pt-lg pb-md">
+<h4 class="font-title-lg text-title-lg text-on-surface">Working Days &amp; Leaves</h4>
+<span class="font-label-md text-label-md text-secondary">Oct 2026 - 31 days</span>
+</div>
+<div class="overflow-x-auto">
+<table class="w-full text-left border-collapse min-w-[680px]">
+<thead>
+<tr class="border-y border-outline-variant bg-surface-container-low">
+<th class="py-sm px-lg font-label-sm text-label-sm text-secondary uppercase tracking-wider">Category</th>
+<th class="py-sm px-lg text-right font-label-sm text-label-sm text-secondary uppercase tracking-wider">Days</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-outline-variant/60">
+<tr><td class="py-sm px-lg font-body-md text-on-surface">Working Days</td><td class="py-sm px-lg text-right font-body-md text-on-surface">23</td></tr>
+<tr><td class="py-sm px-lg font-body-md text-on-surface">Weekly Off</td><td class="py-sm px-lg text-right font-body-md text-on-surface">5</td></tr>
+<tr><td class="py-sm px-lg font-body-md text-on-surface">Annual Leave</td><td class="py-sm px-lg text-right font-body-md text-on-surface">1</td></tr>
+<tr><td class="py-sm px-lg font-body-md text-on-surface">Sick Leave</td><td class="py-sm px-lg text-right font-body-md text-on-surface">0</td></tr>
+<tr><td class="py-sm px-lg font-body-md text-on-surface">Paid Days</td><td class="py-sm px-lg text-right font-body-md text-on-surface">2</td></tr>
+</tbody>
+</table>
+</div>
+</div>
+<!-- Deductions table -->
+<div class="bg-surface-container-lowest rounded-xl soft-shadow border border-outline-variant overflow-hidden">
+<div class="flex items-center justify-between px-lg pt-lg pb-md">
+<h4 class="font-title-lg text-title-lg text-on-surface">Deductions</h4>
+<span class="font-label-md text-label-md text-secondary">All deductions require Branch Manager + HR approval</span>
+</div>
+<div class="overflow-x-auto">
+<table class="w-full text-left border-collapse min-w-[680px]">
+<thead>
+<tr class="border-y border-outline-variant bg-surface-container-low">
+<th class="py-sm px-lg font-label-sm text-label-sm text-secondary uppercase tracking-wider">Item</th>
+<th class="py-sm px-lg font-label-sm text-label-sm text-secondary uppercase tracking-wider">Reason</th>
+<th class="py-sm px-lg font-label-sm text-label-sm text-secondary uppercase tracking-wider">Approvals</th>
+<th class="py-sm px-lg text-right font-label-sm text-label-sm text-secondary uppercase tracking-wider">Amount</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-outline-variant/60">
+<tr>
+<td class="py-sm px-lg font-body-md text-on-surface">Attendance Deduction</td>
+<td class="py-sm px-lg font-body-md text-secondary">2 Late arrivals + 1 Missing Check-out</td>
+<td class="py-sm px-lg"><span class="inline-flex items-center gap-xs bg-primary-container/40 text-on-primary-container px-md py-xs rounded-full font-label-md text-label-md">Approved</span></td>
+<td class="py-sm px-lg text-right font-body-md text-error">-240</td>
+</tr>
+<tr>
+<td class="py-sm px-lg font-body-md text-on-surface">Work Deduction</td>
+<td class="py-sm px-lg font-body-md text-secondary">Damaged equipment (approved deduction request)</td>
+<td class="py-sm px-lg"><span class="inline-flex items-center gap-xs bg-primary-container/40 text-on-primary-container px-md py-xs rounded-full font-label-md text-label-md">Approved</span></td>
+<td class="py-sm px-lg text-right font-body-md text-error">-310</td>
+</tr>
+<tr class="bg-error-container/20">
+<td class="py-sm px-lg font-body-lg font-semibold text-on-surface">Total Deductions</td>
+<td class="py-sm px-lg"></td>
+<td class="py-sm px-lg"></td>
+<td class="py-sm px-lg text-right font-body-lg font-bold text-error">-550</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<!-- Net summary -->
+<div class="bg-primary-container/25 border border-primary-container rounded-xl p-lg flex flex-col md:flex-row items-start md:items-center justify-between gap-md">
+<div>
+<p class="font-label-sm text-label-sm text-secondary uppercase tracking-wider">Net Salary</p>
+<p class="font-display-lg text-display-lg text-primary">EGP 11,500</p>
+<p class="font-label-md text-label-md text-secondary mt-xs">12,050 gross - 550 deductions = 11,500 net</p>
+</div>
+<div class="flex gap-sm">
+<button class="bg-primary text-on-primary py-sm px-md rounded-lg font-label-md text-label-md flex items-center gap-xs hover:bg-on-primary-fixed-variant shadow-sm" onclick="window.location.href='../employee_self_service_hub/code.html'">
+<span class="material-symbols-outlined text-[18px]">send</span>Deliver to Employee Account
+</button>
+</div>
+</div>
+</main>
+</div>
+<div class="fixed bottom-md right-md z-50 hidden items-center gap-sm bg-on-surface text-surface px-md py-sm rounded-lg shadow-lg" id="toast">
+<span class="material-symbols-outlined text-[20px]">check_circle</span>
+<span class="font-body-md text-body-md">Payroll sheet delivered to employee account.</span>
+</div>
+<script>
+        (function () {
+            'use strict';
+
+            window.approvePayroll = function () {
+                var banner = document.querySelector('.bg-surface-container-low.rounded-xl');
+                banner.classList.replace('bg-surface-container-low', 'bg-primary-container/25');
+                banner.querySelector('.font-body-lg.font-semibold').textContent = 'Approved';
+                banner.querySelector('.font-body-md.text-secondary').textContent = 'HR approval recorded. Payroll is locked for period October 2026.';
+                banner.querySelector('.ml-auto').innerHTML = '<span class="inline-flex items-center gap-xs bg-primary-container/40 text-on-primary-container px-md py-xs rounded-full font-label-md text-label-md"><span class="material-symbols-outlined text-[16px]">verified</span>Branch Manager + HR - Approved</span>';
+                showToast('Payroll approved by HR. Net amount locked at EGP 11,500.');
+            };
+
+            window.showToast = function (message) {
+                var toast = document.getElementById('toast');
+                toast.querySelector('span:last-of-type').textContent = message;
+                toast.classList.replace('hidden', 'flex');
+                setTimeout(function () { toast.classList.replace('flex', 'hidden'); }, 3200);
+            };
+        })();
+    </script>
+</body>
+</html>

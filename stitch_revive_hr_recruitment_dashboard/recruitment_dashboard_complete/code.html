@@ -1,0 +1,564 @@
+<!DOCTYPE html><html class="light" lang="en" style=""><head>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0" name="viewport">
+<title>Recruitment Dashboard - Revive HR</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "secondary-fixed-dim": "#c5c6c8",
+                        "tertiary-fixed": "#d8e3dd",
+                        "surface-dim": "#d2dbd1",
+                        "surface": "#fbfcfa",
+                        "surface-tint": "#16a34a",
+                        "surface-container-high": "#dee5dd",
+                        "on-primary": "#ffffff",
+                        "on-primary-fixed": "#052e16",
+                        "primary-fixed-dim": "#4ade80",
+                        "primary-fixed": "#86efac",
+                        "on-tertiary": "#ffffff",
+                        "on-primary-container": "#14532d",
+                        "surface-container-highest": "#d3dcd2",
+                        "on-surface-variant": "#3f4a41",
+                        "secondary": "#5c5f60",
+                        "inverse-on-surface": "#eaf1ff",
+                        "surface-container": "#e9eee8",
+                        "surface-container-low": "#f3f6f2",
+                        "primary": "#16a34a",
+                        "on-primary-fixed-variant": "#166534",
+                        "surface-container-lowest": "#ffffff",
+                        "outline-variant": "#c6cdc5",
+                        "outline": "#6e7b6c",
+                        "on-tertiary-fixed-variant": "#3c475a",
+                        "on-tertiary-fixed": "#111c18",
+                        "secondary-fixed": "#e1e2e4",
+                        "primary-container": "#bbf7d0",
+                        "tertiary": "#51605a",
+                        "tertiary-container": "#b3c7bc",
+                        "on-error-container": "#93000a",
+                        "on-secondary-fixed": "#191c1e",
+                        "inverse-surface": "#213145",
+                        "tertiary-fixed-dim": "#bcc7c0",
+                        "surface-bright": "#ffffff",
+                        "on-tertiary-container": "#1c2a23",
+                        "on-secondary-fixed-variant": "#444749",
+                        "on-secondary-container": "#43474a",
+                        "error": "#ba1a1a",
+                        "inverse-primary": "#4ade80",
+                        "on-surface": "#13221a",
+                        "surface-variant": "#e2e8e0",
+                        "on-secondary": "#ffffff",
+                        "background": "#f7f9f7",
+                        "on-error": "#ffffff",
+                        "error-container": "#ffdad6",
+                        "secondary-container": "#e8e8e8",
+                        "on-background": "#13221a"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "margin-mobile": "16px",
+                        "md": "16px",
+                        "lg": "24px",
+                        "xl": "32px",
+                        "gutter": "24px",
+                        "2xl": "48px",
+                        "sm": "8px",
+                        "xs": "4px",
+                        "base": "4px",
+                        "margin-desktop": "32px",
+                        "max-width": "1440px"
+                    },
+                    "fontFamily": {
+                        "body-lg": ["Inter"],
+                        "label-sm": ["Inter"],
+                        "body-md": ["Inter"],
+                        "label-md": ["Inter"],
+                        "headline-lg": ["Inter"],
+                        "headline-md": ["Inter"],
+                        "display-lg": ["Inter"],
+                        "headline-lg-mobile": ["Inter"],
+                        "title-lg": ["Inter"]
+                    },
+                    "fontSize": {
+                        "body-lg": ["16px", { "lineHeight": "24px", "fontWeight": "400" }],
+                        "label-sm": ["11px", { "lineHeight": "14px", "fontWeight": "600" }],
+                        "body-md": ["14px", { "lineHeight": "20px", "fontWeight": "400" }],
+                        "label-md": ["12px", { "lineHeight": "16px", "letterSpacing": "0.01em", "fontWeight": "500" }],
+                        "headline-lg": ["32px", { "lineHeight": "40px", "letterSpacing": "-0.01em", "fontWeight": "600" }],
+                        "headline-md": ["24px", { "lineHeight": "32px", "fontWeight": "600" }],
+                        "display-lg": ["48px", { "lineHeight": "56px", "letterSpacing": "-0.02em", "fontWeight": "700" }],
+                        "headline-lg-mobile": ["24px", { "lineHeight": "32px", "fontWeight": "600" }],
+                        "title-lg": ["20px", { "lineHeight": "28px", "fontWeight": "600" }]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .material-symbols-outlined[data-weight="fill"] {
+            font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        
+        /* Soft shadows for Material Design feel */
+        .card-shadow {
+            box-shadow: 0px 1px 3px rgba(0,0,0,0.05);
+        }
+        .dropdown-shadow {
+            box-shadow: 0px 10px 15px -3px rgba(0,0,0,0.1);
+        }
+    </style>
+</head>
+<body class="bg-background text-on-background font-body-md min-h-screen flex flex-col md:flex-row">
+<!-- Mobile Top App Bar -->
+<header class="md:hidden flex justify-between items-center w-full px-lg py-sm bg-surface shadow-sm sticky top-0 z-50">
+<div class="flex items-center gap-sm">
+<img class="w-8 h-8 rounded-full object-cover" data-alt="A small, stylized modern corporate logo featuring a subtle geometric design in shades of green and white, isolated on a clean white background, creating a professional and welcoming mood." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBNp2dBb9jx4SeDbFgJ45fEInJrYuVQGwbGz0omcPkgyWn2AHasB6-b_Uv_3DXi4nGWSdC62zDagYwW7ottJLcWpQKWE0EEPtHdpHxw6XASvwN2HN5LCh5v8OPml_orUNiOl06t3tw7v1u9H0EgKtdEiAFFweNEkNOA9iT8DaIBJH3Zoj0godQvSOXETzAzSK9nEp3qZl5PEvKhKyxGC2yUo8gPqR7MzS43TOxArUv1aFEi1QRDwO37">
+<h1 class="font-headline-md text-headline-md-mobile font-bold text-primary">Revive HR</h1>
+</div>
+<div class="flex gap-md text-primary">
+<span class="material-symbols-outlined cursor-pointer" data-icon="notifications">notifications</span>
+<span class="material-symbols-outlined cursor-pointer" data-icon="menu" onclick="document.getElementById('mobile-menu').classList.toggle('hidden')">menu</span>
+</div>
+</header>
+<!-- Mobile Navigation Menu -->
+<nav class="hidden md:hidden bg-surface-container-low absolute top-[60px] left-0 w-full z-40 border-b border-outline-variant shadow-md" id="mobile-menu">
+<div class="flex flex-col py-sm">
+<a class="px-lg py-md text-secondary hover:bg-surface-container-high font-label-md text-label-md transition-colors" href="#">Dashboard</a>
+<a class="px-lg py-md bg-primary-container text-on-surface font-label-md text-label-md font-bold" href="#">Recruitment</a>
+<a class="px-lg py-md text-secondary hover:bg-surface-container-high font-label-md text-label-md transition-colors" href="#">Employees</a>
+<a class="px-lg py-md text-secondary hover:bg-surface-container-high font-label-md text-label-md transition-colors" href="#">Performance</a>
+<a class="px-lg py-md text-secondary hover:bg-surface-container-high font-label-md text-label-md transition-colors border-t border-outline-variant mt-sm" href="#">Settings</a>
+</div>
+</nav>
+<!-- SideNavBar (Desktop) -->
+<aside class="hidden md:flex docked h-full w-[280px] left-0 bg-surface-container-low flex-col py-lg border-r border-outline-variant fixed top-0 overflow-y-auto">
+<div class="px-lg mb-xl flex items-center gap-md">
+<img class="w-10 h-10 rounded-full object-cover" data-alt="A modern, abstract geometric logo design featuring interlocking shapes in shades of vibrant green and calm grey, set against a bright white background, conveying a sense of corporate synergy and growth." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCKTjm6riESmMNCHMRmEqid3GLqklQx3xUjdFoiCfGeW1rbJDbXv3Qjp3rn8hDiIpdmCiGGU6p1nN4_N1zgsnkJrI4JR3vGGjhtACVu88uD37v2_3mQwoD6XXG39gHaXON9kT8c0q6Ea2xhqiLNL6dO4Io2YGeBYhoZeucUnLrBUPbqFn75Ul8xD31W_FSS0RLA5pQk3WYCVvXUuZ4Wr-OwWI4PXUih4dL7kGSF3Y_nA8M99lDg7DHc">
+<div>
+<h1 class="font-title-lg text-title-lg font-bold text-primary">Revive HR</h1>
+<p class="font-label-sm text-label-sm text-secondary">Management System</p>
+</div>
+</div>
+<nav class="flex-1 px-sm space-y-xs">
+<a class="flex items-center gap-md text-on-surface-variant px-md py-sm rounded-lg hover:bg-surface-container-high transition-colors font-label-md text-label-md cursor-pointer transition-transform duration-200 active:translate-x-1" href="../recruitment_dashboard_complete/code.html">
+<span class="material-symbols-outlined" data-icon="dashboard">dashboard</span>
+<span class="">Dashboard</span>
+</a>
+<a class="flex items-center gap-md bg-primary text-on-primary rounded-lg px-md py-sm font-label-md text-label-md font-bold cursor-pointer transition-transform duration-200 active:translate-x-1" href="../vacancy_list/code.html">
+<span class="material-symbols-outlined" data-icon="group_add">group_add</span>
+<span class="">Recruitment</span>
+</a>
+<a class="flex items-center gap-md text-on-surface-variant px-md py-sm rounded-lg hover:bg-surface-container-high transition-colors font-label-md text-label-md cursor-pointer transition-transform duration-200 active:translate-x-1" href="../candidate_list/code.html">
+<span class="material-symbols-outlined" data-icon="people">people</span>
+<span class="">Candidates</span>
+</a>
+<a class="flex items-center gap-md text-on-surface-variant px-md py-sm rounded-lg hover:bg-surface-container-high transition-colors font-label-md text-label-md cursor-pointer transition-transform duration-200 active:translate-x-1" href="../recruitment_pipeline_interactive_kanban/code.html">
+<span class="material-symbols-outlined" data-icon="account_tree">account_tree</span>
+<span class="">Pipeline</span>
+</a>
+<a class="flex items-center gap-md text-on-surface-variant px-md py-sm rounded-lg hover:bg-surface-container-high transition-colors font-label-md text-label-md cursor-pointer transition-transform duration-200 active:translate-x-1" href="../waiting_list_management/code.html">
+<span class="material-symbols-outlined" data-icon="hourglass_empty">hourglass_empty</span>
+<span class="">Waiting List</span>
+</a>
+<a class="flex items-center gap-md text-on-surface-variant px-md py-sm rounded-lg hover:bg-surface-container-high transition-colors font-label-md text-label-md cursor-pointer transition-transform duration-200 active:translate-x-1" href="../recruitment_reports/code.html">
+<span class="material-symbols-outlined" data-icon="monitoring">monitoring</span>
+<span class="">Reports</span>
+</a>
+</nav>
+<div class="px-lg mt-auto mb-md space-y-sm">
+<button class="w-full py-sm px-md bg-primary text-on-primary rounded-lg font-label-md text-label-md hover:opacity-90 transition-opacity flex items-center justify-center gap-sm">
+<span class="material-symbols-outlined text-[18px]">person_add</span>
+                Add Employee
+            </button>
+</div>
+<nav class="px-sm mt-sm space-y-xs border-t border-outline-variant pt-sm mx-sm">
+<a class="flex items-center gap-md text-on-surface-variant px-md py-sm rounded-lg hover:bg-surface-container-high transition-colors font-label-md text-label-md cursor-pointer" href="#">
+<span class="material-symbols-outlined" data-icon="settings">settings</span>
+<span class="">Settings</span>
+</a>
+<a class="flex items-center gap-md text-on-surface-variant px-md py-sm rounded-lg hover:bg-surface-container-high transition-colors font-label-md text-label-md cursor-pointer" href="#">
+<span class="material-symbols-outlined" data-icon="logout">logout</span>
+<span class="">Logout</span>
+</a>
+</nav>
+</aside>
+<!-- Main Content Canvas -->
+<main class="flex-1 md:ml-[280px] p-margin-mobile md:p-margin-desktop max-w-max-width mx-auto w-full overflow-x-hidden">
+<!-- Page Header -->
+<div class="flex flex-col md:flex-row md:items-center justify-between mb-xl gap-md">
+<div>
+<h2 class="font-headline-lg text-headline-lg-mobile md:text-headline-lg text-on-background">Recruitment Dashboard</h2>
+<p class="font-body-md text-body-md text-secondary mt-xs">Overview of hiring metrics and pipeline activity.</p>
+</div>
+<div class="flex gap-sm">
+<a class="px-lg py-sm bg-primary text-on-primary rounded-lg font-label-md text-label-md hover:opacity-90 transition-opacity flex items-center gap-sm shadow-sm" href="../create_vacancy/code.html">
+<span class="material-symbols-outlined text-[18px]" data-icon="add">add</span>
+                    Create Vacancy
+                </a>
+<button class="px-md py-sm bg-surface-container-highest text-primary rounded-lg font-label-md text-label-md hover:bg-surface-container-high transition-colors flex items-center gap-sm">
+<span class="material-symbols-outlined text-[18px]" data-icon="filter_list">filter_list</span>
+                    Filter
+                </button>
+<a class="px-md py-sm bg-surface-container-highest text-primary rounded-lg font-label-md text-label-md hover:bg-surface-container-high transition-colors flex items-center gap-sm" href="../candidate_list/code.html">
+<span class="material-symbols-outlined text-[18px]">group</span>
+View All Candidates
+</a></div>
+</div>
+<!-- Key Metrics Cards (Bento Grid Style) -->
+<div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-md mb-xl">
+<!-- Metric 1 -->
+<div class="bg-surface-container-lowest rounded-xl p-md card-shadow border border-outline-variant flex flex-col justify-between hover:-translate-y-1 transition-transform duration-200">
+<div class="flex justify-between items-start mb-sm">
+<span class="font-label-sm text-label-sm text-secondary uppercase tracking-wider">Open Vacancies</span>
+<div class="w-8 h-8 rounded-full bg-primary-container/50 flex items-center justify-center text-primary">
+<span class="material-symbols-outlined text-[18px]" data-icon="work">work</span>
+</div>
+</div>
+<div>
+<span class="font-display-lg text-display-lg text-on-surface">12</span>
+<div class="flex items-center text-primary text-[12px] mt-xs">
+<span class="material-symbols-outlined text-[14px]">arrow_upward</span>
+<span class="">2 from last week</span>
+</div>
+</div>
+</div>
+<!-- Metric 2 -->
+<div class="bg-surface-container-lowest rounded-xl p-md card-shadow border border-outline-variant flex flex-col justify-between hover:-translate-y-1 transition-transform duration-200">
+<div class="flex justify-between items-start mb-sm">
+<span class="font-label-sm text-label-sm text-secondary uppercase tracking-wider">Candidates</span>
+<div class="w-8 h-8 rounded-full bg-surface-container-highest flex items-center justify-center text-tertiary">
+<span class="material-symbols-outlined text-[18px]" data-icon="groups">groups</span>
+</div>
+</div>
+<div>
+<span class="font-display-lg text-display-lg text-on-surface">148</span>
+<div class="flex items-center text-secondary text-[12px] mt-xs">
+<span class="">Active pipeline</span>
+</div>
+</div>
+</div>
+<!-- Metric 3 -->
+<div class="bg-surface-container-lowest rounded-xl p-md card-shadow border border-outline-variant flex flex-col justify-between hover:-translate-y-1 transition-transform duration-200">
+<div class="flex justify-between items-start mb-sm">
+<span class="font-label-sm text-label-sm text-secondary uppercase tracking-wider">Interviews Today</span>
+<div class="w-8 h-8 rounded-full bg-tertiary-container/20 flex items-center justify-center text-tertiary-container">
+<span class="material-symbols-outlined text-[18px]" data-icon="event_available">event_available</span>
+</div>
+</div>
+<div>
+<span class="font-display-lg text-display-lg text-on-surface">5</span>
+<div class="flex items-center text-secondary text-[12px] mt-xs">
+<span class="">2 completed</span>
+</div>
+</div>
+</div>
+<!-- Metric 4 -->
+<div class="bg-surface-container-lowest rounded-xl p-md card-shadow border border-outline-variant flex flex-col justify-between hover:-translate-y-1 transition-transform duration-200">
+<div class="flex justify-between items-start mb-sm">
+<span class="font-label-sm text-label-sm text-secondary uppercase tracking-wider">Candidates Waiting Action</span>
+<div class="w-8 h-8 rounded-full bg-error-container/50 flex items-center justify-center text-on-error-container">
+<span class="material-symbols-outlined text-[18px]" data-icon="pending_actions">pending_actions</span>
+</div>
+</div>
+<div>
+<span class="font-display-lg text-display-lg text-on-surface">18</span>
+<div class="flex items-center text-error text-[12px] mt-xs">
+<span class="material-symbols-outlined text-[14px]">warning</span>
+<span class="">Requires review</span>
+</div>
+</div>
+</div>
+<!-- Metric 5 -->
+<div class="bg-surface-container-lowest rounded-xl p-md card-shadow border border-outline-variant flex flex-col justify-between hover:-translate-y-1 transition-transform duration-200">
+<div class="flex justify-between items-start mb-sm">
+<span class="font-label-sm text-label-sm text-secondary uppercase tracking-wider">Candidates in Waiting List</span>
+<div class="w-8 h-8 rounded-full bg-surface-container-highest flex items-center justify-center text-secondary">
+<span class="material-symbols-outlined text-[18px]" data-icon="hourglass_empty">hourglass_empty</span>
+</div>
+</div>
+<div>
+<span class="font-display-lg text-display-lg text-on-surface">34</span>
+<div class="flex items-center text-secondary text-[12px] mt-xs">
+<span class="">Stored profiles</span>
+</div>
+</div>
+</div>
+<!-- Metric 6 -->
+<div class="bg-primary rounded-xl p-md card-shadow flex flex-col justify-between text-on-primary hover:-translate-y-1 transition-transform duration-200">
+<div class="flex justify-between items-start mb-sm">
+<span class="font-label-sm text-label-sm uppercase tracking-wider opacity-90">Hired This Month</span>
+<div class="w-8 h-8 rounded-full bg-on-primary/20 flex items-center justify-center">
+<span class="material-symbols-outlined text-[18px]" data-icon="celebration">celebration</span>
+</div>
+</div>
+<div>
+<span class="font-display-lg text-display-lg">8</span>
+<div class="flex items-center text-primary-container text-[12px] mt-xs">
+<span class="material-symbols-outlined text-[14px]">arrow_upward</span>
+<span class="">Goal: 10</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Dashboard Widgets Grid -->
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-lg mb-xl">
+<!-- Hiring Funnel Chart -->
+<div class="lg:col-span-2 bg-surface-container-lowest rounded-xl p-lg card-shadow border border-outline-variant">
+<h3 class="font-title-lg text-title-lg text-on-surface mb-md">Hiring Pipeline Funnel</h3>
+<div class="h-[300px] w-full relative">
+<canvas id="funnelChart" style="display: block; box-sizing: border-box; height: 300px; width: 566.4px;" width="708" height="375"></canvas>
+</div>
+ <div class="flex gap-md mt-md pt-md border-t border-outline-variant">
+<a class="text-primary font-label-md text-label-md flex items-center gap-xs hover:underline" href="../recruitment_pipeline_interactive_kanban/code.html">
+<span class="material-symbols-outlined text-[18px]">account_tree</span>
+See Pipeline
+</a>
+<a class="text-primary font-label-md text-label-md flex items-center gap-xs hover:underline" href="../waiting_list_management/code.html">
+<span class="material-symbols-outlined text-[18px]">list_alt</span>
+See Waiting List
+</a>
+</div></div>
+<!-- Upcoming Interviews -->
+<div class="bg-surface-container-lowest rounded-xl p-lg card-shadow border border-outline-variant flex flex-col h-full">
+<div class="flex justify-between items-center mb-md">
+<h3 class="font-title-lg text-title-lg text-on-surface">Upcoming Interviews</h3>
+<a class="text-primary font-label-md text-label-md flex items-center gap-xs hover:underline" href="../interview_management_complete_workflow/code.html">
+<span class="material-symbols-outlined text-[16px]">calendar_month</span>
+View Calendar
+</a>
+</div>
+<ul class="flex-1 space-y-sm">
+<li class="flex gap-sm p-sm rounded-lg hover:bg-surface-container-low transition-colors">
+<div class="w-8 h-8 rounded-full bg-primary-container/50 flex-shrink-0 flex items-center justify-center text-primary">
+<span class="material-symbols-outlined text-[16px]">video_call</span>
+</div>
+<div>
+<p class="font-body-md text-on-surface font-medium">Sarah Jenkins</p>
+<p class="font-label-md text-secondary">UX Designer • 10:30 AM Today</p>
+</div>
+</li>
+<li class="flex gap-sm p-sm rounded-lg hover:bg-surface-container-low transition-colors">
+<div class="w-8 h-8 rounded-full bg-primary-container/50 flex-shrink-0 flex items-center justify-center text-primary">
+<span class="material-symbols-outlined text-[16px]">mic</span>
+</div>
+<div>
+<p class="font-body-md text-on-surface font-medium">Michael Chen</p>
+<p class="font-label-md text-secondary">Frontend Dev • 2:00 PM Today</p>
+</div>
+</li>
+<li class="flex gap-sm p-sm rounded-lg hover:bg-surface-container-low transition-colors">
+<div class="w-8 h-8 rounded-full bg-primary-container/50 flex-shrink-0 flex items-center justify-center text-primary">
+<span class="material-symbols-outlined text-[16px]">person</span>
+</div>
+<div>
+<p class="font-body-md text-on-surface font-medium">Anna Rodriguez</p>
+<p class="font-label-md text-secondary">Product Designer • Tomorrow 10:30 AM</p>
+</div>
+</li>
+</ul>
+</div>
+</div>
+<!-- Recent Activity Feed + Overdue Follow-ups -->
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-lg mb-xl">
+<!-- Recent Activity Feed -->
+<div class="lg:col-span-2 bg-surface-container-lowest rounded-xl p-lg card-shadow border border-outline-variant">
+<h3 class="font-title-lg text-title-lg text-on-surface mb-md">Recent Activity Feed</h3>
+<ul class="space-y-md">
+<li class="flex gap-md">
+<div class="flex flex-col items-center">
+<div class="w-8 h-8 rounded-full bg-primary-container/50 flex-shrink-0 flex items-center justify-center text-primary">
+<span class="material-symbols-outlined text-[16px]">task_alt</span>
+</div>
+<div class="w-px flex-1 bg-outline-variant mt-xs"></div>
+</div>
+<div class="pb-md">
+<p class="font-body-md text-on-surface font-medium">Sarah Jenkins moved to Interview 1</p>
+<p class="font-label-md text-secondary">Technical Interview completed • 2 hours ago</p>
+</div>
+</li>
+<li class="flex gap-md">
+<div class="flex flex-col items-center">
+<div class="w-8 h-8 rounded-full bg-surface-container-highest flex-shrink-0 flex items-center justify-center text-secondary">
+<span class="material-symbols-outlined text-[16px]">person_add</span>
+</div>
+<div class="w-px flex-1 bg-outline-variant mt-xs"></div>
+</div>
+<div class="pb-md">
+<p class="font-body-md text-on-surface font-medium">New application from David Chen</p>
+<p class="font-label-md text-secondary">Senior Frontend Developer • 4 hours ago</p>
+</div>
+</li>
+<li class="flex gap-md">
+<div class="flex flex-col items-center">
+<div class="w-8 h-8 rounded-full bg-surface-container-highest flex-shrink-0 flex items-center justify-center text-secondary">
+<span class="material-symbols-outlined text-[16px]">post_add</span>
+</div>
+<div class="w-px flex-1 bg-outline-variant mt-xs"></div>
+</div>
+<div class="pb-md">
+<p class="font-body-md text-on-surface font-medium">Vacancy "Backend Engineer" published</p>
+<p class="font-label-md text-secondary">Downtown Fitness Hub • Yesterday</p>
+</div>
+</li>
+<li class="flex gap-md">
+<div class="flex flex-col items-center">
+<div class="w-8 h-8 rounded-full bg-primary-container/50 flex-shrink-0 flex items-center justify-center text-primary">
+<span class="material-symbols-outlined text-[16px]">celebration</span>
+</div>
+<div class="w-px flex-1 bg-outline-variant mt-xs"></div>
+</div>
+<div>
+<p class="font-body-md text-on-surface font-medium">Marcus Vance hired as Personal Trainer</p>
+<p class="font-label-md text-secondary">Offer accepted • 3 days ago</p>
+</div>
+</li>
+</ul>
+</div>
+<!-- Overdue Follow-ups -->
+<div class="bg-surface-container-lowest rounded-xl p-lg card-shadow border border-outline-variant flex flex-col h-full">
+<h3 class="font-title-lg text-title-lg text-on-surface mb-md">Overdue Follow-ups</h3>
+<ul class="flex-1 space-y-sm">
+<li class="flex gap-sm p-sm rounded-lg hover:bg-error-container/20 transition-colors">
+<div class="w-8 h-8 rounded-full bg-error-container/50 flex-shrink-0 flex items-center justify-center text-error">
+<span class="material-symbols-outlined text-[16px]">priority_high</span>
+</div>
+<div>
+<p class="font-body-md text-on-surface font-medium">Emma Thompson</p>
+<p class="font-label-md text-secondary">Offer Draft • 1 day overdue</p>
+</div>
+</li>
+<li class="flex gap-sm p-sm rounded-lg hover:bg-error-container/20 transition-colors">
+<div class="w-8 h-8 rounded-full bg-error-container/50 flex-shrink-0 flex items-center justify-center text-error">
+<span class="material-symbols-outlined text-[16px]">priority_high</span>
+</div>
+<div>
+<p class="font-body-md text-on-surface font-medium">David Miller</p>
+<p class="font-label-md text-secondary">Interview Feedback • 2 days overdue</p>
+</div>
+</li>
+<li class="flex gap-sm p-sm rounded-lg hover:bg-error-container/20 transition-colors">
+<div class="w-8 h-8 rounded-full bg-error-container/50 flex-shrink-0 flex items-center justify-center text-error">
+<span class="material-symbols-outlined text-[16px]">priority_high</span>
+</div>
+<div>
+<p class="font-body-md text-on-surface font-medium">Layla Hassan</p>
+<p class="font-label-md text-secondary">Screening Call • 3 days overdue</p>
+</div>
+</li>
+</ul>
+<a class="text-primary font-label-md text-label-md flex items-center gap-xs hover:underline mt-md" href="../recruitment_pipeline_interactive_kanban/code.html">
+<span class="material-symbols-outlined text-[16px]">arrow_forward</span>
+Review pipeline
+</a>
+</div>
+</div>
+<!-- Quick Actions -->
+<div class="bg-surface-container-lowest rounded-xl p-lg card-shadow border border-outline-variant mb-xl">
+<h3 class="font-title-lg text-title-lg text-on-surface mb-md">Quick Actions</h3>
+<div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-md">
+<a class="px-md py-sm bg-primary text-on-primary rounded-lg font-label-md text-label-md hover:opacity-90 transition-opacity flex flex-col items-center justify-center gap-xs text-center h-24" href="../create_vacancy/code.html">
+<span class="material-symbols-outlined text-[24px]">add_circle</span>
+            Create Vacancy
+        </a>
+<a class="px-md py-sm bg-surface text-primary border border-primary rounded-lg font-label-md text-label-md hover:bg-primary-container/20 transition-colors flex flex-col items-center justify-center gap-xs text-center h-24" href="../candidate_list/code.html"><span class="material-symbols-outlined text-[24px]">group</span>View Candidates</a>
+
+
+<a class="px-md py-sm bg-surface text-primary border border-primary rounded-lg font-label-md text-label-md hover:bg-primary-container/20 transition-colors flex flex-col items-center justify-center gap-xs text-center h-24" href="../interview_management_complete_workflow/code.html">
+<span class="material-symbols-outlined text-[24px]">event</span>
+            Schedule Interview
+        </a>
+<a class="px-md py-sm bg-surface text-primary border border-primary rounded-lg font-label-md text-label-md hover:bg-primary-container/20 transition-colors flex flex-col items-center justify-center gap-xs text-center h-24" href="../hire_candidate_wizard_sidebar_navigation/code.html">
+<span class="material-symbols-outlined text-[24px]">person_add</span>
+            Create Employee
+        </a>
+</div>
+</div>
+</main>
+<script>
+    // Funnel Chart Initialization
+    document.addEventListener('DOMContentLoaded', function() {
+        const ctx = document.getElementById('funnelChart').getContext('2d');
+        
+        new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: ['Applied', 'Screening', 'Interview 1', 'Interview 2', 'Waiting List', 'Hired'],
+                datasets: [{
+                    label: 'Candidates',
+                    data: [148, 85, 45, 20, 12, 8],
+                    backgroundColor: [
+                        'rgba(22, 163, 74, 0.2)', // Lightest green
+                        'rgba(22, 163, 74, 0.4)',
+                        'rgba(22, 163, 74, 0.6)',
+                        'rgba(22, 163, 74, 0.8)',
+                        'rgba(22, 163, 74, 0.9)',
+                        'rgba(22, 163, 74, 1)'    // Solid primary green
+                    ],
+                    borderColor: '#16a34a',
+                    borderWidth: 1,
+                    borderRadius: 4,
+                    barPercentage: 0.6
+                }]
+            },
+            options: {
+                indexAxis: 'y', // Horizontal bar chart to act like a funnel
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        display: false
+                    },
+                    tooltip: {
+                        backgroundColor: '#213145',
+                        titleFont: { family: 'Inter', size: 13 },
+                        bodyFont: { family: 'Inter', size: 14, weight: 'bold' },
+                        padding: 10,
+                        displayColors: false
+                    }
+                },
+                scales: {
+                    x: {
+                        grid: {
+                            display: false,
+                            drawBorder: false
+                        },
+                        ticks: {
+                            display: false
+                        }
+                    },
+                    y: {
+                        grid: {
+                            display: false,
+                            drawBorder: false
+                        },
+                        ticks: {
+                            font: {
+                                family: 'Inter',
+                                size: 12,
+                                weight: '500'
+                            },
+                            color: '#5c5f60'
+                        }
+                    }
+                }
+            }
+        });
+    });
+</script>
+
+
+</body></html>

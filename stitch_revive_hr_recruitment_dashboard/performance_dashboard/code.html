@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Revive HR - Performance Dashboard</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "on-secondary-fixed": "#191c1e",
+                    "secondary": "#5c5f60",
+                    "primary-fixed-dim": "#62df7d",
+                    "background": "#f8f9ff",
+                    "on-surface-variant": "#3e4a3d",
+                    "inverse-surface": "#213145",
+                    "primary": "#006b2c",
+                    "surface-bright": "#f8f9ff",
+                    "outline": "#6e7b6c",
+                    "on-tertiary-fixed": "#111c2d",
+                    "on-error-container": "#93000a",
+                    "error": "#ba1a1a",
+                    "surface-container-low": "#eff4ff",
+                    "on-primary-fixed-variant": "#005320",
+                    "on-primary": "#ffffff",
+                    "tertiary": "#515c71",
+                    "primary-container": "#00873a",
+                    "surface-container-high": "#dce9ff",
+                    "surface-container-lowest": "#ffffff",
+                    "on-error": "#ffffff",
+                    "on-secondary-fixed-variant": "#444749",
+                    "tertiary-fixed": "#d8e3fb",
+                    "tertiary-container": "#6a758a",
+                    "on-background": "#0b1c30",
+                    "surface-tint": "#006e2d",
+                    "on-tertiary-fixed-variant": "#3c475a",
+                    "secondary-container": "#dee0e2",
+                    "on-secondary": "#ffffff",
+                    "inverse-primary": "#62df7d",
+                    "primary-fixed": "#7ffc97",
+                    "surface-container-highest": "#d3e4fe",
+                    "on-tertiary": "#ffffff",
+                    "secondary-fixed": "#e1e2e4",
+                    "inverse-on-surface": "#eaf1ff",
+                    "on-primary-fixed": "#002109",
+                    "on-surface": "#0b1c30",
+                    "on-secondary-container": "#606365",
+                    "outline-variant": "#bdcaba",
+                    "on-primary-container": "#f7fff2",
+                    "surface-container": "#e5eeff",
+                    "tertiary-fixed-dim": "#bcc7de",
+                    "surface-dim": "#cbdbf5",
+                    "secondary-fixed-dim": "#c5c6c8",
+                    "on-tertiary-container": "#fefcff",
+                    "error-container": "#ffdad6",
+                    "surface": "#f8f9ff",
+                    "surface-variant": "#d3e4fe"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.25rem",
+                    "lg": "0.5rem",
+                    "xl": "0.75rem",
+                    "full": "9999px"
+            },
+            "spacing": {
+                    "2xl": "48px",
+                    "xl": "32px",
+                    "lg": "24px",
+                    "max-width": "1440px",
+                    "margin-desktop": "32px",
+                    "base": "4px",
+                    "gutter": "24px",
+                    "xs": "4px",
+                    "sm": "8px",
+                    "margin-mobile": "16px",
+                    "md": "16px"
+            },
+            "fontFamily": {
+                    "headline-md": ["Inter"],
+                    "display-lg": ["Inter"],
+                    "label-md": ["Inter"],
+                    "headline-lg-mobile": ["Inter"],
+                    "body-md": ["Inter"],
+                    "headline-lg": ["Inter"],
+                    "body-lg": ["Inter"],
+                    "label-sm": ["Inter"],
+                    "title-lg": ["Inter"]
+            },
+            "fontSize": {
+                    "headline-md": ["24px", {"lineHeight": "32px", "fontWeight": "600"}],
+                    "display-lg": ["48px", {"lineHeight": "56px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                    "label-md": ["12px", {"lineHeight": "16px", "letterSpacing": "0.01em", "fontWeight": "500"}],
+                    "headline-lg-mobile": ["24px", {"lineHeight": "32px", "fontWeight": "600"}],
+                    "body-md": ["14px", {"lineHeight": "20px", "fontWeight": "400"}],
+                    "headline-lg": ["32px", {"lineHeight": "40px", "letterSpacing": "-0.01em", "fontWeight": "600"}],
+                    "body-lg": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+                    "label-sm": ["11px", {"lineHeight": "14px", "fontWeight": "600"}],
+                    "title-lg": ["20px", {"lineHeight": "28px", "fontWeight": "600"}]
+            }
+          },
+        },
+      }
+    </script>
+<style>
+        body { font-family: 'Inter', sans-serif; background-color: #F3F4F6; }
+        .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
+        .filled-icon { font-variation-settings: 'FILL' 1; }
+    </style>
+</head>
+<body class="bg-background text-on-background flex h-screen overflow-hidden">
+<!-- SideNavBar -->
+<nav class="hidden md:flex flex-col h-full py-lg px-md fixed left-0 top-0 h-screen w-[280px] bg-surface-container-lowest dark:bg-surface-container-low shadow-sm z-20">
+<div class="flex items-center gap-3 mb-8 px-4">
+<div class="w-10 h-10 rounded-lg bg-primary-container flex items-center justify-center text-on-primary-container">
+<span class="material-symbols-outlined filled-icon">switch_account</span>
+</div>
+<div>
+<h1 class="font-headline-md text-headline-md font-bold text-primary dark:text-primary-fixed-dim">Revive HR</h1>
+<p class="font-label-md text-label-md text-secondary">Management Portal</p>
+</div>
+</div>
+<button class="w-full bg-primary text-on-primary py-3 px-4 rounded-lg font-headline-md text-body-md mb-8 flex items-center justify-center gap-2 hover:bg-surface-tint transition-colors">
+<span class="material-symbols-outlined">add</span>
+            New Review Cycle
+        </button>
+<div class="flex-1 flex flex-col gap-2">
+<a class="flex items-center gap-3 px-4 py-3 text-secondary dark:text-secondary-fixed-dim hover:bg-secondary-container dark:hover:bg-on-secondary-fixed-variant transition-all rounded-lg font-body-md text-body-md" href="#">
+<span class="material-symbols-outlined" data-icon="dashboard">dashboard</span>
+                Dashboard
+            </a>
+<a class="flex items-center gap-3 px-4 py-3 text-secondary dark:text-secondary-fixed-dim hover:bg-secondary-container dark:hover:bg-on-secondary-fixed-variant transition-all rounded-lg font-body-md text-body-md" href="#">
+<span class="material-symbols-outlined" data-icon="groups">groups</span>
+                Employees
+            </a>
+<a class="flex items-center gap-3 px-4 py-3 bg-primary-container dark:bg-on-primary-fixed-variant text-on-primary-container dark:text-primary-fixed rounded-lg font-bold font-body-md text-body-md scale-95 transition-transform duration-150" href="#">
+<span class="material-symbols-outlined filled-icon" data-icon="monitoring">monitoring</span>
+                Performance
+            </a>
+<a class="flex items-center gap-3 px-4 py-3 text-secondary dark:text-secondary-fixed-dim hover:bg-secondary-container dark:hover:bg-on-secondary-fixed-variant transition-all rounded-lg font-body-md text-body-md" href="#">
+<span class="material-symbols-outlined" data-icon="payments">payments</span>
+                Payroll
+            </a>
+<a class="flex items-center gap-3 px-4 py-3 text-secondary dark:text-secondary-fixed-dim hover:bg-secondary-container dark:hover:bg-on-secondary-fixed-variant transition-all rounded-lg font-body-md text-body-md" href="#">
+<span class="material-symbols-outlined" data-icon="description">description</span>
+                Documents
+            </a>
+</div>
+<div class="mt-auto border-t border-secondary-container pt-4 flex flex-col gap-2">
+<a class="flex items-center gap-3 px-4 py-3 text-secondary dark:text-secondary-fixed-dim hover:bg-secondary-container transition-all rounded-lg font-body-md text-body-md" href="#">
+<span class="material-symbols-outlined" data-icon="settings">settings</span>
+                Settings
+            </a>
+<a class="flex items-center gap-3 px-4 py-3 text-secondary dark:text-secondary-fixed-dim hover:bg-secondary-container transition-all rounded-lg font-body-md text-body-md" href="#">
+<span class="material-symbols-outlined" data-icon="logout">logout</span>
+                Logout
+            </a>
+</div>
+</nav>
+<!-- Main Content -->
+<main class="flex-1 md:ml-[280px] h-screen overflow-y-auto">
+<!-- TopAppBar (Mobile) -->
+<header class="md:hidden flex justify-between items-center w-full px-margin-mobile h-16 bg-surface-container-lowest dark:bg-surface-container-low shadow-sm sticky top-0 z-20">
+<h1 class="font-headline-md text-headline-md font-bold text-primary dark:text-primary-fixed-dim">Revive HR</h1>
+<div class="flex gap-4">
+<span class="material-symbols-outlined text-secondary">notifications</span>
+<span class="material-symbols-outlined text-secondary">menu</span>
+</div>
+</header>
+<div class="p-margin-mobile md:p-margin-desktop max-w-max-width mx-auto">
+<header class="flex justify-between items-end mb-lg">
+<div>
+<h2 class="font-headline-lg text-headline-lg-mobile md:text-headline-lg text-on-surface">Performance Dashboard</h2>
+<p class="font-body-md text-body-md text-secondary mt-1">Overview of company performance metrics and review cycles.</p>
+</div>
+<div class="hidden md:flex gap-3">
+<button class="p-2 bg-surface text-secondary rounded-lg border border-outline-variant hover:bg-secondary-container transition-colors">
+<span class="material-symbols-outlined">download</span>
+</button>
+<button class="px-4 py-2 bg-surface text-on-surface rounded-lg border border-outline-variant hover:bg-secondary-container transition-colors font-label-md text-label-md flex items-center gap-2">
+<span class="material-symbols-outlined">filter_list</span> Filter
+                    </button>
+</div>
+</header>
+<!-- Metric Cards -->
+<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-gutter mb-xl">
+<div class="bg-surface-container-lowest rounded-xl p-lg shadow-sm border border-outline-variant/30 flex flex-col justify-between">
+<div class="flex justify-between items-start mb-4">
+<p class="font-body-md text-body-md text-secondary">Avg. Performance Score</p>
+<span class="material-symbols-outlined text-primary-container p-2 bg-primary-container/10 rounded-full">star</span>
+</div>
+<div>
+<p class="font-display-lg text-display-lg text-on-surface">4.2<span class="text-title-lg text-secondary">/5</span></p>
+<p class="font-label-sm text-label-sm text-primary flex items-center gap-1 mt-2">
+<span class="material-symbols-outlined text-[14px]">trending_up</span> +0.3 vs last cycle
+                        </p>
+</div>
+</div>
+<div class="bg-surface-container-lowest rounded-xl p-lg shadow-sm border border-outline-variant/30 flex flex-col justify-between">
+<div class="flex justify-between items-start mb-4">
+<p class="font-body-md text-body-md text-secondary">Active Review Cycles</p>
+<span class="material-symbols-outlined text-tertiary-container p-2 bg-tertiary-container/10 rounded-full">cycle</span>
+</div>
+<div>
+<p class="font-display-lg text-display-lg text-on-surface">3</p>
+<p class="font-label-sm text-label-sm text-secondary mt-2">Across 4 departments</p>
+</div>
+</div>
+<div class="bg-surface-container-lowest rounded-xl p-lg shadow-sm border border-outline-variant/30 flex flex-col justify-between">
+<div class="flex justify-between items-start mb-4">
+<p class="font-body-md text-body-md text-secondary">Goal Completion Rate</p>
+<span class="material-symbols-outlined text-primary-container p-2 bg-primary-container/10 rounded-full">check_circle</span>
+</div>
+<div>
+<p class="font-display-lg text-display-lg text-on-surface">78%</p>
+<div class="w-full bg-secondary-container h-2 rounded-full mt-3 overflow-hidden">
+<div class="bg-primary h-full rounded-full" style="width: 78%"></div>
+</div>
+</div>
+</div>
+<div class="bg-surface-container-lowest rounded-xl p-lg shadow-sm border border-outline-variant/30 flex flex-col justify-between">
+<div class="flex justify-between items-start mb-4">
+<p class="font-body-md text-body-md text-secondary">Pending Feedbacks</p>
+<span class="material-symbols-outlined text-error p-2 bg-error-container/50 rounded-full">pending_actions</span>
+</div>
+<div>
+<p class="font-display-lg text-display-lg text-on-surface">12</p>
+<p class="font-label-sm text-label-sm text-error flex items-center gap-1 mt-2">
+<span class="material-symbols-outlined text-[14px]">warning</span> Requires attention
+                        </p>
+</div>
+</div>
+</div>
+<!-- Bento Grid Layout -->
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-gutter">
+<!-- Chart Area (Spans 2 cols on lg) -->
+<div class="lg:col-span-2 bg-surface-container-lowest rounded-xl p-lg shadow-sm border border-outline-variant/30 flex flex-col">
+<div class="flex justify-between items-center mb-6">
+<h3 class="font-title-lg text-title-lg text-on-surface">Performance Trends</h3>
+<select class="bg-surface border-outline-variant text-body-md rounded-md text-secondary py-1 pl-2 pr-8 focus:ring-primary focus:border-primary">
+<option>Last 6 Months</option>
+<option>Last Year</option>
+</select>
+</div>
+<!-- Placeholder for Chart -->
+<div class="flex-1 bg-surface rounded-lg border border-outline-variant/50 relative overflow-hidden min-h-[300px] flex items-center justify-center">
+<div class="absolute inset-0 bg-cover bg-center opacity-80" data-alt="A clean, modern line chart showing an upward trend over six months. The chart uses a vibrant green line against a light gray grid on a stark white background. The aesthetic is corporate and data-driven, highlighting growth." style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuDx32fJBibH4EEZstD_-S7wQHiwB6aQTibyY7J0BmuukkBiW_zEkHF7_Bqk3bL6BHdpKdeI9L0yhPAGrnM5KzLJHH8JBxo3jwj0Dy6ZrPf_4-q_Ha_LRn1-czuxGu7ZICu1P4rp9o2UUtJBrYSaEaOrADE10rQODDlM0V77fCESZLmbtCue4gUrs3wuzrYe5nI3cSz5RJBdMi5_n6IWAFPQEdUneb8BiVQPj8UiP3WPY-Pij6c9aUcC')"></div>
+<div class="relative z-10 bg-white/90 backdrop-blur-sm p-4 rounded shadow-sm text-center">
+<span class="material-symbols-outlined text-secondary text-4xl mb-2">bar_chart</span>
+<p class="font-body-md text-secondary">Chart visualization placeholder</p>
+</div>
+</div>
+</div>
+<!-- Active Review Cycles -->
+<div class="bg-surface-container-lowest rounded-xl p-lg shadow-sm border border-outline-variant/30 flex flex-col">
+<div class="flex justify-between items-center mb-6">
+<h3 class="font-title-lg text-title-lg text-on-surface">Active Cycles</h3>
+<button class="text-primary font-label-sm text-label-sm hover:underline">View All</button>
+</div>
+<div class="flex flex-col gap-4">
+<div class="p-4 bg-surface rounded-lg border border-outline-variant/30 hover:border-primary-container transition-colors cursor-pointer group">
+<div class="flex justify-between items-start mb-2">
+<h4 class="font-body-lg text-body-lg font-semibold text-on-surface group-hover:text-primary transition-colors">Q4 Annual Review</h4>
+<span class="px-2 py-1 bg-surface-tint/10 text-surface-tint rounded text-[10px] font-bold tracking-wide uppercase">In Progress</span>
+</div>
+<div class="flex items-center gap-2 text-secondary font-label-md text-label-md mt-3">
+<span class="material-symbols-outlined text-[16px]">calendar_today</span>
+                                Deadline: Dec 15, 2023
+                            </div>
+<div class="mt-3 w-full bg-secondary-container h-1.5 rounded-full overflow-hidden">
+<div class="bg-surface-tint h-full rounded-full" style="width: 65%"></div>
+</div>
+</div>
+<div class="p-4 bg-surface rounded-lg border border-outline-variant/30 hover:border-primary-container transition-colors cursor-pointer group">
+<div class="flex justify-between items-start mb-2">
+<h4 class="font-body-lg text-body-lg font-semibold text-on-surface group-hover:text-primary transition-colors">Engineering Q3 Check-in</h4>
+<span class="px-2 py-1 bg-surface-tint/10 text-surface-tint rounded text-[10px] font-bold tracking-wide uppercase">In Progress</span>
+</div>
+<div class="flex items-center gap-2 text-secondary font-label-md text-label-md mt-3">
+<span class="material-symbols-outlined text-[16px]">calendar_today</span>
+                                Deadline: Nov 30, 2023
+                            </div>
+<div class="mt-3 w-full bg-secondary-container h-1.5 rounded-full overflow-hidden">
+<div class="bg-surface-tint h-full rounded-full" style="width: 82%"></div>
+</div>
+</div>
+</div>
+</div>
+<!-- Top Performers -->
+<div class="lg:col-span-2 bg-surface-container-lowest rounded-xl shadow-sm border border-outline-variant/30 overflow-hidden">
+<div class="p-lg pb-4 border-b border-outline-variant/30 flex justify-between items-center">
+<h3 class="font-title-lg text-title-lg text-on-surface">Top Performers</h3>
+<button class="text-secondary hover:text-primary transition-colors">
+<span class="material-symbols-outlined">more_horiz</span>
+</button>
+</div>
+<div class="overflow-x-auto">
+<table class="w-full text-left border-collapse">
+<thead>
+<tr class="bg-surface/50 font-label-sm text-label-sm text-secondary uppercase tracking-wider">
+<th class="py-3 px-lg font-medium">Employee</th>
+<th class="py-3 px-lg font-medium">Role</th>
+<th class="py-3 px-lg font-medium">Department</th>
+<th class="py-3 px-lg font-medium text-right">Score</th>
+</tr>
+</thead>
+<tbody class="font-body-md text-body-md text-on-surface divide-y divide-outline-variant/20">
+<tr class="hover:bg-surface/50 transition-colors">
+<td class="py-4 px-lg flex items-center gap-3">
+<img class="w-8 h-8 rounded-full object-cover border border-outline-variant/30" data-alt="Professional headshot of a smiling woman in corporate attire against a neutral light background, suitable for an HR employee avatar." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDaT7m_fgsA64u4BpqEeTQk_20l6I7CIOTpYJoRDtTwM42nsWfR1ADaHQW5TR96R6vwJov3eBGJlQTR4d7PXrCWKa_M_I_Zek_lzZq4zzg9B7PI_dtfvi3XTySkyiBfZATRV12tJG6oz1Vim9MDpqljHS9oSr9sKaOcFKe3xurLZflKMYZOqKnV4jFOIU9OPgAHEjTK08wZl0QbJNcHBtEnFb5IE-xEDg2Zxjik1ES0O44LnGyymCR3"/>
+<span class="font-medium">Sarah Jenkins</span>
+</td>
+<td class="py-4 px-lg text-secondary">Senior Developer</td>
+<td class="py-4 px-lg text-secondary">Engineering</td>
+<td class="py-4 px-lg text-right font-medium text-primary">4.9/5</td>
+</tr>
+<tr class="hover:bg-surface/50 transition-colors">
+<td class="py-4 px-lg flex items-center gap-3">
+<img class="w-8 h-8 rounded-full object-cover border border-outline-variant/30" data-alt="Professional headshot of a man with glasses in a button-down shirt against a neutral light background, suitable for an HR employee avatar." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAMCJMYzhfQiffwgNT1kfV8Aba3xl-Fk8TpP_VwdD89PLz5jntPQwPxNTav0skaPILwowiCRQm5cVvqZJX1LB6FRcczDIx4JHg4HydfBmybvUPi5fmKmrUA5_PaUe8UbiNN2XiJVpsPThwTugydZYZHVlYPtzzSdZ39gSWAE81ubEqpBHd6MgbqA7KcBUMmDzXCBzOWlLce05gC3-JgQuwFeKzAVqZNHxXPwmNlkbkLToo0rxX6GerL"/>
+<span class="font-medium">Michael Chang</span>
+</td>
+<td class="py-4 px-lg text-secondary">Product Manager</td>
+<td class="py-4 px-lg text-secondary">Product</td>
+<td class="py-4 px-lg text-right font-medium text-primary">4.8/5</td>
+</tr>
+<tr class="hover:bg-surface/50 transition-colors">
+<td class="py-4 px-lg flex items-center gap-3">
+<img class="w-8 h-8 rounded-full object-cover border border-outline-variant/30" data-alt="Professional headshot of a young woman with curly hair against a neutral light background, suitable for an HR employee avatar." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDybqVznnH77UdFafpIlnB-jQ-8dencKcSPMitTBJpr4n1OFdVT7km7eMeVr1U59U0BfwleUrTvdMdXR-bQNcwbvzkxiV17DozxZIzFLlw3sYagOwHF3YTbrsCL2Kks5741nrkoH9fkjrlZtIOsfQZ7cDs9CjHVmzRKEVwvz_NmtjEqVyZv0CnNbchEbbmQEAv03x3DhhvY2l9OGzSCDs_8Qi5ilqw9C7AJ3aJq-Qf7I4H7h4OLqmpI"/>
+<span class="font-medium">Elena Rodriguez</span>
+</td>
+<td class="py-4 px-lg text-secondary">UX Designer</td>
+<td class="py-4 px-lg text-secondary">Design</td>
+<td class="py-4 px-lg text-right font-medium text-primary">4.7/5</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<!-- Goals Overview -->
+<div class="bg-surface-container-lowest rounded-xl p-lg shadow-sm border border-outline-variant/30 flex flex-col">
+<div class="flex justify-between items-center mb-6">
+<h3 class="font-title-lg text-title-lg text-on-surface">Team Goals</h3>
+</div>
+<div class="flex flex-col gap-5">
+<div>
+<div class="flex justify-between text-body-md mb-2">
+<span class="font-medium text-on-surface">Launch Q4 Features</span>
+<span class="text-secondary">85%</span>
+</div>
+<div class="w-full bg-secondary-container h-2 rounded-full overflow-hidden">
+<div class="bg-primary h-full rounded-full" style="width: 85%"></div>
+</div>
+</div>
+<div>
+<div class="flex justify-between text-body-md mb-2">
+<span class="font-medium text-on-surface">Reduce Support Tickets</span>
+<span class="text-secondary">40%</span>
+</div>
+<div class="w-full bg-secondary-container h-2 rounded-full overflow-hidden">
+<div class="bg-tertiary h-full rounded-full" style="width: 40%"></div>
+</div>
+</div>
+<div>
+<div class="flex justify-between text-body-md mb-2">
+<span class="font-medium text-on-surface">Hiring Target (Q4)</span>
+<span class="text-secondary">60%</span>
+</div>
+<div class="w-full bg-secondary-container h-2 rounded-full overflow-hidden">
+<div class="bg-surface-tint h-full rounded-full" style="width: 60%"></div>
+</div>
+</div>
+</div>
+<button class="mt-auto pt-6 w-full text-center text-primary font-label-md text-label-md hover:underline">View All Objectives</button>
+</div>
+</div>
+</div>
+</main>
+</body></html>

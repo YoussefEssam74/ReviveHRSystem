@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Recruitment Pipeline - Revive HR</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "tertiary-fixed": "#d8e3fb",
+                    "surface-container-highest": "#d3e4fe",
+                    "on-secondary-fixed": "#191c1e",
+                    "tertiary-fixed-dim": "#bcc7de",
+                    "secondary-fixed-dim": "#c5c6c8",
+                    "on-primary-fixed-variant": "#005320",
+                    "on-primary-container": "#f7fff2",
+                    "on-background": "#0b1c30",
+                    "on-tertiary": "#ffffff",
+                    "on-secondary-container": "#606365",
+                    "surface-variant": "#d3e4fe",
+                    "on-secondary": "#ffffff",
+                    "on-tertiary-fixed-variant": "#3c475a",
+                    "outline": "#6e7b6c",
+                    "secondary-container": "#dee0e2",
+                    "surface-container": "#e5eeff",
+                    "surface-container-low": "#eff4ff",
+                    "inverse-surface": "#213145",
+                    "on-primary": "#ffffff",
+                    "primary": "#006b2c",
+                    "error": "#ba1a1a",
+                    "on-primary-fixed": "#002109",
+                    "secondary-fixed": "#e1e2e4",
+                    "primary-fixed-dim": "#62df7d",
+                    "background": "#f8f9ff",
+                    "surface": "#f8f9ff",
+                    "surface-tint": "#006e2d",
+                    "tertiary-container": "#6a758a",
+                    "outline-variant": "#bdcaba",
+                    "tertiary": "#515c71",
+                    "on-tertiary-fixed": "#111c2d",
+                    "surface-dim": "#cbdbf5",
+                    "surface-container-lowest": "#ffffff",
+                    "on-error-container": "#93000a",
+                    "on-secondary-fixed-variant": "#444749",
+                    "surface-bright": "#f8f9ff",
+                    "primary-fixed": "#7ffc97",
+                    "inverse-on-surface": "#eaf1ff",
+                    "on-surface": "#0b1c30",
+                    "error-container": "#ffdad6",
+                    "on-surface-variant": "#3e4a3d",
+                    "on-tertiary-container": "#fefcff",
+                    "secondary": "#5c5f60",
+                    "inverse-primary": "#62df7d",
+                    "on-error": "#ffffff",
+                    "primary-container": "#00873a",
+                    "surface-container-high": "#dce9ff"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.25rem",
+                    "lg": "0.5rem",
+                    "xl": "0.75rem",
+                    "full": "9999px"
+            },
+            "spacing": {
+                    "max-width": "1440px",
+                    "md": "16px",
+                    "xs": "4px",
+                    "margin-mobile": "16px",
+                    "gutter": "24px",
+                    "margin-desktop": "32px",
+                    "2xl": "48px",
+                    "xl": "32px",
+                    "lg": "24px",
+                    "sm": "8px",
+                    "base": "4px"
+            },
+            "fontFamily": {
+                    "title-lg": [
+                            "Inter"
+                    ],
+                    "body-lg": [
+                            "Inter"
+                    ],
+                    "headline-md": [
+                            "Inter"
+                    ],
+                    "display-lg": [
+                            "Inter"
+                    ],
+                    "headline-lg-mobile": [
+                            "Inter"
+                    ],
+                    "body-md": [
+                            "Inter"
+                    ],
+                    "headline-lg": [
+                            "Inter"
+                    ],
+                    "label-sm": [
+                            "Inter"
+                    ],
+                    "label-md": [
+                            "Inter"
+                    ]
+            },
+            "fontSize": {
+                    "title-lg": [
+                            "20px",
+                            {
+                                    "lineHeight": "28px",
+                                    "fontWeight": "600"
+                            }
+                    ],
+                    "body-lg": [
+                            "16px",
+                            {
+                                    "lineHeight": "24px",
+                                    "fontWeight": "400"
+                            }
+                    ],
+                    "headline-md": [
+                            "24px",
+                            {
+                                    "lineHeight": "32px",
+                                    "fontWeight": "600"
+                            }
+                    ],
+                    "display-lg": [
+                            "48px",
+                            {
+                                    "lineHeight": "56px",
+                                    "letterSpacing": "-0.02em",
+                                    "fontWeight": "700"
+                            }
+                    ],
+                    "headline-lg-mobile": [
+                            "24px",
+                            {
+                                    "lineHeight": "32px",
+                                    "fontWeight": "600"
+                            }
+                    ],
+                    "body-md": [
+                            "14px",
+                            {
+                                    "lineHeight": "20px",
+                                    "fontWeight": "400"
+                            }
+                    ],
+                    "headline-lg": [
+                            "32px",
+                            {
+                                    "lineHeight": "40px",
+                                    "letterSpacing": "-0.01em",
+                                    "fontWeight": "600"
+                            }
+                    ],
+                    "label-sm": [
+                            "11px",
+                            {
+                                    "lineHeight": "14px",
+                                    "fontWeight": "600"
+                            }
+                    ],
+                    "label-md": [
+                            "12px",
+                            {
+                                    "lineHeight": "16px",
+                                    "letterSpacing": "0.01em",
+                                    "fontWeight": "500"
+                            }
+                    ]
+            }
+    },
+        },
+      }
+    </script>
+<style>
+        .kanban-scroll::-webkit-scrollbar {
+            height: 8px;
+        }
+        .kanban-scroll::-webkit-scrollbar-track {
+            background: #F3F4F6;
+            border-radius: 4px;
+        }
+        .kanban-scroll::-webkit-scrollbar-thumb {
+            background: #D1D5DB;
+            border-radius: 4px;
+        }
+        .kanban-scroll::-webkit-scrollbar-thumb:hover {
+            background: #9CA3AF;
+        }
+    </style>
+</head>
+<body class="bg-background text-on-background min-h-screen font-body-md">
+<!-- SideNavBar -->
+<nav class="hidden md:flex flex-col h-full p-md max-w-[280px] fixed h-screen w-[280px] left-0 top-0 bg-surface-container-lowest dark:bg-inverse-surface border-r border-outline-variant shadow-sm z-50">
+<div class="mb-xl flex items-center gap-sm">
+<div class="w-10 h-10 rounded-full bg-primary flex items-center justify-center text-on-primary font-bold">R</div>
+<div>
+<h1 class="font-headline-md text-headline-md font-bold text-primary dark:text-primary-fixed">Revive HR</h1>
+<p class="font-label-md text-label-md text-secondary">Recruitment Module</p>
+</div>
+</div>
+<button class="mb-xl bg-primary text-on-primary py-sm px-md rounded-lg font-label-md text-label-md font-bold w-full hover:bg-primary-container transition-colors shadow-sm">
+            Create Vacancy
+        </button>
+<ul class="flex-1 space-y-xs">
+<li>
+<a class="flex items-center gap-md p-sm text-secondary dark:text-secondary-fixed-dim hover:text-primary hover:bg-surface-container-low dark:hover:bg-secondary-container/10 transition-colors cursor-pointer active:scale-95 duration-200 rounded-lg" href="#">
+<span class="material-symbols-outlined">dashboard</span>
+<span class="font-body-md text-body-md">Dashboard</span>
+</a>
+</li>
+<li>
+<a class="flex items-center gap-md p-sm text-secondary dark:text-secondary-fixed-dim hover:text-primary hover:bg-surface-container-low dark:hover:bg-secondary-container/10 transition-colors cursor-pointer active:scale-95 duration-200 rounded-lg" href="#">
+<span class="material-symbols-outlined">work</span>
+<span class="font-body-md text-body-md">Vacancies</span>
+</a>
+</li>
+<li>
+<a class="flex items-center gap-md p-sm text-secondary dark:text-secondary-fixed-dim hover:text-primary hover:bg-surface-container-low dark:hover:bg-secondary-container/10 transition-colors cursor-pointer active:scale-95 duration-200 rounded-lg" href="#">
+<span class="material-symbols-outlined">group</span>
+<span class="font-body-md text-body-md">Candidates</span>
+</a>
+</li>
+<li>
+<a class="flex items-center gap-md p-sm text-primary dark:text-primary-fixed-dim font-bold bg-surface-container dark:bg-secondary-container/20 rounded-lg hover:bg-surface-container-low dark:hover:bg-secondary-container/10 transition-colors cursor-pointer active:scale-95 duration-200" href="#">
+<span class="material-symbols-outlined">view_kanban</span>
+<span class="font-body-md text-body-md">Pipeline</span>
+</a>
+</li>
+<li>
+<a class="flex items-center gap-md p-sm text-secondary dark:text-secondary-fixed-dim hover:text-primary hover:bg-surface-container-low dark:hover:bg-secondary-container/10 transition-colors cursor-pointer active:scale-95 duration-200 rounded-lg" href="#">
+<span class="material-symbols-outlined">badge</span>
+<span class="font-body-md text-body-md">Employees</span>
+</a>
+</li>
+<li>
+<a class="flex items-center gap-md p-sm text-secondary dark:text-secondary-fixed-dim hover:text-primary hover:bg-surface-container-low dark:hover:bg-secondary-container/10 transition-colors cursor-pointer active:scale-95 duration-200 rounded-lg" href="#">
+<span class="material-symbols-outlined">settings</span>
+<span class="font-body-md text-body-md">Settings</span>
+</a>
+</li>
+</ul>
+<ul class="mt-auto space-y-xs pt-md border-t border-outline-variant">
+<li>
+<a class="flex items-center gap-md p-sm text-secondary dark:text-secondary-fixed-dim hover:text-primary hover:bg-surface-container-low dark:hover:bg-secondary-container/10 transition-colors cursor-pointer active:scale-95 duration-200 rounded-lg" href="#">
+<span class="material-symbols-outlined">help</span>
+<span class="font-body-md text-body-md">Support</span>
+</a>
+</li>
+<li>
+<a class="flex items-center gap-md p-sm text-secondary dark:text-secondary-fixed-dim hover:text-primary hover:bg-surface-container-low dark:hover:bg-secondary-container/10 transition-colors cursor-pointer active:scale-95 duration-200 rounded-lg" href="#">
+<span class="material-symbols-outlined">logout</span>
+<span class="font-body-md text-body-md">Log Out</span>
+</a>
+</li>
+</ul>
+</nav>
+<!-- Main Content Area -->
+<div class="md:ml-[280px] flex flex-col min-h-screen">
+<!-- TopAppBar -->
+<header class="flex justify-between items-center h-16 px-margin-desktop sticky top-0 z-40 bg-surface/80 backdrop-blur-md border-b border-outline-variant docked full-width top-0">
+<div class="flex items-center gap-md">
+<div class="relative hidden md:flex items-center text-on-surface-variant">
+<span class="material-symbols-outlined absolute left-sm">search</span>
+<input class="pl-xl pr-sm py-xs bg-surface-container-lowest border border-outline-variant rounded-full text-body-md font-body-md focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary w-64 transition-all" placeholder="Search candidates..." type="text"/>
+</div>
+</div>
+<div class="flex items-center gap-md">
+<button class="text-on-surface-variant hover:text-primary dark:hover:text-primary-fixed transition-all duration-200">
+<span class="material-symbols-outlined">notifications</span>
+</button>
+<button class="text-on-surface-variant hover:text-primary dark:hover:text-primary-fixed transition-all duration-200">
+<span class="material-symbols-outlined">chat_bubble</span>
+</button>
+<button class="text-on-surface-variant hover:text-primary dark:hover:text-primary-fixed transition-all duration-200">
+<span class="material-symbols-outlined text-[32px]">account_circle</span>
+</button>
+</div>
+</header>
+<!-- Pipeline Header & Filters -->
+<main class="flex-1 p-margin-desktop flex flex-col overflow-hidden">
+<div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-xl gap-md">
+<div>
+<h2 class="font-headline-lg text-headline-lg text-on-background">Recruitment Pipeline</h2>
+<p class="font-body-md text-body-md text-secondary mt-xs">Manage candidate flow across active vacancies.</p>
+</div>
+<div class="flex items-center gap-sm">
+<label class="font-label-md text-label-md text-secondary" for="vacancy-filter">Filter by Vacancy:</label>
+<select class="bg-surface-container-lowest border border-outline-variant rounded-lg px-md py-sm font-body-md text-body-md text-on-background focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary cursor-pointer" id="vacancy-filter">
+<option>All Active Vacancies</option>
+<option>Senior Frontend Developer</option>
+<option>UX Designer</option>
+<option>Product Manager</option>
+</select>
+</div>
+</div>
+<!-- Kanban Board -->
+<div class="flex-1 overflow-x-auto kanban-scroll pb-md">
+<div class="flex gap-lg h-full min-w-max items-start">
+<!-- Column: Applied -->
+<div class="w-[300px] flex flex-col max-h-full bg-surface-container-low rounded-xl p-md">
+<div class="flex justify-between items-center mb-md px-xs">
+<h3 class="font-title-lg text-title-lg text-on-surface">Applied</h3>
+<span class="bg-surface-container-highest text-on-surface px-sm py-[2px] rounded-full font-label-sm text-label-sm">4</span>
+</div>
+<div class="flex-1 overflow-y-auto space-y-md pr-xs pb-sm">
+<!-- Card -->
+<div class="bg-surface-container-lowest rounded-lg p-md shadow-sm border border-surface-container cursor-grab hover:shadow-md transition-shadow">
+<div class="flex justify-between items-start mb-sm">
+<div class="flex gap-sm items-center">
+<div class="w-8 h-8 rounded-full bg-tertiary-container overflow-hidden">
+<img class="w-full h-full object-cover" data-alt="A professional headshot of a young woman in corporate attire with a soft, warm background." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCfYNUnjPbmLGnCwH9UxGB9WRAM3YaMUDff9gVFGzr3LHpP7P_VF-i83lcz0GRhFDjlnrQZtEuoXlocdBj1vCyuQWBCrmbozKTIeKnL0Gj7BTxrGxk_neomdnajQ9a8Y_zXcwwmjAaKb-iKh_cwzKYY5fOsb4OWSwq2gSGnEyuincYm5LcvBIrqQX_tjWRdfr4bcEe3Ts16D5Wk23IgFoZnHVzK53_9mykXRIvPY0IUXzhPTBX6CKZ3"/>
+</div>
+<div>
+<p class="font-title-lg text-[14px] leading-tight text-on-surface">Sarah Jenkins</p>
+<p class="font-label-md text-label-md text-secondary">Senior Frontend Dev</p>
+</div>
+</div>
+<button class="text-secondary hover:text-primary"><span class="material-symbols-outlined text-[18px]">more_vert</span></button>
+</div>
+<div class="flex justify-between items-center mt-md">
+<div class="flex items-center gap-xs text-secondary">
+<span class="material-symbols-outlined text-[14px]">schedule</span>
+<span class="font-label-sm text-label-sm">2d in stage</span>
+</div>
+<span class="w-2 h-2 rounded-full bg-[#16A34A]"></span>
+</div>
+</div>
+</div>
+</div>
+<!-- Column: Screening -->
+<div class="w-[300px] flex flex-col max-h-full bg-surface-container-low rounded-xl p-md">
+<div class="flex justify-between items-center mb-md px-xs">
+<h3 class="font-title-lg text-title-lg text-on-surface">Screening</h3>
+<span class="bg-surface-container-highest text-on-surface px-sm py-[2px] rounded-full font-label-sm text-label-sm">2</span>
+</div>
+<div class="flex-1 overflow-y-auto space-y-md pr-xs pb-sm">
+<!-- Card -->
+<div class="bg-surface-container-lowest rounded-lg p-md shadow-sm border border-surface-container cursor-grab hover:shadow-md transition-shadow">
+<div class="flex justify-between items-start mb-sm">
+<div class="flex gap-sm items-center">
+<div class="w-8 h-8 rounded-full bg-tertiary-container overflow-hidden">
+<img class="w-full h-full object-cover" data-alt="A professional headshot of a middle aged man wearing glasses in a well lit office environment." src="https://lh3.googleusercontent.com/aida-public/AB6AXuA8Ur-F41kjJMQsFpiDT40XG19hjNYv7EQvj9w-jkhQiqQqzqqs5u2PFv1OBu0zFtQLzyJ-oaraBr8yhyqVx0ijYKRIIb4cdD0oubu9ZA1Ytu6GcYE2yLfnwgBvQhAolrkVqbSWhYKDsbU952VsARoENE1lMGS4NhT7m1RV41DL2jcxMCWPVpSMYfe4ygbYLqYP9mdjrnr1z-zkgXJ0NAV5QMDMTfg7Y1DD5HNcXhr1atWWJiAOE0Xv"/>
+</div>
+<div>
+<p class="font-title-lg text-[14px] leading-tight text-on-surface">David Chen</p>
+<p class="font-label-md text-label-md text-secondary">UX Designer</p>
+</div>
+</div>
+</div>
+<div class="flex justify-between items-center mt-md">
+<div class="flex items-center gap-xs text-secondary">
+<span class="material-symbols-outlined text-[14px]">schedule</span>
+<span class="font-label-sm text-label-sm">4d in stage</span>
+</div>
+<span class="w-2 h-2 rounded-full bg-secondary-container"></span>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</main>
+</div>
+</body></html>

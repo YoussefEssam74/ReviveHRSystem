@@ -1,0 +1,553 @@
+<!DOCTYPE html>
+
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Revive HR - Recruitment Reports</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "on-error-container": "#93000a",
+                        "on-secondary-fixed-variant": "#444749",
+                        "on-error": "#ffffff",
+                        "on-primary": "#ffffff",
+                        "primary-fixed": "#86efac",
+                        "on-tertiary-fixed": "#111c18",
+                        "inverse-on-surface": "#eaf1ff",
+                        "on-secondary": "#ffffff",
+                        "tertiary-container": "#b3c7bc",
+                        "on-primary-fixed-variant": "#166534",
+                        "surface-container-high": "#dee5dd",
+                        "outline-variant": "#c6cdc5",
+                        "background": "#f7f9f7",
+                        "inverse-primary": "#4ade80",
+                        "surface-container-low": "#f3f6f2",
+                        "on-tertiary-fixed-variant": "#3c475a",
+                        "on-tertiary": "#ffffff",
+                        "surface-container-highest": "#d3dcd2",
+                        "tertiary-fixed": "#d8e3dd",
+                        "primary-container": "#bbf7d0",
+                        "error-container": "#ffdad6",
+                        "tertiary": "#51605a",
+                        "on-surface-variant": "#3f4a41",
+                        "on-primary-fixed": "#052e16",
+                        "on-background": "#13221a",
+                        "secondary-container": "#e8e8e8",
+                        "surface-variant": "#e2e8e0",
+                        "secondary": "#5c5f60",
+                        "on-surface": "#13221a",
+                        "surface": "#fbfcfa",
+                        "surface-container-lowest": "#ffffff",
+                        "primary": "#16a34a",
+                        "secondary-fixed-dim": "#c5c6c8",
+                        "on-secondary-fixed": "#191c1e",
+                        "tertiary-fixed-dim": "#bcc7c0",
+                        "surface-tint": "#16a34a",
+                        "surface-container": "#e9eee8",
+                        "on-tertiary-container": "#1c2a23",
+                        "outline": "#6e7b6c",
+                        "surface-dim": "#d2dbd1",
+                        "error": "#ba1a1a",
+                        "surface-bright": "#ffffff",
+                        "secondary-fixed": "#e1e2e4",
+                        "primary-fixed-dim": "#4ade80",
+                        "inverse-surface": "#213145",
+                        "on-primary-container": "#14532d",
+                        "on-secondary-container": "#43474a"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "md": "16px",
+                        "xs": "4px",
+                        "gutter": "24px",
+                        "max-width": "1440px",
+                        "margin-desktop": "32px",
+                        "margin-mobile": "16px",
+                        "xl": "32px",
+                        "2xl": "48px",
+                        "sm": "8px",
+                        "lg": "24px",
+                        "base": "4px"
+                    },
+                    "fontFamily": {
+                        "headline-lg": ["Inter"],
+                        "label-md": ["Inter"],
+                        "label-sm": ["Inter"],
+                        "display-lg": ["Inter"],
+                        "headline-lg-mobile": ["Inter"],
+                        "body-lg": ["Inter"],
+                        "headline-md": ["Inter"],
+                        "title-lg": ["Inter"],
+                        "body-md": ["Inter"]
+                    },
+                    "fontSize": {
+                        "headline-lg": ["32px", { "lineHeight": "40px", "letterSpacing": "-0.01em", "fontWeight": "600" }],
+                        "label-md": ["12px", { "lineHeight": "16px", "letterSpacing": "0.01em", "fontWeight": "500" }],
+                        "label-sm": ["11px", { "lineHeight": "14px", "fontWeight": "600" }],
+                        "display-lg": ["48px", { "lineHeight": "56px", "letterSpacing": "-0.02em", "fontWeight": "700" }],
+                        "headline-lg-mobile": ["24px", { "lineHeight": "32px", "fontWeight": "600" }],
+                        "body-lg": ["16px", { "lineHeight": "24px", "fontWeight": "400" }],
+                        "headline-md": ["24px", { "lineHeight": "32px", "fontWeight": "600" }],
+                        "title-lg": ["20px", { "lineHeight": "28px", "fontWeight": "600" }],
+                        "body-md": ["14px", { "lineHeight": "20px", "fontWeight": "400" }]
+                    }
+                },
+            },
+        }
+    </script>
+<style>
+        body { font-family: 'Inter', sans-serif; background-color: #F7F9F7; }
+        .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
+        .material-symbols-outlined.filled { font-variation-settings: 'FILL' 1; }
+        
+        /* Subtle shadow for cards */
+        .card-shadow { box-shadow: 0px 1px 3px rgba(0,0,0,0.05); }
+        .hover-lift { transition: transform 0.2s ease, box-shadow 0.2s ease; }
+        .hover-lift:hover { transform: translateY(-2px); box-shadow: 0px 4px 6px -1px rgba(0, 0, 0, 0.1), 0px 2px 4px -1px rgba(0, 0, 0, 0.06); }
+    </style>
+</head>
+<body class="bg-background text-on-background flex min-h-screen">
+<!-- SideNavBar -->
+<nav class="hidden md:flex bg-surface-container-lowest dark:bg-inverse-surface border-r border-outline-variant shadow-sm fixed h-screen w-[280px] left-0 top-0 flex-col h-full p-md max-w-[280px] z-50">
+<div class="mb-xl flex items-center gap-sm">
+<div class="w-10 h-10 rounded-full bg-primary flex items-center justify-center text-on-primary">
+<span class="material-symbols-outlined">analytics</span>
+</div>
+<div>
+<h1 class="font-headline-md text-headline-md font-bold text-primary dark:text-primary-fixed">Revive HR</h1>
+<p class="font-label-sm text-label-sm text-secondary">Recruitment Module</p>
+</div>
+</div>
+<button class="mb-lg w-full bg-primary text-on-primary rounded-lg py-sm px-md flex items-center justify-center gap-sm font-label-md text-label-md font-semibold hover:bg-surface-tint transition-colors shadow-sm" onclick="window.location.href='../create_vacancy/code.html'">
+<span class="material-symbols-outlined text-[18px]">add</span>
+            Create Vacancy
+        </button>
+<ul class="flex-1 space-y-xs font-body-md text-body-md">
+<li>
+<a class="flex items-center gap-md py-sm px-md rounded-lg text-secondary dark:text-secondary-fixed-dim hover:text-primary hover:bg-surface-container-low dark:hover:bg-secondary-container/10 transition-colors cursor-pointer active:scale-95 duration-200" href="../recruitment_dashboard_complete/code.html">
+<span class="material-symbols-outlined">dashboard</span>
+                    Dashboard
+                </a>
+</li>
+<li>
+<a class="flex items-center gap-md py-sm px-md rounded-lg text-secondary dark:text-secondary-fixed-dim hover:text-primary hover:bg-surface-container-low dark:hover:bg-secondary-container/10 transition-colors cursor-pointer active:scale-95 duration-200" href="../vacancy_list/code.html">
+<span class="material-symbols-outlined">work</span>
+                    Vacancies
+                </a>
+</li>
+<li>
+<a class="flex items-center gap-md py-sm px-md rounded-lg text-secondary dark:text-secondary-fixed-dim hover:text-primary hover:bg-surface-container-low dark:hover:bg-secondary-container/10 transition-colors cursor-pointer active:scale-95 duration-200" href="../candidate_list/code.html">
+<span class="material-symbols-outlined">group</span>
+                    Candidates
+                </a>
+</li>
+<li>
+<a class="flex items-center gap-md py-sm px-md rounded-lg text-secondary dark:text-secondary-fixed-dim hover:text-primary hover:bg-surface-container-low dark:hover:bg-secondary-container/10 transition-colors cursor-pointer active:scale-95 duration-200" href="../recruitment_pipeline_interactive_kanban/code.html">
+<span class="material-symbols-outlined">view_kanban</span>
+                    Pipeline
+                </a>
+</li>
+<li>
+<a class="flex items-center gap-md py-sm px-md rounded-lg text-secondary dark:text-secondary-fixed-dim hover:text-primary hover:bg-surface-container-low dark:hover:bg-secondary-container/10 transition-colors cursor-pointer active:scale-95 duration-200" href="../waiting_list_management/code.html">
+<span class="material-symbols-outlined">hourglass_empty</span>
+                    Waiting List
+                </a>
+</li>
+<li>
+<a class="flex items-center gap-md py-sm px-md rounded-lg text-primary dark:text-primary-fixed-dim font-bold bg-surface-container dark:bg-secondary-container/20 cursor-pointer active:scale-95 duration-200" href="../recruitment_reports/code.html">
+<span class="material-symbols-outlined filled">bar_chart</span>
+                    Reports
+                </a>
+</li>
+<li>
+<a class="flex items-center gap-md py-sm px-md rounded-lg text-secondary dark:text-secondary-fixed-dim hover:text-primary hover:bg-surface-container-low dark:hover:bg-secondary-container/10 transition-colors cursor-pointer active:scale-95 duration-200" href="../employee_dashboard_full_navigation/code.html">
+<span class="material-symbols-outlined">badge</span>
+                    Employees
+                </a>
+</li>
+<li>
+<a class="flex items-center gap-md py-sm px-md rounded-lg text-secondary dark:text-secondary-fixed-dim hover:text-primary hover:bg-surface-container-low dark:hover:bg-secondary-container/10 transition-colors cursor-pointer active:scale-95 duration-200" href="#">
+<span class="material-symbols-outlined">settings</span>
+                    Settings
+                </a>
+</li>
+</ul>
+<div class="mt-auto pt-md border-t border-outline-variant space-y-xs font-body-md text-body-md">
+<a class="flex items-center gap-md py-sm px-md rounded-lg text-secondary dark:text-secondary-fixed-dim hover:text-primary hover:bg-surface-container-low dark:hover:bg-secondary-container/10 transition-colors cursor-pointer active:scale-95 duration-200" href="#">
+<span class="material-symbols-outlined">help</span>
+                Support
+            </a>
+<a class="flex items-center gap-md py-sm px-md rounded-lg text-secondary dark:text-secondary-fixed-dim hover:text-primary hover:bg-surface-container-low dark:hover:bg-secondary-container/10 transition-colors cursor-pointer active:scale-95 duration-200" href="#">
+<span class="material-symbols-outlined">logout</span>
+                Log Out
+            </a>
+</div>
+</nav>
+<!-- Main Content Wrapper -->
+<div class="flex-1 flex flex-col min-w-0 md:ml-[280px]">
+<!-- TopAppBar -->
+<header class="flex justify-between items-center h-16 px-margin-desktop sticky top-0 z-40 bg-surface/80 backdrop-blur-md border-b border-outline-variant">
+<div class="flex items-center gap-md w-full max-w-md">
+<!-- Mobile Menu Button (Hidden on Desktop) -->
+<button class="md:hidden text-on-surface-variant hover:text-primary transition-colors">
+<span class="material-symbols-outlined">menu</span>
+</button>
+<div class="relative w-full hidden md:block">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-secondary text-[20px]">search</span>
+<input class="w-full bg-surface-container-lowest border border-outline-variant rounded-full py-2 pl-10 pr-4 font-body-md text-body-md focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all" placeholder="Search reports..." type="text"/>
+</div>
+</div>
+<div class="flex items-center gap-sm">
+<button class="w-10 h-10 rounded-full flex items-center justify-center text-on-surface-variant hover:bg-surface-container-low hover:text-primary transition-all duration-200">
+<span class="material-symbols-outlined">notifications</span>
+</button>
+<button class="w-10 h-10 rounded-full flex items-center justify-center text-on-surface-variant hover:bg-surface-container-low hover:text-primary transition-all duration-200">
+<span class="material-symbols-outlined">chat_bubble</span>
+</button>
+<button class="w-10 h-10 rounded-full flex items-center justify-center text-on-surface-variant hover:bg-surface-container-low hover:text-primary transition-all duration-200">
+<img class="w-8 h-8 rounded-full object-cover border border-outline-variant" data-alt="A professional headshot of a corporate HR manager smiling warmly in a bright, modern office setting. Light mode aesthetic with soft, natural lighting and a clean white background." src="https://lh3.googleusercontent.com/aida-public/AB6AXuALbJHr4Y3NrQEioJBvVSqmweOMApOijElUHvxMK7rc3Oo57a2RyHDy75jA2Zee_MC9SgmbMmZ1juXouE1CeyA3gBJ5ETfpZXLEMeDI0F3JFwGL3TT-d9PAndBGOGYFW8LBT0sOsJ4NnH3M_2WHPo_EsegPNh_V_8Lotj1xGY3J20-BoZ6uk6ic-iuAHSfSE66aUVnyjm2JOGHyO_Qp59NzVdJsS_p7ytSa0Y7FD7NT5PzzpB7qOKS5"/>
+</button>
+</div>
+</header>
+<!-- Main Canvas -->
+<main class="flex-1 p-margin-mobile md:p-margin-desktop max-w-max-width mx-auto w-full overflow-y-auto">
+<!-- Page Header & Actions -->
+<div class="flex flex-col md:flex-row md:items-center justify-between mb-xl gap-md">
+<div>
+<h2 class="font-headline-lg text-headline-lg-mobile md:text-headline-lg text-on-background mb-xs">Recruitment Reports</h2>
+<p class="font-body-md text-body-md text-secondary">Overview of hiring performance and pipeline metrics.</p>
+</div>
+<div class="flex items-center gap-sm">
+<button class="flex items-center gap-xs px-md py-sm rounded-lg bg-surface-container-lowest border border-outline-variant text-on-surface-variant font-label-md text-label-md hover:bg-surface-container-low transition-colors shadow-sm" onclick="exportReport('PDF')">
+<span class="material-symbols-outlined text-[18px]">picture_as_pdf</span>
+                        Export PDF
+                    </button>
+<button class="flex items-center gap-xs px-md py-sm rounded-lg bg-surface-container-lowest border border-outline-variant text-on-surface-variant font-label-md text-label-md hover:bg-surface-container-low transition-colors shadow-sm" onclick="exportReport('Excel')">
+<span class="material-symbols-outlined text-[18px]">table_chart</span>
+                        Export Excel
+                    </button>
+<button class="flex items-center gap-xs px-md py-sm rounded-lg bg-surface-container-lowest border border-outline-variant text-on-surface-variant font-label-md text-label-md hover:bg-surface-container-low transition-colors shadow-sm" onclick="exportReport('Print')">
+<span class="material-symbols-outlined text-[18px]">print</span>
+                        Print
+                    </button>
+</div>
+</div>
+<!-- KPI Cards Grid -->
+<div class="grid grid-cols-2 md:grid-cols-4 gap-md md:gap-gutter mb-xl">
+<!-- KPI 1 -->
+<div class="bg-surface-container-lowest rounded-xl p-lg card-shadow hover-lift border border-outline-variant/30 flex flex-col justify-between">
+<div class="flex justify-between items-start mb-sm">
+<p class="font-label-md text-label-md text-secondary uppercase tracking-wider">Total Applicants</p>
+<div class="w-8 h-8 rounded-full bg-surface-container flex items-center justify-center text-primary">
+<span class="material-symbols-outlined text-[18px]">group</span>
+</div>
+</div>
+<div class="flex items-end gap-sm">
+<h3 class="font-display-lg text-display-lg text-on-background">4,285</h3>
+<span class="flex items-center text-primary font-label-sm text-label-sm mb-2 bg-primary-container/10 px-2 py-0.5 rounded-full">
+<span class="material-symbols-outlined text-[14px]">trending_up</span> 12%
+                        </span>
+</div>
+</div>
+<!-- KPI 2 -->
+<div class="bg-surface-container-lowest rounded-xl p-lg card-shadow hover-lift border border-outline-variant/30 flex flex-col justify-between">
+<div class="flex justify-between items-start mb-sm">
+<p class="font-label-md text-label-md text-secondary uppercase tracking-wider">Hired</p>
+<div class="w-8 h-8 rounded-full bg-surface-container flex items-center justify-center text-primary">
+<span class="material-symbols-outlined text-[18px]">task_alt</span>
+</div>
+</div>
+<div class="flex items-end gap-sm">
+<h3 class="font-display-lg text-display-lg text-on-background">142</h3>
+<span class="flex items-center text-primary font-label-sm text-label-sm mb-2 bg-primary-container/10 px-2 py-0.5 rounded-full">
+<span class="material-symbols-outlined text-[14px]">trending_up</span> 4%
+                        </span>
+</div>
+</div>
+<!-- KPI 3 -->
+<div class="bg-surface-container-lowest rounded-xl p-lg card-shadow hover-lift border border-outline-variant/30 flex flex-col justify-between">
+<div class="flex justify-between items-start mb-sm">
+<p class="font-label-md text-label-md text-secondary uppercase tracking-wider">Rejected</p>
+<div class="w-8 h-8 rounded-full bg-error-container flex items-center justify-center text-on-error-container">
+<span class="material-symbols-outlined text-[18px]">block</span>
+</div>
+</div>
+<div class="flex items-end gap-sm">
+<h3 class="font-display-lg text-display-lg text-on-background">3,120</h3>
+<span class="flex items-center text-error font-label-sm text-label-sm mb-2 bg-error-container/50 px-2 py-0.5 rounded-full">
+<span class="material-symbols-outlined text-[14px]">trending_up</span> 2%
+                        </span>
+</div>
+</div>
+<!-- KPI 4 -->
+<div class="bg-surface-container-lowest rounded-xl p-lg card-shadow hover-lift border border-outline-variant/30 flex flex-col justify-between">
+<div class="flex justify-between items-start mb-sm">
+<p class="font-label-md text-label-md text-secondary uppercase tracking-wider">Avg Hiring Time</p>
+<div class="w-8 h-8 rounded-full bg-surface-container flex items-center justify-center text-primary">
+<span class="material-symbols-outlined text-[18px]">timer</span>
+</div>
+</div>
+<div class="flex items-end gap-sm">
+<h3 class="font-display-lg text-display-lg text-on-background">24<span class="text-title-lg text-secondary ml-1">Days</span></h3>
+<span class="flex items-center text-primary font-label-sm text-label-sm mb-2 bg-primary-container/10 px-2 py-0.5 rounded-full">
+<span class="material-symbols-outlined text-[14px]">trending_down</span> -3 Days
+                        </span>
+</div>
+</div>
+</div>
+<!-- Bento Grid Layout for Charts & Data -->
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-gutter">
+<!-- Chart: Monthly Hiring (Line) - Spans 2 cols -->
+<div class="lg:col-span-2 bg-surface-container-lowest rounded-xl p-lg card-shadow border border-outline-variant/30">
+<div class="flex justify-between items-center mb-md">
+<h3 class="font-title-lg text-title-lg text-on-background">Monthly Hiring Trends</h3>
+<select class="bg-surface-container-lowest border border-outline-variant text-on-surface-variant font-label-md text-label-md rounded-md px-2 py-1 focus:ring-primary focus:border-primary">
+<option>This Year</option>
+<option>Last Year</option>
+</select>
+</div>
+<div class="h-[300px] w-full relative">
+<canvas id="monthlyHiringChart"></canvas>
+</div>
+</div>
+<!-- Chart: Interview Success Rate (Donut) -->
+<div class="bg-surface-container-lowest rounded-xl p-lg card-shadow border border-outline-variant/30 flex flex-col">
+<h3 class="font-title-lg text-title-lg text-on-background mb-md">Interview Success Rate</h3>
+<div class="flex-1 flex flex-col items-center justify-center relative min-h-[250px]">
+<canvas id="successRateChart"></canvas>
+<!-- Center Text for Donut -->
+<div class="absolute inset-0 flex flex-col items-center justify-center pointer-events-none mt-4">
+<span class="font-display-lg text-headline-lg font-bold text-on-background">68%</span>
+<span class="font-label-md text-label-md text-secondary">Offer Rate</span>
+</div>
+</div>
+</div>
+<!-- Chart: Hiring Funnel (Bar) -->
+<div class="lg:col-span-2 bg-surface-container-lowest rounded-xl p-lg card-shadow border border-outline-variant/30">
+<h3 class="font-title-lg text-title-lg text-on-background mb-md">Hiring Funnel Analysis</h3>
+<div class="h-[300px] w-full relative">
+<canvas id="hiringFunnelChart"></canvas>
+</div>
+</div>
+<!-- List: Top Vacancies & Recruitment Source -->
+<div class="flex flex-col gap-gutter">
+<!-- Recruitment Source (Mini Pie/Legend layout) -->
+<div class="bg-surface-container-lowest rounded-xl p-lg card-shadow border border-outline-variant/30 flex-1">
+<h3 class="font-title-lg text-title-lg text-on-background mb-md">Recruitment Sources</h3>
+<div class="flex items-center gap-md h-[180px]">
+<div class="w-1/2 h-full relative">
+<canvas id="sourceChart"></canvas>
+</div>
+<div class="w-1/2 flex flex-col justify-center gap-sm font-label-md text-label-md">
+<div class="flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-[#16a34a]"></span> LinkedIn (45%)</div>
+<div class="flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-[#4ade80]"></span> Referrals (30%)</div>
+<div class="flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-[#86efac]"></span> Job Board (15%)</div>
+<div class="flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-[#c6cdc5]"></span> Agency (10%)</div>
+</div>
+</div>
+</div>
+<!-- Top Vacancies -->
+<div class="bg-surface-container-lowest rounded-xl p-lg card-shadow border border-outline-variant/30 flex-1">
+<div class="flex justify-between items-center mb-md">
+<h3 class="font-title-lg text-title-lg text-on-background">Top Vacancies</h3>
+<button class="text-primary font-label-md text-label-md hover:underline" onclick="window.location.href='../vacancy_list/code.html'">View All</button>
+</div>
+<ul class="space-y-3">
+<li class="flex justify-between items-center py-2 border-b border-surface-container-low last:border-0">
+<div>
+<p class="font-body-md text-body-md font-medium text-on-background">Senior Frontend Dev</p>
+<p class="font-label-sm text-label-sm text-secondary">Engineering • 12 Hires</p>
+</div>
+<span class="bg-surface-container px-2 py-1 rounded text-primary font-label-sm text-label-sm">High Priority</span>
+</li>
+<li class="flex justify-between items-center py-2 border-b border-surface-container-low last:border-0">
+<div>
+<p class="font-body-md text-body-md font-medium text-on-background">Product Manager</p>
+<p class="font-label-sm text-label-sm text-secondary">Product • 8 Hires</p>
+</div>
+<span class="bg-surface-container px-2 py-1 rounded text-secondary font-label-sm text-label-sm">Active</span>
+</li>
+<li class="flex justify-between items-center py-2 border-b border-surface-container-low last:border-0">
+<div>
+<p class="font-body-md text-body-md font-medium text-on-background">UX Designer</p>
+<p class="font-label-sm text-label-sm text-secondary">Design • 5 Hires</p>
+</div>
+<span class="bg-surface-container px-2 py-1 rounded text-secondary font-label-sm text-label-sm">Active</span>
+</li>
+</ul>
+</div>
+</div>
+</div>
+</main>
+</div>
+<!-- Chart.js Initialization -->
+<script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Common Chart Settings
+            Chart.defaults.font.family = "'Inter', sans-serif";
+            Chart.defaults.color = '#5c5f60'; // secondary text
+            const gridColor = '#e9eee8'; // surface-container
+            const brandGreen = '#16a34a';
+            const greenLight = '#4ade80';
+            const greenSoft = '#86efac';
+            const greenPale = '#bbf7d0';
+            const grayMuted = '#c6cdc5';
+            const graySoft = '#e2e8e0';
+            const surfaceDim = '#d2dbd1';
+            
+            // 1. Monthly Hiring (Line Chart)
+            const ctxMonthly = document.getElementById('monthlyHiringChart').getContext('2d');
+            
+            // Create Gradient for Line Chart
+            const gradientLine = ctxMonthly.createLinearGradient(0, 0, 0, 300);
+            gradientLine.addColorStop(0, 'rgba(22, 163, 74, 0.2)'); // primary with opacity
+            gradientLine.addColorStop(1, 'rgba(22, 163, 74, 0)');
+
+            new Chart(ctxMonthly, {
+                type: 'line',
+                data: {
+                    labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
+                    datasets: [{
+                        label: 'Hires',
+                        data: [12, 19, 15, 25, 22, 30, 28, 35, 32, 40, 38, 45],
+                        borderColor: brandGreen,
+                        backgroundColor: gradientLine,
+                        borderWidth: 2,
+                        pointBackgroundColor: '#ffffff',
+                        pointBorderColor: brandGreen,
+                        pointBorderWidth: 2,
+                        pointRadius: 4,
+                        pointHoverRadius: 6,
+                        fill: true,
+                        tension: 0.4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        y: { beginAtZero: true, grid: { color: gridColor, drawBorder: false } },
+                        x: { grid: { display: false, drawBorder: false } }
+                    },
+                    interaction: { mode: 'index', intersect: false }
+                }
+            });
+
+            // 2. Interview Success Rate (Donut Chart)
+            const ctxSuccess = document.getElementById('successRateChart').getContext('2d');
+            new Chart(ctxSuccess, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Offers Accepted', 'Offers Declined', 'No Offer'],
+                    datasets: [{
+                        data: [68, 12, 20],
+                        backgroundColor: [brandGreen, greenLight, greenPale],
+                        borderWidth: 0,
+                        hoverOffset: 4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    cutout: '75%',
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) { return ' ' + context.label + ': ' + context.parsed + '%'; }
+                            }
+                        }
+                    }
+                }
+            });
+
+            // 3. Hiring Funnel Analysis (Bar Chart - Horizontal)
+            const ctxFunnel = document.getElementById('hiringFunnelChart').getContext('2d');
+            new Chart(ctxFunnel, {
+                type: 'bar',
+                data: {
+                    labels: ['Sourced', 'Applied', 'Screened', 'Interviewed', 'Offered', 'Hired'],
+                    datasets: [{
+                        label: 'Candidates',
+                        data: [5000, 4285, 1200, 450, 180, 142],
+                        backgroundColor: [
+                            graySoft,
+                            surfaceDim,
+                            greenSoft,
+                            greenLight,
+                            greenPale,
+                            brandGreen
+                        ],
+                        borderRadius: 4,
+                        borderWidth: 0
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    indexAxis: 'y', // Horizontal bar chart to simulate funnel
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        x: { beginAtZero: true, grid: { color: gridColor, drawBorder: false } },
+                        y: { grid: { display: false, drawBorder: false } }
+                    }
+                }
+            });
+
+            // 4. Recruitment Sources (Pie Chart)
+            const ctxSource = document.getElementById('sourceChart').getContext('2d');
+            new Chart(ctxSource, {
+                type: 'pie',
+                data: {
+                    labels: ['LinkedIn', 'Referrals', 'Job Board', 'Agency'],
+                    datasets: [{
+                        data: [45, 30, 15, 10],
+                        backgroundColor: [
+                            brandGreen,
+                            greenLight,
+                            greenSoft,
+                            grayMuted
+                        ],
+                        borderWidth: 2,
+                        borderColor: '#ffffff'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false }
+                    }
+                }
+            });
+        });
+    </script>
+<script>
+        window.exportReport = function (format) {
+            if (format === 'Print') {
+                window.print();
+                return;
+            }
+            const msg = format + ' export generated. Check your downloads.';
+            const banner = document.createElement('div');
+            banner.className = 'fixed top-4 right-4 z-[110] bg-primary text-on-primary font-label-md text-label-md px-lg py-sm rounded-lg shadow-lg';
+            banner.textContent = msg;
+            document.body.appendChild(banner);
+            setTimeout(function () { banner.remove(); }, 3000);
+        };
+    </script>
+</body></html>

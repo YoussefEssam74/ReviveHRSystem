@@ -1,0 +1,578 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Hire Candidate Wizard - Revive HR</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+          darkMode: "class",
+          theme: {
+            extend: {
+              "colors": {
+                      "on-error-container": "#93000a",
+                      "on-secondary-fixed-variant": "#444749",
+                      "on-error": "#ffffff",
+                      "on-primary": "#ffffff",
+                      "primary-fixed": "#86efac",
+                      "on-tertiary-fixed": "#111c18",
+                      "inverse-on-surface": "#eaf1ff",
+                      "on-secondary": "#ffffff",
+                      "tertiary-container": "#b3c7bc",
+                      "on-primary-fixed-variant": "#166534",
+                      "surface-container-high": "#dee5dd",
+                      "outline-variant": "#c6cdc5",
+                      "background": "#f7f9f7",
+                      "inverse-primary": "#4ade80",
+                      "surface-container-low": "#f3f6f2",
+                      "on-tertiary-fixed-variant": "#3c475a",
+                      "on-tertiary": "#ffffff",
+                      "surface-container-highest": "#d3dcd2",
+                      "tertiary-fixed": "#d8e3dd",
+                      "primary-container": "#bbf7d0",
+                      "error-container": "#ffdad6",
+                      "tertiary": "#51605a",
+                      "on-surface-variant": "#3f4a41",
+                      "on-primary-fixed": "#052e16",
+                      "on-background": "#13221a",
+                      "secondary-container": "#e8e8e8",
+                      "surface-variant": "#e2e8e0",
+                      "secondary": "#5c5f60",
+                      "on-surface": "#13221a",
+                      "surface": "#fbfcfa",
+                      "surface-container-lowest": "#ffffff",
+                      "primary": "#16a34a",
+                      "secondary-fixed-dim": "#c5c6c8",
+                      "on-secondary-fixed": "#191c1e",
+                      "tertiary-fixed-dim": "#bcc7c0",
+                      "surface-tint": "#16a34a",
+                      "surface-container": "#e9eee8",
+                      "on-tertiary-container": "#1c2a23",
+                      "outline": "#6e7b6c",
+                      "surface-dim": "#d2dbd1",
+                      "error": "#ba1a1a",
+                      "surface-bright": "#ffffff",
+                      "secondary-fixed": "#e1e2e4",
+                      "primary-fixed-dim": "#4ade80",
+                      "inverse-surface": "#213145",
+                      "on-primary-container": "#14532d",
+                      "on-secondary-container": "#43474a"
+              },
+              "borderRadius": {
+                      "DEFAULT": "0.25rem",
+                      "lg": "0.5rem",
+                      "xl": "0.75rem",
+                      "full": "9999px"
+              },
+              "spacing": {
+                      "md": "16px",
+                      "xs": "4px",
+                      "gutter": "24px",
+                      "max-width": "1440px",
+                      "margin-desktop": "32px",
+                      "margin-mobile": "16px",
+                      "xl": "32px",
+                      "2xl": "48px",
+                      "sm": "8px",
+                      "lg": "24px",
+                      "base": "4px"
+              },
+              "fontFamily": {
+                      "headline-lg": ["Inter"],
+                      "label-md": ["Inter"],
+                      "label-sm": ["Inter"],
+                      "display-lg": ["Inter"],
+                      "headline-lg-mobile": ["Inter"],
+                      "body-lg": ["Inter"],
+                      "headline-md": ["Inter"],
+                      "title-lg": ["Inter"],
+                      "body-md": ["Inter"]
+              },
+              "fontSize": {
+                      "headline-lg": ["32px", {"lineHeight": "40px", "letterSpacing": "-0.01em", "fontWeight": "600"}],
+                      "label-md": ["12px", {"lineHeight": "16px", "letterSpacing": "0.01em", "fontWeight": "500"}],
+                      "label-sm": ["11px", {"lineHeight": "14px", "fontWeight": "600"}],
+                      "display-lg": ["36px", {"lineHeight": "44px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                      "headline-lg-mobile": ["24px", {"lineHeight": "32px", "fontWeight": "600"}],
+                      "body-lg": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+                      "headline-md": ["24px", {"lineHeight": "32px", "fontWeight": "600"}],
+                      "title-lg": ["20px", {"lineHeight": "28px", "fontWeight": "600"}],
+                      "body-md": ["14px", {"lineHeight": "20px", "fontWeight": "400"}]
+              }
+            }
+          }
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .material-symbols-outlined.fill {
+            font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        
+        .step-transition {
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+    </style>
+</head>
+<body class="bg-background text-on-background font-body-md min-h-screen flex flex-col antialiased">
+<header class="sticky top-0 left-0 w-full bg-surface/80 backdrop-blur-md border-b border-surface-container-high h-16 flex justify-between items-center px-margin-mobile md:px-margin-desktop z-50">
+<div class="flex items-center gap-sm">
+<button class="w-10 h-10 rounded-full flex items-center justify-center hover:bg-surface-container-low transition-colors text-on-surface-variant" onclick="window.location.href='../candidate_list/code.html'">
+<span class="material-symbols-outlined">close</span>
+</button>
+<span class="font-title-lg text-title-lg text-on-surface font-semibold">Hire Candidate</span>
+</div>
+<div class="flex items-center gap-sm">
+<span class="font-label-md text-label-md text-secondary" id="save-status">Draft Saved</span>
+</div>
+</header>
+<main class="w-full flex-grow flex flex-col md:flex-row max-w-[1440px] mx-auto px-margin-mobile md:px-margin-desktop py-lg md:py-xl gap-xl">
+<!-- Left Sidebar Navigation -->
+<aside class="w-full md:w-64 flex flex-col gap-sm border-r border-surface-container-high pr-lg hidden md:flex shrink-0">
+<div class="font-label-sm text-label-sm text-secondary uppercase tracking-wider mb-sm">Hiring Steps</div>
+<button class="flex items-center gap-3 py-2 text-secondary cursor-pointer text-left" data-step="1" onclick="goToStep(1)">
+<div class="w-5 h-5 rounded-full border border-secondary text-secondary flex items-center justify-center text-[10px] font-bold">1</div>
+<span class="font-label-md text-label-md" data-label="1">Review</span>
+</button>
+<button class="flex items-center gap-3 py-2 text-secondary cursor-pointer text-left" data-step="2" onclick="goToStep(2)">
+<div class="w-5 h-5 rounded-full border border-secondary text-secondary flex items-center justify-center text-[10px] font-bold">2</div>
+<span class="font-label-md text-label-md" data-label="2">Gym</span>
+</button>
+<button class="flex items-center gap-3 py-2 text-secondary cursor-pointer text-left" data-step="3" onclick="goToStep(3)">
+<div class="w-5 h-5 rounded-full border border-secondary text-secondary flex items-center justify-center text-[10px] font-bold">3</div>
+<span class="font-label-md text-label-md" data-label="3">Position</span>
+</button>
+<button class="flex items-center gap-3 py-2 text-secondary cursor-pointer text-left" data-step="4" onclick="goToStep(4)">
+<div class="w-5 h-5 rounded-full border border-secondary text-secondary flex items-center justify-center text-[10px] font-bold">4</div>
+<span class="font-label-md text-label-md" data-label="4">Employment</span>
+</button>
+<button class="flex items-center gap-3 py-2 px-3 bg-primary/10 rounded-lg text-primary -ml-3 cursor-pointer text-left" id="step-nav-5" data-step="5" onclick="goToStep(5)">
+<div class="w-5 h-5 rounded-full bg-primary text-on-primary flex items-center justify-center text-[10px] font-bold">5</div>
+<span class="font-label-md text-label-md font-bold" data-label="5">Account</span>
+</button>
+<button class="flex items-center gap-3 py-2 text-secondary px-3 -ml-3 cursor-pointer text-left" data-step="6" onclick="goToStep(6)">
+<div class="w-5 h-5 rounded-full border border-secondary text-secondary flex items-center justify-center text-[10px] font-bold">6</div>
+<span class="font-label-md text-label-md" data-label="6">Finish</span>
+</button>
+</aside>
+<!-- Mobile Steps Indicator -->
+<div class="w-full md:hidden flex items-center gap-2 mb-md text-primary" id="mobile-step">
+<div class="w-6 h-6 rounded-full bg-primary/10 text-primary flex items-center justify-center text-[12px] font-bold" id="mobile-step-num">5</div>
+<span class="font-label-md text-label-md font-bold" id="mobile-step-label">Step 5: Account</span>
+</div>
+<!-- Wizard Canvas -->
+<div class="flex-grow flex flex-col gap-lg max-w-[900px]">
+<!-- Step 1: Review -->
+<div class="step-panel hidden step-transition" id="step-1">
+<div class="flex flex-col gap-xs">
+<h1 class="font-display-lg text-headline-lg-mobile md:text-display-lg text-on-surface">Review Candidate</h1>
+<p class="font-body-lg text-body-lg text-on-surface-variant">Confirm the candidate before creating a hire record.</p>
+</div>
+<div class="bg-surface-container-lowest rounded-xl p-lg shadow-sm border border-surface-container-highest flex flex-col gap-md">
+<div class="flex items-center gap-md">
+<div class="w-14 h-14 rounded-full bg-tertiary-container flex items-center justify-center text-on-tertiary-container font-bold overflow-hidden shrink-0">
+<img class="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCfYNUnjPbmLGnCwH9UxGB9WRAM3YaMUDff9gVFGzr3LHpP7P_VF-i83lcz0GRhFDjlnrQZtEuoXlocdBj1vCyuQWBCrmbozKTIeKnL0Gj7BTxrGxk_neomdnajQ9a8Y_zXcwwmjAaKb-iKh_cwzKYY5fOsb4OWSwq2gSGnEyuincYm5LcvBIrqQX_tjWRdfr4bcEe3Ts16D5Wk23IgFoZnHVzK53_9mykXRIvPY0IUXzhPTBX6CKZ3" alt="Sarah Jenkins"/>
+</div>
+<div class="flex-1">
+<h2 class="font-title-lg text-title-lg text-on-surface">Sarah Jenkins</h2>
+<p class="font-body-md text-body-md text-on-surface-variant">Senior Frontend Engineer</p>
+<div class="flex flex-wrap gap-sm mt-sm">
+<span class="font-label-sm text-label-sm bg-primary-container text-on-primary-container px-sm py-xs rounded-full">4.5 Rating</span>
+<span class="font-label-sm text-label-sm bg-surface-container text-on-surface-variant px-sm py-xs rounded-full">Applied 15d ago</span>
+<span class="font-label-sm text-label-sm bg-surface-container text-on-surface-variant px-sm py-xs rounded-full">Stage: Applied</span>
+</div>
+</div>
+<div>
+<span class="font-label-sm text-label-sm bg-primary-container text-on-primary-container px-sm py-xs rounded-full flex items-center gap-xs">
+<span class="material-symbols-outlined text-[16px]">check_circle</span> Ready to Hire
+</span>
+</div>
+</div>
+<div class="border-t border-surface-container-high pt-md">
+<div class="grid grid-cols-1 md:grid-cols-2 gap-md">
+<div><label class="font-label-sm text-label-sm text-secondary uppercase tracking-wider mb-xs block">Email</label><p class="font-body-md text-body-md text-on-surface">sarah.j@email.com</p></div>
+<div><label class="font-label-sm text-label-sm text-secondary uppercase tracking-wider mb-xs block">Resume</label><p class="font-body-md text-body-md text-on-surface flex items-center gap-xs"><span class="material-symbols-outlined text-primary text-[18px]">description</span>Sarah_Jenkins_Resume.pdf</p></div>
+<div><label class="font-label-sm text-label-sm text-secondary uppercase tracking-wider mb-xs block">Assigned Recruiter</label><p class="font-body-md text-body-md text-on-surface">Amanda Lee</p></div>
+<div><label class="font-label-sm text-label-sm text-secondary uppercase tracking-wider mb-xs block">Last Activity</label><p class="font-body-md text-body-md text-on-surface">Screening passed Oct 18</p></div>
+</div>
+</div>
+</div>
+</div>
+<!-- Step 2: Gym -->
+<div class="step-panel hidden step-transition" id="step-2">
+<div class="flex flex-col gap-xs">
+<h1 class="font-display-lg text-headline-lg-mobile md:text-display-lg text-on-surface">Assign Gym</h1>
+<p class="font-body-lg text-body-lg text-on-surface-variant">Choose the branch where this candidate will be placed.</p>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-3 gap-md">
+<div class="bg-surface-container-lowest rounded-xl p-lg shadow-sm border border-surface-container-highest flex flex-col gap-sm cursor-pointer hover:border-primary transition-colors">
+<div class="flex items-center justify-between">
+<span class="material-symbols-outlined text-primary">fitness_center</span>
+<span class="font-label-sm text-label-sm bg-primary-container text-on-primary-container px-sm py-xs rounded-full">Selected</span>
+</div>
+<h3 class="font-title-lg text-title-lg text-on-surface">Downtown Studio</h3>
+<p class="font-body-md text-body-md text-on-surface-variant">120 Main Street</p>
+<p class="font-body-md text-body-md text-on-surface-variant">10 openings</p>
+</div>
+<div class="bg-surface-container-lowest rounded-xl p-lg shadow-sm border border-surface-container-highest flex flex-col gap-sm cursor-pointer hover:border-primary transition-colors">
+<div class="flex items-center justify-between">
+<span class="material-symbols-outlined">fitness_center</span>
+<span class="font-label-sm text-label-sm bg-surface-container text-on-surface-variant px-sm py-xs rounded-full">7 openings</span>
+</div>
+<h3 class="font-title-lg text-title-lg text-on-surface">Uptown Arena</h3>
+<p class="font-body-md text-body-md text-on-surface-variant">88 Uptown Ave</p>
+</div>
+<div class="bg-surface-container-lowest rounded-xl p-lg shadow-sm border border-surface-container-highest flex flex-col gap-sm cursor-pointer hover:border-primary transition-colors">
+<div class="flex items-center justify-between">
+<span class="material-symbols-outlined">fitness_center</span>
+<span class="font-label-sm text-label-sm bg-surface-container text-on-surface-variant px-sm py-xs rounded-full">5 openings</span>
+</div>
+<h3 class="font-title-lg text-title-lg text-on-surface">Westside Branch</h3>
+<p class="font-body-md text-body-md text-on-surface-variant">200 West Blvd</p>
+</div>
+</div>
+</div>
+<!-- Step 3: Position -->
+<div class="step-panel hidden step-transition" id="step-3">
+<div class="flex flex-col gap-xs">
+<h1 class="font-display-lg text-headline-lg-mobile md:text-display-lg text-on-surface">Assign Position</h1>
+<p class="font-body-lg text-body-lg text-on-surface-variant">Define the role and department for the new hire.</p>
+</div>
+<div class="bg-surface-container-lowest rounded-xl p-lg shadow-sm border border-surface-container-highest flex flex-col gap-md">
+<div class="grid grid-cols-1 md:grid-cols-2 gap-md">
+<div class="flex flex-col gap-xs">
+<label class="font-label-md text-label-md text-on-surface-variant" for="wiz-vacancy">Vacancy / Position</label>
+<select id="wiz-vacancy" class="w-full px-3 py-2 bg-surface-container-lowest border border-outline-variant rounded-lg font-body-md text-body-md text-on-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary">
+<option>Senior Frontend Developer</option>
+<option>UX Designer</option>
+<option>Product Manager</option>
+</select>
+</div>
+<div class="flex flex-col gap-xs">
+<label class="font-label-md text-label-md text-on-surface-variant" for="wiz-dept">Department</label>
+<select id="wiz-dept" class="w-full px-3 py-2 bg-surface-container-lowest border border-outline-variant rounded-lg font-body-md text-body-md text-on-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary">
+<option>Engineering</option>
+<option>Design</option>
+<option>Product</option>
+</select>
+</div>
+<div class="flex flex-col gap-xs">
+<label class="font-label-md text-label-md text-on-surface-variant" for="wiz-salary">Salary Range</label>
+<input id="wiz-salary" class="w-full px-3 py-2 bg-surface-container-lowest border border-outline-variant rounded-lg font-body-md text-body-md text-on-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary" type="text" value="$5,500 - $6,800 / month"/>
+</div>
+<div class="flex flex-col gap-xs">
+<label class="font-label-md text-label-md text-on-surface-variant" for="wiz-manager">Reporting Manager</label>
+<select id="wiz-manager" class="w-full px-3 py-2 bg-surface-container-lowest border border-outline-variant rounded-lg font-body-md text-body-md text-on-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary">
+<option>Daniel Ortiz (Head of Engineering)</option>
+<option>Amanda Lee (HR Manager)</option>
+</select>
+</div>
+</div>
+</div>
+</div>
+<!-- Step 4: Employment -->
+<div class="step-panel hidden step-transition" id="step-4">
+<div class="flex flex-col gap-xs">
+<h1 class="font-display-lg text-headline-lg-mobile md:text-display-lg text-on-surface">Employment Details</h1>
+<p class="font-body-lg text-body-lg text-on-surface-variant">Configure the contract and start information.</p>
+</div>
+<div class="bg-surface-container-lowest rounded-xl p-lg shadow-sm border border-surface-container-highest flex flex-col gap-md">
+<div class="grid grid-cols-1 md:grid-cols-2 gap-md">
+<div class="flex flex-col gap-xs">
+<label class="font-label-md text-label-md text-on-surface-variant" for="wiz-contract">Contract Type</label>
+<select id="wiz-contract" class="w-full px-3 py-2 bg-surface-container-lowest border border-outline-variant rounded-lg font-body-md text-body-md text-on-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary">
+<option>Full-Time (Permanent)</option>
+<option>Part-Time</option>
+<option>Contract / Freelance</option>
+</select>
+</div>
+<div class="flex flex-col gap-xs">
+<label class="font-label-md text-label-md text-on-surface-variant" for="wiz-start">Start Date</label>
+<input id="wiz-start" class="w-full px-3 py-2 bg-surface-container-lowest border border-outline-variant rounded-lg font-body-md text-body-md text-on-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary" type="date" value="2023-11-06"/>
+</div>
+<div class="flex flex-col gap-xs">
+<label class="font-label-md text-label-md text-on-surface-variant" for="wiz-basic">Basic Salary (SAR)</label>
+<input id="wiz-basic" class="w-full px-3 py-2 bg-surface-container-lowest border border-outline-variant rounded-lg font-body-md text-body-md text-on-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary" type="number" value="6500"/>
+</div>
+<div class="flex flex-col gap-xs">
+<label class="font-label-md text-label-md text-on-surface-variant" for="wiz-allowance">Housing Allowance (SAR)</label>
+<input id="wiz-allowance" class="w-full px-3 py-2 bg-surface-container-lowest border border-outline-variant rounded-lg font-body-md text-body-md text-on-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary" type="number" value="2400"/>
+</div>
+</div>
+<div class="border-t border-surface-container-high pt-md">
+<p class="font-label-md text-label-md text-on-surface-variant mb-sm">Benefits</p>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-sm">
+<label class="flex items-center gap-2"><input checked class="rounded text-primary border-outline-variant focus:ring-primary" type="checkbox"><span class="font-body-md text-body-md text-on-surface-variant">Health Insurance</span></label>
+<label class="flex items-center gap-2"><input checked class="rounded text-primary border-outline-variant focus:ring-primary" type="checkbox"><span class="font-body-md text-body-md text-on-surface-variant">Transportation Allowance</span></label>
+<label class="flex items-center gap-2"><input class="rounded text-primary border-outline-variant focus:ring-primary" type="checkbox"><span class="font-body-md text-body-md text-on-surface-variant">Annual Bonus</span></label>
+<label class="flex items-center gap-2"><input class="rounded text-primary border-outline-variant focus:ring-primary" type="checkbox"><span class="font-body-md text-body-md text-on-surface-variant">Gym Membership</span></label>
+</div>
+</div>
+</div>
+</div>
+<!-- Step 5: Account -->
+<div class="step-panel hidden step-transition" id="step-5">
+<div class="flex flex-col gap-xs">
+<h1 class="font-display-lg text-headline-lg-mobile md:text-display-lg text-on-surface">Generate Employee Account</h1>
+<p class="font-body-lg text-body-lg text-on-surface-variant">Configure system access and credentials for the new hire.</p>
+</div>
+<!-- Main Form Area -->
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-md lg:gap-gutter">
+<!-- Left Column: Credentials -->
+<div class="lg:col-span-2 flex flex-col gap-md">
+<div class="bg-surface-container-lowest rounded-xl p-lg shadow-sm border border-surface-container-highest flex flex-col gap-md">
+<div class="flex items-center gap-sm border-b border-surface-container-high pb-sm">
+<span class="material-symbols-outlined text-primary">badge</span>
+<h2 class="font-title-lg text-title-lg text-on-surface">Credentials</h2>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-md">
+<div class="flex flex-col gap-xs">
+<label class="font-label-md text-label-md text-on-surface-variant">Username</label>
+<div class="relative">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-secondary text-[20px]">person</span>
+<input class="w-full pl-10 pr-3 py-2 bg-surface-container-lowest border border-outline-variant rounded-lg font-body-md text-body-md text-on-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-colors" readonly="" type="text" value="sarah.jenkins"/>
+</div>
+<span class="font-label-sm text-label-sm text-secondary">Auto-generated based on naming convention.</span>
+</div>
+<div class="flex flex-col gap-xs">
+<label class="font-label-md text-label-md text-on-surface-variant">Corporate Email</label>
+<div class="relative">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-secondary text-[20px]">mail</span>
+<input class="w-full pl-10 pr-3 py-2 bg-surface-container-lowest border border-outline-variant rounded-lg font-body-md text-body-md text-on-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-colors" type="email" value="sarah.jenkins@revivehr.com"/>
+</div>
+</div>
+</div>
+<div class="flex flex-col gap-xs mt-sm">
+<label class="font-label-md text-label-md text-on-surface-variant">Temporary Password</label>
+<div class="flex gap-sm">
+<div class="relative flex-grow">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-secondary text-[20px]">key</span>
+<input class="w-full pl-10 pr-10 py-2 bg-surface-container-lowest border border-outline-variant rounded-lg font-body-md text-body-md text-on-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-colors" id="temp-password" type="text" value="TempPass!2024"/>
+<button class="absolute right-3 top-1/2 -translate-y-1/2 text-secondary hover:text-primary transition-colors">
+<span class="material-symbols-outlined text-[20px]">content_copy</span>
+</button>
+</div>
+<button class="px-md py-2 bg-surface-container-low text-on-surface hover:bg-surface-container transition-colors rounded-lg font-label-md text-label-md flex items-center gap-xs border border-surface-container-high">
+<span class="material-symbols-outlined text-[18px]">autorenew</span>
+                                    Regenerate
+                                </button>
+</div>
+<div class="flex items-center gap-2 mt-2">
+<input checked="" class="rounded text-primary border-outline-variant focus:ring-primary" id="send-email" type="checkbox"/>
+<label class="font-body-md text-body-md text-on-surface-variant" for="send-email">Email credentials to personal address (sarah.j@email.com)</label>
+</div>
+<div class="flex items-center gap-2 mt-1">
+<input checked="" class="rounded text-primary border-outline-variant focus:ring-primary" id="force-reset" type="checkbox"/>
+<label class="font-body-md text-body-md text-on-surface-variant" for="force-reset">Require password change on first login</label>
+</div>
+</div>
+</div>
+</div>
+<!-- Right Column: Permissions Preview -->
+<div class="lg:col-span-1 flex flex-col gap-md">
+<div class="bg-surface-container-lowest rounded-xl p-lg shadow-sm border border-surface-container-highest h-full flex flex-col gap-sm">
+<div class="flex items-center gap-sm border-b border-surface-container-high pb-sm mb-sm">
+<span class="material-symbols-outlined text-primary">admin_panel_settings</span>
+<h2 class="font-title-lg text-title-lg text-on-surface">Permissions Preview</h2>
+</div>
+<p class="font-body-md text-body-md text-on-surface-variant mb-xs">Based on Role: <strong class="text-on-surface">Senior Developer</strong></p>
+<ul class="flex flex-col gap-xs flex-grow">
+<li class="flex items-start gap-2">
+<span class="material-symbols-outlined text-primary text-[18px] mt-[2px]">check_circle</span>
+<span class="font-body-md text-body-md text-on-surface">System Login (SSO)</span>
+</li>
+<li class="flex items-start gap-2">
+<span class="material-symbols-outlined text-primary text-[18px] mt-[2px]">check_circle</span>
+<span class="font-body-md text-body-md text-on-surface">Employee Self-Service Portal</span>
+</li>
+<li class="flex items-start gap-2">
+<span class="material-symbols-outlined text-primary text-[18px] mt-[2px]">check_circle</span>
+<span class="font-body-md text-body-md text-on-surface">Time &amp; Attendance Tracking</span>
+</li>
+<li class="flex items-start gap-2">
+<span class="material-symbols-outlined text-surface-container-highest text-[18px] mt-[2px]">cancel</span>
+<span class="font-body-md text-body-md text-secondary line-through">Managerial Dashboard</span>
+</li>
+</ul>
+<div class="mt-auto pt-sm border-t border-surface-container-high">
+<button class="w-full py-2 text-primary hover:bg-surface-container-low transition-colors rounded-lg font-label-md text-label-md flex items-center justify-center gap-xs" onclick="window.location.href='../employee_dashboard_full_navigation/code.html'">
+<span class="material-symbols-outlined text-[18px]">edit</span>
+                                Customize Permissions
+                            </button>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Step 6: Finish -->
+<div class="step-panel hidden step-transition" id="step-6">
+<div class="flex flex-col gap-xs">
+<h1 class="font-display-lg text-headline-lg-mobile md:text-display-lg text-on-surface">Review &amp; Finish</h1>
+<p class="font-body-lg text-body-lg text-on-surface-variant">Review the hire summary, then generate the employee account.</p>
+</div>
+<div class="bg-surface-container-lowest rounded-xl p-lg shadow-sm border border-surface-container-highest flex flex-col gap-md">
+<div class="flex items-center gap-md">
+<div class="w-14 h-14 rounded-full bg-primary-container flex items-center justify-center text-on-primary-container font-bold overflow-hidden shrink-0">
+<img class="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCfYNUnjPbmLGnCwH9UxGB9WRAM3YaMUDff9gVFGzr3LHpP7P_VF-i83lcz0GRhFDjlnrQZtEuoXlocdBj1vCyuQWBCrmbozKTIeKnL0Gj7BTxrGxk_neomdnajQ9a8Y_zXcwwmjAaKb-iKh_cwzKYY5fOsb4OWSwq2gSGnEyuincYm5LcvBIrqQX_tjWRdfr4bcEe3Ts16D5Wk23IgFoZnHVzK53_9mykXRIvPY0IUXzhPTBX6CKZ3" alt="Sarah Jenkins"/>
+</div>
+<div class="flex-1">
+<h2 class="font-title-lg text-title-lg text-on-surface">Sarah Jenkins</h2>
+<p class="font-body-md text-body-md text-on-surface-variant">Senior Frontend Engineer</p>
+</div>
+<span class="font-label-sm text-label-sm bg-primary-container text-on-primary-container px-sm py-xs rounded-full">Ready to Hire</span>
+</div>
+<div class="border-t border-surface-container-high pt-md">
+<div class="grid grid-cols-1 md:grid-cols-2 gap-md">
+<div><label class="font-label-sm text-label-sm text-secondary uppercase tracking-wider mb-xs block">Gym</label><p class="font-body-md text-body-md text-on-surface">Downtown Studio</p></div>
+<div><label class="font-label-sm text-label-sm text-secondary uppercase tracking-wider mb-xs block">Position</label><p class="font-body-md text-body-md text-on-surface">Senior Frontend Developer</p></div>
+<div><label class="font-label-sm text-label-sm text-secondary uppercase tracking-wider mb-xs block">Start Date</label><p class="font-body-md text-body-md text-on-surface" id="finish-start">Nov 6, 2023</p></div>
+<div><label class="font-label-sm text-label-sm text-secondary uppercase tracking-wider mb-xs block">Contract</label><p class="font-body-md text-body-md text-on-surface" id="finish-contract">Full-Time (Permanent)</p></div>
+<div><label class="font-label-sm text-label-sm text-secondary uppercase tracking-wider mb-xs block">Username</label><p class="font-body-md text-body-md text-on-surface">sarah.jenkins</p></div>
+<div><label class="font-label-sm text-label-sm text-secondary uppercase tracking-wider mb-xs block">Email</label><p class="font-body-md text-body-md text-on-surface">sarah.jenkins@revivehr.com</p></div>
+</div>
+</div>
+<div class="border-t border-surface-container-high pt-md flex items-start gap-sm bg-primary-container/40 rounded-lg p-md">
+<span class="material-symbols-outlined text-primary">info</span>
+<p class="font-body-md text-body-md text-on-surface">Generating the account will create a system login, send credentials to sarah.j@email.com, and move the candidate to <strong>Hired</strong>.</p>
+</div>
+</div>
+</div>
+<!-- Bottom Action Bar -->
+<div class="flex justify-between items-center mt-md pt-lg border-t border-surface-container-highest">
+<button class="px-lg py-3 rounded-lg font-label-md text-label-md text-on-surface-variant hover:bg-surface-container-low transition-colors flex items-center gap-xs" onclick="goToStep(currentStep - 1)" id="btn-back">
+<span class="material-symbols-outlined text-[18px]">arrow_back</span>
+                    <span id="btn-back-label">Back to Review</span>
+                </button>
+<div class="flex gap-sm">
+<button class="px-lg py-3 rounded-lg font-label-md text-label-md text-on-surface bg-surface-container-low hover:bg-surface-container transition-colors border border-surface-container-high" onclick="saveDraft()">
+                        Save as Draft
+                    </button>
+<button class="px-lg py-3 rounded-lg font-label-md text-label-md text-on-primary bg-primary hover:bg-surface-tint transition-colors shadow-sm flex items-center gap-xs" onclick="nextStep()" id="btn-next">
+                        Continue to Gym
+                        <span class="material-symbols-outlined text-[18px]">arrow_forward</span>
+</button>
+</div>
+</div>
+</div>
+</main>
+<!-- Success Modal -->
+<div class="fixed inset-0 bg-on-surface/50 z-[100] flex items-center justify-center p-4 hidden" id="success-modal">
+<div class="bg-surface-container-lowest rounded-xl shadow-lg w-full max-w-md flex flex-col overflow-hidden">
+<div class="p-lg flex justify-between items-center border-b border-surface-container-high">
+<h3 class="font-title-lg text-title-lg text-on-surface">Employee Account Created</h3>
+<button class="text-secondary hover:text-on-surface transition-colors" onclick="closeSuccess()">
+<span class="material-symbols-outlined">close</span>
+</button>
+</div>
+<div class="p-lg">
+<div class="flex items-center gap-md mb-md">
+<div class="w-14 h-14 rounded-full bg-primary-container text-primary flex items-center justify-center shrink-0">
+<span class="material-symbols-outlined text-[28px]">check_circle</span>
+</div>
+<div>
+<h4 class="font-title-lg text-title-lg text-on-surface">Sarah Jenkins was hired!</h4>
+<p class="font-body-md text-body-md text-on-surface-variant">Credentials sent to sarah.j@email.com. Candidate moved to Hired.</p>
+</div>
+</div>
+<div class="bg-surface-container-low rounded-lg p-md">
+<p class="font-body-md text-body-md text-on-surface mb-xs"><strong>Username:</strong> sarah.jenkins</p>
+<p class="font-body-md text-body-md text-on-surface mb-xs"><strong>Email:</strong> sarah.jenkins@revivehr.com</p>
+<p class="font-body-md text-body-md text-on-surface"><strong>Temporary Password:</strong> TempPass!2024</p>
+</div>
+</div>
+<div class="p-lg border-t border-surface-container-high bg-surface flex justify-end gap-md">
+<button class="px-md py-sm font-label-md text-label-md font-bold text-primary hover:bg-surface-container transition-colors rounded-lg" onclick="window.location.href='../recruitment_pipeline_interactive_kanban/code.html'">View Pipeline</button>
+<button class="px-md py-sm font-label-md text-label-md font-bold text-on-primary bg-primary hover:bg-primary/90 transition-colors rounded-lg shadow-sm" onclick="window.location.href='../candidate_profile_eleanor_richards/code.html'">View Profile</button>
+</div>
+</div>
+</div>
+<script>
+(function () {
+    window.currentStep = 1;
+    const stepNames = ['Review', 'Gym', 'Position', 'Employment', 'Account', 'Finish'];
+
+    function render() {
+        document.querySelectorAll('.step-panel').forEach(function (el) {
+            el.classList.add('hidden');
+        });
+        document.getElementById('step-' + currentStep).classList.remove('hidden');
+
+        document.querySelectorAll('[data-step]').forEach(function (btn) {
+            const step = parseInt(btn.getAttribute('data-step'), 10);
+            const isActive = step === currentStep;
+            const isDone = step < currentStep;
+            const circle = btn.querySelector('div');
+            if (isActive) {
+                btn.className = 'flex items-center gap-3 py-2 px-3 bg-primary/10 rounded-lg text-primary -ml-3 cursor-pointer text-left';
+                circle.className = 'w-5 h-5 rounded-full bg-primary text-on-primary flex items-center justify-center text-[10px] font-bold';
+            } else if (isDone) {
+                btn.className = 'flex items-center gap-3 py-2 px-3 text-primary -ml-3 cursor-pointer text-left';
+                circle.innerHTML = 'check';
+                circle.className = 'w-5 h-5 rounded-full bg-primary-container text-primary flex items-center justify-center text-[10px] font-bold';
+            } else {
+                btn.className = 'flex items-center gap-3 py-2 text-secondary px-3 -ml-3 cursor-pointer text-left';
+                circle.innerHTML = step;
+                circle.className = 'w-5 h-5 rounded-full border border-secondary text-secondary flex items-center justify-center text-[10px] font-bold';
+            }
+        });
+
+        document.getElementById('mobile-step-num').textContent = currentStep;
+        document.getElementById('mobile-step-label').textContent = 'Step ' + currentStep + ': ' + stepNames[currentStep - 1];
+
+        const back = document.getElementById('btn-back');
+        if (currentStep === 1) {
+            back.classList.add('opacity-50', 'pointer-events-none');
+        } else {
+            back.classList.remove('opacity-50', 'pointer-events-none');
+        }
+        document.getElementById('btn-back-label').textContent = currentStep === 1 ? 'Back to Review' : 'Back to ' + stepNames[currentStep - 2];
+
+        const next = document.getElementById('btn-next');
+        if (currentStep === 6) {
+            next.innerHTML = 'Generate Employee Account <span class="material-symbols-outlined text-[18px]">badge</span>';
+        } else if (currentStep === 5) {
+            next.innerHTML = 'Continue to Finish <span class="material-symbols-outlined text-[18px]">arrow_forward</span>';
+        } else {
+            next.innerHTML = 'Continue to ' + stepNames[currentStep] + ' <span class="material-symbols-outlined text-[18px]">arrow_forward</span>';
+        }
+
+        document.getElementById('save-status').textContent = currentStep === 6 ? 'Reviewing Hire' : 'Draft Saved';
+    }
+
+    window.goToStep = function (n) {
+        if (n < 1 || n > 6) return;
+        currentStep = n;
+        render();
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    };
+
+    window.nextStep = function () {
+        if (currentStep === 6) {
+            document.getElementById('success-modal').classList.remove('hidden');
+            return;
+        }
+        goToStep(currentStep + 1);
+    };
+
+    window.saveDraft = function () {
+        const status = document.getElementById('save-status');
+        status.textContent = 'Draft Saved ✓';
+        setTimeout(function () { status.textContent = 'Draft Saved'; }, 2500);
+    };
+
+    window.closeSuccess = function () {
+        document.getElementById('success-modal').classList.add('hidden');
+    };
+
+    render();
+})();
+</script>
+
+</body></html>

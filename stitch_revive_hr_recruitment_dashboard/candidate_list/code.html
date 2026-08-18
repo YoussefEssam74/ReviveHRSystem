@@ -1,0 +1,714 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Revive HR - Candidates</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+          darkMode: "class",
+          theme: {
+            extend: {
+              "colors": {
+                      "tertiary-fixed": "#d8e3dd",
+                      "surface-container-highest": "#d3dcd2",
+                      "on-secondary-fixed": "#191c1e",
+                      "tertiary-fixed-dim": "#bcc7c0",
+                      "secondary-fixed-dim": "#c5c6c8",
+                      "on-primary-fixed-variant": "#166534",
+                      "on-primary-container": "#14532d",
+                      "on-background": "#13221a",
+                      "on-tertiary": "#ffffff",
+                      "on-secondary-container": "#43474a",
+                      "surface-variant": "#e2e8e0",
+                      "on-secondary": "#ffffff",
+                      "on-tertiary-fixed-variant": "#3c475a",
+                      "outline": "#6e7b6c",
+                      "secondary-container": "#e8e8e8",
+                      "surface-container": "#e9eee8",
+                      "surface-container-low": "#f3f6f2",
+                      "inverse-surface": "#213145",
+                      "on-primary": "#ffffff",
+                      "primary": "#16a34a",
+                      "error": "#ba1a1a",
+                      "on-primary-fixed": "#052e16",
+                      "secondary-fixed": "#e1e2e4",
+                      "primary-fixed-dim": "#4ade80",
+                      "background": "#f7f9f7",
+                      "surface": "#fbfcfa",
+                      "surface-tint": "#16a34a",
+                      "tertiary-container": "#b3c7bc",
+                      "outline-variant": "#c6cdc5",
+                      "tertiary": "#51605a",
+                      "on-tertiary-fixed": "#111c18",
+                      "surface-dim": "#d2dbd1",
+                      "surface-container-lowest": "#ffffff",
+                      "on-error-container": "#93000a",
+                      "on-secondary-fixed-variant": "#444749",
+                      "surface-bright": "#ffffff",
+                      "primary-fixed": "#86efac",
+                      "inverse-on-surface": "#eaf1ff",
+                      "on-surface": "#13221a",
+                      "error-container": "#ffdad6",
+                      "on-surface-variant": "#3f4a41",
+                      "on-tertiary-container": "#1c2a23",
+                      "secondary": "#5c5f60",
+                      "inverse-primary": "#4ade80",
+                      "on-error": "#ffffff",
+                      "primary-container": "#bbf7d0",
+                      "surface-container-high": "#dee5dd"
+              },
+              "borderRadius": {
+                      "DEFAULT": "0.25rem",
+                      "lg": "0.5rem",
+                      "xl": "0.75rem",
+                      "full": "9999px"
+              },
+              "spacing": {
+                      "max-width": "1440px",
+                      "md": "16px",
+                      "xs": "4px",
+                      "margin-mobile": "16px",
+                      "gutter": "24px",
+                      "margin-desktop": "32px",
+                      "2xl": "48px",
+                      "xl": "32px",
+                      "lg": "24px",
+                      "sm": "8px",
+                      "base": "4px"
+              },
+              "fontFamily": {
+                      "title-lg": ["Inter"],
+                      "body-lg": ["Inter"],
+                      "headline-md": ["Inter"],
+                      "display-lg": ["Inter"],
+                      "headline-lg-mobile": ["Inter"],
+                      "body-md": ["Inter"],
+                      "headline-lg": ["Inter"],
+                      "label-sm": ["Inter"],
+                      "label-md": ["Inter"]
+              },
+              "fontSize": {
+                      "title-lg": ["20px", {"lineHeight": "28px", "fontWeight": "600"}],
+                      "body-lg": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+                      "headline-md": ["24px", {"lineHeight": "32px", "fontWeight": "600"}],
+                      "display-lg": ["48px", {"lineHeight": "56px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                      "headline-lg-mobile": ["24px", {"lineHeight": "32px", "fontWeight": "600"}],
+                      "body-md": ["14px", {"lineHeight": "20px", "fontWeight": "400"}],
+                      "headline-lg": ["32px", {"lineHeight": "40px", "letterSpacing": "-0.01em", "fontWeight": "600"}],
+                      "label-sm": ["11px", {"lineHeight": "14px", "fontWeight": "600"}],
+                      "label-md": ["12px", {"lineHeight": "16px", "letterSpacing": "0.01em", "fontWeight": "500"}]
+              }
+            }
+          }
+        }
+    </script>
+<style>
+        .status-screening { background-color: rgba(22, 163, 74, 0.1); color: #16a34a; }
+        .status-interviewing { background-color: rgba(81, 96, 90, 0.1); color: #51605a; }
+        .status-offer { background-color: rgba(22, 163, 74, 0.15); color: #166534; }
+        .status-rejected { background-color: rgba(186, 26, 26, 0.1); color: #ba1a1a; }
+        .status-hired { background-color: rgba(22, 163, 74, 0.15); color: #16a34a; }
+    </style>
+</head>
+<body class="bg-background text-on-background font-body-md min-h-screen">
+<!-- SideNavBar -->
+<nav class="fixed h-screen w-[280px] left-0 top-0 bg-surface-container-lowest dark:bg-inverse-surface border-r border-outline-variant shadow-sm flex flex-col p-md z-50">
+<div class="mb-xl flex items-center gap-sm">
+<div class="w-10 h-10 rounded-full bg-primary flex items-center justify-center text-on-primary font-bold">R</div>
+<div>
+<h1 class="font-headline-md text-headline-md font-bold text-primary dark:text-primary-fixed">Revive HR</h1>
+<p class="font-label-sm text-label-sm text-secondary">Recruitment Module</p>
+</div>
+</div>
+<button class="w-full bg-primary text-on-primary py-sm px-md rounded-lg font-label-md text-label-md hover:bg-on-primary-fixed-variant transition-colors mb-lg flex items-center justify-center gap-sm shadow-sm cursor-pointer active:scale-95 duration-200" onclick="window.location.href='../create_vacancy/code.html'">
+<span class="material-symbols-outlined" style="font-size: 18px;">add</span>
+            Create Vacancy
+        </button>
+<ul class="flex flex-col gap-xs flex-grow">
+<li class="flex items-center gap-md px-md py-sm rounded-lg text-secondary dark:text-secondary-fixed-dim hover:text-primary hover:bg-surface-container-low dark:hover:bg-secondary-container/10 transition-colors cursor-pointer active:scale-95 duration-200 font-body-md text-body-md">
+<a class="flex items-center gap-md" href="../recruitment_dashboard_complete/code.html">
+<span class="material-symbols-outlined" data-icon="dashboard">dashboard</span>
+                Dashboard
+            </a>
+</li>
+<li class="flex items-center gap-md px-md py-sm rounded-lg text-secondary dark:text-secondary-fixed-dim hover:text-primary hover:bg-surface-container-low dark:hover:bg-secondary-container/10 transition-colors cursor-pointer active:scale-95 duration-200 font-body-md text-body-md">
+<a class="flex items-center gap-md" href="../vacancy_list/code.html">
+<span class="material-symbols-outlined" data-icon="work">work</span>
+                Vacancies
+            </a>
+</li>
+<li class="flex items-center gap-md px-md py-sm rounded-lg text-primary dark:text-primary-fixed-dim font-bold bg-surface-container dark:bg-secondary-container/20 cursor-pointer active:scale-95 duration-200 font-body-md text-body-md">
+<a class="flex items-center gap-md" href="../candidate_list/code.html">
+<span class="material-symbols-outlined" data-icon="group" style="font-variation-settings: 'FILL' 1;">group</span>
+                Candidates
+            </a>
+</li>
+<li class="flex items-center gap-md px-md py-sm rounded-lg text-secondary dark:text-secondary-fixed-dim hover:text-primary hover:bg-surface-container-low dark:hover:bg-secondary-container/10 transition-colors cursor-pointer active:scale-95 duration-200 font-body-md text-body-md">
+<a class="flex items-center gap-md" href="../recruitment_pipeline_interactive_kanban/code.html">
+<span class="material-symbols-outlined" data-icon="view_kanban">view_kanban</span>
+                Pipeline
+            </a>
+</li>
+<li class="flex items-center gap-md px-md py-sm rounded-lg text-secondary dark:text-secondary-fixed-dim hover:text-primary hover:bg-surface-container-low dark:hover:bg-secondary-container/10 transition-colors cursor-pointer active:scale-95 duration-200 font-body-md text-body-md">
+<a class="flex items-center gap-md" href="../waiting_list_management/code.html">
+<span class="material-symbols-outlined" data-icon="hourglass_empty">hourglass_empty</span>
+                Waiting List
+            </a>
+</li>
+<li class="flex items-center gap-md px-md py-sm rounded-lg text-secondary dark:text-secondary-fixed-dim hover:text-primary hover:bg-surface-container-low dark:hover:bg-secondary-container/10 transition-colors cursor-pointer active:scale-95 duration-200 font-body-md text-body-md">
+<a class="flex items-center gap-md" href="../recruitment_reports/code.html">
+<span class="material-symbols-outlined" data-icon="monitoring">monitoring</span>
+                Reports
+            </a>
+</li>
+<li class="flex items-center gap-md px-md py-sm rounded-lg text-secondary dark:text-secondary-fixed-dim hover:text-primary hover:bg-surface-container-low dark:hover:bg-secondary-container/10 transition-colors cursor-pointer active:scale-95 duration-200 font-body-md text-body-md">
+<a class="flex items-center gap-md" href="../employee_dashboard_full_navigation/code.html">
+<span class="material-symbols-outlined" data-icon="badge">badge</span>
+                Employees
+            </a>
+</li>
+<li class="flex items-center gap-md px-md py-sm rounded-lg text-secondary dark:text-secondary-fixed-dim hover:text-primary hover:bg-surface-container-low dark:hover:bg-secondary-container/10 transition-colors cursor-pointer active:scale-95 duration-200 font-body-md text-body-md">
+<a class="flex items-center gap-md" href="#">
+<span class="material-symbols-outlined" data-icon="settings">settings</span>
+                Settings
+            </a>
+</li>
+</ul>
+<div class="mt-auto border-t border-outline-variant pt-sm">
+<ul class="flex flex-col gap-xs">
+<li class="flex items-center gap-md px-md py-sm rounded-lg text-secondary hover:text-primary hover:bg-surface-container-low transition-colors cursor-pointer active:scale-95 duration-200 font-body-md text-body-md">
+<span class="material-symbols-outlined" data-icon="help">help</span>
+                    Support
+                </li>
+<li class="flex items-center gap-md px-md py-sm rounded-lg text-secondary hover:text-primary hover:bg-surface-container-low transition-colors cursor-pointer active:scale-95 duration-200 font-body-md text-body-md">
+<span class="material-symbols-outlined" data-icon="logout">logout</span>
+                    Log Out
+                </li>
+</ul>
+</div>
+</nav>
+<!-- TopAppBar -->
+<header class="flex justify-between items-center h-16 px-margin-desktop sticky top-0 z-40 ml-[280px] bg-surface/80 backdrop-blur-md border-b border-outline-variant transition-all duration-200">
+<div class="flex-1 flex items-center">
+<div class="relative w-64">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant text-sm">search</span>
+<input class="w-full pl-10 pr-4 py-1.5 rounded-full border border-outline-variant bg-surface-container-lowest text-body-md focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all" placeholder="Search..." type="text"/>
+</div>
+</div>
+<div class="flex items-center gap-md text-primary dark:text-primary-fixed-dim">
+<button class="p-2 rounded-full hover:bg-surface-container transition-colors text-on-surface-variant hover:text-primary">
+<span class="material-symbols-outlined" data-icon="notifications">notifications</span>
+</button>
+<button class="p-2 rounded-full hover:bg-surface-container transition-colors text-on-surface-variant hover:text-primary">
+<span class="material-symbols-outlined" data-icon="chat_bubble">chat_bubble</span>
+</button>
+<button class="p-2 rounded-full hover:bg-surface-container transition-colors text-on-surface-variant hover:text-primary">
+<span class="material-symbols-outlined" data-icon="account_circle" style="font-size: 28px;">account_circle</span>
+</button>
+</div>
+</header>
+<!-- Main Content -->
+<main class="ml-[280px] p-margin-desktop max-w-[1440px]">
+<!-- Page Header -->
+<div class="flex flex-col md:flex-row justify-between items-start md:items-end gap-md mb-lg">
+<div>
+<h2 class="font-headline-lg text-headline-lg text-on-background">Candidates</h2>
+<p class="font-body-lg text-body-lg text-secondary mt-1">148 Candidates</p>
+</div>
+<div class="flex gap-sm">
+<a class="px-md py-2 border border-outline-variant rounded-lg bg-surface-container-lowest text-on-surface flex items-center gap-2 hover:bg-surface-container-low transition-colors font-label-md text-label-md" href="../create_vacancy/code.html">
+<span class="material-symbols-outlined text-[18px]">add</span>
+                    Create Vacancy
+                </a>
+<a class="px-md py-2 bg-primary text-on-primary rounded-lg font-label-md text-label-md hover:bg-on-primary-fixed-variant transition-colors flex items-center gap-2" href="../recruitment_pipeline_interactive_kanban/code.html">
+<span class="material-symbols-outlined text-[18px]">view_kanban</span>
+                    See Pipeline
+                </a>
+</div>
+</div>
+<!-- Advanced Filters -->
+<div class="bg-surface-container-lowest rounded-xl shadow-sm border border-outline-variant/30 p-lg mb-lg">
+<div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-md">
+<div class="flex flex-col gap-xs">
+<label class="font-label-sm text-label-sm text-secondary uppercase tracking-wider">Stage</label>
+<div class="relative">
+<select class="w-full bg-surface-container-lowest border border-outline-variant rounded-lg py-sm px-md appearance-none font-body-md text-body-md text-on-surface focus:border-primary focus:ring-1 focus:ring-primary outline-none">
+<option>All Stages</option>
+<option>Applied</option>
+<option>Screening</option>
+<option>Interview 1</option>
+<option>Interview 2</option>
+<option>Waiting List</option>
+<option>Hired</option>
+</select>
+<span class="material-symbols-outlined absolute right-sm top-1/2 -translate-y-1/2 pointer-events-none text-secondary text-[18px]">expand_more</span>
+</div>
+</div>
+<div class="flex flex-col gap-xs">
+<label class="font-label-sm text-label-sm text-secondary uppercase tracking-wider">Gym</label>
+<div class="relative">
+<select class="w-full bg-surface-container-lowest border border-outline-variant rounded-lg py-sm px-md appearance-none font-body-md text-body-md text-on-surface focus:border-primary focus:ring-1 focus:ring-primary outline-none">
+<option>All Gyms</option>
+<option>Downtown Central</option>
+<option>Westside Elite</option>
+<option>Uptown Express</option>
+</select>
+<span class="material-symbols-outlined absolute right-sm top-1/2 -translate-y-1/2 pointer-events-none text-secondary text-[18px]">expand_more</span>
+</div>
+</div>
+<div class="flex flex-col gap-xs">
+<label class="font-label-sm text-label-sm text-secondary uppercase tracking-wider">Vacancy</label>
+<div class="relative">
+<select class="w-full bg-surface-container-lowest border border-outline-variant rounded-lg py-sm px-md appearance-none font-body-md text-body-md text-on-surface focus:border-primary focus:ring-1 focus:ring-primary outline-none">
+<option>All Vacancies</option>
+<option>Senior Frontend Engineer</option>
+<option>Product Manager</option>
+<option>UX Designer</option>
+</select>
+<span class="material-symbols-outlined absolute right-sm top-1/2 -translate-y-1/2 pointer-events-none text-secondary text-[18px]">expand_more</span>
+</div>
+</div>
+<div class="flex flex-col gap-xs">
+<label class="font-label-sm text-label-sm text-secondary uppercase tracking-wider">Interview Status</label>
+<div class="relative">
+<select class="w-full bg-surface-container-lowest border border-outline-variant rounded-lg py-sm px-md appearance-none font-body-md text-body-md text-on-surface focus:border-primary focus:ring-1 focus:ring-primary outline-none">
+<option>All</option>
+<option>Scheduled</option>
+<option>Completed</option>
+<option>No Show</option>
+<option>Not Scheduled</option>
+</select>
+<span class="material-symbols-outlined absolute right-sm top-1/2 -translate-y-1/2 pointer-events-none text-secondary text-[18px]">expand_more</span>
+</div>
+</div>
+<div class="flex flex-col gap-xs">
+<label class="font-label-sm text-label-sm text-secondary uppercase tracking-wider">Date Applied</label>
+<input class="w-full bg-surface-container-lowest border border-outline-variant rounded-lg py-sm px-md font-body-md text-body-md text-on-surface focus:border-primary focus:ring-1 focus:ring-primary outline-none" type="date"/>
+</div>
+<div class="flex flex-col justify-end">
+<button class="bg-surface-container hover:bg-surface-container-high text-primary font-label-md text-label-md py-sm px-md rounded-lg transition-colors flex items-center justify-center gap-xs w-full h-[40px]">
+<span class="material-symbols-outlined text-[18px]">filter_list</span>
+                            More Filters
+                         </button>
+</div>
+</div>
+</div>
+<!-- Data Table Card -->
+<div class="bg-surface-container-lowest rounded-xl shadow-sm border border-outline-variant/30 overflow-hidden">
+<!-- Table Toolbar -->
+<div class="flex flex-col md:flex-row items-start md:items-center justify-between gap-sm px-lg py-sm border-b border-outline-variant/30 bg-surface-container-low">
+<div class="flex items-center gap-sm">
+<label class="flex items-center gap-xs font-label-md text-label-md text-secondary cursor-pointer">
+<input class="rounded border-outline-variant text-primary focus:ring-primary" type="checkbox"/>
+                            Select all
+                        </label>
+<div class="h-5 w-px bg-outline-variant mx-sm"></div>
+<button class="px-md py-sm bg-primary text-on-primary rounded-lg font-label-md text-label-md hover:bg-on-primary-fixed-variant transition-colors flex items-center gap-xs" onclick="document.getElementById('schedule-interview-modal').classList.remove('hidden')">
+<span class="material-symbols-outlined text-[18px]">event</span>
+                        Schedule Interview
+                    </button>
+<button class="px-md py-sm bg-surface-container-highest text-on-surface rounded-lg font-label-md text-label-md hover:bg-surface-container-high transition-colors flex items-center gap-xs" onclick="document.getElementById('move-stage-modal').classList.remove('hidden')">
+<span class="material-symbols-outlined text-[18px]">swap_vert</span>
+                        Move Stage
+                    </button>
+<button class="px-md py-sm bg-surface-container-highest text-on-surface rounded-lg font-label-md text-label-md hover:bg-error-container/50 hover:text-error transition-colors flex items-center gap-xs" onclick="document.getElementById('reject-modal').classList.remove('hidden')">
+<span class="material-symbols-outlined text-[18px]">close</span>
+                        Reject
+                    </button>
+</div>
+<div class="flex items-center gap-sm">
+<div class="relative">
+<select class="bg-surface-container-lowest border border-outline-variant rounded-lg py-sm px-md appearance-none font-label-md text-label-md text-on-surface focus:border-primary focus:ring-1 focus:ring-primary outline-none pr-xl">
+<option>10 per page</option>
+<option>25 per page</option>
+<option>50 per page</option>
+</select>
+<span class="material-symbols-outlined absolute right-sm top-1/2 -translate-y-1/2 pointer-events-none text-secondary text-[18px]">expand_more</span>
+</div>
+<button class="px-md py-sm bg-surface-container-lowest border border-outline-variant text-on-surface rounded-lg font-label-md text-label-md hover:bg-surface-container transition-colors flex items-center gap-xs">
+<span class="material-symbols-outlined text-[18px]">view_column</span>
+                        Columns
+                    </button>
+</div>
+</div>
+<div class="overflow-x-auto">
+<table class="w-full text-left border-collapse">
+<thead>
+<tr class="bg-surface-container-low border-b border-outline-variant/50">
+<th class="py-sm pl-lg pr-sm w-10">
+<input class="rounded border-outline-variant text-primary focus:ring-primary" type="checkbox"/>
+</th>
+<th class="py-sm px-lg font-label-sm text-label-sm text-secondary font-semibold uppercase tracking-wider">
+<div class="flex items-center gap-xs cursor-pointer hover:text-on-surface">Candidate <span class="material-symbols-outlined text-[14px]">arrow_downward</span></div>
+</th>
+<th class="py-sm px-lg font-label-sm text-label-sm text-secondary font-semibold uppercase tracking-wider">Applied Position</th>
+<th class="py-sm px-lg font-label-sm text-label-sm text-secondary font-semibold uppercase tracking-wider">Current Stage</th>
+<th class="py-sm px-lg font-label-sm text-label-sm text-secondary font-semibold uppercase tracking-wider">Interview Date</th>
+<th class="py-sm px-lg font-label-sm text-label-sm text-secondary font-semibold uppercase tracking-wider text-center">Rating</th>
+<th class="py-sm px-lg font-label-sm text-label-sm text-secondary font-semibold uppercase tracking-wider">Status</th>
+<th class="py-sm px-lg font-label-sm text-label-sm text-secondary font-semibold uppercase tracking-wider">Assigned Recruiter</th>
+<th class="py-sm px-lg font-label-sm text-label-sm text-secondary font-semibold uppercase tracking-wider text-right">Actions</th>
+</tr>
+</thead>
+<tbody class="font-body-md text-body-md text-on-background divide-y divide-outline-variant/20">
+<tr class="hover:bg-surface-container-low/50 transition-colors group">
+<td class="py-md pl-lg pr-sm">
+<input class="rounded border-outline-variant text-primary focus:ring-primary" type="checkbox"/>
+</td>
+<td class="py-md px-lg">
+<a class="flex items-center gap-3" href="../candidate_profile_eleanor_richards/code.html">
+<img class="w-10 h-10 rounded-full object-cover border border-outline-variant/30" data-alt="A professional headshot of a young woman with dark hair in a well-lit modern office setting. The background is slightly blurred with light mode aesthetics, soft white light, and neutral tones. Corporate professional attire." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAaolSkx-D95U_3jzsnjRq6HKiM2Hg_XyfgGR-2RPpfF6xuBDDUgpAB9VqxG350_S5zsB36KICustig0gDVTyHCiUkcPbJcqmw6yIEM426wOiKpappsy7mw07GnDpTVI0Rkdugxyjuh5hJyX_s6cIdIrgg31p0tkB8q3wuDNWzAcqB9WclMfl91G568p8qMrFNbP5Pkf31bZp8PcTqB4KJ4JTRcnER5At9SNNnk19pOChQMsEoxvslT"/>
+<div>
+<div class="font-medium text-on-surface">Eleanor Richards</div>
+<div class="text-xs text-secondary">erichards@example.com</div>
+</div>
+</a>
+</td>
+<td class="py-md px-lg text-on-surface-variant">Senior Frontend Engineer</td>
+<td class="py-md px-lg text-on-surface font-medium">Interview 2</td>
+<td class="py-md px-lg text-secondary">Oct 26, 2023</td>
+<td class="py-md px-lg text-center"><span class="text-primary font-medium">★ 4.5</span></td>
+<td class="py-md px-lg">
+<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium status-interviewing">
+                                Interviewing
+                            </span>
+</td>
+<td class="py-md px-lg text-secondary">Sarah Jenkins</td>
+<td class="py-md px-lg text-right whitespace-nowrap">
+<div class="flex items-center justify-end gap-xs">
+<a class="text-secondary hover:text-primary transition-colors p-1 rounded-full hover:bg-surface-container" title="Open Profile" href="../candidate_profile_eleanor_richards/code.html">
+<span class="material-symbols-outlined text-[20px]">person</span>
+</a>
+<button class="text-secondary hover:text-primary transition-colors p-1 rounded-full hover:bg-surface-container" title="Move Stage" onclick="document.getElementById('move-stage-modal').classList.remove('hidden')">
+<span class="material-symbols-outlined text-[20px]">swap_vert</span>
+</button>
+<button class="text-secondary hover:text-primary transition-colors p-1 rounded-full hover:bg-surface-container" title="Schedule Interview" onclick="document.getElementById('schedule-interview-modal').classList.remove('hidden')">
+<span class="material-symbols-outlined text-[20px]">event</span>
+</button>
+<button class="text-secondary hover:text-error transition-colors p-1 rounded-full hover:bg-error-container/50" title="Reject" onclick="document.getElementById('reject-modal').classList.remove('hidden')">
+<span class="material-symbols-outlined text-[20px]">close</span>
+</button>
+<button class="text-secondary hover:text-primary transition-colors p-1 rounded-full hover:bg-primary-container/50" title="Hire" onclick="document.getElementById('hire-modal').classList.remove('hidden')">
+<span class="material-symbols-outlined text-[20px]">how_to_reg</span>
+</button>
+</div>
+</td>
+</tr>
+<tr class="hover:bg-surface-container-low/50 transition-colors group">
+<td class="py-md pl-lg pr-sm">
+<input class="rounded border-outline-variant text-primary focus:ring-primary" type="checkbox"/>
+</td>
+<td class="py-md px-lg">
+<a class="flex items-center gap-3" href="../candidate_profile_eleanor_richards/code.html">
+<img class="w-10 h-10 rounded-full object-cover border border-outline-variant/30" data-alt="A professional portrait of a middle-aged man with glasses and short hair, wearing a casual button-down shirt. The lighting is bright and clean, fitting a modern tech company aesthetic with a light gray background." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBOj2-kWkd0A7f8kVdvU5jnpTukTowU_-lOwapUwhMy-6Y4gJLjRMeXVl_iKS866h_rk2orco-yLSs9IwDsV4UDVVk1gGFTskOsUoKCES4XhE2w5X_ikBqPMw4NrIxE6dthLD8XN84IQvwLKODIjRfKJBK7w6QF44P2BZ8veWXmL4M1VOHnMXcDdVI4fyTn1vUA9gXrqwFOPiuz-mfqvwnr-O7a_exoJjX1W-XLeTaNcQTXP6Wobhof"/>
+<div>
+<div class="font-medium text-on-surface">Marcus Vance</div>
+<div class="text-xs text-secondary">m.vance@example.com</div>
+</div>
+</a>
+</td>
+<td class="py-md px-lg text-on-surface-variant">Product Manager</td>
+<td class="py-md px-lg text-on-surface font-medium">Screening</td>
+<td class="py-md px-lg text-secondary">Oct 25, 2023</td>
+<td class="py-md px-lg text-center"><span class="text-secondary">—</span></td>
+<td class="py-md px-lg">
+<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium status-screening">
+                                Screening
+                            </span>
+</td>
+<td class="py-md px-lg text-secondary">John Smith</td>
+<td class="py-md px-lg text-right whitespace-nowrap">
+<div class="flex items-center justify-end gap-xs">
+<a class="text-secondary hover:text-primary transition-colors p-1 rounded-full hover:bg-surface-container" title="Open Profile" href="../candidate_profile_eleanor_richards/code.html">
+<span class="material-symbols-outlined text-[20px]">person</span>
+</a>
+<button class="text-secondary hover:text-primary transition-colors p-1 rounded-full hover:bg-surface-container" title="Move Stage" onclick="document.getElementById('move-stage-modal').classList.remove('hidden')">
+<span class="material-symbols-outlined text-[20px]">swap_vert</span>
+</button>
+<button class="text-secondary hover:text-primary transition-colors p-1 rounded-full hover:bg-surface-container" title="Schedule Interview" onclick="document.getElementById('schedule-interview-modal').classList.remove('hidden')">
+<span class="material-symbols-outlined text-[20px]">event</span>
+</button>
+<button class="text-secondary hover:text-error transition-colors p-1 rounded-full hover:bg-error-container/50" title="Reject" onclick="document.getElementById('reject-modal').classList.remove('hidden')">
+<span class="material-symbols-outlined text-[20px]">close</span>
+</button>
+<button class="text-secondary hover:text-primary transition-colors p-1 rounded-full hover:bg-primary-container/50" title="Hire" onclick="document.getElementById('hire-modal').classList.remove('hidden')">
+<span class="material-symbols-outlined text-[20px]">how_to_reg</span>
+</button>
+</div>
+</td>
+</tr>
+<tr class="hover:bg-surface-container-low/50 transition-colors group">
+<td class="py-md pl-lg pr-sm">
+<input class="rounded border-outline-variant text-primary focus:ring-primary" type="checkbox"/>
+</td>
+<td class="py-md px-lg">
+<a class="flex items-center gap-3" href="../candidate_profile_eleanor_richards/code.html">
+<div class="w-10 h-10 rounded-full bg-primary-container text-on-primary-container flex items-center justify-center font-bold border border-outline-variant/30">SC</div>
+<div>
+<div class="font-medium text-on-surface">Sarah Chen</div>
+<div class="text-xs text-secondary">schen88@example.com</div>
+</div>
+</a>
+</td>
+<td class="py-md px-lg text-on-surface-variant">UX Designer</td>
+<td class="py-md px-lg text-on-surface font-medium">Applied</td>
+<td class="py-md px-lg text-secondary">Not scheduled</td>
+<td class="py-md px-lg text-center"><span class="text-primary font-medium">★ 3.5</span></td>
+<td class="py-md px-lg">
+<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium status-offer">
+                                Applied
+                            </span>
+</td>
+<td class="py-md px-lg text-secondary">Amanda Lee</td>
+<td class="py-md px-lg text-right whitespace-nowrap">
+<div class="flex items-center justify-end gap-xs">
+<a class="text-secondary hover:text-primary transition-colors p-1 rounded-full hover:bg-surface-container" title="Open Profile" href="../candidate_profile_eleanor_richards/code.html">
+<span class="material-symbols-outlined text-[20px]">person</span>
+</a>
+<button class="text-secondary hover:text-primary transition-colors p-1 rounded-full hover:bg-surface-container" title="Move Stage" onclick="document.getElementById('move-stage-modal').classList.remove('hidden')">
+<span class="material-symbols-outlined text-[20px]">swap_vert</span>
+</button>
+<button class="text-secondary hover:text-primary transition-colors p-1 rounded-full hover:bg-surface-container" title="Schedule Interview" onclick="document.getElementById('schedule-interview-modal').classList.remove('hidden')">
+<span class="material-symbols-outlined text-[20px]">event</span>
+</button>
+<button class="text-secondary hover:text-error transition-colors p-1 rounded-full hover:bg-error-container/50" title="Reject" onclick="document.getElementById('reject-modal').classList.remove('hidden')">
+<span class="material-symbols-outlined text-[20px]">close</span>
+</button>
+<button class="text-secondary hover:text-primary transition-colors p-1 rounded-full hover:bg-primary-container/50" title="Hire" onclick="document.getElementById('hire-modal').classList.remove('hidden')">
+<span class="material-symbols-outlined text-[20px]">how_to_reg</span>
+</button>
+</div>
+</td>
+</tr>
+<tr class="hover:bg-surface-container-low/50 transition-colors group">
+<td class="py-md pl-lg pr-sm">
+<input class="rounded border-outline-variant text-primary focus:ring-primary" type="checkbox"/>
+</td>
+<td class="py-md px-lg">
+<a class="flex items-center gap-3" href="../candidate_profile_eleanor_richards/code.html">
+<img class="w-10 h-10 rounded-full object-cover border border-outline-variant/30" data-alt="A portrait of a young man with a slight smile in a well-lit studio setting. He is wearing a crisp white shirt. The background is a soft, minimal off-white, conveying a clean and professional corporate light-mode design style." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBgkYt5Adp_qXbO_hzqXlM_gDb6g9q9xyTBb9RWKiVnaH-x6QoeJtP22FWYYuUlk6KpoayN-WjjqE5YSp9aw-VWoNtqK-fhz2UHNCXVz0LgpLbs59BuDqyieISWLnI9wNvhMhshqXGZ762wo2Ol_3xEJ8mO15Xls0YLq7KEOLhBGRd78L9-UOp-Oey9yRlfmLhrPbry6ErRR9unf0h63TP8gEjJjWLq1hCUImeBgDmo260nZ8Tg09jP"/>
+<div>
+<div class="font-medium text-on-surface">David Okafor</div>
+<div class="text-xs text-secondary">d.okafor@example.com</div>
+</div>
+</a>
+</td>
+<td class="py-md px-lg text-on-surface-variant">Data Analyst</td>
+<td class="py-md px-lg text-on-surface font-medium">Rejected</td>
+<td class="py-md px-lg text-secondary">—</td>
+<td class="py-md px-lg text-center"><span class="text-primary font-medium">★ 3.0</span></td>
+<td class="py-md px-lg">
+<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium status-rejected">
+                                Rejected
+                            </span>
+</td>
+<td class="py-md px-lg text-secondary">John Smith</td>
+<td class="py-md px-lg text-right whitespace-nowrap">
+<div class="flex items-center justify-end gap-xs">
+<a class="text-secondary hover:text-primary transition-colors p-1 rounded-full hover:bg-surface-container" title="Open Profile" href="../candidate_profile_eleanor_richards/code.html">
+<span class="material-symbols-outlined text-[20px]">person</span>
+</a>
+<button class="text-secondary hover:text-primary transition-colors p-1 rounded-full hover:bg-surface-container" title="Move Stage" onclick="document.getElementById('move-stage-modal').classList.remove('hidden')">
+<span class="material-symbols-outlined text-[20px]">swap_vert</span>
+</button>
+<button class="text-secondary hover:text-primary transition-colors p-1 rounded-full hover:bg-surface-container" title="Schedule Interview" onclick="document.getElementById('schedule-interview-modal').classList.remove('hidden')">
+<span class="material-symbols-outlined text-[20px]">event</span>
+</button>
+<button class="text-secondary hover:text-error transition-colors p-1 rounded-full hover:bg-error-container/50" title="Reject" onclick="document.getElementById('reject-modal').classList.remove('hidden')">
+<span class="material-symbols-outlined text-[20px]">close</span>
+</button>
+<button class="text-secondary hover:text-primary transition-colors p-1 rounded-full hover:bg-primary-container/50" title="Hire" onclick="document.getElementById('hire-modal').classList.remove('hidden')">
+<span class="material-symbols-outlined text-[20px]">how_to_reg</span>
+</button>
+</div>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+<!-- Pagination -->
+<div class="bg-surface-container-lowest px-lg py-sm border-t border-outline-variant/30 flex items-center justify-between sm:px-6">
+<div class="flex-1 flex justify-between sm:hidden">
+<a class="relative inline-flex items-center px-4 py-2 border border-outline-variant text-sm font-medium rounded-md text-on-surface bg-surface-container-lowest hover:bg-surface-container-low" href="#"> Previous </a>
+<a class="ml-3 relative inline-flex items-center px-4 py-2 border border-outline-variant text-sm font-medium rounded-md text-on-surface bg-surface-container-lowest hover:bg-surface-container-low" href="#"> Next </a>
+</div>
+<div class="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
+<div>
+<p class="text-sm text-secondary">
+                            Showing <span class="font-medium text-on-surface">1</span> to <span class="font-medium text-on-surface">10</span> of <span class="font-medium text-on-surface">148</span> results
+                        </p>
+</div>
+<div>
+<nav aria-label="Pagination" class="relative z-0 inline-flex rounded-md shadow-sm -space-x-px">
+<a class="relative inline-flex items-center px-2 py-2 rounded-l-md border border-outline-variant bg-surface-container-lowest text-sm font-medium text-secondary hover:bg-surface-container-low" href="#">
+<span class="sr-only">Previous</span>
+<span class="material-symbols-outlined text-[18px]">chevron_left</span>
+</a>
+<a aria-current="page" class="z-10 bg-primary text-on-primary relative inline-flex items-center px-4 py-2 border border-primary text-sm font-medium" href="#"> 1 </a>
+<a class="bg-surface-container-lowest border-outline-variant text-secondary hover:bg-surface-container-low relative inline-flex items-center px-4 py-2 border text-sm font-medium" href="#"> 2 </a>
+<a class="bg-surface-container-lowest border-outline-variant text-secondary hover:bg-surface-container-low hidden md:inline-flex relative items-center px-4 py-2 border text-sm font-medium" href="#"> 3 </a>
+<span class="relative inline-flex items-center px-4 py-2 border border-outline-variant bg-surface-container-lowest text-sm font-medium text-secondary"> ... </span>
+<a class="bg-surface-container-lowest border-outline-variant text-secondary hover:bg-surface-container-low hidden md:inline-flex relative items-center px-4 py-2 border text-sm font-medium" href="#"> 15 </a>
+<a class="relative inline-flex items-center px-2 py-2 rounded-r-md border border-outline-variant bg-surface-container-lowest text-sm font-medium text-secondary hover:bg-surface-container-low" href="#">
+<span class="sr-only">Next</span>
+<span class="material-symbols-outlined text-[18px]">chevron_right</span>
+</a>
+</nav>
+</div>
+</div>
+</div>
+</div>
+</main>
+<!-- Move Stage Modal -->
+<div class="hidden fixed inset-0 z-50 flex items-center justify-center p-md" id="move-stage-modal">
+<div class="absolute inset-0 bg-black/40" onclick="document.getElementById('move-stage-modal').classList.add('hidden')"></div>
+<div class="relative bg-surface-container-lowest rounded-xl shadow-xl max-w-md w-full p-lg">
+<div class="flex items-center gap-sm mb-md">
+<div class="w-10 h-10 rounded-full bg-primary-container/60 flex items-center justify-center text-primary">
+<span class="material-symbols-outlined">swap_vert</span>
+</div>
+<div>
+<h3 class="font-headline-md text-headline-md text-on-surface">Move Candidate</h3>
+<p class="font-body-md text-body-md text-secondary">Eleanor Richards • Interview 2</p>
+</div>
+</div>
+<div class="flex flex-col gap-sm mb-md">
+<label class="font-label-md text-label-md text-on-surface-variant">Move to Stage</label>
+<div class="relative">
+<select class="w-full bg-surface-container-lowest border border-outline-variant rounded-lg py-sm px-md appearance-none font-body-md text-body-md text-on-surface focus:border-primary focus:ring-1 focus:ring-primary outline-none">
+<option>Applied</option>
+<option>Screening</option>
+<option>Interview 1</option>
+<option selected="">Interview 2</option>
+<option>Waiting List</option>
+<option>Hired</option>
+</select>
+<span class="material-symbols-outlined absolute right-sm top-1/2 -translate-y-1/2 pointer-events-none text-secondary text-[18px]">expand_more</span>
+</div>
+</div>
+<div class="flex flex-col gap-xs mb-lg">
+<label class="font-label-md text-label-md text-on-surface-variant">Reason</label>
+<textarea class="w-full rounded-lg border border-outline-variant bg-surface-container-lowest px-md py-sm font-body-md text-body-md text-on-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary resize-y" placeholder="Add a note (optional)..." rows="3"></textarea>
+</div>
+<div class="flex justify-end gap-sm">
+<button class="px-md py-sm rounded-lg border border-outline-variant text-on-surface font-label-md text-label-md hover:bg-surface-container transition-colors" onclick="document.getElementById('move-stage-modal').classList.add('hidden')">Cancel</button>
+<button class="px-md py-sm rounded-lg bg-primary text-on-primary font-label-md text-label-md hover:opacity-90 transition-opacity" onclick="document.getElementById('move-stage-modal').classList.add('hidden'); document.getElementById('success-dialog').classList.remove('hidden')">Save</button>
+</div>
+</div>
+</div>
+<!-- Schedule Interview Modal -->
+<div class="hidden fixed inset-0 z-50 flex items-center justify-center p-md" id="schedule-interview-modal">
+<div class="absolute inset-0 bg-black/40" onclick="document.getElementById('schedule-interview-modal').classList.add('hidden')"></div>
+<div class="relative bg-surface-container-lowest rounded-xl shadow-xl max-w-md w-full p-lg">
+<div class="flex items-center gap-sm mb-md">
+<div class="w-10 h-10 rounded-full bg-primary-container/60 flex items-center justify-center text-primary">
+<span class="material-symbols-outlined">event</span>
+</div>
+<div>
+<h3 class="font-headline-md text-headline-md text-on-surface">Schedule Interview</h3>
+<p class="font-body-md text-body-md text-secondary">Eleanor Richards</p>
+</div>
+</div>
+<div class="grid grid-cols-2 gap-md mb-md">
+<div class="flex flex-col gap-xs">
+<label class="font-label-md text-label-md text-on-surface-variant">Date</label>
+<input class="rounded-lg border border-outline-variant bg-surface-container-lowest px-md py-sm font-body-md text-body-md text-on-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary" type="date"/>
+</div>
+<div class="flex flex-col gap-xs">
+<label class="font-label-md text-label-md text-on-surface-variant">Time</label>
+<input class="rounded-lg border border-outline-variant bg-surface-container-lowest px-md py-sm font-body-md text-body-md text-on-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary" type="time"/>
+</div>
+</div>
+<div class="flex flex-col gap-xs mb-md">
+<label class="font-label-md text-label-md text-on-surface-variant">Interviewer</label>
+<div class="relative">
+<select class="w-full bg-surface-container-lowest border border-outline-variant rounded-lg py-sm px-md appearance-none font-body-md text-body-md text-on-surface focus:border-primary focus:ring-1 focus:ring-primary outline-none">
+<option>Sarah Jenkins (Lead)</option>
+<option>Amanda Lee</option>
+<option>Michael Chang</option>
+</select>
+<span class="material-symbols-outlined absolute right-sm top-1/2 -translate-y-1/2 pointer-events-none text-secondary text-[18px]">expand_more</span>
+</div>
+</div>
+<div class="flex flex-col gap-xs mb-lg">
+<label class="font-label-md text-label-md text-on-surface-variant">Interview Type</label>
+<div class="relative">
+<select class="w-full bg-surface-container-lowest border border-outline-variant rounded-lg py-sm px-md appearance-none font-body-md text-body-md text-on-surface focus:border-primary focus:ring-1 focus:ring-primary outline-none">
+<option>Technical</option>
+<option>HR / Culture</option>
+<option>Portfolio Review</option>
+<option>Final Round</option>
+</select>
+<span class="material-symbols-outlined absolute right-sm top-1/2 -translate-y-1/2 pointer-events-none text-secondary text-[18px]">expand_more</span>
+</div>
+</div>
+<div class="flex justify-end gap-sm">
+<button class="px-md py-sm rounded-lg border border-outline-variant text-on-surface font-label-md text-label-md hover:bg-surface-container transition-colors" onclick="document.getElementById('schedule-interview-modal').classList.add('hidden')">Cancel</button>
+<button class="px-md py-sm rounded-lg bg-primary text-on-primary font-label-md text-label-md hover:opacity-90 transition-opacity" onclick="document.getElementById('schedule-interview-modal').classList.add('hidden'); document.getElementById('success-dialog').classList.remove('hidden')">Schedule</button>
+</div>
+</div>
+</div>
+<!-- Reject Candidate Modal -->
+<div class="hidden fixed inset-0 z-50 flex items-center justify-center p-md" id="reject-modal">
+<div class="absolute inset-0 bg-black/40" onclick="document.getElementById('reject-modal').classList.add('hidden')"></div>
+<div class="relative bg-surface-container-lowest rounded-xl shadow-xl max-w-md w-full p-lg">
+<div class="w-12 h-12 rounded-full bg-error-container/60 flex items-center justify-center text-error mb-md">
+<span class="material-symbols-outlined text-[28px]">close</span>
+</div>
+<h3 class="font-headline-md text-headline-md text-on-surface mb-xs">Reject Candidate?</h3>
+<p class="font-body-md text-body-md text-secondary mb-md">Eleanor Richards will be removed from the active pipeline.</p>
+<div class="flex flex-col gap-xs mb-lg">
+<label class="font-label-md text-label-md text-on-surface-variant">Reason for rejection</label>
+<textarea class="w-full rounded-lg border border-outline-variant bg-surface-container-lowest px-md py-sm font-body-md text-body-md text-on-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary resize-y" placeholder="Add a reason (optional)..." rows="3"></textarea>
+</div>
+<div class="flex justify-end gap-sm">
+<button class="px-md py-sm rounded-lg border border-outline-variant text-on-surface font-label-md text-label-md hover:bg-surface-container transition-colors" onclick="document.getElementById('reject-modal').classList.add('hidden')">Cancel</button>
+<button class="px-md py-sm rounded-lg bg-error text-on-error font-label-md text-label-md hover:opacity-90 transition-opacity" onclick="document.getElementById('reject-modal').classList.add('hidden'); document.getElementById('error-dialog').classList.remove('hidden')">Reject Candidate</button>
+</div>
+</div>
+</div>
+<!-- Hire Confirmation Modal -->
+<div class="hidden fixed inset-0 z-50 flex items-center justify-center p-md" id="hire-modal">
+<div class="absolute inset-0 bg-black/40" onclick="document.getElementById('hire-modal').classList.add('hidden')"></div>
+<div class="relative bg-surface-container-lowest rounded-xl shadow-xl max-w-md w-full p-lg">
+<div class="w-12 h-12 rounded-full bg-primary-container/60 flex items-center justify-center text-primary mb-md">
+<span class="material-symbols-outlined text-[28px]">how_to_reg</span>
+</div>
+<h3 class="font-headline-md text-headline-md text-on-surface mb-xs">Hire Candidate?</h3>
+<p class="font-body-md text-body-md text-secondary mb-lg">Proceed to the hiring wizard to convert <span class="font-medium text-on-surface">Eleanor Richards</span> into an employee.</p>
+<div class="flex justify-end gap-sm">
+<button class="px-md py-sm rounded-lg border border-outline-variant text-on-surface font-label-md text-label-md hover:bg-surface-container transition-colors" onclick="document.getElementById('hire-modal').classList.add('hidden')">Cancel</button>
+<a class="px-md py-sm rounded-lg bg-primary text-on-primary font-label-md text-label-md hover:opacity-90 transition-opacity" href="../hire_candidate_wizard_sidebar_navigation/code.html">Continue to Hire</a>
+</div>
+</div>
+</div>
+<!-- Success Dialog -->
+<div class="hidden fixed inset-0 z-50 flex items-center justify-center p-md" id="success-dialog">
+<div class="absolute inset-0 bg-black/40" onclick="document.getElementById('success-dialog').classList.add('hidden')"></div>
+<div class="relative bg-surface-container-lowest rounded-xl shadow-xl max-w-sm w-full p-lg text-center">
+<div class="w-14 h-14 rounded-full bg-primary-container/60 flex items-center justify-center text-primary mx-auto mb-md">
+<span class="material-symbols-outlined text-[32px]">task_alt</span>
+</div>
+<h3 class="font-headline-md text-headline-md text-on-surface mb-xs">Success</h3>
+<p class="font-body-md text-body-md text-secondary mb-lg">The candidate was updated successfully.</p>
+<button class="px-md py-sm rounded-lg bg-primary text-on-primary font-label-md text-label-md hover:opacity-90 transition-opacity" onclick="document.getElementById('success-dialog').classList.add('hidden')">Done</button>
+</div>
+</div>
+<!-- Error Dialog -->
+<div class="hidden fixed inset-0 z-50 flex items-center justify-center p-md" id="error-dialog">
+<div class="absolute inset-0 bg-black/40" onclick="document.getElementById('error-dialog').classList.add('hidden')"></div>
+<div class="relative bg-surface-container-lowest rounded-xl shadow-xl max-w-sm w-full p-lg text-center">
+<div class="w-14 h-14 rounded-full bg-error-container/60 flex items-center justify-center text-error mx-auto mb-md">
+<span class="material-symbols-outlined text-[32px]">error</span>
+</div>
+<h3 class="font-headline-md text-headline-md text-on-surface mb-xs">Something went wrong</h3>
+<p class="font-body-md text-body-md text-secondary mb-lg">The candidate could not be rejected. Please try again.</p>
+<button class="px-md py-sm rounded-lg bg-error text-on-error font-label-md text-label-md hover:opacity-90 transition-opacity" onclick="document.getElementById('error-dialog').classList.add('hidden')">OK</button>
+</div>
+</div>
+</body></html>

@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Recruitment Dashboard - Revive HR</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "secondary-fixed-dim": "#c5c6c8",
+                        "tertiary-fixed": "#d8e3fb",
+                        "surface-dim": "#cbdbf5",
+                        "surface": "#f8f9ff",
+                        "surface-tint": "#006e2d",
+                        "surface-container-high": "#dce9ff",
+                        "on-primary": "#ffffff",
+                        "on-primary-fixed": "#002109",
+                        "primary-fixed-dim": "#62df7d",
+                        "primary-fixed": "#7ffc97",
+                        "on-tertiary": "#ffffff",
+                        "on-primary-container": "#f7fff2",
+                        "surface-container-highest": "#d3e4fe",
+                        "on-surface-variant": "#3e4a3d",
+                        "secondary": "#5c5f60",
+                        "inverse-on-surface": "#eaf1ff",
+                        "surface-container": "#e5eeff",
+                        "surface-container-low": "#eff4ff",
+                        "primary": "#006b2c",
+                        "on-primary-fixed-variant": "#005320",
+                        "surface-container-lowest": "#ffffff",
+                        "outline-variant": "#bdcaba",
+                        "outline": "#6e7b6c",
+                        "on-tertiary-fixed-variant": "#3c475a",
+                        "on-tertiary-fixed": "#111c2d",
+                        "secondary-fixed": "#e1e2e4",
+                        "primary-container": "#00873a",
+                        "tertiary": "#515c71",
+                        "tertiary-container": "#6a758a",
+                        "on-error-container": "#93000a",
+                        "on-secondary-fixed": "#191c1e",
+                        "inverse-surface": "#213145",
+                        "tertiary-fixed-dim": "#bcc7de",
+                        "surface-bright": "#f8f9ff",
+                        "on-tertiary-container": "#fefcff",
+                        "on-secondary-fixed-variant": "#444749",
+                        "on-secondary-container": "#606365",
+                        "error": "#ba1a1a",
+                        "inverse-primary": "#62df7d",
+                        "on-surface": "#0b1c30",
+                        "surface-variant": "#d3e4fe",
+                        "on-secondary": "#ffffff",
+                        "background": "#f8f9ff",
+                        "on-error": "#ffffff",
+                        "error-container": "#ffdad6",
+                        "secondary-container": "#dee0e2",
+                        "on-background": "#0b1c30"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "margin-mobile": "16px",
+                        "md": "16px",
+                        "lg": "24px",
+                        "xl": "32px",
+                        "gutter": "24px",
+                        "2xl": "48px",
+                        "sm": "8px",
+                        "xs": "4px",
+                        "base": "4px",
+                        "margin-desktop": "32px",
+                        "max-width": "1440px"
+                    },
+                    "fontFamily": {
+                        "body-lg": ["Inter"],
+                        "label-sm": ["Inter"],
+                        "body-md": ["Inter"],
+                        "label-md": ["Inter"],
+                        "headline-lg": ["Inter"],
+                        "headline-md": ["Inter"],
+                        "display-lg": ["Inter"],
+                        "headline-lg-mobile": ["Inter"],
+                        "title-lg": ["Inter"]
+                    },
+                    "fontSize": {
+                        "body-lg": ["16px", { "lineHeight": "24px", "fontWeight": "400" }],
+                        "label-sm": ["11px", { "lineHeight": "14px", "fontWeight": "600" }],
+                        "body-md": ["14px", { "lineHeight": "20px", "fontWeight": "400" }],
+                        "label-md": ["12px", { "lineHeight": "16px", "letterSpacing": "0.01em", "fontWeight": "500" }],
+                        "headline-lg": ["32px", { "lineHeight": "40px", "letterSpacing": "-0.01em", "fontWeight": "600" }],
+                        "headline-md": ["24px", { "lineHeight": "32px", "fontWeight": "600" }],
+                        "display-lg": ["48px", { "lineHeight": "56px", "letterSpacing": "-0.02em", "fontWeight": "700" }],
+                        "headline-lg-mobile": ["24px", { "lineHeight": "32px", "fontWeight": "600" }],
+                        "title-lg": ["20px", { "lineHeight": "28px", "fontWeight": "600" }]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .material-symbols-outlined[data-weight="fill"] {
+            font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        
+        /* Soft shadows for Material Design feel */
+        .card-shadow {
+            box-shadow: 0px 1px 3px rgba(0,0,0,0.05);
+        }
+        .dropdown-shadow {
+            box-shadow: 0px 10px 15px -3px rgba(0,0,0,0.1);
+        }
+    </style>
+</head>
+<body class="bg-background text-on-background font-body-md min-h-screen flex flex-col md:flex-row">
+<!-- Mobile Top App Bar -->
+<header class="md:hidden flex justify-between items-center w-full px-lg py-sm bg-surface shadow-sm sticky top-0 z-50">
+<div class="flex items-center gap-sm">
+<img class="w-8 h-8 rounded-full object-cover" data-alt="A small, stylized modern corporate logo featuring a subtle geometric design in shades of green and white, isolated on a clean white background, creating a professional and welcoming mood." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBNp2dBb9jx4SeDbFgJ45fEInJrYuVQGwbGz0omcPkgyWn2AHasB6-b_Uv_3DXi4nGWSdC62zDagYwW7ottJLcWpQKWE0EEPtHdpHxw6XASvwN2HN5LCh5v8OPml_orUNiOl06t3tw7v1u9H0EgKtdEiAFFweNEkNOA9iT8DaIBJH3Zoj0godQvSOXETzAzSK9nEp3qZl5PEvKhKyxGC2yUo8gPqR7MzS43TOxArUv1aFEi1QRDwO37"/>
+<h1 class="font-headline-md text-headline-md-mobile font-bold text-primary">Revive HR</h1>
+</div>
+<div class="flex gap-md text-primary">
+<span class="material-symbols-outlined cursor-pointer" data-icon="notifications">notifications</span>
+<span class="material-symbols-outlined cursor-pointer" data-icon="menu" onclick="document.getElementById('mobile-menu').classList.toggle('hidden')">menu</span>
+</div>
+</header>
+<!-- Mobile Navigation Menu -->
+<nav class="hidden md:hidden bg-surface-container-low absolute top-[60px] left-0 w-full z-40 border-b border-outline-variant shadow-md" id="mobile-menu">
+<div class="flex flex-col py-sm">
+<a class="px-lg py-md text-secondary hover:bg-surface-container-high font-label-md text-label-md transition-colors" href="#">Dashboard</a>
+<a class="px-lg py-md bg-primary-container text-on-primary-container font-label-md text-label-md font-bold" href="#">Recruitment</a>
+<a class="px-lg py-md text-secondary hover:bg-surface-container-high font-label-md text-label-md transition-colors" href="#">Employees</a>
+<a class="px-lg py-md text-secondary hover:bg-surface-container-high font-label-md text-label-md transition-colors" href="#">Performance</a>
+<a class="px-lg py-md text-secondary hover:bg-surface-container-high font-label-md text-label-md transition-colors border-t border-outline-variant mt-sm" href="#">Settings</a>
+</div>
+</nav>
+<!-- SideNavBar (Desktop) -->
+<aside class="hidden md:flex docked h-full w-[280px] left-0 bg-surface-container-low flex-col py-lg border-r border-outline-variant fixed top-0 overflow-y-auto">
+<div class="px-lg mb-xl flex items-center gap-md">
+<img class="w-10 h-10 rounded-full object-cover" data-alt="A modern, abstract geometric logo design featuring interlocking shapes in shades of vibrant green and calm grey, set against a bright white background, conveying a sense of corporate synergy and growth." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCKTjm6riESmMNCHMRmEqid3GLqklQx3xUjdFoiCfGeW1rbJDbXv3Qjp3rn8hDiIpdmCiGGU6p1nN4_N1zgsnkJrI4JR3vGGjhtACVu88uD37v2_3mQwoD6XXG39gHaXON9kT8c0q6Ea2xhqiLNL6dO4Io2YGeBYhoZeucUnLrBUPbqFn75Ul8xD31W_FSS0RLA5pQk3WYCVvXUuZ4Wr-OwWI4PXUih4dL7kGSF3Y_nA8M99lDg7DHc"/>
+<div>
+<h1 class="font-title-lg text-title-lg font-bold text-primary">Revive HR</h1>
+<p class="font-label-sm text-label-sm text-secondary">Management System</p>
+</div>
+</div>
+<nav class="flex-1 px-sm space-y-xs">
+<a class="flex items-center gap-md text-on-surface-variant px-md py-sm rounded-lg hover:bg-surface-container-high transition-colors font-label-md text-label-md cursor-pointer transition-transform duration-200 active:translate-x-1" href="#">
+<span class="material-symbols-outlined" data-icon="dashboard">dashboard</span>
+<span>Dashboard</span>
+</a>
+<a class="flex items-center gap-md bg-primary-container text-on-primary-container rounded-lg px-md py-sm font-label-md text-label-md font-bold cursor-pointer transition-transform duration-200 active:translate-x-1" href="#">
+<span class="material-symbols-outlined" data-icon="group_add">group_add</span>
+<span>Recruitment</span>
+</a>
+<a class="flex items-center gap-md text-on-surface-variant px-md py-sm rounded-lg hover:bg-surface-container-high transition-colors font-label-md text-label-md cursor-pointer transition-transform duration-200 active:translate-x-1" href="#">
+<span class="material-symbols-outlined" data-icon="badge">badge</span>
+<span>Employees</span>
+</a>
+<a class="flex items-center gap-md text-on-surface-variant px-md py-sm rounded-lg hover:bg-surface-container-high transition-colors font-label-md text-label-md cursor-pointer transition-transform duration-200 active:translate-x-1" href="#">
+<span class="material-symbols-outlined" data-icon="trending_up">trending_up</span>
+<span>Performance</span>
+</a>
+</nav>
+<div class="px-lg mt-auto mb-md space-y-sm">
+<button class="w-full py-sm px-md bg-primary text-on-primary rounded-lg font-label-md text-label-md hover:opacity-90 transition-opacity flex items-center justify-center gap-sm">
+<span class="material-symbols-outlined text-[18px]">person_add</span>
+                Add Employee
+            </button>
+</div>
+<nav class="px-sm mt-sm space-y-xs border-t border-outline-variant pt-sm mx-sm">
+<a class="flex items-center gap-md text-on-surface-variant px-md py-sm rounded-lg hover:bg-surface-container-high transition-colors font-label-md text-label-md cursor-pointer" href="#">
+<span class="material-symbols-outlined" data-icon="settings">settings</span>
+<span>Settings</span>
+</a>
+<a class="flex items-center gap-md text-on-surface-variant px-md py-sm rounded-lg hover:bg-surface-container-high transition-colors font-label-md text-label-md cursor-pointer" href="#">
+<span class="material-symbols-outlined" data-icon="logout">logout</span>
+<span>Logout</span>
+</a>
+</nav>
+</aside>
+<!-- Main Content Canvas -->
+<main class="flex-1 md:ml-[280px] p-margin-mobile md:p-margin-desktop max-w-max-width mx-auto w-full">
+<!-- Page Header -->
+<div class="flex flex-col md:flex-row md:items-center justify-between mb-xl gap-md">
+<div>
+<h2 class="font-headline-lg text-headline-lg-mobile md:text-headline-lg text-on-background">Recruitment Dashboard</h2>
+<p class="font-body-md text-body-md text-secondary mt-xs">Overview of hiring metrics and pipeline activity.</p>
+</div>
+<div class="flex gap-sm">
+<button class="px-lg py-sm bg-primary text-on-primary rounded-lg font-label-md text-label-md hover:bg-on-primary-fixed-variant transition-colors flex items-center gap-sm shadow-sm">
+<span class="material-symbols-outlined text-[18px]" data-icon="add">add</span>
+                    Create Vacancy
+                </button>
+<button class="px-md py-sm bg-surface-container-highest text-primary rounded-lg font-label-md text-label-md hover:bg-surface-container-high transition-colors flex items-center gap-sm">
+<span class="material-symbols-outlined text-[18px]" data-icon="filter_list">filter_list</span>
+                    Filter
+                </button>
+</div>
+</div>
+<!-- Key Metrics Cards (Bento Grid Style) -->
+<div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-md mb-xl">
+<!-- Metric 1 -->
+<div class="bg-surface-container-lowest rounded-xl p-md card-shadow border border-outline-variant flex flex-col justify-between hover:-translate-y-1 transition-transform duration-200">
+<div class="flex justify-between items-start mb-sm">
+<span class="font-label-sm text-label-sm text-secondary uppercase tracking-wider">Open Vacancies</span>
+<div class="w-8 h-8 rounded-full bg-primary-container/20 flex items-center justify-center text-primary">
+<span class="material-symbols-outlined text-[18px]" data-icon="work">work</span>
+</div>
+</div>
+<div>
+<span class="font-display-lg text-display-lg text-on-surface">12</span>
+<div class="flex items-center text-primary-fixed-dim text-[12px] mt-xs">
+<span class="material-symbols-outlined text-[14px]">arrow_upward</span>
+<span>2 from last week</span>
+</div>
+</div>
+</div>
+<!-- Metric 2 -->
+<div class="bg-surface-container-lowest rounded-xl p-md card-shadow border border-outline-variant flex flex-col justify-between hover:-translate-y-1 transition-transform duration-200">
+<div class="flex justify-between items-start mb-sm">
+<span class="font-label-sm text-label-sm text-secondary uppercase tracking-wider">Total Candidates</span>
+<div class="w-8 h-8 rounded-full bg-surface-container-highest flex items-center justify-center text-tertiary">
+<span class="material-symbols-outlined text-[18px]" data-icon="groups">groups</span>
+</div>
+</div>
+<div>
+<span class="font-display-lg text-display-lg text-on-surface">148</span>
+<div class="flex items-center text-secondary text-[12px] mt-xs">
+<span>Active pipeline</span>
+</div>
+</div>
+</div>
+<!-- Metric 3 -->
+<div class="bg-surface-container-lowest rounded-xl p-md card-shadow border border-outline-variant flex flex-col justify-between hover:-translate-y-1 transition-transform duration-200">
+<div class="flex justify-between items-start mb-sm">
+<span class="font-label-sm text-label-sm text-secondary uppercase tracking-wider">Interviews Today</span>
+<div class="w-8 h-8 rounded-full bg-tertiary-container/20 flex items-center justify-center text-tertiary-container">
+<span class="material-symbols-outlined text-[18px]" data-icon="event_available">event_available</span>
+</div>
+</div>
+<div>
+<span class="font-display-lg text-display-lg text-on-surface">5</span>
+<div class="flex items-center text-secondary text-[12px] mt-xs">
+<span>2 completed</span>
+</div>
+</div>
+</div>
+<!-- Metric 4 -->
+<div class="bg-surface-container-lowest rounded-xl p-md card-shadow border border-outline-variant flex flex-col justify-between hover:-translate-y-1 transition-transform duration-200">
+<div class="flex justify-between items-start mb-sm">
+<span class="font-label-sm text-label-sm text-secondary uppercase tracking-wider">Awaiting Action</span>
+<div class="w-8 h-8 rounded-full bg-error-container/50 flex items-center justify-center text-on-error-container">
+<span class="material-symbols-outlined text-[18px]" data-icon="pending_actions">pending_actions</span>
+</div>
+</div>
+<div>
+<span class="font-display-lg text-display-lg text-on-surface">18</span>
+<div class="flex items-center text-error text-[12px] mt-xs">
+<span class="material-symbols-outlined text-[14px]">warning</span>
+<span>Requires review</span>
+</div>
+</div>
+</div>
+<!-- Metric 5 -->
+<div class="bg-surface-container-lowest rounded-xl p-md card-shadow border border-outline-variant flex flex-col justify-between hover:-translate-y-1 transition-transform duration-200">
+<div class="flex justify-between items-start mb-sm">
+<span class="font-label-sm text-label-sm text-secondary uppercase tracking-wider">Waiting List</span>
+<div class="w-8 h-8 rounded-full bg-surface-container-highest flex items-center justify-center text-secondary">
+<span class="material-symbols-outlined text-[18px]" data-icon="hourglass_empty">hourglass_empty</span>
+</div>
+</div>
+<div>
+<span class="font-display-lg text-display-lg text-on-surface">34</span>
+<div class="flex items-center text-secondary text-[12px] mt-xs">
+<span>Stored profiles</span>
+</div>
+</div>
+</div>
+<!-- Metric 6 -->
+<div class="bg-primary-container rounded-xl p-md card-shadow border border-primary-fixed-dim flex flex-col justify-between text-on-primary-container hover:-translate-y-1 transition-transform duration-200">
+<div class="flex justify-between items-start mb-sm">
+<span class="font-label-sm text-label-sm uppercase tracking-wider opacity-80">Hired This Month</span>
+<div class="w-8 h-8 rounded-full bg-on-primary-container/20 flex items-center justify-center">
+<span class="material-symbols-outlined text-[18px]" data-icon="celebration">celebration</span>
+</div>
+</div>
+<div>
+<span class="font-display-lg text-display-lg">8</span>
+<div class="flex items-center text-primary-fixed text-[12px] mt-xs">
+<span class="material-symbols-outlined text-[14px]">arrow_upward</span>
+<span>Goal: 10</span>
+</div>
+</div>
+</div>
+</div>
+</main>
+</body></html>

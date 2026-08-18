@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Revive HR - Employee Self-Service</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+          darkMode: "class",
+          theme: {
+            extend: {
+              "colors": {
+                      "tertiary-fixed": "#d8e3dd",
+                      "surface-container-highest": "#d3dcd2",
+                      "on-secondary-fixed": "#191c1e",
+                      "tertiary-fixed-dim": "#bcc7c0",
+                      "secondary-fixed-dim": "#c5c6c8",
+                      "on-primary-fixed-variant": "#166534",
+                      "on-primary-container": "#14532d",
+                      "on-background": "#13221a",
+                      "on-tertiary": "#ffffff",
+                      "on-secondary-container": "#43474a",
+                      "surface-variant": "#e2e8e0",
+                      "on-secondary": "#ffffff",
+                      "on-tertiary-fixed-variant": "#3c475a",
+                      "outline": "#6e7b6c",
+                      "secondary-container": "#e8e8e8",
+                      "surface-container": "#e9eee8",
+                      "surface-container-low": "#f3f6f2",
+                      "inverse-surface": "#213145",
+                      "on-primary": "#ffffff",
+                      "primary": "#16a34a",
+                      "error": "#ba1a1a",
+                      "on-primary-fixed": "#052e16",
+                      "secondary-fixed": "#e1e2e4",
+                      "primary-fixed-dim": "#4ade80",
+                      "background": "#f7f9f7",
+                      "surface": "#fbfcfa",
+                      "surface-tint": "#16a34a",
+                      "tertiary-container": "#b3c7bc",
+                      "outline-variant": "#c6cdc5",
+                      "tertiary": "#51605a",
+                      "on-tertiary-fixed": "#111c18",
+                      "surface-dim": "#d2dbd1",
+                      "surface-container-lowest": "#ffffff",
+                      "on-error-container": "#93000a",
+                      "on-secondary-fixed-variant": "#444749",
+                      "surface-bright": "#ffffff",
+                      "primary-fixed": "#86efac",
+                      "inverse-on-surface": "#eaf1ff",
+                      "on-surface": "#13221a",
+                      "error-container": "#ffdad6",
+                      "on-surface-variant": "#3f4a41",
+                      "on-tertiary-container": "#1c2a23",
+                      "secondary": "#5c5f60",
+                      "inverse-primary": "#4ade80",
+                      "on-error": "#ffffff",
+                      "primary-container": "#bbf7d0",
+                      "surface-container-high": "#dee5dd"
+              },
+              "borderRadius": { "DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px" },
+              "spacing": {
+                      "max-width": "1440px", "md": "16px", "xs": "4px", "margin-mobile": "16px", "gutter": "24px",
+                      "margin-desktop": "32px", "2xl": "48px", "xl": "32px", "lg": "24px", "sm": "8px", "base": "4px"
+              },
+              "fontFamily": {
+                      "title-lg": ["Inter"], "body-lg": ["Inter"], "headline-md": ["Inter"], "display-lg": ["Inter"],
+                      "headline-lg-mobile": ["Inter"], "body-md": ["Inter"], "headline-lg": ["Inter"], "label-sm": ["Inter"], "label-md": ["Inter"]
+              },
+              "fontSize": {
+                      "title-lg": ["20px", {"lineHeight": "28px", "fontWeight": "600"}],
+                      "body-lg": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+                      "headline-md": ["24px", {"lineHeight": "32px", "fontWeight": "600"}],
+                      "display-lg": ["48px", {"lineHeight": "56px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                      "headline-lg-mobile": ["24px", {"lineHeight": "32px", "fontWeight": "600"}],
+                      "body-md": ["14px", {"lineHeight": "20px", "fontWeight": "400"}],
+                      "headline-lg": ["32px", {"lineHeight": "40px", "letterSpacing": "-0.01em", "fontWeight": "600"}],
+                      "label-sm": ["11px", {"lineHeight": "14px", "fontWeight": "600"}],
+                      "label-md": ["12px", {"lineHeight": "16px", "letterSpacing": "0.01em", "fontWeight": "500"}]
+              }
+            }
+          }
+        }
+    </script>
+<style>
+        .soft-shadow { box-shadow: 0px 1px 3px rgba(0,0,0,0.05); }
+        .hover-shadow:hover { box-shadow: 0px 10px 15px -3px rgba(0,0,0,0.1); transition: all 0.2s ease; }
+        .tab-panel { display: none; }
+        .tab-panel.active { display: block; }
+        .tab-btn { border-bottom: 2px solid transparent; color: #3f4a41; }
+        .tab-btn.active { border-bottom-color: #16a34a; color: #14532d; font-weight: 600; }
+    </style>
+</head>
+<body class="bg-background text-on-background font-body-md min-h-screen flex">
+<!-- SideNavBar -->
+<nav class="fixed h-screen w-[280px] left-0 top-0 bg-surface-container-lowest dark:bg-inverse-surface border-r border-outline-variant shadow-sm flex flex-col p-md z-50 hidden md:flex">
+<div class="mb-xl flex items-center gap-sm">
+<div class="w-10 h-10 rounded-full bg-primary flex items-center justify-center text-on-primary font-bold">R</div>
+<div>
+<h1 class="font-headline-md text-headline-md font-bold text-primary dark:text-primary-fixed">Revive HR</h1>
+<p class="font-label-sm text-label-sm text-secondary">Employee Self-Service</p>
+</div>
+</div>
+<div class="flex-1 flex flex-col gap-1 overflow-y-auto">
+<a class="flex items-center gap-md px-md py-sm rounded-lg bg-surface-container-high text-primary font-bold border-r-4 border-primary opacity-90 transition-opacity" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">account_circle</span><span class="font-body-md text-body-md">My Profile</span>
+</a>
+<a class="flex items-center gap-md px-md py-sm rounded-lg text-secondary hover:text-on-surface hover:bg-surface-container-high transition-colors" href="../employee_requests_dashboard/code.html">
+<span class="material-symbols-outlined">assignment</span><span class="font-body-md text-body-md">My Requests</span>
+</a>
+<a class="flex items-center gap-md px-md py-sm rounded-lg text-secondary hover:text-on-surface hover:bg-surface-container-high transition-colors" href="#">
+<span class="material-symbols-outlined">notifications</span><span class="font-body-md text-body-md">My Notifications</span>
+</a>
+<a class="flex items-center gap-md px-md py-sm rounded-lg text-secondary hover:text-on-surface hover:bg-surface-container-high transition-colors" href="#">
+<span class="material-symbols-outlined">event_available</span><span class="font-body-md text-body-md">My Attendance</span>
+</a>
+<a class="flex items-center gap-md px-md py-sm rounded-lg text-secondary hover:text-on-surface hover:bg-surface-container-high transition-colors" href="../employee_payroll_sheet/code.html">
+<span class="material-symbols-outlined">receipt_long</span><span class="font-body-md text-body-md">My Payroll</span>
+</a>
+<a class="flex items-center gap-md px-md py-sm rounded-lg text-secondary hover:text-on-surface hover:bg-surface-container-high transition-colors" href="../individual_review_sarah_jenkins/code.html">
+<span class="material-symbols-outlined">insights</span><span class="font-body-md text-body-md">My Evaluation</span>
+</a>
+<a class="flex items-center gap-md px-md py-sm rounded-lg text-secondary hover:text-on-surface hover:bg-surface-container-high transition-colors" href="../my_shifts_schedule/code.html">
+<span class="material-symbols-outlined">calendar_month</span><span class="font-body-md text-body-md">My Shifts</span>
+</a>
+</div>
+<div class="border-t border-outline-variant pt-md flex flex-col gap-sm shrink-0">
+<a class="flex items-center gap-md px-md py-sm rounded-lg text-secondary hover:text-on-surface hover:bg-surface-container-high transition-colors" href="../hr_control_center_dashboard/code.html">
+<span class="material-symbols-outlined">logout</span><span class="font-body-md text-body-md">Sign out</span>
+</a>
+</div>
+</nav>
+<!-- Main Content Area -->
+<div class="flex-1 md:ml-[280px] min-h-screen flex flex-col w-full">
+<!-- TopAppBar -->
+<header class="flex justify-between items-center px-margin-desktop bg-surface-container-lowest dark:bg-surface-container fixed top-0 right-0 w-full md:w-[calc(100%-280px)] h-16 shadow-sm dark:shadow-none z-40">
+<div class="flex items-center gap-sm bg-surface-container-low px-md py-xs rounded-full border border-outline-variant w-64 md:w-96 focus-within:border-primary focus-within:ring-1 focus-within:ring-primary transition-all">
+<span class="material-symbols-outlined text-secondary text-[20px]">search</span>
+<input class="bg-transparent border-none focus:ring-0 w-full font-body-md text-body-md text-on-surface placeholder:text-secondary p-0 h-8" placeholder="Fast navigation..." type="text"/>
+</div>
+<div class="flex items-center gap-sm">
+<button class="p-sm text-on-surface-variant hover:bg-secondary-container rounded-full transition-transform active:scale-95 bg-error-container/40" onclick="window.location.href='../notifications_follow_up_hub/code.html'">
+<span class="material-symbols-outlined">notifications</span>
+</button>
+<button class="p-sm text-on-surface-variant hover:bg-secondary-container rounded-full transition-transform active:scale-95 flex items-center gap-sm pl-sm">
+<img class="w-8 h-8 rounded-full border border-outline-variant object-cover" alt="Self-service employee avatar" data-alt="A young gym shift lead named Alex Rivera, short dark hair, wearing a green athletic polo shirt, bright gym background." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAIfHF5FHauJwwnRX9njSF_V3gqV0IlE87RzFEOVy9KfIISULvtXCv6Luel0REeVwwcve5iKCzNQfqq0u84jszB-W0SKcFncKtmwg2aRhQzQvgNz3ZJ69ExxzjfJDmv6w9I7qlOpcbNYfgKUjXHKv9DaChXre5p4PEQWizHqQtKDvWGFERjsjYsUVstaps-OUsc1f8ivFHxP3YojrvMeRKYJS-iM46pSEU0BxyIaF4T3Hv2o-DdOgoh"/>
+<span class="font-label-md text-label-md text-on-surface hidden sm:inline">Alex Rivera</span>
+</button>
+</div>
+</header>
+<!-- Main Canvas -->
+<main class="flex-1 mt-16 p-margin-mobile md:p-margin-desktop max-w-max-width mx-auto w-full flex flex-col gap-lg">
+<!-- Welcome banner -->
+<div class="bg-primary-container/30 border border-primary-container rounded-xl p-lg flex flex-col md:flex-row items-start md:items-center justify-between gap-md">
+<div class="flex items-center gap-md">
+<span class="material-symbols-outlined text-primary text-[32px]">waving_hand</span>
+<div>
+<h2 class="font-headline-lg-mobile md:font-headline-md text-headline-lg-mobile md:text-headline-md text-on-surface">Welcome back, Alex Rivera</h2>
+<p class="font-body-md text-body-md text-secondary mt-xs">Employee Self-Service - manage your profile, requests, attendance, payroll, and evaluations without contacting HR.</p>
+</div>
+</div>
+<button class="bg-primary text-on-primary py-sm px-md rounded-lg font-label-md text-label-md flex items-center gap-xs hover:bg-on-primary-fixed-variant transition-colors shadow-sm cursor-pointer active:scale-95 duration-200" onclick="window.location.href='../employee_requests_dashboard/code.html'">
+<span class="material-symbols-outlined text-[18px]">add_task</span>New Request
+</button>
+</div>
+<!-- Quick stats -->
+<div class="grid grid-cols-2 lg:grid-cols-4 gap-md">
+<div class="bg-surface-container-lowest rounded-xl p-lg soft-shadow border border-outline-variant hover-shadow flex flex-col justify-between h-28">
+<p class="font-label-sm text-label-sm text-secondary uppercase tracking-wider">Coming In Today</p>
+<h3 class="font-display-lg text-display-lg text-on-surface">10:01</h3>
+</div>
+<div class="bg-surface-container-lowest rounded-xl p-lg soft-shadow border border-outline-variant hover-shadow flex flex-col justify-between h-28">
+<p class="font-label-sm text-label-sm text-secondary uppercase tracking-wider">Leave Balance</p>
+<h3 class="font-display-lg text-display-lg text-on-surface">18</h3>
+<p class="font-label-md text-label-md text-secondary">Annual days remaining</p>
+</div>
+<div class="bg-surface-container-lowest rounded-xl p-lg soft-shadow border border-outline-variant hover-shadow flex flex-col justify-between h-28">
+<p class="font-label-sm text-label-sm text-secondary uppercase tracking-wider">Pending Requests</p>
+<h3 class="font-display-lg text-display-lg text-on-surface">2</h3>
+</div>
+<div class="bg-surface-container-lowest rounded-xl p-lg soft-shadow border border-outline-variant hover-shadow flex flex-col justify-between h-28">
+<p class="font-label-sm text-label-sm text-secondary uppercase tracking-wider">Last Evaluation</p>
+<h3 class="font-display-lg text-display-lg text-on-surface">4.5</h3>
+<p class="font-label-md text-label-md text-secondary">Q3 2026</p>
+</div>
+</div>
+<!-- Self-service tabs -->
+<div class="bg-surface-container-lowest rounded-xl soft-shadow border border-outline-variant overflow-hidden">
+<div class="flex items-center gap-md px-lg pt-lg pb-0 tabs-scroll overflow-x-auto">
+<button class="tab-btn active px-md pb-md font-label-md text-label-md whitespace-nowrap" data-tab="ss-profile">My Profile</button>
+<button class="tab-btn px-md pb-md font-label-md text-label-md whitespace-nowrap" data-tab="ss-attendance">My Attendance</button>
+<button class="tab-btn px-md pb-md font-label-md text-label-md whitespace-nowrap" data-tab="ss-notifications">My Notifications</button>
+<button class="tab-btn px-md pb-md font-label-md text-label-md whitespace-nowrap" data-tab="ss-payroll">My Payroll</button>
+<button class="tab-btn px-md pb-md font-label-md text-label-md whitespace-nowrap" data-tab="ss-evaluation">My Evaluation</button>
+</div>
+<div class="p-lg">
+<!-- SS Profile -->
+<div class="tab-panel active" id="ss-profile">
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-md">
+<div class="bg-surface-container-low rounded-xl p-lg border border-outline-variant">
+<h4 class="font-title-lg text-title-lg text-on-surface mb-md">My Details</h4>
+<div class="grid grid-cols-1 sm:grid-cols-2 gap-md">
+<div><p class="font-label-sm text-label-sm text-secondary">Employee ID</p><p class="font-body-lg text-body-lg text-on-surface font-medium">REV-EMP-000118</p></div>
+<div><p class="font-label-sm text-label-sm text-secondary">Position</p><p class="font-body-lg text-body-lg text-on-surface font-medium">Gym Shift Lead</p></div>
+<div><p class="font-label-sm text-label-sm text-secondary">Gym / Branch</p><p class="font-body-lg text-body-lg text-on-surface font-medium">Downtown Gym</p></div>
+<div><p class="font-label-sm text-label-sm text-secondary">Manager</p><p class="font-body-lg text-body-lg text-on-surface font-medium">Sara Khalil</p></div>
+<div><p class="font-label-sm text-label-sm text-secondary">Joining Date</p><p class="font-body-lg text-body-lg text-on-surface font-medium">02 Feb 2022</p></div>
+<div><p class="font-label-sm text-label-sm text-secondary">Email</p><p class="font-body-lg text-body-lg text-on-surface font-medium">alex.rivera@revive.fit</p></div>
+</div>
+</div>
+<div class="flex flex-col gap-md">
+<div class="bg-surface-container-low rounded-xl p-lg border border-outline-variant">
+<h4 class="font-title-lg text-title-lg text-on-surface mb-md">My Employment Status</h4>
+<span class="inline-flex items-center gap-xs bg-primary-container/40 text-on-primary-container px-md py-xs rounded-full font-label-md text-label-md">Active Employee</span>
+<p class="font-body-md text-body-md text-secondary mt-sm">Employee ID is permanent and never changes.</p>
+</div>
+<div class="bg-surface-container-low rounded-xl p-lg border border-outline-variant">
+<h4 class="font-title-lg text-title-lg text-on-surface mb-md">My Documents</h4>
+<div class="flex flex-col gap-sm">
+<div class="flex items-center justify-between"><span class="font-body-md text-body-md text-on-surface">National ID Scan</span><span class="material-symbols-outlined text-primary text-[20px]">visibility</span></div>
+<div class="flex items-center justify-between"><span class="font-body-md text-body-md text-on-surface">Employment Contract</span><span class="material-symbols-outlined text-primary text-[20px]">visibility</span></div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- SS Attendance -->
+<div class="tab-panel" id="ss-attendance">
+<div class="bg-surface-container-low rounded-xl p-lg border border-outline-variant">
+<h4 class="font-title-lg text-title-lg text-on-surface mb-md">My Attendance - October 2026</h4>
+<div class="overflow-x-auto">
+<table class="w-full text-left border-collapse min-w-[620px]">
+<thead>
+<tr class="border-b border-outline-variant">
+<th class="py-sm px-md font-label-sm text-label-sm text-secondary uppercase tracking-wider">Date</th>
+<th class="py-sm px-md font-label-sm text-label-sm text-secondary uppercase tracking-wider">Check-in</th>
+<th class="py-sm px-md font-label-sm text-label-sm text-secondary uppercase tracking-wider">Check-out</th>
+<th class="py-sm px-md font-label-sm text-label-sm text-secondary uppercase tracking-wider">Status</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-outline-variant/60">
+<tr><td class="py-sm px-md font-body-md text-on-surface">Sat 17 Oct</td><td class="py-sm px-md font-body-md text-on-surface">10:01</td><td class="py-sm px-md font-body-md text-on-surface">18:00</td><td class="py-sm px-md"><span class="inline-flex bg-primary-container/40 text-on-primary-container px-md py-xs rounded-full font-label-md text-label-md">On Time</span></td></tr>
+<tr><td class="py-sm px-md font-body-md text-on-surface">Sun 18 Oct</td><td class="py-sm px-md font-body-md text-on-surface">10:23</td><td class="py-sm px-md font-body-md text-on-surface">18:05</td><td class="py-sm px-md"><span class="inline-flex bg-error-container text-on-error-container px-md py-xs rounded-full font-label-md text-label-md">Late - notified</span></td></tr>
+<tr><td class="py-sm px-md font-body-md text-on-surface">Mon 19 Oct</td><td class="py-sm px-md font-body-md text-on-surface">14:02</td><td class="py-sm px-md font-body-md text-on-surface">22:01</td><td class="py-sm px-md"><span class="inline-flex bg-primary-container/40 text-on-primary-container px-md py-xs rounded-full font-label-md text-label-md">On Time</span></td></tr>
+<tr><td class="py-sm px-md font-body-md text-on-surface">Tue 20 Oct</td><td class="py-sm px-md font-body-md text-on-surface">--:--</td><td class="py-sm px-md font-body-md text-on-surface">--:--</td><td class="py-sm px-md"><span class="inline-flex bg-surface-container-high text-on-surface-variant px-md py-xs rounded-full font-label-md text-label-md">Weekly Off</span></td></tr>
+<tr><td class="py-sm px-md font-body-md text-on-surface">Wed 21 Oct</td><td class="py-sm px-md font-body-md text-on-surface">14:00</td><td class="py-sm px-md font-body-md text-on-surface">21:30</td><td class="py-sm px-md"><span class="inline-flex bg-surface-container-high text-on-surface-variant px-md py-xs rounded-full font-label-md text-label-md">Early Check-out</span></td></tr>
+<tr><td class="py-sm px-md font-body-md text-on-surface">Thu 22 Oct</td><td class="py-sm px-md font-body-md text-on-surface">14:05</td><td class="py-sm px-md font-body-md text-on-surface">22:10</td><td class="py-sm px-md"><span class="inline-flex bg-primary-fixed-dim/30 text-on-primary-fixed px-md py-xs rounded-full font-label-md text-label-md">Overtime</span></td></tr>
+</tbody>
+</table>
+</div>
+</div>
+</div>
+<!-- SS Notifications -->
+<div class="tab-panel" id="ss-notifications">
+<div class="bg-surface-container-low rounded-xl p-lg border border-outline-variant">
+<h4 class="font-title-lg text-title-lg text-on-surface mb-md">My Notifications</h4>
+<div class="space-y-sm">
+<div class="flex items-start gap-md bg-surface-container-lowest rounded-lg border border-outline-variant p-md">
+<span class="material-symbols-outlined text-error text-[22px]">payments</span>
+<div><p class="font-body-md text-body-md font-medium text-on-surface">Deduction posted on your account</p><p class="font-body-md text-body-md text-secondary">EGP 240 attendance deduction for Oct 2026 was approved by Branch Manager and HR.</p></div>
+<span class="ml-auto font-label-md text-label-md text-secondary shrink-0">2h ago</span>
+</div>
+<div class="flex items-start gap-md bg-surface-container-lowest rounded-lg border border-outline-variant p-md">
+<span class="material-symbols-outlined text-error text-[22px]">warning</span>
+<div><p class="font-body-md text-body-md font-medium text-on-surface">Missing Check-out detected</p><p class="font-body-md text-body-md text-secondary">Wed 21 Oct - no check-out recorded. Please raise a correction if this is an error.</p></div>
+<span class="ml-auto font-label-md text-label-md text-secondary shrink-0">1d ago</span>
+</div>
+<div class="flex items-start gap-md bg-surface-container-lowest rounded-lg border border-outline-variant p-md">
+<span class="material-symbols-outlined text-primary text-[22px]">event_available</span>
+<div><p class="font-body-md text-body-md font-medium text-on-surface">Payroll Sheet ready</p><p class="font-body-md text-body-md text-secondary">Your Oct 2026 payroll sheet is available on My Payroll.</p></div>
+<span class="ml-auto font-label-md text-label-md text-secondary shrink-0">3d ago</span>
+</div>
+</div>
+</div>
+</div>
+<!-- SS Payroll -->
+<div class="tab-panel" id="ss-payroll">
+<div class="bg-surface-container-low rounded-xl p-lg border border-outline-variant">
+<div class="flex items-center justify-between mb-md">
+<h4 class="font-title-lg text-title-lg text-on-surface">My Payroll - October 2026</h4>
+<button class="bg-primary text-on-primary py-sm px-md rounded-lg font-label-md text-label-md flex items-center gap-xs hover:bg-on-primary-fixed-variant transition-colors shadow-sm cursor-pointer active:scale-95 duration-200" onclick="window.location.href='../employee_payroll_sheet/code.html'">View Full Sheet</button>
+</div>
+<div class="grid grid-cols-2 lg:grid-cols-4 gap-md">
+<div class="bg-surface-container-lowest rounded-lg border border-outline-variant p-md"><p class="font-label-sm text-label-sm text-secondary">Gross Salary</p><p class="font-body-lg text-body-lg font-semibold text-on-surface">EGP 11,000</p></div>
+<div class="bg-surface-container-lowest rounded-lg border border-outline-variant p-md"><p class="font-label-sm text-label-sm text-secondary">Deductions</p><p class="font-body-lg text-body-lg font-semibold text-error">- EGP 550</p></div>
+<div class="bg-surface-container-lowest rounded-lg border border-outline-variant p-md"><p class="font-label-sm text-label-sm text-secondary">Bonuses</p><p class="font-body-lg text-body-lg font-semibold text-primary">+ EGP 800</p></div>
+<div class="bg-surface-container-lowest rounded-lg border border-outline-variant p-md"><p class="font-label-sm text-label-sm text-secondary">Net Salary</p><p class="font-body-lg text-body-lg font-semibold text-on-surface">EGP 11,250</p></div>
+</div>
+</div>
+</div>
+<!-- SS Evaluation -->
+<div class="tab-panel" id="ss-evaluation">
+<div class="bg-surface-container-low rounded-xl p-lg border border-outline-variant">
+<div class="flex items-center justify-between mb-md">
+<h4 class="font-title-lg text-title-lg text-on-surface">My Evaluation History</h4>
+<button class="bg-surface border border-outline-variant text-on-surface py-sm px-md rounded-lg font-label-md text-label-md flex items-center gap-xs hover:bg-surface-container-high transition-colors" onclick="window.location.href='../individual_review_sarah_jenkins/code.html'">Open Full Review</button>
+</div>
+<div class="space-y-sm">
+<div class="flex items-center justify-between bg-surface-container-lowest rounded-lg border border-outline-variant p-md">
+<div><p class="font-body-md text-body-md font-medium text-on-surface">Q3 2026</p><p class="font-label-md text-label-md text-secondary">Manager: Sara Khalil</p></div>
+<div class="flex flex-col items-end"><p class="font-body-lg text-body-lg font-semibold text-primary">4.5 / 5</p><span class="inline-flex bg-primary-container/40 text-on-primary-container px-md py-xs rounded-full font-label-md text-label-md">Exceeds Expectations</span></div>
+</div>
+<div class="flex items-center justify-between bg-surface-container-lowest rounded-lg border border-outline-variant p-md">
+<div><p class="font-body-md text-body-md font-medium text-on-surface">Q2 2026</p><p class="font-label-md text-label-md text-secondary">Manager: Sara Khalil</p></div>
+<div class="flex flex-col items-end"><p class="font-body-lg text-body-lg font-semibold text-on-surface">4.1 / 5</p><span class="inline-flex bg-surface-container-high text-on-surface-variant px-md py-xs rounded-full font-label-md text-label-md">Meets Expectations</span></div>
+</div>
+<div class="flex items-center justify-between bg-surface-container-lowest rounded-lg border border-outline-variant p-md">
+<div><p class="font-body-md text-body-md font-medium text-on-surface">Q1 2026</p><p class="font-label-md text-label-md text-secondary">Manager: Sara Khalil</p></div>
+<div class="flex flex-col items-end"><p class="font-body-lg text-body-lg font-semibold text-on-surface">3.9 / 5</p><span class="inline-flex bg-surface-container-high text-on-surface-variant px-md py-xs rounded-full font-label-md text-label-md">Meets Expectations</span></div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</main>
+</div>
+<script>
+        (function () {
+            'use strict';
+
+            document.querySelectorAll('.tab-btn').forEach(function (btn) {
+                btn.addEventListener('click', function () {
+                    document.querySelectorAll('.tab-btn').forEach(function (b) { b.classList.remove('active'); });
+                    btn.classList.add('active');
+                    document.querySelectorAll('.tab-panel').forEach(function (p) { p.classList.remove('active'); });
+                    document.getElementById(btn.getAttribute('data-tab')).classList.add('active');
+                });
+            });
+        })();
+    </script>
+</body>
+</html>

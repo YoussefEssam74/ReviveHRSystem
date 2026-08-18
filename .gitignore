@@ -1,0 +1,49 @@
+## Visual Studio
+.vs/
+.vsconfig
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+## Build results
+[Dd]ebug/
+[Rr]elease/
+x64/
+x86/
+build/
+bld/
+[Oo]bj/
+[Bb]in/
+*.ilk
+*.log
+*.pdb
+*.dbg
+
+## Rider / IDEA
+.idea/
+*.sln.iml
+
+## .NET
+project.lock.json
+project.fragment.lock.json
+artifacts/
+*.nupkg
+*.snupkg
+TestResults/
+*.trx
+
+## Node / npm (if used)
+node_modules/
+npm-debug.log*
+yarn-error.log*
+
+## OS files
+.DS_Store
+Thumbs.db
+*.tmp
+
+## User-specific files
+*.pfx
+*.p12
+appsettings.Development.json

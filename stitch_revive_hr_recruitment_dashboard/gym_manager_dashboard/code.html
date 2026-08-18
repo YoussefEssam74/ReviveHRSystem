@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Revive HR - Gym Manager Dashboard</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+          darkMode: "class",
+          theme: {
+            extend: {
+              "colors": {
+                      "tertiary-fixed": "#d8e3dd",
+                      "surface-container-highest": "#d3dcd2",
+                      "on-secondary-fixed": "#191c1e",
+                      "tertiary-fixed-dim": "#bcc7c0",
+                      "secondary-fixed-dim": "#c5c6c8",
+                      "on-primary-fixed-variant": "#166534",
+                      "on-primary-container": "#14532d",
+                      "on-background": "#13221a",
+                      "on-tertiary": "#ffffff",
+                      "on-secondary-container": "#43474a",
+                      "surface-variant": "#e2e8e0",
+                      "on-secondary": "#ffffff",
+                      "on-tertiary-fixed-variant": "#3c475a",
+                      "outline": "#6e7b6c",
+                      "secondary-container": "#e8e8e8",
+                      "surface-container": "#e9eee8",
+                      "surface-container-low": "#f3f6f2",
+                      "inverse-surface": "#213145",
+                      "on-primary": "#ffffff",
+                      "primary": "#16a34a",
+                      "error": "#ba1a1a",
+                      "on-primary-fixed": "#052e16",
+                      "secondary-fixed": "#e1e2e4",
+                      "primary-fixed-dim": "#4ade80",
+                      "background": "#f7f9f7",
+                      "surface": "#fbfcfa",
+                      "surface-tint": "#16a34a",
+                      "tertiary-container": "#b3c7bc",
+                      "outline-variant": "#c6cdc5",
+                      "tertiary": "#51605a",
+                      "on-tertiary-fixed": "#111c18",
+                      "surface-dim": "#d2dbd1",
+                      "surface-container-lowest": "#ffffff",
+                      "on-error-container": "#93000a",
+                      "on-secondary-fixed-variant": "#444749",
+                      "surface-bright": "#ffffff",
+                      "primary-fixed": "#86efac",
+                      "inverse-on-surface": "#eaf1ff",
+                      "on-surface": "#13221a",
+                      "error-container": "#ffdad6",
+                      "on-surface-variant": "#3f4a41",
+                      "on-tertiary-container": "#1c2a23",
+                      "secondary": "#5c5f60",
+                      "inverse-primary": "#4ade80",
+                      "on-error": "#ffffff",
+                      "primary-container": "#bbf7d0",
+                      "surface-container-high": "#dee5dd"
+              },
+              "borderRadius": { "DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px" },
+              "spacing": {
+                      "max-width": "1440px", "md": "16px", "xs": "4px", "margin-mobile": "16px", "gutter": "24px",
+                      "margin-desktop": "32px", "2xl": "48px", "xl": "32px", "lg": "24px", "sm": "8px", "base": "4px"
+              },
+              "fontFamily": {
+                      "title-lg": ["Inter"], "body-lg": ["Inter"], "headline-md": ["Inter"], "display-lg": ["Inter"],
+                      "headline-lg-mobile": ["Inter"], "body-md": ["Inter"], "headline-lg": ["Inter"], "label-sm": ["Inter"], "label-md": ["Inter"]
+              },
+              "fontSize": {
+                      "title-lg": ["20px", {"lineHeight": "28px", "fontWeight": "600"}],
+                      "body-lg": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+                      "headline-md": ["24px", {"lineHeight": "32px", "fontWeight": "600"}],
+                      "display-lg": ["48px", {"lineHeight": "56px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                      "headline-lg-mobile": ["24px", {"lineHeight": "32px", "fontWeight": "600"}],
+                      "body-md": ["14px", {"lineHeight": "20px", "fontWeight": "400"}],
+                      "headline-lg": ["32px", {"lineHeight": "40px", "letterSpacing": "-0.01em", "fontWeight": "600"}],
+                      "label-sm": ["11px", {"lineHeight": "14px", "fontWeight": "600"}],
+                      "label-md": ["12px", {"lineHeight": "16px", "letterSpacing": "0.01em", "fontWeight": "500"}]
+              }
+            }
+          }
+        }
+    </script>
+<style>
+        .soft-shadow { box-shadow: 0px 1px 3px rgba(0,0,0,0.05); }
+        .hover-shadow:hover { box-shadow: 0px 10px 15px -3px rgba(0,0,0,0.1); transition: all 0.2s ease; }
+    </style>
+</head>
+<body class="bg-background text-on-background font-body-md min-h-screen flex">
+<!-- SideNavBar -->
+<nav class="fixed h-screen w-[280px] left-0 top-0 bg-surface-container-lowest dark:bg-inverse-surface border-r border-outline-variant shadow-sm flex flex-col p-md z-50 hidden md:flex">
+<div class="mb-xl flex items-center gap-sm">
+<div class="w-10 h-10 rounded-full bg-primary flex items-center justify-center text-on-primary font-bold">R</div>
+<div>
+<h1 class="font-headline-md text-headline-md font-bold text-primary dark:text-primary-fixed">Revive HR</h1>
+<p class="font-label-sm text-label-sm text-secondary">Manager - Downtown Gym</p>
+</div>
+</div>
+<div class="flex-1 flex flex-col gap-1 overflow-y-auto">
+<a class="flex items-center gap-md px-md py-sm rounded-lg bg-surface-container-high text-primary font-bold border-r-4 border-primary opacity-90 transition-opacity" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">dashboard</span><span class="font-body-md text-body-md">My Gym Dashboard</span>
+</a>
+<a class="flex items-center gap-md px-md py-sm rounded-lg text-secondary hover:text-on-surface hover:bg-surface-container-high transition-colors" href="../attendance_management_dashboard/code.html">
+<span class="material-symbols-outlined">event_available</span><span class="font-body-md text-body-md">Attendance</span>
+</a>
+<a class="flex items-center gap-md px-md py-sm rounded-lg text-secondary hover:text-on-surface hover:bg-surface-container-high transition-colors" href="../shift_schedule_management/code.html">
+<span class="material-symbols-outlined">calendar_month</span><span class="font-body-md text-body-md">Shift Schedule</span>
+</a>
+<a class="flex items-center gap-md px-md py-sm rounded-lg text-secondary hover:text-on-surface hover:bg-surface-container-high transition-colors" href="../employee_requests_dashboard/code.html">
+<span class="material-symbols-outlined">assignment</span><span class="font-body-md text-body-md">Requests</span>
+</a>
+<a class="flex items-center gap-md px-md py-sm rounded-lg text-secondary hover:text-on-surface hover:bg-surface-container-high transition-colors" href="../leave_management/code.html">
+<span class="material-symbols-outlined">flight_takeoff</span><span class="font-body-md text-body-md">Leave Management</span>
+</a>
+<a class="flex items-center gap-md px-md py-sm rounded-lg text-secondary hover:text-on-surface hover:bg-surface-container-high transition-colors" href="../performance_dashboard/code.html">
+<span class="material-symbols-outlined">insights</span><span class="font-body-md text-body-md">Team Evaluations</span>
+</a>
+<a class="flex items-center gap-md px-md py-sm rounded-lg text-secondary hover:text-on-surface hover:bg-surface-container-high transition-colors" href="../employee_dashboard_full_navigation/code.html">
+<span class="material-symbols-outlined">badge</span><span class="font-body-md text-body-md">My Employees</span>
+</a>
+<a class="flex items-center gap-md px-md py-sm rounded-lg text-secondary hover:text-on-surface hover:bg-surface-container-high transition-colors" href="../payroll_support_dashboard/code.html">
+<span class="material-symbols-outlined">payments</span><span class="font-body-md text-body-md">Deductions &amp; Payroll</span>
+</a>
+<a class="flex items-center gap-md px-md py-sm rounded-lg text-secondary hover:text-on-surface hover:bg-surface-container-high transition-colors" href="../permissions_role_management/code.html">
+<span class="material-symbols-outlined">lock</span><span class="font-body-md text-body-md">My Permissions</span>
+</a>
+</div>
+<div class="border-t border-outline-variant pt-md flex flex-col gap-sm shrink-0">
+<a class="flex items-center gap-md px-md py-sm rounded-lg text-secondary hover:text-on-surface hover:bg-surface-container-high transition-colors" href="../hr_control_center_dashboard/code.html">
+<span class="material-symbols-outlined">exit_to_app</span><span class="font-body-md text-body-md">Switch to HR View</span>
+</a>
+<a class="flex items-center gap-md px-md py-sm rounded-lg text-secondary hover:text-on-surface hover:bg-surface-container-high transition-colors" href="../permissions_role_management/code.html">
+<span class="material-symbols-outlined">settings</span><span class="font-body-md text-body-md">Settings</span>
+</a>
+</div>
+</nav>
+<!-- Main Content Area -->
+<div class="flex-1 md:ml-[280px] min-h-screen flex flex-col w-full">
+<!-- TopAppBar -->
+<header class="flex justify-between items-center px-margin-desktop bg-surface-container-lowest dark:bg-surface-container fixed top-0 right-0 w-full md:w-[calc(100%-280px)] h-16 shadow-sm dark:shadow-none z-40">
+<div class="flex items-center gap-sm bg-surface-container-low px-md py-xs rounded-full border border-outline-variant w-64 md:w-96 focus-within:border-primary focus-within:ring-1 focus-within:ring-primary transition-all">
+<span class="material-symbols-outlined text-secondary text-[20px]">search</span>
+<input class="bg-transparent border-none focus:ring-0 w-full font-body-md text-body-md text-on-surface placeholder:text-secondary p-0 h-8" placeholder="Search my gym employees..." type="text"/>
+</div>
+<div class="flex items-center gap-sm">
+<button class="p-sm text-on-surface-variant hover:bg-secondary-container rounded-full transition-transform active:scale-95" onclick="window.location.href='../notifications_follow_up_hub/code.html'">
+<span class="material-symbols-outlined">notifications</span>
+</button>
+<button class="p-sm text-on-surface-variant hover:bg-secondary-container rounded-full transition-transform active:scale-95 bg-surface-container-high" onclick="window.location.href='../permissions_role_management/code.html'">
+<span class="material-symbols-outlined">admin_panel_settings</span>
+</button>
+</div>
+</header>
+<!-- Main Canvas -->
+<main class="flex-1 mt-16 p-margin-mobile md:p-margin-desktop max-w-max-width mx-auto w-full flex flex-col gap-lg">
+<!-- Page Header -->
+<div class="flex flex-col md:flex-row justify-between items-start md:items-end gap-md">
+<div>
+<div class="flex items-center gap-sm">
+<h2 class="font-headline-lg-mobile md:font-headline-lg text-headline-lg-mobile md:text-headline-lg text-on-surface">Gym Manager Dashboard</h2>
+<span class="inline-flex items-center gap-xs bg-primary-container/40 text-on-primary-container px-md py-xs rounded-full font-label-md text-label-md">Downtown Gym</span>
+</div>
+<p class="font-body-md text-body-md text-secondary mt-xs">Viewing only Downtown Gym personnel and data per your permissions.</p>
+</div>
+<div class="flex flex-wrap gap-sm">
+<button class="bg-primary text-on-primary py-sm px-md rounded-lg font-label-md text-label-md flex items-center gap-xs hover:bg-on-primary-fixed-variant transition-colors shadow-sm cursor-pointer active:scale-95 duration-200" onclick="openEvaluationModal()">
+<span class="material-symbols-outlined text-[18px]">rate_review</span>New Evaluation
+</button>
+<button class="bg-surface border border-outline-variant text-on-surface py-sm px-md rounded-lg font-label-md text-label-md flex items-center gap-xs hover:bg-surface-container-high transition-colors soft-shadow" onclick="window.location.href='../payroll_support_dashboard/code.html'">
+<span class="material-symbols-outlined text-[18px]">request_quote</span>Deduction Request
+</button>
+</div>
+</div>
+<!-- Bento: My Gym Metrics -->
+<div class="grid grid-cols-2 lg:grid-cols-4 gap-md">
+<div class="bg-surface-container-lowest rounded-xl p-lg soft-shadow border border-outline-variant hover-shadow flex flex-col justify-between h-32">
+<div class="flex justify-between items-start">
+<p class="font-label-sm text-label-sm text-secondary uppercase tracking-wider">My Employees</p>
+<span class="material-symbols-outlined text-primary bg-primary-container/10 p-sm rounded-full">group</span>
+</div>
+<h3 class="font-display-lg text-display-lg text-on-surface">34</h3>
+</div>
+<div class="bg-surface-container-lowest rounded-xl p-lg soft-shadow border border-outline-variant hover-shadow flex flex-col justify-between h-32">
+<div class="flex justify-between items-start">
+<p class="font-label-sm text-label-sm text-secondary uppercase tracking-wider">Today's Attendance</p>
+<span class="material-symbols-outlined text-primary bg-primary-container/10 p-sm rounded-full">fingerprint</span>
+</div>
+<h3 class="font-display-lg text-display-lg text-on-surface">29 / 34</h3>
+</div>
+<div class="bg-surface-container-lowest rounded-xl p-lg soft-shadow border border-outline-variant hover-shadow flex flex-col justify-between h-32 border-l-4 border-l-error">
+<div class="flex justify-between items-start">
+<p class="font-label-sm text-label-sm text-secondary uppercase tracking-wider">Late Employees</p>
+<span class="material-symbols-outlined text-error bg-error-container/30 p-sm rounded-full">schedule</span>
+</div>
+<h3 class="font-display-lg text-display-lg text-on-surface">3</h3>
+</div>
+<div class="bg-surface-container-lowest rounded-xl p-lg soft-shadow border border-outline-variant hover-shadow flex flex-col justify-between h-32 border-l-4 border-l-error">
+<div class="flex justify-between items-start">
+<p class="font-label-sm text-label-sm text-secondary uppercase tracking-wider">Absent Today</p>
+<span class="material-symbols-outlined text-error bg-error-container/30 p-sm rounded-full">person_off</span>
+</div>
+<h3 class="font-display-lg text-display-lg text-on-surface">2</h3>
+</div>
+</div>
+<!-- Shift Summary + Pending Requests -->
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-md">
+<div class="bg-surface-container-lowest rounded-xl soft-shadow border border-outline-variant p-lg">
+<h4 class="font-title-lg text-title-lg text-on-surface mb-md">Today's Shift Schedule - Sat 17 Oct</h4>
+<div class="space-y-sm">
+<div class="flex items-center justify-between py-sm px-md bg-surface-container-low rounded-lg border border-outline-variant">
+<div class="flex items-center gap-md"><span class="material-symbols-outlined text-primary">wb_sunny</span><div><p class="font-body-md text-body-md font-medium text-on-surface">Morning Shift</p><p class="font-label-md text-label-md text-secondary">10:00 - 18:00 - 14 employees</p></div></div>
+<span class="inline-flex bg-primary-container/40 text-on-primary-container px-md py-xs rounded-full font-label-md text-label-md">Scheduled</span>
+</div>
+<div class="flex items-center justify-between py-sm px-md bg-surface-container-low rounded-lg border border-outline-variant">
+<div class="flex items-center gap-md"><span class="material-symbols-outlined text-tertiary">dark_mode</span><div><p class="font-body-md text-body-md font-medium text-on-surface">Evening Shift</p><p class="font-label-md text-label-md text-secondary">14:00 - 22:00 - 12 employees</p></div></div>
+<span class="inline-flex bg-primary-container/40 text-on-primary-container px-md py-xs rounded-full font-label-md text-label-md">Scheduled</span>
+</div>
+<div class="flex items-center justify-between py-sm px-md bg-surface-container-low rounded-lg border border-outline-variant">
+<div class="flex items-center gap-md"><span class="material-symbols-outlined text-secondary">hotel_class</span><div><p class="font-body-md text-body-md font-medium text-on-surface">Weekly Off</p><p class="font-label-md text-label-md text-secondary">8 employees off today</p></div></div>
+<span class="inline-flex bg-surface-container-high text-on-surface-variant px-md py-xs rounded-full font-label-md text-label-md">Rest Day</span>
+</div>
+</div>
+</div>
+<div class="bg-surface-container-lowest rounded-xl soft-shadow border border-outline-variant p-lg">
+<h4 class="font-title-lg text-title-lg text-on-surface mb-md">Pending Requests</h4>
+<div class="space-y-sm">
+<div class="flex items-center justify-between border-b border-outline-variant/60 pb-sm">
+<div><p class="font-body-md text-body-md font-medium text-on-surface">Annual Leave - Dalia M.</p><p class="font-label-md text-label-md text-secondary">Mon 19 Oct - Wed 21 Oct</p></div>
+<div class="flex gap-xs">
+<button class="px-sm py-xs rounded-lg bg-primary-container/40 text-on-primary-container font-label-md text-label-md hover:bg-primary-fixed" onclick="approveRequest(this)">Approve</button>
+<button class="px-sm py-xs rounded-lg bg-error-container text-on-error-container font-label-md text-label-md hover:opacity-80" onclick="rejectRequest(this)">Reject</button>
+</div>
+</div>
+<div class="flex items-center justify-between border-b border-outline-variant/60 pb-sm">
+<div><p class="font-body-md text-body-md font-medium text-on-surface">Early Check-out Req - Emad S.</p><p class="font-label-md text-label-md text-secondary">Today 17:30 (instead of 18:00)</p></div>
+<div class="flex gap-xs">
+<button class="px-sm py-xs rounded-lg bg-primary-container/40 text-on-primary-container font-label-md text-label-md hover:bg-primary-fixed" onclick="approveRequest(this)">Approve</button>
+<button class="px-sm py-xs rounded-lg bg-error-container text-on-error-container font-label-md text-label-md hover:opacity-80" onclick="rejectRequest(this)">Reject</button>
+</div>
+</div>
+<div class="flex items-center justify-between pb-sm">
+<div><p class="font-body-md text-body-md font-medium text-on-surface">Sick Leave - Heba R.</p><p class="font-label-md text-label-md text-secondary">Certificate attached, 2 days</p></div>
+<div class="flex gap-xs">
+<button class="px-sm py-xs rounded-lg bg-primary-container/40 text-on-primary-container font-label-md text-label-md hover:bg-primary-fixed" onclick="approveRequest(this)">Approve</button>
+<button class="px-sm py-xs rounded-lg bg-error-container text-on-error-container font-label-md text-label-md hover:opacity-80" onclick="rejectRequest(this)">Reject</button>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- My Employees table -->
+<div class="bg-surface-container-lowest rounded-xl soft-shadow border border-outline-variant overflow-hidden">
+<div class="flex items-center justify-between px-lg pt-lg pb-md">
+<h4 class="font-title-lg text-title-lg text-on-surface">My Employees (Downtown Gym Only)</h4>
+<div class="flex gap-sm">
+<button class="bg-surface border border-outline-variant text-on-surface py-sm px-md rounded-lg font-label-md text-label-md flex items-center gap-xs hover:bg-surface-container-high transition-colors" onclick="window.location.href='../employee_dashboard_full_navigation/code.html'">View All</button>
+</div>
+</div>
+<div class="overflow-x-auto">
+<table class="w-full text-left border-collapse min-w-[760px]">
+<thead>
+<tr class="border-y border-outline-variant bg-surface-container-low">
+<th class="py-sm px-lg font-label-sm text-label-sm text-secondary uppercase tracking-wider">Employee</th>
+<th class="py-sm px-lg font-label-sm text-label-sm text-secondary uppercase tracking-wider">Position</th>
+<th class="py-sm px-lg font-label-sm text-label-sm text-secondary uppercase tracking-wider">Check-in</th>
+<th class="py-sm px-lg font-label-sm text-label-sm text-secondary uppercase tracking-wider">Status</th>
+<th class="py-sm px-lg font-label-sm text-label-sm text-secondary uppercase tracking-wider">Action</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-outline-variant/60">
+<tr>
+<td class="py-sm px-lg">
+<div class="flex items-center gap-md">
+<img class="w-9 h-9 rounded-full border border-outline-variant object-cover" alt="Employee" data-alt="Professional corporate headshot of a gym employee." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDSi5dfA7ojtkA2IXZy0AJVPSSwcbW5wnidddudcPSmkBm14ZjsApTKSfiqP4qGDG2-ysySI_oLc7C2qWhMmlvRyteVNksJRGVlW1-i42sdBkBTRbmTL1CmFs7a4x94_fxePCXwdaQIbbaNg-FgVu52EOp0TV7VjvfjUPK9hPuqDrJlSjxSMpoireOJPgJmNZsMXuni4a7O0SYfiSXVQUCjIMnIPnWLw2bCPU0cKbHgAOwmAg4eyxIL"/>
+<div><p class="font-body-md text-body-md font-medium text-on-surface">Omar Farouk</p><p class="font-label-md text-label-md text-secondary">REV-EMP-000124</p></div>
+</div>
+</td>
+<td class="py-sm px-lg font-body-md text-on-surface">Senior Trainer</td>
+<td class="py-sm px-lg font-body-md text-on-surface">09:58</td>
+<td class="py-sm px-lg"><span class="inline-flex bg-primary-container/40 text-on-primary-container px-md py-xs rounded-full font-label-md text-label-md">On Time</span></td>
+<td class="py-sm px-lg"><button class="text-primary font-label-md text-label-md hover:underline" onclick="window.location.href='../employee_profile_single_source_of_truth/code.html'">View Profile</button></td>
+</tr>
+<tr>
+<td class="py-sm px-lg">
+<div class="flex items-center gap-md">
+<img class="w-9 h-9 rounded-full border border-outline-variant object-cover" alt="Employee" data-alt="Professional corporate headshot of a gym front desk employee." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBk9jHv3m4u01LYwsC3kyBrHzOU4D1yDaCggckYM25Uy7RaNVw5_YbsLdt_YyTgbmlmqIO7-marQKuwnI7GHPRsom9eykxah5mKfYpVcvstFyH2DhdapmuvZZN5UtQNeZ12NQoWRsGkXhLusUv8S4-eoLPUCfnTg9rM7k8um4XcVRmaS38ls_oq_EexitMBYIuWX2L6bvgp9DoSXWTV9gzyLWusDxbiOyBcNAkdXtluj89S8T61Rnh"/>
+<div><p class="font-body-md text-body-md font-medium text-on-surface">Laila Mostafa</p><p class="font-label-md text-label-md text-secondary">REV-EMP-000131</p></div>
+</div>
+</td>
+<td class="py-sm px-lg font-body-md text-on-surface">Front Desk</td>
+<td class="py-sm px-lg font-body-md text-on-surface">10:17</td>
+<td class="py-sm px-lg"><span class="inline-flex bg-error-container text-on-error-container px-md py-xs rounded-full font-label-md text-label-md">Late</span></td>
+<td class="py-sm px-lg"><button class="text-primary font-label-md text-label-md hover:underline" onclick="window.location.href='../employee_profile_single_source_of_truth/code.html'">View Profile</button></td>
+</tr>
+<tr>
+<td class="py-sm px-lg">
+<div class="flex items-center gap-md">
+<img class="w-9 h-9 rounded-full border border-outline-variant object-cover" alt="Employee" data-alt="Professional corporate headshot of a Jordanian gym fitness coach wearing a dark green polo." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAIfHF5FHauJwwnRX9njSF_V3gqV0IlE87RzFEOVy9KfIISULvtXCv6Luel0REeVwwcve5iKCzNQfqq0u84jszB-W0SKcFncKtmwg2aRhQzQvgNz3ZJ69ExxzjfJDmv6w9I7qlOpcbNYfgKUjXHKv9DaChXre5p4PEQWizHqQtKDvWGFERjsjYsUVstaps-OUsc1f8ivFHxP3YojrvMeRKYJS-iM46pSEU0BxyIaF4T3Hv2o-DdOgoh"/>
+<div><p class="font-body-md text-body-md font-medium text-on-surface">Karim Adel</p><p class="font-label-md text-label-md text-secondary">REV-EMP-000145</p></div>
+</div>
+</td>
+<td class="py-sm px-lg font-body-md text-on-surface">Fitness Coach</td>
+<td class="py-sm px-lg font-body-md text-on-surface">--:--</td>
+<td class="py-sm px-lg"><span class="inline-flex bg-error-container text-on-error-container px-md py-xs rounded-full font-label-md text-label-md">Absent</span></td>
+<td class="py-sm px-lg"><button class="text-primary font-label-md text-label-md hover:underline" onclick="window.location.href='../employee_profile_single_source_of_truth/code.html'">View Profile</button></td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<!-- Team Evaluations + Performance -->
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-md">
+<div class="bg-surface-container-lowest rounded-xl soft-shadow border border-outline-variant p-lg">
+<div class="flex items-center justify-between mb-md">
+<h4 class="font-title-lg text-title-lg text-on-surface">Team Evaluations</h4>
+<button class="text-primary font-label-md text-label-md hover:underline" onclick="window.location.href='../performance_dashboard/code.html'">View All</button>
+</div>
+<div class="space-y-sm">
+<div class="flex items-center justify-between bg-surface-container-low rounded-lg border border-outline-variant px-md py-sm">
+<div><p class="font-body-md text-body-md font-medium text-on-surface">Omar Farouk</p><p class="font-label-md text-label-md text-secondary">Q3 2026 - Senior Trainer</p></div>
+<span class="inline-flex bg-primary-container/40 text-on-primary-container px-md py-xs rounded-full font-label-md text-label-md">4.7 / 5</span>
+</div>
+<div class="flex items-center justify-between bg-surface-container-low rounded-lg border border-outline-variant px-md py-sm">
+<div><p class="font-body-md text-body-md font-medium text-on-surface">Nour El-Sayed</p><p class="font-label-md text-label-md text-secondary">Q3 2026 - Receptionist</p></div>
+<span class="inline-flex bg-primary-container/40 text-on-primary-container px-md py-xs rounded-full font-label-md text-label-md">4.2 / 5</span>
+</div>
+<div class="flex items-center justify-between bg-surface-container-low rounded-lg border border-outline-variant px-md py-sm">
+<div><p class="font-body-md text-body-md font-medium text-on-surface">Karim Adel</p><p class="font-label-md text-label-md text-secondary">Q3 2026 - Fitness Coach</p></div>
+<span class="inline-flex bg-error-container text-on-error-container px-md py-xs rounded-full font-label-md text-label-md">3.1 / 5</span>
+</div>
+</div>
+</div>
+<div class="bg-surface-container-lowest rounded-xl soft-shadow border border-outline-variant p-lg">
+<h4 class="font-title-lg text-title-lg text-on-surface mb-md">Employee Performance</h4>
+<div class="space-y-md">
+<div>
+<div class="flex items-center justify-between mb-xs"><p class="font-body-md text-body-md font-medium text-on-surface">Attendance Adherence</p><span class="font-label-md text-label-md text-secondary">92%</span></div>
+<div class="h-2 bg-surface-container-high rounded-full"><div class="h-full bg-primary rounded-full" style="width: 92%"></div></div>
+</div>
+<div>
+<div class="flex items-center justify-between mb-xs"><p class="font-body-md text-body-md font-medium text-on-surface">Goal Completion</p><span class="font-label-md text-label-md text-secondary">78%</span></div>
+<div class="h-2 bg-surface-container-high rounded-full"><div class="h-full bg-primary rounded-full" style="width: 78%"></div></div>
+</div>
+<div>
+<div class="flex items-center justify-between mb-xs"><p class="font-body-md text-body-md font-medium text-on-surface">Member Satisfaction</p><span class="font-label-md text-label-md text-secondary">88%</span></div>
+<div class="h-2 bg-surface-container-high rounded-full"><div class="h-full bg-primary-fixed-dim rounded-full" style="width: 88%"></div></div>
+</div>
+</div>
+<div class="mt-md bg-surface-container-low rounded-lg border border-outline-variant p-md flex items-start gap-sm">
+<span class="material-symbols-outlined text-primary text-[20px]">gpp_good</span>
+<p class="font-body-md text-body-md text-secondary text-sm">As Downtown Gym Manager you can only view this gym's employees. Salary, Employee ID, and Employment History edits require higher permission.</p>
+</div>
+</div>
+</div>
+</main>
+</div>
+<!-- Evaluation Modal -->
+<div class="fixed inset-0 z-50 hidden items-center justify-center p-md" id="eval-modal">
+<div class="absolute inset-0 bg-black/40" onclick="closeEvaluationModal()"></div>
+<div class="relative bg-surface-container-lowest rounded-xl shadow-xl w-full max-w-lg p-lg flex flex-col gap-md">
+<div class="flex items-center justify-between">
+<h3 class="font-title-lg text-title-lg text-on-surface">Employee Evaluation</h3>
+<button class="p-sm text-on-surface-variant hover:bg-surface-container-high rounded-full" onclick="closeEvaluationModal()"><span class="material-symbols-outlined">close</span></button>
+</div>
+<div class="flex flex-col gap-md">
+<label class="flex flex-col gap-xs">
+<span class="font-label-md text-label-md text-on-surface-variant">Employee</span>
+<select class="bg-surface border border-outline-variant rounded-lg px-md py-sm font-body-md">
+<option>Omar Farouk - Senior Trainer</option>
+<option>Nour El-Sayed - Receptionist</option>
+<option>Karim Adel - Fitness Coach</option>
+</select>
+</label>
+<label class="flex flex-col gap-xs">
+<span class="font-label-md text-label-md text-on-surface-variant">Score (1 - 5)</span>
+<input class="bg-surface border border-outline-variant rounded-lg px-md py-sm font-body-md" type="number" min="1" max="5" value="4"/>
+</label>
+<label class="flex flex-col gap-xs">
+<span class="font-label-md text-label-md text-on-surface-variant">Comments</span>
+<textarea class="bg-surface border border-outline-variant rounded-lg px-md py-sm font-body-md" rows="3" placeholder="Manager review notes..."></textarea>
+</label>
+</div>
+<div class="flex items-center gap-sm justify-between mt-xs">
+<button class="bg-surface border border-outline-variant text-on-surface py-sm px-md rounded-lg font-label-md text-label-md hover:bg-surface-container-high" onclick="closeEvaluationModal()">Cancel</button>
+<button class="bg-primary text-on-primary py-sm px-md rounded-lg font-label-md text-label-md hover:bg-on-primary-fixed-variant" onclick="submitEvaluation()">Submit Evaluation</button>
+</div>
+</div>
+</div>
+<!-- Toast -->
+<div class="fixed bottom-md right-md z-50 hidden items-center gap-sm bg-on-surface text-surface px-md py-sm rounded-lg shadow-lg" id="toast">
+<span class="material-symbols-outlined text-[20px]">check_circle</span>
+<span class="font-body-md text-body-md">Action submitted for Downtown Gym.</span>
+</div>
+<script>
+        (function () {
+            'use strict';
+
+            window.openEvaluationModal = function () {
+                document.getElementById('eval-modal').classList.replace('hidden', 'flex');
+            };
+            window.closeEvaluationModal = function () {
+                document.getElementById('eval-modal').classList.replace('flex', 'hidden');
+            };
+            window.submitEvaluation = function () {
+                closeEvaluationModal();
+                showToast('Evaluation submitted and routed to HR for approval.');
+            };
+            window.approveRequest = function (btn) {
+                var row = btn.closest('.flex.items-center.justify-between');
+                row.innerHTML = '<span class="inline-flex bg-primary-container/40 text-on-primary-container px-md py-xs rounded-full font-label-md text-label-md">Approved</span>';
+            };
+            window.rejectRequest = function (btn) {
+                var row = btn.closest('.flex.items-center.justify-between');
+                row.innerHTML = '<span class="inline-flex bg-error-container text-on-error-container px-md py-xs rounded-full font-label-md text-label-md">Rejected</span>';
+            };
+            window.showToast = function (message) {
+                var toast = document.getElementById('toast');
+                toast.querySelector('span:last-of-type').textContent = message;
+                toast.classList.replace('hidden', 'flex');
+                setTimeout(function () { toast.classList.replace('flex', 'hidden'); }, 3000);
+            };
+        })();
+    </script>
+</body>
+</html>

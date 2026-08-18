@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Revive HR - Create Vacancy</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "surface-container-highest": "#d3dcd2",
+                    "surface": "#fbfcfa",
+                    "tertiary-fixed": "#d8e3dd",
+                    "primary-fixed": "#86efac",
+                    "surface-container-low": "#f3f6f2",
+                    "error-container": "#ffdad6",
+                    "surface-dim": "#d2dbd1",
+                    "primary-fixed-dim": "#4ade80",
+                    "primary": "#16a34a",
+                    "on-surface-variant": "#3f4a41",
+                    "tertiary": "#51605a",
+                    "secondary-fixed-dim": "#c5c6c8",
+                    "on-tertiary": "#ffffff",
+                    "on-secondary": "#ffffff",
+                    "secondary-fixed": "#e1e2e4",
+                    "background": "#f7f9f7",
+                    "outline": "#6e7b6c",
+                    "secondary-container": "#e8e8e8",
+                    "surface-tint": "#16a34a",
+                    "tertiary-container": "#b3c7bc",
+                    "on-primary-fixed": "#052e16",
+                    "surface-container": "#e9eee8",
+                    "on-tertiary-fixed": "#111c18",
+                    "inverse-surface": "#213145",
+                    "on-tertiary-container": "#1c2a23",
+                    "inverse-on-surface": "#eaf1ff",
+                    "on-secondary-container": "#43474a",
+                    "on-error-container": "#93000a",
+                    "surface-container-lowest": "#ffffff",
+                    "on-tertiary-fixed-variant": "#3c475a",
+                    "surface-variant": "#e2e8e0",
+                    "tertiary-fixed-dim": "#bcc7c0",
+                    "inverse-primary": "#4ade80",
+                    "on-secondary-fixed-variant": "#444749",
+                    "on-surface": "#13221a",
+                    "on-error": "#ffffff",
+                    "on-primary": "#ffffff",
+                    "outline-variant": "#c6cdc5",
+                    "on-secondary-fixed": "#191c1e",
+                    "on-primary-container": "#14532d",
+                    "secondary": "#5c5f60",
+                    "surface-bright": "#ffffff",
+                    "error": "#ba1a1a",
+                    "primary-container": "#bbf7d0",
+                    "surface-container-high": "#dee5dd",
+                    "on-background": "#13221a",
+                    "on-primary-fixed-variant": "#166534"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.25rem",
+                    "lg": "0.5rem",
+                    "xl": "0.75rem",
+                    "full": "9999px"
+            },
+            "spacing": {
+                    "margin-mobile": "16px",
+                    "2xl": "48px",
+                    "xl": "32px",
+                    "max-width": "1440px",
+                    "margin-desktop": "32px",
+                    "md": "16px",
+                    "xs": "4px",
+                    "lg": "24px",
+                    "gutter": "24px",
+                    "sm": "8px",
+                    "base": "4px"
+            },
+            "fontFamily": {
+                    "label-md": ["Inter"],
+                    "body-lg": ["Inter"],
+                    "headline-lg": ["Inter"],
+                    "body-md": ["Inter"],
+                    "display-lg": ["Inter"],
+                    "title-lg": ["Inter"],
+                    "headline-md": ["Inter"],
+                    "label-sm": ["Inter"],
+                    "headline-lg-mobile": ["Inter"]
+            },
+            "fontSize": {
+                    "label-md": ["12px", {"lineHeight": "16px", "letterSpacing": "0.01em", "fontWeight": "500"}],
+                    "body-lg": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+                    "headline-lg": ["32px", {"lineHeight": "40px", "letterSpacing": "-0.01em", "fontWeight": "600"}],
+                    "body-md": ["14px", {"lineHeight": "20px", "fontWeight": "400"}],
+                    "display-lg": ["48px", {"lineHeight": "56px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                    "title-lg": ["20px", {"lineHeight": "28px", "fontWeight": "600"}],
+                    "headline-md": ["24px", {"lineHeight": "32px", "fontWeight": "600"}],
+                    "label-sm": ["11px", {"lineHeight": "14px", "fontWeight": "600"}],
+                    "headline-lg-mobile": ["24px", {"lineHeight": "32px", "fontWeight": "600"}]
+            }
+          }
+        }
+      }
+    </script>
+<style>
+        body { background-color: theme('colors.background'); color: theme('colors.on-background'); }
+        .card-shadow { box-shadow: 0px 1px 3px rgba(0,0,0,0.05); }
+    </style>
+</head>
+<body class="flex min-h-screen bg-background">
+<!-- SideNavBar (Desktop) -->
+<nav class="hidden md:flex flex-col fixed left-0 top-0 h-full w-[280px] py-lg border-r border-outline-variant bg-surface-container-low z-20">
+<div class="px-md pb-lg mb-lg border-b border-outline-variant">
+<h1 class="font-title-lg text-title-lg font-bold text-primary">Revive HR</h1>
+<p class="font-label-md text-label-md text-on-surface-variant">Management System</p>
+</div>
+<div class="px-sm flex-1 flex flex-col gap-sm">
+<button class="w-full bg-primary text-on-primary font-label-md text-label-md py-sm px-md rounded-lg mb-md flex items-center justify-center gap-sm hover:bg-primary-container hover:text-on-primary-container transition-colors shadow-sm">
+<span class="material-symbols-outlined" style="font-size: 18px;">add</span> Add Employee
+            </button>
+<a class="flex items-center gap-md text-on-surface-variant px-md py-sm rounded-lg hover:bg-surface-container-high transition-colors cursor-pointer active:translate-x-1" href="../recruitment_dashboard_complete/code.html">
+<span class="material-symbols-outlined">dashboard</span>
+<span class="font-label-md text-label-md">Dashboard</span>
+</a>
+<a class="flex items-center gap-md bg-primary-container text-on-primary-container rounded-lg px-md py-sm cursor-pointer transition-transform duration-200 active:translate-x-1" href="../vacancy_list/code.html">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">group_add</span>
+<span class="font-label-md text-label-md font-bold">Recruitment</span>
+</a>
+<a class="flex items-center gap-md text-on-surface-variant px-md py-sm rounded-lg hover:bg-surface-container-high transition-colors cursor-pointer active:translate-x-1" href="../candidate_list/code.html">
+<span class="material-symbols-outlined">people</span>
+<span class="font-label-md text-label-md">Candidates</span>
+</a>
+<a class="flex items-center gap-md text-on-surface-variant px-md py-sm rounded-lg hover:bg-surface-container-high transition-colors cursor-pointer active:translate-x-1" href="../recruitment_pipeline_interactive_kanban/code.html">
+<span class="material-symbols-outlined">account_tree</span>
+<span class="font-label-md text-label-md">Pipeline</span>
+</a>
+<a class="flex items-center gap-md text-on-surface-variant px-md py-sm rounded-lg hover:bg-surface-container-high transition-colors cursor-pointer active:translate-x-1" href="../waiting_list_management/code.html">
+<span class="material-symbols-outlined">hourglass_empty</span>
+<span class="font-label-md text-label-md">Waiting List</span>
+</a>
+<a class="flex items-center gap-md text-on-surface-variant px-md py-sm rounded-lg hover:bg-surface-container-high transition-colors cursor-pointer active:translate-x-1" href="../recruitment_reports/code.html">
+<span class="material-symbols-outlined">monitoring</span>
+<span class="font-label-md text-label-md">Reports</span>
+</a>
+</div>
+<div class="px-sm mt-auto border-t border-outline-variant pt-md">
+<a class="flex items-center gap-md text-on-surface-variant px-md py-sm rounded-lg hover:bg-surface-container-high transition-colors cursor-pointer" href="#">
+<span class="material-symbols-outlined">settings</span>
+<span class="font-label-md text-label-md">Settings</span>
+</a>
+<a class="flex items-center gap-md text-on-surface-variant px-md py-sm rounded-lg hover:bg-surface-container-high transition-colors cursor-pointer mt-sm" href="#">
+<span class="material-symbols-outlined">logout</span>
+<span class="font-label-md text-label-md">Logout</span>
+</a>
+</div>
+</nav>
+<!-- TopNavBar (Mobile) -->
+<header class="md:hidden flex justify-between items-center w-full px-lg py-sm fixed top-0 left-0 right-0 bg-surface shadow-sm z-30">
+<h1 class="font-headline-md text-headline-md font-bold text-primary">Revive HR</h1>
+<div class="flex gap-md">
+<span class="material-symbols-outlined text-secondary cursor-pointer hover:text-primary-container transition-colors">notifications</span>
+<span class="material-symbols-outlined text-secondary cursor-pointer hover:text-primary-container transition-colors">menu</span>
+</div>
+</header>
+<!-- Main Content Area -->
+<main class="flex-1 md:ml-[280px] pt-[80px] md:pt-0 p-margin-mobile md:p-margin-desktop max-w-max-width mx-auto w-full">
+<!-- Header -->
+<div class="mb-xl flex items-center gap-md">
+<a class="text-on-surface-variant hover:text-primary transition-colors cursor-pointer rounded-full p-sm bg-surface-container hover:bg-surface-container-high flex items-center justify-center" href="../vacancy_list/code.html">
+<span class="material-symbols-outlined">arrow_back</span>
+</a>
+<div>
+<h2 class="font-headline-lg-mobile md:font-headline-lg text-headline-lg-mobile md:text-headline-lg text-on-background">Create New Vacancy</h2>
+<p class="font-body-md text-body-md text-on-surface-variant mt-xs">Define the requirements and details for a new open position.</p>
+</div>
+</div>
+<!-- Form Layout -->
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-gutter items-start" id="publish-form">
+<!-- Left Column: Main Details -->
+<div class="lg:col-span-2 flex flex-col gap-lg">
+<!-- Section 1: Vacancy Details -->
+<section class="bg-surface-container-lowest rounded-xl p-lg card-shadow">
+<h3 class="font-title-lg text-title-lg text-on-surface mb-md flex items-center gap-sm border-b border-surface-container-high pb-sm">
+<span class="material-symbols-outlined text-primary">work</span>
+                        Vacancy Details
+                    </h3>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-lg mt-md">
+<div class="flex flex-col gap-xs">
+<label class="font-label-md text-label-md text-on-surface-variant">Job Title</label>
+<input class="rounded-lg border border-outline-variant bg-surface-container-lowest px-md py-sm font-body-md text-body-md text-on-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-shadow" placeholder="e.g. Senior Frontend Developer" type="text"/>
+</div>
+<div class="flex flex-col gap-xs">
+<label class="font-label-md text-label-md text-on-surface-variant">Department</label>
+<select class="rounded-lg border border-outline-variant bg-surface-container-lowest px-md py-sm font-body-md text-body-md text-on-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary appearance-none bg-[url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2224%22%20height%3D%2224%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%233e4a3d%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpolyline%20points%3D%226%209%2012%2015%2018%209%22%3E%3C%2Fpolyline%3E%3C%2Fsvg%3E')] bg-[length:1.2em] bg-[right_0.5rem_center] bg-no-repeat pr-xl">
+<option disabled="" selected="">Select Department</option>
+<option>Engineering</option>
+<option>Design</option>
+<option>Marketing</option>
+<option>Human Resources</option>
+</select>
+</div>
+<div class="flex flex-col gap-xs">
+<label class="font-label-md text-label-md text-on-surface-variant">Employment Type</label>
+<select class="rounded-lg border border-outline-variant bg-surface-container-lowest px-md py-sm font-body-md text-body-md text-on-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary appearance-none bg-[url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2224%22%20height%3D%2224%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%233e4a3d%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpolyline%20points%3D%226%209%2012%2015%2018%209%22%3E%3C%2Fpolyline%3E%3C%2Fsvg%3E')] bg-[length:1.2em] bg-[right_0.5rem_center] bg-no-repeat pr-xl">
+<option>Full-time</option>
+<option>Part-time</option>
+<option>Contract</option>
+<option>Internship</option>
+</select>
+</div>
+<div class="flex flex-col gap-xs">
+<label class="font-label-md text-label-md text-on-surface-variant">Gym</label>
+<div class="relative">
+<select class="rounded-lg border border-outline-variant bg-surface-container-lowest px-md py-sm font-body-md text-body-md text-on-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary appearance-none bg-[url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2224%22%20height%3D%2224%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%233e4a3d%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpolyline%20points%3D%226%209%2012%2015%2018%209%22%3E%3C%2Fpolyline%3E%3C%2Fsvg%3E')] bg-[length:1.2em] bg-[right_0.5rem_center] bg-no-repeat pr-xl w-full">
+<option disabled="" selected="">Select Gym</option>
+<option>Downtown Central</option>
+<option>Westside Elite</option>
+<option>Uptown Express</option>
+</select>
+</div>
+</div>
+<div class="flex flex-col gap-xs">
+<label class="font-label-md text-label-md text-on-surface-variant">Position Level</label>
+<select class="rounded-lg border border-outline-variant bg-surface-container-lowest px-md py-sm font-body-md text-body-md text-on-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary">
+<option>Entry Level</option>
+<option>Mid Level</option>
+<option>Senior Level</option>
+<option>Lead / Manager</option>
+</select>
+</div>
+<div class="flex flex-col gap-xs">
+<label class="font-label-md text-label-md text-on-surface-variant">Hiring Manager</label>
+<select class="rounded-lg border border-outline-variant bg-surface-container-lowest px-md py-sm font-body-md text-body-md text-on-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary appearance-none bg-[url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2224%22%20height%3D%2224%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%233e4a3d%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpolyline%20points%3D%226%209%2012%2015%2018%209%22%3E%3C%2Fpolyline%3E%3C%2Fsvg%3E')] bg-[length:1.2em] bg-[right_0.5rem_center] bg-no-repeat pr-xl w-full">
+<option disabled="" selected="">Select Manager</option>
+<option>Sarah Jenkins</option>
+<option>Michael Chen</option>
+<option>Amanda Lee</option>
+<option>John Smith</option>
+</select>
+</div>
+<div class="flex flex-col gap-xs">
+<label class="font-label-md text-label-md text-on-surface-variant">Number of Positions</label>
+<input class="rounded-lg border border-outline-variant bg-surface-container-lowest px-md py-sm font-body-md text-body-md text-on-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary" min="1" placeholder="e.g. 2" type="number"/>
+</div>
+</div>
+</section>
+<!-- Section 2: Requirements -->
+<section class="bg-surface-container-lowest rounded-xl p-lg card-shadow">
+<h3 class="font-title-lg text-title-lg text-on-surface mb-md flex items-center gap-sm border-b border-surface-container-high pb-sm">
+<span class="material-symbols-outlined text-primary">fact_check</span>
+                        Requirements &amp; Responsibilities
+                    </h3>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-lg mt-md">
+<div class="flex flex-col gap-xs">
+<label class="font-label-md text-label-md text-on-surface-variant">Requirements</label>
+<textarea class="w-full rounded-lg border border-outline-variant bg-surface-container-lowest px-md py-sm font-body-md text-body-md text-on-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary resize-y" placeholder="Minimum qualifications and requirements for the role..." rows="3"></textarea>
+</div>
+<div class="flex flex-col gap-xs">
+<label class="font-label-md text-label-md text-on-surface-variant">Salary Range</label>
+<div class="flex items-center gap-sm">
+<input class="w-full rounded-lg border border-outline-variant bg-surface-container-lowest px-md py-sm font-body-md text-body-md text-on-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary" placeholder="Min" type="number"/>
+<span class="text-on-surface-variant">-</span>
+<input class="w-full rounded-lg border border-outline-variant bg-surface-container-lowest px-md py-sm font-body-md text-body-md text-on-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary" placeholder="Max" type="number"/>
+</div>
+</div>
+<div class="md:col-span-2 flex flex-col gap-xs">
+<label class="font-label-md text-label-md text-on-surface-variant">Required Skills</label>
+<input class="w-full rounded-lg border border-outline-variant bg-surface-container-lowest px-md py-sm font-body-md text-body-md text-on-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary mb-sm" placeholder="Type a skill and press Enter (e.g., React, Python, Leadership)" type="text"/>
+<div class="flex flex-wrap gap-xs">
+<span class="inline-flex items-center gap-xs px-sm py-xs bg-surface-container-high rounded-full font-label-md text-label-md text-on-surface-variant">
+                                    Communication <span class="material-symbols-outlined cursor-pointer hover:text-error" style="font-size: 14px;">close</span>
+</span>
+<span class="inline-flex items-center gap-xs px-sm py-xs bg-surface-container-high rounded-full font-label-md text-label-md text-on-surface-variant">
+                                    Project Management <span class="material-symbols-outlined cursor-pointer hover:text-error" style="font-size: 14px;">close</span>
+</span>
+</div>
+</div>
+<div class="md:col-span-2 flex flex-col gap-xs">
+<label class="font-label-md text-label-md text-on-surface-variant">Key Responsibilities</label>
+<textarea class="w-full rounded-lg border border-outline-variant bg-surface-container-lowest px-md py-sm font-body-md text-body-md text-on-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary resize-y" placeholder="List the core duties and responsibilities..." rows="4"></textarea>
+</div>
+<div class="md:col-span-2 flex flex-col gap-xs">
+<label class="font-label-md text-label-md text-on-surface-variant">Benefits</label>
+<textarea class="w-full rounded-lg border border-outline-variant bg-surface-container-lowest px-md py-sm font-body-md text-body-md text-on-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary resize-y" placeholder="Benefits and perks offered with this role (health insurance, gym membership, etc.)..." rows="3"></textarea>
+</div>
+</div>
+</section>
+<!-- Section 3: Full Description -->
+<section class="bg-surface-container-lowest rounded-xl p-lg card-shadow">
+<h3 class="font-title-lg text-title-lg text-on-surface mb-md flex items-center gap-sm border-b border-surface-container-high pb-sm">
+<span class="material-symbols-outlined text-primary">description</span>
+                        Job Description
+                    </h3>
+<div class="border border-outline-variant rounded-lg overflow-hidden flex flex-col">
+<div class="bg-surface-container-low px-sm py-xs flex gap-sm border-b border-outline-variant items-center flex-wrap">
+<button class="p-xs hover:bg-surface-container-high rounded"><span class="material-symbols-outlined" style="font-size: 18px;">format_bold</span></button>
+<button class="p-xs hover:bg-surface-container-high rounded"><span class="material-symbols-outlined" style="font-size: 18px;">format_italic</span></button>
+<button class="p-xs hover:bg-surface-container-high rounded"><span class="material-symbols-outlined" style="font-size: 18px;">format_underlined</span></button>
+<div class="w-[1px] h-4 bg-outline-variant mx-xs"></div>
+<button class="p-xs hover:bg-surface-container-high rounded"><span class="material-symbols-outlined" style="font-size: 18px;">format_list_bulleted</span></button>
+<button class="p-xs hover:bg-surface-container-high rounded"><span class="material-symbols-outlined" style="font-size: 18px;">format_list_numbered</span></button>
+<div class="w-[1px] h-4 bg-outline-variant mx-xs"></div>
+<button class="p-xs hover:bg-surface-container-high rounded"><span class="material-symbols-outlined" style="font-size: 18px;">link</span></button>
+</div>
+<textarea class="w-full bg-surface-container-lowest p-md font-body-md text-body-md text-on-surface border-none focus:ring-0 resize-y" placeholder="Provide a comprehensive description of the role, team culture, and company values..." rows="6"></textarea>
+</div>
+</section>
+</div>
+<!-- Right Column: Settings & Actions -->
+<div class="flex flex-col gap-lg sticky top-[32px]">
+<section class="bg-surface-container-lowest rounded-xl p-lg card-shadow">
+<h3 class="font-title-lg text-title-lg text-on-surface mb-md flex items-center gap-sm border-b border-surface-container-high pb-sm">
+<span class="material-symbols-outlined text-primary">settings</span>
+                        Settings
+                    </h3>
+<div class="flex flex-col gap-lg mt-md">
+<div class="flex flex-col gap-xs">
+<label class="font-label-md text-label-md text-on-surface-variant">Status</label>
+<select class="rounded-lg border border-outline-variant bg-surface-container-lowest px-md py-sm font-body-md text-body-md text-on-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary appearance-none bg-[url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2224%22%20height%3D%2224%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%233e4a3d%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpolyline%20points%3D%226%209%2012%2015%2018%209%22%3E%3C%2Fpolyline%3E%3C%2Fsvg%3E')] bg-[length:1.2em] bg-[right_0.5rem_center] bg-no-repeat pr-xl w-full">
+<option selected="">Draft</option>
+<option>Active</option>
+</select>
+</div>
+<div class="flex flex-col gap-xs">
+<label class="font-label-md text-label-md text-on-surface-variant">Visibility</label>
+<div class="flex flex-col gap-sm mt-xs">
+<label class="flex items-center gap-sm cursor-pointer">
+<input checked="" class="text-primary focus:ring-primary border-outline-variant w-4 h-4" name="visibility" type="radio"/>
+<span class="font-body-md text-body-md text-on-surface">Internal &amp; External</span>
+</label>
+<label class="flex items-center gap-sm cursor-pointer">
+<input class="text-primary focus:ring-primary border-outline-variant w-4 h-4" name="visibility" type="radio"/>
+<span class="font-body-md text-body-md text-on-surface">Internal Only</span>
+</label>
+</div>
+</div>
+<div class="flex flex-col gap-xs">
+<label class="font-label-md text-label-md text-on-surface-variant">Closing Date</label>
+<div class="relative">
+<span class="material-symbols-outlined absolute right-sm top-1/2 -translate-y-1/2 text-on-surface-variant pointer-events-none" style="font-size: 20px;">calendar_today</span>
+<input class="w-full rounded-lg border border-outline-variant bg-surface-container-lowest pl-md pr-xl py-sm font-body-md text-body-md text-on-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary" type="date"/>
+</div>
+</div>
+</div>
+</section>
+<!-- Action Buttons -->
+<div class="flex flex-col gap-md">
+<button class="w-full bg-primary text-on-primary font-title-lg text-title-lg py-sm px-lg rounded-lg hover:bg-on-primary-fixed-variant transition-colors shadow-sm flex justify-center items-center gap-sm" onclick="document.getElementById('published-panel').classList.remove('hidden'); document.getElementById('publish-form').classList.add('hidden');">
+<span class="material-symbols-outlined">publish</span>
+                        Publish Vacancy
+                    </button>
+<button class="w-full border-2 border-primary text-primary font-title-lg text-title-lg py-[6px] px-lg rounded-lg hover:bg-surface-container-low transition-colors flex justify-center items-center gap-sm" onclick="document.getElementById('success-dialog').classList.remove('hidden')">
+<span class="material-symbols-outlined">save</span>
+                        Save as Draft
+                    </button>
+<a class="w-full bg-surface-container-high text-on-surface-variant font-title-lg text-title-lg py-sm px-lg rounded-lg hover:bg-surface-container transition-colors flex justify-center items-center gap-sm" href="../vacancy_list/code.html">
+                        Cancel
+                    </a>
+</div>
+</div>
+</div>
+<!-- Published Panel -->
+<div class="hidden bg-surface-container-lowest rounded-xl p-lg card-shadow border-2 border-primary" id="published-panel">
+<div class="flex items-center gap-sm mb-md">
+<div class="w-10 h-10 rounded-full bg-primary-container/60 flex items-center justify-center text-primary">
+<span class="material-symbols-outlined">task_alt</span>
+</div>
+<div>
+<h3 class="font-title-lg text-title-lg text-on-surface">Vacancy Published</h3>
+<p class="font-body-md text-body-md text-secondary">Your vacancy is now live. Share the public application link below.</p>
+</div>
+</div>
+<div class="flex flex-col gap-md mt-md">
+<div>
+<label class="font-label-md text-label-md text-on-surface-variant">Public Application Link</label>
+<div class="flex items-center gap-xs mt-xs">
+<input class="flex-1 rounded-lg border border-outline-variant bg-surface-container-lowest px-md py-sm font-body-md text-body-md text-on-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary" readonly="" value="https://revivehr.com/apply/senior-personal-trainer-4x7k9"/>
+<button class="px-md py-sm rounded-lg bg-primary text-on-primary font-label-md text-label-md hover:bg-on-primary-fixed-variant transition-colors flex items-center gap-xs" onclick="document.getElementById('success-dialog').classList.remove('hidden')">
+<span class="material-symbols-outlined text-[18px]">link</span>
+                        Copy Link
+                    </button>
+</div>
+</div>
+<div>
+<label class="font-label-md text-label-md text-on-surface-variant">QR Code</label>
+<div class="mt-xs flex items-center gap-lg">
+<div class="w-32 h-32 border border-outline-variant rounded-xl p-sm bg-white">
+<svg class="w-full h-full" viewBox="0 0 29 29" xmlns="http://www.w3.org/2000/svg"><rect width="29" height="29" fill="#ffffff"/><path d="M2 2h6v6H2zM6 3h2v4H6zM3 3v4h2V3zM12 2h6v6h-6zM13 3v4h4V3zM2 12h6v6H2zM3 13v4h4v-4zM6 13h2v4H6zM12 12h6v6h-6zM13 13v4h4v-4zM2 22h6v6H2zM6 23h2v4H6zM12 22h6v6h-6zM13 23v4h4v-4zM22 2h5v5h-5zM23 3v3h3V3zM22 12h2v5h-2zM27 12h-1v3h1zM22 18h2v2h-2zM27 16v2h-1v-2zM22 22h2v2h-2zM25 22h3v5h-3zM22 26h2v-2h-2zM27 24v3h-1v-3z"/></svg>
+</div>
+<div class="flex flex-col gap-xs">
+<a class="px-md py-sm rounded-lg bg-primary text-on-primary font-label-md text-label-md hover:bg-on-primary-fixed-variant transition-colors flex items-center justify-center gap-xs" href="../vacancy_details/code.html">
+<span class="material-symbols-outlined text-[18px]">visibility</span>
+                            View Vacancy
+                        </a>
+<a class="px-md py-sm rounded-lg border border-primary text-primary font-label-md text-label-md hover:bg-primary-container/20 transition-colors flex items-center justify-center gap-xs" href="../vacancy_list/code.html">
+<span class="material-symbols-outlined text-[18px]">arrow_back</span>
+                            Back to Vacancies
+                        </a>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Success Dialog -->
+<div class="hidden fixed inset-0 z-50 flex items-center justify-center p-md" id="success-dialog">
+<div class="absolute inset-0 bg-black/40" onclick="document.getElementById('success-dialog').classList.add('hidden')"></div>
+<div class="relative bg-surface-container-lowest rounded-xl shadow-xl max-w-sm w-full p-lg text-center">
+<div class="w-14 h-14 rounded-full bg-primary-container/60 flex items-center justify-center text-primary mx-auto mb-md">
+<span class="material-symbols-outlined text-[32px]">task_alt</span>
+</div>
+<h3 class="font-headline-md text-headline-md text-on-surface mb-xs">Saved</h3>
+<p class="font-body-md text-body-md text-secondary mb-lg">Your changes were saved successfully.</p>
+<button class="px-md py-sm rounded-lg bg-primary text-on-primary font-label-md text-label-md hover:opacity-90 transition-opacity" onclick="document.getElementById('success-dialog').classList.add('hidden')">Done</button>
+</div>
+</div>
+</main>
+</body></html>

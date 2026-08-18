@@ -1,0 +1,531 @@
+<!DOCTYPE html>
+
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Employee Separation - Revive HR</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "surface-bright": "#f8f9ff",
+                        "on-error": "#ffffff",
+                        "surface-variant": "#d3e4fe",
+                        "secondary-fixed": "#e1e2e4",
+                        "on-primary": "#ffffff",
+                        "error-container": "#ffdad6",
+                        "surface-container-low": "#eff4ff",
+                        "secondary-container": "#dee0e2",
+                        "primary-container": "#00873a",
+                        "primary": "#006b2c",
+                        "background": "#f8f9ff",
+                        "on-primary-container": "#f7fff2",
+                        "on-tertiary": "#ffffff",
+                        "on-primary-fixed": "#002109",
+                        "tertiary-fixed": "#d8e3fb",
+                        "tertiary": "#515c71",
+                        "on-tertiary-fixed-variant": "#3c475a",
+                        "inverse-primary": "#62df7d",
+                        "error": "#ba1a1a",
+                        "secondary-fixed-dim": "#c5c6c8",
+                        "on-tertiary-container": "#fefcff",
+                        "on-secondary-fixed": "#191c1e",
+                        "on-surface": "#0b1c30",
+                        "on-secondary-fixed-variant": "#444749",
+                        "surface-dim": "#cbdbf5",
+                        "inverse-surface": "#213145",
+                        "on-background": "#0b1c30",
+                        "surface-container-highest": "#d3e4fe",
+                        "outline-variant": "#bdcaba",
+                        "on-secondary-container": "#606365",
+                        "primary-fixed-dim": "#62df7d",
+                        "on-error-container": "#93000a",
+                        "on-primary-fixed-variant": "#005320",
+                        "tertiary-container": "#6a758a",
+                        "surface-container-lowest": "#ffffff",
+                        "on-tertiary-fixed": "#111c2d",
+                        "inverse-on-surface": "#eaf1ff",
+                        "surface-container": "#e5eeff",
+                        "surface-tint": "#006e2d",
+                        "secondary": "#5c5f60",
+                        "tertiary-fixed-dim": "#bcc7de",
+                        "surface": "#f8f9ff",
+                        "on-surface-variant": "#3e4a3d",
+                        "on-secondary": "#ffffff",
+                        "primary-fixed": "#7ffc97",
+                        "outline": "#6e7b6c",
+                        "surface-container-high": "#dce9ff"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "base": "4px",
+                        "xl": "32px",
+                        "xs": "4px",
+                        "max-width": "1440px",
+                        "lg": "24px",
+                        "md": "16px",
+                        "2xl": "48px",
+                        "sm": "8px",
+                        "margin-desktop": "32px",
+                        "gutter": "24px",
+                        "margin-mobile": "16px"
+                    },
+                    "fontFamily": {
+                        "display-lg": ["Inter"],
+                        "body-lg": ["Inter"],
+                        "title-lg": ["Inter"],
+                        "headline-lg": ["Inter"],
+                        "body-md": ["Inter"],
+                        "headline-lg-mobile": ["Inter"],
+                        "headline-md": ["Inter"],
+                        "label-md": ["Inter"],
+                        "label-sm": ["Inter"]
+                    },
+                    "fontSize": {
+                        "display-lg": ["48px", { "lineHeight": "56px", "letterSpacing": "-0.02em", "fontWeight": "700" }],
+                        "body-lg": ["16px", { "lineHeight": "24px", "fontWeight": "400" }],
+                        "title-lg": ["20px", { "lineHeight": "28px", "fontWeight": "600" }],
+                        "headline-lg": ["32px", { "lineHeight": "40px", "letterSpacing": "-0.01em", "fontWeight": "600" }],
+                        "body-md": ["14px", { "lineHeight": "20px", "fontWeight": "400" }],
+                        "headline-lg-mobile": ["24px", { "lineHeight": "32px", "fontWeight": "600" }],
+                        "headline-md": ["24px", { "lineHeight": "32px", "fontWeight": "600" }],
+                        "label-md": ["12px", { "lineHeight": "16px", "letterSpacing": "0.01em", "fontWeight": "500" }],
+                        "label-sm": ["11px", { "lineHeight": "14px", "fontWeight": "600" }]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        body { font-family: 'Inter', sans-serif; }
+        .soft-shadow { box-shadow: 0px 1px 3px rgba(0,0,0,0.05); }
+        .deep-shadow { box-shadow: 0px 10px 15px -3px rgba(0,0,0,0.1); }
+        .scrollbar-hide::-webkit-scrollbar { display: none; }
+        .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+    </style>
+</head>
+<body class="bg-background text-on-background min-h-screen flex overflow-x-hidden">
+<!-- JSON Component: SideNavBar -->
+<nav class="bg-surface dark:bg-surface-dim border-r border-outline-variant fixed left-0 top-0 h-full w-[280px] flex flex-col py-6 z-50">
+<!-- Header -->
+<div class="px-lg mb-xl flex items-center gap-md">
+<div class="w-10 h-10 rounded-lg bg-primary flex items-center justify-center text-on-primary">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">corporate_fare</span>
+</div>
+<div>
+<h1 class="font-headline-md text-headline-md font-bold text-primary dark:text-inverse-primary">Revive HR</h1>
+<p class="font-label-sm text-label-sm text-on-surface-variant">HR Operations</p>
+</div>
+</div>
+<!-- CTA -->
+<div class="px-lg mb-lg">
+<button class="w-full bg-primary text-on-primary font-label-md text-label-md py-3 rounded-lg flex justify-center items-center gap-2 hover:bg-on-primary-fixed-variant transition-colors shadow-sm">
+<span class="material-symbols-outlined">add</span>
+                New Request
+            </button>
+</div>
+<!-- Navigation Links -->
+<div class="flex-1 overflow-y-auto scrollbar-hide px-sm flex flex-col gap-1">
+<!-- Inactive -->
+<a class="flex items-center gap-md py-3 px-3 text-on-surface-variant dark:text-on-secondary-fixed-variant hover:bg-surface-container-high mx-2 rounded-lg font-label-md text-label-md transition-all hover:bg-secondary-container dark:hover:bg-tertiary-container" href="#">
+<span class="material-symbols-outlined">dashboard</span>
+                Dashboard
+            </a>
+<!-- Inactive -->
+<a class="flex items-center gap-md py-3 px-3 text-on-surface-variant dark:text-on-secondary-fixed-variant hover:bg-surface-container-high mx-2 rounded-lg font-label-md text-label-md transition-all hover:bg-secondary-container dark:hover:bg-tertiary-container" href="#">
+<span class="material-symbols-outlined">pending_actions</span>
+                Employee Requests
+            </a>
+<!-- Active: Employee Separation -->
+<a class="flex items-center gap-md py-3 px-3 bg-primary-container text-on-primary-container font-semibold rounded-lg mx-2 font-label-md text-label-md scale-[0.98] duration-150 shadow-sm" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">person_remove</span>
+                Employee Separation
+            </a>
+<!-- Inactive -->
+<a class="flex items-center gap-md py-3 px-3 text-on-surface-variant dark:text-on-secondary-fixed-variant hover:bg-surface-container-high mx-2 rounded-lg font-label-md text-label-md transition-all hover:bg-secondary-container dark:hover:bg-tertiary-container" href="#">
+<span class="material-symbols-outlined">notifications_active</span>
+                Notifications
+            </a>
+<!-- Inactive -->
+<a class="flex items-center gap-md py-3 px-3 text-on-surface-variant dark:text-on-secondary-fixed-variant hover:bg-surface-container-high mx-2 rounded-lg font-label-md text-label-md transition-all hover:bg-secondary-container dark:hover:bg-tertiary-container" href="#">
+<span class="material-symbols-outlined">payments</span>
+                Payroll
+            </a>
+<!-- Inactive -->
+<a class="flex items-center gap-md py-3 px-3 text-on-surface-variant dark:text-on-secondary-fixed-variant hover:bg-surface-container-high mx-2 rounded-lg font-label-md text-label-md transition-all hover:bg-secondary-container dark:hover:bg-tertiary-container" href="#">
+<span class="material-symbols-outlined">calendar_today</span>
+                Attendance
+            </a>
+<!-- Inactive -->
+<a class="flex items-center gap-md py-3 px-3 text-on-surface-variant dark:text-on-secondary-fixed-variant hover:bg-surface-container-high mx-2 rounded-lg font-label-md text-label-md transition-all hover:bg-secondary-container dark:hover:bg-tertiary-container" href="#">
+<span class="material-symbols-outlined">trending_up</span>
+                Performance
+            </a>
+<!-- Inactive -->
+<a class="flex items-center gap-md py-3 px-3 text-on-surface-variant dark:text-on-secondary-fixed-variant hover:bg-surface-container-high mx-2 rounded-lg font-label-md text-label-md transition-all hover:bg-secondary-container dark:hover:bg-tertiary-container" href="#">
+<span class="material-symbols-outlined">person_search</span>
+                Recruitment
+            </a>
+<!-- Inactive -->
+<a class="flex items-center gap-md py-3 px-3 text-on-surface-variant dark:text-on-secondary-fixed-variant hover:bg-surface-container-high mx-2 rounded-lg font-label-md text-label-md transition-all hover:bg-secondary-container dark:hover:bg-tertiary-container" href="#">
+<span class="material-symbols-outlined">school</span>
+                Learning
+            </a>
+<!-- Inactive -->
+<a class="flex items-center gap-md py-3 px-3 text-on-surface-variant dark:text-on-secondary-fixed-variant hover:bg-surface-container-high mx-2 rounded-lg font-label-md text-label-md transition-all hover:bg-secondary-container dark:hover:bg-tertiary-container" href="#">
+<span class="material-symbols-outlined">folder_shared</span>
+                Documents
+            </a>
+<!-- Inactive -->
+<a class="flex items-center gap-md py-3 px-3 text-on-surface-variant dark:text-on-secondary-fixed-variant hover:bg-surface-container-high mx-2 rounded-lg font-label-md text-label-md transition-all hover:bg-secondary-container dark:hover:bg-tertiary-container" href="#">
+<span class="material-symbols-outlined">analytics</span>
+                Reports
+            </a>
+</div>
+<!-- Footer Links -->
+<div class="px-sm mt-auto pt-lg border-t border-outline-variant/30 flex flex-col gap-1">
+<a class="flex items-center gap-md py-3 px-3 text-on-surface-variant hover:bg-surface-container-high mx-2 rounded-lg font-label-md text-label-md transition-colors" href="#">
+<span class="material-symbols-outlined">support_agent</span>
+                Support
+            </a>
+<a class="flex items-center gap-md py-3 px-3 text-on-surface-variant hover:bg-surface-container-high mx-2 rounded-lg font-label-md text-label-md transition-colors" href="#">
+<span class="material-symbols-outlined">logout</span>
+                Sign Out
+            </a>
+</div>
+</nav>
+<!-- Main Content Wrapper -->
+<div class="ml-[280px] w-full flex flex-col relative min-h-screen">
+<!-- JSON Component: TopNavBar -->
+<header class="bg-surface-container-lowest dark:bg-surface-dim border-b border-outline-variant shadow-sm fixed top-0 left-0 w-full z-40 flex justify-between items-center px-margin-desktop h-16 pl-[calc(280px+32px)]">
+<!-- Left Side: Search Bar -->
+<div class="flex items-center w-full max-w-md">
+<div class="relative w-full">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant text-[20px]">search</span>
+<input class="w-full bg-surface-container-low border border-transparent focus:border-primary focus:ring-1 focus:ring-primary rounded-full py-2 pl-10 pr-4 font-body-md text-body-md text-on-surface transition-all outline-none" placeholder="Search offboardings..." type="text"/>
+</div>
+</div>
+<!-- Right Side: Actions & Profile -->
+<div class="flex items-center gap-md">
+<button class="w-10 h-10 rounded-full flex items-center justify-center text-on-surface-variant hover:bg-surface-container-low transition-colors relative">
+<span class="material-symbols-outlined">notifications</span>
+<span class="absolute top-2 right-2 w-2 h-2 bg-error rounded-full border border-surface-container-lowest"></span>
+</button>
+<button class="w-10 h-10 rounded-full flex items-center justify-center text-on-surface-variant hover:bg-surface-container-low transition-colors">
+<span class="material-symbols-outlined">help_outline</span>
+</button>
+<div class="h-6 w-px bg-outline-variant/50 mx-2"></div>
+<button class="flex items-center gap-sm hover:bg-surface-container-low p-1 pr-3 rounded-full transition-colors border border-transparent hover:border-outline-variant/30">
+<img alt="User Profile Avatar" class="w-8 h-8 rounded-full object-cover border border-outline-variant/50" data-alt="A professional headshot of a mid-30s HR manager smiling softly in a brightly lit modern office setting. She is wearing a neat corporate blouse. Soft, natural light illuminates her face, reflecting a clean, approachable, and corporate aesthetic." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCLqB7Z8UtIqfYmbdLvZ9ulWItYAUPYQqP2xOCZnW8f5dRXpkaf7JkXaVfymCd23kSze22TrmKCmEsCVL7FKSujO_oOtbgslp9hy-wmOpF5TafO0o1VSz4FigyRdTC06CD_RlNl1d15T1gUc2I1bMiPCJ-xkTr4T86pjN569gR03gKiSFj_Kw2rstbp74GzZpyNkT-P2V9kF6-5OwEavElIDNtu7ROIZQwIpjo7NigzUu9ERNFxpnSN"/>
+<span class="font-label-md text-label-md text-on-surface font-medium hidden md:block">Settings</span>
+<span class="material-symbols-outlined text-on-surface-variant text-[18px]">expand_more</span>
+</button>
+</div>
+</header>
+<!-- Page Canvas -->
+<main class="mt-16 p-xl max-w-max-width mx-auto w-full flex-1 flex flex-col gap-xl">
+<!-- Page Header -->
+<div class="flex justify-between items-end">
+<div>
+<h2 class="font-headline-lg text-headline-lg text-on-surface">Employee Separation</h2>
+<p class="font-body-md text-body-md text-on-surface-variant mt-1">Manage offboarding workflows, checklists, and final settlements.</p>
+</div>
+<div class="flex gap-md">
+<button class="bg-surface-container-lowest border border-outline-variant text-on-surface font-label-md text-label-md px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-surface-container-low transition-colors shadow-sm">
+<span class="material-symbols-outlined text-[18px]">download</span>
+                        Export Report
+                    </button>
+</div>
+</div>
+<!-- Top Cards (KPIs) -->
+<div class="grid grid-cols-1 md:grid-cols-3 gap-lg">
+<!-- Card 1 -->
+<div class="bg-surface-container-lowest rounded-xl p-lg soft-shadow flex items-start justify-between border border-transparent hover:border-outline-variant/30 transition-all">
+<div>
+<p class="font-label-md text-label-md text-on-surface-variant mb-1">Total Pending Offboardings</p>
+<h3 class="font-display-lg text-display-lg text-on-surface">14</h3>
+<p class="font-body-md text-body-md text-primary mt-2 flex items-center gap-1">
+<span class="material-symbols-outlined text-[16px]">arrow_upward</span> 2 since last week
+                        </p>
+</div>
+<div class="w-12 h-12 rounded-full bg-surface-container-low flex items-center justify-center text-secondary">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">pending_actions</span>
+</div>
+</div>
+<!-- Card 2 -->
+<div class="bg-surface-container-lowest rounded-xl p-lg soft-shadow flex items-start justify-between border border-transparent hover:border-outline-variant/30 transition-all">
+<div>
+<p class="font-label-md text-label-md text-on-surface-variant mb-1">Notice Periods Ending Soon</p>
+<h3 class="font-display-lg text-display-lg text-on-surface">5</h3>
+<p class="font-body-md text-body-md text-error mt-2 flex items-center gap-1">
+<span class="material-symbols-outlined text-[16px]">warning</span> Within 7 days
+                        </p>
+</div>
+<div class="w-12 h-12 rounded-full bg-error-container/30 flex items-center justify-center text-error">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">alarm</span>
+</div>
+</div>
+<!-- Card 3 -->
+<div class="bg-surface-container-lowest rounded-xl p-lg soft-shadow flex items-start justify-between border border-transparent hover:border-outline-variant/30 transition-all">
+<div>
+<p class="font-label-md text-label-md text-on-surface-variant mb-1">Completed This Month</p>
+<h3 class="font-display-lg text-display-lg text-on-surface">28</h3>
+<p class="font-body-md text-body-md text-on-surface-variant mt-2 flex items-center gap-1">
+<span class="material-symbols-outlined text-[16px]">check_circle</span> All settlements cleared
+                        </p>
+</div>
+<div class="w-12 h-12 rounded-full bg-primary-container/20 flex items-center justify-center text-primary">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">task_alt</span>
+</div>
+</div>
+</div>
+<!-- Main Content Area: Master-Detail Bento Layout -->
+<div class="flex flex-col lg:flex-row gap-lg items-start">
+<!-- Left: Offboarding List (Master) -->
+<div class="w-full lg:w-2/3 bg-surface-container-lowest rounded-xl soft-shadow overflow-hidden flex flex-col h-[600px] border border-outline-variant/20">
+<div class="px-lg py-md border-b border-surface-container-high bg-surface-bright flex justify-between items-center">
+<h3 class="font-title-lg text-title-lg text-on-surface">Active Offboardings</h3>
+<button class="text-primary hover:text-on-primary-fixed-variant font-label-md text-label-md flex items-center gap-1 transition-colors">
+<span class="material-symbols-outlined text-[18px]">filter_list</span> Filter
+                        </button>
+</div>
+<div class="flex-1 overflow-y-auto">
+<table class="w-full text-left border-collapse">
+<thead class="sticky top-0 bg-surface-bright z-10 border-b border-surface-container-high">
+<tr>
+<th class="px-lg py-3 font-label-sm text-label-sm text-on-surface-variant font-semibold uppercase tracking-wider">Employee</th>
+<th class="px-lg py-3 font-label-sm text-label-sm text-on-surface-variant font-semibold uppercase tracking-wider">Last Day &amp; Reason</th>
+<th class="px-lg py-3 font-label-sm text-label-sm text-on-surface-variant font-semibold uppercase tracking-wider">Progress</th>
+<th class="px-lg py-3 font-label-sm text-label-sm text-on-surface-variant font-semibold uppercase tracking-wider">Status</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-surface-container-high">
+<!-- Row 1 (Active/Selected State Simulation) -->
+<tr class="bg-surface-container-low hover:bg-surface-container-high transition-colors cursor-pointer group">
+<td class="px-lg py-4">
+<div class="flex items-center gap-3">
+<img alt="Employee" class="w-10 h-10 rounded-full object-cover border-2 border-white shadow-sm" data-alt="A headshot of a professional young man in his late 20s wearing a smart casual blue shirt. He is looking slightly off-camera with a neutral expression in a bright, modern corporate environment. Clean lighting and sharp focus emphasize a modern aesthetic." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDk6REdUviPL1JY6vvrJv9531MBnP7wpPc-6x5mR1g5U2QsFqb0l6IwWMSpBDXIZKI9vkJigX6oDYY6D3mmGtn4NWf6S9zWaQ8GdSxSYtLUIO_Muzlx-CLvpZGkUphbC6rZ2TSxvb7Z44FRQSLnxcEnrNd-O6fvAoTRQF_kLpZPAHb2drPtPj2xerdWeMeFXR-0mvOFDcXKDJJfGCf4vl37zMXuyjZX8UxlWPeaBpQMFRK1Wu7OyAs7"/>
+<div>
+<p class="font-label-md text-label-md text-on-surface font-semibold">Michael Chen</p>
+<p class="font-body-md text-[13px] text-on-surface-variant">Senior Developer • Engineering</p>
+</div>
+</div>
+</td>
+<td class="px-lg py-4">
+<p class="font-label-md text-label-md text-on-surface">Oct 24, 2023</p>
+<p class="font-body-md text-[13px] text-on-surface-variant">Resignation</p>
+</td>
+<td class="px-lg py-4 w-48">
+<div class="flex items-center gap-2 mb-1">
+<span class="font-label-sm text-label-sm text-on-surface-variant">75%</span>
+</div>
+<div class="w-full bg-secondary-fixed rounded-full h-[6px] overflow-hidden">
+<div class="bg-primary h-full rounded-full w-[75%] transition-all duration-500"></div>
+</div>
+</td>
+<td class="px-lg py-4">
+<span class="inline-flex items-center px-2 py-1 rounded-md bg-surface-variant text-on-surface font-label-sm text-[11px] font-semibold border border-outline-variant/30">
+                                            In Progress
+                                        </span>
+</td>
+</tr>
+<!-- Row 2 -->
+<tr class="bg-surface-container-lowest hover:bg-surface-container-high transition-colors cursor-pointer">
+<td class="px-lg py-4">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded-full bg-tertiary-container text-on-tertiary-container flex items-center justify-center font-title-lg font-bold shadow-sm">
+                                                SJ
+                                            </div>
+<div>
+<p class="font-label-md text-label-md text-on-surface font-semibold">Sarah Jenkins</p>
+<p class="font-body-md text-[13px] text-on-surface-variant">Marketing Manager • Marketing</p>
+</div>
+</div>
+</td>
+<td class="px-lg py-4">
+<p class="font-label-md text-label-md text-on-surface">Oct 15, 2023</p>
+<p class="font-body-md text-[13px] text-on-surface-variant">Termination</p>
+</td>
+<td class="px-lg py-4 w-48">
+<div class="flex items-center gap-2 mb-1">
+<span class="font-label-sm text-label-sm text-on-surface-variant">20%</span>
+</div>
+<div class="w-full bg-secondary-fixed rounded-full h-[6px] overflow-hidden">
+<div class="bg-error h-full rounded-full w-[20%] transition-all duration-500"></div>
+</div>
+</td>
+<td class="px-lg py-4">
+<span class="inline-flex items-center px-2 py-1 rounded-md bg-error-container text-on-error-container font-label-sm text-[11px] font-semibold border border-error/20">
+                                            On Hold
+                                        </span>
+</td>
+</tr>
+<!-- Row 3 -->
+<tr class="bg-surface-container-lowest hover:bg-surface-container-high transition-colors cursor-pointer">
+<td class="px-lg py-4">
+<div class="flex items-center gap-3">
+<img alt="Employee" class="w-10 h-10 rounded-full object-cover border-2 border-white shadow-sm" data-alt="A portrait of an older gentleman with silver hair, wearing a grey suit and light blue tie. He has a warm, experienced demeanor. The background is a slightly blurred office setting with natural sunlight creating a pristine, trustworthy corporate feel." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBpa7zrrioqN2FElRDg_Dc3Hqiy61Fh_Qwq4SUlUzAV2QOYpRDKVTXTn70UAQVxXU0cwO_otBwzRmoHaTzEw6nFvkr43DrgFy1vlnRsFmm5teFc4-hf3UW1_vNdiRwO0XCKL1-uypafUktEdi0eLLlBYiiJwDB8rLi3gAAYOxh4LARlDg2_mFQz_upMUb2BGSl2Bny8-057we1Ufa4kwY4pGjmU4BgjHtWSX8VwXk8bbusW3ncRMKjp"/>
+<div>
+<p class="font-label-md text-label-md text-on-surface font-semibold">David Ross</p>
+<p class="font-body-md text-[13px] text-on-surface-variant">VP of Sales • Sales</p>
+</div>
+</div>
+</td>
+<td class="px-lg py-4">
+<p class="font-label-md text-label-md text-on-surface">Nov 01, 2023</p>
+<p class="font-body-md text-[13px] text-on-surface-variant">Retirement</p>
+</td>
+<td class="px-lg py-4 w-48">
+<div class="flex items-center gap-2 mb-1">
+<span class="font-label-sm text-label-sm text-on-surface-variant">95%</span>
+</div>
+<div class="w-full bg-secondary-fixed rounded-full h-[6px] overflow-hidden">
+<div class="bg-primary-fixed-dim h-full rounded-full w-[95%] transition-all duration-500"></div>
+</div>
+</td>
+<td class="px-lg py-4">
+<span class="inline-flex items-center px-2 py-1 rounded-md bg-surface-variant text-on-surface font-label-sm text-[11px] font-semibold border border-outline-variant/30">
+                                            In Progress
+                                        </span>
+</td>
+</tr>
+<!-- Row 4 -->
+<tr class="bg-surface-container-lowest hover:bg-surface-container-high transition-colors cursor-pointer opacity-70">
+<td class="px-lg py-4">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded-full bg-surface-container-high text-on-surface-variant flex items-center justify-center font-title-lg font-bold shadow-sm">
+                                                AL
+                                            </div>
+<div>
+<p class="font-label-md text-label-md text-on-surface font-semibold">Amanda Lee</p>
+<p class="font-body-md text-[13px] text-on-surface-variant">UX Designer • Product</p>
+</div>
+</div>
+</td>
+<td class="px-lg py-4">
+<p class="font-label-md text-label-md text-on-surface">Oct 05, 2023</p>
+<p class="font-body-md text-[13px] text-on-surface-variant">Resignation</p>
+</td>
+<td class="px-lg py-4 w-48">
+<div class="flex items-center gap-2 mb-1">
+<span class="font-label-sm text-label-sm text-on-surface-variant">100%</span>
+</div>
+<div class="w-full bg-secondary-fixed rounded-full h-[6px] overflow-hidden">
+<div class="bg-primary h-full rounded-full w-full transition-all duration-500"></div>
+</div>
+</td>
+<td class="px-lg py-4">
+<span class="inline-flex items-center px-2 py-1 rounded-md bg-primary-container text-on-primary-container font-label-sm text-[11px] font-semibold border border-primary/20">
+                                            Completed
+                                        </span>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<!-- Right: Selected Employee Details (Detail Panel) -->
+<div class="w-full lg:w-1/3 bg-surface-container-lowest rounded-xl deep-shadow border border-outline-variant/30 flex flex-col h-[600px] overflow-hidden relative">
+<!-- Decorative header background -->
+<div class="h-24 bg-surface-variant w-full absolute top-0 left-0 z-0"></div>
+<div class="p-lg relative z-10 flex flex-col h-full">
+<!-- Profile Block -->
+<div class="flex flex-col items-center mt-4 mb-6">
+<img alt="Michael Chen" class="w-20 h-20 rounded-full object-cover border-4 border-surface-container-lowest shadow-md mb-3" data-alt="A headshot of a professional young man in his late 20s wearing a smart casual blue shirt. He is looking slightly off-camera with a neutral expression in a bright, modern corporate environment. Clean lighting and sharp focus emphasize a modern aesthetic." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAhNtyVfybaqOJvQhVMPJ8ponV7rkdkgfl0s-aizTNtK35MDllHRqRJugmNG2ZiaU33WTHnYJZOCarIaFlFJ94-OdFvr2A4s-hRqb_USg2RwVI3Mi3WS9QfYDzjAQ8tbtG1c7sS0SD-7VbnkYm2VkyjHFXSW_pyIJsJNe1Vmt34vALqS5a_rPKDgNJ42gOXw07Mf5IqSKoynJ6_f30KHk7FeHv0-hyQ9GWSkGYkrCzHS0v8sLeOgXPL"/>
+<h3 class="font-title-lg text-title-lg text-on-surface font-bold text-center">Michael Chen</h3>
+<p class="font-body-md text-body-md text-on-surface-variant text-center">Senior Developer</p>
+<span class="mt-2 inline-flex items-center px-2 py-1 rounded bg-surface-container-low text-on-surface-variant font-label-sm text-[11px] uppercase tracking-wider border border-outline-variant/30">
+                                Resignation
+                            </span>
+</div>
+<!-- Progress Section -->
+<div class="mb-6">
+<div class="flex justify-between items-center mb-2">
+<span class="font-label-md text-label-md text-on-surface font-semibold">Offboarding Progress</span>
+<span class="font-label-md text-label-md text-primary font-bold">75%</span>
+</div>
+<div class="w-full bg-secondary-fixed rounded-full h-[8px] overflow-hidden">
+<div class="bg-primary h-full rounded-full w-[75%]"></div>
+</div>
+<p class="font-body-md text-[12px] text-on-surface-variant mt-2 text-center">Last Day: Oct 24, 2023</p>
+</div>
+<!-- Checklist Preview -->
+<div class="flex-1 overflow-y-auto mb-6 pr-2">
+<h4 class="font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wider mb-3">Key Milestones</h4>
+<ul class="flex flex-col gap-3 relative before:absolute before:inset-y-0 before:left-[11px] before:w-px before:bg-outline-variant/30">
+<!-- Completed Item -->
+<li class="flex gap-3 relative z-10">
+<div class="w-6 h-6 rounded-full bg-primary text-on-primary flex items-center justify-center shrink-0 shadow-sm">
+<span class="material-symbols-outlined text-[14px] font-bold">check</span>
+</div>
+<div class="pt-[2px]">
+<p class="font-label-md text-label-md text-on-surface font-semibold line-through opacity-80">Asset Recovery</p>
+<p class="font-body-md text-[12px] text-on-surface-variant">Laptop &amp; ID badge returned.</p>
+</div>
+</li>
+<!-- Completed Item -->
+<li class="flex gap-3 relative z-10">
+<div class="w-6 h-6 rounded-full bg-primary text-on-primary flex items-center justify-center shrink-0 shadow-sm">
+<span class="material-symbols-outlined text-[14px] font-bold">check</span>
+</div>
+<div class="pt-[2px]">
+<p class="font-label-md text-label-md text-on-surface font-semibold line-through opacity-80">Account Revocation</p>
+<p class="font-body-md text-[12px] text-on-surface-variant">IT access terminated.</p>
+</div>
+</li>
+<!-- Pending/Active Item -->
+<li class="flex gap-3 relative z-10">
+<div class="w-6 h-6 rounded-full bg-surface-container-lowest border-2 border-primary text-primary flex items-center justify-center shrink-0 shadow-sm">
+<span class="material-symbols-outlined text-[14px]">more_horiz</span>
+</div>
+<div class="pt-[2px]">
+<p class="font-label-md text-label-md text-on-surface font-semibold">Exit Interview</p>
+<p class="font-body-md text-[12px] text-on-surface-variant">Scheduled for Oct 23.</p>
+</div>
+</li>
+<!-- Locked/Future Item -->
+<li class="flex gap-3 relative z-10">
+<div class="w-6 h-6 rounded-full bg-surface-container-high text-on-surface-variant flex items-center justify-center shrink-0">
+<span class="material-symbols-outlined text-[14px]">lock</span>
+</div>
+<div class="pt-[2px]">
+<p class="font-label-md text-label-md text-on-surface-variant font-medium">Final Settlement</p>
+<p class="font-body-md text-[12px] text-on-surface-variant/70">Awaiting clearance.</p>
+</div>
+</li>
+</ul>
+</div>
+<!-- Action Buttons -->
+<div class="mt-auto flex flex-col gap-2 pt-4 border-t border-outline-variant/30">
+<button class="w-full bg-primary text-on-primary font-label-md text-label-md py-2.5 rounded-lg hover:bg-on-primary-fixed-variant transition-colors shadow-sm flex justify-center items-center gap-2">
+<span class="material-symbols-outlined text-[18px]">payments</span>
+                                Process Settlement
+                            </button>
+<div class="flex gap-2">
+<button class="flex-1 bg-surface-container-low border border-outline-variant/50 text-on-surface font-label-md text-label-md py-2.5 rounded-lg hover:bg-surface-container-high transition-colors flex justify-center items-center gap-1">
+<span class="material-symbols-outlined text-[18px]">fact_check</span>
+                                    Checklist
+                                </button>
+<button class="flex-1 bg-surface-container-low border border-outline-variant/50 text-on-surface font-label-md text-label-md py-2.5 rounded-lg hover:bg-surface-container-high transition-colors flex justify-center items-center gap-1">
+<span class="material-symbols-outlined text-[18px]">description</span>
+                                    Docs
+                                </button>
+</div>
+</div>
+</div>
+</div>
+</div>
+</main>
+</div>
+</body></html>

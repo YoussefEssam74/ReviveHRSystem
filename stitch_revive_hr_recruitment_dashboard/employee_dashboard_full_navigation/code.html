@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Revive HR - Employees</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "outline": "#6e7b6c",
+                        "surface-bright": "#f8f9ff",
+                        "on-error-container": "#93000a",
+                        "surface-tint": "#006e2d",
+                        "surface-variant": "#d3e4fe",
+                        "on-secondary-container": "#606365",
+                        "surface-container-highest": "#d3e4fe",
+                        "primary-fixed": "#7ffc97",
+                        "on-surface": "#0b1c30",
+                        "on-background": "#0b1c30",
+                        "surface": "#f8f9ff",
+                        "on-primary-fixed-variant": "#005320",
+                        "outline-variant": "#bdcaba",
+                        "on-secondary-fixed-variant": "#444749",
+                        "primary-fixed-dim": "#62df7d",
+                        "on-tertiary-fixed-variant": "#3c475a",
+                        "secondary": "#5c5f60",
+                        "on-tertiary-fixed": "#111c2d",
+                        "inverse-surface": "#213145",
+                        "surface-container": "#e5eeff",
+                        "on-secondary-fixed": "#191c1e",
+                        "surface-dim": "#cbdbf5",
+                        "on-error": "#ffffff",
+                        "secondary-container": "#dee0e2",
+                        "surface-container-lowest": "#ffffff",
+                        "on-tertiary-container": "#fefcff",
+                        "surface-container-high": "#dce9ff",
+                        "secondary-fixed": "#e1e2e4",
+                        "tertiary-fixed": "#d8e3fb",
+                        "error": "#ba1a1a",
+                        "background": "#f8f9ff",
+                        "inverse-primary": "#62df7d",
+                        "on-primary-fixed": "#002109",
+                        "primary-container": "#00873a",
+                        "on-secondary": "#ffffff",
+                        "on-primary-container": "#f7fff2",
+                        "error-container": "#ffdad6",
+                        "tertiary-fixed-dim": "#bcc7de",
+                        "secondary-fixed-dim": "#c5c6c8",
+                        "inverse-on-surface": "#eaf1ff",
+                        "tertiary": "#515c71",
+                        "on-primary": "#ffffff",
+                        "tertiary-container": "#6a758a",
+                        "surface-container-low": "#eff4ff",
+                        "primary": "#006b2c",
+                        "on-surface-variant": "#3e4a3d",
+                        "on-tertiary": "#ffffff"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "margin-desktop": "32px",
+                        "lg": "24px",
+                        "margin-mobile": "16px",
+                        "2xl": "48px",
+                        "base": "4px",
+                        "gutter": "24px",
+                        "md": "16px",
+                        "max-width": "1440px",
+                        "xl": "32px",
+                        "xs": "4px",
+                        "sm": "8px"
+                    },
+                    "fontFamily": {
+                        "display-lg": ["Inter"],
+                        "title-lg": ["Inter"],
+                        "label-sm": ["Inter"],
+                        "body-md": ["Inter"],
+                        "headline-lg-mobile": ["Inter"],
+                        "body-lg": ["Inter"],
+                        "headline-lg": ["Inter"],
+                        "headline-md": ["Inter"],
+                        "label-md": ["Inter"]
+                    },
+                    "fontSize": {
+                        "display-lg": ["48px", {"lineHeight": "56px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                        "title-lg": ["20px", {"lineHeight": "28px", "fontWeight": "600"}],
+                        "label-sm": ["11px", {"lineHeight": "14px", "fontWeight": "600"}],
+                        "body-md": ["14px", {"lineHeight": "20px", "fontWeight": "400"}],
+                        "headline-lg-mobile": ["24px", {"lineHeight": "32px", "fontWeight": "600"}],
+                        "body-lg": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+                        "headline-lg": ["32px", {"lineHeight": "40px", "letterSpacing": "-0.01em", "fontWeight": "600"}],
+                        "headline-md": ["24px", {"lineHeight": "32px", "fontWeight": "600"}],
+                        "label-md": ["12px", {"lineHeight": "16px", "letterSpacing": "0.01em", "fontWeight": "500"}]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        body { font-family: 'Inter', sans-serif; background-color: #f8f9ff; }
+        .soft-shadow { box-shadow: 0px 1px 3px rgba(0,0,0,0.05); }
+        .hover-shadow:hover { box-shadow: 0px 10px 15px -3px rgba(0,0,0,0.1); transform: translateY(-2px); transition: all 0.2s ease; }
+        /* Custom Scrollbar for Sidebar */
+        .sidebar-scroll::-webkit-scrollbar {
+            width: 4px;
+        }
+        .sidebar-scroll::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        .sidebar-scroll::-webkit-scrollbar-thumb {
+            background-color: #d3e4fe;
+            border-radius: 20px;
+        }
+    </style>
+</head>
+<body class="bg-background text-on-background antialiased flex">
+<!-- SideNavBar -->
+<nav class="hidden md:flex flex-col py-xl px-md gap-sm bg-surface dark:bg-surface-container-low fixed left-0 top-0 h-full w-[280px] border-r border-outline-variant dark:border-outline z-50">
+<div class="mb-lg px-md shrink-0">
+<h1 class="font-title-lg text-title-lg font-bold text-primary dark:text-primary-fixed">Revive HR</h1>
+<p class="font-label-sm text-label-sm text-secondary mt-xs">Enterprise Suite</p>
+</div>
+<div class="flex-1 flex flex-col gap-sm overflow-y-auto sidebar-scroll pr-1 pb-4">
+<a class="flex items-center gap-md px-md py-sm rounded-lg text-secondary dark:text-secondary-fixed-dim hover:text-on-surface dark:hover:text-on-surface hover:bg-surface-container-high dark:hover:bg-surface-container-highest transition-colors" href="#">
+<span class="material-symbols-outlined">dashboard</span>
+<span class="font-body-md text-body-md">Dashboard</span>
+</a>
+<a class="flex items-center gap-md px-md py-sm rounded-lg text-secondary dark:text-secondary-fixed-dim hover:text-on-surface dark:hover:text-on-surface hover:bg-surface-container-high dark:hover:bg-surface-container-highest transition-colors" href="#">
+<span class="material-symbols-outlined">group_add</span>
+<span class="font-body-md text-body-md">Recruitment &amp; Hiring</span>
+</a>
+<!-- Active State for Employees -->
+<a class="flex items-center gap-md px-md py-sm rounded-lg bg-surface-container-high text-primary dark:text-primary-fixed font-bold border-r-4 border-primary dark:border-primary-fixed opacity-90 transition-opacity duration-150" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">badge</span>
+<span class="font-body-md text-body-md">Employee Management</span>
+</a>
+<a class="flex items-center gap-md px-md py-sm rounded-lg text-secondary dark:text-secondary-fixed-dim hover:text-on-surface dark:hover:text-on-surface hover:bg-surface-container-high dark:hover:bg-surface-container-highest transition-colors" href="#">
+<span class="material-symbols-outlined">event_available</span>
+<span class="font-body-md text-body-md">Attendance Management</span>
+</a>
+<a class="flex items-center gap-md px-md py-sm rounded-lg text-secondary dark:text-secondary-fixed-dim hover:text-on-surface dark:hover:text-on-surface hover:bg-surface-container-high dark:hover:bg-surface-container-highest transition-colors" href="#">
+<span class="material-symbols-outlined">calendar_month</span>
+<span class="font-body-md text-body-md">Shift &amp; Schedule Management</span>
+</a>
+<a class="flex items-center gap-md px-md py-sm rounded-lg text-secondary dark:text-secondary-fixed-dim hover:text-on-surface dark:hover:text-on-surface hover:bg-surface-container-high dark:hover:bg-surface-container-highest transition-colors" href="#">
+<span class="material-symbols-outlined">flight_takeoff</span>
+<span class="font-body-md text-body-md">Leave Management</span>
+</a>
+<a class="flex items-center gap-md px-md py-sm rounded-lg text-secondary dark:text-secondary-fixed-dim hover:text-on-surface dark:hover:text-on-surface hover:bg-surface-container-high dark:hover:bg-surface-container-highest transition-colors" href="#">
+<span class="material-symbols-outlined">assignment</span>
+<span class="font-body-md text-body-md">Employee Requests</span>
+</a>
+<a class="flex items-center gap-md px-md py-sm rounded-lg text-secondary dark:text-secondary-fixed-dim hover:text-on-surface dark:hover:text-on-surface hover:bg-surface-container-high dark:hover:bg-surface-container-highest transition-colors" href="#">
+<span class="material-symbols-outlined">insights</span>
+<span class="font-body-md text-body-md">Performance Management</span>
+</a>
+<a class="flex items-center gap-md px-md py-sm rounded-lg text-secondary dark:text-secondary-fixed-dim hover:text-on-surface dark:hover:text-on-surface hover:bg-surface-container-high dark:hover:bg-surface-container-highest transition-colors" href="#">
+<span class="material-symbols-outlined">payments</span>
+<span class="font-body-md text-body-md">Payroll Support</span>
+</a>
+<a class="flex items-center gap-md px-md py-sm rounded-lg text-secondary dark:text-secondary-fixed-dim hover:text-on-surface dark:hover:text-on-surface hover:bg-surface-container-high dark:hover:bg-surface-container-highest transition-colors" href="#">
+<span class="material-symbols-outlined">person_remove</span>
+<span class="font-body-md text-body-md">Employee Separation</span>
+</a>
+<a class="flex items-center gap-md px-md py-sm rounded-lg text-secondary dark:text-secondary-fixed-dim hover:text-on-surface dark:hover:text-on-surface hover:bg-surface-container-high dark:hover:bg-surface-container-highest transition-colors" href="#">
+<span class="material-symbols-outlined">bar_chart</span>
+<span class="font-body-md text-body-md">Reports &amp; Analytics</span>
+</a>
+<a class="flex items-center gap-md px-md py-sm rounded-lg text-secondary dark:text-secondary-fixed-dim hover:text-on-surface dark:hover:text-on-surface hover:bg-surface-container-high dark:hover:bg-surface-container-highest transition-colors" href="#">
+<span class="material-symbols-outlined">notifications_active</span>
+<span class="font-body-md text-body-md">Notifications &amp; Follow-up</span>
+</a>
+</div>
+<div class="shrink-0 mt-auto pt-sm">
+<button class="mb-md bg-primary text-on-primary py-sm px-md rounded-lg font-label-md text-label-md w-full flex items-center justify-center gap-sm hover:bg-primary-container transition-colors shadow-sm">
+<span class="material-symbols-outlined text-[18px]">add</span>
+            Add New Employee
+        </button>
+</div>
+<div class="border-t border-outline-variant pt-md flex flex-col gap-sm shrink-0">
+<a class="flex items-center gap-md px-md py-sm rounded-lg text-secondary hover:text-on-surface hover:bg-surface-container-high transition-colors" href="#">
+<span class="material-symbols-outlined">settings</span>
+<span class="font-body-md text-body-md">Settings</span>
+</a>
+<a class="flex items-center gap-md px-md py-sm rounded-lg text-secondary hover:text-on-surface hover:bg-surface-container-high transition-colors" href="#">
+<span class="material-symbols-outlined">help_outline</span>
+<span class="font-body-md text-body-md">Support</span>
+</a>
+</div>
+</nav>
+<!-- Main Content Area -->
+<div class="flex-1 md:ml-[280px] min-h-screen flex flex-col w-full">
+<!-- TopAppBar -->
+<header class="flex justify-between items-center px-margin-desktop bg-surface-container-lowest dark:bg-surface-container fixed top-0 right-0 w-full md:w-[calc(100%-280px)] h-16 shadow-sm dark:shadow-none z-40">
+<div class="flex items-center gap-sm bg-surface-container-low px-md py-xs rounded-full border border-outline-variant w-64 md:w-96 focus-within:border-primary focus-within:ring-1 focus-within:ring-primary transition-all">
+<span class="material-symbols-outlined text-secondary text-[20px]">search</span>
+<input class="bg-transparent border-none focus:ring-0 w-full font-body-md text-body-md text-on-surface placeholder:text-secondary p-0 h-8" placeholder="Search employees, departments..." type="text"/>
+</div>
+<div class="flex items-center gap-sm">
+<button class="p-sm text-on-surface-variant hover:bg-secondary-container dark:hover:bg-secondary-fixed-dim rounded-full transition-transform active:scale-95">
+<span class="material-symbols-outlined">notifications</span>
+</button>
+<button class="p-sm text-on-surface-variant hover:bg-secondary-container dark:hover:bg-secondary-fixed-dim rounded-full transition-transform active:scale-95 flex items-center gap-sm pl-sm">
+<img class="w-8 h-8 rounded-full border border-outline-variant object-cover" data-alt="A small circular avatar placeholder image showing a professional corporate headshot of a smiling person in standard high-key office lighting." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDSi5dfA7ojtkA2IXZy0AJVPSSwcbW5wnidddudcPSmkBm14ZjsApTKSfiqP4qGDG2-ysySI_oLc7C2qWhMmlvRyteVNksJRGVlW1-i42sdBkBTRbmTL1CmFs7a4x94_fxePCXwdaQIbbaNg-FgVu52EOp0TV7VjvfjUPK9hPuqDrJlSjxSMpoireOJPgJmNZsMXuni4a7O0SYfiSXVQUCjIMnIPnWLw2bCPU0cKbHgAOwmAg4eyxIL"/>
+</button>
+</div>
+</header>
+<!-- Main Canvas -->
+<main class="flex-1 mt-16 p-margin-mobile md:p-margin-desktop max-w-max-width mx-auto w-full flex flex-col gap-lg">
+<!-- Page Header & Quick Actions -->
+<div class="flex flex-col md:flex-row justify-between items-start md:items-end gap-md">
+<div>
+<h2 class="font-headline-lg-mobile md:font-headline-lg text-headline-lg-mobile md:text-headline-lg text-on-surface">Employee Management</h2>
+<p class="font-body-md text-body-md text-secondary mt-xs">Overview and directory of all Revive HR personnel.</p>
+</div>
+<div class="flex flex-wrap gap-sm">
+<button class="bg-surface border border-outline-variant text-on-surface py-sm px-md rounded-lg font-label-md text-label-md flex items-center gap-xs hover:bg-surface-container-high transition-colors soft-shadow">
+<span class="material-symbols-outlined text-[18px]">download</span>
+                        Export Report
+                    </button>
+<button class="bg-surface border border-outline-variant text-on-surface py-sm px-md rounded-lg font-label-md text-label-md flex items-center gap-xs hover:bg-surface-container-high transition-colors soft-shadow">
+<span class="material-symbols-outlined text-[18px]">payments</span>
+                        Run Payroll
+                    </button>
+</div>
+</div>
+<!-- Bento Grid: Metrics -->
+<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-md">
+<!-- Total Employees -->
+<div class="bg-surface-container-lowest rounded-xl p-lg soft-shadow border border-outline-variant hover-shadow flex flex-col justify-between h-32 relative overflow-hidden">
+<div class="flex justify-between items-start z-10">
+<p class="font-label-sm text-label-sm text-secondary uppercase tracking-wider">Total Employees</p>
+<span class="material-symbols-outlined text-primary bg-primary-container/10 p-sm rounded-full">group</span>
+</div>
+<div class="z-10">
+<h3 class="font-display-lg text-display-lg text-on-surface">452</h3>
+</div>
+<!-- Decorative subtle accent -->
+<div class="absolute -bottom-4 -right-4 w-24 h-24 bg-primary-fixed-dim/20 rounded-full blur-xl"></div>
+</div>
+<!-- New Hires -->
+<div class="bg-surface-container-lowest rounded-xl p-lg soft-shadow border border-outline-variant hover-shadow flex flex-col justify-between h-32">
+<div class="flex justify-between items-start">
+<p class="font-label-sm text-label-sm text-secondary uppercase tracking-wider">New Hires (Month)</p>
+<span class="material-symbols-outlined text-primary bg-primary-container/10 p-sm rounded-full">person_add</span>
+</div>
+<div class="flex items-end gap-sm">
+<h3 class="font-display-lg text-display-lg text-on-surface">12</h3>
+<span class="font-label-sm text-label-sm text-primary flex items-center mb-base"><span class="material-symbols-outlined text-[14px]">trending_up</span> +3%</span>
+</div>
+</div>
+<!-- Attendance Rate -->
+<div class="bg-surface-container-lowest rounded-xl p-lg soft-shadow border border-outline-variant hover-shadow flex flex-col justify-between h-32">
+<div class="flex justify-between items-start">
+<p class="font-label-sm text-label-sm text-secondary uppercase tracking-wider">Attendance Rate</p>
+<span class="material-symbols-outlined text-primary bg-primary-container/10 p-sm rounded-full">event_available</span>
+</div>
+<div>
+<h3 class="font-display-lg text-display-lg text-on-surface">98%</h3>
+<div class="w-full bg-surface-container-high h-2 rounded-full mt-sm overflow-hidden">
+<div class="bg-primary h-full rounded-full" style="width: 98%"></div>
+</div>
+</div>
+</div>
+<!-- Open Roles -->
+<div class="bg-surface-container-lowest rounded-xl p-lg soft-shadow border border-outline-variant hover-shadow flex flex-col justify-between h-32">
+<div class="flex justify-between items-start">
+<p class="font-label-sm text-label-sm text-secondary uppercase tracking-wider">Open Roles</p>
+<span class="material-symbols-outlined text-tertiary bg-tertiary-container/10 p-sm rounded-full">work_outline</span>
+</div>
+<div>
+<h3 class="font-display-lg text-display-lg text-on-surface">18</h3>
+<p class="font-label-sm text-label-sm text-secondary mt-base">Across 4 departments</p>
+</div>
+</div>
+</div>
+<!-- Complex Layout Grid -->
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-md">
+<!-- Employee Directory Preview (Spans 2 columns) -->
+<div class="bg-surface-container-lowest rounded-xl soft-shadow border border-outline-variant lg:col-span-2 overflow-hidden flex flex-col">
+<div class="p-lg border-b border-outline-variant flex justify-between items-center bg-surface-bright">
+<h3 class="font-title-lg text-title-lg text-on-surface">Directory Preview</h3>
+<button class="text-primary font-label-md text-label-md hover:underline flex items-center gap-xs">View All <span class="material-symbols-outlined text-[16px]">arrow_forward</span></button>
+</div>
+<div class="overflow-x-auto flex-1 p-lg">
+<table class="w-full text-left border-collapse">
+<thead>
+<tr class="border-b border-outline-variant bg-surface-bright">
+<th class="font-label-sm text-label-sm text-secondary uppercase pb-sm font-medium w-1/3">Employee</th>
+<th class="font-label-sm text-label-sm text-secondary uppercase pb-sm font-medium w-1/4">Department</th>
+<th class="font-label-sm text-label-sm text-secondary uppercase pb-sm font-medium w-1/4">Role</th>
+<th class="font-label-sm text-label-sm text-secondary uppercase pb-sm font-medium text-right">Status</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-surface-container-high">
+<tr class="hover:bg-surface-container-low transition-colors group">
+<td class="py-sm">
+<div class="flex items-center gap-sm">
+<img class="w-10 h-10 rounded-full border border-outline-variant object-cover group-hover:border-primary transition-colors" data-alt="Corporate headshot of Sarah Jenkins, a professional woman in a bright office environment, smiling warmly, clear high-resolution lighting." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDPXjHyFiApj-EBu72Ohqz95fRftYe7Rsrspk73ymYJ7TcOylxFQGh58yY6Menv3VepqL7KoZiopdS_ZqnZ-ykSZAYXO-3QW2z7yxjUC7mDt3nyV04KzvmeqTIqR4comGeUARzNdedQ_qQQka0pF0hmrTa3fufYeuokAyTGMSaG5iNCLEmRlkCP0tNhwY9Rs5Wl6UGZW7uNyM6lrZgve24JZgfxGJDqXZP5MV1tYixfu-KyEowGeKkE"/>
+<div>
+<p class="font-body-md text-body-md font-medium text-on-surface">Sarah Jenkins</p>
+<p class="font-label-sm text-label-sm text-secondary">sarah.j@revive.hr</p>
+</div>
+</div>
+</td>
+<td class="py-sm font-body-md text-body-md text-on-surface-variant">Engineering</td>
+<td class="py-sm font-body-md text-body-md text-on-surface-variant">Senior Developer</td>
+<td class="py-sm text-right">
+<span class="inline-flex items-center px-2 py-1 rounded-full text-[10px] font-bold bg-primary-container/10 text-primary-container">Active</span>
+</td>
+</tr>
+<tr class="hover:bg-surface-container-low transition-colors group">
+<td class="py-sm">
+<div class="flex items-center gap-sm">
+<div class="w-10 h-10 rounded-full bg-surface-container-high border border-outline-variant flex items-center justify-center font-title-lg text-title-lg text-secondary group-hover:border-primary transition-colors">
+                                                MR
+                                            </div>
+<div>
+<p class="font-body-md text-body-md font-medium text-on-surface">Marcus Reed</p>
+<p class="font-label-sm text-label-sm text-secondary">marcus.r@revive.hr</p>
+</div>
+</div>
+</td>
+<td class="py-sm font-body-md text-body-md text-on-surface-variant">Design</td>
+<td class="py-sm font-body-md text-body-md text-on-surface-variant">Lead Product Designer</td>
+<td class="py-sm text-right">
+<span class="inline-flex items-center px-2 py-1 rounded-full text-[10px] font-bold bg-primary-container/10 text-primary-container">Active</span>
+</td>
+</tr>
+<tr class="hover:bg-surface-container-low transition-colors group">
+<td class="py-sm">
+<div class="flex items-center gap-sm">
+<img class="w-10 h-10 rounded-full border border-outline-variant object-cover group-hover:border-primary transition-colors" data-alt="Corporate headshot of Elena Croft, a professional woman with glasses, smiling in a modern bright corporate setting." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDRejRbvDGMHKWb9hhILHYGcXrDvF7NRz7WYgIqrrHDWVVP4wr4GTYvUVXqAB4VWXYC2zM8STAecTVQ43f7-S_qiRWNNJnh5ttuXxqALeuTIWVbZkvppcO6mcgMC0ke8alrQqu7y-85pzIyfIh9xBQek2dxM_GLiy4v9P_v-64ghx5benxGSBztbFZQxRAYKenQun3LMC4f8Gptr_kMiRGVJqeznCttFO2xAsgc_NGD3XOvKIlvc5PT"/>
+<div>
+<p class="font-body-md text-body-md font-medium text-on-surface">Elena Croft</p>
+<p class="font-label-sm text-label-sm text-secondary">elena.c@revive.hr</p>
+</div>
+</div>
+</td>
+<td class="py-sm font-body-md text-body-md text-on-surface-variant">Marketing</td>
+<td class="py-sm font-body-md text-body-md text-on-surface-variant">Campaign Manager</td>
+<td class="py-sm text-right">
+<span class="inline-flex items-center px-2 py-1 rounded-full text-[10px] font-bold bg-secondary-container text-on-secondary-container">On Leave</span>
+</td>
+</tr>
+<tr class="hover:bg-surface-container-low transition-colors group">
+<td class="py-sm">
+<div class="flex items-center gap-sm">
+<img class="w-10 h-10 rounded-full border border-outline-variant object-cover group-hover:border-primary transition-colors" data-alt="Corporate headshot of David Kim, a professional man in a crisp shirt, warm office lighting, looking confidently at the camera." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAJzcQ1ZjkShuxCo-H3WGDI0-d-AT99zzVV3wkS-Y1gdlHz7WBmNgi3MV4UdSlvvS_I6cSjMXnbQbL3ETmqxD2sG1HEJTO45d8KLtJyiD2W3doqNnYp9VGz7qp45385igI6qQHnwGuCKX7C6XqqHVE7bOthwkU73smV3a1eb53FfN9SrPNSGB7TV_D3Chn7V614Eu4fj5RyxKiEOj7cHiUp5czm3mebBTeovFsqS_K35x1ubtK_FEJY"/>
+<div>
+<p class="font-body-md text-body-md font-medium text-on-surface">David Kim</p>
+<p class="font-label-sm text-label-sm text-secondary">david.k@revive.hr</p>
+</div>
+</div>
+</td>
+<td class="py-sm font-body-md text-body-md text-on-surface-variant">Sales</td>
+<td class="py-sm font-body-md text-body-md text-on-surface-variant">Account Executive</td>
+<td class="py-sm text-right">
+<span class="inline-flex items-center px-2 py-1 rounded-full text-[10px] font-bold bg-primary-container/10 text-primary-container">Active</span>
+</td>
+</tr>
+<tr class="hover:bg-surface-container-low transition-colors group">
+<td class="py-sm">
+<div class="flex items-center gap-sm">
+<div class="w-10 h-10 rounded-full bg-surface-container-high border border-outline-variant flex items-center justify-center font-title-lg text-title-lg text-secondary group-hover:border-primary transition-colors">
+                                                AJ
+                                            </div>
+<div>
+<p class="font-body-md text-body-md font-medium text-on-surface">Aisha Jones</p>
+<p class="font-label-sm text-label-sm text-secondary">aisha.j@revive.hr</p>
+</div>
+</div>
+</td>
+<td class="py-sm font-body-md text-body-md text-on-surface-variant">Human Resources</td>
+<td class="py-sm font-body-md text-body-md text-on-surface-variant">HR Specialist</td>
+<td class="py-sm text-right">
+<span class="inline-flex items-center px-2 py-1 rounded-full text-[10px] font-bold bg-primary-container/10 text-primary-container">Active</span>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<!-- Right Column Stack -->
+<div class="flex flex-col gap-md">
+<!-- Department Breakdown -->
+<div class="bg-surface-container-lowest rounded-xl p-lg soft-shadow border border-outline-variant">
+<h3 class="font-title-lg text-title-lg text-on-surface mb-md">Department Headcount</h3>
+<div class="flex flex-col gap-sm">
+<div class="flex items-center justify-between">
+<span class="font-body-md text-body-md text-secondary flex items-center gap-xs"><div class="w-2 h-2 rounded-full bg-primary"></div> Engineering</span>
+<span class="font-body-md text-body-md font-medium text-on-surface">142</span>
+</div>
+<div class="flex items-center justify-between">
+<span class="font-body-md text-body-md text-secondary flex items-center gap-xs"><div class="w-2 h-2 rounded-full bg-primary-fixed-dim"></div> Sales</span>
+<span class="font-body-md text-body-md font-medium text-on-surface">98</span>
+</div>
+<div class="flex items-center justify-between">
+<span class="font-body-md text-body-md text-secondary flex items-center gap-xs"><div class="w-2 h-2 rounded-full bg-surface-tint"></div> Marketing</span>
+<span class="font-body-md text-body-md font-medium text-on-surface">65</span>
+</div>
+<div class="flex items-center justify-between">
+<span class="font-body-md text-body-md text-secondary flex items-center gap-xs"><div class="w-2 h-2 rounded-full bg-outline-variant"></div> Support</span>
+<span class="font-body-md text-body-md font-medium text-on-surface">84</span>
+</div>
+<div class="flex items-center justify-between">
+<span class="font-body-md text-body-md text-secondary flex items-center gap-xs"><div class="w-2 h-2 rounded-full bg-secondary-container"></div> Other</span>
+<span class="font-body-md text-body-md font-medium text-on-surface">63</span>
+</div>
+</div>
+<!-- Simple visual bar indicating distribution -->
+<div class="w-full h-2 rounded-full flex overflow-hidden mt-md">
+<div class="bg-primary h-full" style="width: 31%"></div>
+<div class="bg-primary-fixed-dim h-full" style="width: 21%"></div>
+<div class="bg-surface-tint h-full" style="width: 14%"></div>
+<div class="bg-outline-variant h-full" style="width: 18%"></div>
+<div class="bg-secondary-container h-full" style="width: 16%"></div>
+</div>
+</div>
+<!-- Upcoming Events -->
+<div class="bg-surface-container-lowest rounded-xl p-lg soft-shadow border border-outline-variant flex-1">
+<div class="flex justify-between items-center mb-md">
+<h3 class="font-title-lg text-title-lg text-on-surface">Upcoming Events</h3>
+<span class="material-symbols-outlined text-secondary text-[20px]">cake</span>
+</div>
+<ul class="flex flex-col gap-sm">
+<li class="flex gap-md items-start p-sm rounded-lg hover:bg-surface-container-low transition-colors">
+<div class="bg-surface-bright border border-outline-variant rounded-md px-sm py-xs text-center min-w-[48px]">
+<p class="font-label-sm text-label-sm text-secondary uppercase">Oct</p>
+<p class="font-body-md text-body-md font-bold text-on-surface">12</p>
+</div>
+<div>
+<p class="font-body-md text-body-md font-medium text-on-surface">Elena Croft's Birthday</p>
+<p class="font-label-sm text-label-sm text-secondary">Marketing Department</p>
+</div>
+</li>
+<li class="flex gap-md items-start p-sm rounded-lg hover:bg-surface-container-low transition-colors">
+<div class="bg-surface-bright border border-outline-variant rounded-md px-sm py-xs text-center min-w-[48px]">
+<p class="font-label-sm text-label-sm text-secondary uppercase">Oct</p>
+<p class="font-body-md text-body-md font-bold text-on-surface">15</p>
+</div>
+<div>
+<p class="font-body-md text-body-md font-medium text-on-surface">David Kim's 3rd Work Anniversary</p>
+<p class="font-label-sm text-label-sm text-secondary">Sales Department</p>
+</div>
+</li>
+</ul>
+</div>
+</div>
+</div>
+</main>
+</div>
+</body></html>

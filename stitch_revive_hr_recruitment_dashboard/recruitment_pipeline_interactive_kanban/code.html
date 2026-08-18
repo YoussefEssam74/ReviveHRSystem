@@ -1,0 +1,642 @@
+<!DOCTYPE html><html class="light" lang="en"><head>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0" name="viewport">
+<title>Recruitment Pipeline - Revive HR</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<script id="tailwind-config">
+  tailwind.config = {
+    darkMode: "class",
+    theme: {
+      extend: {
+        "colors": {
+                "on-secondary-fixed": "#191c1e",
+                "on-primary-fixed-variant": "#166534",
+                "on-tertiary-fixed-variant": "#3c475a",
+                "outline-variant": "#c6cdc5",
+                "inverse-surface": "#213145",
+                "error": "#ba1a1a",
+                "on-primary-container": "#14532d",
+                "surface-container-low": "#f3f6f2",
+                "on-error-container": "#93000a",
+                "error-container": "#ffdad6",
+                "surface-bright": "#ffffff",
+                "tertiary-fixed-dim": "#bcc7c0",
+                "primary-fixed-dim": "#4ade80",
+                "inverse-on-surface": "#eaf1ff",
+                "secondary-fixed-dim": "#c5c6c8",
+                "on-primary": "#ffffff",
+                "secondary-container": "#e8e8e8",
+                "surface-tint": "#16a34a",
+                "surface-container": "#e9eee8",
+                "inverse-primary": "#4ade80",
+                "surface-variant": "#e2e8e0",
+                "tertiary-fixed": "#d8e3dd",
+                "on-error": "#ffffff",
+                "primary-container": "#bbf7d0",
+                "surface-dim": "#d2dbd1",
+                "background": "#f7f9f7",
+                "primary": "#16a34a",
+                "on-tertiary-container": "#1c2a23",
+                "surface-container-lowest": "#ffffff",
+                "tertiary": "#51605a",
+                "secondary-fixed": "#e1e2e4",
+                "surface-container-high": "#dee5dd",
+                "on-primary-fixed": "#052e16",
+                "on-tertiary-fixed": "#111c18",
+                "on-background": "#13221a",
+                "surface": "#fbfcfa",
+                "on-secondary-container": "#43474a",
+                "on-secondary-fixed-variant": "#444749",
+                "on-tertiary": "#ffffff",
+                "primary-fixed": "#86efac",
+                "outline": "#6e7b6c",
+                "tertiary-container": "#b3c7bc",
+                "on-secondary": "#ffffff",
+                "on-surface-variant": "#3f4a41",
+                "secondary": "#5c5f60",
+                "on-surface": "#13221a",
+                "surface-container-highest": "#d3dcd2"
+        },
+        "borderRadius": {
+                "DEFAULT": "0.25rem",
+                "lg": "0.5rem",
+                "xl": "0.75rem",
+                "full": "9999px"
+        },
+        "spacing": {
+                "margin-mobile": "16px",
+                "2xl": "48px",
+                "base": "4px",
+                "xs": "4px",
+                "gutter": "24px",
+                "margin-desktop": "32px",
+                "xl": "32px",
+                "max-width": "1440px",
+                "md": "16px",
+                "lg": "24px",
+                "sm": "8px"
+        },
+        "fontFamily": {
+                "title-lg": [
+                        "Inter"
+                ],
+                "label-md": [
+                        "Inter"
+                ],
+                "headline-lg": [
+                        "Inter"
+                ],
+                "display-lg": [
+                        "Inter"
+                ],
+                "headline-md": [
+                        "Inter"
+                ],
+                "label-sm": [
+                        "Inter"
+                ],
+                "body-lg": [
+                        "Inter"
+                ],
+                "body-md": [
+                        "Inter"
+                ],
+                "headline-lg-mobile": [
+                        "Inter"
+                ]
+        },
+        "fontSize": {
+                "title-lg": [
+                        "20px",
+                        {
+                                "lineHeight": "28px",
+                                "fontWeight": "600"
+                        }
+                ],
+                "label-md": [
+                        "12px",
+                        {
+                                "lineHeight": "16px",
+                                "letterSpacing": "0.01em",
+                                "fontWeight": "500"
+                        }
+                ],
+                "headline-lg": [
+                        "32px",
+                        {
+                                "lineHeight": "40px",
+                                "letterSpacing": "-0.01em",
+                                "fontWeight": "600"
+                        }
+                ],
+                "display-lg": [
+                        "48px",
+                        {
+                                "lineHeight": "56px",
+                                "letterSpacing": "-0.02em",
+                                "fontWeight": "700"
+                        }
+                ],
+                "headline-md": [
+                        "24px",
+                        {
+                                "lineHeight": "32px",
+                                "fontWeight": "600"
+                        }
+                ],
+                "label-sm": [
+                        "11px",
+                        {
+                                "lineHeight": "14px",
+                                "fontWeight": "600"
+                        }
+                ],
+                "body-lg": [
+                        "16px",
+                        {
+                                "lineHeight": "24px",
+                                "fontWeight": "400"
+                        }
+                ],
+                "body-md": [
+                        "14px",
+                        {
+                                "lineHeight": "20px",
+                                "fontWeight": "400"
+                        }
+                ],
+                "headline-lg-mobile": [
+                        "24px",
+                        {
+                                "lineHeight": "32px",
+                                "fontWeight": "600"
+                        }
+                ]
+        }
+},
+    },
+  }
+</script>
+<style>
+        .kanban-scroll::-webkit-scrollbar {
+            height: 8px;
+        }
+        .kanban-scroll::-webkit-scrollbar-track {
+            background: #F3F4F6;
+            border-radius: 4px;
+        }
+        .kanban-scroll::-webkit-scrollbar-thumb {
+            background: #D1D5DB;
+            border-radius: 4px;
+        }
+        .kanban-scroll::-webkit-scrollbar-thumb:hover {
+            background: #9CA3AF;
+        }
+    </style>
+</head>
+<body class="bg-background text-on-background min-h-screen font-body-md flex relative">
+<!-- SideNavBar -->
+<nav class="hidden md:flex flex-col h-full p-md max-w-[280px] fixed w-[280px] left-0 top-0 bg-surface-container-lowest dark:bg-inverse-surface border-r border-outline-variant shadow-sm z-50">
+<div class="mb-xl flex items-center gap-sm">
+<div class="w-10 h-10 rounded-full bg-primary flex items-center justify-center text-on-primary font-bold">R</div>
+<div>
+<h1 class="font-headline-md text-headline-md font-bold text-primary dark:text-primary-fixed">Revive HR</h1>
+<p class="font-label-md text-label-md text-secondary">Recruitment Module</p>
+</div>
+</div>
+<button class="mb-xl bg-primary text-on-primary py-sm px-md rounded-lg font-label-md text-label-md font-bold w-full hover:bg-on-primary-fixed-variant transition-colors shadow-sm" onclick="window.location.href='../create_vacancy/code.html'">
+            Create Vacancy
+        </button>
+<ul class="flex-1 space-y-xs">
+<li class="">
+<a class="flex items-center gap-md p-sm text-secondary dark:text-secondary-fixed-dim hover:text-primary hover:bg-surface-container-low dark:hover:bg-secondary-container/10 transition-colors cursor-pointer active:scale-95 duration-200 rounded-lg" href="../recruitment_dashboard_complete/code.html">
+<span class="material-symbols-outlined">dashboard</span>
+<span class="font-body-md text-body-md">Dashboard</span>
+</a>
+</li>
+<li class="">
+<a class="flex items-center gap-md p-sm text-secondary dark:text-secondary-fixed-dim hover:text-primary hover:bg-surface-container-low dark:hover:bg-secondary-container/10 transition-colors cursor-pointer active:scale-95 duration-200 rounded-lg" href="../vacancy_list/code.html">
+<span class="material-symbols-outlined">work</span>
+<span class="font-body-md text-body-md">Vacancies</span>
+</a>
+</li>
+<li class="">
+<a class="flex items-center gap-md p-sm text-secondary dark:text-secondary-fixed-dim hover:text-primary hover:bg-surface-container-low dark:hover:bg-secondary-container/10 transition-colors cursor-pointer active:scale-95 duration-200 rounded-lg" href="../candidate_list/code.html">
+<span class="material-symbols-outlined">group</span>
+<span class="font-body-md text-body-md">Candidates</span>
+</a>
+</li>
+<li class="">
+<a class="flex items-center gap-md p-sm text-primary dark:text-primary-fixed-dim font-bold bg-surface-container dark:bg-secondary-container/20 rounded-lg hover:bg-surface-container-low dark:hover:bg-secondary-container/10 transition-colors cursor-pointer active:scale-95 duration-200" href="../recruitment_pipeline_interactive_kanban/code.html">
+<span class="material-symbols-outlined">view_kanban</span>
+<span class="font-body-md text-body-md">Pipeline</span>
+</a>
+</li>
+<li class="">
+<a class="flex items-center gap-md p-sm text-secondary dark:text-secondary-fixed-dim hover:text-primary hover:bg-surface-container-low dark:hover:bg-secondary-container/10 transition-colors cursor-pointer active:scale-95 duration-200 rounded-lg" href="../waiting_list_management/code.html">
+<span class="material-symbols-outlined">hourglass_empty</span>
+<span class="font-body-md text-body-md">Waiting List</span>
+</a>
+</li>
+<li class="">
+<a class="flex items-center gap-md p-sm text-secondary dark:text-secondary-fixed-dim hover:text-primary hover:bg-surface-container-low dark:hover:bg-secondary-container/10 transition-colors cursor-pointer active:scale-95 duration-200 rounded-lg" href="../recruitment_reports/code.html">
+<span class="material-symbols-outlined">monitoring</span>
+<span class="font-body-md text-body-md">Reports</span>
+</a>
+</li>
+<li class="">
+<a class="flex items-center gap-md p-sm text-secondary dark:text-secondary-fixed-dim hover:text-primary hover:bg-surface-container-low dark:hover:bg-secondary-container/10 transition-colors cursor-pointer active:scale-95 duration-200 rounded-lg" href="../employee_dashboard_full_navigation/code.html">
+<span class="material-symbols-outlined">badge</span>
+<span class="font-body-md text-body-md">Employees</span>
+</a>
+</li>
+<li class="">
+<a class="flex items-center gap-md p-sm text-secondary dark:text-secondary-fixed-dim hover:text-primary hover:bg-surface-container-low dark:hover:bg-secondary-container/10 transition-colors cursor-pointer active:scale-95 duration-200 rounded-lg" href="#">
+<span class="material-symbols-outlined">settings</span>
+<span class="font-body-md text-body-md">Settings</span>
+</a>
+</li>
+</ul>
+<ul class="mt-auto space-y-xs pt-md border-t border-outline-variant">
+<li class="">
+<a class="flex items-center gap-md p-sm text-secondary dark:text-secondary-fixed-dim hover:text-primary hover:bg-surface-container-low dark:hover:bg-secondary-container/10 transition-colors cursor-pointer active:scale-95 duration-200 rounded-lg" href="#">
+<span class="material-symbols-outlined">help</span>
+<span class="font-body-md text-body-md">Support</span>
+</a>
+</li>
+<li class="">
+<a class="flex items-center gap-md p-sm text-secondary dark:text-secondary-fixed-dim hover:text-primary hover:bg-surface-container-low dark:hover:bg-secondary-container/10 transition-colors cursor-pointer active:scale-95 duration-200 rounded-lg" href="#">
+<span class="material-symbols-outlined">logout</span>
+<span class="font-body-md text-body-md">Log Out</span>
+</a>
+</li>
+</ul>
+</nav>
+<!-- Main Content Area -->
+<div class="md:ml-[280px] flex-1 flex flex-col min-h-screen max-w-[calc(100vw-280px)]">
+<!-- TopAppBar -->
+<header class="flex justify-between items-center h-16 px-margin-desktop sticky top-0 z-40 bg-surface/80 backdrop-blur-md border-b border-outline-variant w-full">
+<div class="flex items-center gap-md">
+<div class="relative hidden md:flex items-center text-on-surface-variant">
+<span class="material-symbols-outlined absolute left-sm">search</span>
+<input class="pl-xl pr-sm py-xs bg-surface-container-lowest border border-outline-variant rounded-full text-body-md font-body-md focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary w-64 transition-all" placeholder="Search candidates..." type="text">
+</div>
+</div>
+<div class="flex items-center gap-md">
+<button class="text-on-surface-variant hover:text-primary dark:hover:text-primary-fixed transition-all duration-200">
+<span class="material-symbols-outlined">notifications</span>
+</button>
+<button class="text-on-surface-variant hover:text-primary dark:hover:text-primary-fixed transition-all duration-200">
+<span class="material-symbols-outlined">chat_bubble</span>
+</button>
+<button class="text-on-surface-variant hover:text-primary dark:hover:text-primary-fixed transition-all duration-200">
+<span class="material-symbols-outlined text-[32px]">account_circle</span>
+</button>
+</div>
+</header>
+<!-- Pipeline Header & Filters -->
+<main class="flex-1 p-margin-desktop flex flex-col overflow-hidden w-full">
+<div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-xl gap-md shrink-0">
+<div>
+<h2 class="font-headline-lg text-headline-lg text-on-background">Recruitment Pipeline</h2>
+<p class="font-body-md text-body-md text-secondary mt-xs">Manage candidate flow across active vacancies.</p>
+</div>
+<div class="flex items-center gap-sm">
+<label class="font-label-md text-label-md text-secondary" for="vacancy-filter">Filter by Vacancy:</label>
+<select class="bg-surface-container-lowest border border-outline-variant rounded-lg px-md py-sm font-body-md text-body-md text-on-background focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary cursor-pointer" id="vacancy-filter">
+<option>All Active Vacancies</option>
+<option>Senior Frontend Developer</option>
+<option>UX Designer</option>
+<option>Product Manager</option>
+</select>
+</div>
+</div>
+<!-- Kanban Board -->
+<div class="flex-1 overflow-x-auto overflow-y-hidden kanban-scroll pb-md w-full">
+<div class="flex gap-lg h-full min-w-max items-start pb-4"><!-- Column: Applied -->
+<div class="w-[300px] flex flex-col h-full bg-surface-container-low rounded-xl p-md shrink-0">
+    <div class="flex justify-between items-center mb-md px-xs">
+        <h3 class="font-title-lg text-title-lg text-on-surface">Applied</h3>
+        <span class="bg-surface-container-highest text-on-surface px-sm py-[2px] rounded-full font-label-sm text-label-sm" id="badge-applied">2</span>
+    </div>
+    <div class="flex-1 overflow-y-auto space-y-md pr-xs pb-sm kanban-scroll kcol" id="col-applied" ondragover="dragOver(event)" ondragleave="dragLeave(event)" ondrop="drop(event)">
+        <!-- Card 1 -->
+        <div class="bg-surface-container-lowest rounded-lg p-md shadow-sm border border-surface-container cursor-pointer hover:shadow-md transition-shadow group relative" draggable="true" ondragstart="dragStart(event)" onclick="openProfile(event,'candidate_profile_eleanor_richards')">
+            <div class="flex gap-sm items-center mb-sm">
+                <div class="w-10 h-10 rounded-full bg-tertiary-container overflow-hidden shrink-0">
+                    <img class="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCfYNUnjPbmLGnCwH9UxGB9WRAM3YaMUDff9gVFGzr3LHpP7P_VF-i83lcz0GRhFDjlnrQZtEuoXlocdBj1vCyuQWBCrmbozKTIeKnL0Gj7BTxrGxk_neomdnajQ9a8Y_zXcwwmjAaKb-iKh_cwzKYY5fOsb4OWSwq2gSGnEyuincYm5LcvBIrqQX_tjWRdfr4bcEe3Ts16D5Wk23IgFoZnHVzK53_9mykXRIvPY0IUXzhPTBX6CKZ3" alt="Sarah Jenkins">
+                </div>
+                <div class="overflow-hidden">
+                    <p class="font-title-lg text-[14px] leading-tight text-on-surface group-hover:text-primary transition-colors truncate">Sarah Jenkins</p>
+                    <p class="font-label-md text-label-md text-secondary truncate">Senior Frontend Dev</p>
+                </div>
+            </div>
+            <div class="flex items-center justify-between mb-sm">
+                <div class="flex items-center gap-xs text-secondary">
+                    <span class="material-symbols-outlined text-[16px] text-[#EAB308] fill-1">star</span>
+                    <span class="font-label-sm text-label-sm">4.5</span>
+                </div>
+                <div class="flex items-center gap-xs text-secondary">
+                    <span class="material-symbols-outlined text-[16px]">schedule</span>
+                    <span class="font-label-sm text-label-sm">2d in stage</span>
+                </div>
+            </div>
+        </div>
+        <!-- Card 2 -->
+        <div class="bg-surface-container-lowest rounded-lg p-md shadow-sm border border-surface-container cursor-pointer hover:shadow-md transition-shadow group relative" draggable="true" ondragstart="dragStart(event)" onclick="openProfile(event,'candidate_profile_eleanor_richards')">
+            <div class="flex gap-sm items-center mb-sm">
+                <div class="w-10 h-10 rounded-full bg-surface-variant flex items-center justify-center text-primary font-bold shrink-0">M</div>
+                <div class="overflow-hidden">
+                    <p class="font-title-lg text-[14px] leading-tight text-on-surface group-hover:text-primary transition-colors truncate">Michael Chang</p>
+                    <p class="font-label-md text-label-md text-secondary truncate">Product Manager</p>
+                </div>
+            </div>
+            <div class="flex items-center justify-between mb-sm">
+                <div class="flex items-center gap-xs text-secondary">
+                    <span class="material-symbols-outlined text-[16px]">star</span>
+                    <span class="font-label-sm text-label-sm">Unrated</span>
+                </div>
+                <div class="flex items-center gap-xs text-secondary">
+                    <span class="material-symbols-outlined text-[16px]">schedule</span>
+                    <span class="font-label-sm text-label-sm">1d in stage</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+<!-- Column: Screening -->
+<div class="w-[300px] flex flex-col h-full bg-surface-container-low rounded-xl p-md shrink-0">
+    <div class="flex justify-between items-center mb-md px-xs">
+        <h3 class="font-title-lg text-title-lg text-on-surface">Screening</h3>
+        <span class="bg-surface-container-highest text-on-surface px-sm py-[2px] rounded-full font-label-sm text-label-sm" id="badge-screening">1</span>
+    </div>
+    <div class="flex-1 overflow-y-auto space-y-md pr-xs pb-sm kanban-scroll kcol" id="col-screening" ondragover="dragOver(event)" ondragleave="dragLeave(event)" ondrop="drop(event)">
+        <div class="bg-surface-container-lowest rounded-lg p-md shadow-sm border border-surface-container cursor-pointer hover:shadow-md transition-shadow group relative" draggable="true" ondragstart="dragStart(event)" onclick="openProfile(event,'candidate_profile_eleanor_richards')">
+            <div class="flex gap-sm items-center mb-sm">
+                <div class="w-10 h-10 rounded-full bg-tertiary-container overflow-hidden shrink-0">
+                    <img class="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuA8Ur-F41kjJMQsFpiDT40XG19hjNYv7EQvj9w-jkhQiqQqzqqs5u2PFv1OBu0zFtQLzyJ-oaraBr8yhyqVx0ijYKRIIb4cdD0oubu9ZA1Ytu6GcYE2yLfnwgBvQhAolrkVqbSWhYKDsbU952VsARoENE1lMGS4NhT7m1RV41DL2jcxMCWPVpSMYfe4ygbYLqYP9mdjrnr1z-zkgXJ0NAV5QMDMTfg7Y1DD5HNcXhr1atWWJiAOE0Xv" alt="David Chen">
+                </div>
+                <div class="overflow-hidden">
+                    <p class="font-title-lg text-[14px] leading-tight text-on-surface group-hover:text-primary transition-colors truncate">David Chen</p>
+                    <p class="font-label-md text-label-md text-secondary truncate">UX Designer</p>
+                </div>
+            </div>
+            <div class="flex items-center justify-between mb-sm">
+                <div class="flex items-center gap-xs text-secondary">
+                    <span class="material-symbols-outlined text-[16px] text-[#EAB308] fill-1">star</span>
+                    <span class="font-label-sm text-label-sm">4.0</span>
+                </div>
+                <div class="flex items-center gap-xs text-secondary">
+                    <span class="material-symbols-outlined text-[16px]">schedule</span>
+                    <span class="font-label-sm text-label-sm">4d in stage</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+<!-- Column: Interview 1 -->
+<div class="w-[300px] flex flex-col h-full bg-surface-container-low rounded-xl p-md shrink-0">
+    <div class="flex justify-between items-center mb-md px-xs">
+        <h3 class="font-title-lg text-title-lg text-on-surface">Interview 1</h3>
+        <span class="bg-surface-container-highest text-on-surface px-sm py-[2px] rounded-full font-label-sm text-label-sm" id="badge-interview-1">0</span>
+    </div>
+    <div class="flex-1 overflow-y-auto space-y-md pr-xs pb-sm kanban-scroll kcol" id="col-interview-1" ondragover="dragOver(event)" ondragleave="dragLeave(event)" ondrop="drop(event)">
+        <div class="flex flex-col items-center justify-center text-secondary p-4 text-center border-2 border-dashed border-outline-variant rounded-lg empty-state" id="empty-interview-1">
+            <span class="material-symbols-outlined text-4xl mb-2 opacity-50">move_to_inbox</span>
+            <p class="font-body-md">Drop candidate here</p>
+        </div>
+    </div>
+</div>
+<!-- Column: Interview 2 -->
+<div class="w-[300px] flex flex-col h-full bg-surface-container-low rounded-xl p-md shrink-0">
+    <div class="flex justify-between items-center mb-md px-xs">
+        <h3 class="font-title-lg text-title-lg text-on-surface">Interview 2</h3>
+        <span class="bg-surface-container-highest text-on-surface px-sm py-[2px] rounded-full font-label-sm text-label-sm" id="badge-interview-2">1</span>
+    </div>
+    <div class="flex-1 overflow-y-auto space-y-md pr-xs pb-sm kanban-scroll kcol" id="col-interview-2" ondragover="dragOver(event)" ondragleave="dragLeave(event)" ondrop="drop(event)">
+        <div class="bg-surface-container-lowest rounded-lg p-md shadow-sm border border-surface-container cursor-pointer hover:shadow-md transition-shadow group relative" draggable="true" ondragstart="dragStart(event)" onclick="openProfile(event,'candidate_profile_eleanor_richards')">
+            <div class="flex gap-sm items-center mb-sm">
+                <div class="w-10 h-10 rounded-full bg-surface-variant overflow-hidden shrink-0">
+                    <img class="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuD5ySrpXRcRUVTvasn8oyxo5QoSbhlsvaZYaHuGSFtbfpiJLD93iHlqPpJLlRXjhdjDouEwIaDO5H7kVbCnyYMBvvmDPiZ9Xh25PD0a1zpRej_mXUD8KNYrWOms-o1vetljN07nberxy5U6edvx_aNBpeyXeEdWIo2HfICq8TU8ntxeMP5ojIJ1s-OAu1h2V5mFJI1shTqg7SBH8uBooJN_3wSIfdElRq78OuOMUKR3CyO3hFp5uqPG" alt="Eleanor Richards">
+                </div>
+                <div class="overflow-hidden">
+                    <p class="font-title-lg text-[14px] leading-tight text-on-surface group-hover:text-primary transition-colors truncate">Eleanor Richards</p>
+                    <p class="font-label-md text-label-md text-secondary truncate">Senior Product Designer</p>
+                </div>
+            </div>
+            <div class="flex items-center gap-xs text-primary mb-sm">
+                <span class="material-symbols-outlined text-[16px]">calendar_today</span>
+                <span class="font-label-sm text-label-sm">Nov 5, 10:00 AM</span>
+            </div>
+            <div class="flex items-center justify-between">
+                <div class="flex items-center gap-xs text-secondary">
+                    <span class="material-symbols-outlined text-[16px] text-[#EAB308] fill-1">star</span>
+                    <span class="font-label-sm text-label-sm">4.8</span>
+                </div>
+                <div class="flex items-center gap-xs text-secondary">
+                    <span class="material-symbols-outlined text-[16px]">schedule</span>
+                    <span class="font-label-sm text-label-sm">3d in stage</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+<!-- Column: Waiting List -->
+<div class="w-[300px] flex flex-col h-full bg-surface-container-low rounded-xl p-md shrink-0">
+    <div class="flex justify-between items-center mb-md px-xs">
+        <h3 class="font-title-lg text-title-lg text-on-surface">Waiting List</h3>
+        <span class="bg-surface-container-highest text-on-surface px-sm py-[2px] rounded-full font-label-sm text-label-sm" id="badge-waiting-list">1</span>
+    </div>
+    <div class="flex-1 overflow-y-auto space-y-md pr-xs pb-sm kanban-scroll kcol" id="col-waiting-list" ondragover="dragOver(event)" ondragleave="dragLeave(event)" ondrop="drop(event)">
+        <div class="bg-surface-container-lowest rounded-lg p-md shadow-sm border border-surface-container cursor-pointer hover:shadow-md transition-shadow group relative" draggable="true" ondragstart="dragStart(event)" onclick="openProfile(event,'candidate_profile_eleanor_richards')">
+            <div class="flex gap-sm items-center mb-sm">
+                <div class="w-10 h-10 rounded-full bg-surface-variant flex items-center justify-center text-primary font-bold shrink-0">ET</div>
+                <div class="overflow-hidden">
+                    <p class="font-title-lg text-[14px] leading-tight text-on-surface group-hover:text-primary transition-colors truncate">Emma Thompson</p>
+                    <p class="font-label-md text-label-md text-secondary truncate">HR Coordinator</p>
+                </div>
+            </div>
+            <div class="flex items-center justify-between mb-sm">
+                <div class="flex items-center gap-xs text-secondary">
+                    <span class="material-symbols-outlined text-[16px] text-[#EAB308] fill-1">star</span>
+                    <span class="font-label-sm text-label-sm">3.8</span>
+                </div>
+                <div class="flex items-center gap-xs text-secondary">
+                    <span class="material-symbols-outlined text-[16px]">schedule</span>
+                    <span class="font-label-sm text-label-sm">12d in stage</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+<!-- Column: Hired -->
+<div class="w-[300px] flex flex-col h-full bg-surface-container-low rounded-xl p-md shrink-0">
+    <div class="flex justify-between items-center mb-md px-xs">
+        <h3 class="font-title-lg text-title-lg text-on-surface">Hired</h3>
+        <span class="bg-surface-container-highest text-on-surface px-sm py-[2px] rounded-full font-label-sm text-label-sm" id="badge-hired">1</span>
+    </div>
+    <div class="flex-1 overflow-y-auto space-y-md pr-xs pb-sm kanban-scroll kcol" id="col-hired" ondragover="dragOver(event)" ondragleave="dragLeave(event)" ondrop="drop(event)">
+        <div class="bg-surface-container-lowest rounded-lg p-md shadow-sm border border-primary/30 cursor-pointer hover:shadow-md transition-shadow group relative" draggable="true" ondragstart="dragStart(event)" onclick="openProfile(event,'candidate_profile_eleanor_richards')">
+            <div class="flex gap-sm items-center mb-sm">
+                <div class="w-10 h-10 rounded-full bg-primary-container flex items-center justify-center text-primary-on-container font-bold shrink-0">MV</div>
+                <div class="overflow-hidden">
+                    <p class="font-title-lg text-[14px] leading-tight text-on-surface group-hover:text-primary transition-colors truncate">Marcus Vance</p>
+                    <p class="font-label-md text-label-md text-secondary truncate">Senior Frontend Developer</p>
+                </div>
+            </div>
+            <div class="flex items-center gap-xs text-primary mb-sm">
+                <span class="material-symbols-outlined text-[16px]">check_circle</span>
+                <span class="font-label-sm text-label-sm">Hired Nov 2</span>
+            </div>
+            <div class="flex items-center justify-between">
+                <div class="flex items-center gap-xs text-secondary">
+                    <span class="material-symbols-outlined text-[16px] text-[#EAB308] fill-1">star</span>
+                    <span class="font-label-sm text-label-sm">5.0</span>
+                </div>
+                <div class="flex items-center gap-xs text-secondary">
+                    <span class="material-symbols-outlined text-[16px]">schedule</span>
+                    <span class="font-label-sm text-label-sm">2d in stage</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div></div>
+</div>
+</main>
+</div>
+<!-- Confirmation Modal (hidden by default, shown on drop) -->
+<div class="fixed inset-0 bg-on-surface/50 z-[100] flex items-center justify-center p-4 hidden" id="move-modal">
+<div class="bg-surface-container-lowest rounded-xl shadow-lg w-full max-w-md flex flex-col overflow-hidden">
+<div class="p-lg flex justify-between items-center border-b border-surface-container">
+<h3 class="font-title-lg text-title-lg text-on-surface">Move Candidate</h3>
+<button class="text-secondary hover:text-on-surface transition-colors" onclick="closeMoveModal()">
+<span class="material-symbols-outlined">close</span>
+</button>
+</div>
+<div class="p-lg">
+<p class="font-body-md text-body-md text-on-surface mb-md">Move <strong id="modal-candidate-name">David Chen</strong> to <strong id="modal-target-name">Interview 1</strong>?</p>
+<div class="flex flex-col gap-sm">
+<label class="font-label-md text-label-md text-on-surface font-medium" for="move-reason">Reason for moving</label>
+<textarea class="w-full border border-outline-variant rounded-lg p-3 font-body-md text-body-md focus:border-primary focus:ring-1 focus:ring-primary outline-none resize-none bg-surface" id="move-reason" placeholder="Add a note (optional)..." rows="3"></textarea>
+</div>
+</div>
+<div class="p-lg border-t border-surface-container bg-surface flex justify-end gap-md">
+<button class="px-md py-sm font-label-md text-label-md font-bold text-primary hover:bg-surface-container transition-colors rounded-lg" onclick="closeMoveModal()">Cancel</button>
+<button class="px-md py-sm font-label-md text-label-md font-bold text-on-primary bg-primary hover:bg-primary/90 transition-colors rounded-lg shadow-sm" onclick="confirmMove()">Save</button>
+</div>
+</div>
+</div>
+
+<script>
+(function () {
+    let draggedCard = null;
+    let draggedFrom = null;
+    let dropTargetId = null;
+    let justMoved = false;
+
+    const colNames = {
+        'col-applied': 'Applied',
+        'col-screening': 'Screening',
+        'col-interview-1': 'Interview 1',
+        'col-interview-2': 'Interview 2',
+        'col-waiting-list': 'Waiting List',
+        'col-hired': 'Hired'
+    };
+
+    window.dragStart = function (e) {
+        const card = e.target.closest('[draggable="true"]');
+        if (!card) return;
+        draggedCard = card;
+        draggedFrom = card.parentElement;
+        e.dataTransfer.effectAllowed = 'move';
+        if (e.dataTransfer.setData) e.dataTransfer.setData('text/plain', '');
+        card.classList.add('opacity-50');
+    };
+
+    window.dragOver = function (e) {
+        if (!draggedCard) return;
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+        e.currentTarget.classList.add('bg-surface-container-high');
+    };
+
+    window.dragLeave = function (e) {
+        e.currentTarget.classList.remove('bg-surface-container-high');
+    };
+
+    window.drop = function (e) {
+        if (!draggedCard) return;
+        e.preventDefault();
+        const col = e.currentTarget;
+        col.classList.remove('bg-surface-container-high');
+        dropTargetId = col.id;
+        if (dropTargetId === draggedFrom.id) { resetDrag(); return; }
+        const name = draggedCard.querySelector('.group-hover\\:text-primary, p').textContent.trim() || 'Candidate';
+        document.getElementById('modal-candidate-name').textContent = name.split('\n')[0].trim();
+        document.getElementById('modal-target-name').textContent = colNames[dropTargetId] || dropTargetId;
+        document.getElementById('move-reason').value = '';
+        document.getElementById('move-modal').classList.remove('hidden');
+    };
+
+    window.closeMoveModal = function () {
+        document.getElementById('move-modal').classList.add('hidden');
+        resetDrag();
+    };
+
+    window.confirmMove = function () {
+        if (!draggedCard || !dropTargetId) { closeMoveModal(); return; }
+        const target = document.getElementById(dropTargetId);
+        target.appendChild(draggedCard);
+        const empty = target.querySelector('.empty-state');
+        if (empty) empty.remove();
+        justMoved = true;
+        setTimeout(function () { justMoved = false; }, 250);
+        closeMoveModal();
+        target.classList.add('bg-surface-container-high');
+        setTimeout(function () { target.classList.remove('bg-surface-container-high'); }, 600);
+    };
+
+    window.openProfile = function (e, page) {
+        if (justMoved) return;
+        window.location.href = '../' + page + '/code.html';
+    };
+
+    function resetDrag() {
+        if (draggedCard) draggedCard.classList.remove('opacity-50');
+        draggedCard = null;
+        draggedFrom = null;
+        dropTargetId = null;
+    }
+
+    function updateCounts() {
+        const mapping = {
+            'col-applied': 'badge-applied',
+            'col-screening': 'badge-screening',
+            'col-interview-1': 'badge-interview-1',
+            'col-interview-2': 'badge-interview-2',
+            'col-waiting-list': 'badge-waiting-list',
+            'col-hired': 'badge-hired'
+        };
+        Object.keys(mapping).forEach(function (colId) {
+            const col = document.getElementById(colId);
+            const badge = document.getElementById(mapping[colId]);
+            if (!col || !badge) return;
+            let count = 0;
+            col.querySelectorAll('.bg-surface-container-lowest.rounded-lg').forEach(function (card) {
+                if (!card.closest('.hidden')) count++;
+            });
+            badge.textContent = count;
+        });
+    }
+
+    document.addEventListener('dragend', function () {
+        if (draggedCard) draggedCard.classList.remove('opacity-50');
+    });
+    document.addEventListener('DOMContentLoaded', updateCounts);
+    if (document.readyState !== 'loading') updateCounts();
+})();
+</script>
+
+</body></html>

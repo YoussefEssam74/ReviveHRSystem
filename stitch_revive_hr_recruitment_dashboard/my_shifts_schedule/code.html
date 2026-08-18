@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Downtown Gym - Shifts</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+          darkMode: "class",
+          theme: {
+            extend: {
+              "colors": {
+                      "inverse-primary": "#62df7d",
+                      "on-primary-container": "#f7fff2",
+                      "surface-variant": "#e1e2e8",
+                      "inverse-on-surface": "#eff0f6",
+                      "secondary-fixed-dim": "#bcc7df",
+                      "surface-container-highest": "#e1e2e8",
+                      "error-container": "#ffdad6",
+                      "tertiary-fixed": "#9cf7a7",
+                      "status-active-text": "#166534",
+                      "on-tertiary-container": "#f7fff2",
+                      "on-secondary-container": "#586378",
+                      "on-secondary-fixed-variant": "#3c475b",
+                      "on-tertiary": "#ffffff",
+                      "surface-dim": "#d8dae0",
+                      "primary-container": "#00873a",
+                      "on-secondary-fixed": "#101c2e",
+                      "surface-bright": "#f8f9ff",
+                      "surface-container": "#E5EEFF",
+                      "on-primary-fixed-variant": "#005320",
+                      "surface-container-lowest": "#ffffff",
+                      "secondary": "#545f74",
+                      "on-error": "#ffffff",
+                      "on-surface-variant": "#3e4a3d",
+                      "primary-fixed": "#7ffc97",
+                      "background": "#f8f9ff",
+                      "on-surface": "#0B1C30",
+                      "inverse-surface": "#2e3135",
+                      "surface-tint": "#006e2d",
+                      "on-tertiary-fixed-variant": "#005320",
+                      "on-error-container": "#93000a",
+                      "surface": "#f8f9ff",
+                      "on-primary-fixed": "#002109",
+                      "on-tertiary-fixed": "#002109",
+                      "outline-variant": "#bdcaba",
+                      "tertiary-container": "#2a8542",
+                      "secondary-fixed": "#d8e3fc",
+                      "status-active-bg": "#DCFCE7",
+                      "tertiary": "#006b2c",
+                      "primary": "#006b2c",
+                      "on-secondary": "#ffffff",
+                      "tertiary-fixed-dim": "#80da8d",
+                      "secondary-container": "#d5e0f9",
+                      "outline": "#6e7b6c",
+                      "surface-container-low": "#f2f3f9",
+                      "primary-fixed-dim": "#62df7d",
+                      "on-background": "#191c20",
+                      "on-primary": "#ffffff",
+                      "error": "#ba1a1a",
+                      "surface-container-high": "#e7e8ee"
+              },
+              "borderRadius": {
+                      "DEFAULT": "0.25rem",
+                      "lg": "0.5rem",
+                      "xl": "0.75rem",
+                      "full": "9999px"
+              },
+              "spacing": {
+                      "stack-sm": "8px",
+                      "stack-lg": "24px",
+                      "margin-mobile": "16px",
+                      "gutter-mobile": "12px",
+                      "touch-target-min": "48px",
+                      "stack-md": "16px"
+              },
+              "fontFamily": {
+                      "headline-lg-mobile": ["Inter"],
+                      "body-md": ["Inter"],
+                      "label-sm": ["Inter"],
+                      "button-text": ["Inter"],
+                      "label-md": ["Inter"],
+                      "title-lg": ["Inter"],
+                      "body-lg": ["Inter"]
+              },
+              "fontSize": {
+                      "headline-lg-mobile": ["24px", {"lineHeight": "32px", "letterSpacing": "-0.01em", "fontWeight": "600"}],
+                      "body-md": ["14px", {"lineHeight": "20px", "fontWeight": "400"}],
+                      "label-sm": ["11px", {"lineHeight": "14px", "fontWeight": "600"}],
+                      "button-text": ["16px", {"lineHeight": "24px", "fontWeight": "600"}],
+                      "label-md": ["12px", {"lineHeight": "16px", "letterSpacing": "0.01em", "fontWeight": "500"}],
+                      "title-lg": ["20px", {"lineHeight": "28px", "fontWeight": "600"}],
+                      "body-lg": ["16px", {"lineHeight": "24px", "fontWeight": "400"}]
+              }
+            }
+          }
+        }
+    </script>
+<style>
+        body { font-family: 'Inter', sans-serif; }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background text-on-background antialiased min-h-screen pb-[80px]">
+<!-- TopAppBar -->
+<header class="bg-surface w-full top-0 sticky border-b border-surface-variant flex justify-between items-center px-margin-mobile h-touch-target-min z-40">
+<div class="flex items-center gap-3">
+<button class="h-8 w-8 rounded-full overflow-hidden focus:outline-none hover:bg-surface-container-low transition-colors active:scale-95 duration-150">
+<img alt="Employee Profile" class="w-full h-full object-cover" data-alt="A close up portrait of a young professional gym employee, fit and smiling, wearing a dark green athletic polo shirt, shot against a bright, modern indoor gym background with soft natural lighting and a shallow depth of field. Corporate modern aesthetic." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBk9jHv3m4u01LYwsC3kyBrHzOU4D1yDaCggckYM25Uy7RaNVw5_YbsLdt_YyTgbmlmqIO7-marQKuwnI7GHPRsom9eykxah5mKfYpVcvstFyH2DhdapmuvZZN5UtQNeZ12NQoWRsGkXhLusUv8S4-eoLPUCfnTg9rM7k8um4XcVRmaS38ls_oq_EexitMBYIuWX2L6bvgp9DoSXWTV9gzyLWus0DxbiOyBcNAkdXtluj89S8T61Rnh"/>
+</button>
+<h1 class="font-headline-lg-mobile text-headline-lg-mobile text-primary font-bold">Downtown Gym</h1>
+</div>
+<button class="text-primary hover:bg-surface-container-low transition-colors active:scale-95 duration-150 p-2 rounded-full h-touch-target-min w-touch-target-min flex items-center justify-center">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0;">notifications</span>
+</button>
+</header>
+<!-- Main Content Canvas -->
+<main class="px-margin-mobile pt-stack-lg flex flex-col gap-stack-lg">
+<!-- Page Header & Toggles -->
+<div class="flex justify-between items-end">
+<div>
+<h2 class="font-title-lg text-title-lg text-on-surface">My Shifts</h2>
+<p class="font-body-md text-body-md text-on-surface-variant mt-1">October 2023</p>
+</div>
+<div class="bg-surface-container-high rounded-full p-1 flex items-center">
+<button class="bg-surface text-on-surface rounded-full px-4 py-2 font-label-md text-label-md shadow-sm transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-primary">
+                    List
+                </button>
+<button class="text-on-surface-variant rounded-full px-4 py-2 font-label-md text-label-md hover:text-on-surface transition-all duration-200 focus:outline-none">
+                    Calendar
+                </button>
+</div>
+</div>
+<!-- Pulse Card: Active/Next Shift Clock In -->
+<div class="bg-primary-container rounded-xl p-4 flex items-center justify-between shadow-sm border border-primary-container">
+<div class="flex flex-col text-on-primary-container">
+<span class="font-label-sm text-label-sm uppercase tracking-wider opacity-90 mb-1 flex items-center gap-1">
+<span class="material-symbols-outlined text-[14px]">bolt</span> Current Shift
+                </span>
+<span class="font-title-lg text-title-lg font-bold">Front Desk</span>
+<span class="font-body-md text-body-md opacity-90">08:00 AM - 02:00 PM</span>
+</div>
+<button class="h-[56px] px-6 bg-surface text-primary rounded-full font-button-text text-button-text shadow-md hover:bg-surface-bright active:scale-95 transition-all duration-150 flex items-center gap-2">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">login</span>
+                Clock In
+            </button>
+</div>
+<!-- Shift List -->
+<div class="flex flex-col gap-gutter-mobile">
+<h3 class="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider mb-1">Today, Oct 24</h3>
+<!-- Own Shift Item -->
+<div class="bg-surface-container-lowest border border-surface-variant rounded-lg overflow-hidden flex min-h-[64px] shadow-sm relative">
+<div class="w-1 bg-primary absolute left-0 top-0 bottom-0"></div>
+<div class="flex-1 p-3 pl-4 flex justify-between items-center">
+<div class="flex flex-col">
+<span class="font-body-lg text-body-lg text-on-surface font-medium">Front Desk</span>
+<span class="font-body-md text-body-md text-on-surface-variant flex items-center gap-1 mt-0.5">
+<span class="material-symbols-outlined text-[16px]">location_on</span> Main Lobby
+                        </span>
+</div>
+<div class="flex flex-col items-end text-right">
+<span class="font-body-md text-body-md text-on-surface">08:00 AM</span>
+<span class="font-body-md text-body-md text-on-surface-variant">02:00 PM</span>
+</div>
+</div>
+</div>
+<h3 class="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider mt-stack-md mb-1">Tomorrow, Oct 25</h3>
+<!-- Own Shift Item -->
+<div class="bg-surface-container-lowest border border-surface-variant rounded-lg overflow-hidden flex min-h-[64px] shadow-sm relative">
+<div class="w-1 bg-primary absolute left-0 top-0 bottom-0"></div>
+<div class="flex-1 p-3 pl-4 flex justify-between items-center">
+<div class="flex flex-col">
+<span class="font-body-lg text-body-lg text-on-surface font-medium">Floor Supervisor</span>
+<span class="font-body-md text-body-md text-on-surface-variant flex items-center gap-1 mt-0.5">
+<span class="material-symbols-outlined text-[16px]">location_on</span> Weight Room
+                        </span>
+</div>
+<div class="flex flex-col items-end text-right">
+<span class="font-body-md text-body-md text-on-surface">12:00 PM</span>
+<span class="font-body-md text-body-md text-on-surface-variant">06:00 PM</span>
+</div>
+</div>
+</div>
+<h3 class="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider mt-stack-md mb-1">Thursday, Oct 26</h3>
+<!-- Available Shift Item -->
+<div class="bg-surface-container-lowest border border-outline-variant border-dashed rounded-lg overflow-hidden flex min-h-[64px] relative">
+<div class="w-1 bg-tertiary-fixed absolute left-0 top-0 bottom-0"></div>
+<div class="flex-1 p-3 pl-4 flex justify-between items-center">
+<div class="flex flex-col">
+<span class="font-body-lg text-body-lg text-on-surface font-medium">Group Class Cover</span>
+<span class="font-body-md text-body-md text-on-surface-variant flex items-center gap-1 mt-0.5">
+<span class="material-symbols-outlined text-[16px]">location_on</span> Studio 2
+                        </span>
+</div>
+<div class="flex flex-col items-end text-right">
+<span class="font-body-md text-body-md text-on-surface">05:00 PM</span>
+<span class="font-body-md text-body-md text-on-surface-variant">07:00 PM</span>
+</div>
+</div>
+<button class="bg-tertiary-container text-on-tertiary-container h-full px-4 font-label-md text-label-md active:bg-tertiary transition-colors flex items-center justify-center">
+                    Claim
+                </button>
+</div>
+</div>
+</main>
+<!-- BottomNavBar -->
+<nav class="bg-surface fixed bottom-0 w-full z-50 h-[56px] border-t border-surface-variant flex justify-around items-center px-gutter-mobile pb-safe">
+<a class="flex flex-col items-center justify-center text-secondary hover:bg-surface-container-high active:scale-90 transition-transform h-full min-w-[64px]" href="#">
+<span class="material-symbols-outlined mb-1" style="font-variation-settings: 'FILL' 0;">home</span>
+<span class="font-label-md text-label-md">Home</span>
+</a>
+<!-- Active Tab: Shifts -->
+<a class="flex flex-col items-center justify-center bg-secondary-container text-on-secondary-container rounded-full px-4 py-1 active:scale-90 transition-transform" href="#">
+<span class="material-symbols-outlined mb-1 text-primary" style="font-variation-settings: 'FILL' 1;">schedule</span>
+<span class="font-label-md text-label-md font-bold text-primary">Shifts</span>
+</a>
+<a class="flex flex-col items-center justify-center text-secondary hover:bg-surface-container-high active:scale-90 transition-transform h-full min-w-[64px]" href="#">
+<span class="material-symbols-outlined mb-1" style="font-variation-settings: 'FILL' 0;">event_note</span>
+<span class="font-label-md text-label-md">Requests</span>
+</a>
+<a class="flex flex-col items-center justify-center text-secondary hover:bg-surface-container-high active:scale-90 transition-transform h-full min-w-[64px]" href="#">
+<span class="material-symbols-outlined mb-1" style="font-variation-settings: 'FILL' 0;">person</span>
+<span class="font-label-md text-label-md">Profile</span>
+</a>
+</nav>
+<script>
+        // Simple script to handle safe area padding for bottom nav on iOS
+        if (CSS.supports('padding-bottom: env(safe-area-inset-bottom)')) {
+            document.querySelector('.pb-safe').style.paddingBottom = 'env(safe-area-inset-bottom)';
+            document.body.style.paddingBottom = 'calc(80px + env(safe-area-inset-bottom))';
+        }
+    </script>
+</body></html>

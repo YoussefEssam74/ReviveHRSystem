@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Hire Candidate Wizard - Revive HR</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+          darkMode: "class",
+          theme: {
+            extend: {
+              "colors": {
+                      "on-error-container": "#93000a",
+                      "on-secondary-fixed-variant": "#444749",
+                      "on-error": "#ffffff",
+                      "on-primary": "#ffffff",
+                      "primary-fixed": "#7ffc97",
+                      "on-tertiary-fixed": "#111c2d",
+                      "inverse-on-surface": "#eaf1ff",
+                      "on-secondary": "#ffffff",
+                      "tertiary-container": "#6a758a",
+                      "on-primary-fixed-variant": "#005320",
+                      "surface-container-high": "#dce9ff",
+                      "outline-variant": "#bdcaba",
+                      "background": "#f8f9ff",
+                      "inverse-primary": "#62df7d",
+                      "surface-container-low": "#eff4ff",
+                      "on-tertiary-fixed-variant": "#3c475a",
+                      "on-tertiary": "#ffffff",
+                      "surface-container-highest": "#d3e4fe",
+                      "tertiary-fixed": "#d8e3fb",
+                      "primary-container": "#00873a",
+                      "error-container": "#ffdad6",
+                      "tertiary": "#515c71",
+                      "on-surface-variant": "#3e4a3d",
+                      "on-primary-fixed": "#002109",
+                      "on-background": "#0b1c30",
+                      "secondary-container": "#dee0e2",
+                      "surface-variant": "#d3e4fe",
+                      "secondary": "#5c5f60",
+                      "on-surface": "#0b1c30",
+                      "surface": "#f8f9ff",
+                      "surface-container-lowest": "#ffffff",
+                      "primary": "#006b2c",
+                      "secondary-fixed-dim": "#c5c6c8",
+                      "on-secondary-fixed": "#191c1e",
+                      "tertiary-fixed-dim": "#bcc7de",
+                      "surface-tint": "#006e2d",
+                      "surface-container": "#e5eeff",
+                      "on-tertiary-container": "#fefcff",
+                      "outline": "#6e7b6c",
+                      "surface-dim": "#cbdbf5",
+                      "error": "#ba1a1a",
+                      "surface-bright": "#f8f9ff",
+                      "secondary-fixed": "#e1e2e4",
+                      "primary-fixed-dim": "#62df7d",
+                      "inverse-surface": "#213145",
+                      "on-primary-container": "#f7fff2",
+                      "on-secondary-container": "#606365"
+              },
+              "borderRadius": {
+                      "DEFAULT": "0.25rem",
+                      "lg": "0.5rem",
+                      "xl": "0.75rem",
+                      "full": "9999px"
+              },
+              "spacing": {
+                      "md": "16px",
+                      "xs": "4px",
+                      "gutter": "24px",
+                      "max-width": "1440px",
+                      "margin-desktop": "32px",
+                      "margin-mobile": "16px",
+                      "xl": "32px",
+                      "2xl": "48px",
+                      "sm": "8px",
+                      "lg": "24px",
+                      "base": "4px"
+              },
+              "fontFamily": {
+                      "headline-lg": ["Inter"],
+                      "label-md": ["Inter"],
+                      "label-sm": ["Inter"],
+                      "display-lg": ["Inter"],
+                      "headline-lg-mobile": ["Inter"],
+                      "body-lg": ["Inter"],
+                      "headline-md": ["Inter"],
+                      "title-lg": ["Inter"],
+                      "body-md": ["Inter"]
+              },
+              "fontSize": {
+                      "headline-lg": ["32px", {"lineHeight": "40px", "letterSpacing": "-0.01em", "fontWeight": "600"}],
+                      "label-md": ["12px", {"lineHeight": "16px", "letterSpacing": "0.01em", "fontWeight": "500"}],
+                      "label-sm": ["11px", {"lineHeight": "14px", "fontWeight": "600"}],
+                      "display-lg": ["48px", {"lineHeight": "56px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                      "headline-lg-mobile": ["24px", {"lineHeight": "32px", "fontWeight": "600"}],
+                      "body-lg": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+                      "headline-md": ["24px", {"lineHeight": "32px", "fontWeight": "600"}],
+                      "title-lg": ["20px", {"lineHeight": "28px", "fontWeight": "600"}],
+                      "body-md": ["14px", {"lineHeight": "20px", "fontWeight": "400"}]
+              }
+            }
+          }
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .material-symbols-outlined.fill {
+            font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        
+        /* Stepper Animation */
+        .step-transition {
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .fade-in {
+            animation: fadeIn 0.5s ease-in-out;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+    </style>
+</head>
+<body class="bg-surface-container text-on-background font-body-md min-h-screen flex flex-col antialiased">
+<!-- Top Navigation (Mobile) -->
+<header class="fixed top-0 left-0 w-full bg-surface-container-lowest/80 backdrop-blur-md border-b border-surface-container-high h-16 flex justify-between items-center px-margin-mobile md:px-margin-desktop z-50">
+<div class="flex items-center gap-sm">
+<button class="w-10 h-10 rounded-full flex items-center justify-center hover:bg-surface-container-low transition-colors text-on-surface-variant">
+<span class="material-symbols-outlined">close</span>
+</button>
+<span class="font-title-lg text-title-lg text-on-surface font-semibold">Hire Candidate</span>
+</div>
+<div class="flex items-center gap-sm">
+<span class="font-label-md text-label-md text-secondary">Draft Saved</span>
+</div>
+</header>
+<!-- Main Content Canvas -->
+<main class="flex-grow flex items-center justify-center pt-24 pb-2xl px-margin-mobile md:px-margin-desktop w-full">
+<div class="w-full max-w-[1024px] bg-surface-container-lowest rounded-2xl shadow-lg p-lg md:p-2xl flex flex-col gap-xl">
+<!-- Stepper Indicator -->
+<div class="w-full relative" id="stepper">
+<!-- Connecting Line Background -->
+<div class="absolute top-5 left-0 w-full h-[2px] bg-surface-container-highest -z-10 rounded-full hidden md:block"></div>
+<!-- Connecting Line Active (Simulated Progress) -->
+<div class="absolute top-5 left-0 w-[80%] h-[2px] bg-primary -z-10 rounded-full hidden md:block step-transition"></div>
+<ol class="flex flex-col md:flex-row justify-between w-full gap-sm md:gap-0">
+<!-- Step 1 (Completed) -->
+<li class="flex md:flex-col items-center gap-sm md:gap-xs relative z-10">
+<div class="w-10 h-10 rounded-full bg-primary text-on-primary flex items-center justify-center shadow-sm step-transition">
+<span class="material-symbols-outlined text-[20px]">check</span>
+</div>
+<span class="font-label-sm text-label-sm text-primary uppercase tracking-wider mt-1 hidden md:block">Review</span>
+</li>
+<!-- Step 2 (Completed) -->
+<li class="flex md:flex-col items-center gap-sm md:gap-xs relative z-10">
+<div class="w-10 h-10 rounded-full bg-primary text-on-primary flex items-center justify-center shadow-sm step-transition">
+<span class="material-symbols-outlined text-[20px]">fitness_center</span>
+</div>
+<span class="font-label-sm text-label-sm text-primary uppercase tracking-wider mt-1 hidden md:block">Gym</span>
+</li>
+<!-- Step 3 (Completed) -->
+<li class="flex md:flex-col items-center gap-sm md:gap-xs relative z-10">
+<div class="w-10 h-10 rounded-full bg-primary text-on-primary flex items-center justify-center shadow-sm step-transition">
+<span class="material-symbols-outlined text-[20px]">work</span>
+</div>
+<span class="font-label-sm text-label-sm text-primary uppercase tracking-wider mt-1 hidden md:block">Position</span>
+</li>
+<!-- Step 4 (Completed) -->
+<li class="flex md:flex-col items-center gap-sm md:gap-xs relative z-10">
+<div class="w-10 h-10 rounded-full bg-primary text-on-primary flex items-center justify-center shadow-sm step-transition">
+<span class="material-symbols-outlined text-[20px]">feed</span>
+</div>
+<span class="font-label-sm text-label-sm text-primary uppercase tracking-wider mt-1 hidden md:block">Details</span>
+</li>
+<!-- Step 5 (Active) -->
+<li class="flex md:flex-col items-center gap-sm md:gap-xs relative z-10">
+<div class="w-10 h-10 rounded-full bg-surface-container-lowest border-2 border-primary text-primary flex items-center justify-center shadow-[0_0_0_4px_rgba(0,107,44,0.1)] step-transition">
+<span class="material-symbols-outlined text-[20px]">manage_accounts</span>
+</div>
+<span class="font-label-sm text-label-sm text-primary uppercase tracking-wider mt-1 hidden md:block font-bold">Account</span>
+</li>
+<!-- Step 6 (Pending) -->
+<li class="flex md:flex-col items-center gap-sm md:gap-xs relative z-10">
+<div class="w-10 h-10 rounded-full bg-surface-container-highest text-secondary flex items-center justify-center step-transition">
+<span class="material-symbols-outlined text-[20px]">flag</span>
+</div>
+<span class="font-label-sm text-label-sm text-secondary uppercase tracking-wider mt-1 hidden md:block">Finish</span>
+</li>
+</ol>
+</div>
+<!-- Wizard Form Content -->
+<div class="flex flex-col gap-lg" id="wizard-content">
+<div class="flex flex-col gap-xs text-center mb-md">
+<h1 class="font-display-lg text-headline-lg-mobile md:text-display-lg text-on-surface">Candidate Details &amp; Account</h1>
+<p class="font-body-lg text-body-lg text-on-surface-variant">Review final details and configure system access for the new hire.</p>
+</div>
+<!-- Step 4 & 5 Combined Fields Area -->
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-md lg:gap-gutter">
+<!-- Left Column: Details (Step 4) -->
+<div class="flex flex-col gap-md">
+<div class="bg-surface-container-lowest rounded-xl p-lg border border-surface-container-highest flex flex-col gap-md h-full">
+<div class="flex items-center gap-sm border-b border-surface-container-high pb-sm">
+<span class="material-symbols-outlined text-primary">description</span>
+<h2 class="font-title-lg text-title-lg text-on-surface">Employment Details</h2>
+</div>
+<div class="flex flex-col gap-md">
+<div class="flex flex-col gap-xs">
+<label class="font-label-md text-label-md text-on-surface-variant">Salary</label>
+<div class="relative">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-secondary text-[20px]">attach_money</span>
+<input class="w-full pl-10 pr-3 py-2 bg-surface-container-lowest border border-outline-variant rounded-lg font-body-md text-body-md text-on-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-colors" type="text" value="$120,000 / year"/>
+</div>
+</div>
+<div class="flex flex-col gap-xs">
+<label class="font-label-md text-label-md text-on-surface-variant">Contract Type</label>
+<div class="relative">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-secondary text-[20px]">assignment</span>
+<select class="w-full pl-10 pr-3 py-2 bg-surface-container-lowest border border-outline-variant rounded-lg font-body-md text-body-md text-on-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-colors">
+<option selected="">Full-time Permanent</option>
+<option>Contractor</option>
+<option>Part-time</option>
+</select>
+</div>
+</div>
+<div class="flex flex-col gap-xs">
+<label class="font-label-md text-label-md text-on-surface-variant">Start Date</label>
+<div class="relative">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-secondary text-[20px]">calendar_today</span>
+<input class="w-full pl-10 pr-3 py-2 bg-surface-container-lowest border border-outline-variant rounded-lg font-body-md text-body-md text-on-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-colors" type="date" value="2024-11-01"/>
+</div>
+</div>
+<div class="flex flex-col gap-xs">
+<label class="font-label-md text-label-md text-on-surface-variant">Department</label>
+<div class="relative">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-secondary text-[20px]">domain</span>
+<input class="w-full pl-10 pr-3 py-2 bg-surface-container-lowest border border-outline-variant rounded-lg font-body-md text-body-md text-on-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-colors" type="text" value="Engineering"/>
+</div>
+</div>
+<div class="flex flex-col gap-xs">
+<label class="font-label-md text-label-md text-on-surface-variant">Manager</label>
+<div class="relative">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-secondary text-[20px]">supervisor_account</span>
+<input class="w-full pl-10 pr-3 py-2 bg-surface-container-lowest border border-outline-variant rounded-lg font-body-md text-body-md text-on-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-colors" type="text" value="Alex Rivera"/>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Right Column: Credentials & Permissions (Step 5) -->
+<div class="flex flex-col gap-md">
+<div class="bg-surface-container-lowest rounded-xl p-lg border border-surface-container-highest flex flex-col gap-md h-full">
+<div class="flex items-center gap-sm border-b border-surface-container-high pb-sm">
+<span class="material-symbols-outlined text-primary">badge</span>
+<h2 class="font-title-lg text-title-lg text-on-surface">Account Setup</h2>
+</div>
+<div class="flex flex-col gap-md">
+<div class="flex flex-col gap-xs">
+<label class="font-label-md text-label-md text-on-surface-variant">Username</label>
+<div class="relative">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-secondary text-[20px]">person</span>
+<input class="w-full pl-10 pr-3 py-2 bg-surface-container-lowest border border-outline-variant rounded-lg font-body-md text-body-md text-on-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-colors" readonly="" type="text" value="sarah.jenkins"/>
+</div>
+</div>
+<div class="flex flex-col gap-xs">
+<label class="font-label-md text-label-md text-on-surface-variant">Corporate Email</label>
+<div class="relative">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-secondary text-[20px]">mail</span>
+<input class="w-full pl-10 pr-3 py-2 bg-surface-container-lowest border border-outline-variant rounded-lg font-body-md text-body-md text-on-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-colors" type="email" value="sarah.jenkins@revivehr.com"/>
+</div>
+</div>
+<div class="flex flex-col gap-xs">
+<label class="font-label-md text-label-md text-on-surface-variant">Temporary Password</label>
+<div class="flex gap-sm">
+<div class="relative flex-grow">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-secondary text-[20px]">key</span>
+<input class="w-full pl-10 pr-10 py-2 bg-surface-container-lowest border border-outline-variant rounded-lg font-body-md text-body-md text-on-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-colors" id="temp-password" type="text" value="TempPass!2024"/>
+</div>
+<button class="px-md py-2 bg-surface-container-low text-on-surface hover:bg-surface-container transition-colors rounded-lg font-label-md text-label-md flex items-center gap-xs border border-surface-container-high">
+<span class="material-symbols-outlined text-[18px]">autorenew</span>
+</button>
+</div>
+<div class="flex items-center gap-2 mt-1">
+<input checked="" class="rounded text-primary border-outline-variant focus:ring-primary" id="force-reset" type="checkbox"/>
+<label class="font-body-md text-body-md text-on-surface-variant" for="force-reset">Require password change on first login</label>
+</div>
+</div>
+<div class="mt-sm pt-sm border-t border-surface-container-high">
+<div class="flex items-center gap-sm mb-sm">
+<span class="material-symbols-outlined text-primary text-[20px]">admin_panel_settings</span>
+<h3 class="font-title-lg text-title-lg text-on-surface text-base">Permissions Preview</h3>
+</div>
+<ul class="flex flex-col gap-xs">
+<li class="flex items-start gap-2">
+<span class="material-symbols-outlined text-primary text-[18px] mt-[2px]">check_circle</span>
+<span class="font-body-md text-body-md text-on-surface">System Login (SSO)</span>
+</li>
+<li class="flex items-start gap-2">
+<span class="material-symbols-outlined text-primary text-[18px] mt-[2px]">check_circle</span>
+<span class="font-body-md text-body-md text-on-surface">Employee Self-Service Portal</span>
+</li>
+<li class="flex items-start gap-2">
+<span class="material-symbols-outlined text-surface-container-highest text-[18px] mt-[2px]">cancel</span>
+<span class="font-body-md text-body-md text-secondary line-through">Managerial Dashboard</span>
+</li>
+</ul>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Bottom Action Bar -->
+<div class="flex justify-between items-center mt-md pt-lg border-t border-surface-container-highest w-full">
+<button class="px-lg py-3 rounded-lg font-label-md text-label-md text-on-surface-variant hover:bg-surface-container-low transition-colors flex items-center gap-xs">
+<span class="material-symbols-outlined">arrow_back</span>
+                    Back
+                </button>
+<div class="flex gap-sm">
+<button class="px-lg py-3 rounded-lg font-label-md text-label-md text-on-surface bg-surface-container-low hover:bg-surface-container transition-colors border border-surface-container-high">
+                        Save as Draft
+                    </button>
+<button class="px-lg py-3 rounded-lg font-label-md text-label-md text-on-primary bg-primary hover:bg-surface-tint transition-colors shadow-sm flex items-center gap-xs" onclick="showConfirmation()">
+                        Complete Hiring
+                        <span class="material-symbols-outlined">check_circle</span>
+</button>
+</div>
+</div>
+</div>
+<!-- Confirmation Screen (Hidden initially) -->
+<div class="hidden flex-col items-center justify-center text-center py-2xl fade-in" id="confirmation-screen">
+<div class="w-24 h-24 bg-primary-container rounded-full flex items-center justify-center mb-lg">
+<span class="material-symbols-outlined text-on-primary-container text-[48px]">celebration</span>
+</div>
+<h2 class="font-display-lg text-display-lg text-on-surface mb-sm">Candidate Hired Successfully!</h2>
+<p class="font-body-lg text-body-lg text-on-surface-variant max-w-lg mb-xl">Sarah Jenkins has been officially onboarded. An email with account credentials and next steps has been sent to their personal address.</p>
+<div class="flex gap-md">
+<button class="px-lg py-3 rounded-lg font-label-md text-label-md text-on-surface bg-surface-container-low hover:bg-surface-container transition-colors border border-surface-container-high">
+            View Employee Profile
+        </button>
+<button class="px-lg py-3 rounded-lg font-label-md text-label-md text-on-primary bg-primary hover:bg-surface-tint transition-colors shadow-sm" onclick="window.location.reload()">
+            Return to Dashboard
+        </button>
+</div>
+</div>
+</div>
+</main>
+<script>
+    function showConfirmation() {
+        document.getElementById('wizard-content').style.display = 'none';
+        document.getElementById('stepper').style.display = 'none';
+        document.getElementById('confirmation-screen').classList.remove('hidden');
+        document.getElementById('confirmation-screen').classList.add('flex');
+    }
+</script>
+</body></html>
