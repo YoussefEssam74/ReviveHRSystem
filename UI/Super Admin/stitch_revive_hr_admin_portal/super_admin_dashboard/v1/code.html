@@ -1,0 +1,717 @@
+<!DOCTYPE html><html lang="en"><head>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0" name="viewport">
+<title>Revive HR - Super Admin Dashboard</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com" rel="preconnect">
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<script id="tailwind-config">
+        tailwind.config = {
+          darkMode: "class",
+          theme: {
+            extend: {
+              "colors": {
+                      "surface-container-highest": "#d8e3fb",
+                      "on-tertiary-fixed": "#131e19",
+                      "surface-bright": "#f9f9ff",
+                      "error-container": "#ffdad6",
+                      "on-surface-variant": "#3c4a42",
+                      "surface-dim": "#cfdaf2",
+                      "surface": "#f9f9ff",
+                      "secondary-container": "#adedd3",
+                      "outline": "#6c7a71",
+                      "outline-variant": "#bbcabf",
+                      "inverse-on-surface": "#ecf1ff",
+                      "tertiary-fixed": "#d9e6dd",
+                      "primary-fixed-dim": "#4edea3",
+                      "secondary-fixed-dim": "#95d3ba",
+                      "on-tertiary-fixed-variant": "#3e4943",
+                      "inverse-primary": "#4edea3",
+                      "tertiary": "#55615a",
+                      "primary-container": "#10b981",
+                      "on-error": "#ffffff",
+                      "primary-fixed": "#6ffbbe",
+                      "on-error-container": "#93000a",
+                      "error": "#ba1a1a",
+                      "surface-container": "#e7eeff",
+                      "on-tertiary": "#ffffff",
+                      "tertiary-fixed-dim": "#bdcac1",
+                      "on-secondary-container": "#306d58",
+                      "on-primary-container": "#00422b",
+                      "surface-container-low": "#f0f3ff",
+                      "on-background": "#111c2d",
+                      "tertiary-container": "#99a69e",
+                      "secondary-fixed": "#b0f0d6",
+                      "on-primary-fixed-variant": "#005236",
+                      "on-surface": "#111c2d",
+                      "on-primary": "#ffffff",
+                      "inverse-surface": "#263143",
+                      "surface-container-high": "#dee8ff",
+                      "background": "#f9f9ff",
+                      "surface-variant": "#d8e3fb",
+                      "on-secondary-fixed": "#002117",
+                      "on-secondary-fixed-variant": "#0b513d",
+                      "secondary": "#2b6954",
+                      "on-primary-fixed": "#002113",
+                      "primary": "#006c49",
+                      "on-secondary": "#ffffff",
+                      "on-tertiary-container": "#303c36",
+                      "surface-container-lowest": "#ffffff",
+                      "surface-tint": "#006c49"
+              },
+              "borderRadius": {
+                      "DEFAULT": "0.25rem",
+                      "lg": "0.5rem",
+                      "xl": "0.75rem",
+                      "full": "9999px"
+              },
+              "spacing": {
+                      "unit": "4px",
+                      "section-gap": "32px",
+                      "container-padding": "24px",
+                      "element-loose": "12px",
+                      "gutter": "16px",
+                      "element-tight": "8px"
+              },
+              "fontFamily": {
+                      "title-md": [
+                              "Inter"
+                      ],
+                      "display-lg": [
+                              "Inter"
+                      ],
+                      "title-lg": [
+                              "Inter"
+                      ],
+                      "body-lg": [
+                              "Inter"
+                      ],
+                      "body-md": [
+                              "Inter"
+                      ],
+                      "headline-md": [
+                              "Inter"
+                      ],
+                      "label-sm": [
+                              "Inter"
+                      ],
+                      "body-sm": [
+                              "Inter"
+                      ],
+                      "label-md": [
+                              "Inter"
+                      ],
+                      "headline-lg": [
+                              "Inter"
+                      ]
+              },
+              "fontSize": {
+                      "title-md": [
+                              "16px",
+                              {
+                                      "lineHeight": "24px",
+                                      "fontWeight": "600"
+                              }
+                      ],
+                      "display-lg": [
+                              "36px",
+                              {
+                                      "lineHeight": "44px",
+                                      "letterSpacing": "-0.02em",
+                                      "fontWeight": "700"
+                              }
+                      ],
+                      "title-lg": [
+                              "18px",
+                              {
+                                      "lineHeight": "24px",
+                                      "fontWeight": "600"
+                              }
+                      ],
+                      "body-lg": [
+                              "16px",
+                              {
+                                      "lineHeight": "24px",
+                                      "fontWeight": "400"
+                              }
+                      ],
+                      "body-md": [
+                              "14px",
+                              {
+                                      "lineHeight": "20px",
+                                      "fontWeight": "400"
+                              }
+                      ],
+                      "headline-md": [
+                              "20px",
+                              {
+                                      "lineHeight": "28px",
+                                      "fontWeight": "600"
+                              }
+                      ],
+                      "label-sm": [
+                              "11px",
+                              {
+                                      "lineHeight": "14px",
+                                      "fontWeight": "500"
+                              }
+                      ],
+                      "body-sm": [
+                              "13px",
+                              {
+                                      "lineHeight": "18px",
+                                      "fontWeight": "400"
+                              }
+                      ],
+                      "label-md": [
+                              "12px",
+                              {
+                                      "lineHeight": "16px",
+                                      "letterSpacing": "0.05em",
+                                      "fontWeight": "600"
+                              }
+                      ],
+                      "headline-lg": [
+                              "24px",
+                              {
+                                      "lineHeight": "32px",
+                                      "letterSpacing": "-0.01em",
+                                      "fontWeight": "600"
+                              }
+                      ]
+              }
+      },
+          },
+        }
+      </script>
+<style>
+        body {
+            background-color: #f0f3ff; /* surface-container-low fallback */
+        }
+        .bento-grid {
+            display: grid;
+            grid-template-columns: repeat(12, 1fr);
+            gap: 16px;
+        }
+        .chart-bar {
+            transition: height 0.3s ease-in-out;
+        }
+        .chart-bar:hover {
+            opacity: 0.8;
+        }
+        .scrollbar-hide::-webkit-scrollbar {
+            display: none;
+        }
+        .scrollbar-hide {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+    </style>
+</head>
+<body class="bg-surface-container-low text-on-surface font-body-md antialiased flex">
+<!-- SideNavBar -->
+<aside class="w-[280px] h-screen sticky top-0 left-0 border-r border-outline-variant bg-surface hidden md:flex flex-col py-section-gap px-gutter z-50">
+<div class="mb-section-gap px-2">
+<div class="flex items-center gap-3 mb-2">
+<div class="w-10 h-10 rounded-lg bg-primary-container flex items-center justify-center text-on-primary-container">
+<span class="material-symbols-outlined font-title-lg">fitness_center</span>
+</div>
+<div>
+<h1 class="font-headline-lg text-headline-lg font-bold text-primary">GymPulse HR</h1>
+<p class="font-label-sm text-label-sm text-on-surface-variant">Enterprise Admin</p>
+</div>
+</div>
+<button class="mt-4 w-full flex items-center justify-between px-3 py-2 border border-outline-variant rounded-lg hover:bg-surface-container-highest transition-colors cursor-pointer group">
+<div class="flex items-center gap-2 text-on-surface">
+<div class="w-2 h-2 rounded-full bg-primary"></div>
+<span class="font-label-md text-label-md">System Health</span>
+</div>
+<span class="material-symbols-outlined text-outline-variant group-hover:text-on-surface transition-colors">chevron_right</span>
+</button>
+</div>
+<nav class="flex-1 overflow-y-auto scrollbar-hide flex flex-col gap-1">
+<!-- Active Tab -->
+<a class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-primary bg-secondary-container/30 font-bold transition-colors cursor-pointer active:opacity-80" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">dashboard</span>
+<span class="font-label-md text-label-md">Dashboard</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-on-surface-variant hover:bg-surface-container-highest transition-colors cursor-pointer active:opacity-80" href="#">
+<span class="material-symbols-outlined">storefront</span>
+<span class="font-label-md text-label-md">Gyms</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-on-surface-variant hover:bg-surface-container-highest transition-colors cursor-pointer active:opacity-80" href="#">
+<span class="material-symbols-outlined">group</span>
+<span class="font-label-md text-label-md">Users</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-on-surface-variant hover:bg-surface-container-highest transition-colors cursor-pointer active:opacity-80" href="#">
+<span class="material-symbols-outlined">badge</span>
+<span class="font-label-md text-label-md">Roles</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-on-surface-variant hover:bg-surface-container-highest transition-colors cursor-pointer active:opacity-80" href="#">
+<span class="material-symbols-outlined">person_book</span>
+<span class="font-label-md text-label-md">Employees</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-on-surface-variant hover:bg-surface-container-highest transition-colors cursor-pointer active:opacity-80" href="#">
+<span class="material-symbols-outlined">person_add</span>
+<span class="font-label-md text-label-md">Recruitment</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-on-surface-variant hover:bg-surface-container-highest transition-colors cursor-pointer active:opacity-80" href="#">
+<span class="material-symbols-outlined">analytics</span>
+<span class="font-label-md text-label-md">Reports</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-on-surface-variant hover:bg-surface-container-highest transition-colors cursor-pointer active:opacity-80" href="#">
+<span class="material-symbols-outlined">payments</span>
+<span class="font-label-md text-label-md">Payroll</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-on-surface-variant hover:bg-surface-container-highest transition-colors cursor-pointer active:opacity-80" href="#">
+<span class="material-symbols-outlined">event_available</span>
+<span class="font-label-md text-label-md">Attendance</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-on-surface-variant hover:bg-surface-container-highest transition-colors cursor-pointer active:opacity-80" href="#">
+<span class="material-symbols-outlined">volunteer_activism</span>
+<span class="font-label-md text-label-md">Benefits</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-on-surface-variant hover:bg-surface-container-highest transition-colors cursor-pointer active:opacity-80" href="#">
+<span class="material-symbols-outlined">school</span>
+<span class="font-label-md text-label-md">Training</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-on-surface-variant hover:bg-surface-container-highest transition-colors cursor-pointer active:opacity-80" href="#">
+<span class="material-symbols-outlined">inventory_2</span>
+<span class="font-label-md text-label-md">Assets</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-on-surface-variant hover:bg-surface-container-highest transition-colors cursor-pointer active:opacity-80" href="#">
+<span class="material-symbols-outlined">description</span>
+<span class="font-label-md text-label-md">Documents</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-on-surface-variant hover:bg-surface-container-highest transition-colors cursor-pointer active:opacity-80" href="#">
+<span class="material-symbols-outlined">history</span>
+<span class="font-label-md text-label-md">Audit Log</span>
+</a>
+<div class="mt-auto pt-4 border-t border-outline-variant flex flex-col gap-1">
+<a class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-on-surface-variant hover:bg-surface-container-highest transition-colors cursor-pointer active:opacity-80" href="#">
+<span class="material-symbols-outlined">settings</span>
+<span class="font-label-md text-label-md">Settings</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-on-surface-variant hover:bg-surface-container-highest transition-colors cursor-pointer active:opacity-80" href="#">
+<span class="material-symbols-outlined">help_outline</span>
+<span class="font-label-md text-label-md">Support</span>
+</a>
+</div>
+</nav>
+<div class="mt-4 pt-4 border-t border-outline-variant">
+<a class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-on-surface-variant hover:bg-surface-container-highest transition-colors cursor-pointer active:opacity-80" href="#">
+<span class="material-symbols-outlined">logout</span>
+<span class="font-label-md text-label-md">Log Out</span>
+</a>
+</div>
+</aside>
+<div class="flex-1 flex flex-col min-h-screen min-w-0">
+<!-- TopAppBar -->
+<header class="h-[64px] w-full sticky top-0 z-40 bg-surface-container-lowest border-b border-outline-variant flex justify-between items-center px-container-padding duration-200 ease-in-out">
+<div class="flex items-center gap-4">
+<div class="md:hidden">
+<span class="font-headline-md text-headline-md font-extrabold text-primary">GymPulse HR</span>
+</div>
+<!-- Search Bar (on_left) -->
+<div class="hidden sm:flex items-center bg-surface-container-low rounded-full px-4 py-1.5 border border-outline-variant/50 focus-within:border-primary focus-within:ring-1 focus-within:ring-primary w-64 lg:w-96 transition-all">
+<span class="material-symbols-outlined text-on-surface-variant text-[20px] mr-2">search</span>
+<input class="bg-transparent border-none focus:ring-0 text-body-md font-body-md text-on-surface placeholder-on-surface-variant w-full outline-none py-1" placeholder="Search employees, gyms, or settings..." type="text">
+</div>
+</div>
+<div class="flex items-center gap-4">
+<div class="hidden lg:flex items-center gap-2 text-primary bg-secondary-container/20 px-3 py-1 rounded-full border border-secondary-container">
+<div class="w-2 h-2 rounded-full bg-primary animate-pulse"></div>
+<span class="font-label-sm text-label-sm">System Status: Healthy</span>
+</div>
+<div class="flex items-center gap-1">
+<button class="w-10 h-10 rounded-full flex items-center justify-center text-on-surface-variant hover:bg-surface-container-high transition-colors relative">
+<span class="material-symbols-outlined">notifications</span>
+<span class="absolute top-2 right-2 w-2 h-2 rounded-full bg-error"></span>
+</button>
+<button class="w-10 h-10 rounded-full flex items-center justify-center text-on-surface-variant hover:bg-surface-container-high transition-colors">
+<span class="material-symbols-outlined">help</span>
+</button>
+</div>
+<div class="w-px h-8 bg-outline-variant mx-1"></div>
+<button class="flex items-center gap-2 hover:opacity-80 transition-opacity pl-1 cursor-pointer">
+<img class="w-9 h-9 rounded-full object-cover border border-outline-variant" data-alt="A professional corporate headshot of a mature executive in a clean modern office environment, soft high-key lighting, bright white and emerald green accents, high resolution, confident expression." src="https://lh3.googleusercontent.com/aida-public/AB6AXuD4r-wIYgtJ5bo1oYLJPFHaczjtkma6o6zXyhh8r70DH20w5FBSF3Nrl1jVYK-oEgutkxHo5AjCFon--A1UNY8D31Ra911AqnmS-KotLShb2IUB7uTQMn9KyapeNRMif1iNz5bcCaDrq3KYyqZUVQO7TPPelQkqEhT6Jw9zcmejiMdtwAVFv8uscm4RkBAkUnwKJoKK8i0EPUrYd1T9zJNClYrnIK7sJUnhmqoskolsBz1kNT-YN3v7SQ">
+<span class="material-symbols-outlined text-on-surface-variant text-[20px]">expand_more</span>
+</button>
+</div>
+</header>
+<!-- Main Content -->
+<main class="flex-1 p-container-padding overflow-y-auto w-full max-w-[1400px] mx-auto">
+<!-- Header & Quick Actions -->
+<div class="flex flex-col lg:flex-row lg:items-end justify-between gap-4 mb-section-gap">
+<div>
+<h2 class="font-display-lg text-display-lg text-on-surface mb-1">Super Admin Dashboard</h2>
+<p class="font-body-lg text-body-lg text-on-surface-variant">Global overview of GymPulse HR operations and performance metrics.</p>
+</div>
+<div class="flex flex-wrap items-center gap-3">
+<button class="px-4 py-2 rounded-lg bg-surface border border-primary text-primary font-label-md text-label-md hover:bg-surface-container-lowest transition-colors flex items-center gap-2">
+<span class="material-symbols-outlined text-[18px]">person_add</span>
+                        Create User
+                    </button>
+<button class="px-4 py-2 rounded-lg bg-surface border border-primary text-primary font-label-md text-label-md hover:bg-surface-container-lowest transition-colors flex items-center gap-2">
+<span class="material-symbols-outlined text-[18px]">add_business</span>
+                        Add New Gym
+                    </button>
+<button class="px-4 py-2 rounded-lg bg-primary text-on-primary font-label-md text-label-md hover:opacity-90 transition-opacity flex items-center gap-2 shadow-sm">
+<span class="material-symbols-outlined text-[18px]">campaign</span>
+                        Post Vacancy
+                    </button>
+</div>
+</div>
+<!-- KPI Cards Bento Grid -->
+<div class="bento-grid mb-section-gap">
+<!-- Large KPI 1 -->
+<div class="col-span-12 md:col-span-6 lg:col-span-4 bg-surface-container-lowest rounded-xl border border-outline-variant p-6 flex flex-col relative overflow-hidden">
+<div class="absolute -right-4 -top-4 w-24 h-24 rounded-full bg-secondary-container/20 border border-secondary-container/30"></div>
+<div class="flex justify-between items-start mb-4 relative z-10">
+<div>
+<p class="font-label-md text-label-md text-on-surface-variant mb-1 uppercase tracking-wider">Total Gyms</p>
+<h3 class="font-display-lg text-display-lg text-on-surface">142</h3>
+</div>
+<div class="w-10 h-10 rounded-lg bg-primary-container/20 flex items-center justify-center text-primary">
+<span class="material-symbols-outlined text-[24px]">storefront</span>
+</div>
+</div>
+<div class="mt-auto flex items-center justify-between text-body-sm font-body-sm relative z-10">
+<div class="flex items-center gap-1 text-primary">
+<span class="material-symbols-outlined text-[16px]">check_circle</span>
+<span>138 Active</span>
+</div>
+<span class="text-on-surface-variant">4 Pre-opening</span>
+</div>
+<div class="mt-3 w-full h-1.5 bg-surface-variant rounded-full overflow-hidden relative z-10">
+<div class="h-full bg-primary w-[97%] rounded-full"></div>
+</div>
+</div>
+<!-- Large KPI 2 -->
+<div class="col-span-12 md:col-span-6 lg:col-span-4 bg-surface-container-lowest rounded-xl border border-outline-variant p-6 flex flex-col relative overflow-hidden">
+<div class="absolute -right-4 -bottom-4 w-24 h-24 rounded-full bg-surface-container-highest/50 border border-outline-variant/30"></div>
+<div class="flex justify-between items-start mb-4 relative z-10">
+<div>
+<p class="font-label-md text-label-md text-on-surface-variant mb-1 uppercase tracking-wider">Total Employees</p>
+<h3 class="font-display-lg text-display-lg text-on-surface">4,892</h3>
+</div>
+<div class="w-10 h-10 rounded-lg bg-secondary-container/30 flex items-center justify-center text-secondary">
+<span class="material-symbols-outlined text-[24px]">groups</span>
+</div>
+</div>
+<div class="mt-auto flex items-center gap-2 text-body-sm font-body-sm relative z-10">
+<span class="flex items-center text-primary bg-secondary-container/30 px-1.5 py-0.5 rounded">
+<span class="material-symbols-outlined text-[14px]">trending_up</span>
+                            +12%
+                        </span>
+<span class="text-on-surface-variant">vs last month</span>
+</div>
+<!-- Mini chart placeholder -->
+<div class="mt-4 flex items-end gap-1 h-8 relative z-10 opacity-70">
+<div class="flex-1 bg-outline-variant rounded-t-sm h-[30%]"></div>
+<div class="flex-1 bg-outline-variant rounded-t-sm h-[40%]"></div>
+<div class="flex-1 bg-outline-variant rounded-t-sm h-[35%]"></div>
+<div class="flex-1 bg-outline-variant rounded-t-sm h-[50%]"></div>
+<div class="flex-1 bg-outline-variant rounded-t-sm h-[60%]"></div>
+<div class="flex-1 bg-primary rounded-t-sm h-[80%]"></div>
+</div>
+</div>
+<!-- Smaller KPIs Grid -->
+<div class="col-span-12 lg:col-span-4 grid grid-cols-2 gap-4">
+<div class="bg-surface-container-lowest rounded-xl border border-outline-variant p-4 flex flex-col justify-between">
+<div class="flex items-start justify-between">
+<p class="font-label-sm text-label-sm text-on-surface-variant uppercase">HR Users</p>
+<span class="material-symbols-outlined text-outline text-[18px]">admin_panel_settings</span>
+</div>
+<div>
+<h4 class="font-headline-lg text-headline-lg text-on-surface mt-2">64</h4>
+<p class="font-label-sm text-label-sm text-on-surface-variant mt-1">Global &amp; Regional</p>
+</div>
+</div>
+<div class="bg-surface-container-lowest rounded-xl border border-outline-variant p-4 flex flex-col justify-between">
+<div class="flex items-start justify-between">
+<p class="font-label-sm text-label-sm text-on-surface-variant uppercase">Branch Mgrs</p>
+<span class="material-symbols-outlined text-outline text-[18px]">manage_accounts</span>
+</div>
+<div>
+<h4 class="font-headline-lg text-headline-lg text-on-surface mt-2">140</h4>
+<p class="font-label-sm text-label-sm text-on-surface-variant mt-1">98% Coverage</p>
+</div>
+</div>
+<div class="bg-surface-container-lowest rounded-xl border border-outline-variant p-4 flex flex-col justify-between">
+<div class="flex items-start justify-between">
+<p class="font-label-sm text-label-sm text-on-surface-variant uppercase">Vacancies</p>
+<span class="material-symbols-outlined text-outline text-[18px]">work_outline</span>
+</div>
+<div>
+<h4 class="font-headline-lg text-headline-lg text-on-surface mt-2">87</h4>
+<p class="font-label-sm text-label-sm text-primary mt-1 flex items-center gap-1">
+<span class="material-symbols-outlined text-[12px]">arrow_downward</span> 5 from prev
+                            </p>
+</div>
+</div>
+<div class="bg-surface-container-lowest rounded-xl border border-outline-variant p-4 flex flex-col justify-between border-l-4 border-l-primary">
+<div class="flex items-start justify-between">
+<p class="font-label-sm text-label-sm text-on-surface-variant uppercase">Candidates</p>
+<span class="material-symbols-outlined text-primary text-[18px]">recent_actors</span>
+</div>
+<div>
+<h4 class="font-headline-lg text-headline-lg text-on-surface mt-2">1,240</h4>
+<p class="font-label-sm text-label-sm text-on-surface-variant mt-1">In pipeline</p>
+</div>
+</div>
+</div>
+</div>
+<!-- Main Panels Bento -->
+<div class="bento-grid">
+<!-- Recruitment Trends Chart -->
+<div class="col-span-12 lg:col-span-8 bg-surface-container-lowest rounded-xl border border-outline-variant flex flex-col">
+<div class="p-5 border-b border-outline-variant flex justify-between items-center">
+<div>
+<h3 class="font-title-lg text-title-lg text-on-surface">Recruitment Pipeline Trends</h3>
+<p class="font-body-sm text-body-sm text-on-surface-variant mt-0.5">Application vs Hiring volume over 6 months</p>
+</div>
+<div class="flex items-center gap-2">
+<div class="flex items-center gap-1.5 font-label-sm text-label-sm">
+<div class="w-3 h-3 rounded-sm bg-surface-container-highest border border-outline-variant"></div>
+<span class="text-on-surface-variant">Applications</span>
+</div>
+<div class="flex items-center gap-1.5 font-label-sm text-label-sm ml-2">
+<div class="w-3 h-3 rounded-sm bg-primary"></div>
+<span class="text-on-surface-variant">Hires</span>
+</div>
+<button class="ml-4 text-on-surface-variant hover:bg-surface-variant p-1 rounded transition-colors">
+<span class="material-symbols-outlined text-[20px]">more_vert</span>
+</button>
+</div>
+</div>
+<div class="p-6 flex-1 flex items-end gap-2 h-[300px] relative">
+<!-- Y-Axis labels -->
+<div class="absolute left-6 top-6 bottom-6 flex flex-col justify-between font-label-sm text-label-sm text-outline-variant w-8">
+<span>1k</span>
+<span>750</span>
+<span>500</span>
+<span>250</span>
+<span>0</span>
+</div>
+<!-- Grid lines -->
+<div class="absolute left-14 right-6 top-6 bottom-6 flex flex-col justify-between pointer-events-none">
+<div class="w-full h-px bg-outline-variant/30 border-dashed"></div>
+<div class="w-full h-px bg-outline-variant/30 border-dashed"></div>
+<div class="w-full h-px bg-outline-variant/30 border-dashed"></div>
+<div class="w-full h-px bg-outline-variant/30 border-dashed"></div>
+<div class="w-full h-px bg-outline-variant/50"></div>
+</div>
+<!-- Chart Bars -->
+<div class="flex-1 flex justify-between items-end pl-10 pr-2 h-full pb-6 z-10">
+<!-- Jan -->
+<div class="flex flex-col items-center gap-2 group w-1/6">
+<div class="flex items-end gap-1 w-full justify-center h-[200px]">
+<div class="w-4 lg:w-6 bg-surface-container-highest border border-outline-variant rounded-t-sm h-[40%] chart-bar"></div>
+<div class="w-4 lg:w-6 bg-primary rounded-t-sm h-[15%] chart-bar shadow-[0_0_8px_rgba(16,185,129,0.3)]"></div>
+</div>
+<span class="font-label-sm text-label-sm text-on-surface-variant mt-2">Jan</span>
+</div>
+<!-- Feb -->
+<div class="flex flex-col items-center gap-2 group w-1/6">
+<div class="flex items-end gap-1 w-full justify-center h-[200px]">
+<div class="w-4 lg:w-6 bg-surface-container-highest border border-outline-variant rounded-t-sm h-[45%] chart-bar"></div>
+<div class="w-4 lg:w-6 bg-primary rounded-t-sm h-[18%] chart-bar shadow-[0_0_8px_rgba(16,185,129,0.3)]"></div>
+</div>
+<span class="font-label-sm text-label-sm text-on-surface-variant mt-2">Feb</span>
+</div>
+<!-- Mar -->
+<div class="flex flex-col items-center gap-2 group w-1/6">
+<div class="flex items-end gap-1 w-full justify-center h-[200px]">
+<div class="w-4 lg:w-6 bg-surface-container-highest border border-outline-variant rounded-t-sm h-[60%] chart-bar"></div>
+<div class="w-4 lg:w-6 bg-primary rounded-t-sm h-[25%] chart-bar shadow-[0_0_8px_rgba(16,185,129,0.3)]"></div>
+</div>
+<span class="font-label-sm text-label-sm text-on-surface-variant mt-2">Mar</span>
+</div>
+<!-- Apr -->
+<div class="flex flex-col items-center gap-2 group w-1/6">
+<div class="flex items-end gap-1 w-full justify-center h-[200px]">
+<div class="w-4 lg:w-6 bg-surface-container-highest border border-outline-variant rounded-t-sm h-[55%] chart-bar"></div>
+<div class="w-4 lg:w-6 bg-primary rounded-t-sm h-[30%] chart-bar shadow-[0_0_8px_rgba(16,185,129,0.3)]"></div>
+</div>
+<span class="font-label-sm text-label-sm text-on-surface-variant mt-2">Apr</span>
+</div>
+<!-- May -->
+<div class="flex flex-col items-center gap-2 group w-1/6">
+<div class="flex items-end gap-1 w-full justify-center h-[200px]">
+<div class="w-4 lg:w-6 bg-surface-container-highest border border-outline-variant rounded-t-sm h-[80%] chart-bar"></div>
+<div class="w-4 lg:w-6 bg-primary rounded-t-sm h-[45%] chart-bar shadow-[0_0_8px_rgba(16,185,129,0.3)]"></div>
+</div>
+<span class="font-label-sm text-label-sm text-on-surface-variant mt-2">May</span>
+</div>
+<!-- Jun -->
+<div class="flex flex-col items-center gap-2 group w-1/6">
+<div class="flex items-end gap-1 w-full justify-center h-[200px]">
+<div class="w-4 lg:w-6 bg-surface-container-highest border border-outline-variant rounded-t-sm h-[90%] chart-bar"></div>
+<div class="w-4 lg:w-6 bg-primary rounded-t-sm h-[55%] chart-bar shadow-[0_0_8px_rgba(16,185,129,0.3)]"></div>
+</div>
+<span class="font-label-sm text-label-sm text-primary font-bold mt-2">Jun</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Recent System Activity -->
+<div class="col-span-12 lg:col-span-4 bg-surface-container-lowest rounded-xl border border-outline-variant flex flex-col">
+<div class="p-5 border-b border-outline-variant flex justify-between items-center">
+<h3 class="font-title-lg text-title-lg text-on-surface">System Activity</h3>
+<button class="text-primary font-label-md text-label-md hover:underline">View All</button>
+</div>
+<div class="p-5 flex-1 overflow-y-auto max-h-[300px]">
+<div class="relative border-l border-outline-variant ml-3 space-y-6 pb-2">
+<!-- Activity Item 1 -->
+<div class="relative pl-6">
+<div class="absolute -left-[9px] top-1 w-4 h-4 rounded-full bg-surface-container-lowest border-2 border-primary flex items-center justify-center">
+<div class="w-1.5 h-1.5 rounded-full bg-primary"></div>
+</div>
+<div class="font-label-sm text-label-sm text-on-surface-variant mb-1">10 mins ago</div>
+<div class="font-body-md text-body-md text-on-surface">
+<span class="font-semibold">Security Alert:</span> Multiple failed login attempts for user <span class="text-primary">j.doe@gympulse.com</span>.
+                                </div>
+<div class="mt-2 inline-flex items-center gap-1 px-2 py-1 bg-error-container text-on-error-container rounded text-[11px] font-medium">
+<span class="material-symbols-outlined text-[14px]">warning</span> High Priority
+                                </div>
+</div>
+<!-- Activity Item 2 -->
+<div class="relative pl-6">
+<div class="absolute -left-[9px] top-1 w-4 h-4 rounded-full bg-surface-container-lowest border-2 border-outline-variant flex items-center justify-center"></div>
+<div class="font-label-sm text-label-sm text-on-surface-variant mb-1">2 hours ago</div>
+<div class="font-body-md text-body-md text-on-surface">
+<span class="font-semibold">Permission Change:</span> Role <span class="bg-surface-variant px-1 rounded">Regional Manager</span> updated. Added 'Payroll View' access.
+                                </div>
+<div class="mt-1 text-label-sm font-label-sm text-on-surface-variant flex items-center gap-1">
+<span class="material-symbols-outlined text-[14px]">account_circle</span> By Super Admin
+                                </div>
+</div>
+<!-- Activity Item 3 -->
+<div class="relative pl-6">
+<div class="absolute -left-[9px] top-1 w-4 h-4 rounded-full bg-surface-container-lowest border-2 border-secondary-container flex items-center justify-center">
+<div class="w-1.5 h-1.5 rounded-full bg-secondary"></div>
+</div>
+<div class="font-label-sm text-label-sm text-on-surface-variant mb-1">Yesterday, 14:30</div>
+<div class="font-body-md text-body-md text-on-surface">
+<span class="font-semibold">New Gym Created:</span> 'PulseFit Downtown' added to active roster.
+                                </div>
+<div class="mt-2 flex -space-x-2">
+<img class="w-6 h-6 rounded-full border border-surface" data-alt="Small circular profile picture of a young professional woman smiling slightly against a solid light gray background, corporate styling, soft lighting." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAjpULc_cjX_OdovNCyKsmYcjZqaq8mufYObcxuFgmG5fK7EXFhfDfyj_07VC8aAqFAl1VGj82SX8CTKLplWy2DKCfUhncYXYGokkWj0amylrFqvH4ZIZvvBEKAbxX25FhIy-iLlRuPTzoMhWMyOIalMZyCmMw1K8NkL603oKP_oCVPdhRSMoi8XKyIvWMxI0ySfQduXAnkCSGqRIQwRA6aK-hzb2NhJGQ6_E4xHErnt2AOzn0uqxjmLw">
+<div class="w-6 h-6 rounded-full bg-surface-container-high border border-surface flex items-center justify-center text-[10px] text-on-surface-variant">+2</div>
+</div>
+</div>
+<!-- Activity Item 4 -->
+<div class="relative pl-6">
+<div class="absolute -left-[9px] top-1 w-4 h-4 rounded-full bg-surface-container-lowest border-2 border-outline-variant flex items-center justify-center"></div>
+<div class="font-label-sm text-label-sm text-on-surface-variant mb-1">Yesterday, 09:15</div>
+<div class="font-body-md text-body-md text-on-surface">
+<span class="font-semibold">Bulk Import:</span> 45 employee records imported successfully.
+                                </div>
+</div>
+</div>
+</div>
+</div>
+<!-- Gym Operations Status List -->
+<div class="col-span-12 bg-surface-container-lowest rounded-xl border border-outline-variant overflow-hidden">
+<div class="p-5 border-b border-outline-variant flex justify-between items-center bg-surface-bright">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-on-surface-variant">location_on</span>
+<h3 class="font-title-lg text-title-lg text-on-surface">Gym Operations Status</h3>
+</div>
+<div class="flex items-center gap-3">
+<div class="relative">
+<span class="material-symbols-outlined absolute left-2 top-1.5 text-[18px] text-outline-variant">search</span>
+<input class="pl-8 pr-3 py-1.5 border border-outline-variant rounded-md text-body-sm focus:border-primary focus:ring-1 focus:ring-primary outline-none" placeholder="Filter locations..." type="text">
+</div>
+<button class="p-1.5 border border-outline-variant rounded-md hover:bg-surface-variant transition-colors text-on-surface-variant">
+<span class="material-symbols-outlined text-[20px]">filter_list</span>
+</button>
+</div>
+</div>
+<div class="overflow-x-auto">
+<table class="w-full text-left border-collapse">
+<thead>
+<tr class="bg-surface border-b border-outline-variant">
+<th class="px-5 py-3 font-label-md text-label-md text-outline-variant uppercase">Location Name</th>
+<th class="px-5 py-3 font-label-md text-label-md text-outline-variant uppercase">Region</th>
+<th class="px-5 py-3 font-label-md text-label-md text-outline-variant uppercase">Manager</th>
+<th class="px-5 py-3 font-label-md text-label-md text-outline-variant uppercase">Staff Count</th>
+<th class="px-5 py-3 font-label-md text-label-md text-outline-variant uppercase">Open Roles</th>
+<th class="px-5 py-3 font-label-md text-label-md text-outline-variant uppercase text-right">Status</th>
+</tr>
+</thead>
+<tbody class="text-body-md font-body-md text-on-surface divide-y divide-outline-variant/50">
+<tr class="hover:bg-surface-container-highest/30 transition-colors group cursor-pointer">
+<td class="px-5 py-3.5 flex items-center gap-3">
+<div class="w-8 h-8 rounded bg-surface-container-highest flex items-center justify-center text-primary font-bold">DT</div>
+<span class="font-semibold group-hover:text-primary transition-colors">PulseFit Downtown</span>
+</td>
+<td class="px-5 py-3.5 text-on-surface-variant">North America - East</td>
+<td class="px-5 py-3.5 flex items-center gap-2">
+<div class="w-6 h-6 rounded-full bg-secondary text-on-secondary flex items-center justify-center text-[10px] font-bold">SM</div>
+                                        Sarah Miller
+                                    </td>
+<td class="px-5 py-3.5">42</td>
+<td class="px-5 py-3.5">
+<span class="inline-flex items-center justify-center px-2 py-0.5 rounded-full bg-error-container text-on-error-container text-label-sm font-label-sm">3</span>
+</td>
+<td class="px-5 py-3.5 text-right">
+<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-secondary-container bg-secondary-container/10 text-primary text-label-sm font-label-sm">
+<div class="w-1.5 h-1.5 rounded-full bg-primary"></div> Active
+                                        </span>
+</td>
+</tr>
+<tr class="hover:bg-surface-container-highest/30 transition-colors group cursor-pointer">
+<td class="px-5 py-3.5 flex items-center gap-3">
+<div class="w-8 h-8 rounded bg-surface-container-highest flex items-center justify-center text-primary font-bold">WS</div>
+<span class="font-semibold group-hover:text-primary transition-colors">PulseFit Westside</span>
+</td>
+<td class="px-5 py-3.5 text-on-surface-variant">North America - West</td>
+<td class="px-5 py-3.5 flex items-center gap-2">
+<div class="w-6 h-6 rounded-full bg-tertiary text-on-tertiary flex items-center justify-center text-[10px] font-bold">JD</div>
+                                        James Davies
+                                    </td>
+<td class="px-5 py-3.5">38</td>
+<td class="px-5 py-3.5">
+<span class="inline-flex items-center justify-center px-2 py-0.5 rounded-full bg-surface-variant text-on-surface-variant text-label-sm font-label-sm">0</span>
+</td>
+<td class="px-5 py-3.5 text-right">
+<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-secondary-container bg-secondary-container/10 text-primary text-label-sm font-label-sm">
+<div class="w-1.5 h-1.5 rounded-full bg-primary"></div> Active
+                                        </span>
+</td>
+</tr>
+<tr class="hover:bg-surface-container-highest/30 transition-colors group cursor-pointer">
+<td class="px-5 py-3.5 flex items-center gap-3">
+<div class="w-8 h-8 rounded bg-surface-container-highest flex items-center justify-center text-outline font-bold">EU</div>
+<span class="font-semibold group-hover:text-primary transition-colors">PulseFit London</span>
+</td>
+<td class="px-5 py-3.5 text-on-surface-variant">Europe - UK</td>
+<td class="px-5 py-3.5 text-outline-variant italic">Pending Assignment</td>
+<td class="px-5 py-3.5">12</td>
+<td class="px-5 py-3.5">
+<span class="inline-flex items-center justify-center px-2 py-0.5 rounded-full bg-surface-variant text-on-surface-variant text-label-sm font-label-sm">15</span>
+</td>
+<td class="px-5 py-3.5 text-right">
+<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-outline-variant bg-surface-container-high text-on-surface-variant text-label-sm font-label-sm">
+<div class="w-1.5 h-1.5 rounded-full bg-outline"></div> Pre-opening
+                                        </span>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="p-3 border-t border-outline-variant bg-surface-bright flex justify-center">
+<button class="text-primary font-label-md text-label-md hover:underline flex items-center gap-1">
+                            View All Locations <span class="material-symbols-outlined text-[16px]">arrow_forward</span>
+</button>
+</div>
+</div>
+</div>
+</main>
+</div>
+</body></html>

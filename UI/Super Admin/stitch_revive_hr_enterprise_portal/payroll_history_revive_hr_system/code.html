@@ -1,0 +1,522 @@
+<!DOCTYPE html>
+
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Revive HR - Payroll History</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "secondary-fixed-dim": "#b7c8e1",
+                        "on-tertiary-fixed-variant": "#004395",
+                        "surface-container-low": "#f2f4f6",
+                        "outline-variant": "#c6c6cd",
+                        "on-secondary-container": "#54647a",
+                        "on-surface": "#191c1e",
+                        "inverse-on-surface": "#eff1f3",
+                        "tertiary": "#000000",
+                        "inverse-primary": "#bec6e0",
+                        "secondary": "#505f76",
+                        "error": "#ba1a1a",
+                        "surface-container-high": "#e6e8ea",
+                        "on-secondary": "#ffffff",
+                        "on-surface-variant": "#45464d",
+                        "surface-container-highest": "#e0e3e5",
+                        "surface-container-lowest": "#ffffff",
+                        "on-error-container": "#93000a",
+                        "on-primary-container": "#7c839b",
+                        "error-container": "#ffdad6",
+                        "tertiary-fixed-dim": "#adc6ff",
+                        "on-secondary-fixed-variant": "#38485d",
+                        "tertiary-container": "#001a42",
+                        "on-tertiary-fixed": "#001a42",
+                        "secondary-container": "#d0e1fb",
+                        "surface-tint": "#565e74",
+                        "inverse-surface": "#2d3133",
+                        "primary-container": "#131b2e",
+                        "on-primary-fixed-variant": "#3f465c",
+                        "on-error": "#ffffff",
+                        "on-tertiary": "#ffffff",
+                        "surface-bright": "#f7f9fb",
+                        "primary-fixed-dim": "#bec6e0",
+                        "on-secondary-fixed": "#0b1c30",
+                        "primary-fixed": "#dae2fd",
+                        "surface-variant": "#e0e3e5",
+                        "surface": "#f7f9fb",
+                        "background": "#f7f9fb",
+                        "on-primary": "#ffffff",
+                        "secondary-fixed": "#d3e4fe",
+                        "surface-container": "#eceef0",
+                        "primary": "#000000",
+                        "tertiary-fixed": "#d8e2ff",
+                        "outline": "#76777d",
+                        "on-background": "#191c1e",
+                        "surface-dim": "#d8dadc",
+                        "on-primary-fixed": "#131b2e",
+                        "on-tertiary-container": "#3980f4"
+                    },
+                    borderRadius: {
+                        DEFAULT: "0.25rem",
+                        lg: "0.5rem",
+                        xl: "0.75rem",
+                        full: "9999px"
+                    },
+                    spacing: {
+                        "card-padding": "20px",
+                        "margin-page": "32px",
+                        "gutter": "24px",
+                        "base": "4px",
+                        "table-cell-padding": "12px 16px"
+                    },
+                    fontFamily: {
+                        "body-lg": ["Inter"],
+                        "display-lg": ["Inter"],
+                        "label-md": ["Inter"],
+                        "headline-lg": ["Inter"],
+                        "headline-md": ["Inter"],
+                        "body-md": ["Inter"],
+                        "label-sm": ["Inter"],
+                        "body-sm": ["Inter"]
+                    },
+                    fontSize: {
+                        "body-lg": ["16px", { lineHeight: "24px", fontWeight: "400" }],
+                        "display-lg": ["36px", { lineHeight: "44px", letterSpacing: "-0.02em", fontWeight: "700" }],
+                        "label-md": ["12px", { lineHeight: "16px", letterSpacing: "0.05em", fontWeight: "600" }],
+                        "headline-lg": ["24px", { lineHeight: "32px", letterSpacing: "-0.01em", fontWeight: "600" }],
+                        "headline-md": ["20px", { lineHeight: "28px", fontWeight: "600" }],
+                        "body-md": ["14px", { lineHeight: "20px", fontWeight: "400" }],
+                        "label-sm": ["11px", { lineHeight: "14px", fontWeight: "500" }],
+                        "body-sm": ["13px", { lineHeight: "18px", fontWeight: "400" }]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+    </style>
+</head>
+<body class="bg-background text-on-background font-body-md h-screen flex overflow-hidden">
+<!-- SideNavBar -->
+<aside class="fixed left-0 top-0 h-full w-[280px] bg-primary-container flex flex-col py-gutter overflow-y-auto shadow-md z-20">
+<div class="px-gutter mb-8 flex items-center gap-4">
+<div class="w-10 h-10 rounded-lg bg-surface flex items-center justify-center shrink-0">
+<span class="material-symbols-outlined text-primary" data-icon="corporate_fare" data-weight="fill" style="font-variation-settings: 'FILL' 1;">corporate_fare</span>
+</div>
+<div>
+<h1 class="text-headline-lg font-headline-lg font-bold text-on-primary">Revive HR</h1>
+<p class="text-label-sm font-label-sm text-on-primary-container">Enterprise Management</p>
+</div>
+</div>
+<nav class="flex-1 flex flex-col gap-1 px-4">
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-primary-container/70 font-medium hover:bg-surface-variant/20 hover:text-on-primary transition-colors duration-200 scale-95 active:scale-90 transition-transform" href="#">
+<span class="material-symbols-outlined" data-icon="dashboard">dashboard</span>
+<span class="text-label-md font-label-md">Dashboard</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-primary-container/70 font-medium hover:bg-surface-variant/20 hover:text-on-primary transition-colors duration-200 scale-95 active:scale-90 transition-transform" href="#">
+<span class="material-symbols-outlined" data-icon="corporate_fare">corporate_fare</span>
+<span class="text-label-md font-label-md">Organization</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-primary-container/70 font-medium hover:bg-surface-variant/20 hover:text-on-primary transition-colors duration-200 scale-95 active:scale-90 transition-transform" href="#">
+<span class="material-symbols-outlined" data-icon="group">group</span>
+<span class="text-label-md font-label-md">People</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-primary-container/70 font-medium hover:bg-surface-variant/20 hover:text-on-primary transition-colors duration-200 scale-95 active:scale-90 transition-transform" href="#">
+<span class="material-symbols-outlined" data-icon="work">work</span>
+<span class="text-label-md font-label-md">Recruitment</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg border-l-[3px] border-on-tertiary-container bg-surface-variant/10 text-on-primary font-bold scale-95 active:scale-90 transition-transform" href="#">
+<span class="material-symbols-outlined" data-icon="schedule" data-weight="fill" style="font-variation-settings: 'FILL' 1;">schedule</span>
+<span class="text-label-md font-label-md">Operations</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-primary-container/70 font-medium hover:bg-surface-variant/20 hover:text-on-primary transition-colors duration-200 scale-95 active:scale-90 transition-transform" href="#">
+<span class="material-symbols-outlined" data-icon="admin_panel_settings">admin_panel_settings</span>
+<span class="text-label-md font-label-md">Access Control</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-primary-container/70 font-medium hover:bg-surface-variant/20 hover:text-on-primary transition-colors duration-200 scale-95 active:scale-90 transition-transform" href="#">
+<span class="material-symbols-outlined" data-icon="settings">settings</span>
+<span class="text-label-md font-label-md">System</span>
+</a>
+</nav>
+<div class="px-4 mt-auto border-t border-surface-variant/20 pt-4 flex flex-col gap-1">
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-primary-container/70 font-medium hover:bg-surface-variant/20 hover:text-on-primary transition-colors duration-200 scale-95 active:scale-90 transition-transform" href="#">
+<span class="material-symbols-outlined" data-icon="account_circle">account_circle</span>
+<span class="text-label-md font-label-md">Profile</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-primary-container/70 font-medium hover:bg-surface-variant/20 hover:text-on-primary transition-colors duration-200 scale-95 active:scale-90 transition-transform" href="#">
+<span class="material-symbols-outlined" data-icon="logout">logout</span>
+<span class="text-label-md font-label-md">Logout</span>
+</a>
+</div>
+</aside>
+<!-- Main Content Wrapper -->
+<main class="ml-[280px] flex-1 flex flex-col h-screen overflow-hidden">
+<!-- TopNavBar -->
+<header class="flex justify-between items-center w-full px-margin-page py-4 bg-surface border-b border-outline-variant shadow-sm shrink-0 z-10">
+<div class="flex items-center gap-8">
+<h2 class="text-headline-md font-headline-md font-black text-primary">Revive HR</h2>
+<nav class="hidden md:flex gap-6">
+<a class="text-on-surface-variant font-medium text-label-md font-label-md hover:text-primary transition-colors" href="#">Dashboard</a>
+<a class="text-on-surface-variant font-medium text-label-md font-label-md hover:text-primary transition-colors" href="#">Gyms</a>
+<a class="text-primary border-b-2 border-primary font-bold pb-1 text-label-md font-label-md hover:text-primary transition-colors" href="#">Employees</a>
+</nav>
+</div>
+<div class="flex items-center gap-4">
+<div class="relative hidden lg:block">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant text-sm" data-icon="search">search</span>
+<input class="pl-10 pr-4 py-2 bg-surface-container-low border border-outline-variant rounded-full text-body-sm font-body-sm focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all w-64" placeholder="Search..." type="text"/>
+</div>
+<button class="px-4 py-2 bg-surface-container-low text-on-surface border border-outline-variant rounded-md text-label-md font-label-md hover:bg-surface-container-high transition-colors flex items-center gap-2">
+                    Gym Selector
+                    <span class="material-symbols-outlined text-sm" data-icon="expand_more">expand_more</span>
+</button>
+<button class="px-4 py-2 bg-primary text-on-primary rounded-md text-label-md font-label-md hover:bg-primary/90 transition-colors shadow-sm">
+                    Quick Action
+                </button>
+<div class="flex items-center gap-2 border-l border-outline-variant pl-4 ml-2">
+<button class="w-10 h-10 rounded-full flex items-center justify-center hover:bg-surface-container-low transition-colors text-on-surface-variant">
+<span class="material-symbols-outlined" data-icon="notifications">notifications</span>
+</button>
+<button class="w-10 h-10 rounded-full flex items-center justify-center hover:bg-surface-container-low transition-colors text-on-surface-variant hidden sm:flex">
+<span class="material-symbols-outlined" data-icon="help">help</span>
+</button>
+<button class="w-10 h-10 rounded-full bg-surface-container overflow-hidden ml-2 border border-outline-variant">
+<img alt="User Avatar" class="w-full h-full object-cover" data-alt="A small, professional headshot of an HR administrator with a neutral expression, clean lighting, and a soft blurred background." src="https://lh3.googleusercontent.com/aida-public/AB6AXuC-XLjBiMGQ20Thr5jJRildBPpC8KCgF14gNU5Yh6c6CWM_7ZjPWttUzu6tj4NdM9Sijg1oOJGUmGZ7n-lWFRYl91tHjQA6jC8kcdoGS4112_J5GFqtJ6dnXQAl17qc3kVdXyEACSAmGJiPwz_Oo5SOS66pMmYTzkf4f5WKtAjZdCOTp1Fspb65v6ALP7lZ1PW2qiOO1C8I_MxwzmYrqEEBxbd6e5y_bM-xQrWfFGp0vHmxNa5ps-MWqQ"/>
+</button>
+</div>
+</div>
+</header>
+<!-- Page Content -->
+<div class="flex-1 overflow-y-auto bg-background p-margin-page">
+<div class="max-w-[1200px] mx-auto space-y-8">
+<!-- Page Header -->
+<div class="flex flex-col md:flex-row md:items-end justify-between gap-4">
+<div>
+<div class="flex items-center gap-2 text-on-surface-variant mb-2">
+<span class="text-label-sm font-label-sm">Operations</span>
+<span class="material-symbols-outlined text-[16px]" data-icon="chevron_right">chevron_right</span>
+<span class="text-label-sm font-label-sm text-primary font-semibold">Payroll History</span>
+</div>
+<h1 class="text-display-lg font-display-lg text-primary">Payroll History</h1>
+<p class="text-body-md font-body-md text-on-surface-variant mt-1">Review past pay periods and associated costs across all locations.</p>
+</div>
+<div class="flex items-center gap-3">
+<button class="px-4 py-2 bg-surface flex items-center gap-2 border border-outline-variant rounded-md text-label-md font-label-md shadow-sm hover:bg-surface-container-low transition-colors">
+<span class="material-symbols-outlined text-[18px]" data-icon="download">download</span>
+                            Export Full Report
+                        </button>
+<div class="bg-surface border border-outline-variant rounded-md flex items-center px-3 py-2 shadow-sm">
+<span class="material-symbols-outlined text-on-surface-variant mr-2" data-icon="calendar_month">calendar_month</span>
+<select class="bg-transparent border-none p-0 text-label-md font-label-md focus:ring-0 text-primary cursor-pointer outline-none">
+<option>2024</option>
+<option>2023</option>
+<option>2022</option>
+</select>
+</div>
+</div>
+</div>
+<!-- KPI Bento Grid -->
+<div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+<!-- KPI 1 -->
+<div class="bg-surface rounded-xl p-card-padding border border-outline-variant shadow-sm flex flex-col justify-between">
+<div class="flex items-start justify-between mb-4">
+<div>
+<p class="text-label-sm font-label-sm text-on-surface-variant uppercase tracking-wider">YTD Total Payroll</p>
+<h3 class="text-headline-lg font-headline-lg text-primary mt-1">$1,245,600.00</h3>
+</div>
+<div class="w-10 h-10 rounded-full bg-secondary-container text-on-tertiary-container flex items-center justify-center">
+<span class="material-symbols-outlined" data-icon="account_balance">account_balance</span>
+</div>
+</div>
+<div class="flex items-center gap-2">
+<span class="flex items-center text-sm font-medium text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded">
+<span class="material-symbols-outlined text-[16px] mr-1" data-icon="trending_up">trending_up</span>
+                                +4.2%
+                            </span>
+<span class="text-label-sm font-label-sm text-on-surface-variant">vs previous year</span>
+</div>
+</div>
+<!-- KPI 2 -->
+<div class="bg-surface rounded-xl p-card-padding border border-outline-variant shadow-sm flex flex-col justify-between">
+<div class="flex items-start justify-between mb-4">
+<div>
+<p class="text-label-sm font-label-sm text-on-surface-variant uppercase tracking-wider">Avg Pay Period Cost</p>
+<h3 class="text-headline-lg font-headline-lg text-primary mt-1">$51,900.00</h3>
+</div>
+<div class="w-10 h-10 rounded-full bg-surface-container-high text-on-surface-variant flex items-center justify-center">
+<span class="material-symbols-outlined" data-icon="payments">payments</span>
+</div>
+</div>
+<div class="flex items-center gap-2">
+<span class="flex items-center text-sm font-medium text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded">
+<span class="material-symbols-outlined text-[16px] mr-1" data-icon="trending_down">trending_down</span>
+                                -1.1%
+                            </span>
+<span class="text-label-sm font-label-sm text-on-surface-variant">vs previous period</span>
+</div>
+</div>
+<!-- KPI 3 -->
+<div class="bg-surface rounded-xl p-card-padding border border-outline-variant shadow-sm flex flex-col justify-between">
+<div class="flex items-start justify-between mb-4">
+<div>
+<p class="text-label-sm font-label-sm text-on-surface-variant uppercase tracking-wider">Total Deductions YTD</p>
+<h3 class="text-headline-lg font-headline-lg text-primary mt-1">$214,350.00</h3>
+</div>
+<div class="w-10 h-10 rounded-full bg-surface-container-high text-on-surface-variant flex items-center justify-center">
+<span class="material-symbols-outlined" data-icon="receipt_long">receipt_long</span>
+</div>
+</div>
+<div class="flex items-center gap-2">
+<span class="text-label-sm font-label-sm text-on-surface-variant">Across 14 active gyms</span>
+</div>
+</div>
+</div>
+<!-- Pay Periods Summary Table -->
+<div class="bg-surface rounded-xl border border-outline-variant shadow-sm overflow-hidden">
+<div class="px-card-padding py-4 border-b border-outline-variant flex justify-between items-center bg-surface-bright">
+<h3 class="text-headline-md font-headline-md text-primary">Recent Pay Periods</h3>
+<button class="text-on-tertiary-container hover:text-on-tertiary-fixed-variant text-label-md font-label-md transition-colors">View All Periods</button>
+</div>
+<div class="overflow-x-auto">
+<table class="w-full text-left border-collapse">
+<thead>
+<tr class="border-b border-outline-variant bg-surface-container-low text-label-md font-label-md text-on-surface-variant">
+<th class="p-table-cell-padding font-semibold">Period Range</th>
+<th class="p-table-cell-padding font-semibold">Run Date</th>
+<th class="p-table-cell-padding font-semibold">Status</th>
+<th class="p-table-cell-padding font-semibold text-right">Gross Pay</th>
+<th class="p-table-cell-padding font-semibold text-right">Taxes &amp; Ded.</th>
+<th class="p-table-cell-padding font-semibold text-right">Net Pay</th>
+<th class="p-table-cell-padding font-semibold text-center">Actions</th>
+</tr>
+</thead>
+<tbody class="text-body-md font-body-md text-on-surface divide-y divide-outline-variant/50">
+<tr class="hover:bg-surface-container-lowest transition-colors group">
+<td class="p-table-cell-padding font-medium">Oct 16 - Oct 31, 2024</td>
+<td class="p-table-cell-padding text-on-surface-variant">Nov 02, 2024</td>
+<td class="p-table-cell-padding">
+<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+<span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                                            Processed
+                                        </span>
+</td>
+<td class="p-table-cell-padding text-right font-mono">$52,400.00</td>
+<td class="p-table-cell-padding text-right font-mono text-on-surface-variant">-$8,908.00</td>
+<td class="p-table-cell-padding text-right font-mono font-medium">$43,492.00</td>
+<td class="p-table-cell-padding text-center">
+<button class="text-on-surface-variant hover:text-primary transition-colors p-1 rounded-md hover:bg-surface-container-high opacity-0 group-hover:opacity-100 focus:opacity-100">
+<span class="material-symbols-outlined text-[20px]" data-icon="more_horiz">more_horiz</span>
+</button>
+</td>
+</tr>
+<tr class="hover:bg-surface-container-lowest transition-colors group">
+<td class="p-table-cell-padding font-medium">Oct 01 - Oct 15, 2024</td>
+<td class="p-table-cell-padding text-on-surface-variant">Oct 17, 2024</td>
+<td class="p-table-cell-padding">
+<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+<span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                                            Processed
+                                        </span>
+</td>
+<td class="p-table-cell-padding text-right font-mono">$51,850.00</td>
+<td class="p-table-cell-padding text-right font-mono text-on-surface-variant">-$8,814.50</td>
+<td class="p-table-cell-padding text-right font-mono font-medium">$43,035.50</td>
+<td class="p-table-cell-padding text-center">
+<button class="text-on-surface-variant hover:text-primary transition-colors p-1 rounded-md hover:bg-surface-container-high opacity-0 group-hover:opacity-100 focus:opacity-100">
+<span class="material-symbols-outlined text-[20px]" data-icon="more_horiz">more_horiz</span>
+</button>
+</td>
+</tr>
+<tr class="hover:bg-surface-container-lowest transition-colors group">
+<td class="p-table-cell-padding font-medium">Sep 16 - Sep 30, 2024</td>
+<td class="p-table-cell-padding text-on-surface-variant">Oct 02, 2024</td>
+<td class="p-table-cell-padding">
+<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+<span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                                            Processed
+                                        </span>
+</td>
+<td class="p-table-cell-padding text-right font-mono">$53,100.00</td>
+<td class="p-table-cell-padding text-right font-mono text-on-surface-variant">-$9,027.00</td>
+<td class="p-table-cell-padding text-right font-mono font-medium">$44,073.00</td>
+<td class="p-table-cell-padding text-center">
+<button class="text-on-surface-variant hover:text-primary transition-colors p-1 rounded-md hover:bg-surface-container-high opacity-0 group-hover:opacity-100 focus:opacity-100">
+<span class="material-symbols-outlined text-[20px]" data-icon="more_horiz">more_horiz</span>
+</button>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<!-- Detailed Employee History (Bento Layout Item) -->
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+<!-- Gym Breakdown Sidebar -->
+<div class="bg-surface rounded-xl border border-outline-variant shadow-sm p-card-padding flex flex-col h-[500px]">
+<h3 class="text-headline-md font-headline-md text-primary mb-4">Costs by Location</h3>
+<div class="text-label-sm font-label-sm text-on-surface-variant mb-2">Oct 16 - Oct 31, 2024</div>
+<div class="flex-1 overflow-y-auto pr-2 space-y-4">
+<!-- Location Item -->
+<div class="flex items-center justify-between p-3 rounded-lg border border-outline-variant/50 hover:bg-surface-container-low transition-colors cursor-pointer bg-surface-container-low">
+<div class="flex items-center gap-3">
+<div class="w-8 h-8 rounded-md bg-secondary-container text-on-tertiary-container flex items-center justify-center shrink-0">
+<span class="material-symbols-outlined text-[18px]" data-icon="storefront">storefront</span>
+</div>
+<div>
+<p class="text-label-md font-label-md text-primary">Downtown Metro</p>
+<p class="text-label-sm font-label-sm text-on-surface-variant">12 Employees</p>
+</div>
+</div>
+<div class="text-right">
+<p class="text-label-md font-label-md font-mono text-primary">$18,400</p>
+</div>
+</div>
+<!-- Location Item -->
+<div class="flex items-center justify-between p-3 rounded-lg border border-outline-variant/50 hover:bg-surface-container-low transition-colors cursor-pointer">
+<div class="flex items-center gap-3">
+<div class="w-8 h-8 rounded-md bg-surface-container-high text-on-surface-variant flex items-center justify-center shrink-0">
+<span class="material-symbols-outlined text-[18px]" data-icon="storefront">storefront</span>
+</div>
+<div>
+<p class="text-label-md font-label-md text-primary">Westside Plaza</p>
+<p class="text-label-sm font-label-sm text-on-surface-variant">8 Employees</p>
+</div>
+</div>
+<div class="text-right">
+<p class="text-label-md font-label-md font-mono text-primary">$12,150</p>
+</div>
+</div>
+<!-- Location Item -->
+<div class="flex items-center justify-between p-3 rounded-lg border border-outline-variant/50 hover:bg-surface-container-low transition-colors cursor-pointer">
+<div class="flex items-center gap-3">
+<div class="w-8 h-8 rounded-md bg-surface-container-high text-on-surface-variant flex items-center justify-center shrink-0">
+<span class="material-symbols-outlined text-[18px]" data-icon="storefront">storefront</span>
+</div>
+<div>
+<p class="text-label-md font-label-md text-primary">North Hills</p>
+<p class="text-label-sm font-label-sm text-on-surface-variant">15 Employees</p>
+</div>
+</div>
+<div class="text-right">
+<p class="text-label-md font-label-md font-mono text-primary">$21,850</p>
+</div>
+</div>
+</div>
+<button class="w-full mt-4 py-2 border border-outline-variant rounded-md text-label-md font-label-md text-primary hover:bg-surface-container-low transition-colors">
+                            View Gym Reports
+                        </button>
+</div>
+<!-- Employee Detail Table -->
+<div class="lg:col-span-2 bg-surface rounded-xl border border-outline-variant shadow-sm flex flex-col h-[500px]">
+<div class="px-card-padding py-4 border-b border-outline-variant flex justify-between items-center bg-surface-bright rounded-t-xl">
+<div>
+<h3 class="text-headline-md font-headline-md text-primary">Employee Net Pay Details</h3>
+<p class="text-body-sm font-body-sm text-on-surface-variant">Downtown Metro • Oct 16 - Oct 31, 2024</p>
+</div>
+<div class="relative">
+<span class="material-symbols-outlined absolute left-2.5 top-1/2 -translate-y-1/2 text-on-surface-variant text-[18px]" data-icon="search">search</span>
+<input class="pl-9 pr-3 py-1.5 bg-background border border-outline-variant rounded-md text-body-sm font-body-sm focus:outline-none focus:border-primary w-48" placeholder="Find employee..." type="text"/>
+</div>
+</div>
+<div class="flex-1 overflow-auto">
+<table class="w-full text-left border-collapse min-w-[600px]">
+<thead class="sticky top-0 bg-surface z-10 shadow-[0_1px_0_rgba(0,0,0,0.1)]">
+<tr class="text-label-md font-label-md text-on-surface-variant">
+<th class="p-table-cell-padding font-semibold">Employee</th>
+<th class="p-table-cell-padding font-semibold">Role</th>
+<th class="p-table-cell-padding font-semibold text-right">Gross</th>
+<th class="p-table-cell-padding font-semibold text-right">Deductions</th>
+<th class="p-table-cell-padding font-semibold text-right">Net Pay</th>
+</tr>
+</thead>
+<tbody class="text-body-md font-body-md text-on-surface divide-y divide-outline-variant/30">
+<tr class="hover:bg-surface-container-lowest transition-colors">
+<td class="p-table-cell-padding">
+<div class="flex items-center gap-3">
+<div class="w-8 h-8 rounded-full bg-secondary text-on-secondary flex items-center justify-center text-label-sm font-label-sm font-bold">
+                                                    AS
+                                                </div>
+<span class="font-medium">Alice Smith</span>
+</div>
+</td>
+<td class="p-table-cell-padding text-on-surface-variant">Manager</td>
+<td class="p-table-cell-padding text-right font-mono">$3,200.00</td>
+<td class="p-table-cell-padding text-right font-mono text-error">-$544.00</td>
+<td class="p-table-cell-padding text-right font-mono font-medium">$2,656.00</td>
+</tr>
+<tr class="hover:bg-surface-container-lowest transition-colors">
+<td class="p-table-cell-padding">
+<div class="flex items-center gap-3">
+<div class="w-8 h-8 rounded-full bg-surface-tint text-on-primary flex items-center justify-center text-label-sm font-label-sm font-bold">
+                                                    BJ
+                                                </div>
+<span class="font-medium">Bob Jones</span>
+</div>
+</td>
+<td class="p-table-cell-padding text-on-surface-variant">Trainer</td>
+<td class="p-table-cell-padding text-right font-mono">$2,400.00</td>
+<td class="p-table-cell-padding text-right font-mono text-error">-$408.00</td>
+<td class="p-table-cell-padding text-right font-mono font-medium">$1,992.00</td>
+</tr>
+<tr class="hover:bg-surface-container-lowest transition-colors">
+<td class="p-table-cell-padding">
+<div class="flex items-center gap-3">
+<div class="w-8 h-8 rounded-full bg-surface-tint text-on-primary flex items-center justify-center text-label-sm font-label-sm font-bold">
+                                                    CD
+                                                </div>
+<span class="font-medium">Charlie Davis</span>
+</div>
+</td>
+<td class="p-table-cell-padding text-on-surface-variant">Front Desk</td>
+<td class="p-table-cell-padding text-right font-mono">$1,600.00</td>
+<td class="p-table-cell-padding text-right font-mono text-error">-$272.00</td>
+<td class="p-table-cell-padding text-right font-mono font-medium">$1,328.00</td>
+</tr>
+<tr class="hover:bg-surface-container-lowest transition-colors">
+<td class="p-table-cell-padding">
+<div class="flex items-center gap-3">
+<div class="w-8 h-8 rounded-full bg-surface-tint text-on-primary flex items-center justify-center text-label-sm font-label-sm font-bold">
+                                                    EW
+                                                </div>
+<span class="font-medium">Emma Wilson</span>
+</div>
+</td>
+<td class="p-table-cell-padding text-on-surface-variant">Trainer</td>
+<td class="p-table-cell-padding text-right font-mono">$2,550.00</td>
+<td class="p-table-cell-padding text-right font-mono text-error">-$433.50</td>
+<td class="p-table-cell-padding text-right font-mono font-medium">$2,116.50</td>
+</tr>
+<tr class="hover:bg-surface-container-lowest transition-colors">
+<td class="p-table-cell-padding">
+<div class="flex items-center gap-3">
+<div class="w-8 h-8 rounded-full bg-surface-tint text-on-primary flex items-center justify-center text-label-sm font-label-sm font-bold">
+                                                    MT
+                                                </div>
+<span class="font-medium">Michael Taylor</span>
+</div>
+</td>
+<td class="p-table-cell-padding text-on-surface-variant">Maintenance</td>
+<td class="p-table-cell-padding text-right font-mono">$1,800.00</td>
+<td class="p-table-cell-padding text-right font-mono text-error">-$306.00</td>
+<td class="p-table-cell-padding text-right font-mono font-medium">$1,494.00</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+</div>
+</div>
+<!-- Bottom spacing -->
+<div class="h-12"></div>
+</div>
+</main>
+</body></html>

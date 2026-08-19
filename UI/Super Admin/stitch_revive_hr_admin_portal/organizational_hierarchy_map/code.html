@@ -1,0 +1,411 @@
+<!DOCTYPE html><html lang="en"><head>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0" name="viewport">
+<title>Revive HR - Organizational Hierarchy Map</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "on-error": "#ffffff",
+                        "on-primary-fixed": "#002113",
+                        "on-secondary-fixed": "#002117",
+                        "error": "#ba1a1a",
+                        "on-secondary": "#ffffff",
+                        "primary-fixed": "#6ffbbe",
+                        "on-tertiary-fixed": "#131e19",
+                        "secondary-fixed": "#b0f0d6",
+                        "on-error-container": "#93000a",
+                        "surface-variant": "#d8e3fb",
+                        "error-container": "#ffdad6",
+                        "primary-container": "#10b981",
+                        "tertiary-fixed-dim": "#bdcac1",
+                        "inverse-on-surface": "#ecf1ff",
+                        "on-primary-fixed-variant": "#005236",
+                        "on-background": "#111c2d",
+                        "secondary-fixed-dim": "#95d3ba",
+                        "on-surface": "#111c2d",
+                        "secondary": "#2b6954",
+                        "surface-container-high": "#dee8ff",
+                        "on-primary-container": "#00422b",
+                        "surface-tint": "#006c49",
+                        "surface-container": "#e7eeff",
+                        "on-surface-variant": "#3c4a42",
+                        "surface-dim": "#cfdaf2",
+                        "secondary-container": "#adedd3",
+                        "surface-container-highest": "#d8e3fb",
+                        "surface": "#f9f9ff",
+                        "primary-fixed-dim": "#4edea3",
+                        "surface-container-lowest": "#ffffff",
+                        "tertiary-fixed": "#d9e6dd",
+                        "surface-container-low": "#f0f3ff",
+                        "on-tertiary-container": "#303c36",
+                        "surface-bright": "#f9f9ff",
+                        "inverse-surface": "#263143",
+                        "on-secondary-fixed-variant": "#0b513d",
+                        "outline": "#6c7a71",
+                        "on-tertiary": "#ffffff",
+                        "primary": "#006c49",
+                        "background": "#f9f9ff",
+                        "on-secondary-container": "#306d58",
+                        "tertiary-container": "#99a69e",
+                        "inverse-primary": "#4edea3",
+                        "outline-variant": "#bbcabf",
+                        "tertiary": "#55615a",
+                        "on-primary": "#ffffff",
+                        "on-tertiary-fixed-variant": "#3e4943"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "container-padding": "24px",
+                        "element-loose": "12px",
+                        "gutter": "16px",
+                        "section-gap": "32px",
+                        "unit": "4px",
+                        "element-tight": "8px"
+                    },
+                    "fontFamily": {
+                        "body-sm": ["Inter"],
+                        "label-md": ["Inter"],
+                        "title-lg": ["Inter"],
+                        "body-md": ["Inter"],
+                        "headline-md": ["Inter"],
+                        "label-sm": ["Inter"],
+                        "title-md": ["Inter"],
+                        "headline-lg": ["Inter"],
+                        "body-lg": ["Inter"],
+                        "display-lg": ["Inter"]
+                    },
+                    "fontSize": {
+                        "body-sm": ["13px", { "lineHeight": "18px", "fontWeight": "400" }],
+                        "label-md": ["12px", { "lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "600" }],
+                        "title-lg": ["18px", { "lineHeight": "24px", "fontWeight": "600" }],
+                        "body-md": ["14px", { "lineHeight": "20px", "fontWeight": "400" }],
+                        "headline-md": ["20px", { "lineHeight": "28px", "fontWeight": "600" }],
+                        "label-sm": ["11px", { "lineHeight": "14px", "fontWeight": "500" }],
+                        "title-md": ["16px", { "lineHeight": "24px", "fontWeight": "600" }],
+                        "headline-lg": ["24px", { "lineHeight": "32px", "letterSpacing": "-0.01em", "fontWeight": "600" }],
+                        "body-lg": ["16px", { "lineHeight": "24px", "fontWeight": "400" }],
+                        "display-lg": ["36px", { "lineHeight": "44px", "letterSpacing": "-0.02em", "fontWeight": "700" }]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        body { font-family: 'Inter', sans-serif; background-color: #f9f9ff; }
+        .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
+        .icon-fill { font-variation-settings: 'FILL' 1; }
+        
+        /* Tree Lines */
+        .tree-line-v { width: 2px; background-color: #bbcabf; position: absolute; left: 50%; transform: translateX(-50%); z-index: 0; }
+        .tree-line-h { height: 2px; background-color: #bbcabf; position: absolute; top: 0; z-index: 0; }
+        
+        .node-card { position: relative; z-index: 10; transition: all 0.2s ease; cursor: pointer; }
+        .node-card:hover { border-color: #10b981; transform: translateY(-2px); box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1); }
+        .node-card.active { border-color: #10b981; ring: 2px; ring-color: #10b981; background-color: #f0fdf4; }
+    </style>
+</head>
+<body class="flex h-screen overflow-hidden text-on-surface bg-background">
+<!-- SideNavBar -->
+<nav class="hidden md:flex flex-col h-full py-container-padding w-[280px] sticky top-0 left-0 bg-white border-r border-outline-variant z-50">
+<div class="px-container-padding mb-8 flex items-center gap-3">
+<div class="w-10 h-10 rounded-lg bg-primary-container flex items-center justify-center text-on-primary-container">
+<span class="material-symbols-outlined icon-fill">domain</span>
+</div>
+<div>
+<h1 class="text-headline-md font-headline-md font-extrabold text-primary">Revive HR</h1>
+<p class="text-label-sm font-label-sm text-on-surface-variant">Management Suite</p>
+</div>
+</div>
+<div class="flex-1 overflow-y-auto px-gutter space-y-1">
+<!-- Tabs -->
+<a class="flex items-center gap-3 px-3 py-2 rounded-lg text-on-surface-variant hover:bg-tertiary-container/10 transition-colors duration-200 ease-in-out" href="#">
+<span class="material-symbols-outlined">dashboard</span>
+<span class="text-label-md font-label-md">Dashboard</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 rounded-lg bg-secondary-container text-on-secondary-container font-bold transition-colors duration-200 ease-in-out" href="#">
+<span class="material-symbols-outlined">fitness_center</span>
+<span class="text-label-md font-label-md">Gyms</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 rounded-lg text-on-surface-variant hover:bg-tertiary-container/10 transition-colors duration-200 ease-in-out" href="#">
+<span class="material-symbols-outlined">group</span>
+<span class="text-label-md font-label-md">Users</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 rounded-lg text-on-surface-variant hover:bg-tertiary-container/10 transition-colors duration-200 ease-in-out" href="#">
+<span class="material-symbols-outlined">security</span>
+<span class="text-label-md font-label-md">Roles</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 rounded-lg text-on-surface-variant hover:bg-tertiary-container/10 transition-colors duration-200 ease-in-out" href="#">
+<span class="material-symbols-outlined">badge</span>
+<span class="text-label-md font-label-md">Employees</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 rounded-lg text-on-surface-variant hover:bg-tertiary-container/10 transition-colors duration-200 ease-in-out" href="#">
+<span class="material-symbols-outlined">work</span>
+<span class="text-label-md font-label-md">Recruitment</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 rounded-lg text-on-surface-variant hover:bg-tertiary-container/10 transition-colors duration-200 ease-in-out" href="#">
+<span class="material-symbols-outlined">assessment</span>
+<span class="text-label-md font-label-md">Reports</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 rounded-lg text-on-surface-variant hover:bg-tertiary-container/10 transition-colors duration-200 ease-in-out" href="#">
+<span class="material-symbols-outlined">payments</span>
+<span class="text-label-md font-label-md">Payroll</span>
+</a>
+</div>
+<div class="px-container-padding mt-auto pt-4 border-t border-outline-variant">
+<button class="w-full bg-primary text-white py-2 rounded-lg text-label-md font-label-md flex items-center justify-center gap-2 hover:bg-primary-container transition-colors">
+<span class="material-symbols-outlined text-[18px]">add</span>
+                Add New Hub
+            </button>
+</div>
+</nav>
+<!-- Main Content Area -->
+<div class="flex-1 flex flex-col min-w-0 overflow-hidden" id="main-content">
+<!-- TopNavBar -->
+<header class="flex justify-between items-center h-16 px-gutter w-full sticky top-0 z-40 bg-surface border-b border-outline-variant">
+<div class="flex items-center gap-4">
+<div class="relative focus-within:ring-2 focus-within:ring-primary rounded-lg">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant text-[20px]">search</span>
+<input class="pl-10 pr-4 py-2 bg-white border border-outline-variant rounded-lg text-body-sm font-body-sm focus:outline-none focus:border-primary w-64" placeholder="Search hierarchy..." type="text">
+</div>
+</div>
+<div class="flex items-center gap-4">
+<button class="p-2 text-on-surface-variant hover:text-primary transition-colors rounded-full hover:bg-surface-variant">
+<span class="material-symbols-outlined">sensors</span>
+</button>
+<button class="p-2 text-on-surface-variant hover:text-primary transition-colors rounded-full hover:bg-surface-variant relative">
+<span class="material-symbols-outlined">notifications</span>
+<span class="absolute top-1.5 right-1.5 w-2 h-2 bg-error rounded-full"></span>
+</button>
+<button class="flex items-center gap-2 hover:opacity-80 transition-opacity">
+<img alt="Super Admin Avatar" class="w-8 h-8 rounded-full object-cover border border-outline-variant" data-alt="Professional headshot of a corporate HR executive, male, in a modern office setting, soft natural lighting, high resolution." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBYHpG7jPVvPNbJWlR_jFmIZ0u6aliMSMq_STOaNOHrjZYwOnj9CzC_CMQlwo2StHh19r-ls9BdxNTaAK5iSUynMY-ffejo2agymnoUgm0czJ9EZ8AvRjSZmWj7LGamDs-Oq0Iccguds7OaOerEszq6feqhU23N4A7SxR207CrJan5tdd3BCrM26AB-DzJgV0xyDAcRn77776fwlKQDp1Dlx8II077aD4xkFBQcrHkHmkyb2FFc8I7YzQ">
+</button>
+</div>
+</header>
+<!-- Main Canvas -->
+<main class="flex-1 overflow-auto bg-surface relative flex flex-col" id="map-container">
+<!-- Map Controls / Toolbar -->
+<div class="sticky top-0 left-0 right-0 p-container-padding flex justify-between items-start z-30 pointer-events-none">
+<div class="pointer-events-auto bg-white/80 backdrop-blur-md p-4 rounded-xl border border-outline-variant shadow-sm max-w-sm">
+<h2 class="text-headline-md font-headline-md text-on-surface mb-1">Organizational Hierarchy Map</h2>
+<p class="text-body-sm font-body-sm text-on-surface-variant">Click on any node to view detailed headcount and management information for that specific region or hub.</p>
+</div>
+<div class="pointer-events-auto flex gap-2">
+<button class="flex items-center gap-2 px-4 py-2 bg-white border border-outline-variant rounded-lg text-label-md font-label-md text-on-surface hover:bg-surface-variant transition-colors" onclick="toggleFullScreen()">
+<span class="material-symbols-outlined text-[18px]">fullscreen</span>
+                        Full Screen
+                    </button>
+<button class="flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg text-label-md font-label-md hover:bg-primary-container transition-colors shadow-sm">
+<span class="material-symbols-outlined text-[18px]">download</span>
+                        Export PDF
+                    </button>
+</div>
+</div>
+<!-- Hierarchy Tree Canvas -->
+<div class="flex-1 min-h-[800px] min-w-[1000px] relative p-12 flex flex-col items-center pt-24 cursor-grab active:cursor-grabbing" id="tree-canvas">
+<!-- Level 1: Global HQ -->
+<div class="relative flex flex-col items-center">
+<div class="node-card bg-white border-2 border-primary rounded-xl p-4 w-64 text-center shadow-sm relative z-20 cursor-pointer active" onclick="showNodeDetails('Global HQ', '14,250', 'Sarah Jenkins, CHRO')">
+<div class="w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-3">
+<span class="material-symbols-outlined text-primary text-[24px]">public</span>
+</div>
+<h3 class="text-title-md font-title-md text-on-surface">Global HQ</h3>
+<p class="text-label-sm font-label-sm text-on-surface-variant mt-1">London, UK</p>
+<div class="mt-3 pt-3 border-t border-outline-variant flex justify-between text-label-sm font-label-sm">
+<span class="text-on-surface-variant">Total HC</span>
+<span class="font-bold text-primary">14,250</span>
+</div>
+</div>
+<!-- Vertical Line down from HQ -->
+<div class="tree-line-v h-16 top-full"></div>
+</div>
+<!-- Level 2 container -->
+<div class="relative mt-16 w-full max-w-[900px] flex justify-between">
+<!-- Horizontal connection line for Level 2 -->
+<div class="tree-line-h w-[calc(100%-250px)] left-[125px]"></div>
+<!-- Vertical lines up to connection line -->
+<div class="tree-line-v h-8 -top-8 left-[125px] !transform-none"></div>
+<div class="tree-line-v h-8 -top-8 left-1/2 -ml-[1px]"></div>
+<div class="tree-line-v h-8 -top-8 right-[125px] left-auto !transform-none"></div>
+<!-- Region: North America -->
+<div class="relative flex flex-col items-center w-[250px]">
+<div class="node-card bg-white border border-outline-variant rounded-xl p-4 w-56 text-center shadow-sm relative z-20 cursor-pointer" onclick="showNodeDetails('North America', '6,400', 'Michael Chang, Regional HRVP')">
+<h3 class="text-title-sm font-title-lg text-on-surface">North America</h3>
+<div class="mt-3 pt-3 border-t border-outline-variant flex justify-between text-label-sm font-label-sm">
+<span class="text-on-surface-variant">HC: 6,400</span>
+<span class="text-primary flex items-center gap-1"><span class="material-symbols-outlined text-[14px]">groups</span></span>
+</div>
+</div>
+<div class="tree-line-v h-16 top-full"></div>
+<!-- Level 3: NA Hubs -->
+<div class="relative mt-16 w-[300px] flex justify-between">
+<div class="tree-line-h w-[150px] left-[75px]"></div>
+<div class="tree-line-v h-8 -top-8 left-[75px] !transform-none"></div>
+<div class="tree-line-v h-8 -top-8 right-[75px] left-auto !transform-none"></div>
+<div class="node-card bg-white border border-outline-variant rounded-lg p-3 w-32 text-center text-body-sm font-body-sm hover:border-primary">
+<div>NYC Hub</div>
+<div class="text-label-sm text-on-surface-variant mt-1">HC: 2,100</div>
+</div>
+<div class="node-card bg-white border border-outline-variant rounded-lg p-3 w-32 text-center text-body-sm font-body-sm hover:border-primary">
+<div>LA Hub</div>
+<div class="text-label-sm text-on-surface-variant mt-1">HC: 1,800</div>
+</div>
+</div>
+</div>
+<!-- Region: Europe -->
+<div class="relative flex flex-col items-center w-[250px]">
+<div class="node-card bg-white border border-outline-variant rounded-xl p-4 w-56 text-center shadow-sm relative z-20 cursor-pointer" onclick="showNodeDetails('Europe', '4,850', 'Elena Rostova, Regional HRVP')">
+<h3 class="text-title-sm font-title-lg text-on-surface">Europe</h3>
+<div class="mt-3 pt-3 border-t border-outline-variant flex justify-between text-label-sm font-label-sm">
+<span class="text-on-surface-variant">HC: 4,850</span>
+<span class="text-primary flex items-center gap-1"><span class="material-symbols-outlined text-[14px]">groups</span></span>
+</div>
+</div>
+<div class="tree-line-v h-16 top-full"></div>
+<!-- Level 3: EU Hubs -->
+<div class="relative mt-16 w-[300px] flex justify-between">
+<div class="tree-line-h w-[150px] left-[75px]"></div>
+<div class="tree-line-v h-8 -top-8 left-[75px] !transform-none"></div>
+<div class="tree-line-v h-8 -top-8 right-[75px] left-auto !transform-none"></div>
+<div class="node-card bg-white border border-outline-variant rounded-lg p-3 w-32 text-center text-body-sm font-body-sm hover:border-primary">
+<div>London Hub</div>
+<div class="text-label-sm text-on-surface-variant mt-1">HC: 3,000</div>
+</div>
+<div class="node-card bg-white border border-outline-variant rounded-lg p-3 w-32 text-center text-body-sm font-body-sm hover:border-primary">
+<div>Berlin Hub</div>
+<div class="text-label-sm text-on-surface-variant mt-1">HC: 1,850</div>
+</div>
+</div>
+</div>
+<!-- Region: APAC -->
+<div class="relative flex flex-col items-center w-[250px]">
+<div class="node-card bg-white border border-outline-variant rounded-xl p-4 w-56 text-center shadow-sm relative z-20 cursor-pointer" onclick="showNodeDetails('APAC', '3,000', 'David Chen, Regional HRVP')">
+<h3 class="text-title-sm font-title-lg text-on-surface">APAC</h3>
+<div class="mt-3 pt-3 border-t border-outline-variant flex justify-between text-label-sm font-label-sm">
+<span class="text-on-surface-variant">HC: 3,000</span>
+<span class="text-primary flex items-center gap-1"><span class="material-symbols-outlined text-[14px]">groups</span></span>
+</div>
+</div>
+<div class="tree-line-v h-16 top-full"></div>
+<!-- Level 3: APAC Hubs -->
+<div class="relative mt-16 w-[150px] flex justify-center">
+<div class="tree-line-v h-8 -top-8 left-1/2 -ml-[1px]"></div>
+<div class="node-card bg-white border border-outline-variant rounded-lg p-3 w-32 text-center text-body-sm font-body-sm hover:border-primary">
+<div>Singapore</div>
+<div class="text-label-sm text-on-surface-variant mt-1">HC: 3,000</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Context Panel (Fixed Bottom Right) -->
+<div class="fixed bottom-container-padding right-container-padding bg-white border border-outline-variant rounded-xl shadow-lg w-80 p-6 z-40 transform transition-transform duration-300 translate-y-0" id="details-panel">
+<div class="flex justify-between items-start mb-4">
+<div class="flex items-center gap-2 text-primary">
+<span class="material-symbols-outlined">account_tree</span>
+<h4 class="text-title-md font-title-md" id="panel-title">Global HQ</h4>
+</div>
+<button class="text-on-surface-variant hover:text-on-surface" onclick="document.getElementById('details-panel').classList.add('translate-y-[150%]')">
+<span class="material-symbols-outlined text-[20px]">close</span>
+</button>
+</div>
+<div class="space-y-4">
+<div>
+<p class="text-label-sm font-label-sm text-on-surface-variant mb-1">Total Headcount</p>
+<p class="text-headline-md font-headline-md text-on-surface" id="panel-hc">14,250</p>
+</div>
+<div class="bg-surface-variant/30 p-3 rounded-lg border border-outline-variant/50">
+<p class="text-label-sm font-label-sm text-on-surface-variant mb-2">Primary HR Contact</p>
+<div class="flex items-center gap-3">
+<div class="w-8 h-8 rounded-full bg-tertiary-container text-on-tertiary-container flex items-center justify-center text-label-md">
+<span class="material-symbols-outlined text-[16px]">person</span>
+</div>
+<div>
+<p class="text-body-sm font-body-sm font-medium text-on-surface" id="panel-manager">Sarah Jenkins, CHRO</p>
+<a class="text-label-sm font-label-sm text-primary hover:underline" href="#">View Profile</a>
+</div>
+</div>
+</div>
+</div>
+<button class="w-full mt-4 py-2 border border-primary text-primary rounded-lg text-label-md font-label-md hover:bg-primary/5 transition-colors">
+                    View Full Directory
+                </button>
+</div>
+</main>
+</div>
+<script>
+        function toggleFullScreen() {
+            const content = document.getElementById('main-content');
+            if (!document.fullscreenElement) {
+                content.requestFullscreen().catch(err => {
+                    console.log(`Error attempting to enable fullscreen: ${err.message}`);
+                });
+            } else {
+                document.exitFullscreen();
+            }
+        }
+
+        function showNodeDetails(title, hc, manager) {
+            document.getElementById('panel-title').innerText = title;
+            document.getElementById('panel-hc').innerText = hc;
+            document.getElementById('panel-manager').innerText = manager;
+            
+            const panel = document.getElementById('details-panel');
+            panel.classList.remove('translate-y-[150%]');
+            
+            // Visual feedback on cards (very basic)
+            document.querySelectorAll('.node-card').forEach(card => card.classList.remove('border-primary', 'bg-f0fdf4'));
+            event.currentTarget.classList.add('border-primary');
+        }
+        
+        // Simple drag to scroll for canvas
+        const slider = document.getElementById('tree-canvas');
+        let isDown = false;
+        let startX;
+        let startY;
+        let scrollLeft;
+        let scrollTop;
+        const main = document.getElementById('map-container');
+
+        slider.addEventListener('mousedown', (e) => {
+            isDown = true;
+            slider.classList.add('cursor-grabbing');
+            slider.classList.remove('cursor-grab');
+            startX = e.pageX - main.offsetLeft;
+            startY = e.pageY - main.offsetTop;
+            scrollLeft = main.scrollLeft;
+            scrollTop = main.scrollTop;
+        });
+        slider.addEventListener('mouseleave', () => {
+            isDown = false;
+            slider.classList.remove('cursor-grabbing');
+            slider.classList.add('cursor-grab');
+        });
+        slider.addEventListener('mouseup', () => {
+            isDown = false;
+            slider.classList.remove('cursor-grabbing');
+            slider.classList.add('cursor-grab');
+        });
+        slider.addEventListener('mousemove', (e) => {
+            if (!isDown) return;
+            e.preventDefault();
+            const x = e.pageX - main.offsetLeft;
+            const y = e.pageY - main.offsetTop;
+            const walkX = (x - startX) * 2;
+            const walkY = (y - startY) * 2;
+            main.scrollLeft = scrollLeft - walkX;
+            main.scrollTop = scrollTop - walkY;
+        });
+    </script>
+</body></html>
