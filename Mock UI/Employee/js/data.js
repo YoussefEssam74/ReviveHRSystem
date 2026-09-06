@@ -7,7 +7,7 @@ const MOCK = {
     gym: { id: 'gym-1', name: 'Revive Gym', branch: 'Nasr City' },
     hireDate: '2026-01-12', employmentType: 'Full-time', status: 'Active',
     role: 'Branch Manager',
-    permissions: ['team_view','team_requests_approve','team_attendance','team_schedule','team_followup','recruitment_request','employee_leaving'],
+    permissions: ['team.view','requests.approve.team','attendance.view.team','schedule.view.team','team.manage','recruitment.vacancy_request.create','employees.offboard'],
     dateOfBirth: '1995-03-15', nationalId: '29503151234567', gender: 'Male',
     address: '15 El-Thawra St, Nasr City, Cairo',
     emergencyContact: { name: 'Mohamed Ahmed', relationship: 'Father', phone: '+20 100 987 6543' },
@@ -66,6 +66,8 @@ const MOCK = {
     't10': ['st-morning','st-evening','st-morning','st-off','st-morning','st-evening','st-morning'],
   },
   currentCycleIndex: 2,
+  todayIndex: 1, // Tue 26 in the Shift Management week (Mon 25 – Sun 31) — index into teamSchedule arrays
+  now: '14:30',  // mock current time — drives the auto shift status on the Employees page
   payroll: [
     { id: 'p1', period: 'August 2026', status: 'Processing', paidDate: null, netSalary: null, visible: false,
       items: [], grossEarnings: 0, totalDeductions: 0 },
@@ -233,12 +235,36 @@ const MOCK = {
     { id: 'f4', employee: 'Tarek Nabil', type: 'Performance', description: 'Q2 evaluation below expectations', severity: 'medium' },
   ],
   recruitmentRequests: [
-    { id: 'rr1', position: 'Senior Trainer', count: 1, urgency: 'High', status: 'Approved', date: 'Aug 20, 2026' },
-    { id: 'rr2', position: 'Receptionist', count: 1, urgency: 'Medium', status: 'Pending', date: 'Aug 15, 2026' },
-    { id: 'rr3', position: 'Cleaner', count: 2, urgency: 'Low', status: 'Submitted', date: 'Aug 10, 2026' },
+    { id: 'rr1', position: 'Senior Trainer', count: 1, urgency: 'High', status: 'Approved', date: 'Aug 20, 2026', requestedBy: 'Omar Youssef', department: 'Training', reason: 'Replacing a departing trainer; Q4 class load is increasing.', timeline: 'Submitted Aug 10 · Approved Aug 20', candidates: 3 },
+    { id: 'rr2', position: 'Receptionist', count: 1, urgency: 'Medium', status: 'Pending', date: 'Aug 15, 2026', requestedBy: 'Sara Ali', department: 'Front Desk', reason: 'Covering evening shift demand at the front desk.', timeline: 'Submitted Aug 15 · Awaiting approval', candidates: 0 },
+    { id: 'rr3', position: 'Cleaner', count: 2, urgency: 'Low', status: 'Submitted', date: 'Aug 10, 2026', requestedBy: 'Hassan Ali', department: 'Facilities', reason: 'New branch floor area added; current team cannot cover it.', timeline: 'Submitted Aug 10 · In review', candidates: 0 },
   ],
   employeeLeaving: [
     { id: 'el1', employee: 'Mona Said', position: 'Trainer', lastDay: 'Sep 30, 2026', status: 'Notice Period', reason: 'Personal reasons' },
+  ],
+  branchEmployees: [
+    { id: 'RV-00124', name: 'Ahmed Mohamed', position: 'Trainer', shift: 'Morning', status: 'Active', initials: 'AM' },
+    { id: 'RV-00125', name: 'Karim Hassan', position: 'Trainer', shift: 'Morning', status: 'Active', initials: 'KH' },
+    { id: 'RV-00126', name: 'Sara Ali', position: 'Receptionist', shift: 'Morning', status: 'Active', initials: 'SA' },
+    { id: 'RV-00127', name: 'Omar Youssef', position: 'Trainer', shift: 'Evening', status: 'Active', initials: 'OY' },
+    { id: 'RV-00128', name: 'Nour Ibrahim', position: 'Cleaner', shift: 'Morning', status: 'Active', initials: 'NI' },
+    { id: 'RV-00129', name: 'Yasmin Adel', position: 'Trainer', shift: 'Evening', status: 'On Leave', initials: 'YA' },
+    { id: 'RV-00130', name: 'Tarek Nabil', position: 'Receptionist', shift: 'Evening', status: 'Active', initials: 'TN' },
+    { id: 'RV-00131', name: 'Mona Said', position: 'Trainer', shift: 'Morning', status: 'Active', initials: 'MS' },
+    { id: 'RV-00132', name: 'Hassan Ali', position: 'Maintenance', shift: 'Morning', status: 'Active', initials: 'HA' },
+    { id: 'RV-00133', name: 'Fatma Hassan', position: 'Trainer', shift: 'Evening', status: 'Active', initials: 'FH' },
+    { id: 'RV-00134', name: 'Ahmed Zaki', position: 'Trainer', shift: 'Morning', status: 'Active', initials: 'AZ' },
+    { id: 'RV-00135', name: 'Laila Mostafa', position: 'Receptionist', shift: 'Evening', status: 'Suspended', initials: 'LM' },
+  ],
+  teamEvaluations: [
+    { id: 'te1', employee: 'Karim Hassan', position: 'Trainer', period: 'Q2 2026', score: 4.2, result: 'Exceeds', status: 'Completed' },
+    { id: 'te2', employee: 'Sara Ali', position: 'Receptionist', period: 'Q2 2026', score: 3.8, result: 'Meets', status: 'Completed' },
+    { id: 'te3', employee: 'Omar Youssef', position: 'Trainer', period: 'Q2 2026', score: 3.1, result: 'Meets', status: 'Completed' },
+    { id: 'te4', employee: 'Nour Ibrahim', position: 'Cleaner', period: 'Q2 2026', score: 4.0, result: 'Meets', status: 'Completed' },
+    { id: 'te5', employee: 'Yasmin Adel', position: 'Trainer', period: 'Q2 2026', score: 2.6, result: 'Below', status: 'Completed' },
+    { id: 'te6', employee: 'Tarek Nabil', position: 'Receptionist', period: 'Q2 2026', score: 3.5, result: 'Meets', status: 'Completed' },
+    { id: 'te7', employee: 'Mona Said', position: 'Trainer', period: 'Q2 2026', score: 4.6, result: 'Exceeds', status: 'Completed' },
+    { id: 'te8', employee: 'Hassan Ali', position: 'Maintenance', period: 'Q2 2026', score: 3.9, result: 'Meets', status: 'Completed' },
   ],
   settings: {
     emailNotifications: true,
@@ -247,5 +273,94 @@ const MOCK = {
     attendanceNotifications: true,
     payrollNotifications: true,
     requestNotifications: false,
+  },
+};
+
+// ==================== DEMO USERS (Prototype Preview) ====================
+// Switch roles in the demo toolbar to preview how permissions change the
+// navigation and which pages are visible. Keys follow the permission catalog
+// in docs/product/features.md (dotted format, e.g. `team.view`).
+const DEMO_USERS = {
+  employee: {
+    id: 'RV-00124', firstName: 'Ahmed', lastName: 'Mohamed', fullName: 'Ahmed Mohamed',
+    email: 'ahmed.mohamed@revive.com', phone: '+20 101 234 5678', initials: 'AM',
+    position: 'Trainer', level: 'Senior',
+    gym: { id: 'gym-1', name: 'Revive Gym', branch: 'Nasr City' },
+    hireDate: '2026-01-12', employmentType: 'Full-time', status: 'Active',
+    role: 'Employee',
+    permissions: [],
+    dateOfBirth: '1995-03-15', nationalId: '29503151234567', gender: 'Male',
+    address: '15 El-Thawra St, Nasr City, Cairo',
+    emergencyContact: { name: 'Mohamed Ahmed', relationship: 'Father', phone: '+20 100 987 6543' },
+    baseSalary: 12000,
+  },
+  teamLeader: {
+    id: 'RV-00124', firstName: 'Ahmed', lastName: 'Mohamed', fullName: 'Ahmed Mohamed',
+    email: 'ahmed.mohamed@revive.com', phone: '+20 101 234 5678', initials: 'AM',
+    position: 'Trainer', level: 'Senior',
+    gym: { id: 'gym-1', name: 'Revive Gym', branch: 'Nasr City' },
+    hireDate: '2026-01-12', employmentType: 'Full-time', status: 'Active',
+    role: 'Team Leader',
+    // Team-scoped only — scope is the assigned team, NOT the whole gym.
+    // requests.approve.team is intentionally NOT granted (usually held by BM/HR).
+    permissions: ['team.view','attendance.view.team','schedule.view.team','requests.view.team','evaluations.view.team','team.manage'],
+    dateOfBirth: '1995-03-15', nationalId: '29503151234567', gender: 'Male',
+    address: '15 El-Thawra St, Nasr City, Cairo',
+    emergencyContact: { name: 'Mohamed Ahmed', relationship: 'Father', phone: '+20 100 987 6543' },
+    baseSalary: 12000,
+  },
+  branchManager: {
+    id: 'RV-00124', firstName: 'Ahmed', lastName: 'Mohamed', fullName: 'Ahmed Mohamed',
+    email: 'ahmed.mohamed@revive.com', phone: '+20 101 234 5678', initials: 'AM',
+    position: 'Trainer', level: 'Senior',
+    gym: { id: 'gym-1', name: 'Revive Gym', branch: 'Nasr City' },
+    hireDate: '2026-01-12', employmentType: 'Full-time', status: 'Active',
+    role: 'Branch Manager',
+    // Branch-wide only — scope is the assigned gym. No team-scoped keys here so
+    // the demo clearly separates branch management from team leadership.
+    permissions: ['employees.view','employees.create','employees.edit','employees.status.change','attendance.view','attendance.edit','schedule.view','schedule.manage','requests.view','requests.approve','recruitment.vacancy_request.create','employees.offboard'],
+    dateOfBirth: '1995-03-15', nationalId: '29503151234567', gender: 'Male',
+    address: '15 El-Thawra St, Nasr City, Cairo',
+    emergencyContact: { name: 'Mohamed Ahmed', relationship: 'Father', phone: '+20 100 987 6543' },
+    baseSalary: 12000,
+  },
+  hr: {
+    id: 'RV-00201', firstName: 'Sarah', lastName: 'Hassan', fullName: 'Sarah Hassan',
+    email: 'sarah.hassan@revive.com', phone: '+20 102 345 6789', initials: 'SH',
+    position: 'HR Specialist', level: 'Senior',
+    gym: { id: 'gym-1', name: 'Revive Gym', branch: 'Nasr City' },
+    hireDate: '2025-06-01', employmentType: 'Full-time', status: 'Active',
+    role: 'HR',
+    permissions: ['employees.view','employees.create','employees.edit','employees.documents.view','attendance.view','attendance.edit','attendance.view.team','schedule.view','schedule.manage','schedule.view.team','requests.view','requests.approve','requests.view.team','requests.approve.team','payroll.view','recruitment.view','recruitment.vacancies.manage','recruitment.candidates.manage','recruitment.vacancy_request.create','recruitment.vacancy_request.approve','evaluations.view','evaluations.view.team','team.view','team.manage','employees.offboard'],
+    dateOfBirth: '1992-11-20', nationalId: '29211201234567', gender: 'Female',
+    address: '8 Makram Ebeid St, Nasr City, Cairo',
+    emergencyContact: { name: 'Hassan Ali', relationship: 'Father', phone: '+20 100 111 2222' },
+    baseSalary: 15000,
+  },
+  hrManager: {
+    id: 'RV-00102', firstName: 'Mona', lastName: 'El-Sayed', fullName: 'Mona El-Sayed',
+    email: 'mona.elsayed@revive.com', phone: '+20 103 456 7890', initials: 'ME',
+    position: 'HR Manager', level: 'Manager',
+    gym: { id: 'gym-1', name: 'Revive Gym', branch: 'Nasr City' },
+    hireDate: '2024-03-15', employmentType: 'Full-time', status: 'Active',
+    role: 'HR Manager',
+    permissions: ['employees.view','employees.create','employees.edit','employees.transfer','employees.position.change','employees.role.assign','employees.status.change','employees.compensation.manage','employees.contract.manage','employees.offboard','employees.documents.view','employees.documents.manage','employees.bulk_import','employees.leave_balance.manage','positions.view','positions.manage','attendance.view','attendance.edit','attendance.manual_entry','attendance.view.team','schedule.view','schedule.manage','schedule.view.team','requests.view','requests.approve','requests.view.team','requests.approve.team','payroll.view','payroll.edit','payroll.approve','evaluations.view','evaluations.manage','evaluations.view.team','reports.view','announcements.view','announcements.manage','audit.view','team.view','team.manage','recruitment.view','recruitment.vacancies.manage','recruitment.candidates.manage','recruitment.hire.approve','recruitment.vacancy_request.create','recruitment.vacancy_request.approve'],
+    dateOfBirth: '1988-07-08', nationalId: '28807081234567', gender: 'Female',
+    address: '22 Abbas El-Akkad St, Nasr City, Cairo',
+    emergencyContact: { name: 'El-Sayed Mahmoud', relationship: 'Father', phone: '+20 100 333 4444' },
+    baseSalary: 22000,
+  },
+  superAdmin: {
+    id: 'RV-00001', firstName: 'Omar', lastName: 'Farouk', fullName: 'Omar Farouk',
+    email: 'omar.farouk@revive.com', phone: '+20 100 000 0001', initials: 'OF',
+    position: 'System Administrator', level: 'Executive',
+    gym: { id: 'gym-1', name: 'Revive Gym', branch: 'Nasr City' },
+    hireDate: '2024-01-01', employmentType: 'Full-time', status: 'Active',
+    role: 'Super Admin',
+    permissions: ['*'],
+    dateOfBirth: '1985-01-01', nationalId: '28501011234567', gender: 'Male',
+    address: '1 Central Plaza, New Cairo, Cairo',
+    emergencyContact: { name: 'Farouk Omar', relationship: 'Father', phone: '+20 100 555 6666' },
+    baseSalary: 30000,
   },
 };

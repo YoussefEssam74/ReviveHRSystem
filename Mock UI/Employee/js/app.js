@@ -12,12 +12,15 @@ const pageRenderers = {
   'notifications': renderNotifications,
   'settings': renderSettings,
   'team': renderTeam,
-  'team-overview': renderTeamOverview,
-  'team-requests': renderTeamRequests,
-  'team-attendance': renderTeamAttendance,
+  'team-attendance': renderTeam,
   'team-schedule': renderTeamSchedule,
-  'shift-assignment': renderShiftAssignment,
-  'team-followup': renderTeamFollowup,
+  'team-requests': renderTeamRequests,
+  'team-performance': renderTeamPerformance,
+  'team-updates': renderTeamUpdates,
+  'employees': renderEmployees,
+  'attendance-management': renderAttendanceManagement,
+  'requests-management': renderRequestsManagement,
+  'shift-management': renderShiftManagement,
   'recruitment': renderRecruitment,
   'leaving': renderLeaving,
 };
@@ -35,12 +38,15 @@ const pageTitles = {
   'notifications': 'Notifications',
   'settings': 'Settings',
   'team': 'My Team',
-  'team-overview': 'Team Overview',
-  'team-requests': 'Team Requests',
-  'team-attendance': 'Team Attendance',
+  'team-attendance': 'My Team',
   'team-schedule': 'Team Schedule',
-  'shift-assignment': 'Shift Assignment',
-  'team-followup': 'Team Follow-up',
+  'team-requests': 'Team Requests',
+  'team-performance': 'Team Performance',
+  'team-updates': 'Team Updates',
+  'employees': 'Employees',
+  'attendance-management': 'Attendance Management',
+  'requests-management': 'Requests Management',
+  'shift-management': 'Shift Management',
   'recruitment': 'Recruitment Requests',
   'leaving': 'Employee Leaving',
 };
@@ -66,6 +72,9 @@ function renderAll() {
   renderNavItems('sidebar-nav');
   renderNavItems('mobile-sidebar-nav');
 
+  // Header user info (role switcher may have changed the active user)
+  updateUserUI();
+
   // Mobile bottom nav active
   document.querySelectorAll('.mobile-nav-btn').forEach(btn => {
     const p = btn.getAttribute('data-page');
@@ -79,5 +88,6 @@ function renderAll() {
 
 // ==================== INIT ====================
 document.addEventListener('DOMContentLoaded', () => {
+  updateUserUI();
   renderAll();
 });

@@ -157,13 +157,13 @@ function renderDashboard() {
       </div>
     </div>
 
-    ${hasMgmt?`<div class="bg-white rounded-xl border border-charcoal-200 p-3">
+    ${hasMgmt()?`<div class="bg-white rounded-xl border border-charcoal-200 p-3">
       <div class="flex items-center justify-between mb-2">
-        <p class="bento-label">MANAGEMENT OVERVIEW</p>
-        <button onclick="navigateTo('team-overview')" class="text-[11px] text-brand-600 font-semibold hover:underline">View Team</button>
+        <p class="bento-label">${hasPermission('employees.view') ? 'BRANCH OVERVIEW' : 'TEAM OVERVIEW'}</p>
+        <button onclick="navigateTo('${hasPermission('employees.view') ? 'employees' : 'team'}')" class="text-[11px] text-brand-600 font-semibold hover:underline">${hasPermission('employees.view') ? 'View Employees' : 'View Team'}</button>
       </div>
       <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
-        <div class="text-center p-2 rounded-lg bg-charcoal-50"><p class="text-lg font-bold text-charcoal-900">${MOCK.teamStats.total}</p><p class="text-[10px] text-charcoal-500">Team Members</p></div>
+        <div class="text-center p-2 rounded-lg bg-charcoal-50"><p class="text-lg font-bold text-charcoal-900">${hasPermission('employees.view') ? MOCK.branchEmployees.length : MOCK.teamStats.total}</p><p class="text-[10px] text-charcoal-500">${hasPermission('employees.view') ? 'Employees' : 'Team Members'}</p></div>
         <div class="text-center p-2 rounded-lg bg-brand-50"><p class="text-lg font-bold text-brand-600">${MOCK.teamStats.present}</p><p class="text-[10px] text-charcoal-500">Present Today</p></div>
         <div class="text-center p-2 rounded-lg bg-yellow-50"><p class="text-lg font-bold text-yellow-600">${MOCK.teamStats.pendingRequests}</p><p class="text-[10px] text-charcoal-500">Pending Requests</p></div>
         <div class="text-center p-2 rounded-lg bg-red-50"><p class="text-lg font-bold text-red-600">${MOCK.teamStats.absent}</p><p class="text-[10px] text-charcoal-500">Absent</p></div>

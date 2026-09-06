@@ -12,7 +12,6 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/lucide/0.263.1/lucide.min.css">
   <script>
     tailwind.config = {
       theme: {
@@ -52,13 +51,42 @@
   </script>
   <link rel="stylesheet" href="styles.css">
 </head>
-<body class="h-full bg-gray-50 font-sans text-charcoal-800 antialiased">
+<body class="h-full flex flex-col bg-gray-50 font-sans text-charcoal-800 antialiased">
+
+  <!-- ==================== PROTOTYPE PREVIEW TOOLBAR ==================== -->
+  <div id="demo-toolbar" class="flex-shrink-0 h-10 bg-charcoal-900 text-white flex items-center px-3 gap-2 text-xs z-[60]">
+    <div class="flex items-center gap-1.5 font-semibold text-charcoal-200 flex-shrink-0">
+      <svg class="w-3.5 h-3.5 text-brand-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+      Prototype Preview
+    </div>
+    <div class="flex-1"></div>
+    <!-- Role switcher -->
+    <div class="relative" id="demo-role-container">
+      <button onclick="toggleDemoRoleMenu()" class="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white/10 hover:bg-white/20 transition-colors" aria-label="Switch role">
+        <span id="demo-role-label">Branch Manager</span>
+        <svg class="w-3 h-3 opacity-70" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+      </button>
+      <div id="demo-role-menu" class="hidden absolute right-0 mt-1 w-44 bg-white text-charcoal-800 rounded-lg shadow-xl border border-charcoal-100 py-1 z-50">
+        <button onclick="switchRole('employee')" class="w-full text-left px-3 py-1.5 text-xs hover:bg-charcoal-50">Employee</button>
+        <button onclick="switchRole('teamLeader')" class="w-full text-left px-3 py-1.5 text-xs hover:bg-charcoal-50">Team Leader</button>
+        <button onclick="switchRole('branchManager')" class="w-full text-left px-3 py-1.5 text-xs hover:bg-charcoal-50">Branch Manager</button>
+        <button onclick="switchRole('hr')" class="w-full text-left px-3 py-1.5 text-xs hover:bg-charcoal-50">HR</button>
+        <button onclick="switchRole('hrManager')" class="w-full text-left px-3 py-1.5 text-xs hover:bg-charcoal-50">HR Manager</button>
+        <button onclick="switchRole('superAdmin')" class="w-full text-left px-3 py-1.5 text-xs hover:bg-charcoal-50">Super Admin</button>
+      </div>
+    </div>
+    <!-- Show all pages toggle -->
+    <button onclick="toggleShowAll()" id="demo-showall" class="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white/10 hover:bg-white/20 transition-colors" aria-label="Show all pages">
+      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
+      Show All Pages
+    </button>
+  </div>
 
   <!-- ==================== DESKTOP SHELL ==================== -->
-  <div id="app-shell" class="hidden lg:flex h-full">
+  <div id="app-shell" class="hidden lg:flex flex-1 min-h-0">
 
     <!-- SIDEBAR -->
-    <aside id="sidebar" class="fixed inset-y-0 left-0 z-40 w-64 bg-white border-r border-charcoal-200 flex flex-col transition-transform duration-300 lg:translate-x-0 -translate-x-full" data-sidebar>
+    <aside id="sidebar" class="fixed top-10 bottom-0 left-0 z-40 w-64 bg-white border-r border-charcoal-200 flex flex-col transition-transform duration-300 lg:translate-x-0 -translate-x-full" data-sidebar>
 
       <!-- Logo -->
       <div class="flex items-center gap-3 px-6 h-16 border-b border-charcoal-100 flex-shrink-0">
@@ -169,7 +197,7 @@
   </div>
 
   <!-- ==================== MOBILE SHELL ==================== -->
-  <div id="mobile-shell" class="lg:hidden flex flex-col h-full">
+  <div id="mobile-shell" class="lg:hidden flex flex-col flex-1 min-h-0">
 
     <!-- Mobile Header -->
     <header class="sticky top-0 z-20 bg-white border-b border-charcoal-100 h-14 flex items-center px-4 gap-3 flex-shrink-0">
@@ -224,7 +252,7 @@
     <div id="mobile-sidebar-overlay" class="fixed inset-0 bg-black/50 z-40 hidden" onclick="closeSidebar()"></div>
 
     <!-- Mobile Sidebar Drawer -->
-    <div id="mobile-sidebar" class="fixed inset-y-0 left-0 z-50 w-72 bg-white shadow-xl transform -translate-x-full transition-transform duration-300 flex flex-col">
+    <div id="mobile-sidebar" class="fixed top-10 bottom-0 left-0 z-50 w-72 bg-white shadow-xl transform -translate-x-full transition-transform duration-300 flex flex-col">
       <div class="flex items-center gap-3 px-5 h-14 border-b border-charcoal-100 flex-shrink-0">
         <div class="w-7 h-7 bg-brand-600 rounded-lg flex items-center justify-center">
           <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
@@ -246,7 +274,7 @@
     </div>
 
     <!-- Mobile More Menu -->
-    <div id="mobile-more-menu" class="hidden fixed inset-0 z-40">
+    <div id="mobile-more-menu" class="hidden fixed top-10 bottom-0 left-0 right-0 z-40">
       <div class="absolute inset-0 bg-black/40" onclick="closeMobileMore()"></div>
       <div class="absolute bottom-16 left-4 right-4 bg-white rounded-2xl shadow-xl border border-charcoal-100 p-2 max-h-[70vh] overflow-y-auto">
         <div class="grid grid-cols-3 gap-2" id="mobile-more-grid">
@@ -263,11 +291,11 @@
   <div id="toast-container" class="fixed top-4 right-4 z-[100] space-y-2 pointer-events-none"></div>
 
   <!-- ==================== SCRIPTS ==================== -->
-  <script src="js/data.js?v=2"></script>
-  <script src="js/core.js?v=2"></script>
-  <script src="js/pages-employee.js?v=2"></script>
-  <script src="js/pages-employee2.js?v=2"></script>
-  <script src="js/pages-management.js?v=2"></script>
-  <script src="js/app.js?v=2"></script>
+  <script src="js/data.js?v=8"></script>
+  <script src="js/core.js?v=8"></script>
+  <script src="js/pages-employee.js?v=8"></script>
+  <script src="js/pages-employee2.js?v=8"></script>
+  <script src="js/pages-management.js?v=8"></script>
+  <script src="js/app.js?v=8"></script>
 </body>
 </html>
