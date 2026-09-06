@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Team Schedule - Nasr City Branch</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .material-symbols-outlined.fill {
+            font-variation-settings: 'FILL' 1;
+        }
+    </style>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "on-tertiary-fixed-variant": "#842225",
+                        "surface-tint": "#006c49",
+                        "on-primary": "#ffffff",
+                        "surface-variant": "#d3e4fe",
+                        "deep-navy": "#000B21",
+                        "tertiary-fixed-dim": "#ffb3af",
+                        "tertiary-fixed": "#ffdad7",
+                        "secondary": "#006e2f",
+                        "tertiary": "#a43a3a",
+                        "on-background": "#0b1c30",
+                        "background": "#f8f9ff",
+                        "surface-gray": "#F8FAFC",
+                        "on-tertiary": "#ffffff",
+                        "inverse-surface": "#213145",
+                        "on-surface-variant": "#3c4a42",
+                        "on-primary-fixed-variant": "#005236",
+                        "primary-fixed-dim": "#4edea3",
+                        "on-error": "#ffffff",
+                        "surface-container-high": "#dce9ff",
+                        "status-error": "#EF4444",
+                        "secondary-container": "#6bff8f",
+                        "on-tertiary-container": "#711419",
+                        "on-secondary-container": "#007432",
+                        "primary-container": "#10b981",
+                        "on-tertiary-fixed": "#410005",
+                        "on-error-container": "#93000a",
+                        "inverse-primary": "#4edea3",
+                        "on-surface": "#0b1c30",
+                        "error": "#ba1a1a",
+                        "outline-variant": "#bbcabf",
+                        "border-subtle": "#E2E8F0",
+                        "secondary-fixed-dim": "#4ae176",
+                        "outline": "#6c7a71",
+                        "status-info": "#00A4A6",
+                        "on-primary-container": "#00422b",
+                        "inverse-on-surface": "#eaf1ff",
+                        "primary": "#006c49",
+                        "primary-fixed": "#6ffbbe",
+                        "surface-bright": "#f8f9ff",
+                        "surface-container-highest": "#d3e4fe",
+                        "secondary-fixed": "#6bff8f",
+                        "surface-container": "#e5eeff",
+                        "surface-container-lowest": "#ffffff",
+                        "status-warning": "#F59E0B",
+                        "surface-dim": "#cbdbf5",
+                        "on-secondary-fixed-variant": "#005321",
+                        "on-secondary": "#ffffff",
+                        "on-secondary-fixed": "#002109",
+                        "tertiary-container": "#fc7c78",
+                        "on-primary-fixed": "#002113",
+                        "surface": "#f8f9ff",
+                        "error-container": "#ffdad6",
+                        "surface-container-low": "#eff4ff"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.125rem",
+                        "lg": "0.25rem",
+                        "xl": "0.5rem",
+                        "full": "0.75rem"
+                    },
+                    "spacing": {
+                        "base": "4px",
+                        "default": "16px",
+                        "comfortable": "24px",
+                        "grid-gutter": "20px",
+                        "container-padding": "32px",
+                        "compact": "8px"
+                    },
+                    "fontFamily": {
+                        "label-bold": ["Inter"],
+                        "body-lg": ["Inter"],
+                        "body-md": ["Inter"],
+                        "headline-md": ["Inter"],
+                        "body-sm": ["Inter"],
+                        "display": ["Inter"],
+                        "headline-lg": ["Inter"],
+                        "tabular-nums": ["Inter"]
+                    },
+                    "fontSize": {
+                        "label-bold": ["12px", { "lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "600" }],
+                        "body-lg": ["16px", { "lineHeight": "24px", "fontWeight": "400" }],
+                        "body-md": ["14px", { "lineHeight": "20px", "fontWeight": "400" }],
+                        "headline-md": ["20px", { "lineHeight": "28px", "fontWeight": "600" }],
+                        "body-sm": ["13px", { "lineHeight": "18px", "fontWeight": "400" }],
+                        "display": ["36px", { "lineHeight": "44px", "letterSpacing": "-0.02em", "fontWeight": "700" }],
+                        "headline-lg": ["24px", { "lineHeight": "32px", "fontWeight": "600" }],
+                        "tabular-nums": ["14px", { "lineHeight": "20px", "fontWeight": "400" }]
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-surface-gray text-on-surface font-body-md flex h-screen overflow-hidden">
+<!-- SideNavBar -->
+<nav class="bg-surface-container-lowest dark:bg-inverse-surface border-r border-outline-variant fixed left-0 top-0 h-screen w-64 shadow-sm flex flex-col py-unit-stack-lg z-50 hidden md:flex">
+<div class="px-default mb-comfortable flex items-center gap-compact">
+<div class="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-on-primary">
+<span class="material-symbols-outlined text-sm">domain</span>
+</div>
+<div>
+<h1 class="font-headline-md text-headline-md font-bold text-primary dark:text-primary-fixed-dim">Super Admin</h1>
+<p class="font-label-bold text-label-bold text-on-surface-variant">Enterprise HRMS</p>
+</div>
+</div>
+<ul class="flex flex-col gap-base px-compact flex-grow mt-comfortable">
+<li><a class="flex items-center gap-default px-default py-compact rounded-DEFAULT text-on-surface-variant font-medium hover:bg-surface-container hover:text-on-surface transition-colors" href="#"><span class="material-symbols-outlined" data-icon="dashboard">dashboard</span>Dashboard</a></li>
+<li><a class="flex items-center gap-default px-default py-compact rounded-DEFAULT text-on-surface-variant font-medium hover:bg-surface-container hover:text-on-surface transition-colors" href="#"><span class="material-symbols-outlined" data-icon="domain">domain</span>Organization</a></li>
+<li><a class="flex items-center gap-default px-default py-compact rounded-DEFAULT text-secondary font-bold border-l-4 border-secondary bg-secondary-container/10 Active: translate-x-1 transition-transform duration-200" href="#"><span class="material-symbols-outlined fill text-secondary" data-icon="groups">groups</span>Employees</a></li>
+<li><a class="flex items-center gap-default px-default py-compact rounded-DEFAULT text-on-surface-variant font-medium hover:bg-surface-container hover:text-on-surface transition-colors" href="#"><span class="material-symbols-outlined" data-icon="work">work</span>Recruitment</a></li>
+<li><a class="flex items-center gap-default px-default py-compact rounded-DEFAULT text-on-surface-variant font-medium hover:bg-surface-container hover:text-on-surface transition-colors" href="#"><span class="material-symbols-outlined" data-icon="analytics">analytics</span>Analytics</a></li>
+<li><a class="flex items-center gap-default px-default py-compact rounded-DEFAULT text-on-surface-variant font-medium hover:bg-surface-container hover:text-on-surface transition-colors" href="#"><span class="material-symbols-outlined" data-icon="receipt_long">receipt_long</span>Audit Logs</a></li>
+<li><a class="flex items-center gap-default px-default py-compact rounded-DEFAULT text-on-surface-variant font-medium hover:bg-surface-container hover:text-on-surface transition-colors" href="#"><span class="material-symbols-outlined" data-icon="settings">settings</span>Settings</a></li>
+</ul>
+<div class="mt-auto px-compact pb-comfortable">
+<ul class="flex flex-col gap-base">
+<li><a class="flex items-center gap-default px-default py-compact rounded-DEFAULT text-on-surface-variant font-medium hover:bg-surface-container hover:text-on-surface transition-colors" href="#"><span class="material-symbols-outlined" data-icon="help">help</span>Support</a></li>
+<li><a class="flex items-center gap-default px-default py-compact rounded-DEFAULT text-on-surface-variant font-medium hover:bg-surface-container hover:text-on-surface transition-colors" href="#"><span class="material-symbols-outlined" data-icon="logout">logout</span>Log Out</a></li>
+</ul>
+</div>
+</nav>
+<!-- Main Content Area -->
+<main class="flex-1 flex flex-col md:ml-64 relative min-w-0">
+<!-- TopAppBar -->
+<header class="bg-surface-container-lowest dark:bg-inverse-surface border-b border-outline-variant sticky top-0 right-0 z-40 w-full shadow-sm flex justify-between items-center px-container-padding h-16">
+<div class="flex items-center gap-comfortable">
+<h2 class="font-title-lg text-title-lg font-bold text-on-surface dark:text-inverse-on-surface hidden md:block">HRMS Portal</h2>
+</div>
+<div class="flex items-center gap-default">
+<button class="text-on-surface-variant hover:bg-surface-container dark:hover:bg-surface-variant/20 rounded-full p-2 transition-colors">
+<span class="material-symbols-outlined" data-icon="notifications">notifications</span>
+</button>
+<button class="text-on-surface-variant hover:bg-surface-container dark:hover:bg-surface-variant/20 rounded-full p-2 transition-colors">
+<span class="material-symbols-outlined" data-icon="help_outline">help_outline</span>
+</button>
+<div class="w-8 h-8 rounded-full bg-surface-variant overflow-hidden border border-border-subtle ml-compact cursor-pointer">
+<img alt="Super Admin Avatar" class="w-full h-full object-cover" data-alt="Professional headshot of a corporate manager, warm lighting, sharp focus, modern office background, slight smile, high quality, highly detailed." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDGFN61ZO-NxpBF56KpJYan4vqBdQQeBNwVFqwSz5LsglnkCTXe0dsuzNf4Iz4uGwflvRhI2A4HpkvDr_hkIXb7mfckOFMdeFQFc6jetHjBDYOf7b4OkMNV2dgU-FshEdZ1MbAAewIsMCmPbug3kuTacLwWccEUyE5p2UwAMIjkkS6ftbezaD-VhxHoZOj7qBc-hkRz3ISGkRnJ7SNMS_-f-6b5rV-sJa0V6uNEI-p8W9yxBAA_Kb6-_Q"/>
+</div>
+</div>
+</header>
+<!-- Page Canvas -->
+<div class="flex-1 overflow-auto p-container-padding">
+<!-- Header Actions -->
+<div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-comfortable gap-default">
+<div>
+<div class="flex items-center gap-compact mb-base">
+<span class="material-symbols-outlined text-on-surface-variant text-xl">location_on</span>
+<h1 class="font-headline-lg text-headline-lg font-semibold text-on-surface">Nasr City Branch</h1>
+</div>
+<p class="font-body-md text-body-md text-on-surface-variant">Team Schedule: Oct 15 - Oct 24, 2023</p>
+</div>
+<div class="flex items-center gap-default flex-wrap">
+<label class="flex items-center gap-compact cursor-pointer relative mr-comfortable">
+<input class="sr-only peer" id="edit-mode-toggle" type="checkbox"/>
+<div class="w-10 h-6 bg-surface-variant rounded-full peer peer-focus:ring-2 peer-focus:ring-primary/20 peer-checked:bg-primary transition-colors"></div>
+<div class="absolute left-1 top-1 bg-white w-4 h-4 rounded-full transition-transform peer-checked:translate-x-4 shadow-sm"></div>
+<span class="font-label-bold text-label-bold text-on-surface ml-compact">Edit Mode</span>
+</label>
+<button class="px-default py-compact border border-primary text-primary font-label-bold text-label-bold rounded-DEFAULT hover:bg-primary/5 transition-colors flex items-center gap-compact">
+<span class="material-symbols-outlined text-sm">content_copy</span> Copy Previous
+                    </button>
+<button class="px-default py-compact border border-primary text-primary font-label-bold text-label-bold rounded-DEFAULT hover:bg-primary/5 transition-colors flex items-center gap-compact">
+<span class="material-symbols-outlined text-sm">calendar_add_on</span> Create Next Cycle
+                    </button>
+<button class="px-default py-compact bg-primary text-on-primary font-label-bold text-label-bold rounded-DEFAULT hover:bg-primary-container hover:text-on-primary-container transition-colors shadow-sm flex items-center gap-compact">
+<span class="material-symbols-outlined text-sm">publish</span> Publish
+                    </button>
+</div>
+</div>
+<!-- Dashboard Grid Area -->
+<div class="grid grid-cols-1 xl:grid-cols-12 gap-grid-gutter">
+<!-- Main Schedule Container (Left Heavy) -->
+<div class="xl:col-span-12 bg-white rounded-lg border border-border-subtle shadow-sm overflow-hidden flex flex-col">
+<!-- Toolbar -->
+<div class="p-default border-b border-border-subtle bg-surface-gray flex justify-between items-center">
+<div class="flex items-center gap-default">
+<div class="flex items-center gap-compact">
+<span class="w-3 h-3 rounded-full bg-surface-container-highest border border-outline-variant"></span>
+<span class="font-body-sm text-body-sm text-on-surface-variant">Morning (M)</span>
+</div>
+<div class="flex items-center gap-compact">
+<span class="w-3 h-3 rounded-full bg-surface-dim border border-outline-variant"></span>
+<span class="font-body-sm text-body-sm text-on-surface-variant">Evening (E)</span>
+</div>
+<div class="flex items-center gap-compact">
+<span class="w-3 h-3 rounded-full bg-white border border-border-subtle"></span>
+<span class="font-body-sm text-body-sm text-on-surface-variant">Off (O)</span>
+</div>
+<div class="flex items-center gap-compact ml-comfortable">
+<span class="w-3 h-3 rounded-full bg-error-container border border-error"></span>
+<span class="font-body-sm text-body-sm text-error">Conflict / Leave</span>
+</div>
+</div>
+<div class="relative">
+<span class="material-symbols-outlined absolute left-compact top-1/2 -translate-y-1/2 text-on-surface-variant text-sm">search</span>
+<input class="pl-8 pr-compact py-compact border border-border-subtle rounded-DEFAULT font-body-sm text-body-sm w-48 focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all" placeholder="Search team member..." type="text"/>
+</div>
+</div>
+<!-- Scrollable Table Area -->
+<div class="overflow-x-auto flex-1">
+<table class="w-full text-left border-collapse min-w-[1000px]">
+<thead>
+<tr class="bg-surface-gray border-b border-border-subtle">
+<th class="p-compact font-label-bold text-label-bold text-on-surface sticky left-0 bg-surface-gray z-10 w-48 border-r border-border-subtle shadow-[1px_0_0_0_#E2E8F0]">Team Member</th>
+<!-- 10 Days -->
+<th class="p-compact font-label-bold text-label-bold text-on-surface-variant text-center border-r border-border-subtle min-w-[60px]">Oct 15<br/><span class="font-body-sm font-normal">Mon</span></th>
+<th class="p-compact font-label-bold text-label-bold text-on-surface-variant text-center border-r border-border-subtle min-w-[60px]">Oct 16<br/><span class="font-body-sm font-normal">Tue</span></th>
+<th class="p-compact font-label-bold text-label-bold text-on-surface-variant text-center border-r border-border-subtle min-w-[60px]">Oct 17<br/><span class="font-body-sm font-normal">Wed</span></th>
+<th class="p-compact font-label-bold text-label-bold text-on-surface-variant text-center border-r border-border-subtle min-w-[60px]">Oct 18<br/><span class="font-body-sm font-normal">Thu</span></th>
+<th class="p-compact font-label-bold text-label-bold text-on-surface-variant text-center border-r border-border-subtle min-w-[60px]">Oct 19<br/><span class="font-body-sm font-normal">Fri</span></th>
+<th class="p-compact font-label-bold text-label-bold text-on-surface-variant text-center border-r border-border-subtle min-w-[60px]">Oct 20<br/><span class="font-body-sm font-normal">Sat</span></th>
+<th class="p-compact font-label-bold text-label-bold text-on-surface-variant text-center border-r border-border-subtle min-w-[60px]">Oct 21<br/><span class="font-body-sm font-normal">Sun</span></th>
+<th class="p-compact font-label-bold text-label-bold text-on-surface-variant text-center border-r border-border-subtle min-w-[60px]">Oct 22<br/><span class="font-body-sm font-normal">Mon</span></th>
+<th class="p-compact font-label-bold text-label-bold text-on-surface-variant text-center border-r border-border-subtle min-w-[60px]">Oct 23<br/><span class="font-body-sm font-normal">Tue</span></th>
+<th class="p-compact font-label-bold text-label-bold text-on-surface-variant text-center min-w-[60px]">Oct 24<br/><span class="font-body-sm font-normal">Wed</span></th>
+</tr>
+</thead>
+<tbody class="font-body-sm text-body-sm" id="schedule-grid">
+<!-- Row 1 -->
+<tr class="border-b border-border-subtle hover:bg-surface transition-colors group">
+<td class="p-compact sticky left-0 bg-white group-hover:bg-surface z-10 border-r border-border-subtle shadow-[1px_0_0_0_#E2E8F0]">
+<div class="flex items-center gap-compact">
+<div class="w-6 h-6 rounded-full bg-surface-variant overflow-hidden">
+<img alt="Ahmed K." class="w-full h-full object-cover" data-alt="A portrait of a young male gym trainer, confident expression, well-lit studio environment, casual athletic wear, clear sharp focus." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCgqLlqGnoQf1ml8v8YmjQNgZoUV6-wCqUTp6YcXckAApToInsThqjV_1DtPCGcSsv9TDifvIRo-zc0QK45WDS1CYvt2T1dHy8dQfQJydW9XasLhpr3HB_FXVIiGxU88K9VWzf0-i867br3s5brIqv4P9X6TNhM9tNMGOl6vQKfeG6k6E-6yFe1bgG62Z1GH-8-6oK1sHUbBHRzDdKPe8beS3iW76D7ndgm6pc89Z5zPvwWjFe_dQvJOg"/>
+</div>
+<span class="font-medium text-on-surface">Ahmed K.</span>
+</div>
+<div class="text-[10px] text-on-surface-variant mt-1">Head Trainer</div>
+</td>
+<!-- Cells -->
+<td class="p-base border-r border-border-subtle text-center cursor-pointer shift-cell" data-state="M">
+<div class="w-full h-full min-h-[32px] flex items-center justify-center rounded bg-surface-container-highest border border-outline-variant font-medium text-on-surface transition-colors">M</div>
+</td>
+<td class="p-base border-r border-border-subtle text-center cursor-pointer shift-cell" data-state="M">
+<div class="w-full h-full min-h-[32px] flex items-center justify-center rounded bg-surface-container-highest border border-outline-variant font-medium text-on-surface transition-colors">M</div>
+</td>
+<td class="p-base border-r border-border-subtle text-center cursor-pointer shift-cell" data-state="O">
+<div class="w-full h-full min-h-[32px] flex items-center justify-center rounded bg-white border border-border-subtle text-on-surface-variant transition-colors">O</div>
+</td>
+<td class="p-base border-r border-border-subtle text-center cursor-pointer shift-cell" data-state="E">
+<div class="w-full h-full min-h-[32px] flex items-center justify-center rounded bg-surface-dim border border-outline-variant font-medium text-on-surface transition-colors">E</div>
+</td>
+<td class="p-base border-r border-border-subtle text-center cursor-pointer shift-cell" data-state="E">
+<div class="w-full h-full min-h-[32px] flex items-center justify-center rounded bg-surface-dim border border-outline-variant font-medium text-on-surface transition-colors">E</div>
+</td>
+<td class="p-base border-r border-border-subtle text-center cursor-pointer shift-cell relative" data-state="C">
+<div class="w-full h-full min-h-[32px] flex items-center justify-center rounded bg-error-container border border-error font-medium text-error transition-colors">M</div>
+<span class="absolute top-0 right-1 w-2 h-2 rounded-full bg-status-error border border-white"></span>
+<div class="hidden absolute top-full left-1/2 -translate-x-1/2 mt-1 w-32 p-2 bg-inverse-surface text-inverse-on-surface text-[10px] rounded shadow-lg z-20 group-hover:block">Overlaps with PTO</div>
+</td>
+<td class="p-base border-r border-border-subtle text-center cursor-pointer shift-cell" data-state="O">
+<div class="w-full h-full min-h-[32px] flex items-center justify-center rounded bg-white border border-border-subtle text-on-surface-variant transition-colors">O</div>
+</td>
+<td class="p-base border-r border-border-subtle text-center cursor-pointer shift-cell" data-state="M">
+<div class="w-full h-full min-h-[32px] flex items-center justify-center rounded bg-surface-container-highest border border-outline-variant font-medium text-on-surface transition-colors">M</div>
+</td>
+<td class="p-base border-r border-border-subtle text-center cursor-pointer shift-cell" data-state="M">
+<div class="w-full h-full min-h-[32px] flex items-center justify-center rounded bg-surface-container-highest border border-outline-variant font-medium text-on-surface transition-colors">M</div>
+</td>
+<td class="p-base text-center cursor-pointer shift-cell" data-state="M">
+<div class="w-full h-full min-h-[32px] flex items-center justify-center rounded bg-surface-container-highest border border-outline-variant font-medium text-on-surface transition-colors">M</div>
+</td>
+</tr>
+<!-- Row 2 -->
+<tr class="border-b border-border-subtle hover:bg-surface transition-colors group">
+<td class="p-compact sticky left-0 bg-white group-hover:bg-surface z-10 border-r border-border-subtle shadow-[1px_0_0_0_#E2E8F0]">
+<div class="flex items-center gap-compact">
+<div class="w-6 h-6 rounded-full bg-surface-variant overflow-hidden">
+<img alt="Sara M." class="w-full h-full object-cover" data-alt="A portrait of a female fitness instructor, bright expression, well-lit studio environment, casual athletic wear, clear sharp focus." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDZbmxtO8qZSG8L7QCPLJ9eiJ6F5nps0dHBJsRhxjo6ieNoqQEKlwM6m_Hutk-Hwt3HTXVuS6yDRLeJU-pluBf5iZl2cM8hZfsO3LhAU8wjrQZ0tcxckxyp1sRlg-OV-pdaIc0s13kvNER3CiDJhcYgAOU9pM7HiAtw96C_NItqxpcEzmlDgkS2qK7ickdI5oi8f1jf9OE9ZVFc-qc5caOOujYxGCbM68x7Sv2ZtDOwZ10ICIwGFmOCYA"/>
+</div>
+<span class="font-medium text-on-surface">Sara M.</span>
+</div>
+<div class="text-[10px] text-on-surface-variant mt-1">Yoga Instructor</div>
+</td>
+<!-- Cells -->
+<td class="p-base border-r border-border-subtle text-center cursor-pointer shift-cell" data-state="E">
+<div class="w-full h-full min-h-[32px] flex items-center justify-center rounded bg-surface-dim border border-outline-variant font-medium text-on-surface transition-colors">E</div>
+</td>
+<td class="p-base border-r border-border-subtle text-center cursor-pointer shift-cell" data-state="O">
+<div class="w-full h-full min-h-[32px] flex items-center justify-center rounded bg-white border border-border-subtle text-on-surface-variant transition-colors">O</div>
+</td>
+<td class="p-base border-r border-border-subtle text-center cursor-pointer shift-cell" data-state="M">
+<div class="w-full h-full min-h-[32px] flex items-center justify-center rounded bg-surface-container-highest border border-outline-variant font-medium text-on-surface transition-colors">M</div>
+</td>
+<td class="p-base border-r border-border-subtle text-center cursor-pointer shift-cell" data-state="M">
+<div class="w-full h-full min-h-[32px] flex items-center justify-center rounded bg-surface-container-highest border border-outline-variant font-medium text-on-surface transition-colors">M</div>
+</td>
+<td class="p-base border-r border-border-subtle text-center cursor-pointer shift-cell" data-state="O">
+<div class="w-full h-full min-h-[32px] flex items-center justify-center rounded bg-white border border-border-subtle text-on-surface-variant transition-colors">O</div>
+</td>
+<td class="p-base border-r border-border-subtle text-center cursor-pointer shift-cell" data-state="E">
+<div class="w-full h-full min-h-[32px] flex items-center justify-center rounded bg-surface-dim border border-outline-variant font-medium text-on-surface transition-colors">E</div>
+</td>
+<td class="p-base border-r border-border-subtle text-center cursor-pointer shift-cell" data-state="E">
+<div class="w-full h-full min-h-[32px] flex items-center justify-center rounded bg-surface-dim border border-outline-variant font-medium text-on-surface transition-colors">E</div>
+</td>
+<td class="p-base border-r border-border-subtle text-center cursor-pointer shift-cell" data-state="M">
+<div class="w-full h-full min-h-[32px] flex items-center justify-center rounded bg-surface-container-highest border border-outline-variant font-medium text-on-surface transition-colors">M</div>
+</td>
+<td class="p-base border-r border-border-subtle text-center cursor-pointer shift-cell" data-state="M">
+<div class="w-full h-full min-h-[32px] flex items-center justify-center rounded bg-surface-container-highest border border-outline-variant font-medium text-on-surface transition-colors">M</div>
+</td>
+<td class="p-base text-center cursor-pointer shift-cell" data-state="O">
+<div class="w-full h-full min-h-[32px] flex items-center justify-center rounded bg-white border border-border-subtle text-on-surface-variant transition-colors">O</div>
+</td>
+</tr>
+<!-- Row 3 -->
+<tr class="border-b border-border-subtle hover:bg-surface transition-colors group">
+<td class="p-compact sticky left-0 bg-white group-hover:bg-surface z-10 border-r border-border-subtle shadow-[1px_0_0_0_#E2E8F0]">
+<div class="flex items-center gap-compact">
+<div class="w-6 h-6 rounded-full bg-surface-variant overflow-hidden flex items-center justify-center text-primary font-label-bold">
+                                                OM
+                                            </div>
+<span class="font-medium text-on-surface">Omar M.</span>
+</div>
+<div class="text-[10px] text-on-surface-variant mt-1">Receptionist</div>
+</td>
+<td class="p-base border-r border-border-subtle text-center cursor-pointer shift-cell" data-state="O">
+<div class="w-full h-full min-h-[32px] flex items-center justify-center rounded bg-white border border-border-subtle text-on-surface-variant transition-colors">O</div>
+</td>
+<td class="p-base border-r border-border-subtle text-center cursor-pointer shift-cell" data-state="E">
+<div class="w-full h-full min-h-[32px] flex items-center justify-center rounded bg-surface-dim border border-outline-variant font-medium text-on-surface transition-colors">E</div>
+</td>
+<td class="p-base border-r border-border-subtle text-center cursor-pointer shift-cell" data-state="E">
+<div class="w-full h-full min-h-[32px] flex items-center justify-center rounded bg-surface-dim border border-outline-variant font-medium text-on-surface transition-colors">E</div>
+</td>
+<td class="p-base border-r border-border-subtle text-center cursor-pointer shift-cell" data-state="O">
+<div class="w-full h-full min-h-[32px] flex items-center justify-center rounded bg-white border border-border-subtle text-on-surface-variant transition-colors">O</div>
+</td>
+<td class="p-base border-r border-border-subtle text-center cursor-pointer shift-cell" data-state="M">
+<div class="w-full h-full min-h-[32px] flex items-center justify-center rounded bg-surface-container-highest border border-outline-variant font-medium text-on-surface transition-colors">M</div>
+</td>
+<td class="p-base border-r border-border-subtle text-center cursor-pointer shift-cell" data-state="M">
+<div class="w-full h-full min-h-[32px] flex items-center justify-center rounded bg-surface-container-highest border border-outline-variant font-medium text-on-surface transition-colors">M</div>
+</td>
+<td class="p-base border-r border-border-subtle text-center cursor-pointer shift-cell relative" data-state="C">
+<div class="w-full h-full min-h-[32px] flex items-center justify-center rounded bg-error-container border border-error font-medium text-error transition-colors">E</div>
+<span class="absolute top-0 right-1 w-2 h-2 rounded-full bg-status-error border border-white"></span>
+</td>
+<td class="p-base border-r border-border-subtle text-center cursor-pointer shift-cell" data-state="O">
+<div class="w-full h-full min-h-[32px] flex items-center justify-center rounded bg-white border border-border-subtle text-on-surface-variant transition-colors">O</div>
+</td>
+<td class="p-base border-r border-border-subtle text-center cursor-pointer shift-cell" data-state="E">
+<div class="w-full h-full min-h-[32px] flex items-center justify-center rounded bg-surface-dim border border-outline-variant font-medium text-on-surface transition-colors">E</div>
+</td>
+<td class="p-base text-center cursor-pointer shift-cell" data-state="E">
+<div class="w-full h-full min-h-[32px] flex items-center justify-center rounded bg-surface-dim border border-outline-variant font-medium text-on-surface transition-colors">E</div>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+</div>
+</div>
+</main>
+<script>
+        const editToggle = document.getElementById('edit-mode-toggle');
+        const grid = document.getElementById('schedule-grid');
+        const cells = grid.querySelectorAll('.shift-cell');
+
+        const states = {
+            'M': { class: 'bg-surface-container-highest border-outline-variant text-on-surface', label: 'M' },
+            'E': { class: 'bg-surface-dim border-outline-variant text-on-surface', label: 'E' },
+            'O': { class: 'bg-white border-border-subtle text-on-surface-variant', label: 'O' }
+        };
+        const nextState = { 'M': 'E', 'E': 'O', 'O': 'M' };
+
+        cells.forEach(cell => {
+            cell.addEventListener('click', function() {
+                if (!editToggle.checked) return;
+
+                let currentState = this.getAttribute('data-state');
+                if (currentState === 'C') return; // Don't easily toggle conflict cells in this simple demo
+
+                let newState = nextState[currentState];
+                this.setAttribute('data-state', newState);
+
+                let innerDiv = this.querySelector('div');
+                
+                // reset classes
+                innerDiv.className = `w-full h-full min-h-[32px] flex items-center justify-center rounded border font-medium transition-colors ${states[newState].class}`;
+                innerDiv.textContent = states[newState].label;
+            });
+        });
+
+        editToggle.addEventListener('change', (e) => {
+            if(e.target.checked) {
+                 grid.classList.add('cursor-pointer');
+            } else {
+                 grid.classList.remove('cursor-pointer');
+            }
+        });
+    </script>
+</body></html>

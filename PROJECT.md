@@ -16,7 +16,8 @@ Revive Solutions Fitness manages a growing network of gyms (targeting 20–50+).
 | **HR Manager** | Assigned gyms | HR management with configurable permissions |
 | **HR** | Assigned gyms | HR operations with configurable permissions |
 | **Branch Manager** | Own gym (Employee + role) | Team management through granted permissions only |
-| **Employee** | Own data / own gym | Self-service portal for personal HR information |
+| **Team Leader** | Own team(s), within own gym (Employee + role) | Sub-gym team oversight through granted permissions only; may lead multiple teams |
+| **Employee** | Own data / own gym (or a chosen one of two assigned gyms at login) | Self-service portal for personal HR information |
 
 ## MVP Goal
 
@@ -113,7 +114,7 @@ Brand: Modern Corporate Minimalism with green (#16A34A) primary palette, Inter f
 2. **Never bypass the authorization model** — every action is gated by permission + gym scope.
 3. **Preserve audit trails** — every edit/approval must record who, when, and why.
 4. **Gym isolation is absolute** — a user must never see data from a gym they don't have access to.
-5. **Branch Manager is NOT a User Type** — it is a Role applied to an Employee.
+5. **Branch Manager is NOT a User Type** — it is a Role applied to an Employee. **Team Leader** is the same pattern, scoped to a sub-gym team rather than the whole gym.
 6. **Candidate ≠ Employee** — a Candidate becomes an Employee only at the Hired transition.
 7. **Schedules are dynamic** — never model an employee as having one permanent fixed shift.
 8. **RTL support** — all UI must work in both LTR (English) and RTL (Arabic).

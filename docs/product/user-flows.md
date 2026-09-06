@@ -22,6 +22,33 @@ HR user can now log in and operate
 
 ---
 
+## 1a. Employee Login (Single Gym vs Two Gyms)
+
+```
+Employee enters email + password
+    ↓
+Credentials validated
+    ↓
+System checks Employee's UserGymAccess count
+    ↓
+┌─────────────────────────────┬─────────────────────────────────────┐
+│ 1 gym assigned              │ 2 gyms assigned                      │
+│ → Session issued, scoped    │ → Gym picker screen shown             │
+│   to that gym directly      │   ("Which gym are you signing in     │
+│                             │    to today: Gym A / Gym B?")         │
+│                             │ → Employee selects one                │
+│                             │ → Session issued, scoped to the       │
+│                             │   CHOSEN gym only                     │
+└─────────────────────────────┴─────────────────────────────────────┘
+    ↓
+Employee sees the Employee Interface for their (chosen) gym only
+    ↓
+To work under the other gym, Employee must log out and log back in,
+choosing differently — there is no in-session gym switch for Employees
+```
+
+---
+
 ## 2. Recruitment → Hiring → Employee
 
 ```
@@ -57,6 +84,32 @@ Generates login credentials
 Recruitment history linked to Employee record
     ↓
 Employee logs in → sees self-service portal
+```
+
+---
+
+## 2a. Branch Manager Requests a Vacancy
+
+```
+Branch Manager → Recruitment → "Request Vacancy" (requires `recruitment.vacancy_request.create`)
+    ↓
+Selects position (from own gym's catalog) + writes justification
+    ↓
+Submits → VacancyRequest created, Status = Pending
+    ↓
+HR sees it in their Vacancy Requests review queue (requires `recruitment.vacancy_request.approve`)
+    ↓
+┌─────────────────────────┬──────────────────────────┐
+│ HR Approves              │ HR Rejects                │
+│ → HR creates the actual  │ → Request closed with a   │
+│   Vacancy (normal flow), │   comment; no Vacancy     │
+│   linked back to the     │   created                 │
+│   request                │                            │
+└─────────────────────────┴──────────────────────────┘
+    ↓
+Branch Manager notified of the decision
+    ↓ (if Approved)
+Vacancy now follows the normal Recruitment → Hiring flow (Flow 2)
 ```
 
 ---
@@ -258,6 +311,37 @@ Employee X now sees additional navigation items
 
 ---
 
+## 9a. Team Creation & Team Leader Assignment
+
+```
+HR or Branch Manager (requires `team.manage`) → Teams → "Create Team"
+    ↓
+Selects gym (team belongs to exactly one gym)
+    ↓
+Names the team (e.g. "Morning Floor Team")
+    ↓
+Adds members from that gym's employee list
+    (an employee may already belong to another team — allowed)
+    ↓
+Assigns one or more Team Leaders from the team's members
+    (an employee may already lead another team — allowed)
+    ↓
+System:
+    1. Team row created (Teams)
+    2. TeamMembers rows created for each selected employee
+    3. TeamLeaders rows created for each selected leader
+    4. Team Leader's effective scope = union of all teams they lead
+    ↓
+Assigned Team Leader(s) now see "My Team" in their sidebar
+    ↓
+Separately: HR/Branch Manager may grant team-scoped permissions
+    (`attendance.view.team`, `requests.approve.team`, etc.) to the
+    Team Leader — team membership alone grants no capabilities,
+    permissions are still individually assigned per the granular model
+```
+
+---
+
 ## 10. Payroll Deduction Flow
 
 ```
@@ -286,9 +370,11 @@ Employee sees in "My Payroll":
 ## 11. Employee Offboarding
 
 ```
-HR opens Employee X's profile
+HR, or a Branch Manager holding `employees.offboard`, opens Employee X's profile
     ↓
-Clicks "Offboard" (requires `employees.offboard`)
+Clicks "Offboard" (requires `employees.offboard` — no separate approval
+step; whoever holds the permission can start this directly, same pattern
+as every other lifecycle action)
     ↓
 Offboarding wizard:
     1. Set last working day
@@ -303,6 +389,16 @@ System:
     4. Employment History: "Offboarded on [date], reason: [reason]"
     5. Employee data preserved (not deleted)
 ```
+
+**Note — relationship to self-service Resignation requests:** An
+employee submitting a "Resignation" request (Request type #10, see
+features.md §9) does NOT automatically trigger this flow. HR (or a
+Branch Manager) reviews the Resignation request through the normal
+Requests Inbox, and — once ready — separately clicks "Offboard" on that
+employee's profile to run this wizard. The two are related in practice
+but are deliberately two independent actions with no automatic hand-off,
+so a Resignation can be discussed/withdrawn before Offboarding is ever
+started.
 
 ---
 

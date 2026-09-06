@@ -142,6 +142,9 @@ DELETE /api/roles/{id}              → Archive role
 
 ### Recruitment
 ```
+GET    /api/vacancy-requests             → List vacancy requests (gym-filtered; HR review queue)
+POST   /api/vacancy-requests             → Create vacancy request (Branch Manager, own gym only)
+PUT    /api/vacancy-requests/{id}/decide → HR Approve/Reject; Approve requires positionId + vacancy details to create the resulting Vacancy
 GET    /api/vacancies               → List vacancies (gym-filtered)
 POST   /api/vacancies               → Create vacancy
 PUT    /api/vacancies/{id}          → Update vacancy
@@ -152,6 +155,15 @@ GET    /api/applications            → List applications (gym-filtered)
 PUT    /api/applications/{id}/stage → Move to next pipeline stage
 POST   /api/applications/{id}/hire  → Hire candidate → create employee
 GET    /api/recruitment/follow-ups  → Candidates needing action
+```
+
+### Teams
+```
+GET    /api/teams                   → List teams (gym-filtered)
+POST   /api/teams                   → Create team (requires `team.manage`)
+PUT    /api/teams/{id}/members      → Set team members
+PUT    /api/teams/{id}/leaders      → Set team leader(s)
+GET    /api/teams/my-teams          → Teams the current user leads (for Team Leader "My Team")
 ```
 
 ### Employees

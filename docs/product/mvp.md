@@ -46,9 +46,20 @@ Can:
 - Review/approve employee requests (if permitted)
 - Manage schedules (if permitted)
 - Follow up on attendance issues (if permitted)
-- Request vacancies / new employees (if permitted)
-- Initiate employee leaving process (if permitted)
+- **Request** a new vacancy for their gym (creates a Vacancy Request that HR must approve — the Branch Manager cannot open a vacancy directly; see features.md §5a)
+- **Offboard** a subordinate directly if granted `employees.offboard` (no separate approval step — same as HR's offboarding action)
+- Submit their own **Resignation** as a self-service request (they are also an Employee), routed to HR like any other request
 - **Cannot** do anything beyond their granted permissions
+
+### Team Leader (Employee + Role)
+
+Can:
+- Everything a Regular Employee can do for themselves, plus:
+- View their team's roster, attendance, and schedule (if permitted)
+- Follow up on team requests, and approve/reject them only if explicitly granted `requests.approve.team` (in practice this is more often reserved for Branch Manager or HR)
+- View/manage team evaluations (if permitted)
+- **Cannot** act on employees outside the team(s) they lead
+- May lead more than one team, and an employee may belong to more than one team
 
 ### Employee
 
@@ -59,6 +70,7 @@ Can:
 - View own evaluations
 - Submit requests (9 types, as enabled)
 - Receive notifications
+- If assigned to two gyms, choose which gym's account to sign into at login (see ADR-002-authentication.md)
 
 ---
 
@@ -94,6 +106,7 @@ Can:
 - Preview effective access for any user
 
 ### 5. Recruitment & Hiring (Critical)
+- **Vacancy Requests**: Branch Manager (or any user with `recruitment.vacancy_request.create`) requests a new position for their gym; HR approves/rejects; only Approve leads to an actual Vacancy being created (see features.md §5a)
 - **Vacancies**: gym-scoped, create/edit/close
 - **Candidates/Applications**: public application link, candidate profiles
 - **Recruitment Pipeline**: Kanban — Applied → Screening → 1st Interview → 2nd Interview → Final Decision → (Hired / Waiting List / Rejected)
@@ -137,7 +150,7 @@ Each action is independently permission-gated:
 - Repeated-issue flagging (e.g., 3+ lates in a cycle)
 
 ### 10. Employee Requests (High)
-9 request types — **⚠️ DRAFT, subject to final business confirmation before seeding**:
+10 request types — **⚠️ DRAFT, subject to final business confirmation before seeding**:
 
 | # | Type | Key Fields |
 |---|------|------------|
@@ -150,6 +163,7 @@ Each action is independently permission-gated:
 | 7 | Emergency Leave | Date, reason (required) |
 | 8 | Document Request | e.g., salary certificate |
 | 9 | General Inquiry / Complaint | Free text |
+| 10 | Resignation / Employee Leaving | Intended last working day, reason — self-initiated, any employee including Branch Manager (see features.md §9) |
 
 > **Implementation note:** Store `Type` as a string/varchar, NOT a C# enum, until the list is finalized.
 
@@ -198,7 +212,15 @@ Lifecycle: Employee → Submit → Pending → Authorized Reviewer → Approve/R
 - HR can edit `TotalEntitlement` with `employees.leave_balance.manage` permission
 - Used/Pending days updated automatically on request submission/decision
 
-### 16. Announcements — HR Broadcasts (Medium)
+### 16. Teams & Team Leader (Critical — MVP)
+- Sub-gym `Team` grouping of employees within a gym
+- HR/Branch Manager compose teams and assign one or more Team Leaders per team (`team.manage`)
+- Team Leader role preset (Employee + Role, same pattern as Branch Manager)
+- Team-scoped permission variants (`attendance.view.team`, `schedule.view.team`, `requests.view.team`, `requests.approve.team`, `evaluations.view.team`, `evaluations.manage.team`) — individually granted, not implied by the role
+- "My Team" dashboard widget + sidebar entry for Team Leaders
+- A leader can lead multiple teams; an employee can belong to multiple teams; effective team scope is the union across all teams led
+
+### 17. Announcements — HR Broadcasts (Medium)
 - HR authors broadcast messages to a defined audience (gym, department, role, or individual)
 - Supports immediate send or scheduled delivery
 - Delivered as a Notification to each matched recipient

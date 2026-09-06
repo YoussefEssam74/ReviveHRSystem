@@ -47,7 +47,7 @@ System:
 |------|----------------|
 | Employees | `employees.view`, `employees.create`, `employees.edit`, `employees.transfer`, `employees.position.change`, `employees.role.assign`, `employees.status.change`, `employees.compensation.manage`, `employees.contract.manage`, `employees.offboard`, `employees.documents.view`, `employees.documents.manage`, `employees.bulk_import`, `employees.leave_balance.manage` |
 | Positions | `positions.view`, `positions.manage` |
-| Recruitment | `recruitment.view`, `recruitment.vacancies.manage`, `recruitment.candidates.manage`, `recruitment.hire.approve` |
+| Recruitment | `recruitment.view`, `recruitment.vacancies.manage`, `recruitment.candidates.manage`, `recruitment.hire.approve`, `recruitment.vacancy_request.create`, `recruitment.vacancy_request.approve` |
 | Attendance | `attendance.view`, `attendance.edit`, `attendance.manual_entry` |
 | Schedule | `schedule.view`, `schedule.manage` |
 | Requests | `requests.view`, `requests.approve` |
@@ -56,6 +56,9 @@ System:
 | Reports | `reports.view` |
 | Announcements | `announcements.view`, `announcements.manage` |
 | Audit Logs | `audit.view` |
+| Teams | `team.view`, `team.manage`, `attendance.view.team`, `schedule.view.team`, `requests.view.team`, `requests.approve.team`, `evaluations.view.team`, `evaluations.manage.team` |
+
+> **Team-scoped keys** (suffixed `.team`) are distinct from their gym-wide counterparts (e.g. `attendance.view.team` vs `attendance.view`). They exist so a Team Leader can be granted visibility/action limited to their own team's members, without touching the existing gym-wide checks used by HR/HR Manager/Branch Manager. See ADR-003-authorization.md for the scope-resolution logic.
 
 > **`attendance.manual_entry`** is separate from `attendance.edit` — manual_entry is for the on-site operator recording a failed Face ID; edit is for HR correcting a past record.
 
@@ -118,6 +121,14 @@ Top Management provides:
 ---
 
 ## 5. Recruitment & Hiring
+
+### Vacancy Requests (Branch Manager → HR) — §5a
+- A Branch Manager (or any user with `recruitment.vacancy_request.create`) can request a new vacancy for their gym without being able to open one directly
+- Request captures: gym (locked to their own), position, justification
+- Appears in an HR review queue, gated by `recruitment.vacancy_request.approve`
+- HR **Approve** → HR then creates the actual Vacancy through the normal Vacancy Management flow below, linked back to the originating request
+- HR **Reject** → request closed with a comment, no Vacancy is created
+- This does NOT bypass Super Admin/HR governance over vacancies (see `Revive_Super_Admin_Module_Specification.md`) — it's an intake mechanism, not a shortcut to publishing
 
 ### Vacancy Management
 - Create vacancy: gym, position, requirements, description
@@ -272,8 +283,25 @@ Each attendance event is compared against the employee's effective schedule:
 | 7 | Emergency Leave | Date + reason (required) | |
 | 8 | Document Request | Type of document requested | e.g., salary certificate |
 | 9 | General Inquiry / Complaint | Free text | |
+| 10 | Resignation / Employee Leaving | Intended last working day, reason | Self-initiated by ANY employee (including a Branch Manager acting as an employee about themselves) — see distinction below |
 
 > **Note:** This list is confirmed directionally but may change before finalization.
+
+### Resignation vs. Offboarding — Important Distinction
+These are two separate, independently-triggered flows that both end up affecting the same employee record:
+
+| | Resignation (Request type #10) | Offboarding (`employees.offboard`) |
+|---|---|---|
+| Who initiates | The employee themselves, about themselves (self-service) | HR, or a Branch Manager with `employees.offboard`, about a subordinate |
+| Where | My Requests (self-service), routes to standard HR Requests Inbox | Employee profile → "Offboard" button (management action) |
+| Approval | Standard request Approve/Reject like any other request type | No separate approval — starts the guided offboarding wizard directly once the button is clicked, since it's already permission-gated |
+| Typical relationship | HR reviewing an approved Resignation request will usually then trigger Offboarding on that employee | Independent — Offboarding can be started without a prior Resignation request (e.g. termination) |
+
+A Branch Manager is both an Employee and a manager: he can submit
+Resignation about *himself* via My Requests (goes straight to HR, same as
+any employee), and separately can click Offboard on one of *his team's*
+employees if he holds `employees.offboard` (no approval step, per the
+existing lifecycle-actions model).
 
 ### Request Lifecycle
 ```
@@ -287,6 +315,7 @@ Employee → Submit Request → Pending
 ### Cross-Module Integration
 - Approved Day Off / Leave → reflected in Shift Schedule (conflict warnings)
 - Shift Swap → updates both employees' schedules upon approval
+- Approved Resignation → does NOT automatically trigger Offboarding; HR/Branch Manager still separately clicks "Offboard" on the employee profile when ready
 
 ---
 
@@ -377,6 +406,25 @@ Attendance Exception (late/absent/early)
 - My notifications
 - Quick links to self-service areas
 
+### Design Principle: Action-Oriented, Not Just Reporting
+Every dashboard (Super Admin, HR, and every Employee-based dashboard
+below) follows the same rule: anything that needs the viewer to actually
+do something is surfaced as an explicit **"Action Required"** flag/badge,
+not buried as a plain number or stat. A dashboard is a to-do surface
+first, a reporting surface second.
+
+### Team Leader Dashboard (Employee dashboard + additive widgets)
+Base Employee Dashboard (above) **plus**:
+- **My Team** widget: member count (across every team led), team attendance status (present/absent/late today), pending team actions (requests awaiting review, only if `requests.approve.team` granted), required follow-ups
+
+### Branch Manager Dashboard (Employee dashboard + additive widgets)
+Base Employee Dashboard (above) **plus**, each block only rendered if the
+underlying permission is granted:
+- **Branch Overview** — total employees, present / absent / late / missing-checkout counts, pending requests count, count of items needing action
+- **Team Follow-up** — employees requiring attention, pending approvals, attendance issues, recent employee updates
+- **Recruitment** — open vacancies, candidates requiring action, hiring follow-ups, status of the Branch Manager's own Vacancy Requests (§5a)
+- **Employee Actions** shortcuts — New Employee, Employee Updates, Shift Changes, Employee Leaving (jumps to the relevant employee's profile action, per §9's Resignation-vs-Offboarding distinction)
+
 ---
 
 ## 14. Leave Balance Management
@@ -435,3 +483,51 @@ HR (or Branch Manager with permission) composes a message and broadcasts it to a
 ### Announcement History
 - HR can view all past announcements: who authored them, when sent, audience, status (Draft / Scheduled / Sent / Cancelled)
 - Employees can view a read-only archive of announcements they received
+
+---
+
+## 16. Teams & Team Leader (MVP)
+
+> **User Type:** `Employee`, **Role:** `Team Leader` (preset, same "preset only" philosophy as HR Manager/HR Coordinator/Branch Manager — the individual's granted permissions are the source of truth)
+
+### What It Is
+A **Team** is a sub-gym grouping of employees, used to give a Team Leader
+a scope narrower than a full gym (which is Branch Manager's scope) or a
+single self (Regular Employee's scope). Teams belong to exactly one gym
+and never span gyms.
+
+### Team Composition
+- `team.manage` (typically held by HR or Branch Manager) creates teams within a gym, assigns members, and assigns one or more Team Leaders per team
+- An employee can be a Team Leader for more than one team
+- An employee can be a member of more than one team
+- A team's effective roster for authorization purposes is the union of all its `TeamMembers`; a Team Leader's effective scope is the union of every team they lead
+
+### Team Leader Capabilities (all individually permission-gated)
+| Feature | Permission | Scope |
+|---------|-----------|-------|
+| View team roster | `team.view` | Teams the user leads |
+| View team attendance | `attendance.view.team` | Members of teams the user leads |
+| View team schedule | `schedule.view.team` | Members of teams the user leads |
+| View team requests | `requests.view.team` | Requests submitted by team members |
+| Approve/reject team requests | `requests.approve.team` | Only if explicitly granted — in practice this is usually held by Branch Manager or HR rather than Team Leader; a Team Leader only gets it if the business decides to delegate that far |
+| View team evaluations | `evaluations.view.team` | Members of teams the user leads |
+| Manage team evaluations | `evaluations.manage.team` | Members of teams the user leads |
+
+### Team Leader Dashboard (additive to base Employee Dashboard)
+On top of the standard Regular Employee dashboard (My Attendance, My Schedule, My Requests, My Payroll, My Notifications, My Performance), a Team Leader sees a **My Team** widget block:
+- Number of team members (across all teams they lead)
+- Team attendance status (present/absent/late today)
+- Pending team actions (requests awaiting review, if `requests.approve.team` granted)
+- Required follow-ups
+
+### Sidebar
+Base Employee sidebar + **My Team** (shown only if `team.view` is granted).
+
+### Relationship to Branch Manager
+Team Leader and Branch Manager are both `Employee`-typed roles that add
+features to the same base Employee interface (see
+`Regular_Employee_rtf.doc` and `HR_Role_and_Pages_Spec.md` §1). Branch
+Manager's scope is the whole gym; Team Leader's scope is narrower — one
+or more teams within that gym. The two roles can be combined on the same
+user if the business wants a Branch Manager who is also personally
+leading a specific team, since permissions are additive and individually granted.

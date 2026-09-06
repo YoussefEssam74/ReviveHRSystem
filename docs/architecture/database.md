@@ -105,6 +105,21 @@ UserGymAccess
 ├── UserId (FK → Users)
 ├── GymId (FK → Gyms)
 └── AssignedAt
+
+Note — Login-Time Gym Selection:
+Most user types (HR, HR Manager, Top Management) hold UserGymAccess as a
+pure authorization *scope* — they operate across all their assigned gyms
+within a single session, switched via the in-app Gym Context Switcher
+(see frontend.md).
+
+Employees are the exception: an Employee typically has exactly one
+UserGymAccess row, but MAY have two (e.g. someone genuinely works
+shifts at two physical locations). When an Employee's UserGymAccess
+count is 2, the login flow presents an **account/gym picker** before
+issuing the session — the resulting JWT is scoped to the ONE chosen
+gym for that session, not both. To switch, the employee logs out and
+back in, choosing the other gym. See ADR-002-authentication.md and
+user-flows.md (Flow 1a) for the login sequence.
 ```
 
 ### Organization
@@ -132,11 +147,55 @@ Positions
 ├── Level
 ├── IsActive
 └── Common columns
+
+Teams  ← sub-gym grouping of employees under a Team Leader (MVP scope)
+├── Id (PK)
+├── GymId (FK → Gyms)   ← a team belongs to exactly one gym, never spans gyms
+├── Name                 ← e.g. "Morning Floor Team"
+├── IsActive
+└── Common columns
+
+TeamLeaders  ← many-to-many: a leader may lead multiple teams
+├── Id (PK)
+├── TeamId (FK → Teams)
+├── EmployeeId (FK → Employees)
+└── Common columns
+
+TeamMembers  ← many-to-many: an employee may belong to multiple teams
+├── Id (PK)
+├── TeamId (FK → Teams)
+├── EmployeeId (FK → Employees)
+└── Common columns
+
+Note: Team membership and team leadership are both many-to-many
+(confirmed): one employee can lead more than one team, and one
+employee can be a member of more than one team. There is no
+uniqueness constraint on EmployeeId in either TeamLeaders or
+TeamMembers. Effective "my team scope" for a Team Leader is the
+UNION of all TeamMembers across every Team they lead.
 ```
 
 ### Recruitment
 
 ```
+VacancyRequests  ← Branch Manager-initiated ask for a new position; distinct from Vacancies
+├── Id (PK)
+├── GymId (FK → Gyms)
+├── PositionId (FK → Positions)
+├── RequestedBy (FK → Users)         ← the Branch Manager (or any user with the request permission)
+├── Justification (text)
+├── Status (enum: Pending, Approved, Rejected)
+├── DecidedBy (FK → Users, nullable)
+├── DecidedAt (timestamptz, nullable)
+├── DecisionComment (text, nullable)
+├── ResultingVacancyId (FK → Vacancies, nullable)  ← set when Approved and HR creates the actual vacancy
+└── Common columns
+
+Note: A VacancyRequest never becomes a Vacancy automatically. HR reviews
+it and, on Approve, creates the real Vacancy through the normal
+recruitment.vacancies.manage flow, linking back via ResultingVacancyId.
+Rejecting a request just closes it with a comment — no Vacancy is created.
+
 Vacancies
 ├── Id (PK)
 ├── GymId (FK → Gyms)
@@ -340,13 +399,24 @@ EmployeeRequests
 ├── Status (enum: Pending, Approved, Rejected)
 └── Common columns
 
-⚠️ REQUEST TYPE NOTE: The 9 request types (Leave, LeaveEarly, DayOff, SickLeave,
-LateArrival, ShiftSwap, EmergencyLeave, DocumentRequest, GeneralInquiry) are
-**draft and unconfirmed**. Do NOT hard-code these as a C# enum in DomainLayer
-until the business confirms the final list. Use a string/varchar column or a
-RequestTypes lookup table so the list can change without a migration.
-Current draft: Leave | LeaveEarly | DayOff | SickLeave | LateArrival |
-ShiftSwap | EmergencyLeave | DocumentRequest | GeneralInquiry
+⚠️ REQUEST TYPE NOTE: The request types (Leave, LeaveEarly, DayOff, SickLeave,
+LateArrival, ShiftSwap, EmergencyLeave, DocumentRequest, GeneralInquiry,
+**Resignation**) are **draft and unconfirmed**. Do NOT hard-code these as a
+C# enum in DomainLayer until the business confirms the final list. Use a
+string/varchar column or a RequestTypes lookup table so the list can
+change without a migration.
+Current draft (10): Leave | LeaveEarly | DayOff | SickLeave | LateArrival |
+ShiftSwap | EmergencyLeave | DocumentRequest | GeneralInquiry | Resignation
+
+**Resignation** is a self-service request: any Employee — including a
+Branch Manager acting as an employee rather than a manager — submits it
+about themselves via the standard "My Requests" flow. It routes straight
+to the HR Requests Inbox exactly like every other request type, using the
+existing `requests.view`/`requests.approve` permissions. It is
+deliberately NOT the same thing as Branch Manager "offboarding" another
+employee (that stays a management action on the Employee profile, gated
+by `employees.offboard`, with no separate approval step). See
+features.md §9 and §5a for the distinction.
 
 RequestDecisions
 ├── Id (PK)
@@ -443,7 +513,12 @@ This keeps the recipient's notification inbox as the single surface they check.
 - `IX_AttendanceRecords_EmployeeId_Date` — unique, daily lookups
 - `IX_ShiftAssignments_ShiftCycleId` — grid rendering
 - `IX_Applications_VacancyId` — pipeline queries
+- `IX_VacancyRequests_GymId_Status` — HR review queue of pending requests per gym
 - `IX_UserGymAccess_UserId` — authorization checks (every request)
+- `IX_Teams_GymId` — team lookups scoped to a gym
+- `IX_TeamLeaders_EmployeeId` — resolve which teams a user leads (auth checks, every request for a Team Leader)
+- `IX_TeamMembers_TeamId` — team roster rendering
+- `IX_TeamMembers_EmployeeId` — resolve which team(s) an employee belongs to
 - `IX_Notifications_UserId_IsRead` — notification bell count
 - `IX_LeaveBalances_EmployeeId_LeaveType_Year` — unique, balance lookup per type per year
 - `IX_Announcements_Status_ScheduledAt` — scheduled announcement dispatcher query

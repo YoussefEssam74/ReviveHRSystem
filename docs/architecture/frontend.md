@@ -83,6 +83,12 @@ src/
 │   │   ├── components/            ← RequestForm, RequestInbox, RequestDetail
 │   │   └── pages/                 ← RequestsPage (HR inbox), MyRequestsPage (Employee)
 │   │
+│   ├── teams/
+│   │   ├── api/
+│   │   ├── hooks/                 ← useMyTeams, useTeamMembers
+│   │   ├── components/            ← TeamForm, TeamRoster, TeamLeaderAssignment
+│   │   └── pages/                 ← TeamsAdminPage (HR/Branch Manager), MyTeamPage (Team Leader)
+│   │
 │   ├── payroll/
 │   │   ├── api/
 │   │   ├── hooks/
@@ -137,6 +143,7 @@ src/
 │   ├── useCurrentUser.ts          ← Current user + permissions + gym access
 │   ├── usePermission.ts           ← Check if current user has a specific permission
 │   ├── useGymContext.ts           ← Currently selected gym
+│   ├── useTeamContext.ts          ← Resolves teams the user leads (if any) + union of teamMemberIds, for Team Leader-scoped queries
 │   └── useDirection.ts            ← RTL/LTR direction based on language
 │
 └── locales/
@@ -171,6 +178,20 @@ const navItems = allNavItems.filter(item =>
 );
 ```
 
+### Team-Scoped Queries (Team Leader)
+```tsx
+// useTeamContext resolves the union of every team the current user leads
+const { teamMemberIds } = useTeamContext();
+
+// Team-scoped queries filter to teamMemberIds instead of the full gym
+useAttendance({ gymId: selectedGym, employeeIds: teamMemberIds });
+
+// "My Team" nav item only renders if team.view is granted
+<PermissionGate permission="team.view">
+  <SidebarLink to="/my-team">My Team</SidebarLink>
+</PermissionGate>
+```
+
 ### Gym Context
 ```tsx
 // GymSelector at the top of gym-scoped pages
@@ -189,6 +210,22 @@ useEmployees({ gymId: selectedGym });
 - Tailwind's `rtl:` variant for directional styles
 - All layouts use logical properties (start/end instead of left/right)
 
+### Top Bar — Notifications & Settings
+- **Notifications bell** — permission/role-aware; shows System Notifications, Required Actions, Request Updates, Attendance Alerts, and (for Branch Manager/Team Leader) Management Notifications relevant to their scope
+- **Administrative Settings (⚙️)** — the icon is always present in the shell, but its *contents* are entirely permission-driven, never role-driven:
+  - Regular Employee: Personal Settings, Password, Notification Preferences, Language
+  - Team Leader: above + Team-related settings, only if a team-scoped `.manage` permission is granted
+  - Branch Manager: above + Employee Management Settings, Shift Settings, Branch-related Settings, Attendance Settings — each shown only if the corresponding permission is held
+  - **Rule:** never show an admin settings section purely because of a role label (e.g. "Branch Manager") — gate every section by its actual permission, same as page/button visibility elsewhere
+
+### Profile Menu
+Clicking the profile picture (next to Settings) shows:
+- Employee Name, Position, Role, Gym (read-only header)
+- My Profile
+- Account Settings
+- Logout
+- (optional, future) Help & Support, Change Password shortcut
+
 ## Design System
 
 See [Hr-System-Material/DESIGN.md](../../Hr-System-Material/DESIGN.md) for the full design token specification.
@@ -199,3 +236,12 @@ Key values:
 - **Spacing**: 8px base grid
 - **Border radius**: 4px (small), 8px (components), 12px (containers)
 - **Shadows**: Very soft, ambient (premium clean look)
+
+### Action-Oriented Dashboards (applies to every dashboard)
+No dashboard (Super Admin, HR, or any Employee-based dashboard: Regular
+Employee, Team Leader, Branch Manager) is a pure reporting screen.
+Anything requiring the viewer to act must render as an explicit **"Action
+Required"** flag or badge rather than a plain number — e.g. "3 requests
+pending" alone is not enough; it should read/flag as something the user
+is expected to act on. See features.md §13 for the per-role dashboard
+content this applies to.
