@@ -278,77 +278,295 @@ function openMemberAttendance(id) {
 }
 function openEvaluateMember(id) { openNewTeamEvaluation(id); }
 
-// ==================== TEAM SCHEDULE ====================
-function renderTeamSchedule() {
-  const days = ['Mon 25','Tue 26','Wed 27','Thu 28','Fri 29','Sat 30','Sun 31'];
-  const teamData = MOCK.teamMembers.slice(0,8).map(m => {
-    const schedIds = MOCK.teamSchedule[m.id] || days.map(() => 'st-off');
-    return { ...m, scheduleIds: schedIds };
+// ==================== TEAM SCHEDULE (Month-Centric) ====================
+//
+// Flow: pick a MONTH → see that month's schedule PERIODS (dated ranges /
+// history) → drill into a period to view the roster. Only the CURRENT month
+// is editable: you can switch a period into EDIT mode and assign shifts to
+// individuals for that specific period. Past/Future months are read-only.
+//
+
+// --- Scheduling calendar ---------------------------------------------------
+// Anchored to the current month (mock clock lives in 2026). We expose a rolling
+// window of months ending at the current one so there is always a browsable
+// HISTORY behind the live month.
+function schAnchorYear()   { return 2026; }
+function schCurMonth()     { return 9; /* September 2026 */ }
+function schMonthWindow(nBack) {
+  // nBack = how many PAST months to offer beyond the current one.
+  const cur = schCurMonth(), yr = schAnchorYear();
+  const arr = [];
+  for (let k = nBack; k >= 0; k--) {
+    const mm = cur - k;
+    arr.push({ ym: `${yr}-${String(mm).padStart(2,'0')}`, year: yr, month: mm });
+  }
+  return arr.reverse();
+}
+function schLockState(ym) {
+
+  const curYm = `${schAnchorYear()}-${String(schCurMonth()).padStart(2,'0')}`;
+  if (ym < curYm) return 'past';      // history — read only
+  if (ym === curYm) return 'current'; // live — editable
+  return 'future';                    // planned — read only
+}
+function schMonthLabel(year, month) {
+  return new Date(Date.UTC(year, month - 1, 1)).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+}
+function schMonday(dateObj) {
+  const d = new Date(dateObj);
+  const dow = (d.getDay() + 6) % 7; // Mon=0 .. Sun=6
+  d.setDate(d.getDate() - dow);
+  return d;
+}
+// Split a month into contiguous Monday->Sunday WEEKS (partial edges trimmed to
+// the month bounds). Each yields a labelled period descriptor.
+function schPeriodsFor(y, mo) {
+  const dim = new Date(Date.UTC(y, mo, 0)).getDate();
+  // Iterate every day of the month, bucket by ISO week (weeks start Monday).
+  const buckets = {};
+  for (let dd = 1; dd <= dim; dd++) {
+    const dt = new Date(Date.UTC(y, mo - 1, dd));
+    const mon = schMonday(dt);
+    const key = mon.toISOString().slice(0, 10);
+    (buckets[key] = buckets[key] || []).push({
+      iso: dt.toISOString().slice(0, 10),
+      num: dd,
+      dow: dt.toLocaleDateString('en-US', { weekday: 'short' }),
+    });
+  }
+  return Object.keys(buckets).sort().map(key => {
+    const ds = buckets[key];
+    const fmt = o => new Date(o.iso+'T00:00:00Z').toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    return {
+      id: key.replace(/-/g, ''),
+      start: ds[0].iso,
+      end: ds[ds.length - 1].iso,
+      label: `${fmt(ds[0])} – ${fmt(ds[ds.length-1])}`,
+      days: ds,
+    };
   });
-  const isEdit = state.teamScheduleEdit || false;
+}
+function schDefaultYM() {
+  return `${schAnchorYear()}-${String(schCurMonth()).padStart(2,'0')}`;
+}
+// Deterministic per-(member,period) roster seed so history stays stable until
+// someone edits it. Overrides are stored separately.
+function schSeedArray(memberId, periodId, len) {
+  const tmps = MOCK.shiftTemplates;
+  const actives = tmps.filter(t => !t.isOff);
+  const pool = [tmps.find(t => t.isOff)].concat(actives); // OFF weighted lightly
+  let acc = 2166136261 >>> 0;
+  const str = memberId + '#' + periodId;
+  for (let i = 0; i < str.length; i++) { acc ^= str.charCodeAt(i); acc = Math.imul(acc, 16777619) >>> 0; }
+  const rnd = () => { acc ^= acc << 13; acc ^= acc >>> 17; acc ^= acc << 5; return (acc >>> 0) / 4294967296; }; // xorshift32
+  const out = [];
+  for (let i = 0; i < len; i++) {
+    const idx = Math.floor(rnd() * pool.length); // spread
+    out.push(pool[idx]?.id || 'st-off');
+  }
+  return out;
+}
+function schOverrideStore() {
+  if (!MOCK.__rosterOverrides) MOCK.__rosterOverrides = {};
+  return MOCK.__rosterOverrides;
+}
+function schRoster(memberId, periodId, len) {
+  const ov = schOverrideStore()[`${memberId}|${periodId}`];
+  return Array.from({length:len}, (_,i)=>ov&&ov[i]!=null?ov[i]:undefined).map(
+    (v,i)=>{ if(v!=null) return v; const seed=schSeedArray(memberId,periodId,len); return seed[i]; });
+}
+function schPersist(memberId, periodId, sidArr) {
+  schOverrideStore()[`${memberId}|${periodId}`] = sidArr.slice();
+}
+
+// --- Page state ------------------------------------------------------------
+// Persisted on `state` so switching tabs retains the picked month/period.
+function tsSelMonth(){ return state.tsMonth || schDefaultYM(); }
+function tsSelPeriod(){
+  const [,moStr] = tsSelMonth().split('-');
+  const pers = schPeriodsFor(+schAnchorYear(), +moStr);
+  return state.tsPeriod || (pers[pers.length-1] ? pers[pers.length-1].id : null);
+}
+function tsCanEdit(){
+  return schLockState(tsSelMonth()) === 'current';
+}
+
+// --- Render ------------------------------------------------------------------
+function renderTeamSchedule() {
+  const win = schMonthWindow(3);                 // current + 3 past months
+  const selMo = tsSelMonth();
+  const [,selMm] = selMo.split('-');
+  const periods = schPeriodsFor(+schAnchorYear(), +selMm);
+  const selPer = tsSelPeriod();
+  const period = periods.find(p => p.id === selPer) || periods[periods.length-1];
+  const lock = schLockState(selMo);
+  const canEdit = lock === 'current';
+  const isEditMode = !!state.tsEditing && canEdit;
+  const teamRows = MOCK.teamMembers.slice(0, 8);
+
+  // header meta
+  const histDesc = lock === 'current'
+    ? 'Live month — pick a period below to view or assign shifts.'
+    : lock === 'past'
+      ? 'Historical month — viewing archived schedules (read-only).'
+      : 'Future month — drafts are locked until publication.';
 
   return `<div class="space-y-3">
+    <!-- Heading -->
     <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-      <div><h1 class="text-xl font-bold text-charcoal-900">Team Schedule</h1><p class="text-xs text-charcoal-500 mt-0.5">Cycle: Aug 24 – Sep 2 · ${teamData.length} employees</p></div>
+      <div>
+        <h1 class="text-xl font-bold text-charcoal-900">Team Schedule</h1>
+        <p class="text-xs text-charcoal-500 mt-0.5">${histDesc}</p>
+      </div>
       <div class="flex gap-1.5">
-        <button onclick="state.teamScheduleEdit=!state.teamScheduleEdit;renderAll()" class="btn btn-sm ${isEdit?'btn-primary':'btn-secondary'}">
+        ${canEdit ? `
+        <button onclick="state.tsEditing=${isEditMode?'false':'true'};renderAll()" class="btn btn-sm ${isEditMode?'btn-primary':'btn-secondary'}">
           <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/></svg>
-          ${isEdit?'Done':'Edit Schedule'}
+          ${isEditMode?'Finish Editing':'Assign Shifts'}
         </button>
-        <button onclick="navigateTo('shift-management')" class="btn btn-sm btn-primary"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>Assign Shifts</button>
+        <button onclick="confirmTsPublish(${(period?`'${period.id}'`: '""')})" class="btn btn-sm btn-primary" ${isEditMode?'':'disabled'}>
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 1212l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>Publish
+        </button>` : ``}
+        <button onclick="navigateTo('shift-management')" class="btn btn-sm btn-secondary"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>Advanced Editor</button>
       </div>
     </div>
 
-    <!-- Legend (dynamic from templates) -->
-    <div class="flex items-center gap-4 text-[10px] text-charcoal-500 px-1 flex-wrap">
-      ${MOCK.shiftTemplates.filter(t => !t.isOff).map(t => `
-        <span class="inline-flex items-center gap-1">
-          <span class="w-3 h-3 rounded inline-block border" style="background:${t.bgColor};border-color:${t.color}40"></span>
-          ${t.name} (${t.start}–${t.end})
-        </span>
-      `).join('')}
-      <span class="inline-flex items-center gap-1">
-        <span class="w-3 h-3 rounded inline-block border border-charcoal-200 bg-charcoal-100"></span>Off
-      </span>
+    <!-- Step 1 :: CHOOSE THE MONTH -->
+    <div class="bg-white rounded-xl border border-charcoal-200 p-3">
+      <p class="bento-label text-charcoal-500 mb-2">STEP 1 — CHOOSE MONTH</p>
+      <div class="flex items-center gap-2 flex-wrap">
+        ${win.map(m => {
+          const ym = m.ym;
+          const st = schLockState(ym);
+          const active = ym === selMo;
+          const chipCol = active ? 'bg-brand-600 text-white border-brand-600'
+                        : st === 'current' ? 'bg-brand-50 text-brand-700 border-brand-200'
+                        : 'bg-white text-charcoal-700 border-charcoal-200 hover:bg-charcoal-50';
+          const tag = st === 'current' ? '<span class="ml-1 text-[9px] uppercase tracking-wide opacity-80">● Live</span>'
+                     : st === 'past' ? ''
+                     : '<span class="ml-1 text-[9px] uppercase tracking-wide opacity-60">planned</span>';
+          return `<button onclick="selectTsMonth('${ym}')" class="px-3 py-1.5 rounded-lg border text-xs font-semibold transition-colors ${chipCol}">
+            ${schMonthLabel(m.year, m.month)}${tag}
+          </button>`;
+        }).join('')}
+      </div>
     </div>
 
-    <!-- Desktop Table -->
-    <div class="bg-white rounded-xl border border-charcoal-200 overflow-hidden hidden lg:block">
-      <div class="table-responsive"><table class="data-table"><thead><tr><th class="sticky left-0 bg-charcoal-50 z-10">Employee</th>${days.map(d=>`<th class="text-center">${d}</th>`).join('')}</tr></thead>
-      <tbody>${teamData.map(m => `<tr><td class="sticky left-0 bg-white z-10"><div class="flex items-center gap-2"><div class="w-7 h-7 rounded-full bg-brand-100 text-brand-700 flex items-center justify-center text-[10px] font-semibold">${m.initials}</div><div><p class="text-xs font-medium text-charcoal-900">${m.name}</p><p class="text-[10px] text-charcoal-500">${m.position}</p></div></div></td>${m.scheduleIds.map((sid,i) => {
-        const t = getShiftTemplate(sid);
-        const c = getShiftColor(t);
-        if (isEdit) {
-          return `<td class="text-center"><button onclick="cycleTeamScheduleShift(this,'${m.id}',${i})" class="schedule-shift-badge cursor-pointer hover:opacity-80 text-[10px] border" style="background:${c.bg};color:${c.text};border-color:${c.border}40" data-template="${sid}">${t.isOff ? 'OFF' : t.start + '–' + t.end}</button></td>`;
-        }
-        return `<td class="text-center"><span class="schedule-shift-badge text-[10px] border" style="background:${c.bg};color:${c.text};border-color:${c.border}40">${t.isOff ? 'OFF' : t.start}</span></td>`;
-      }).join('')}</tr>`).join('')}</tbody></table></div>
+    <!-- Step 2 :: CHOOSE THE PERIOD (history of schedules in this month) -->
+    <div class="bg-white rounded-xl border border-charcoal-200 p-3">
+      <div class="flex items-center justify-between mb-2">
+        <p class="bento-label text-charcoal-500">STEP 2 — SCHEDULE PERIODS OF THIS MONTH</p>
+        ${lock === 'current' ? `<span class="text-[10px] text-brand-600 font-semibold">Tap a period to view • tap “Assign” to edit it</span>` : `<span class="text-[10px] text-charcoal-400 font-semibold">Archive — read only</span>`}
+      </div>
+      <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
+        ${periods.map(p => {
+          const active = p.id === selPer;
+          const pub = schPubFlag(p.id);
+          return `<button onclick="selectTsPeriod('${p.id}')" class="text-left rounded-xl border p-3 transition-colors ${active?'border-brand-500 bg-brand-50/50 ring-1 ring-brand-500':'border-charcoal-200 hover:border-charcoal-300 hover:bg-charcoal-50/50'}">
+            <div class="flex items-center justify-between">
+              <p class="text-xs font-semibold text-charcoal-900">${p.label}</p>
+              ${pub ? `<span class="badge badge-blue">Published</span>` : lock==='current' ? `<span class="badge badge-yellow">Draft</span>` : `<span class="badge badge-gray">Closed</span>`}
+            </div>
+            <p class="text-[10px] text-charcoal-500 mt-1">${p.days.length} days · ${teamRows.length} employees</p>
+            ${active && canEdit ? `<p class="text-[10px] text-brand-600 font-semibold mt-1.5">${isEditMode?'✎ Editing…':'· Tap “Assign Shifts” to edit'}</p>` : ''}
+          </button>`;
+        }).join('')}
+      </div>
     </div>
 
-    <!-- Mobile Cards -->
-    <div class="space-y-1.5 lg:hidden">${teamData.map(m => `<div class="bg-white rounded-xl border border-charcoal-200 p-3"><div class="flex items-center gap-2 mb-2"><div class="w-7 h-7 rounded-full bg-brand-100 text-brand-700 flex items-center justify-center text-[10px] font-semibold">${m.initials}</div><span class="text-xs font-medium text-charcoal-900">${m.name}</span></div><div class="flex gap-1 flex-wrap">${m.scheduleIds.map((sid,i) => {
-      const t = getShiftTemplate(sid);
-      const c = getShiftColor(t);
-      return `<span class="schedule-shift-badge text-[9px] border" style="background:${c.bg};color:${c.text};border-color:${c.border}40">${days[i].split(' ')[0]}: ${t.isOff ? 'OFF' : t.start + '–' + t.end}</span>`;
-    }).join('')}</div></div>`).join('')}</div>
+    ${period ? `
+    <!-- Step 3 :: VIEW / ASSIGN THE CHOSEN PERIOD'S ROSTER -->
+    <div class="bg-white rounded-xl border border-charcoal-200 overflow-hidden">
+      <div class="px-4 py-2.5 border-b border-charcoal-100 flex items-center justify-between flex-wrap gap-2">
+        <div>
+          <p class="bento-label text-charcoal-500">PERIOD ROSTER — ${period.label}</p>
+          <p class="text-[10px] text-charcoal-400 mt-0.5">${canEdit?(isEditMode?'Editing enabled — click a shift cell to rotate it.':'Preview mode — read only.'):'Archived — read only.'}</p>
+        </div>
+        ${canEdit ? `<button onclick="resetTsPeriod('${period.id}')" class="btn btn-sm btn-secondary" ${isEditMode?'':'style=\"visibility:hidden\"'}>Reset period</button>` : ''}
+      </div>
+
+      <!-- legend -->
+      <div class="flex items-center gap-4 text-[10px] text-charcoal-500 px-4 pb-2 flex-wrap">
+        ${MOCK.shiftTemplates.filter(t => !t.isOff).map(t => `
+          <span class="inline-flex items-center gap-1"><span class="w-3 h-3 rounded inline-block border" style="background:${t.bgColor};border-color:${t.color}40"></span>${t.name} (${t.start}–${t.end})</span>
+        `).join('')}
+        <span class="inline-flex items-center gap-1"><span class="w-3 h-3 rounded inline-block border border-charcoal-200 bg-charcoal-100"></span>Off</span>
+      </div>
+
+      <!-- desktop table -->
+      <div class="table-responsive hidden lg:block">
+        <table class="data-table">
+          <thead><tr><th class="sticky left-0 bg-charcoal-50 z-10">Employee</th>${period.days.map(d=>`<th class="text-center">${d.num}<br/><span class="text-[9px] font-normal text-charcoal-400">${d.dow}</span></th>`).join('')}</tr></thead>
+          <tbody>${teamRows.map(m => {
+            const roster = schRoster(m.id, period.id, period.days.length);
+            return `<tr><td class="sticky left-0 bg-white z-10"><div class="flex items-center gap-2"><div class="w-7 h-7 rounded-full bg-brand-100 text-brand-700 flex items-center justify-center text-[10px] font-semibold">${m.initials}</div><div><p class="text-xs font-medium text-charcoal-900">${m.name}</p><p class="text-[10px] text-charcoal-500">${m.position}</p></div></div></td>${
+              roster.map((sid,i)=>{
+                const t=getShiftTemplate(sid); const c=getShiftColor(t);
+                if(isEditMode){
+                  return `<td class="text-center"><button onclick="rotateTsShift(this,'${m.id}','${period.id}',${i})" class="schedule-shift-badge cursor-pointer hover:opacity-80 text-[10px] border" style="background:${c.bg};color:${c.text};border-color:${c.border}40" data-sid="${sid}">${t.isOff?'OFF':t.start+'–'+t.end}</button></td>`;
+                }
+                return `<td class="text-center"><span class="schedule-shift-badge text-[10px] border" style="background:${c.bg};color:${c.text};border-color:${c.border}40">${t.isOff?'OFF':t.start}</span></td>`;
+              }).join('')
+            }</tr>`;
+          }).join('')}</tbody>
+        </table>
+      </div>
+
+      <!-- mobile cards -->
+      <div class="space-y-1.5 p-3 lg:hidden">${teamRows.map(m => {
+        const roster = schRoster(m.id, period.id, period.days.length);
+        return `<div class="bg-white rounded-xl border border-charcoal-200 p-3">
+          <div class="flex items-center gap-2 mb-2"><div class="w-7 h-7 rounded-full bg-brand-100 text-brand-700 flex items-center justify-center text-[10px] font-semibold">${m.initials}</div><span class="text-xs font-medium text-charcoal-900">${m.name}</span></div>
+          <div class="flex gap-1 flex-wrap">${roster.map((sid,i)=>{
+            const t=getShiftTemplate(sid); const c=getShiftColor(t);
+            return `<span class="schedule-shift-badge text-[9px] border" style="background:${c.bg};color:${c.text};border-color:${c.border}40">${period.days[i].num}/${period.days[i].dow}: ${t.isOff?'OFF':t.start+'–'+t.end}</span>`;
+          }).join('')}</div>
+        </div>`;
+      }).join('')}</div>
+    </div>
+    ` : `<div class="bg-white rounded-xl border border-charcoal-200 p-6 text-center"><p class="text-xs text-charcoal-500">Pick a period above to view its roster.</p></div>`}
   </div>`;
 }
-function cycleTeamScheduleShift(btn, empId, dayIdx) {
+
+// Publication bookkeeping (prototype-grade: tracked in-memory per period).
+function schPubFlags(){ if(!MOCK.__pub){MOCK.__pub={};} return MOCK.__pub; }
+function schPubFlag(pid){ return !!schPubFlags()[pid]; }
+
+// --- Interactions -------------------------------------------------------------
+function selectTsMonth(ym){ state.tsMonth = ym; delete state.tsPeriod; state.tsEditing = false; renderAll(); }
+function selectTsPeriod(pid){ state.tsPeriod = pid; state.tsEditing = false; renderAll(); }
+function confirmTsPublish(pid){
+  if(!pid) return;
+  schPubFlags()[pid] = true;
+  state.tsEditing = false;
+  renderAll();
+  showToast(`Schedule for ${pid} published 🎉`);
+}
+function resetTsPeriod(pid){
+  const membs = MOCK.teamMembers.slice(0,8);
+  membs.forEach(m => { delete schOverrideStore()[`${m.id}|${pid}`]; });
+  renderAll();
+  showToast(`Period ${pid} reset to automatic draft`,'info');
+}
+function rotateTsShift(btn, empId, periodId, dayIdx){
   const templates = MOCK.shiftTemplates;
   const ids = templates.map(t => t.id);
-  const currentSid = btn.getAttribute('data-template');
-  const ci = ids.indexOf(currentSid);
-  const newSid = ids[(ci + 1) % ids.length];
-  if (!MOCK.teamSchedule[empId]) MOCK.teamSchedule[empId] = ids.map(() => 'st-off');
-  MOCK.teamSchedule[empId][dayIdx] = newSid;
-  const t = getShiftTemplate(newSid);
-  const c = getShiftColor(t);
-  btn.setAttribute('data-template', newSid);
-  btn.style.background = c.bg;
-  btn.style.color = c.text;
-  btn.style.borderColor = c.border + '40';
-  btn.textContent = t.isOff ? 'OFF' : t.start + '–' + t.end;
-  showToast(`Shift → ${t.name} (${t.isOff ? 'Off' : t.start + '–' + t.end})`);
+  const cur = btn.getAttribute('data-sid');
+  const ni = (ids.indexOf(cur)+1)%ids.length;
+  const nsid = ids[ni];
+  // Resolve the clicked period's day-count so the rotated roster aligns.
+  const [,moStr] = tsSelMonth().split('-');
+  const pers = schPeriodsFor(+schAnchorYear(), +moStr);
+  const pp = pers.find(p=>p.id===periodId);
+  const len = pp ? pp.days.length : 7;
+  const fresh = schRoster(empId, periodId, len);
+  fresh[dayIdx] = nsid;
+  schPersist(empId, periodId, fresh);
+  const t = getShiftTemplate(nsid); const c = getShiftColor(t);
+  btn.setAttribute('data-sid', nsid);
+  btn.style.background=c.bg; btn.style.color=c.text; btn.style.borderColor=c.border+'40';
+  btn.textContent = t.isOff?'OFF':t.start+'–'+t.end;
+  showToast(`${nsid.startsWith('st-off')?'Off day':t.name+' ('+(t.start??'')+'–'+(t.end??'')+')'} assigned to ${empId}`);
 }
 
 // ==================== SHIFT MANAGEMENT ====================

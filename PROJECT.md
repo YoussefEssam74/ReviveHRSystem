@@ -110,7 +110,7 @@ Brand: Modern Corporate Minimalism with green (#16A34A) primary palette, Inter f
 
 ## Critical Rules
 
-1. **If it isn't in the MVP specification, don't build it unless explicitly requested.**
+1. **If it isn't in the MVP specification, don't build it unless needed for mvp.**
 2. **Never bypass the authorization model** — every action is gated by permission + gym scope.
 3. **Preserve audit trails** — every edit/approval must record who, when, and why.
 4. **Gym isolation is absolute** — a user must never see data from a gym they don't have access to.
