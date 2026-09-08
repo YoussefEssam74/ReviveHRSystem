@@ -1,0 +1,432 @@
+<!DOCTYPE html><html class="h-full" lang="en"><head>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0" name="viewport">
+<title>Revive HR - Shift Management</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&amp;display=swap" rel="stylesheet">
+<script>
+tailwind.config={darkMode:"class",theme:{extend:{colors:{"primary":"#16a34a","primary-container":"#bbf7d0","on-primary":"#ffffff","on-primary-container":"#14532d","surface":"#fbfcfa","surface-container":"#e9eee8","surface-container-low":"#f3f6f2","surface-container-high":"#dee5dd","surface-container-highest":"#d3dcd2","surface-container-lowest":"#ffffff","on-surface":"#13221a","on-surface-variant":"#3f4a41","on-background":"#13221a","background":"#f7f9f7","secondary":"#5c5f60","outline":"#6e7b6c","outline-variant":"#c6cdc5","error":"#ba1a1a","error-container":"#ffdad6","on-error-container":"#93000a","tertiary":"#51605a","tertiary-container":"#b3c7bc","surface-tint":"#16a34a"},fontFamily:{sans:["Inter","system-ui","sans-serif"]}}}}
+</script>
+<style>.material-symbols-outlined{font-variation-settings:'FILL' 0,'wght' 400,'GRAD' 0,'opsz' 24;}.material-symbols-outlined[data-weight="fill"]{font-variation-settings:'FILL' 1;}.elevation-1{box-shadow:0px 1px 3px rgba(0,0,0,0.05);}.shift-chip{cursor:grab;user-select:none;}</style>
+</head>
+<body class="bg-background text-on-background font-sans min-h-screen flex h-full overflow-hidden">
+
+<!-- Sidebar -->
+<nav class="fixed left-0 top-0 h-full w-[280px] bg-surface-container-low flex flex-col py-6 px-4 z-30 hidden md:flex border-r border-outline-variant">
+  <div class="flex items-center gap-3 mb-8 px-2">
+    <div class="w-10 h-10 rounded-lg bg-primary-container text-on-primary-container flex items-center justify-center">
+      <span class="material-symbols-outlined" data-weight="fill">hub</span>
+    </div>
+    <div>
+      <h1 class="text-[20px] font-bold text-on-surface">Revive HR</h1>
+      <p class="text-[12px] text-on-surface-variant">Branch Manager</p>
+    </div>
+  </div>
+  <ul class="flex flex-col gap-1 flex-1">
+    <li><a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant hover:bg-surface-container-high transition-all" href="../branch_manager_dashboard/code.html"><span class="material-symbols-outlined">dashboard</span><span class="text-[14px] font-medium">Dashboard</span></a></li>
+    <li><a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant hover:bg-surface-container-high transition-all" href="../employee_directory/code.html"><span class="material-symbols-outlined">groups</span><span class="text-[14px] font-medium">Employees</span></a></li>
+    <li><a class="flex items-center gap-3 px-4 py-3 rounded-lg text-primary font-bold bg-primary-container/10 transition-colors" href="#"><span class="material-symbols-outlined" data-weight="fill">calendar_month</span><span class="text-[14px] font-medium">Shift Management</span></a></li>
+    <li><a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant hover:bg-surface-container-high transition-all" href="../request_management/code.html"><span class="material-symbols-outlined">assignment</span><span class="text-[14px] font-medium">Requests</span></a></li>
+    <li><a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant hover:bg-surface-container-high transition-all" href="../attendance_management_dashboard/code.html"><span class="material-symbols-outlined">event_available</span><span class="text-[14px] font-medium">Attendance</span></a></li>
+    <li><a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant hover:bg-surface-container-high transition-all" href="../recruitment_request/code.html"><span class="material-symbols-outlined">person_add</span><span class="text-[14px] font-medium">Recruitment</span></a></li>
+    <li><a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant hover:bg-surface-container-high transition-all" href="../employee_separation_offboarding_dashboard/code.html"><span class="material-symbols-outlined">person_off</span><span class="text-[14px] font-medium">Leaving</span></a></li>
+  </ul>
+  <ul class="flex flex-col gap-1 mt-auto pt-4 border-t border-outline-variant">
+    <li><a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant hover:bg-surface-container-high transition-all" href="#"><span class="material-symbols-outlined">support_agent</span><span class="text-[14px] font-medium">Support</span></a></li>
+    <li><a class="flex items-center gap-3 px-4 py-3 rounded-lg text-error hover:bg-error-container/20 transition-all" href="#"><span class="material-symbols-outlined">logout</span><span class="text-[14px] font-medium">Logout</span></a></li>
+  </ul>
+</nav>
+
+<!-- Main Content -->
+<main class="flex-1 ml-0 md:ml-[280px] h-full flex flex-col relative overflow-hidden">
+  <!-- Top Bar -->
+  <header class="w-full h-16 bg-surface flex justify-between items-center px-4 md:px-8 z-10 sticky top-0 shrink-0 border-b border-outline-variant">
+    <div class="flex items-center gap-4 flex-1">
+      <h1 class="text-[18px] font-bold text-on-surface hidden lg:block">Shift Management</h1>
+    </div>
+    <div class="flex items-center gap-4">
+      <div class="flex items-center gap-2 px-4 py-2 rounded-lg bg-surface-container-low text-[13px]">
+        <span class="w-2.5 h-2.5 rounded-full bg-yellow-500"></span>
+        <span class="font-medium text-on-surface-variant">Draft</span>
+      </div>
+      <button id="btn-publish" class="hidden sm:flex items-center gap-2 px-4 py-2 bg-primary text-on-primary rounded-lg text-[13px] font-semibold hover:opacity-90 transition-opacity">
+        <span class="material-symbols-outlined text-[18px]">publish</span> Publish Schedule
+      </button>
+      <div class="ml-2 pl-4 border-l border-outline-variant flex items-center gap-3">
+        <div class="w-9 h-9 rounded-full bg-primary-container text-on-primary-container flex items-center justify-center text-[13px] font-bold">AM</div>
+        <div class="hidden sm:block">
+          <p class="text-[13px] font-semibold text-on-surface leading-tight">Ahmed Mohamed</p>
+          <p class="text-[11px] text-on-surface-variant leading-tight">Branch Manager</p>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Canvas -->
+  <div class="flex-1 overflow-y-auto p-4 md:p-8 bg-background">
+    <div class="max-w-[1440px] mx-auto space-y-6">
+
+      <!-- Period Navigation -->
+      <div class="flex flex-col lg:flex-row lg:items-center gap-4 justify-between">
+        <div class="flex items-center gap-2">
+          <button onclick="moveWeek(-1)" class="w-9 h-9 rounded-lg border border-outline-variant flex items-center justify-center text-secondary hover:bg-surface-container-high transition-colors"><span class="material-symbols-outlined text-[20px]">chevron_left</span></button>
+          <div class="px-4 py-2 bg-surface rounded-lg border border-outline-variant text-[14px] font-semibold text-on-surface">August 2026</div>
+          <button onclick="moveWeek(1)" class="w-9 h-9 rounded-lg border border-outline-variant flex items-center justify-center text-secondary hover:bg-surface-container-high transition-colors"><span class="material-symbols-outlined text-[20px]">chevron_right</span></button>
+          <button onclick="goToday()" class="px-3 py-2 rounded-lg text-[13px] font-medium text-primary hover:bg-primary-container/20 transition-colors">Today</button>
+        </div>
+        <div id="week-tabs" class="flex flex-wrap items-center gap-1 bg-surface-container-low rounded-xl p-1 border border-outline-variant"></div>
+      </div>
+
+      <!-- Alerts -->
+      <div class="flex items-center justify-between">
+        <p class="text-[13px] font-semibold text-on-surface">Coverage Alerts</p>
+        <p class="text-[11px] text-on-surface-variant">Click an alert to highlight it on the schedule</p>
+      </div>
+      <div id="alerts-row" class="grid grid-cols-1 md:grid-cols-3 gap-3"></div>
+
+      <div class="grid grid-cols-1 lg:grid-cols-4 gap-4">
+        <!-- Shift Palette (sidebar) -->
+        <div class="lg:col-span-1 bg-surface rounded-xl p-4 elevation-1 h-fit lg:sticky lg:top-20">
+          <h3 class="text-[14px] font-semibold text-on-surface mb-3">Shift Palette</h3>
+          <p class="text-[11px] text-on-surface-variant mb-3">Select a shift, then click an employee's day cell to assign it.</p>
+          <div class="space-y-2">
+            <div id="slot-morning" class="shift-chip py-2.5 px-3 rounded-lg bg-blue-100 text-blue-800 text-[13px] font-semibold flex items-center justify-between border border-blue-200" draggable="true" onclick="toggleSelect('Morning')">
+              <span class="flex items-center gap-2"><span class="material-symbols-outlined text-[16px]">wb_sunny</span>Morning</span>
+              <span class="text-[11px] text-blue-600">06:00-14:00</span>
+            </div>
+            <div id="slot-evening" class="shift-chip py-2.5 px-3 rounded-lg bg-green-100 text-green-800 text-[13px] font-semibold flex items-center justify-between border border-green-200" draggable="true" onclick="toggleSelect('Evening')">
+              <span class="flex items-center gap-2"><span class="material-symbols-outlined text-[16px]">nightlight</span>Evening</span>
+              <span class="text-[11px] text-green-600">14:00-22:00</span>
+            </div>
+            <div id="slot-off" class="shift-chip py-2.5 px-3 rounded-lg bg-gray-100 text-gray-600 text-[13px] font-semibold flex items-center justify-between border border-gray-200" draggable="true" onclick="toggleSelect('Off')">
+              <span class="flex items-center gap-2"><span class="material-symbols-outlined text-[16px]">bedtime</span>Day Off</span>
+              <span class="text-[11px] text-gray-500">Rest</span>
+            </div>
+          </div>
+          <button onclick="mode='click';updateUI()" id="mode-click" class="mt-3 w-full py-2.5 rounded-lg bg-primary-container/40 text-primary text-[13px] font-semibold flex items-center justify-center gap-2"><span class="material-symbols-outlined text-[16px]">touch_app</span>Click to Assign</button>
+          <button onclick="mode='drag';updateUI()" id="mode-drag" class="mt-2 w-full py-2.5 rounded-lg bg-surface-container-low text-on-surface-variant text-[13px] font-semibold flex items-center justify-center gap-2"><span class="material-symbols-outlined text-[16px]">drag_indicator</span>Drag Mode</button>
+          <div class="mt-4 pt-3 border-t border-outline-variant">
+            <div class="flex items-center justify-between text-[12px] text-on-surface-variant mb-2"><span>Assigned</span><span id="assigned-count" class="font-semibold text-on-surface">30 / 77</span></div>
+            <div class="h-2 rounded-full bg-surface-container-high overflow-hidden"><div class="progress-fill h-2 rounded-full bg-primary" style="width:39%"></div></div>
+            <p class="text-[11px] text-on-surface-variant mt-2" id="remain-text"></p>
+          </div>
+        </div>
+
+        <!-- Schedule Grid -->
+        <div class="lg:col-span-3 bg-surface rounded-xl elevation-1 overflow-hidden">
+          <div class="overflow-x-auto">
+            <table class="w-full min-w-[900px]">
+              <thead id="sched-head"></thead>
+              <tbody id="sched-body"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Toast -->
+      <div id="toast" class="fixed bottom-6 right-6 hidden items-center gap-2 px-4 py-3 rounded-lg bg-on-surface text-surface shadow-lg z-50">
+        <span class="material-symbols-outlined text-[18px] text-green-400">check_circle</span>
+        <span id="toast-msg" class="text-[13px] font-medium"></span>
+      </div>
+
+    </div>
+  </div>
+</main>
+
+<script>
+let selectedShift=null;
+let mode='click';
+let currentWeek='w3';
+let focus=null;
+
+const SHIFT_STYLES={
+  Morning:{bg:'bg-blue-100',text:'text-blue-800',label:'M'},
+  Evening:{bg:'bg-green-100',text:'text-green-800',label:'E'},
+  Off:{bg:'bg-gray-100',text:'text-gray-500',label:'OFF'}
+};
+
+const WEEKS={
+  w1:{label:'Week 1',range:'Aug 1 – 7',days:7,headers:[['Sat','1'],['Sun','2'],['Mon','3'],['Tue','4'],['Wed','5'],['Thu','6'],['Fri','7']],
+    sched:[
+      {name:'Karim Hassan',initials:'KH',days:['Evening','Evening','Evening','Off','Evening','Evening','Evening']},
+      {name:'Sara Ali',initials:'SA',days:['Morning','Morning','Morning','Morning','Morning','Off','Morning']},
+      {name:'Omar Youssef',initials:'OY',days:['Morning','Off','Morning','Morning','Morning','Evening','Evening']},
+      {name:'Nour Ibrahim',initials:'NI',days:['Evening','Evening','Evening','Evening','Evening','Off','Evening']},
+      {name:'Yasmin Adel',initials:'YA',days:['Off','Morning','Morning','Morning','Morning','Morning','Morning']},
+      {name:'Tarek Nabil',initials:'TN',days:['Morning','Morning','Off','Morning','Morning','Morning','Morning']},
+      {name:'Hassan Ali',initials:'HA',days:['Evening','Evening','Off','Evening','Evening','Evening','Evening']},
+      {name:'Fatma Hassan',initials:'FH',days:['Morning','Morning','Morning','Morning','Off','Morning','Morning']},
+      {name:'Ahmed Zaki',initials:'AZ',days:['Evening','','Evening','Evening','Off','Evening','Evening']},
+      {name:'Mona Said',initials:'MS',days:['Morning','Morning','Morning','Off','Morning','Morning','']},
+      {name:'Salma Khaled',initials:'SK',days:['','','','','','','']},
+    ]},
+  w2:{label:'Week 2',range:'Aug 8 – 14',days:7,headers:[['Sat','8'],['Sun','9'],['Mon','10'],['Tue','11'],['Wed','12'],['Thu','13'],['Fri','14']],
+    sched:[
+      {name:'Karim Hassan',initials:'KH',days:['Morning','Morning','Evening','Evening','Off','Morning','Morning']},
+      {name:'Sara Ali',initials:'SA',days:['Morning','Off','Morning','Morning','Morning','Evening','Evening']},
+      {name:'Omar Youssef',initials:'OY',days:['Evening','Evening','Morning','Morning','Morning','Off','Evening']},
+      {name:'Nour Ibrahim',initials:'NI',days:['Off','Morning','Morning','Morning','Morning','Morning','Morning']},
+      {name:'Yasmin Adel',initials:'YA',days:['Evening','','Off','Evening','Evening','Evening','Evening']},
+      {name:'Tarek Nabil',initials:'TN',days:['Morning','Morning','Morning','Morning','Morning','Off','Morning']},
+      {name:'Hassan Ali',initials:'HA',days:['Morning','Morning','Off','Morning','Morning','Morning','Morning']},
+      {name:'Fatma Hassan',initials:'FH',days:['Evening','Evening','Evening','Evening','Evening','Evening','Off']},
+      {name:'Ahmed Zaki',initials:'AZ',days:['Morning','Off','Morning','Morning','Morning','Evening','Evening']},
+      {name:'Mona Said',initials:'MS',days:['','Morning','Morning','Morning','Off','Evening','Evening']},
+      {name:'Salma Khaled',initials:'SK',days:['Evening','Off','Evening','Evening','Evening','Evening','']},
+    ]},
+  w3:{label:'Week 3',range:'Aug 15 – 21',days:7,headers:[['Sat','15'],['Sun','16'],['Mon','17'],['Tue','18'],['Wed','19'],['Thu','20'],['Fri','21']],
+    sched:[
+      {name:'Karim Hassan',initials:'KH',days:['Morning','Morning','Evening','Evening','Off','Morning','Morning']},
+      {name:'Sara Ali',initials:'SA',days:['Morning','Off','Morning','Morning','Morning','Evening','Evening']},
+      {name:'Omar Youssef',initials:'OY',days:['Evening','Evening','Morning','Morning','Morning','Off','Evening']},
+      {name:'Nour Ibrahim',initials:'NI',days:['Off','Morning','Morning','Morning','Morning','Morning','Morning']},
+      {name:'Yasmin Adel',initials:'YA',days:['Evening','Evening','Off','Evening','','Evening','Evening']},
+      {name:'Tarek Nabil',initials:'TN',days:['Morning','Morning','Morning','Morning','Morning','Off','Morning']},
+      {name:'Hassan Ali',initials:'HA',days:['Morning','Morning','Off','Morning','Morning','Morning','Morning']},
+      {name:'Fatma Hassan',initials:'FH',days:['Evening','Evening','Evening','Evening','Evening','Evening','Off']},
+      {name:'Ahmed Zaki',initials:'AZ',days:['Morning','Off','Morning','Morning','Morning','Evening','Evening']},
+      {name:'Mona Said',initials:'MS',days:['Morning','Morning','Morning','Morning','Off','Evening','Evening']},
+      {name:'Salma Khaled',initials:'SK',days:['Evening','Off','Evening','Evening','Evening','Evening','']},
+    ]},
+  w4:{label:'Week 4',range:'Aug 22 – 28',days:7,headers:[['Sat','22'],['Sun','23'],['Mon','24'],['Tue','25'],['Wed','26'],['Thu','27'],['Fri','28']],
+    sched:[
+      {name:'Karim Hassan',initials:'KH',days:['Evening','Evening','Evening','Off','Evening','Evening','Evening']},
+      {name:'Sara Ali',initials:'SA',days:['Morning','Morning','Morning','Morning','Morning','Off','']},
+      {name:'Omar Youssef',initials:'OY',days:['Morning','Off','Morning','Morning','Morning','Evening','Evening']},
+      {name:'Nour Ibrahim',initials:'NI',days:['','','','','','','']},
+      {name:'Yasmin Adel',initials:'YA',days:['Off','Morning','Morning','Morning','Morning','','Morning']},
+      {name:'Tarek Nabil',initials:'TN',days:['Morning','Morning','Off','Morning','Morning','Morning','Morning']},
+      {name:'Hassan Ali',initials:'HA',days:['Evening','Evening','Off','Evening','Evening','Evening','Evening']},
+      {name:'Fatma Hassan',initials:'FH',days:['Morning','Morning','Morning','Morning','Off','Morning','']},
+      {name:'Ahmed Zaki',initials:'AZ',days:['Evening','Evening','Evening','Evening','Off','Evening','Evening']},
+      {name:'Mona Said',initials:'MS',days:['Morning','Morning','Morning','Morning','Morning','Evening','Evening']},
+      {name:'Salma Khaled',initials:'SK',days:['Morning','Off','Morning','Morning','Morning','Morning','Off']},
+    ]},
+  w5:{label:'Week 5',range:'Aug 29 – 31',days:3,headers:[['Sat','29'],['Sun','30'],['Mon','31']],
+    sched:[
+      {name:'Karim Hassan',initials:'KH',days:['Evening','Off','Evening']},
+      {name:'Sara Ali',initials:'SA',days:['Morning','Morning','Off']},
+      {name:'Omar Youssef',initials:'OY',days:['Morning','Morning','Morning']},
+      {name:'Nour Ibrahim',initials:'NI',days:['Evening','Evening','Off']},
+      {name:'Yasmin Adel',initials:'YA',days:['Off','Morning','Morning']},
+      {name:'Tarek Nabil',initials:'TN',days:['Morning','Off','Morning']},
+      {name:'Hassan Ali',initials:'HA',days:['Evening','Evening','Off']},
+      {name:'Fatma Hassan',initials:'FH',days:['Morning','Morning','Morning']},
+      {name:'Ahmed Zaki',initials:'AZ',days:['Morning','Off','Morning']},
+      {name:'Mona Said',initials:'MS',days:['','Morning','Morning']},
+      {name:'Salma Khaled',initials:'SK',days:['Evening','Evening','Off']},
+    ]},
+};
+
+function week(){return WEEKS[currentWeek];}
+
+function renderHead(){
+  const w=week();
+  const glue='<th class="px-4 py-3 text-[11px] font-semibold text-secondary uppercase tracking-wider sticky left-0 bg-surface">Employee</th>';
+  document.getElementById('sched-head').innerHTML='<tr class="text-left border-b border-outline-variant">'+glue+
+    w.headers.map(h=>{
+      const wk=(h[0]==='Sat'||h[0]==='Sun');
+      return '<th class="px-2 py-3 text-center text-[11px] font-semibold text-secondary '+(wk?'bg-surface-container-low':'')+'">'+h[0]+'<br><span class="text-on-surface text-[13px]">'+h[1]+'</span></th>';
+    }).join('')+'</tr>';
+}
+
+function renderSched(){
+  const w=week();
+  renderHead();
+  const body=document.getElementById('sched-body');
+  body.innerHTML=w.sched.map((row,ri)=>{
+    const assigned=row.days.filter(d=>d).length;
+    const fullEmpty=assigned===0;
+    return `
+      <tr class="border-b border-outline-variant/20 last:border-0 ${focus==='unassigned'&&fullEmpty?'bg-error-container/20':''}">
+        <td class="px-4 py-2 sticky left-0 bg-surface">
+          <div class="flex items-center gap-2.5">
+            <div class="w-8 h-8 rounded-full bg-primary-container text-on-primary-container flex items-center justify-center text-[11px] font-bold">${row.initials}</div>
+            <div>
+              <p class="text-[13px] font-semibold text-on-surface">${row.name}</p>
+              <p class="text-[10px] ${fullEmpty?'text-error font-medium':'text-on-surface-variant'}">${fullEmpty?'No shifts this week':assigned+'/'+row.days.length+' assigned'}</p>
+            </div>
+          </div>
+        </td>
+        ${row.days.map((day,di)=>cell(ri,di,day,assigned,fullEmpty)).join('')}
+      </tr>`;
+  }).join('');
+}
+
+function cell(ri,di,val,assigned,fullEmpty){
+  const empty=!val;
+  const inFocus=empty&&((focus==='empty')||(focus==='missing'&&assigned>0)||(focus==='unassigned'&&fullEmpty));
+  const sel=selectedShift===ri+'|'+di;
+  let cls='p-1.5 text-center';
+  if(empty) cls+=' '+(inFocus?'bg-error-container/40':'bg-surface-container-lowest')+' border border-dashed '+(inFocus?'border-error/60':'border-outline-variant');
+  else cls+=' '+SHIFT_STYLES[val].bg;
+  if(sel) cls+=' ring-2 ring-primary/50';
+  const label=empty?'+':SHIFT_STYLES[val].label;
+  const title=empty?(inFocus?'Empty shift — click to assign':'Unassigned — click to assign'):val;
+  return `<td class="${cls}" title="${title}" onclick="assignShift(${ri},${di})">
+    <span class="inline-flex items-center justify-center w-8 h-8 rounded-lg ${empty?'text-secondary hover:bg-surface-container-high':SHIFT_STYLES[val].text} text-[11px] font-bold cursor-pointer">${label}</span>
+  </td>`;
+}
+
+function assignShift(ri,di){
+  if(!selectedShift)return;
+  week().sched[ri].days[di]=(selectedShift===week().sched[ri].days[di])?'':selectedShift;
+  selectedShift=null;
+  highlightPalette();
+  renderSched();
+  updateCoverage();
+  renderAlerts();
+}
+
+function toggleSelect(shift){
+  if(mode==='click'){
+    selectedShift=(selectedShift===shift)?null:shift;
+    highlightPalette();
+  }
+}
+
+function highlightPalette(){
+  ['Morning','Evening','Off'].forEach(s=>{
+    const el=document.getElementById('slot-'+s.toLowerCase());
+    if(el)el.classList.toggle('ring-2', selectedShift===s);
+    if(el)el.classList.toggle('ring-primary/60', selectedShift===s);
+  });
+}
+
+function updateUI(){
+  const cx=['bg-primary-container/40','text-primary','bg-surface-container-low','text-on-surface-variant'];
+  const c0=document.getElementById('mode-click');
+  const c1=document.getElementById('mode-drag');
+  c0.classList.toggle('bg-primary-container/40', mode==='click');
+  c0.classList.toggle('text-primary', mode==='click');
+  c0.classList.toggle('bg-surface-container-low', mode!=='click');
+  c0.classList.toggle('text-on-surface-variant', mode!=='click');
+  c1.classList.toggle('bg-primary-container/40', mode==='drag');
+  c1.classList.toggle('text-primary', mode==='drag');
+  c1.classList.toggle('bg-surface-container-low', mode!=='drag');
+  c1.classList.toggle('text-on-surface-variant', mode!=='drag');
+}
+
+function assignedCount(){
+  return week().sched.reduce((n,r)=>n+r.days.filter(d=>d).length,0);
+}
+
+function updateCoverage(){
+  const w=week();
+  const assigned=assignedCount();
+  const total=w.sched.length*w.days;
+  const pct=Math.round(assigned/total*100);
+  const fill=document.querySelector('.progress-fill');
+  if(fill)fill.style.width=pct+'%';
+  const countEl=document.getElementById('assigned-count');
+  if(countEl)countEl.textContent=assigned+' / '+total;
+  const remain=total-assigned;
+  const rt=document.getElementById('remain-text');
+  if(rt)rt.textContent=remain+' unassigned slot'+(remain===1?'':'s')+' remain for '+w.label+'.';
+}
+
+function weekStats(){
+  const w=week();
+  const empty=[],partial=[],unassigned=[];
+  w.sched.forEach(r=>{
+    const assigned=r.days.filter(d=>d).length;
+    r.days.forEach((d,di)=>{if(!d)empty.push({di:di,name:r.name});});
+    if(assigned===0)unassigned.push(r.name);
+    else if(assigned<r.days.length)partial.push(r.name);
+  });
+  return {empty:empty,partial:partial,unassigned:unassigned};
+}
+
+function renderAlerts(){
+  const w=week();
+  const s=weekStats();
+  const dayOf=di=>w.headers[di]?w.headers[di][0]+' '+w.headers[di][1]:'';
+  const more=arr=>arr.length>3?' +'+(arr.length-3)+' more':'';
+  const emptyTxt=s.empty.length?s.empty.slice(0,3).map(e=>dayOf(e.di)+' · '+e.name).join(', ')+more(s.empty):'All shift slots covered';
+  const missTxt=s.partial.length?'Incomplete weeks: '+s.partial.slice(0,3).join(', ')+more(s.partial):'No partial weeks';
+  const unaTxt=s.unassigned.length?s.unassigned.slice(0,3).join(', ')+more(s.unassigned):'Every employee assigned';
+  const card=(key,count,title,desc,tone,ring,icon)=>{
+    return `<button onclick="toggleFocus('${key}')" class="text-left flex items-start gap-3 p-3.5 rounded-xl ${tone} ${focus===key?ring:''} transition-all">
+      <span class="w-9 h-9 rounded-lg ${icon.bg} ${icon.text} flex items-center justify-center flex-shrink-0"><span class="material-symbols-outlined text-[18px]">${icon.name}</span></span>
+      <div class="flex-1 min-w-0">
+        <div class="flex items-center gap-2">
+          <p class="text-[13px] font-bold text-on-surface">${title}</p>
+          <span class="px-1.5 py-0.5 rounded-full ${icon.bg} ${icon.text} text-[11px] font-bold">${count}</span>
+        </div>
+        <p class="text-[11px] text-on-surface-variant mt-0.5 leading-snug">${desc}</p>
+        <p class="text-[10px] mt-1 font-semibold ${focus===key?'text-primary':'text-on-surface-variant'}">${focus===key?'Click again to clear highlight':'Click to highlight on the grid'}</p>
+      </div>
+    </button>`;
+  };
+  document.getElementById('alerts-row').innerHTML=
+    card('empty',s.empty.length,'Empty Shifts',emptyTxt,'bg-yellow-50 border border-yellow-200','ring-2 ring-yellow-400',{name:'calendar_view_month',bg:'bg-yellow-100',text:'text-yellow-700'})
+    +card('missing',s.partial.length,'Missing Assignments',missTxt,'bg-orange-50 border border-orange-200','ring-2 ring-orange-400',{name:'pending_action',bg:'bg-orange-100',text:'text-orange-700'})
+    +card('unassigned',s.unassigned.length,'Unassigned Employees',unaTxt,'bg-error-container/40 border border-error-container','ring-2 ring-error',{name:'person_off',bg:'bg-error-container',text:'text-error'});
+}
+
+function toggleFocus(k){
+  focus=(focus===k)?null:k;
+  renderSched();
+  renderAlerts();
+}
+
+function renderWeeks(){
+  document.getElementById('week-tabs').innerHTML=Object.keys(WEEKS).map(k=>{
+    const w=WEEKS[k];
+    const active=k===currentWeek;
+    return `<button onclick="setWeek('${k}')" class="px-3 py-2 rounded-lg text-[12px] font-semibold transition-colors ${active?'bg-primary text-on-primary shadow-sm':'text-on-surface-variant hover:bg-surface-container-high'}">${w.label}<span class="hidden lg:inline font-normal opacity-80"> · ${w.range}</span></button>`;
+  }).join('');
+}
+
+function setWeek(k){
+  currentWeek=k;
+  selectedShift=null;
+  const btn=document.getElementById('btn-publish');
+  btn.innerHTML='<span class="material-symbols-outlined text-[18px]">publish</span> Publish Schedule';
+  btn.classList.remove('bg-green-600');
+  btn.classList.add('bg-primary');
+  btn.disabled=false;
+  renderWeeks();
+  renderSched();
+  updateCoverage();
+  renderAlerts();
+}
+
+function moveWeek(d){
+  const keys=Object.keys(WEEKS);
+  const i=keys.indexOf(currentWeek);
+  setWeek(keys[Math.max(0,Math.min(keys.length-1,i+d))]);
+}
+
+function goToday(){
+  setWeek('w4');
+}
+
+function toast(msg){
+  const t=document.getElementById('toast');
+  document.getElementById('toast-msg').textContent=msg;
+  t.classList.remove('hidden');
+  t.classList.add('flex');
+  setTimeout(()=>{t.classList.add('hidden');t.classList.remove('flex');},2500);
+}
+
+document.getElementById('btn-publish').addEventListener('click',()=>{
+  const s=weekStats();
+  const issues=s.empty.length+s.unassigned.length;
+  const btn=document.getElementById('btn-publish');
+  btn.innerHTML='<span class="material-symbols-outlined text-[18px]">check_circle</span> Schedule Published';
+  btn.classList.remove('bg-primary');
+  btn.classList.add('bg-green-600');
+  btn.disabled=true;
+  renderAlerts();
+  toast(issues?('Published with '+issues+' unresolved slots — please check the alerts'):('Schedule for '+week().label+' published to all employees'));
+});
+
+renderWeeks();
+renderSched();
+updateCoverage();
+renderAlerts();
+updateUI();
+</script>
+</body></html>

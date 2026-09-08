@@ -1,0 +1,375 @@
+<!DOCTYPE html><html class="h-full" lang="en"><head>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0" name="viewport">
+<title>Revive HR - Branch Manager Dashboard</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&amp;display=swap" rel="stylesheet">
+<script>
+tailwind.config={darkMode:"class",theme:{extend:{colors:{"primary":"#16a34a","primary-container":"#bbf7d0","on-primary":"#ffffff","on-primary-container":"#14532d","surface":"#fbfcfa","surface-container":"#e9eee8","surface-container-low":"#f3f6f2","surface-container-high":"#dee5dd","surface-container-highest":"#d3dcd2","surface-container-lowest":"#ffffff","on-surface":"#13221a","on-surface-variant":"#3f4a41","on-background":"#13221a","background":"#f7f9f7","secondary":"#5c5f60","outline":"#6e7b6c","outline-variant":"#c6cdc5","error":"#ba1a1a","error-container":"#ffdad6","on-error-container":"#93000a","tertiary":"#51605a","tertiary-container":"#b3c7bc","surface-tint":"#16a34a"},fontFamily:{sans:["Inter","system-ui","sans-serif"]}}}}
+</script>
+<style>.material-symbols-outlined{font-variation-settings:'FILL' 0,'wght' 400,'GRAD' 0,'opsz' 24;}.material-symbols-outlined[data-weight="fill"]{font-variation-settings:'FILL' 1;}.elevation-1{box-shadow:0px 1px 3px rgba(0,0,0,0.05);}.status-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;}</style>
+</head>
+<body class="bg-background text-on-background font-sans min-h-screen flex h-full overflow-hidden">
+
+<!-- Sidebar -->
+<nav class="fixed left-0 top-0 h-full w-[280px] bg-surface-container-low flex flex-col py-6 px-4 z-20 hidden md:flex border-r border-outline-variant">
+  <div class="flex items-center gap-3 mb-8 px-2">
+    <div class="w-10 h-10 rounded-lg bg-primary-container text-on-primary-container flex items-center justify-center">
+      <span class="material-symbols-outlined" data-weight="fill">hub</span>
+    </div>
+    <div>
+      <h1 class="text-[20px] font-bold text-on-surface">Revive HR</h1>
+      <p class="text-[12px] text-on-surface-variant">Branch Manager</p>
+    </div>
+  </div>
+  <ul class="flex flex-col gap-1 flex-1">
+    <li><a class="flex items-center gap-3 px-4 py-3 rounded-lg text-primary font-bold bg-primary-container/10 transition-colors" href="#"><span class="material-symbols-outlined" data-weight="fill">dashboard</span><span class="text-[14px] font-medium">Dashboard</span></a></li>
+    <li><a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant hover:bg-surface-container-high transition-all" href="../employee_directory/code.html"><span class="material-symbols-outlined">groups</span><span class="text-[14px] font-medium">Employees</span></a></li>
+    <li><a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant hover:bg-surface-container-high transition-all" href="../shift_management/code.html"><span class="material-symbols-outlined">calendar_month</span><span class="text-[14px] font-medium">Shift Management</span></a></li>
+    <li><a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant hover:bg-surface-container-high transition-all" href="../request_management/code.html"><span class="material-symbols-outlined">assignment</span><span class="text-[14px] font-medium">Requests</span></a></li>
+    <li><a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant hover:bg-surface-container-high transition-all" href="../attendance_management_dashboard/code.html"><span class="material-symbols-outlined">event_available</span><span class="text-[14px] font-medium">Attendance</span></a></li>
+    <li><a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant hover:bg-surface-container-high transition-all" href="../recruitment_request/code.html"><span class="material-symbols-outlined">person_add</span><span class="text-[14px] font-medium">Recruitment</span></a></li>
+    <li><a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant hover:bg-surface-container-high transition-all" href="../employee_separation_offboarding_dashboard/code.html"><span class="material-symbols-outlined">person_off</span><span class="text-[14px] font-medium">Leaving</span></a></li>
+  </ul>
+  <ul class="flex flex-col gap-1 mt-auto pt-4 border-t border-outline-variant">
+    <li><a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant hover:bg-surface-container-high transition-all" href="#"><span class="material-symbols-outlined">support_agent</span><span class="text-[14px] font-medium">Support</span></a></li>
+    <li><a class="flex items-center gap-3 px-4 py-3 rounded-lg text-error hover:bg-error-container/20 transition-all" href="#"><span class="material-symbols-outlined">logout</span><span class="text-[14px] font-medium">Logout</span></a></li>
+  </ul>
+</nav>
+
+<!-- Main Content -->
+<main class="flex-1 ml-0 md:ml-[280px] h-full flex flex-col relative overflow-hidden">
+  <!-- Top Bar -->
+  <header class="w-full h-16 bg-surface flex justify-between items-center px-4 md:px-8 z-10 sticky top-0 shrink-0 border-b border-outline-variant">
+    <div class="hidden md:block flex-1"></div>
+    <div class="flex items-center gap-4">
+      <div class="relative">
+        <button class="w-10 h-10 rounded-full flex items-center justify-center text-secondary hover:bg-surface-container-low transition-colors relative">
+          <span class="material-symbols-outlined">notifications</span>
+          <span class="absolute top-1.5 right-1.5 w-2.5 h-2.5 bg-primary rounded-full border-2 border-surface"></span>
+        </button>
+      </div>
+      <div class="ml-2 pl-4 border-l border-outline-variant flex items-center gap-3">
+        <div class="w-9 h-9 rounded-full bg-primary-container text-on-primary-container flex items-center justify-center text-[13px] font-bold">AM</div>
+        <div class="hidden sm:block">
+          <p class="text-[13px] font-semibold text-on-surface leading-tight">Ahmed Mohamed</p>
+          <p class="text-[11px] text-on-surface-variant leading-tight">Branch Manager</p>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Dashboard Canvas -->
+  <div class="flex-1 overflow-y-auto p-4 md:p-8 bg-background">
+    <div class="max-w-[1440px] mx-auto space-y-6">
+
+      <!-- Page Header -->
+      <div>
+        <h2 class="text-[32px] font-bold text-on-surface leading-tight">Good morning, Ahmed</h2>
+        <p class="text-[16px] text-on-surface-variant mt-1">Revive Gym — Nasr City · Today is Tuesday, Aug 26, 2026</p>
+      </div>
+
+      <!-- Top Metrics -->
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div class="bg-surface rounded-xl p-5 elevation-1 flex flex-col justify-between min-h-[100px]">
+          <div class="flex items-center gap-2 text-secondary">
+            <span class="material-symbols-outlined text-[20px]">groups</span>
+            <span class="text-[11px] font-semibold uppercase tracking-wider">Team Members</span>
+          </div>
+          <span class="text-[32px] font-bold text-on-surface">42</span>
+        </div>
+        <div class="bg-surface rounded-xl p-5 elevation-1 flex flex-col justify-between min-h-[100px]">
+          <div class="flex items-center gap-2 text-secondary">
+            <span class="material-symbols-outlined text-[20px]">event_available</span>
+            <span class="text-[11px] font-semibold uppercase tracking-wider">Present Today</span>
+          </div>
+          <div class="flex items-baseline gap-2">
+            <span class="text-[32px] font-bold text-on-surface">38</span>
+            <span class="text-[12px] text-primary font-medium flex items-center gap-0.5"><span class="material-symbols-outlined text-[12px]">arrow_upward</span> 90%</span>
+          </div>
+        </div>
+        <div class="bg-surface rounded-xl p-5 elevation-1 flex flex-col justify-between min-h-[100px]">
+          <div class="flex items-center gap-2 text-secondary">
+            <span class="material-symbols-outlined text-[20px]">schedule</span>
+            <span class="text-[11px] font-semibold uppercase tracking-wider">Late</span>
+          </div>
+          <span class="text-[32px] font-bold text-amber-600">3</span>
+        </div>
+        <div class="bg-surface rounded-xl p-5 elevation-1 flex flex-col justify-between min-h-[100px]">
+          <div class="flex items-center gap-2 text-secondary">
+            <span class="material-symbols-outlined text-[20px]">person_off</span>
+            <span class="text-[11px] font-semibold uppercase tracking-wider">Absent</span>
+          </div>
+          <span class="text-[32px] font-bold text-error">1</span>
+        </div>
+      </div>
+
+      <!-- Second Row Metrics -->
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div class="bg-surface rounded-xl p-5 elevation-1 flex flex-col justify-between min-h-[100px] border border-primary-container/30">
+          <div class="flex items-center gap-2 text-primary">
+            <span class="material-symbols-outlined text-[20px]">pending_actions</span>
+            <span class="text-[11px] font-semibold uppercase tracking-wider">Pending Requests</span>
+          </div>
+          <span class="text-[32px] font-bold text-primary">7</span>
+        </div>
+        <div class="bg-surface rounded-xl p-5 elevation-1 flex flex-col justify-between min-h-[100px]">
+          <div class="flex items-center gap-2 text-secondary">
+            <span class="material-symbols-outlined text-[20px]">warning</span>
+            <span class="text-[11px] font-semibold uppercase tracking-wider">Issues</span>
+          </div>
+          <span class="text-[32px] font-bold text-orange-600">4</span>
+        </div>
+        <div class="bg-surface rounded-xl p-5 elevation-1 flex flex-col justify-between min-h-[100px]">
+          <div class="flex items-center gap-2 text-secondary">
+            <span class="material-symbols-outlined text-[20px]">work</span>
+            <span class="text-[11px] font-semibold uppercase tracking-wider">Open Positions</span>
+          </div>
+          <span class="text-[32px] font-bold text-on-surface">3</span>
+        </div>
+        <div class="bg-surface rounded-xl p-5 elevation-1 flex flex-col justify-between min-h-[100px]">
+          <div class="flex items-center gap-2 text-secondary">
+            <span class="material-symbols-outlined text-[20px]">person_off</span>
+            <span class="text-[11px] font-semibold uppercase tracking-wider">Leaving Soon</span>
+          </div>
+          <span class="text-[32px] font-bold text-amber-600">1</span>
+        </div>
+      </div>
+
+      <!-- Main Content Grid -->
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+
+        <!-- Team Overview (2 cols) -->
+        <div class="lg:col-span-2 bg-surface rounded-xl elevation-1 overflow-hidden">
+          <div class="flex justify-between items-center p-5 pb-0">
+            <h3 class="text-[20px] font-semibold text-on-surface">Team Attendance</h3>
+            <a href="../employee_directory/code.html" class="text-[13px] text-primary font-medium hover:underline flex items-center gap-1">View All <span class="material-symbols-outlined text-[16px]">arrow_forward</span></a>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="w-full mt-4">
+              <thead>
+                <tr class="text-left border-b border-outline-variant/30">
+                  <th class="px-5 py-3 text-[11px] font-semibold text-secondary uppercase tracking-wider">Employee</th>
+                  <th class="px-5 py-3 text-[11px] font-semibold text-secondary uppercase tracking-wider">Position</th>
+                  <th class="px-5 py-3 text-[11px] font-semibold text-secondary uppercase tracking-wider">Shift</th>
+                  <th class="px-5 py-3 text-[11px] font-semibold text-secondary uppercase tracking-wider">Check In</th>
+                  <th class="px-5 py-3 text-[11px] font-semibold text-secondary uppercase tracking-wider">Status</th>
+                </tr>
+              </thead>
+              <tbody id="team-table-body"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Right Column -->
+        <div class="flex flex-col gap-4">
+
+          <!-- Action Required -->
+          <div class="bg-surface rounded-xl p-5 elevation-1 border-l-4 border-error">
+            <div class="flex justify-between items-center mb-4">
+              <div class="flex items-center gap-2">
+                <span class="material-symbols-outlined text-error">assignment_late</span>
+                <h3 class="text-[16px] font-semibold text-on-surface">Action Required</h3>
+              </div>
+              <span class="bg-error-container text-on-error-container px-2 py-1 rounded-full text-[11px] font-semibold">3 Pending</span>
+            </div>
+            <div class="space-y-3" id="action-items"></div>
+          </div>
+
+          <!-- Pending Requests -->
+          <div class="bg-surface rounded-xl p-5 elevation-1">
+            <div class="flex justify-between items-center mb-4">
+              <h3 class="text-[16px] font-semibold text-on-surface">Pending Requests</h3>
+              <a href="../request_management/code.html" class="text-[13px] text-primary font-medium hover:underline">View All</a>
+            </div>
+            <div class="space-y-3" id="pending-requests"></div>
+          </div>
+
+          <!-- Today's Shift Summary -->
+          <div class="bg-surface rounded-xl p-5 elevation-1">
+            <div class="flex items-center gap-2 mb-4">
+              <span class="material-symbols-outlined text-primary">schedule</span>
+              <h3 class="text-[16px] font-semibold text-on-surface">Today's Shifts</h3>
+            </div>
+            <div class="space-y-2" id="shift-summary"></div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- Bottom Grid -->
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+
+        <!-- Employee Leaving -->
+        <div class="bg-surface rounded-xl p-5 elevation-1">
+          <div class="flex justify-between items-center mb-4">
+            <h3 class="text-[16px] font-semibold text-on-surface">Employee Leaving</h3>
+            <a href="../employee_separation_offboarding_dashboard/code.html" class="text-[13px] text-primary font-medium hover:underline">Manage</a>
+          </div>
+          <div class="p-4 bg-surface-container-lowest rounded-lg border border-outline-variant">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-full bg-primary-container text-on-primary-container flex items-center justify-center text-[12px] font-bold">MS</div>
+                <div>
+                  <p class="text-[13px] font-semibold text-on-surface">Mona Said</p>
+                  <p class="text-[11px] text-on-surface-variant">Trainer · Last Day: Sep 30, 2026</p>
+                </div>
+              </div>
+              <span class="px-2 py-1 bg-yellow-100 text-yellow-800 rounded-full text-[11px] font-semibold">Notice Period</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Recruitment Requests -->
+        <div class="bg-surface rounded-xl p-5 elevation-1">
+          <div class="flex justify-between items-center mb-4">
+            <h3 class="text-[16px] font-semibold text-on-surface">Recruitment Requests</h3>
+            <a href="../recruitment_request/code.html" class="text-[13px] text-primary font-medium hover:underline">New Request</a>
+          </div>
+          <div class="space-y-3" id="recruitment-list"></div>
+        </div>
+
+      </div>
+
+    </div>
+    <div class="h-8 w-full md:hidden"></div>
+  </div>
+</main>
+
+<script>
+// Mock Data
+const teamMembers = [
+  {id:'RV-00125',name:'Karim Hassan',position:'Trainer',shift:'Morning',status:'Present',checkIn:'07:58',initials:'KH'},
+  {id:'RV-00126',name:'Sara Ali',position:'Receptionist',shift:'Morning',status:'Present',checkIn:'07:55',initials:'SA'},
+  {id:'RV-00127',name:'Omar Youssef',position:'Trainer',shift:'Evening',status:'Late',checkIn:'08:15',initials:'OY'},
+  {id:'RV-00128',name:'Nour Ibrahim',position:'Cleaner',shift:'Morning',status:'Present',checkIn:'06:00',initials:'NI'},
+  {id:'RV-00129',name:'Yasmin Adel',position:'Trainer',shift:'Evening',status:'Absent',checkIn:null,initials:'YA'},
+  {id:'RV-00130',name:'Tarek Nabil',position:'Receptionist',shift:'Evening',status:'Present',checkIn:'15:52',initials:'TN'},
+  {id:'RV-00131',name:'Mona Said',position:'Trainer',shift:'Morning',status:'Present',checkIn:'07:50',initials:'MS'},
+  {id:'RV-00132',name:'Hassan Ali',position:'Maintenance',shift:'Morning',status:'Present',checkIn:'08:00',initials:'HA'},
+  {id:'RV-00133',name:'Fatma Hassan',position:'Trainer',shift:'Evening',status:'Late',checkIn:'08:20',initials:'FH'},
+  {id:'RV-00134',name:'Ahmed Zaki',position:'Trainer',shift:'Morning',status:'Present',checkIn:'07:45',initials:'AZ'},
+];
+
+const pendingRequests = [
+  {employee:'Karim Hassan',type:'Day Off',date:'Aug 30',status:'Pending'},
+  {employee:'Sara Ali',type:'Late Arrival',date:'Aug 27',status:'Pending'},
+  {employee:'Nour Ibrahim',type:'Day Off',date:'Sep 1',status:'Pending'},
+  {employee:'Yasmin Adel',type:'Shift Swap',date:'Aug 29-30',status:'Pending'},
+  {employee:'Fatma Hassan',type:'Overtime',date:'Aug 26',status:'Pending'},
+  {employee:'Omar Youssef',type:'Leave Early',date:'Aug 28',status:'Approved'},
+  {employee:'Mona Said',type:'Day Off',date:'Sep 5',status:'Rejected'},
+];
+
+const actionItems = [
+  {title:'Yasmin Adel — Absent Today',desc:'No check-in today. Scheduled Morning shift.',severity:'high'},
+  {title:'Omar Youssef — Late Pattern',desc:'3rd late arrival this month.',severity:'medium'},
+  {title:'Fatma Hassan — Document Expiring',desc:'PT Certificate expires in 15 days.',severity:'low'},
+];
+
+const recruitmentRequests = [
+  {position:'Senior Trainer',count:1,urgency:'High',status:'Approved',date:'Aug 20'},
+  {position:'Receptionist',count:1,urgency:'Medium',status:'Pending',date:'Aug 15'},
+  {position:'Cleaner',count:2,urgency:'Low',status:'Submitted',date:'Aug 10'},
+];
+
+const shiftCounts = {Morning:16,Evening:14,Off:12};
+
+// Render Functions
+function statusColor(s){
+  if(s==='Present')return 'bg-green-500';
+  if(s==='Late')return 'bg-yellow-500';
+  if(s==='Absent')return 'bg-red-500';
+  return 'bg-gray-400';
+}
+function statusBadge(s){
+  const m={Present:'bg-green-100 text-green-800',Late:'bg-yellow-100 text-yellow-800',Absent:'bg-red-100 text-red-800'};
+  return `<span class="px-2 py-0.5 rounded-full text-[11px] font-semibold ${m[s]||'bg-gray-100 text-gray-800'}">${s}</span>`;
+}
+function requestBadge(s){
+  const m={Pending:'bg-yellow-100 text-yellow-800',Approved:'bg-green-100 text-green-800',Rejected:'bg-red-100 text-red-800',Submitted:'bg-blue-100 text-blue-800'};
+  return `<span class="px-2 py-0.5 rounded-full text-[11px] font-semibold ${m[s]||'bg-gray-100 text-gray-800'}">${s}</span>`;
+}
+function severityIcon(s){
+  if(s==='high')return '<span class="material-symbols-outlined text-[18px] text-red-500">error</span>';
+  if(s==='medium')return '<span class="material-symbols-outlined text-[18px] text-yellow-600">warning</span>';
+  return '<span class="material-symbols-outlined text-[18px] text-blue-500">info</span>';
+}
+
+function render(){
+  // Team Table
+  const tbody=document.getElementById('team-table-body');
+  tbody.innerHTML=teamMembers.map(m=>`
+    <tr class="border-b border-outline-variant/20 hover:bg-surface-container-low/50 cursor-pointer transition-colors">
+      <td class="px-5 py-3">
+        <div class="flex items-center gap-3">
+          <div class="w-8 h-8 rounded-full bg-primary-container text-on-primary-container flex items-center justify-center text-[11px] font-bold">${m.initials}</div>
+          <div>
+            <p class="text-[13px] font-semibold text-on-surface">${m.name}</p>
+            <p class="text-[11px] text-on-surface-variant">${m.id}</p>
+          </div>
+        </div>
+      </td>
+      <td class="px-5 py-3 text-[13px] text-on-surface-variant">${m.position}</td>
+      <td class="px-5 py-3 text-[13px] text-on-surface-variant">${m.shift}</td>
+      <td class="px-5 py-3 text-[13px] text-on-surface font-medium">${m.checkIn||'—'}</td>
+      <td class="px-5 py-3">${statusBadge(m.status)}</td>
+    </tr>
+  `).join('');
+
+  // Action Items
+  const ai=document.getElementById('action-items');
+  ai.innerHTML=actionItems.map(a=>`
+    <div class="p-3 rounded-lg bg-surface-container-lowest border border-outline-variant hover:shadow-sm transition-shadow cursor-pointer">
+      <div class="flex items-start gap-2">
+        ${severityIcon(a.severity)}
+        <div class="flex-1">
+          <p class="text-[13px] font-semibold text-on-surface">${a.title}</p>
+          <p class="text-[11px] text-on-surface-variant mt-0.5">${a.desc}</p>
+        </div>
+      </div>
+    </div>
+  `).join('');
+
+  // Pending Requests
+  const pr=document.getElementById('pending-requests');
+  const pending=pendingRequests.filter(r=>r.status==='Pending').slice(0,4);
+  pr.innerHTML=pending.map(r=>`
+    <div class="flex items-center justify-between py-2 border-b border-outline-variant/20 last:border-0">
+      <div>
+        <p class="text-[13px] font-medium text-on-surface">${r.employee}</p>
+        <p class="text-[11px] text-on-surface-variant">${r.type} · ${r.date}</p>
+      </div>
+      ${requestBadge(r.status)}
+    </div>
+  `).join('');
+
+  // Shift Summary
+  const ss=document.getElementById('shift-summary');
+  ss.innerHTML=Object.entries(shiftCounts).map(([name,count])=>{
+    const colors={Morning:'bg-blue-100 text-blue-800',Evening:'bg-green-100 text-green-800',Off:'bg-gray-100 text-gray-600'};
+    return `<div class="flex items-center justify-between py-2 border-b border-outline-variant/20 last:border-0">
+      <span class="px-2 py-0.5 rounded text-[11px] font-semibold ${colors[name]||''}">${name}</span>
+      <span class="text-[14px] font-bold text-on-surface">${count} employees</span>
+    </div>`;
+  }).join('');
+
+  // Recruitment
+  const rl=document.getElementById('recruitment-list');
+  rl.innerHTML=recruitmentRequests.map(r=>`
+    <div class="p-3 bg-surface-container-lowest rounded-lg border border-outline-variant">
+      <div class="flex items-center justify-between">
+        <div>
+          <p class="text-[13px] font-semibold text-on-surface">${r.position} × ${r.count}</p>
+          <p class="text-[11px] text-on-surface-variant">${r.date} · ${r.urgency} urgency</p>
+        </div>
+        ${requestBadge(r.status)}
+      </div>
+    </div>
+  `).join('');
+}
+
+render();
+</script>
+</body></html>

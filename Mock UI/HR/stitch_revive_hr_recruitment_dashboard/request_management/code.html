@@ -1,0 +1,180 @@
+<!DOCTYPE html><html class="h-full" lang="en"><head>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0" name="viewport">
+<title>Revive HR - Request Management</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&amp;display=swap" rel="stylesheet">
+<script>
+tailwind.config={darkMode:"class",theme:{extend:{colors:{"primary":"#16a34a","primary-container":"#bbf7d0","on-primary":"#ffffff","on-primary-container":"#14532d","surface":"#fbfcfa","surface-container":"#e9eee8","surface-container-low":"#f3f6f2","surface-container-high":"#dee5dd","surface-container-highest":"#d3dcd2","surface-container-lowest":"#ffffff","on-surface":"#13221a","on-surface-variant":"#3f4a41","on-background":"#13221a","background":"#f7f9f7","secondary":"#5c5f60","outline":"#6e7b6c","outline-variant":"#c6cdc5","error":"#ba1a1a","error-container":"#ffdad6","on-error-container":"#93000a","tertiary":"#51605a","tertiary-container":"#b3c7bc","surface-tint":"#16a34a"},fontFamily:{sans:["Inter","system-ui","sans-serif"]}}}}
+</script>
+<style>.material-symbols-outlined{font-variation-settings:'FILL' 0,'wght' 400,'GRAD' 0,'opsz' 24;}.material-symbols-outlined[data-weight="fill"]{font-variation-settings:'FILL' 1;}.elevation-1{box-shadow:0px 1px 3px rgba(0,0,0,0.05);}</style>
+</head>
+<body class="bg-background text-on-background font-sans min-h-screen flex h-full overflow-hidden">
+
+<!-- Sidebar -->
+<nav class="fixed left-0 top-0 h-full w-[280px] bg-surface-container-low flex flex-col py-6 px-4 z-30 hidden md:flex border-r border-outline-variant">
+  <div class="flex items-center gap-3 mb-8 px-2">
+    <div class="w-10 h-10 rounded-lg bg-primary-container text-on-primary-container flex items-center justify-center">
+      <span class="material-symbols-outlined" data-weight="fill">hub</span>
+    </div>
+    <div>
+      <h1 class="text-[20px] font-bold text-on-surface">Revive HR</h1>
+      <p class="text-[12px] text-on-surface-variant">Branch Manager</p>
+    </div>
+  </div>
+  <ul class="flex flex-col gap-1 flex-1">
+    <li><a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant hover:bg-surface-container-high transition-all" href="../branch_manager_dashboard/code.html"><span class="material-symbols-outlined">dashboard</span><span class="text-[14px] font-medium">Dashboard</span></a></li>
+    <li><a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant hover:bg-surface-container-high transition-all" href="../employee_directory/code.html"><span class="material-symbols-outlined">groups</span><span class="text-[14px] font-medium">Employees</span></a></li>
+    <li><a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant hover:bg-surface-container-high transition-all" href="../shift_management/code.html"><span class="material-symbols-outlined">calendar_month</span><span class="text-[14px] font-medium">Shift Management</span></a></li>
+    <li><a class="flex items-center gap-3 px-4 py-3 rounded-lg text-primary font-bold bg-primary-container/10 transition-colors" href="#"><span class="material-symbols-outlined" data-weight="fill">assignment</span><span class="text-[14px] font-medium">Requests</span></a></li>
+    <li><a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant hover:bg-surface-container-high transition-all" href="../attendance_management_dashboard/code.html"><span class="material-symbols-outlined">event_available</span><span class="text-[14px] font-medium">Attendance</span></a></li>
+    <li><a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant hover:bg-surface-container-high transition-all" href="../recruitment_request/code.html"><span class="material-symbols-outlined">person_add</span><span class="text-[14px] font-medium">Recruitment</span></a></li>
+    <li><a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant hover:bg-surface-container-high transition-all" href="../employee_separation_offboarding_dashboard/code.html"><span class="material-symbols-outlined">person_off</span><span class="text-[14px] font-medium">Leaving</span></a></li>
+  </ul>
+  <ul class="flex flex-col gap-1 mt-auto pt-4 border-t border-outline-variant">
+    <li><a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant hover:bg-surface-container-high transition-all" href="#"><span class="material-symbols-outlined">support_agent</span><span class="text-[14px] font-medium">Support</span></a></li>
+    <li><a class="flex items-center gap-3 px-4 py-3 rounded-lg text-error hover:bg-error-container/20 transition-all" href="#"><span class="material-symbols-outlined">logout</span><span class="text-[14px] font-medium">Logout</span></a></li>
+  </ul>
+</nav>
+
+<!-- Main Content -->
+<main class="flex-1 ml-0 md:ml-[280px] h-full flex flex-col relative overflow-hidden">
+  <!-- Top Bar -->
+  <header class="w-full h-16 bg-surface flex justify-between items-center px-4 md:px-8 z-10 sticky top-0 shrink-0 border-b border-outline-variant">
+    <div class="flex items-center gap-4 flex-1">
+      <h1 class="text-[18px] font-bold text-on-surface hidden lg:block">Request Management</h1>
+    </div>
+    <div class="flex items-center gap-4">
+      <div class="ml-2 pl-4 border-l border-outline-variant flex items-center gap-3">
+        <div class="w-9 h-9 rounded-full bg-primary-container text-on-primary-container flex items-center justify-center text-[13px] font-bold">AM</div>
+        <div class="hidden sm:block">
+          <p class="text-[13px] font-semibold text-on-surface leading-tight">Ahmed Mohamed</p>
+          <p class="text-[11px] text-on-surface-variant leading-tight">Branch Manager</p>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Canvas -->
+  <div class="flex-1 overflow-y-auto p-4 md:p-8 bg-background">
+    <div class="max-w-[1100px] mx-auto space-y-6">
+
+      <!-- Tabs -->
+      <div class="flex items-center gap-3 border-b border-outline-variant overflow-x-auto">
+        <button data-tab="pending" class="tab-btn px-4 py-3 text-[14px] font-semibold border-b-2 border-primary text-primary whitespace-nowrap flex items-center gap-2">Pending <span id="c-pending" class="px-1.5 rounded-full bg-primary-container text-on-primary-container text-[11px]">4</span></button>
+        <button data-tab="approved" class="tab-btn px-4 py-3 text-[14px] font-medium text-on-surface-variant border-b-2 border-transparent hover:text-on-surface whitespace-nowrap">Approved</button>
+        <button data-tab="rejected" class="tab-btn px-4 py-3 text-[14px] font-medium text-on-surface-variant border-b-2 border-transparent hover:text-on-surface whitespace-nowrap">Rejected</button>
+        <button data-tab="all" class="tab-btn px-4 py-3 text-[14px] font-medium text-on-surface-variant border-b-2 border-transparent hover:text-on-surface whitespace-nowrap">All Requests</button>
+      </div>
+
+      <!-- Content -->
+      <div id="requests-list" class="space-y-3"></div>
+
+    </div>
+  </div>
+</main>
+
+<script>
+let currentTab='pending';
+
+const requests=[
+  {id:'RQ-1041',employee:'Karim Hassan',initials:'KH',type:'Day Off',detail:'Family emergency — 1 day',date:'Aug 30, 2026',submitted:'Aug 25',status:'Pending',level:'BM'},
+  {id:'RQ-1042',employee:'Sara Ali',initials:'SA',type:'Late Arrival',detail:'Medical appointment — arrive 10:00',date:'Aug 27, 2026',submitted:'Aug 25',status:'Pending',level:'BM'},
+  {id:'RQ-1043',employee:'Nour Ibrahim',initials:'NI',type:'Day Off',detail:'Weekend trip — 1 day',date:'Sep 1, 2026',submitted:'Aug 24',status:'Pending',level:'BM'},
+  {id:'RQ-1044',employee:'Yasmin Adel',initials:'YA',type:'Shift Swap',detail:'Switch Evening with Omar on Aug 29-30',date:'Aug 29-30, 2026',submitted:'Aug 23',status:'Pending',level:'BM'},
+  {id:'RQ-1045',employee:'Fatma Hassan',initials:'FH',type:'Overtime',detail:'Recall Hour — 2 extra hours',date:'Aug 30, 2026',submitted:'Aug 26',status:'Approved',level:'BM'},
+  {id:'RQ-1046',employee:'Omar Youssef',initials:'OY',type:'Leave Early',detail:'Pick up child — leave 20:00',date:'Aug 28, 2026',submitted:'Aug 26',status:'Rejected',level:'BM',note:'Coverage conflict with evening shift.'},
+  {id:'RQ-1047',employee:'Mona Said',initials:'MS',type:'Day Off',detail:'Birthday — 1 day',date:'Sep 5, 2026',submitted:'Aug 26',status:'Pending',level:'HR'},
+];
+
+function typeIcon(t){
+  const m={'Day Off':'beach_access','Late Arrival':'schedule','Shift Swap':'swap_horiz','Overtime':'timer','Leave Early':'logout'};
+  return m[t]||'description';
+}
+
+function statusStyle(s){
+  const m={Pending:'bg-yellow-100 text-yellow-800',Approved:'bg-green-100 text-green-800',Rejected:'bg-red-100 text-red-800'};
+  return m[s]||'bg-gray-100 text-gray-600';
+}
+
+function rowActions(r){
+  if(r.status!=='Pending'||r.level==='HR')return '';
+  return `
+    <div class="flex items-center gap-2 mt-3 pt-3 border-t border-outline-variant/20">
+      <button onclick="setStatus('${r.id}','Approved')" class="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg bg-primary text-on-primary text-[13px] font-semibold hover:opacity-90 transition-opacity">
+        <span class="material-symbols-outlined text-[16px]">check</span> Approve
+      </button>
+      <button onclick="setStatus('${r.id}','Rejected')" class="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg bg-error-container text-on-error-container text-[13px] font-semibold hover:opacity-90 transition-opacity">
+        <span class="material-symbols-outlined text-[16px]">close</span> Reject
+      </button>
+    </div>`;
+}
+
+function renderCard(r){
+  return `
+    <div class="bg-surface rounded-xl p-4 elevation-1 border border-outline-variant/40 ${r.level==='HR'?'border-l-4 border-l-tertiary':''}">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-full bg-primary-container text-on-primary-container flex items-center justify-center text-[12px] font-bold">${r.initials}</div>
+          <div>
+            <div class="flex items-center gap-2">
+              <p class="text-[13px] font-semibold text-on-surface">${r.employee}</p>
+              <span class="text-[11px] text-on-surface-variant">${r.id}</span>
+              ${r.level==='HR'?'<span class="text-[10px] font-semibold text-tertiary px-1.5 py-0.5 bg-tertiary-container/40 rounded">Needs HR</span>':''}
+            </div>
+            <div class="flex items-center gap-1 mt-0.5 text-on-surface-variant text-[12px]">
+              <span class="material-symbols-outlined text-[14px]">${typeIcon(r.type)}</span>
+              <span class="font-medium text-on-surface">${r.type}</span>
+              <span>· ${r.detail}</span>
+            </div>
+          </div>
+        </div>
+        <div class="flex flex-col items-start sm:items-end gap-1">
+          <span class="px-2 py-0.5 rounded-full text-[11px] font-semibold ${statusStyle(r.status)}">${r.status}</span>
+          <span class="text-[11px] text-on-surface-variant">Due ${r.date}</span>
+          <span class="text-[11px] text-on-surface-variant">Submitted ${r.submitted}</span>
+        </div>
+      </div>
+      ${r.note?`<p class="mt-2 text-[12px] text-error bg-error-container/30 px-3 py-2 rounded-lg">Rejection note: ${r.note}</p>`:''}
+      ${rowActions(r)}
+    </div>`;
+}
+
+function render(){
+  const tabs=['pending','approved','rejected','all'];
+  tabs.forEach(t=>{
+    const btn=document.querySelector(`[data-tab="${t}"]`);
+    const isActive=currentTab===t;
+    btn.className='tab-btn px-4 py-3 text-[14px] '+(isActive?'font-semibold text-primary border-b-2 border-primary':'font-medium text-on-surface-variant border-b-2 border-transparent hover:text-on-surface')+' whitespace-nowrap flex items-center gap-2';
+  });
+
+  let shown=requests;
+  if(currentTab==='pending')shown=requests.filter(r=>r.status==='Pending');
+  if(currentTab==='approved')shown=requests.filter(r=>r.status==='Approved');
+  if(currentTab==='rejected')shown=requests.filter(r=>r.status==='Rejected');
+
+  const list=document.getElementById('requests-list');
+  if(shown.length===0){
+    list.innerHTML=`<div class="text-center py-16"><p class="text-[14px] font-medium text-on-surface-variant">No ${currentTab} requests.</p></div>`;
+  } else {
+    list.innerHTML=shown.map(renderCard).join('');
+  }
+
+  const pendingCount=requests.filter(r=>r.status==='Pending').length;
+  document.getElementById('c-pending').textContent=pendingCount;
+}
+
+function setStatus(id,status){
+  const r=requests.find(x=>x.id===id);
+  if(r){r.status=status;}
+  render();
+}
+
+document.querySelectorAll('.tab-btn').forEach(btn=>{
+  btn.addEventListener('click',()=>{currentTab=btn.dataset.tab;render();});
+});
+
+render();
+</script>
+</body></html>

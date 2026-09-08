@@ -54,6 +54,100 @@ function renderPayroll() {
       </div>`;
   }
 
+  // Contract & leave overview (latest paid period)
+  const ref = history[0];
+  let refCard = '';
+  if (ref) {
+    const annualInc = ref.annualIncrease || 0;
+    const contractSal = ref.baseSalary + annualInc;
+    const attPct = Math.round((ref.workedDays / ref.workingDays) * 100);
+    const leaveUsed = ref.usedAnnualLeave || 0;
+    const leaveRem = ref.remainingAnnualLeave || 0;
+    const leaveTotal = leaveUsed + leaveRem;
+    const leavePct = leaveTotal ? Math.round((leaveUsed / leaveTotal) * 100) : 0;
+    refCard = `
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-3">
+        <!-- Salary & Schedule -->
+        <div class="bg-white rounded-2xl border border-charcoal-100/80 shadow-sm p-4">
+          <div class="flex items-center justify-between mb-3">
+            <p class="bento-label text-charcoal-500">SALARY & SCHEDULE</p>
+            <span class="text-[10px] font-semibold text-charcoal-400">${ref.period}</span>
+          </div>
+          <div class="space-y-2">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-2 text-xs text-charcoal-600">
+                <span class="material-icons text-[16px] text-charcoal-400">payments</span>Basic Salary
+              </div>
+              <span class="text-xs font-bold text-charcoal-900">EGP ${ref.baseSalary.toLocaleString()}</span>
+            </div>
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-2 text-xs text-charcoal-600">
+                <span class="material-icons text-[16px] text-green-500">trending_up</span>Annual Increase (10%)
+              </div>
+              <span class="text-xs font-bold text-green-600">+EGP ${annualInc.toLocaleString()}</span>
+            </div>
+            <div class="flex items-center justify-between bg-brand-50 border border-brand-100 rounded-lg px-2.5 py-2">
+              <p class="text-xs font-bold text-brand-700">Contractual Salary / month</p>
+              <p class="text-sm font-bold text-brand-700">EGP ${contractSal.toLocaleString()}</p>
+            </div>
+            <div class="grid grid-cols-4 gap-2 text-center pt-1">
+              <div class="bg-charcoal-50 rounded-lg p-2">
+                <p class="text-sm font-bold text-charcoal-900">${ref.workingDays}</p>
+                <p class="text-[9px] text-charcoal-500 leading-tight mt-0.5">Scheduled Work Days</p>
+              </div>
+              <div class="bg-charcoal-50 rounded-lg p-2">
+                <p class="text-sm font-bold text-charcoal-900">${ref.scheduledWeeklyDays || 6}</p>
+                <p class="text-[9px] text-charcoal-500 leading-tight mt-0.5">Weekly Days</p>
+              </div>
+              <div class="bg-charcoal-50 rounded-lg p-2">
+                <p class="text-sm font-bold text-brand-700">${ref.workedDays}</p>
+                <p class="text-[9px] text-charcoal-500 leading-tight mt-0.5">Attendance · ${attPct}%</p>
+              </div>
+              <div class="bg-charcoal-50 rounded-lg p-2">
+                <p class="text-sm font-bold ${ref.overtimeHours ? 'text-blue-700' : 'text-charcoal-400'}">${ref.overtimeHours || 0}h</p>
+                <p class="text-[9px] text-charcoal-500 leading-tight mt-0.5">Overtime</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Annual Leave Balance -->
+        <div class="bg-white rounded-2xl border border-charcoal-100/80 shadow-sm p-4">
+          <div class="flex items-center justify-between mb-3">
+            <p class="bento-label text-charcoal-500">ANNUAL LEAVE BALANCE</p>
+            <span class="text-[10px] font-semibold text-charcoal-400">Used ${leaveUsed} · Remaining ${leaveRem}</span>
+          </div>
+          <div class="flex items-end justify-between gap-3 mb-2">
+            <div>
+              <p class="text-2xl font-bold text-charcoal-900">${leaveUsed}<span class="text-xs text-charcoal-400 font-normal"> / ${leaveTotal} days</span></p>
+              <p class="text-[10px] text-charcoal-500">Used this year</p>
+            </div>
+            <div class="text-right">
+              <p class="text-2xl font-bold text-brand-700">${leaveRem}</p>
+              <p class="text-[10px] text-charcoal-500">Remaining</p>
+            </div>
+          </div>
+          <div class="w-full h-2.5 bg-charcoal-100 rounded-full overflow-hidden mb-3">
+            <div class="h-full bg-brand-500 rounded-l-full transition-all" style="width:${leavePct}%"></div>
+          </div>
+          <div class="grid grid-cols-3 gap-2">
+            <div class="bg-charcoal-50 rounded-lg p-2.5 text-center">
+              <p class="text-sm font-bold text-charcoal-900">${leaveUsed}</p>
+              <p class="text-[9px] text-charcoal-500 mt-0.5">Used</p>
+            </div>
+            <div class="bg-charcoal-50 rounded-lg p-2.5 text-center">
+              <p class="text-sm font-bold text-brand-700">${leaveRem}</p>
+              <p class="text-[9px] text-charcoal-500 mt-0.5">Remaining</p>
+            </div>
+            <div class="bg-charcoal-50 rounded-lg p-2.5 text-center">
+              <p class="text-sm font-bold text-charcoal-900">${ref.paidLeaveDays || 0}</p>
+              <p class="text-[9px] text-charcoal-500 mt-0.5">Paid Leave</p>
+            </div>
+          </div>
+        </div>
+      </div>`;
+  }
+
   // YTD Summary bento
   const ytdBento = `
     <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
@@ -153,6 +247,10 @@ function renderPayroll() {
             ${attendanceCount > 0 ? `<span class="inline-flex items-center gap-1 bg-orange-50 text-orange-600 rounded-full px-2.5 py-1 text-[10px] font-medium">
               <span class="material-icons text-xs">event_busy</span>
               ${attendanceCount} late/absent
+            </span>` : ''}
+            ${(p.overtimeHours || 0) > 0 ? `<span class="inline-flex items-center gap-1 bg-blue-50 text-blue-600 rounded-full px-2.5 py-1 text-[10px] font-medium">
+              <span class="material-icons text-xs">schedule</span>
+              ${p.overtimeHours}h overtime
             </span>` : ''}
             <span class="inline-flex items-center gap-1 bg-blue-50 text-blue-600 rounded-full px-2.5 py-1 text-[10px] font-medium">
               <span class="material-icons text-xs">calendar_today</span>
@@ -262,6 +360,9 @@ function renderPayroll() {
 
       ${currentCard}
 
+      <!-- Contract & Leave Overview -->
+      ${refCard}
+
       <!-- YTD Summary -->
       <div>
         <p class="bento-label text-charcoal-400 mb-2.5">YEAR TO DATE</p>
@@ -345,6 +446,46 @@ function openPayDetail(id) {
       </div>
       <p class="text-[10px] text-charcoal-400 text-center mt-1.5">${attPct}% attendance rate</p>
     </div>` : ''}
+
+    <!-- Salary, Schedule & Leaves -->
+    <div class="bg-white rounded-xl border border-charcoal-100 p-4">
+      <p class="bento-label text-charcoal-500 mb-2">SALARY, SCHEDULE & LEAVES</p>
+      <div class="grid grid-cols-2 gap-2">
+        <div class="bg-charcoal-50 rounded-lg p-2.5">
+          <p class="bento-label text-charcoal-400 mb-0.5">BASIC SALARY</p>
+          <p class="text-sm font-bold text-charcoal-900">EGP ${(p.baseSalary || 0).toLocaleString()}</p>
+        </div>
+        <div class="bg-charcoal-50 rounded-lg p-2.5">
+          <p class="bento-label text-charcoal-400 mb-0.5">ANNUAL INCREASE (10%)</p>
+          <p class="text-sm font-bold text-green-600">+EGP ${(p.annualIncrease || 0).toLocaleString()}</p>
+        </div>
+      </div>
+      <div class="mt-2 grid grid-cols-2 gap-2">
+        <div class="bg-brand-50 border border-brand-100 rounded-lg p-2.5">
+          <p class="bento-label text-brand-500 mb-0.5">CONTRACTUAL SALARY / MONTH</p>
+          <p class="text-sm font-bold text-brand-700">EGP ${((p.baseSalary || 0) + (p.annualIncrease || 0)).toLocaleString()}</p>
+        </div>
+        <div class="bg-charcoal-50 rounded-lg p-2.5">
+          <p class="bento-label text-charcoal-400 mb-0.5">SCHEDULE</p>
+          <p class="text-sm font-bold text-charcoal-900">${p.workingDays} days / month · ${p.scheduledWeeklyDays || 6}/wk</p>
+          <p class="text-[10px] text-charcoal-500 mt-0.5">${p.weeklyPattern || 'Sun – Fri'}</p>
+        </div>
+      </div>
+      <div class="mt-2 grid grid-cols-3 gap-2">
+        <div class="bg-charcoal-50 rounded-lg p-2.5 text-center">
+          <p class="text-sm font-bold ${p.overtimeHours ? 'text-blue-700' : 'text-charcoal-400'}">${p.overtimeHours || 0} hrs</p>
+          <p class="text-[10px] text-charcoal-500 mt-0.5">Overtime</p>
+        </div>
+        <div class="bg-charcoal-50 rounded-lg p-2.5 text-center">
+          <p class="text-sm font-bold text-charcoal-900">${p.usedAnnualLeave || 0} · ${p.remainingAnnualLeave || 0} d</p>
+          <p class="text-[10px] text-charcoal-500 mt-0.5">Annual Leave<br>Used · Remaining</p>
+        </div>
+        <div class="bg-charcoal-50 rounded-lg p-2.5 text-center">
+          <p class="text-sm font-bold text-charcoal-900">${p.paidLeaveDays || 0} d</p>
+          <p class="text-[10px] text-charcoal-500 mt-0.5">Paid Leave</p>
+        </div>
+      </div>
+    </div>
 
     <!-- Earnings Section -->
     <div class="bg-white rounded-xl border border-charcoal-100 overflow-hidden">

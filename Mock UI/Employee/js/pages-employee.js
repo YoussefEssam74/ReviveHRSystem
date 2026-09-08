@@ -118,8 +118,8 @@ function renderDashboard() {
             ACTION REQUIRED
           </p>
           <div class="space-y-0">
-            <div class="action-alert-item cursor-pointer" onclick="navigateTo('documents')">
-              <svg class="w-4 h-4 text-red-600 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+            <div class="action-alert-item cursor-pointer" onclick="navigateTo('events')">
+              <svg class="w-4 h-4 text-red-600 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
               <div>
                 <p class="text-xs font-semibold text-charcoal-900">Document expiring soon</p>
                 <p class="text-[10px] text-charcoal-500">First Aid Certification expires in 14 days.</p>
@@ -310,23 +310,68 @@ function openEditContact() {
 }
 
 // ==================== DOCUMENTS ====================
+// Employee uploads their required documents. HR-uploaded company documents are
+// view/download only. Expiring-document alerts live on the Events page.
 function renderDocuments() {
+  const doneCount = MOCK.requiredDocs.filter(r=>r.docId).length;
+  const pendingDocs = MOCK.requiredDocs.filter(r=>!r.docId);
   return `<div class="space-y-3">
     <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-      <div><h1 class="text-xl font-bold text-charcoal-900">My Documents</h1><p class="text-xs text-charcoal-500 mt-0.5">${MOCK.documents.length} documents on file</p></div>
-      <button onclick="openUploadModal()" class="btn btn-sm btn-primary"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>Upload</button>
+      <div><h1 class="text-xl font-bold text-charcoal-900">My Documents</h1><p class="text-xs text-charcoal-500 mt-0.5">${doneCount} of ${MOCK.requiredDocs.length} required documents uploaded</p></div>
+      <button onclick="openUploadModal('')" class="btn btn-sm btn-primary"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>Upload</button>
     </div>
 
-    <!-- Search & Filters -->
-    <div class="bg-white rounded-xl border border-charcoal-200 p-3">
-      <div class="flex flex-col sm:flex-row gap-2">
-        <div class="flex-1 relative">
-          <svg class="w-4 h-4 text-charcoal-400 absolute left-2.5 top-1/2 -translate-y-1/2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
-          <input type="text" class="form-input" placeholder="Search documents..." style="padding:0.375rem 0.625rem 0.375rem 2rem;font-size:0.8125rem">
-        </div>
-        <select class="form-select w-full sm:w-36" style="padding:0.375rem 2rem 0.375rem 0.625rem;font-size:0.8125rem"><option>All Categories</option></select>
-        <select class="form-select w-full sm:w-32" style="padding:0.375rem 2rem 0.375rem 0.625rem;font-size:0.8125rem"><option>All Status</option></select>
+    <!-- Required Documents -->
+    <div class="bg-white rounded-xl border border-charcoal-200 overflow-hidden">
+      <div class="px-4 py-2.5 border-b border-charcoal-100 flex items-center justify-between">
+        <p class="bento-label">REQUIRED DOCUMENTS · EMPLOYEE UPLOADS</p>
+        <span class="text-[10px] text-charcoal-400">${doneCount}/${MOCK.requiredDocs.length} complete</span>
       </div>
+      <div class="divide-y divide-charcoal-50">
+        ${MOCK.requiredDocs.map(r=>{
+          const d = r.docId ? MOCK.documents.find(x=>x.id===r.docId) : null;
+          const icon = r.key==='national-id'?'M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z'
+            : r.key==='contract'?'M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z'
+            : r.key==='certificates'||r.key==='graduation'?'M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253'
+            : r.key==='bank'?'M3 6h18M3 6v12a2 2 0 002 2h14a2 2 0 002-2V6m-9 3a3 3 0 100 6 3 3 0 000-6z'
+            : 'M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z';
+          return `<div class="px-4 py-3 flex items-center gap-3">
+            <div class="w-9 h-9 rounded-lg ${d?'bg-brand-100 text-brand-600':'bg-charcoal-100 text-charcoal-400'} flex items-center justify-center flex-shrink-0"><svg class="w-4.5 h-4.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="${icon}"/></svg></div>
+            <div class="flex-1 min-w-0">
+              <p class="text-xs font-semibold text-charcoal-900">${r.label}</p>
+              <p class="text-[10px] text-charcoal-500">${d?'Uploaded '+formatDate(d.uploadDate):'Not uploaded yet'}</p>
+            </div>
+            ${d
+              ?`<div class="flex items-center gap-1.5 flex-shrink-0"><button onclick="openDocDetail('${d.id}')" class="btn btn-sm btn-secondary">${statusBadge(d.status)}</button><button onclick="showToast('Downloading ${d.name}...','info')" class="p-1.5 rounded-lg hover:bg-charcoal-100 transition-colors"><svg class="w-3.5 h-3.5 text-charcoal-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg></button></div>`
+              :`<button onclick="openUploadModal('${r.key}')" class="btn btn-sm btn-secondary flex-shrink-0"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>Upload</button>`
+            }
+          </div>`;
+        }).join('')}
+      </div>
+    </div>
+
+    <!-- HR Uploaded Documents -->
+    <div class="bg-white rounded-xl border border-charcoal-200 overflow-hidden">
+      <div class="px-4 py-2.5 border-b border-charcoal-100 flex items-center justify-between">
+        <p class="bento-label">HR UPLOADED · OFFICIAL COMPANY DOCUMENTS</p>
+        <span class="inline-flex items-center gap-1 text-[10px] text-charcoal-400"><svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"/></svg>View / Download only</span>
+      </div>
+      <div class="divide-y divide-charcoal-50">
+        ${MOCK.hrDocuments.map(h=>`<div class="px-4 py-3 flex items-center gap-3">
+          <div class="w-9 h-9 rounded-lg bg-charcoal-100 text-charcoal-500 flex items-center justify-center flex-shrink-0"><svg class="w-4.5 h-4.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/></svg></div>
+          <div class="flex-1 min-w-0">
+            <p class="text-xs font-semibold text-charcoal-900">${h.name}</p>
+            <p class="text-[10px] text-charcoal-500">${h.category} · Added ${formatDate(h.addedDate)} · ${h.size}</p>
+          </div>
+          <button onclick="showToast('Downloading ${h.name}...','info')" class="btn btn-sm btn-secondary flex-shrink-0"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>Download</button>
+        </div>`).join('')}
+      </div>
+    </div>
+
+    <!-- All On-File Documents -->
+    <div class="flex items-center justify-between">
+      <p class="text-sm font-bold text-charcoal-900">All On-File Documents</p>
+      <span class="text-[10px] text-charcoal-400">${MOCK.documents.length} documents</span>
     </div>
 
     <!-- Desktop Table -->
@@ -365,8 +410,60 @@ function openDocDetail(id) {
     <div class="bg-charcoal-50 rounded-lg p-6 text-center"><svg class="w-10 h-10 text-charcoal-300 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg><p class="text-xs text-charcoal-500">Document preview</p></div>
   </div>`,{footer:`<button onclick="closeModal()" class="btn btn-sm btn-secondary">Close</button>${d.canDownload?`<button onclick="showToast('Downloading...','info');closeModal();" class="btn btn-sm btn-primary"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>Download</button>`:''}`});
 }
-function openUploadModal() {
-  openModal('Upload Document',`<form onsubmit="event.preventDefault();closeModal();showToast('Document uploaded successfully');" class="space-y-3"><div><label class="form-label">Document Type</label><select class="form-select" required><option value="">Select...</option><option>Employment</option><option>Identification</option><option>Certification</option><option>Medical</option><option>Education</option></select></div><div><label class="form-label">Document Name</label><input type="text" class="form-input" placeholder="e.g. Updated Certification" required></div><div><label class="form-label">File</label><div class="border-2 border-dashed border-charcoal-200 rounded-lg p-6 text-center hover:border-brand-400 cursor-pointer transition-colors"><svg class="w-6 h-6 text-charcoal-300 mx-auto mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/></svg><p class="text-xs text-charcoal-500">Click to upload or drag & drop</p><p class="text-[10px] text-charcoal-400 mt-0.5">PDF, JPG, PNG up to 10MB</p></div></div><div class="flex justify-end gap-2 pt-1"><button type="button" onclick="closeModal()" class="btn btn-sm btn-secondary">Cancel</button><button type="submit" class="btn btn-sm btn-primary">Upload</button></div></form>`,{wide:true});
+function openUploadModal(key) {
+  const tgt = MOCK.requiredDocs.find(r=>r.key===key);
+  openModal('Upload Document',`<form onsubmit="event.preventDefault();closeModal();showToast('Document uploaded for HR review');" class="space-y-3"><div><label class="form-label">Document Type</label><select class="form-select" required><option value="">Select...</option>${MOCK.requiredDocs.map(r=>`<option ${tgt&&tgt.key===r.key?'selected':''}>${r.label}</option>`).join('')}</select></div><div><label class="form-label">Document Name</label><input type="text" class="form-input" placeholder="e.g. Updated Certification" required></div><div><label class="form-label">File</label><div class="border-2 border-dashed border-charcoal-200 rounded-lg p-6 text-center hover:border-brand-400 cursor-pointer transition-colors"><svg class="w-6 h-6 text-charcoal-300 mx-auto mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/></svg><p class="text-xs text-charcoal-500">Click to upload or drag & drop</p><p class="text-[10px] text-charcoal-400 mt-0.5">PDF, JPG, PNG up to 10MB</p></div></div><div class="flex justify-end gap-2 pt-1"><button type="button" onclick="closeModal()" class="btn btn-sm btn-secondary">Cancel</button><button type="submit" class="btn btn-sm btn-primary">Upload</button></div></form>`,{wide:true});
+}
+
+// ==================== EVENTS ====================
+// HR-side published events replace the expiring-document notification:
+// compliance deadlines, training and company events.
+function renderEvents() {
+  const events = MOCK.events;
+  const groups = ['Compliance','Benefits','Onboarding','Training','Company Event'];
+  const iconFor = t => t==='Document Expiry'?'M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z'
+    : t==='Contract'?'M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z'
+    : t==='Benefits'?'M3 6h18M3 6v12a2 2 0 002 2h14a2 2 0 002-2V6m-9 3a3 3 0 100 6 3 3 0 000-6z'
+    : t==='Onboarding'?'M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z'
+    : t==='Training'?'M13 7h8m0 0v8m0-8l-8 8-4-4-6 6'
+    : 'M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z';
+  const colorFor = t => t==='Document Expiry'||t==='Onboarding'?'bg-orange-100 text-orange-600'
+    : t==='Contract'?'bg-blue-100 text-blue-600'
+    : t==='Benefits'?'bg-green-100 text-green-600'
+    : t==='Training'?'bg-purple-100 text-purple-600'
+    : 'bg-charcoal-100 text-charcoal-600';
+  return `<div class="space-y-3">
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+      <div><h1 class="text-xl font-bold text-charcoal-900">Events</h1><p class="text-xs text-charcoal-500 mt-0.5">Compliance deadlines, training and company events from HR</p></div>
+      <span class="inline-flex items-center gap-1 text-[10px] text-charcoal-400"><svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>${events.length} upcoming events</span>
+    </div>
+    ${groups.map(g=>{
+      const list = events.filter(e=>e.category===g);
+      if(!list.length) return '';
+      return `<div class="bg-white rounded-xl border border-charcoal-200 overflow-hidden">
+        <div class="px-4 py-2.5 border-b border-charcoal-100 flex items-center justify-between">
+          <p class="bento-label">${g.toUpperCase()}</p>
+          <span class="text-[10px] text-charcoal-400">${list.length} event${list.length>1?'s':''}</span>
+        </div>
+        <div class="divide-y divide-charcoal-50">
+          ${list.map(e=>`<div class="px-4 py-3 flex items-center gap-3">
+            <div class="w-10 h-10 rounded-lg ${colorFor(e.type)} flex items-center justify-center flex-shrink-0"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="${iconFor(e.type)}"/></svg></div>
+            <div class="flex-1 min-w-0">
+              <div class="flex items-center gap-1.5">
+                <p class="text-xs font-semibold text-charcoal-900">${e.title}</p>
+                ${e.urgent?'<span class="px-1.5 py-0.5 rounded-full bg-red-50 text-red-600 text-[9px] font-bold uppercase">Due soon</span>':''}
+              </div>
+              <p class="text-[10px] text-charcoal-500 mt-0.5">${e.detail}</p>
+            </div>
+            <div class="flex flex-col items-end gap-1.5 flex-shrink-0">
+              <span class="text-[10px] font-medium text-charcoal-600">${formatDate(e.date)}</span>
+              ${e.action?`<button onclick="${e.link?`navigateTo('${e.link}')`:`showToast('${e.action}')`}" class="btn btn-sm btn-secondary"><svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6"/></svg>${e.action}</button>`:''}
+            </div>
+          </div>`).join('')}
+        </div>
+      </div>`;
+    }).join('')}
+  </div>`;
 }
 
 // ==================== EMPLOYMENT HISTORY ====================
@@ -376,13 +473,102 @@ function renderHistory() {
   </div>`;
 }
 
-// ==================== ATTENDANCE ====================
+// ==================== ATTENDANCE & SCHEDULE ====================
+// Combines the employee's daily attendance with the assigned shift.
+// Today's view is read-only (immutable) — future changes go through the
+// Employee -> Branch Manager -> HR (if required) -> Final status workflow.
+
+// Persisted future-request state for the My Attendance page.
+let futureRequests = [
+  { id: 'RQ-1035', type: 'Shift Swap', date: '2026-09-03', status: 'Pending BM', requiresHR: false, reason: "Swap evening shift with Karim on Sep 3", submitted: 'Aug 24, 2026' },
+  { id: 'RQ-1036', type: 'Leave Request', date: '2026-09-07', status: 'Pending HR', requiresHR: true, reason: "Family event — out of town", submitted: 'Aug 25, 2026' },
+  { id: 'RQ-1037', type: 'Permission Request', date: '2026-09-01', status: 'Approved', requiresHR: false, reason: "Medical appointment in the morning", submitted: 'Aug 22, 2026' },
+  { id: 'RQ-1038', type: 'Schedule Change', date: '2026-09-10', status: 'Rejected', requiresHR: true, reason: "Requesting off-day swap", submitted: 'Aug 20, 2026' },
+];
+let futureReqSeq = 1039;
+let attType = 'Leave Request';
+let attDate = '2026-08-27';
+let attReason = '';
+
+const TODAY_ISO = '2026-08-26'; // matches the mock "today" in MOCK data
+
+function attWorkMinutes(checkIn, checkOut) {
+  if (!checkIn) return null;
+  const end = checkOut || MOCK.now || '14:30';
+  const [hi, mi] = checkIn.split(':').map(Number);
+  const [he, me] = end.split(':').map(Number);
+  let mins = (he * 60 + me) - (hi * 60 + mi);
+  if (mins < 0) mins += 24 * 60;
+  return mins;
+}
+function attFormatMins(m) {
+  if (m == null) return '—';
+  return Math.floor(m / 60) + 'h ' + String(m % 60).padStart(2, '0') + 'm';
+}
+
 function renderAttendance() {
-  const s=MOCK.attendanceSummary;
-  return `<div class="space-y-3">
+  const s = MOCK.attendanceSummary;
+  const ts = MOCK.todayShift, ta = MOCK.todayAttendance;
+  const checkIn = ta.checkIn, checkOut = ta.checkOut, status = ta.status;
+  const wm = attWorkMinutes(checkIn, checkOut);
+  const shortcuts = [
+    { id: 'attendance', label: 'Attendance', icon: 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4', active: true },
+    { id: 'schedule', label: 'Schedule', icon: 'M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z', active: false },
+    { id: 'requests', label: 'Requests', icon: 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01', active: false },
+  ];
+
+  return `<div class="space-y-4">
     <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-      <div><h1 class="text-xl font-bold text-charcoal-900">My Attendance</h1><p class="text-xs text-charcoal-500 mt-0.5">August 2026 · ${s.rate}% attendance rate</p></div>
+      <div><h1 class="text-xl font-bold text-charcoal-900">Attendance &amp; Schedule</h1><p class="text-xs text-charcoal-500 mt-0.5">Daily attendance and assigned shift in one place · ${s.rate}% attendance rate</p></div>
       <select class="form-select w-36" style="padding:0.375rem 2rem 0.375rem 0.625rem;font-size:0.8125rem"><option>August 2026</option><option>July 2026</option></select>
+    </div>
+
+    <!-- Quick Shortcuts -->
+    <div class="flex items-center gap-2 flex-wrap">
+      <span class="text-[10px] font-bold uppercase tracking-wider text-charcoal-400 mr-1">Quick</span>
+      ${shortcuts.map(x=>`<button onclick="navigateTo('${x.id}')" class="btn btn-sm ${x.active?'btn-primary':'btn-secondary'}"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="${x.icon}"/></svg>${x.label}</button>`).join('')}
+    </div>
+
+    <!-- Today's View (Read-Only) -->
+    <div class="bg-white rounded-xl border border-charcoal-200 overflow-hidden">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-charcoal-100 px-4 py-3">
+        <div>
+          <p class="text-sm font-bold text-charcoal-900">Today's View</p>
+          <p class="text-[10px] text-charcoal-500">Tuesday, Aug 26, 2026 · <span class="font-medium text-charcoal-700">${ts.gym}</span></p>
+        </div>
+        <span class="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-charcoal-100 text-charcoal-600 text-[10px] font-semibold"><svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>Read-only · today is final</span>
+      </div>
+      <div class="grid grid-cols-2 lg:grid-cols-5 divide-x divide-y lg:divide-y-0 divide-charcoal-100">
+        <div class="p-4">
+          <p class="bento-label text-charcoal-400 mb-1">ASSIGNED SHIFT</p>
+          <p class="text-sm font-bold text-charcoal-900">${ts.shiftName}</p>
+          <p class="text-[10px] text-charcoal-500 mt-0.5">${ts.startTime} – ${ts.endTime}</p>
+        </div>
+        <div class="p-4">
+          <p class="bento-label text-charcoal-400 mb-1">CHECK-IN</p>
+          <p class="text-sm font-bold ${checkIn?'text-brand-600':'text-charcoal-400'}">${checkIn||'—'}</p>
+          <p class="text-[10px] text-charcoal-500 mt-0.5">${checkIn?ts.gym:'not checked in'}</p>
+        </div>
+        <div class="p-4">
+          <p class="bento-label text-charcoal-400 mb-1">CHECK-OUT</p>
+          <p class="text-sm font-bold ${checkOut?'text-charcoal-900':'text-charcoal-400'}">${checkOut||'—'}</p>
+          <p class="text-[10px] text-charcoal-500 mt-0.5">${checkOut?'completed':'in progress'}</p>
+        </div>
+        <div class="p-4">
+          <p class="bento-label text-charcoal-400 mb-1">WORKING HOURS</p>
+          <p class="text-sm font-bold text-charcoal-900">${attFormatMins(wm)}</p>
+          <p class="text-[10px] text-charcoal-500 mt-0.5">${checkOut?'of '+attFormatMins(attWorkMinutes(ts.startTime,ts.endTime))+' scheduled':'updating live'}</p>
+        </div>
+        <div class="p-4">
+          <p class="bento-label text-charcoal-400 mb-1">ATTENDANCE STATUS</p>
+          <div class="mt-0.5">${statusBadge(status)}</div>
+          <p class="text-[10px] text-charcoal-500 mt-1">${ta.source||'No action needed'}</p>
+        </div>
+      </div>
+      <div class="px-4 py-2.5 bg-brand-50 border-t border-brand-100 flex items-start gap-2">
+        <svg class="w-3.5 h-3.5 text-brand-600 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+        <p class="text-[11px] text-charcoal-600">Today's attendance and shift are locked. No modifications or requests can be made for today. Plan any changes for future dates below.</p>
+      </div>
     </div>
 
     <!-- Stats Row -->
@@ -395,12 +581,112 @@ function renderAttendance() {
       <div class="bg-white rounded-xl border border-charcoal-200 p-3 text-center"><div class="w-8 h-8 rounded-lg bg-charcoal-100 flex items-center justify-center mx-auto mb-1"><svg class="w-4 h-4 text-charcoal-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg></div><p class="text-lg font-bold text-charcoal-600">${s.missingCheckout}</p><p class="text-[10px] text-charcoal-500">Missing Out</p></div>
     </div>
 
+    <!-- Plan Ahead: Future Requests -->
+    <div class="grid grid-cols-1 lg:grid-cols-5 gap-3">
+      <div class="bg-white rounded-xl border border-charcoal-200 p-4 lg:col-span-2">
+        <div class="flex items-center justify-between mb-1">
+          <p class="text-sm font-bold text-charcoal-900">Plan Ahead</p>
+          <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-50 text-blue-600 text-[9px] font-bold uppercase"><svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-4 8v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>Future only</span>
+        </div>
+        <p class="text-[10px] text-charcoal-500 mb-3">Submit a request for a future date. Today cannot be requested.</p>
+        <div class="space-y-3">
+          <div>
+            <label class="form-label">Request Type</label>
+            <select class="form-select" onchange="attType=this.value">
+              <option ${attType==='Leave Request'?'selected':''}>Leave Request</option>
+              <option ${attType==='Schedule Change'?'selected':''}>Schedule Change</option>
+              <option ${attType==='Shift Swap'?'selected':''}>Shift Swap</option>
+              <option ${attType==='Permission Request'?'selected':''}>Permission Request</option>
+            </select>
+          </div>
+          <div>
+            <label class="form-label">Date (future only)</label>
+            <input type="date" class="form-input" value="${attDate}" min="2026-08-27" onchange="attDate=this.value">
+            <p class="text-[9px] text-charcoal-400 mt-1 flex items-center gap-1"><svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>Earliest selectable date is tomorrow (Aug 27).</p>
+          </div>
+          <div>
+            <label class="form-label">Reason / Details</label>
+            <textarea class="form-input" rows="3" placeholder="Tell us why..." oninput="attReason=this.value">${attReason}</textarea>
+          </div>
+          <button onclick="submitFutureRequest()" class="btn btn-sm btn-primary w-full justify-center"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/></svg>Submit Request</button>
+        </div>
+      </div>
+
+      <div class="lg:col-span-3 flex flex-col gap-3">
+        <div class="bg-white rounded-xl border border-charcoal-200 p-4">
+          <p class="text-sm font-bold text-charcoal-900 mb-2">Approval Workflow</p>
+          <div class="flex items-center gap-1.5 flex-wrap">
+            ${[['You','person','bg-brand-600 text-white'],['Branch Manager','clipboard-check','bg-charcoal-800 text-white'],['HR Approval','shield-check','bg-purple-600 text-white'],['Final Status','flag','bg-charcoal-100 text-charcoal-600']].map((w,ix)=>`
+              <span class="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg ${w[2]} text-[10px] font-semibold" style="${ix===2?'opacity:0.75':''}"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="${ix===0?'M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z':ix===1?'M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z':ix===2?'M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z':'M3 21v-4m0 0V5a2 2 0 012-2h6.5l1 1H21l-3 6 3 6h-8.5l-1-1H5a2 2 0 00-2 2zm9-13.5V9'}"/></svg>${w[0]}</span>
+              ${ix<3?'<svg class="w-3.5 h-3.5 text-charcoal-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>':''}
+            `).join('')}
+          </div>
+          <p class="text-[10px] text-charcoal-500 mt-2">Leave requests and schedule changes require HR approval after your Branch Manager signs off. Other request types stop after the manager's decision.</p>
+        </div>
+
+        <div class="bg-white rounded-xl border border-charcoal-200 overflow-hidden">
+          <div class="flex items-center justify-between px-4 py-3 border-b border-charcoal-100">
+            <p class="text-sm font-bold text-charcoal-900">My Upcoming Requests</p>
+            <span class="text-[10px] text-charcoal-400">${futureRequests.length} upcoming</span>
+          </div>
+          ${futureRequests.length===0?'<div class="p-6 text-center"><p class="text-xs text-charcoal-400">No upcoming requests yet.</p></div>':futureRequests.map(r=>{
+            const totalSteps = r.requiresHR ? 4 : 3; // You -> BM -> HR? -> Final
+            const stepLabels = r.requiresHR ? ['Submitted','Branch Manager','HR Approval','Final'] : ['Submitted','Branch Manager','Final'];
+            const progress = r.status==='Approved' ? totalSteps : r.status==='Pending HR' ? 2 : r.status==='Pending BM' ? 1 : r.status==='Rejected' ? 0 : 1;
+            return `<div class="p-3 border-b border-charcoal-50 last:border-0">
+              <div class="flex items-start justify-between gap-2">
+                <div class="flex items-center gap-2.5 min-w-0">
+                  <div class="w-8 h-8 rounded-lg ${r.status==='Approved'?'bg-brand-100 text-brand-600':r.status==='Rejected'?'bg-red-100 text-red-600':r.status==='Pending'?'bg-yellow-100 text-yellow-600':'bg-blue-100 text-blue-600'} flex items-center justify-center flex-shrink-0"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-4 8v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg></div>
+                  <div class="min-w-0">
+                    <p class="text-xs font-semibold text-charcoal-900">${r.type}</p>
+                    <p class="text-[10px] text-charcoal-500">${formatDate(r.date)} · ${r.id} ${r.requiresHR?'· HR required':''}</p>
+                    <p class="text-[10px] text-charcoal-500 truncate">${r.reason}</p>
+                  </div>
+                </div>
+                ${statusBadge(r.status.replace(/Pending (BM|HR)/,'Pending'))}
+              </div>
+              <div class="flex items-center gap-1.5 mt-2 flex-wrap">
+                ${stepLabels.map((sl,i)=>`<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-semibold ${i<progress?'bg-brand-100 text-brand-700':r.status==='Rejected'&&i===0?'bg-red-100 text-red-600':i===progress&&r.status!=='Rejected'?'bg-yellow-100 text-yellow-700 ring-2 ring-yellow-200':'bg-charcoal-100 text-charcoal-400'}">${i<progress?'<svg class="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/></svg>':''}${sl}</span>${i<stepLabels.length-1?'<svg class="w-3 h-3 text-charcoal-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>':''}`).join('')}
+              </div>
+              ${r.status==='Rejected'?'<p class="mt-1.5 text-[10px] text-red-600 flex items-center gap-1"><svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>Not enough staff coverage on the requested day — please pick another date.</p>':''}
+            </div>`;
+          }).join('')}
+        </div>
+      </div>
+    </div>
+
+    <!-- My Attendance History -->
+    <div class="flex items-center justify-between">
+      <p class="text-sm font-bold text-charcoal-900">Attendance History</p>
+      <span class="text-[10px] text-charcoal-400">Tap a row for details</span>
+    </div>
+
     <!-- Desktop Table -->
     <div class="bg-white rounded-xl border border-charcoal-200 overflow-hidden hidden lg:block"><div class="table-responsive"><table class="data-table"><thead><tr><th>Date</th><th>Shift</th><th>Check In</th><th>Check Out</th><th>Status</th><th></th></tr></thead><tbody>${MOCK.attendanceRecords.map(r=>`<tr class="cursor-pointer ${r.date===MOCK.attendanceRecords[0]?.date?'bg-brand-50/50':''}" onclick="openAttDetail('${r.date}')"><td class="text-xs font-medium">${formatDate(r.date)}</td><td class="text-xs">${r.shift}</td><td class="text-xs">${r.checkIn||'—'}</td><td class="text-xs">${r.checkOut||'—'}</td><td>${statusBadge(r.status)}</td><td><svg class="w-3.5 h-3.5 text-charcoal-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg></td></tr>`).join('')}</tbody></table></div></div>
 
     <!-- Mobile Cards -->
     <div class="space-y-1.5 lg:hidden">${MOCK.attendanceRecords.map(r=>`<div class="bg-white rounded-xl border border-charcoal-200 p-3 card-interactive" onclick="openAttDetail('${r.date}')"><div class="flex items-center justify-between"><div><p class="text-xs font-medium text-charcoal-900">${formatDate(r.date)}</p><p class="text-[10px] text-charcoal-500">${r.shift}</p></div>${statusBadge(r.status)}</div><div class="flex gap-4 mt-1.5 text-[10px] text-charcoal-500"><span class="flex items-center gap-1"><svg class="w-3 h-3 text-brand-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1"/></svg>In: ${r.checkIn||'—'}</span><span class="flex items-center gap-1"><svg class="w-3 h-3 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg>Out: ${r.checkOut||'—'}</span></div></div>`).join('')}</div>
   </div>`;
+}
+function submitFutureRequest() {
+  if(!attType){showToast('Please choose a request type','error');return;}
+  if(!attDate){showToast('Please pick a date','error');return;}
+  if(attDate <= TODAY_ISO){showToast('Today and past dates are locked — choose a future date','error');return;}
+  if(!attReason.trim()){showToast('Please add a reason for your request','error');return;}
+  const requiresHR = (attType==='Leave Request' || attType==='Schedule Change');
+  futureRequests.unshift({
+    id:'RQ-'+futureReqSeq++,
+    type:attType,
+    date:attDate,
+    status:'Pending BM',
+    requiresHR,
+    reason:attReason.trim(),
+    submitted:new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}),
+  });
+  attDate = new Date(Date.parse('2026-08-27') + futureRequests.length*24*60*60*1000).toISOString().slice(0,10);
+  attReason = '';
+  renderAll();
+  showToast('Submitted for Branch Manager approval');
 }
 function openAttDetail(date) {
   const r=MOCK.attendanceRecords.find(a=>a.date===date); if(!r)return;

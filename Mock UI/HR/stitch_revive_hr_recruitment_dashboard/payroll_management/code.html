@@ -1,0 +1,525 @@
+<!DOCTYPE html><html class="h-full" lang="en"><head>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0" name="viewport">
+<title>Revive HR - Payroll Management</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&amp;display=swap" rel="stylesheet">
+<script>
+tailwind.config={darkMode:"class",theme:{extend:{colors:{"primary":"#16a34a","primary-container":"#bbf7d0","on-primary":"#ffffff","on-primary-container":"#14532d","surface":"#fbfcfa","surface-container":"#e9eee8","surface-container-low":"#f3f6f2","surface-container-high":"#dee5dd","surface-container-highest":"#d3dcd2","surface-container-lowest":"#ffffff","on-surface":"#13221a","on-surface-variant":"#3f4a41","on-background":"#13221a","background":"#f7f9f7","secondary":"#5c5f60","outline":"#6e7b6c","outline-variant":"#c6cdc5","error":"#ba1a1a","error-container":"#ffdad6","on-error-container":"#93000a","tertiary":"#51605a","tertiary-container":"#b3c7bc","surface-tint":"#16a34a"},fontFamily:{sans:["Inter","system-ui","sans-serif"]}}}}
+</script>
+<style>.material-symbols-outlined{font-variation-settings:'FILL' 0,'wght' 400,'GRAD' 0,'opsz' 24;}.material-symbols-outlined[data-weight="fill"]{font-variation-settings:'FILL' 1;}.elevation-1{box-shadow:0px 1px 3px rgba(0,0,0,0.05);}</style>
+</head>
+<body class="bg-background text-on-background font-sans min-h-screen flex h-full overflow-hidden">
+
+<!-- Sidebar -->
+<nav class="fixed left-0 top-0 h-full w-[280px] bg-surface-container-low flex flex-col py-6 px-4 z-30 hidden md:flex border-r border-outline-variant">
+  <div class="flex items-center gap-3 mb-8 px-2">
+    <div class="w-10 h-10 rounded-lg bg-primary-container text-on-primary-container flex items-center justify-center">
+      <span class="material-symbols-outlined" data-weight="fill">hub</span>
+    </div>
+    <div>
+      <h1 class="text-[20px] font-bold text-on-surface">Revive HR</h1>
+      <p class="text-[12px] text-on-surface-variant">HR Operations</p>
+    </div>
+  </div>
+  <ul class="flex flex-col gap-1 flex-1">
+    <li><a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant hover:bg-surface-container-high transition-all" href="../hr_control_center_dashboard/code.html"><span class="material-symbols-outlined">dashboard</span><span class="text-[14px] font-medium">Control Center</span></a></li>
+    <li><a class="flex items-center gap-3 px-4 py-3 rounded-lg text-primary font-bold bg-primary-container/10 transition-colors" href="#"><span class="material-symbols-outlined" data-weight="fill">payments</span><span class="text-[14px] font-medium">Payroll</span></a></li>
+    <li><a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant hover:bg-surface-container-high transition-all" href="../new_comers/code.html"><span class="material-symbols-outlined">person_add</span><span class="text-[14px] font-medium">New Comers</span></a></li>
+    <li><a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant hover:bg-surface-container-high transition-all" href="../evaluation_builder/code.html"><span class="material-symbols-outlined">fact_check</span><span class="text-[14px] font-medium">Evaluations</span></a></li>
+    <li><a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant hover:bg-surface-container-high transition-all" href="../termination_workflow/code.html"><span class="material-symbols-outlined">person_off</span><span class="text-[14px] font-medium">Termination</span></a></li>
+    <li><a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant hover:bg-surface-container-high transition-all" href="../permissions_matrix/code.html"><span class="material-symbols-outlined">admin_panel_settings</span><span class="text-[14px] font-medium">Permissions</span></a></li>
+    <li><a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant hover:bg-surface-container-high transition-all" href="../recruitment_dashboard/code.html"><span class="material-symbols-outlined">person_search</span><span class="text-[14px] font-medium">Recruitment</span></a></li>
+  </ul>
+  <ul class="flex flex-col gap-1 mt-auto pt-4 border-t border-outline-variant">
+    <li><a class="flex items-center gap-3 px-4 py-3 rounded-lg text-error hover:bg-error-container/20 transition-all" href="#"><span class="material-symbols-outlined">logout</span><span class="text-[14px] font-medium">Logout</span></a></li>
+  </ul>
+</nav>
+
+<!-- Main Content -->
+<main class="flex-1 ml-0 md:ml-[280px] h-full flex flex-col relative overflow-hidden">
+  <!-- Top Bar -->
+  <header class="w-full h-16 bg-surface flex justify-between items-center px-4 md:px-8 z-10 sticky top-0 shrink-0 border-b border-outline-variant">
+    <div class="flex items-center gap-4 flex-1">
+      <h1 class="text-[18px] font-bold text-on-surface hidden lg:block">Payroll Management</h1>
+    </div>
+    <div class="flex items-center gap-4">
+      <div class="flex items-center gap-2 px-4 py-2 rounded-lg bg-surface-container-low text-[13px]">
+        <span class="material-symbols-outlined text-[16px] text-primary">payments</span>
+        <span class="font-medium text-on-surface-variant">Payroll Cycle: Aug 2026</span>
+      </div>
+      <div class="ml-2 pl-4 border-l border-outline-variant flex items-center gap-3">
+        <div class="w-9 h-9 rounded-full bg-primary-container text-on-primary-container flex items-center justify-center text-[13px] font-bold">HO</div>
+        <div class="hidden sm:block">
+          <p class="text-[13px] font-semibold text-on-surface leading-tight">Hana Osman</p>
+          <p class="text-[11px] text-on-surface-variant leading-tight">HR Operations</p>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Canvas -->
+  <div class="flex-1 overflow-y-auto p-4 md:p-8 bg-background">
+    <div class="max-w-[1440px] mx-auto space-y-6">
+
+      <!-- Steps Indicator -->
+      <div class="flex flex-wrap items-center gap-2 text-[13px] font-medium">
+        <span class="flex items-center gap-1.5 text-primary font-semibold"><span class="w-6 h-6 rounded-full bg-primary text-on-primary flex items-center justify-center text-[12px]">1</span> Generate</span>
+        <span class="material-symbols-outlined text-[16px] text-secondary">chevron_right</span>
+        <span class="flex items-center gap-1.5 text-primary font-semibold"><span class="w-6 h-6 rounded-full bg-primary text-on-primary flex items-center justify-center text-[12px]">2</span> Review</span>
+        <span class="material-symbols-outlined text-[16px] text-secondary">chevron_right</span>
+        <span class="flex items-center gap-1.5 text-on-surface-variant"><span class="w-6 h-6 rounded-full bg-surface-container-high text-on-surface-variant flex items-center justify-center text-[12px]">3</span> Save Draft</span>
+        <span class="material-symbols-outlined text-[16px] text-secondary">chevron_right</span>
+        <span class="flex items-center gap-1.5 text-on-surface-variant"><span class="w-6 h-6 rounded-full bg-surface-container-high text-on-surface-variant flex items-center justify-center text-[12px]">4</span> Publish</span>
+      </div>
+
+      <!-- Summary Cards -->
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div class="bg-surface rounded-xl p-5 elevation-1">
+          <p class="text-[11px] font-semibold text-secondary uppercase tracking-wider mb-1">Gross Payroll</p>
+          <p class="text-[24px] font-bold text-on-surface">EGP 184,500</p>
+          <p class="text-[12px] text-primary flex items-center gap-0.5"><span class="material-symbols-outlined text-[14px]">trending_up</span> +4.2% vs Jul</p>
+        </div>
+        <div class="bg-surface rounded-xl p-5 elevation-1">
+          <p class="text-[11px] font-semibold text-secondary uppercase tracking-wider mb-1">Employees</p>
+          <p class="text-[24px] font-bold text-on-surface">42</p>
+          <p class="text-[12px] text-on-surface-variant">Across 3 branches</p>
+        </div>
+        <div class="bg-surface rounded-xl p-5 elevation-1">
+          <p class="text-[11px] font-semibold text-secondary uppercase tracking-wider mb-1">Overtime</p>
+          <p class="text-[24px] font-bold text-on-surface">EGP 8,240</p>
+          <p class="text-[12px] text-on-surface-variant">18 records</p>
+        </div>
+        <div class="bg-surface rounded-xl p-5 elevation-1">
+          <p class="text-[11px] font-semibold text-secondary uppercase tracking-wider mb-1">Net Payable</p>
+          <p class="text-[24px] font-bold text-on-surface">EGP 168,900</p>
+          <p class="text-[12px] text-primary flex items-center gap-0.5"><span class="material-symbols-outlined text-[14px]">check_circle</span> Ready to review</p>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <!-- Payroll Table -->
+        <div class="lg:col-span-2 bg-surface rounded-xl elevation-1 overflow-hidden">
+          <div class="flex justify-between items-center px-5 py-4 border-b border-outline-variant">
+            <div>
+              <h3 class="text-[16px] font-semibold text-on-surface">Payroll Roster</h3>
+              <p class="text-[11px] text-on-surface-variant mt-0.5">Click any employee to review their full payroll breakdown</p>
+            </div>
+            <div class="flex items-center gap-2">
+              <input id="pay-search" type="text" placeholder="Search..." class="px-3 py-2 rounded-lg border border-outline-variant bg-surface text-[13px] outline-none focus:border-primary w-40">
+              <select id="pay-branch" class="px-3 py-2 rounded-lg border border-outline-variant bg-surface text-[13px] outline-none focus:border-primary">
+                <option value="">All Branches</option>
+                <option>Nasr City</option>
+                <option>Heliopolis</option>
+                <option>New Cairo</option>
+              </select>
+            </div>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="w-full">
+              <thead>
+                <tr class="text-left border-b border-outline-variant/40">
+                  <th class="px-5 py-3 text-[11px] font-semibold text-secondary uppercase tracking-wider">Employee</th>
+                  <th class="px-3 py-3 text-[11px] font-semibold text-secondary uppercase tracking-wider">Branch</th>
+                  <th class="px-3 py-3 text-[11px] font-semibold text-secondary uppercase tracking-wider">Attendance</th>
+                  <th class="px-3 py-3 text-right text-[11px] font-semibold text-secondary uppercase tracking-wider">Gross</th>
+                  <th class="px-3 py-3 text-right text-[11px] font-semibold text-secondary uppercase tracking-wider">Deductions</th>
+                  <th class="px-3 py-3 text-right text-[11px] font-semibold text-secondary uppercase tracking-wider">Net</th>
+                  <th class="px-3 py-3 text-center text-[11px] font-semibold text-secondary uppercase tracking-wider">Status</th>
+                </tr>
+              </thead>
+              <tbody id="pay-body"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Side Panel -->
+        <div class="flex flex-col gap-4">
+          <div class="bg-surface rounded-xl p-5 elevation-1">
+            <h3 class="text-[16px] font-semibold text-on-surface mb-4">Cycle Controls</h3>
+            <div class="space-y-3">
+              <button onclick="setStep(1)" class="w-full flex items-center justify-between px-4 py-3 rounded-lg bg-primary-container/40 text-primary font-semibold text-[13px]">
+                <span class="flex items-center gap-2"><span class="material-symbols-outlined text-[18px]">refresh</span> Regenerate</span>
+                <span class="material-symbols-outlined text-[18px]">chevron_right</span>
+              </button>
+              <button onclick="setStep(2)" class="w-full flex items-center justify-between px-4 py-3 rounded-lg bg-surface-container-low text-on-surface font-medium text-[13px] hover:bg-surface-container-high transition-colors">
+                <span class="flex items-center gap-2"><span class="material-symbols-outlined text-[18px]">fact_check</span> Verify Records</span>
+                <span class="text-[11px] text-secondary">42/42</span>
+              </button>
+              <button onclick="saveDraft()" class="w-full flex items-center justify-between px-4 py-3 rounded-lg bg-surface-container-low text-on-surface font-medium text-[13px] hover:bg-surface-container-high transition-colors">
+                <span class="flex items-center gap-2"><span class="material-symbols-outlined text-[18px]">save</span> Save as Draft</span>
+              </button>
+              <button onclick="publish()" class="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-lg bg-primary text-on-primary font-semibold text-[13px] hover:opacity-90 transition-opacity mt-1">
+                <span class="material-symbols-outlined text-[18px]">publish</span> Publish Payroll
+              </button>
+            </div>
+          </div>
+
+          <div class="bg-surface rounded-xl p-5 elevation-1">
+            <h3 class="text-[16px] font-semibold text-on-surface mb-3">Recent Activity</h3>
+            <div class="space-y-3" id="activity-list"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Toast -->
+      <div id="toast" class="fixed bottom-6 right-6 hidden items-center gap-2 px-4 py-3 rounded-lg bg-on-surface text-surface shadow-lg z-50">
+        <span class="material-symbols-outlined text-[18px] text-green-400">check_circle</span>
+        <span id="toast-msg" class="text-[13px] font-medium"></span>
+      </div>
+
+    </div>
+  </div>
+</main>
+
+<!-- Employee Payroll Detail Panel -->
+<div id="backdrop" class="fixed inset-0 bg-black/30 z-40 hidden" onclick="closePayDetail()"></div>
+<div id="detail-panel" class="fixed top-0 right-0 h-full w-full max-w-[500px] bg-surface z-50 shadow-2xl translate-x-full transition-transform duration-300 overflow-y-auto"></div>
+
+<script>
+const payroll=[
+  {id:'RV-00131',name:'Mona Said',branch:'Nasr City',position:'Trainer',status:'Verified',
+    base:4800,inc:480,bonus:0,ovtHrs:0,ovtPay:0,schedule:26,weekly:6,pattern:'Sun – Fri',worked:26,
+    si:336,tax:84,tardyAmount:60,tardyItems:[
+      {label:'Late Arrival — Jul 5',amount:-30,detail:'15 min late (08:15 check-in)'},
+      {label:'Late Arrival — Jul 8',amount:-30,detail:'8 min late (08:08 check-in)'}],
+    supAmount:0,supItems:[],usedLeave:1,remLeave:11,paidLeave:0},
+
+  {id:'RV-00125',name:'Karim Hassan',branch:'Nasr City',position:'Coach',status:'Verified',
+    base:4400,inc:440,bonus:200,ovtHrs:0,ovtPay:0,schedule:26,weekly:6,pattern:'Sun – Fri',worked:26,
+    si:308,tax:112,tardyAmount:0,tardyItems:[],supAmount:0,supItems:[],usedLeave:1,remLeave:11,paidLeave:0},
+
+  {id:'RV-00127',name:'Omar Youssef',branch:'Nasr City',position:'Trainer',status:'Verified',
+    base:4000,inc:400,bonus:0,ovtHrs:2,ovtPay:60,schedule:26,weekly:6,pattern:'Sun – Fri',worked:26,
+    si:280,tax:80,tardyAmount:40,tardyItems:[
+      {label:'Late Arrival — Jun 12',amount:-40,detail:'10 min late (10:10 check-in)'}],
+    supAmount:0,supItems:[],usedLeave:2,remLeave:10,paidLeave:0},
+
+  {id:'RV-00124',name:'Ahmed Mohamed',branch:'Nasr City',position:'Branch Manager',status:'Pending',
+    base:12000,inc:1200,bonus:500,ovtHrs:6,ovtPay:200,schedule:26,weekly:6,pattern:'Sun – Fri',worked:25,
+    si:840,tax:480,tardyAmount:120,tardyItems:[
+      {label:'Late Arrival — Jul 5',amount:-60,detail:'15 min late (08:15 check-in)'},
+      {label:'Late Arrival — Jul 12',amount:-60,detail:'22 min late (08:22 check-in)'}],
+    supAmount:60,supItems:[
+      {label:'Unapproved Day Off — Jul 18',amount:-60,detail:'Absent without approval. Deduction approved by Branch Manager.'}],
+    usedLeave:1,remLeave:8,paidLeave:0},
+
+  {id:'RV-00126',name:'Sara Ali',branch:'Nasr City',position:'Receptionist',status:'Verified',
+    base:3500,inc:350,bonus:100,ovtHrs:0,ovtPay:0,schedule:26,weekly:6,pattern:'Sun – Fri',worked:25,
+    si:245,tax:70,tardyAmount:0,tardyItems:[],supAmount:0,supItems:[],usedLeave:0,remLeave:12,paidLeave:1},
+
+  {id:'RV-00133',name:'Fatma Hassan',branch:'Heliopolis',position:'Trainer',status:'Verified',
+    base:4200,inc:420,bonus:150,ovtHrs:3,ovtPay:90,schedule:26,weekly:6,pattern:'Sun – Fri',worked:25,
+    si:294,tax:84,tardyAmount:50,tardyItems:[
+      {label:'Late Arrival — Jun 3',amount:-50,detail:'12 min late (08:12 check-in)'}],
+    supAmount:0,supItems:[],usedLeave:1,remLeave:10,paidLeave:1},
+
+  {id:'RV-00129',name:'Yasmin Adel',branch:'Nasr City',position:'Trainer',status:'Override',
+    base:3900,inc:390,bonus:0,ovtHrs:0,ovtPay:0,schedule:26,weekly:6,pattern:'Sun – Fri',worked:24,
+    si:273,tax:78,tardyAmount:90,tardyItems:[
+      {label:'Late Arrival — Jun 15',amount:-60,detail:'20 min late (08:20 check-in)'},
+      {label:'Late Arrival — Jun 22',amount:-30,detail:'10 min late (08:10 check-in)'}],
+    supAmount:120,supItems:[
+      {label:'Damaged Equipment',amount:-120,detail:'Server rack handle damaged in class. Approved deduction request.'}],
+    usedLeave:3,remLeave:9,paidLeave:0},
+
+  {id:'RV-00136',name:'Mahmoud Samir',branch:'New Cairo',position:'Coach',status:'Verified',
+    base:4300,inc:430,bonus:0,ovtHrs:4,ovtPay:120,schedule:26,weekly:6,pattern:'Sun – Fri',worked:26,
+    si:301,tax:86,tardyAmount:0,tardyItems:[],supAmount:0,supItems:[],usedLeave:1,remLeave:11,paidLeave:0},
+
+  {id:'RV-00137',name:'Rania Fathy',branch:'Heliopolis',position:'Receptionist',status:'Verified',
+    base:3600,inc:360,bonus:50,ovtHrs:0,ovtPay:0,schedule:26,weekly:6,pattern:'Sun – Fri',worked:25,
+    si:252,tax:72,tardyAmount:30,tardyItems:[
+      {label:'Late Arrival — Jun 9',amount:-30,detail:'8 min late (08:08 check-in)'}],
+    supAmount:0,supItems:[],usedLeave:2,remLeave:10,paidLeave:1},
+
+  {id:'RV-00138',name:'Ali Diab',branch:'New Cairo',position:'Trainer',status:'Verified',
+    base:3600,inc:360,bonus:0,ovtHrs:0,ovtPay:0,schedule:26,weekly:6,pattern:'Sun – Fri',worked:26,
+    si:252,tax:108,tardyAmount:0,tardyItems:[],supAmount:0,supItems:[],usedLeave:0,remLeave:12,paidLeave:0},
+];
+
+const activity=[
+  {icon:'save',text:'Draft saved for Aug 2026',time:'2h ago'},
+  {icon:'verified',text:'Mona Said — record verified',time:'5h ago'},
+  {icon:'edit',text:'Overtime added for Fatma Hassan',time:'1d ago'},
+  {icon:'sync',text:'Payroll generated from attendance',time:'2d ago'},
+];
+
+function money(n){return 'EGP '+n.toLocaleString();}
+function moneySigned(n){return (n>0?'+':'−')+money(Math.abs(n)).replace('EGP ','EGP ');}
+function statusStyle(s){
+  const m={Verified:'bg-green-100 text-green-800',Pending:'bg-yellow-100 text-yellow-800',Override:'bg-orange-100 text-orange-800',Paid:'bg-primary-container text-on-primary-container'};
+  return m[s]||'bg-gray-100 text-gray-600';
+}
+function initials(name){return name.split(' ').map(x=>x[0]).join('');}
+
+function itemsFor(r){
+  const earnings=[
+    {label:'Basic Salary',amount:r.base,icon:'payments',color:'brand'},
+    {label:'Annual Increase (10%)',amount:r.inc,icon:'trending_up',color:'green'},
+  ];
+  if(r.bonus) earnings.push({label:'Performance Bonus',amount:r.bonus,icon:'star',color:'yellow'});
+  if(r.ovtHrs) earnings.push({label:'Overtime Pay ('+r.ovtHrs+' hrs)',amount:r.ovtPay,icon:'schedule',color:'blue'});
+
+  const deductions=[
+    {label:'Social Insurance (7%)',amount:-r.si,icon:'health_and_safety',color:'red'},
+    {label:'Tax',amount:-r.tax,icon:'receipt_long',color:'red'},
+  ];
+  if(r.tardyItems.length){
+    deductions.push({label:'Tardiness Time Deductions',amount:-r.tardyAmount,icon:'alarm_off',color:'orange',isGroup:true,subItems:r.tardyItems});
+  }
+  if(r.supAmount){
+    deductions.push({label:'Deductions from the Supervisor',amount:-r.supAmount,icon:'supervisor_account',color:'red',isGroup:true,subItems:r.supItems});
+  }
+  const gross=earnings.reduce((s,e)=>s+e.amount,0);
+  const dedTotal=deductions.reduce((s,d)=>s+Math.abs(d.amount),0);
+  return {earnings:earnings,deductions:deductions,gross:gross,ded:dedTotal,net:gross-dedTotal};
+}
+
+function render(){
+  const q=document.getElementById('pay-search').value.toLowerCase();
+  const b=document.getElementById('pay-branch').value;
+  const rows=payroll.filter(r=>{
+    const txt=(r.name+' '+r.id).toLowerCase();
+    return (!q||txt.includes(q))&&(!b||r.branch===b);
+  });
+  document.getElementById('pay-body').innerHTML=rows.length?rows.map(r=>{
+    const p=itemsFor(r);
+    const att=Math.round((r.worked/r.schedule)*100);
+    return `
+    <tr onclick="openPayDetail('${r.id}')" class="border-b border-outline-variant/20 last:border-0 hover:bg-primary-container/10 transition-colors cursor-pointer">
+      <td class="px-5 py-3">
+        <div class="flex items-center gap-3">
+          <div class="w-8 h-8 rounded-full bg-primary-container text-on-primary-container flex items-center justify-center text-[11px] font-bold">${initials(r.name)}</div>
+          <div><p class="text-[13px] font-semibold text-on-surface">${r.name}</p><p class="text-[11px] text-on-surface-variant">${r.id} · ${r.position}</p></div>
+        </div>
+      </td>
+      <td class="px-3 py-3 text-[13px] text-on-surface-variant">${r.branch}</td>
+      <td class="px-3 py-3 text-[13px] text-on-surface-variant">${r.worked}/${r.schedule} · ${att}%</td>
+      <td class="px-3 py-3 text-right text-[13px] font-medium text-on-surface">${money(p.gross)}</td>
+      <td class="px-3 py-3 text-right text-[13px] text-on-surface-variant">${money(p.ded)}</td>
+      <td class="px-3 py-3 text-right text-[14px] font-bold text-on-surface">${money(p.net)}</td>
+      <td class="px-3 py-3"><div class="flex items-center justify-center gap-1"><span class="px-2 py-0.5 rounded-full text-[11px] font-semibold ${statusStyle(r.status)}">${r.status}</span><span class="material-symbols-outlined text-[16px] text-secondary">chevron_right</span></div></td>
+    </tr>`;
+  }).join(''):`<tr><td colspan="7" class="px-5 py-10 text-center text-[13px] text-on-surface-variant">No records found.</td></tr>`;
+
+  document.getElementById('activity-list').innerHTML=activity.map(a=>`
+    <div class="flex items-start gap-3">
+      <span class="w-8 h-8 rounded-full bg-surface-container-low flex items-center justify-center text-secondary"><span class="material-symbols-outlined text-[16px]">${a.icon}</span></span>
+      <div><p class="text-[13px] font-medium text-on-surface">${a.text}</p><p class="text-[11px] text-on-surface-variant">${a.time}</p></div>
+    </div>
+  `).join('');
+}
+
+function openPayDetail(id){
+  const r=payroll.find(x=>x.id===id); if(!r)return;
+  const p=itemsFor(r);
+  const att=Math.round((r.worked/r.schedule)*100);
+  const contract=r.base+r.inc;
+  const leaveTotal=r.usedLeave+r.remLeave;
+  const leavePct=leaveTotal?Math.round((r.usedLeave/leaveTotal)*100):0;
+
+  const earnRows=p.earnings.map(e=>`
+    <div class="flex items-center gap-2.5 px-4 py-2.5">
+      <span class="w-7 h-7 rounded-lg bg-green-100 text-green-700 flex items-center justify-center"><span class="material-symbols-outlined text-[15px]">${e.icon}</span></span>
+      <p class="text-[13px] text-on-surface flex-1">${e.label}</p>
+      <span class="text-[13px] font-semibold text-green-700">+${money(e.amount)}</span>
+    </div>`).join('');
+
+  const dedRows=p.deductions.map(d=>{
+    let row=`
+      <div class="flex items-center gap-2.5 px-4 py-2.5">
+        <span class="w-7 h-7 rounded-lg bg-error-container text-on-error-container flex items-center justify-center"><span class="material-symbols-outlined text-[15px]">${d.icon}</span></span>
+        <p class="text-[13px] text-on-surface flex-1">${d.label}</p>
+        <span class="text-[13px] font-semibold text-error">−${money(Math.abs(d.amount))}</span>
+      </div>`;
+    if(d.subItems){
+      d.subItems.forEach(s=>{
+        row+=`
+        <div class="flex items-start gap-2.5 px-4 pb-2.5 pl-11 bg-orange-50/50 border-t border-orange-100/40">
+          <span class="material-symbols-outlined text-[14px] text-orange-500 mt-0.5">info</span>
+          <div class="flex-1">
+            <p class="text-[12px] font-medium text-on-surface">${s.label}</p>
+            <p class="text-[11px] text-on-surface-variant mt-0.5">${s.detail}</p>
+          </div>
+          <span class="text-[12px] font-semibold text-error whitespace-nowrap">−${money(Math.abs(s.amount))}</span>
+        </div>`;
+      });
+    }
+    return row;
+  }).join('');
+
+  document.getElementById('detail-panel').innerHTML=`
+    <div class="sticky top-0 bg-surface border-b border-outline-variant px-6 py-4 flex items-start justify-between z-10">
+      <div class="flex items-center gap-3">
+        <div class="w-11 h-11 rounded-full bg-primary-container text-on-primary-container flex items-center justify-center text-[14px] font-bold">${initials(r.name)}</div>
+        <div>
+          <p class="text-[15px] font-bold text-on-surface">${r.name}</p>
+          <p class="text-[12px] text-on-surface-variant">${r.id} · ${r.position} · ${r.branch}</p>
+          <span class="mt-1 inline-block px-2 py-0.5 rounded-full text-[11px] font-semibold ${statusStyle(r.status)}">${r.status}</span>
+        </div>
+      </div>
+      <button onclick="closePayDetail()" class="w-8 h-8 rounded-full hover:bg-surface-container-high flex items-center justify-center text-secondary flex-shrink-0"><span class="material-symbols-outlined text-[18px]">close</span></button>
+    </div>
+
+    <div class="px-6 pt-5">
+      <div class="rounded-xl bg-primary p-5 text-on-primary">
+        <div class="flex items-center justify-between">
+          <p class="text-[11px] font-semibold text-on-primary/70 uppercase tracking-wider">Net Payable · Aug 2026</p>
+          <span class="text-[11px] text-on-primary/80">${r.schedule} scheduled days</span>
+        </div>
+        <p class="text-[28px] font-bold mt-1">${money(p.net)}</p>
+        <p class="text-[12px] text-on-primary/80 mt-1">${money(p.gross)} gross − ${money(p.ded)} deductions</p>
+      </div>
+    </div>
+
+    <div class="px-6 py-4">
+      <p class="text-[12px] font-bold text-secondary uppercase tracking-wider mb-3"><span class="material-symbols-outlined text-[15px] align-middle mr-1">payments</span>Salary</p>
+      <div class="bg-surface-container-low rounded-xl divide-y divide-outline-variant/40 overflow-hidden">
+        <div class="flex items-center justify-between px-4 py-2.5">
+          <p class="text-[13px] text-on-surface-variant">Basic Salary</p>
+          <p class="text-[13px] font-bold text-on-surface">${money(r.base)}</p>
+        </div>
+        <div class="flex items-center justify-between px-4 py-2.5">
+          <p class="text-[13px] text-on-surface-variant">Annual Increase (10%)</p>
+          <p class="text-[13px] font-bold text-green-700">+${money(r.inc)}</p>
+        </div>
+        <div class="flex items-center justify-between px-4 py-2.5 bg-primary-container/20">
+          <p class="text-[13px] font-semibold text-on-primary-container">Contractual Salary / month</p>
+          <p class="text-[13px] font-bold text-primary">${money(contract)}</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="px-6 pb-4">
+      <p class="text-[12px] font-bold text-secondary uppercase tracking-wider mb-3"><span class="material-symbols-outlined text-[15px] align-middle mr-1">event_available</span>Schedule & Attendance</p>
+      <div class="grid grid-cols-4 gap-2">
+        <div class="bg-surface-container-low rounded-lg p-2.5 text-center">
+          <p class="text-[16px] font-bold text-on-surface">${r.schedule}</p>
+          <p class="text-[10px] text-on-surface-variant mt-0.5">Scheduled Days</p>
+        </div>
+        <div class="bg-surface-container-low rounded-lg p-2.5 text-center">
+          <p class="text-[16px] font-bold text-on-surface">${r.weekly}</p>
+          <p class="text-[10px] text-on-surface-variant mt-0.5">Days / Week</p>
+        </div>
+        <div class="bg-surface-container-low rounded-lg p-2.5 text-center">
+          <p class="text-[16px] font-bold ${att>=95?'text-primary':'text-orange-600'}">${att}%</p>
+          <p class="text-[10px] text-on-surface-variant mt-0.5">Attendance</p>
+        </div>
+        <div class="bg-surface-container-low rounded-lg p-2.5 text-center">
+          <p class="text-[16px] font-bold ${r.ovtHrs?'text-blue-700':'text-on-surface-variant'}">${r.ovtHrs}h</p>
+          <p class="text-[10px] text-on-surface-variant mt-0.5">Overtime</p>
+        </div>
+      </div>
+      <p class="text-[11px] text-on-surface-variant mt-2">Actual attendance ${r.worked} of ${r.schedule} scheduled days · ${r.pattern}</p>
+    </div>
+
+    <div class="px-6 pb-4">
+      <p class="text-[12px] font-bold text-secondary uppercase tracking-wider mb-3"><span class="material-symbols-outlined text-[15px] align-middle mr-1">trending_up</span>Earnings</p>
+      <div class="bg-surface-container-low rounded-xl overflow-hidden">
+        ${earnRows}
+        <div class="flex items-center justify-between px-4 py-2.5 bg-green-100/50 border-t border-green-200/40">
+          <p class="text-[12px] font-bold text-green-800 uppercase tracking-wider">Gross Earnings</p>
+          <p class="text-[14px] font-bold text-green-800">${money(p.gross)}</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="px-6 pb-4">
+      <p class="text-[12px] font-bold text-secondary uppercase tracking-wider mb-3"><span class="material-symbols-outlined text-[15px] align-middle mr-1">trending_down</span>Deductions</p>
+      <div class="bg-surface-container-low rounded-xl overflow-hidden">
+        ${dedRows}
+        <div class="flex items-center justify-between px-4 py-2.5 bg-error-container/40 border-t border-error-container">
+          <p class="text-[12px] font-bold text-on-error-container uppercase tracking-wider">Total Deductions</p>
+          <p class="text-[14px] font-bold text-error">−${money(p.ded)}</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="px-6 pb-4">
+      <p class="text-[12px] font-bold text-secondary uppercase tracking-wider mb-3"><span class="material-symbols-outlined text-[15px] align-middle mr-1">flight_takeoff</span>Annual Leave Balance</p>
+      <div class="bg-surface-container-low rounded-xl p-4">
+        <div class="flex items-end justify-between mb-2">
+          <div>
+            <p class="text-[20px] font-bold text-on-surface">${r.usedLeave}<span class="text-[12px] text-on-surface-variant font-normal"> / ${leaveTotal} days</span></p>
+            <p class="text-[10px] text-on-surface-variant">Used this year</p>
+          </div>
+          <div class="text-right">
+            <p class="text-[20px] font-bold text-primary">${r.remLeave}</p>
+            <p class="text-[10px] text-on-surface-variant">Remaining</p>
+          </div>
+        </div>
+        <div class="w-full h-2 bg-outline-variant/60 rounded-full overflow-hidden">
+          <div class="h-full bg-primary rounded-full" style="width:${leavePct}%"></div>
+        </div>
+        <div class="grid grid-cols-3 gap-2 mt-3">
+          <div class="bg-surface rounded-lg p-2 text-center">
+            <p class="text-[13px] font-bold text-on-surface">${r.usedLeave}</p>
+            <p class="text-[10px] text-on-surface-variant">Used</p>
+          </div>
+          <div class="bg-surface rounded-lg p-2 text-center">
+            <p class="text-[13px] font-bold text-primary">${r.remLeave}</p>
+            <p class="text-[10px] text-on-surface-variant">Remaining</p>
+          </div>
+          <div class="bg-surface rounded-lg p-2 text-center">
+            <p class="text-[13px] font-bold text-on-surface">${r.paidLeave}</p>
+            <p class="text-[10px] text-on-surface-variant">Paid Leave</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="px-6 py-4 border-t border-outline-variant sticky bottom-0 bg-surface">
+      <div class="flex gap-2">
+        ${r.status!=='Verified'&&r.status!=='Paid'?`<button onclick="verifyRecord('${r.id}')" class="flex-1 px-4 py-2.5 rounded-lg bg-primary text-on-primary text-[13px] font-semibold flex items-center justify-center gap-2 hover:opacity-90 transition-opacity">
+          <span class="material-symbols-outlined text-[16px]">fact_check</span>Verify Record
+        </button>`:''}
+        <button onclick="saveDraft()" class="flex-1 px-4 py-2.5 rounded-lg bg-surface-container-high text-on-surface text-[13px] font-semibold flex items-center justify-center gap-2 hover:bg-surface-container-highest transition-colors">
+          <span class="material-symbols-outlined text-[16px]">save</span>Save to Draft
+        </button>
+      </div>
+    </div>`;
+
+  document.getElementById('backdrop').classList.remove('hidden');
+  document.getElementById('detail-panel').classList.remove('translate-x-full');
+}
+
+function closePayDetail(){
+  document.getElementById('detail-panel').classList.add('translate-x-full');
+  document.getElementById('backdrop').classList.add('hidden');
+}
+
+function verifyRecord(id){
+  const r=payroll.find(x=>x.id===id); if(!r)return;
+  r.status='Verified';
+  render();
+  openPayDetail(id);
+  toast(r.name+' — record verified');
+}
+
+function toast(msg){
+  const t=document.getElementById('toast');
+  document.getElementById('toast-msg').textContent=msg;
+  t.classList.remove('hidden');
+  t.classList.add('flex');
+  setTimeout(()=>{t.classList.add('hidden');t.classList.remove('flex');},2500);
+}
+let step=2;
+function setStep(n){
+  step=n;
+  toast(n===1?'Payroll regenerated from latest attendance data':'Step '+n);
+}
+function saveDraft(){toast('Draft saved successfully');}
+function publish(){
+  payroll.forEach(r=>r.status='Paid');
+  render();
+  toast('Payroll published to all branches');
+}
+
+document.getElementById('pay-search').addEventListener('input',render);
+document.getElementById('pay-branch').addEventListener('change',render);
+
+render();
+</script>
+</body></html>
