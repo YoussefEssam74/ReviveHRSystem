@@ -107,12 +107,12 @@ Can:
 
 ### 5. Recruitment & Hiring (Critical)
 - **Vacancy Requests**: Branch Manager (or any user with `recruitment.vacancy_request.create`) requests a new position for their gym; HR approves/rejects; only Approve leads to an actual Vacancy being created (see features.md §5a)
-- **Vacancies**: gym-scoped, create/edit/close
+- **Vacancies**: gym-scoped, create/edit/close, with a **headcount needed** field (e.g. "20 Trainers") so the sidebar can show applicant/hired progress per role
 - **Candidates/Applications**: public application link, candidate profiles
 - **Recruitment Pipeline**: Kanban — Applied → Screening → 1st Interview → 2nd Interview → Final Decision → (Hired / Waiting List / Rejected)
 - **Follow-up Engine**: every active candidate must have a current stage + required next action; system detects stalled candidates and generates alerts
 - **Waiting List**: accepted candidates with no current vacancy
-- **Hire Action**: Candidate → Employee transition with linked history
+- **Hire Action**: Candidate → Employee transition with linked history; originating Branch Manager notified if hire came from his Vacancy Request; new hire lands in a **New Comers** tab (dedicated view in HR Operations) until an onboarding checklist is complete
 
 ### 6. Employee Module (Critical)
 - Profile management (personal + employment info)
@@ -150,7 +150,7 @@ Each action is independently permission-gated:
 - Repeated-issue flagging (e.g., 3+ lates in a cycle)
 
 ### 10. Employee Requests (High)
-10 request types — **⚠️ DRAFT, subject to final business confirmation before seeding**:
+11 request types — **⚠️ DRAFT, subject to final business confirmation before seeding**:
 
 | # | Type | Key Fields |
 |---|------|------------|
@@ -164,10 +164,15 @@ Each action is independently permission-gated:
 | 8 | Document Request | e.g., salary certificate |
 | 9 | General Inquiry / Complaint | Free text |
 | 10 | Resignation / Employee Leaving | Intended last working day, reason — self-initiated, any employee including Branch Manager (see features.md §9) |
+| 11 | Overtime | Date, hours requested, reason — only counts toward Payroll once Approved |
 
 > **Implementation note:** Store `Type` as a string/varchar, NOT a C# enum, until the list is finalized.
 
-Lifecycle: Employee → Submit → Pending → Authorized Reviewer → Approve/Reject → Notification → History
+**Two-stage approval (all types):** Employee → Submit → `Pending` →
+Branch Manager decides (if assigned; requires `requests.approve.branch`)
+→ `PendingHRReview` → HR makes the FINAL decision (requires
+`requests.approve`) → Approved/Rejected → Notification to employee and
+BM → History. If no BM is assigned, the request skips straight to HR.
 
 ### 11. Employee Self-Service Portal (High)
 - My Profile
@@ -229,6 +234,22 @@ Lifecycle: Employee → Submit → Pending → Authorized Reviewer → Approve/R
 - Gated by `announcements.manage` (create/send) and `announcements.view` (history)
 
 ---
+
+### 18. Events — HR Action Queue (High)
+- New sidebar page: a single queue of Open items needing HR action (distinct from the informational Notification bell)
+- Triggers: document/contract expiry, Resignation/BM-initiated termination needing HR follow-up, pending Vacancy Requests, requests sitting in `PendingHRReview` after BM's stage-1 decision
+- Row-level visibility follows the permission of the underlying entity; HR marks items Resolved
+
+### 19. Evaluations — Custom Form Builder (Medium)
+- Replaces a fixed criteria/score template with HR-authored forms
+- Question types: Rating (1–5), Multiple Choice, Checkbox
+- Different forms per Gym and/or Position
+- Gated by `evaluations.manage` (build + run) / `evaluations.view` (read-only)
+
+### 20. UX Additions (Medium)
+- **HR login gym picker**: HR users with 2+ gyms see a gym picker as their starting view after login; the existing in-app Gym Context Switcher still works afterward — no session lock, no re-login required to switch
+- **Dashboard redesign**: visual/UX pass on HR and Employee-based dashboards for clearer hierarchy and faster access to action items — no AI/ML, no new backend logic
+- **Notifications dropdown redesign**: visual refresh only, stays a dropdown (Events, above, is the separate actionable surface)
 
 ## Out of Scope (NOT in MVP)
 

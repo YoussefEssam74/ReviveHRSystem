@@ -132,7 +132,15 @@ Gyms
 ├── ContactInfo
 ├── ShiftCycleLengthDays (default 10)
 ├── Status (enum: Active, Inactive, Archived)
+├── AnnualIncreasePercent (decimal, nullable)          ← gym-configurable auto raise
+├── AnnualIncreaseAnchorDate (enum: HireAnniversary, FixedCalendarDate)
 └── Common columns
+
+Note — Automatic Annual Increase: When an employee's anchor date arrives
+(e.g. their hire anniversary, if AnnualIncreaseAnchorDate = HireAnniversary),
+a scheduled job automatically creates a new Compensations row applying
+this gym's AnnualIncreasePercent. This is additive to, not a replacement
+for, HR's manual employees.compensation.manage action for off-cycle raises.
 
 Departments
 ├── Id (PK)
@@ -203,9 +211,14 @@ Vacancies
 ├── Title
 ├── Description
 ├── Requirements
+├── HeadcountNeeded (int)              ← NEW — e.g. 20 for "need 20 Trainers"
 ├── PublicLinkToken (unique, for public application URL)
 ├── Status (enum: Open, Closed, Archived)
 └── Common columns
+
+Note: HeadcountNeeded lets the Recruitment sidebar show applicant
+progress per open role (e.g. "Trainer — 12/20"), computed against the
+count of Applications with Status = Hired for that Vacancy.
 
 Candidates
 ├── Id (PK)
@@ -288,7 +301,13 @@ EmployeeDocuments
 ├── FileName
 ├── FilePath
 ├── ExpiryDate (nullable)
+├── EmployeeEditable (bool)            ← NEW — set per Type; false for Contract/NationalId,
+│                                         true for types the employee may self-upload (e.g. Certification)
 └── Common columns
+
+⚠️ OPEN ITEM: exact per-type EmployeeEditable defaults (beyond the
+Contract/NationalId = false, Certification = true examples above) are
+pending final confirmation from the business before seeding.
 
 Compensations
 ├── Id (PK)
@@ -352,20 +371,49 @@ Index: IX_ShiftAssignments_EmployeeId_Date (unique — one shift per employee pe
 ### Attendance
 
 ```
+BiometricDevices  ← one row per physical Face ID device, anchored to exactly one gym
+├── Id (PK)
+├── GymId (FK → Gyms)                 ← the device belongs to ONE gym, never shared
+├── DeviceToken (unique)               ← the "public link" identifier the device sends with every event
+├── Vendor
+├── Status (enum: Active, Inactive)
+└── Common columns
+
+Index: IX_BiometricDevices_DeviceToken (unique — used to resolve GymId on every incoming event)
+
 AttendanceRecords
 ├── Id (PK)
 ├── EmployeeId (FK → Employees)
-├── GymId (FK → Gyms)
+├── GymId (FK → Gyms)                 ← resolved from BiometricDevices.DeviceToken (biometric) or the terminal's gym (manual)
 ├── Date (DateOnly)
 ├── CheckInTime (timestamptz, nullable)
 ├── CheckOutTime (timestamptz, nullable)
 ├── CheckInMethod (enum: Biometric, Manual)
 ├── CheckOutMethod (enum: Biometric, Manual)
 ├── Status (enum: OnTime, Late, Absent, EarlyCheckout, MissingCheckout)
-├── ScheduledShiftTemplateId (FK → ShiftTemplates) ← the shift they were supposed to work
+├── ScheduledShiftTemplateId (FK → ShiftTemplates) ← the shift they were supposed to work, AT THIS GYM
 └── Common columns
 
 Index: IX_AttendanceRecords_EmployeeId_Date (unique)
+
+Note — Cross-Gym Check-In Validation (critical, applies to EVERY
+check-in/check-out event, biometric or manual — see ADR-004 for the full
+rationale): an employee may be assigned to up to two gyms
+(UserGymAccess), but a valid attendance event requires BOTH of the
+following, evaluated against the GYM THE EVENT CAME FROM (resolved via
+BiometricDevices.DeviceToken, or the terminal's own gym for manual
+entry) — NOT the employee's other assigned gym:
+
+    1. Employee has UserGymAccess to this specific gym
+    2. Employee has a ShiftAssignment at THIS specific gym for today's date
+
+If either check fails — including simply having no shift scheduled
+anywhere today (a day off) — the event is REJECTED OUTRIGHT: no
+AttendanceRecord is created, and no attendance credit is given for
+being physically present at a gym the employee isn't scheduled to work
+at right now. This is what actually prevents an employee assigned to
+Gym A and Gym B (or with no access to Gym C at all) from picking up
+attendance at the wrong location.
 
 AttendanceCorrections
 ├── Id (PK)
@@ -394,19 +442,35 @@ EmployeeRequests
 ├── TargetEndDate (nullable)
 ├── TargetTime (nullable)
 ├── SwapWithEmployeeId (FK → Employees, nullable)
+├── OvertimeHoursRequested (decimal, nullable)   ← NEW, used only when Type = Overtime
 ├── Details (text)
 ├── AttachmentPath (nullable)
-├── Status (enum: Pending, Approved, Rejected)
+├── Status (enum: Pending, PendingHRReview, Approved, Rejected)   ← UPDATED (was: Pending, Approved, Rejected)
 └── Common columns
+
+Note — Two-Stage Approval: Status now reflects a two-stage flow.
+Pending = awaiting the employee's Branch Manager (or, if none assigned,
+awaiting HR directly). PendingHRReview = the Branch Manager has made a
+stage-1 decision (Approved or Rejected, see RequestDecisions.Stage
+below); HR still makes the FINAL call. Approved/Rejected are always set
+by HR's decision, regardless of what the Branch Manager decided at
+stage 1. See features.md §9 and user-flows.md Flow 4 for the full
+lifecycle.
 
 ⚠️ REQUEST TYPE NOTE: The request types (Leave, LeaveEarly, DayOff, SickLeave,
 LateArrival, ShiftSwap, EmergencyLeave, DocumentRequest, GeneralInquiry,
-**Resignation**) are **draft and unconfirmed**. Do NOT hard-code these as a
+Resignation, **Overtime**) are **draft and unconfirmed**. Do NOT hard-code these as a
 C# enum in DomainLayer until the business confirms the final list. Use a
 string/varchar column or a RequestTypes lookup table so the list can
 change without a migration.
-Current draft (10): Leave | LeaveEarly | DayOff | SickLeave | LateArrival |
-ShiftSwap | EmergencyLeave | DocumentRequest | GeneralInquiry | Resignation
+Current draft (11): Leave | LeaveEarly | DayOff | SickLeave | LateArrival |
+ShiftSwap | EmergencyLeave | DocumentRequest | GeneralInquiry | Resignation | Overtime
+
+Overtime is request-and-approve based (NOT auto-calculated from raw
+attendance clock times): the employee requests a number of hours for a
+date, and it follows the same two-stage BM → HR approval as any other
+request. Only once Approved does it count toward the employee's Overtime
+figure shown on their Payroll view (features.md §10).
 
 **Resignation** is a self-service request: any Employee — including a
 Branch Manager acting as an employee rather than a manager — submits it
@@ -421,11 +485,18 @@ features.md §9 and §5a for the distinction.
 RequestDecisions
 ├── Id (PK)
 ├── RequestId (FK → EmployeeRequests)
+├── Stage (enum: BranchManager, HR)     ← NEW — distinguishes BM's stage-1 call from HR's final call
 ├── Decision (enum: Approved, Rejected)
 ├── Comment
 ├── DecidedBy (FK → Users)
 ├── DecidedAt
 └── Common columns
+
+Note: A request accumulates up to two RequestDecisions rows — one
+Stage=BranchManager (skipped entirely if the employee has no assigned
+Branch Manager) and one Stage=HR. HR's review screen shows the
+BranchManager-stage row (decision + comment/reason) as context before
+HR records their own, final, Stage=HR decision.
 ```
 
 ### Payroll
@@ -506,6 +577,77 @@ matched recipient (Type = Announcement, LinkTo = announcement detail page).
 This keeps the recipient's notification inbox as the single surface they check.
 ```
 
+### Events (HR-Actionable Queue)
+
+Distinct from Notifications (informational, per-user) — Events are items
+that require HR to actually act on something.
+
+```
+Events
+├── Id (PK)
+├── GymId (FK → Gyms)
+├── Type (enum: DocumentExpiry, ContractExpiry, ResignationFollowUp,
+│               VacancyRequestPending, RequestPendingHRReview)
+├── EntityType (varchar — e.g. "EmployeeDocument", "EmployeeRequest", "VacancyRequest")
+├── EntityId (uuid — the record needing attention)
+├── Title
+├── Description
+├── Status (enum: Open, Resolved)
+├── ResolvedBy (FK → Users, nullable)
+├── ResolvedAt (nullable)
+└── Common columns
+```
+
+Row-level visibility follows the permission of the underlying entity
+(e.g. a VacancyRequestPending event only shows to HR users holding
+`recruitment.vacancy_request.approve`) — Events itself is not a
+separately permission-gated page.
+
+### Evaluations (Custom Form Builder)
+
+```
+EvaluationForms
+├── Id (PK)
+├── GymId (FK → Gyms, nullable)
+├── PositionId (FK → Positions, nullable)
+├── Name
+├── IsActive
+└── Common columns
+
+EvaluationQuestions
+├── Id (PK)
+├── EvaluationFormId (FK → EvaluationForms)
+├── QuestionText
+├── QuestionType (enum: Rating5, MultipleChoice, Checkbox)
+├── Options (jsonb, nullable — used for MultipleChoice/Checkbox)
+├── SortOrder
+└── Common columns
+
+EvaluationResponses
+├── Id (PK)
+├── EvaluationFormId (FK → EvaluationForms)
+├── EmployeeId (FK → Employees)
+├── EvaluatedBy (FK → Users)
+├── SubmittedAt
+└── Common columns
+
+EvaluationAnswers
+├── Id (PK)
+├── EvaluationResponseId (FK → EvaluationResponses)
+├── EvaluationQuestionId (FK → EvaluationQuestions)
+├── AnswerValue (jsonb — number for Rating5, selected option(s) for MultipleChoice/Checkbox)
+└── Common columns
+```
+
+HR builds a form per Gym and/or Position (both nullable to allow a
+narrower or broader scope) with questions of type Rating (1–5), Multiple
+Choice, or Checkbox, then runs evaluation cycles against it.
+
+⚠️ OPEN ITEM: whether pre-existing fixed-format evaluation history (if
+any exists before this ships) needs to coexist/display alongside new
+custom-form `EvaluationResponses`, or whether this is a clean cutover,
+is still pending confirmation.
+
 ## Performance Considerations
 
 ### Indexes (Critical)
@@ -523,6 +665,9 @@ This keeps the recipient's notification inbox as the single surface they check.
 - `IX_LeaveBalances_EmployeeId_LeaveType_Year` — unique, balance lookup per type per year
 - `IX_Announcements_Status_ScheduledAt` — scheduled announcement dispatcher query
 - `IX_AnnouncementTargets_AnnouncementId` — fan-out on send
+- `IX_Events_GymId_Status` — HR's Events queue, filtered to Open items in their gyms
+- `IX_EvaluationResponses_EmployeeId` — employee evaluation history lookup
+- `IX_Vacancies_HeadcountNeeded` not required — HeadcountNeeded is compared against a COUNT() query, no dedicated index needed beyond `IX_Applications_VacancyId`
 
 ### Connection Pooling
 - Use Npgsql connection pooling (built into the provider)

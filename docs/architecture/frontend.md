@@ -89,6 +89,18 @@ src/
 │   │   ├── components/            ← TeamForm, TeamRoster, TeamLeaderAssignment
 │   │   └── pages/                 ← TeamsAdminPage (HR/Branch Manager), MyTeamPage (Team Leader)
 │   │
+│   ├── events/
+│   │   ├── api/
+│   │   ├── hooks/                 ← useEvents
+│   │   ├── components/            ← EventRow, EventFilterBar
+│   │   └── pages/                 ← EventsPage (HR action queue)
+│   │
+│   ├── evaluations-builder/
+│   │   ├── api/
+│   │   ├── hooks/                 ← useEvaluationForms
+│   │   ├── components/            ← FormBuilder, QuestionEditor, RatingInput, ChoiceInput
+│   │   └── pages/                 ← EvaluationFormsPage, RunEvaluationPage
+│   │
 │   ├── payroll/
 │   │   ├── api/
 │   │   ├── hooks/
@@ -192,6 +204,16 @@ useAttendance({ gymId: selectedGym, employeeIds: teamMemberIds });
 </PermissionGate>
 ```
 
+### Events Sidebar Item (HR)
+```tsx
+// Events queue — not separately permission-gated as a page; row
+// visibility is filtered server-side by the permission of each event's
+// underlying entity (e.g. a VacancyRequestPending event requires
+// recruitment.vacancy_request.approve). The sidebar link itself is
+// always visible to HR-type users.
+<SidebarLink to="/events">Events</SidebarLink>
+```
+
 ### Gym Context
 ```tsx
 // GymSelector at the top of gym-scoped pages
@@ -211,7 +233,7 @@ useEmployees({ gymId: selectedGym });
 - All layouts use logical properties (start/end instead of left/right)
 
 ### Top Bar — Notifications & Settings
-- **Notifications bell** — permission/role-aware; shows System Notifications, Required Actions, Request Updates, Attendance Alerts, and (for Branch Manager/Team Leader) Management Notifications relevant to their scope
+- **Notifications bell** — redesigned visually in this MVP round, stays a dropdown (not a full page); permission/role-aware; shows System Notifications, Required Actions, Request Updates, Attendance Alerts, and (for Branch Manager/Team Leader) Management Notifications relevant to their scope. Purely informational — see the **Events** sidebar page (below) for items that need HR to actually act.
 - **Administrative Settings (⚙️)** — the icon is always present in the shell, but its *contents* are entirely permission-driven, never role-driven:
   - Regular Employee: Personal Settings, Password, Notification Preferences, Language
   - Team Leader: above + Team-related settings, only if a team-scoped `.manage` permission is granted
@@ -245,3 +267,13 @@ Required"** flag or badge rather than a plain number — e.g. "3 requests
 pending" alone is not enough; it should read/flag as something the user
 is expected to act on. See features.md §13 for the per-role dashboard
 content this applies to.
+
+### Dashboard & HR Gym-Login UX (this MVP round)
+- HR and every Employee-based dashboard get a visual/UX redesign pass —
+  clearer hierarchy, faster access to action items. No new backend
+  logic or AI/ML; existing dashboard data (features.md §13) and the
+  Action-Oriented principle above are unchanged.
+- HR users with 2+ gyms see a **gym picker as their initial landing
+  view** right after login (see user-flows.md Flow 1b) — the existing
+  in-app Gym Context Switcher (above) still works afterward with no
+  re-login. This is a UX addition only, not a session-scope change.

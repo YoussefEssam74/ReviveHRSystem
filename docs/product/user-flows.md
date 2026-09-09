@@ -49,6 +49,26 @@ choosing differently — there is no in-session gym switch for Employees
 
 ---
 
+## 1b. HR Login — Gym Picker (UX only, no session-scope change)
+
+```
+HR user logs in
+    ↓
+System checks UserGymAccess count
+    ├── 1 gym  → lands directly on that gym's dashboard
+    └── 2+ gyms → gym picker shown as the INITIAL LANDING VIEW
+                   ("Which gym do you want to see first?")
+    ↓
+HR selects a gym → dashboard loads scoped to that gym
+    ↓
+HR can still switch gyms at any time afterward via the existing
+in-app Gym Context Switcher — no re-login, no session-scope change.
+This is a nicer starting point only, NOT a new authorization model
+(unlike Flow 1a for Employees, which is a genuine session-scope lock).
+```
+
+---
+
 ## 2. Recruitment → Hiring → Employee
 
 ```
@@ -114,19 +134,33 @@ Vacancy now follows the normal Recruitment → Hiring flow (Flow 2)
 
 ---
 
-## 3. Employee Daily Flow
+## 3. Employee Daily Flow (with Cross-Gym Validation)
 
 ```
-Employee arrives at gym
+Employee arrives at a gym
     ↓
-Face ID scan at biometric device
+Face ID scan at THAT gym's biometric device (device is registered to
+this one gym via its DeviceToken — see ADR-004)
     ↓
 ┌─────────────────────────────────────────────┐
-│ Face ID succeeds → Check-in recorded        │
+│ Face ID succeeds → event sent to system     │
 │ Face ID fails → Manual entry by staff at PC │
+│   (terminal is itself tied to this gym)     │
 └─────────────────────────────────────────────┘
     ↓
-System compares check-in time vs. scheduled shift
+System resolves GymId (from DeviceToken or the manual terminal)
+    ↓
+CROSS-GYM VALIDATION (runs for every event, biometric or manual):
+    ↓
+1. Does employee have UserGymAccess to THIS gym?
+    ├── No  → REJECTED. No AttendanceRecord created.
+    ↓ Yes
+2. Does employee have a ShiftAssignment at THIS gym today?
+    ├── No (including a scheduled day off) → REJECTED. No AttendanceRecord created.
+    ↓ Yes
+→ ACCEPTED — proceed below
+    ↓
+System compares check-in time vs. THIS gym's scheduled shift
     ↓
 ┌───────────────┬─────────────┬───────────────┐
 │ On-time       │ Late        │ No check-in   │
@@ -135,7 +169,7 @@ System compares check-in time vs. scheduled shift
     ↓
 Employee works shift
     ↓
-Employee checks out (Face ID or manual)
+Employee checks out (Face ID or manual) → same Cross-Gym Validation applies
     ↓
 System compares check-out time vs. scheduled shift end
     ↓
@@ -145,35 +179,58 @@ System compares check-out time vs. scheduled shift end
 └───────────────────┴──────────────────────┘
 ```
 
+**Two-gym example:** Employee is assigned to Gym A and Gym B, and is
+scheduled to work at Gym A today. If he's scanned at Gym B's device
+today, the event is rejected outright (fails check 2 — no shift at Gym B
+today) even though he genuinely has `UserGymAccess` to Gym B. Access
+alone never grants attendance credit; the day's actual `ShiftAssignment`
+at that specific gym does.
+
 ---
 
-## 4. Employee Submit Request
+## 4. Employee Submit Request (Two-Stage: Branch Manager → HR)
 
 ```
 Employee → My Requests
     ↓
-Selects request type (e.g., Day Off)
+Selects request type (e.g., Day Off, Overtime, Resignation — ALL types
+follow this same two-stage flow)
     ↓
-Fills required fields (date, reason)
+Fills required fields (date, reason, etc.)
     ↓
-Submits request → status = Pending
+Submits request → Status = Pending
     ↓
-Notification sent to authorized reviewer (HR / Branch Manager)
+Employee has an assigned Branch Manager?
     ↓
-Reviewer opens Requests Inbox
+┌───────────────────────────────┬──────────────────────────────────┐
+│ Yes                            │ No                                │
+│ → BM notified, opens his       │ → skip straight to HR review      │
+│   Requests view                │   (same as single-stage below)    │
+│ → Reviews request + context    │                                    │
+│   (e.g. shift conflict?)       │                                    │
+│ → Approves or Rejects, with    │                                    │
+│   a reason                     │                                    │
+│ → Status = PendingHRReview     │                                    │
+└───────────────────────────────┴──────────────────────────────────┘
     ↓
-Reviews request details + context
-    (e.g., does this day conflict with a published shift?)
+HR opens Requests Inbox (or the Events queue, if it surfaced there)
+    ↓
+Sees: employee's request + BM's decision + BM's reason as context
+    ↓
+HR makes the FINAL decision
     ↓
 ┌─────────────────────┬──────────────────────┐
 │ Approve             │ Reject               │
 │ → with comment      │ → with reason        │
 └─────────────────────┴──────────────────────┘
     ↓
-Notification sent to employee
+Status = Approved / Rejected (final — HR's call, regardless of BM's)
+    ↓
+Notification sent to employee AND to the Branch Manager (if one acted)
     ↓
 If approved Day Off → reflected in schedule
     (shift conflict warning if already assigned)
+If approved Overtime → contributes to employee's Payroll Overtime figure
 ```
 
 ---
@@ -399,6 +456,19 @@ employee's profile to run this wizard. The two are related in practice
 but are deliberately two independent actions with no automatic hand-off,
 so a Resignation can be discussed/withdrawn before Offboarding is ever
 started.
+
+**Exit Form (new, added to this wizard — HR only fills it out):**
+As part of step 2 ("Exit checklist") above, HR completes an Exit Form
+directly on this wizard (no separate entity):
+- Reason for leaving
+- Rehire-eligibility: Yes / No (a stored note only — does NOT block or
+  flag the person if HR later tries to hire them again; no system
+  enforcement)
+- Exit evaluation (brief notes from the exit appointment)
+
+A Branch-Manager-initiated termination routes to HR as an **Event**
+(features.md §18) so HR can schedule the exit appointment and run this
+wizard — the Branch Manager himself does not fill out the Exit Form.
 
 ---
 

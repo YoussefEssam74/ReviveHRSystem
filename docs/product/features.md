@@ -50,7 +50,7 @@ System:
 | Recruitment | `recruitment.view`, `recruitment.vacancies.manage`, `recruitment.candidates.manage`, `recruitment.hire.approve`, `recruitment.vacancy_request.create`, `recruitment.vacancy_request.approve` |
 | Attendance | `attendance.view`, `attendance.edit`, `attendance.manual_entry` |
 | Schedule | `schedule.view`, `schedule.manage` |
-| Requests | `requests.view`, `requests.approve` |
+| Requests | `requests.view`, `requests.approve.branch`, `requests.approve` |
 | Payroll | `payroll.view`, `payroll.edit`, `payroll.approve` |
 | Evaluations | `evaluations.view`, `evaluations.manage` |
 | Reports | `reports.view` |
@@ -61,6 +61,8 @@ System:
 > **Team-scoped keys** (suffixed `.team`) are distinct from their gym-wide counterparts (e.g. `attendance.view.team` vs `attendance.view`). They exist so a Team Leader can be granted visibility/action limited to their own team's members, without touching the existing gym-wide checks used by HR/HR Manager/Branch Manager. See ADR-003-authorization.md for the scope-resolution logic.
 
 > **`attendance.manual_entry`** is separate from `attendance.edit` — manual_entry is for the on-site operator recording a failed Face ID; edit is for HR correcting a past record.
+
+> **Two-stage Requests approval:** `requests.approve.branch` is the stage-1 decision (typically granted to Branch Manager, gym-scoped) — it does NOT finalize a request. `requests.approve` is now specifically the FINAL decision authority (typically HR) and is what actually sets a request to Approved/Rejected. See §9 for the full lifecycle.
 
 ### Gym Access
 - A user may be assigned access to specific gyms
@@ -131,8 +133,9 @@ Top Management provides:
 - This does NOT bypass Super Admin/HR governance over vacancies (see `Revive_Super_Admin_Module_Specification.md`) — it's an intake mechanism, not a shortcut to publishing
 
 ### Vacancy Management
-- Create vacancy: gym, position, requirements, description
+- Create vacancy: gym, position, requirements, description, **headcount needed** (e.g. "20 Trainers")
 - Public application link generated per vacancy
+- Recruitment sidebar shows each open role with applicant/hired progress against headcount needed (e.g. "Trainer — 12/20")
 - Close/archive vacancy
 - Future: Google Forms integration (behind abstraction boundary)
 
@@ -177,6 +180,8 @@ System detects:
 4. Generates login credentials
 5. Links recruitment history to employee record
 6. Candidate data preserved, not deleted
+7. If this candidate originated from a Branch Manager's Vacancy Request (§5a), that Branch Manager is notified of the hire
+8. New employee lands in the **New Comers** tab (a dedicated view inside HR Operations, separate from the main Employee Directory) until their onboarding checklist is complete (documents collected, system access granted, first shift assigned) — see `HR_Role_and_Pages_Spec.md` §4.3
 
 ---
 
@@ -184,7 +189,7 @@ System detects:
 
 ### Employee Profile (Tabbed)
 - **Personal & Employment Info** — name, contact, position, level, gym, hire date
-- **Documents** — uploaded files (contract, ID, certifications), expiry tracking
+- **Documents** — uploaded files (contract, ID, certifications), expiry tracking; each document Type is marked `EmployeeEditable` or not — e.g. Contract/National ID are HR-only, Certifications may be self-uploaded by the employee (see database.md)
 - **Employment History** — chronological timeline of all changes
 - **Attendance Summary** — recent check-in/out, link to full attendance
 - **Current Shift Assignment** — this cycle's schedule
@@ -284,8 +289,21 @@ Each attendance event is compared against the employee's effective schedule:
 | 8 | Document Request | Type of document requested | e.g., salary certificate |
 | 9 | General Inquiry / Complaint | Free text | |
 | 10 | Resignation / Employee Leaving | Intended last working day, reason | Self-initiated by ANY employee (including a Branch Manager acting as an employee about themselves) — see distinction below |
+| 11 | Overtime | Date, hours requested, reason | Only counts toward Payroll's Overtime figure once Approved (see §10) |
 
 > **Note:** This list is confirmed directionally but may change before finalization.
+
+### Two-Stage Approval (Branch Manager → HR)
+
+**Every** request type — including Resignation and Overtime — goes through this same flow:
+
+1. Employee submits → `Status = Pending`
+2. If the employee has an assigned Branch Manager: BM reviews (requires `requests.approve.branch`) and records a decision + reason. This does **not** finalize the request.
+3. `Status = PendingHRReview`
+4. HR opens the request, sees the BM's decision and reason as context, then makes the **final** call (requires `requests.approve`) → `Status = Approved` or `Rejected`. HR's decision is authoritative regardless of what the BM decided.
+5. If the employee has **no** Branch Manager assigned, step 2–3 are skipped and the request goes straight to HR (`Status = Pending`, same as before).
+
+The Branch Manager's own "My Requests" view (for requests he's reviewing, not submitting) should distinguish **"Pending (with you)"** vs. **"Pending (with HR)"** vs. final status — see `HR_Role_and_Pages_Spec.md` §4.6 and `user-flows.md` Flow 4.
 
 ### Resignation vs. Offboarding — Important Distinction
 These are two separate, independently-triggered flows that both end up affecting the same employee record:
@@ -306,10 +324,13 @@ existing lifecycle-actions model).
 ### Request Lifecycle
 ```
 Employee → Submit Request → Pending
-    → Authorized Reviewer sees in inbox
-    → Approve / Reject (with comment)
-    → Notification sent to employee
-    → History preserved
+    → Branch Manager reviews (if assigned) → decision + reason recorded
+    → PendingHRReview (or straight here if no BM assigned)
+    → HR reviews BM's decision/reason as context → makes FINAL decision
+    → Approved / Rejected (with HR comment)
+    → Notification sent to employee AND to the Branch Manager (so he
+      knows the outcome of his stage-1 call)
+    → History preserved (both RequestDecisions rows kept)
 ```
 
 ### Cross-Module Integration
@@ -344,6 +365,30 @@ Attendance Exception (late/absent/early)
     → Finalized in Payroll History
     → Visible to Employee
 ```
+
+### Employee Self-Service Payroll View
+
+The employee's own read-only Payroll tab shows a fuller breakdown than
+the HR table above:
+
+| Field | Source |
+|-------|--------|
+| Base Salary | `Compensations` (current effective row) |
+| Annual Increase | Latest auto-applied raise from the employee's gym's `AnnualIncreasePercent` / `AnnualIncreaseAnchorDate` policy (database.md) |
+| Scheduled Work Days (this period) | `ShiftAssignments` count, excluding Off |
+| Scheduled Weekly Off-Days | `ShiftAssignments` count where shift = Off |
+| Actual Attendance Days | `AttendanceRecords` count with a valid check-in |
+| Biometric-Based Deductions | `DeductionCandidates` linked to `AttendanceRecordId`, Approved |
+| Manager-Issued Deductions | `DeductionCandidates` not linked to attendance (manual) — shown with reason, date, and amount only; the issuing Branch Manager's name is **not** shown to the employee |
+| Overtime Hours | Approved `EmployeeRequests` of Type = Overtime this period |
+| Annual Leave — Used / Remaining | `LeaveBalances` (LeaveType = Annual) |
+| Paid Leave | ⚠️ open item — pending confirmation whether this is a distinct leave type/balance or just how Annual Leave is labeled on the payslip |
+
+Gym-level auto-increase: each gym can set an `AnnualIncreasePercent` and
+an anchor (`HireAnniversary` or a fixed calendar date). When an
+employee's anchor date arrives, a scheduled job automatically records a
+new `Compensations` row — this is additive to, not a replacement for,
+HR's manual `employees.compensation.manage` action for off-cycle raises.
 
 ---
 
@@ -531,3 +576,73 @@ Manager's scope is the whole gym; Team Leader's scope is narrower — one
 or more teams within that gym. The two roles can be combined on the same
 user if the business wants a Branch Manager who is also personally
 leading a specific team, since permissions are additive and individually granted.
+
+---
+
+## 17. Evaluations — Custom Form Builder
+
+> **Gated by:** `evaluations.manage` (build forms + run cycles), `evaluations.view` (read-only)
+
+### What It Is
+Rather than a fixed criteria/score template, HR builds a custom
+question set per evaluation cycle — like a simplified Google Forms.
+
+### Form Builder
+- HR creates an `EvaluationForm` scoped to a **Gym and/or Position**
+  (different gyms/positions can have entirely different forms)
+- Adds questions, each with a type:
+  - **Rating (1–5)**
+  - **Multiple Choice** (single selection from defined options)
+  - **Checkbox** (multiple selections from defined options)
+- Questions can be reordered, edited, or removed while the form is not
+  actively mid-cycle
+
+### Running an Evaluation
+1. HR (or whoever holds `evaluations.manage`) selects the employee + the form scoped to their gym/position
+2. Fills out the form → creates an `EvaluationResponse` with one `EvaluationAnswer` per question
+3. Result appears on the employee's **Evaluations History** (profile tab) and their self-service **My Performance** view
+
+⚠️ **Open item:** whether any pre-existing fixed-format evaluation
+history needs to remain visible alongside new custom-form responses, or
+this is a clean cutover going forward, is still pending confirmation.
+
+---
+
+## 18. Events — HR Action Queue
+
+> Distinct from Notifications (informational, per-user broadcast/system
+> alerts) — Events are items that specifically require HR to **act**.
+
+### What Triggers an Event
+- A document or contract nearing/past expiry
+- A Resignation request or a Branch-Manager-initiated termination that
+  needs HR follow-up (schedule the exit appointment, run Offboarding)
+- A pending Vacancy Request awaiting HR's Approve/Reject
+- A request now sitting in `PendingHRReview` after the Branch Manager's
+  stage-1 decision (§9)
+
+### Behavior
+- One sidebar entry, **Events**, shows a single queue of all Open events
+  across the gyms the HR user has access to
+- Each row links directly to the underlying record
+- Row-level visibility follows the permission of the underlying entity
+  (e.g. a VacancyRequestPending event only shows to a user holding
+  `recruitment.vacancy_request.approve`) — Events is not itself a
+  separately permission-gated page
+- HR marks an event **Resolved** once actioned; resolved events drop out
+  of the default queue view (visible in a "resolved" filter/archive)
+
+---
+
+## 19. Dashboard & Notifications — UX Redesign
+
+- Both the **HR Dashboard** and every **Employee-based Dashboard**
+  (Regular Employee, Team Leader, Branch Manager) get a visual/UX
+  redesign pass in this MVP round: clearer information hierarchy, faster
+  access to items needing action. This is a design/frontend change —
+  the existing Action-Oriented principle (§13) and existing dashboard
+  data are unchanged; no AI/ML is introduced.
+- The **Notifications dropdown** (top bar) is redesigned visually but
+  stays a dropdown — it does not move to a dedicated full page. Events
+  (§18 above) is the separate, action-oriented surface; Notifications
+  remains purely informational.

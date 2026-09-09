@@ -155,7 +155,10 @@ GET    /api/applications            → List applications (gym-filtered)
 PUT    /api/applications/{id}/stage → Move to next pipeline stage
 POST   /api/applications/{id}/hire  → Hire candidate → create employee
 GET    /api/recruitment/follow-ups  → Candidates needing action
+GET    /api/employees/new-comers    → Employees hired but not yet past their onboarding checklist
+PUT    /api/employees/{id}/onboarding-checklist → Update checklist item(s) for a New Comer
 ```
+> `POST /api/vacancies` and `PUT /api/vacancies/{id}` now accept `headcountNeeded` (int) in the payload.
 
 ### Teams
 ```
@@ -200,18 +203,35 @@ GET    /api/shift-cycles/{id}/conflicts          → Check for conflicts
 ### Attendance
 ```
 GET    /api/attendance                           → List attendance (gym + date filters)
-POST   /api/attendance                           → Record attendance event (biometric/manual)
-PUT    /api/attendance/{id}/correct              → Manual correction
+POST   /api/attendance/events                    → Biometric device event. Body: { deviceToken, employeeId, timestamp, direction: "CheckIn"|"CheckOut" }
+                                                    Server resolves GymId from deviceToken, then runs the
+                                                    Cross-Gym Validation (UserGymAccess + today's ShiftAssignment
+                                                    at THIS gym) before creating any AttendanceRecord.
+                                                    Returns 201 on success, 422 with a reason if rejected
+                                                    (NoGymAccess | NoShiftToday) — no record is created on reject.
+POST   /api/attendance/manual                    → Manual entry at a gym terminal. Body: { employeeId, gymId, timestamp, direction, reason }
+                                                    Same Cross-Gym Validation applies — gymId here is the terminal's own gym.
+PUT    /api/attendance/{id}/correct              → Manual correction (HR, after the fact)
 GET    /api/employees/{id}/attendance            → Employee's attendance history
+```
+
+### Biometric Devices
+```
+GET    /api/gyms/{gymId}/biometric-devices       → List devices registered to a gym
+POST   /api/gyms/{gymId}/biometric-devices       → Register a new device, generates its DeviceToken
+PUT    /api/biometric-devices/{id}/status        → Activate/deactivate a device
 ```
 
 ### Requests
 ```
 GET    /api/requests                             → List requests (HR inbox, gym-filtered)
 POST   /api/requests                             → Submit request (employee)
-GET    /api/requests/{id}                        → Request detail
-POST   /api/requests/{id}/decide                → Approve/reject
+GET    /api/requests/{id}                        → Request detail (includes BranchManager-stage decision, if any)
+POST   /api/requests/{id}/decide                → Record a decision. Body: { stage: "BranchManager" | "HR", decision, comment }
+                                                    BranchManager stage → Status becomes PendingHRReview
+                                                    HR stage → Status becomes Approved/Rejected (final)
 GET    /api/employees/{id}/requests             → Employee's request history
+GET    /api/requests/branch-manager-queue        → Requests awaiting the current user's stage-1 decision (`requests.approve.branch`)
 ```
 
 ### Payroll
@@ -230,6 +250,22 @@ GET    /api/notifications                        → My notifications
 PUT    /api/notifications/{id}/read             → Mark as read
 PUT    /api/notifications/read-all              → Mark all as read
 GET    /api/notifications/unread-count           → Badge count
+```
+
+### Events (HR Action Queue)
+```
+GET    /api/events                               → List Open events (gym-filtered, permission-filtered by underlying entity)
+PUT    /api/events/{id}/resolve                 → Mark event resolved
+```
+
+### Evaluations
+```
+GET    /api/evaluation-forms                     → List forms (gym/position filtered)
+POST   /api/evaluation-forms                     → Create form (requires `evaluations.manage`)
+PUT    /api/evaluation-forms/{id}                → Update form + questions
+GET    /api/evaluation-forms/{id}                → Form detail with questions
+POST   /api/evaluation-forms/{id}/responses      → Submit a completed evaluation for an employee
+GET    /api/employees/{id}/evaluations           → Employee's evaluation response history
 ```
 
 ### Dashboard
