@@ -32,7 +32,7 @@ function renderRequests() {
     <div class="bg-white rounded-xl border border-charcoal-200 p-3 text-center"><p class="text-lg font-bold text-yellow-600">${all.filter(r=>r.type==='Day Off').length}</p><p class="text-[10px] text-charcoal-500">Day-Off Requests</p></div>
   </div>`;
 
-  let body = `<div class="flex items-center justify-between mb-2 flex-wrap gap-2">
+  let body = `<div class="flex items-center justify-between mb-2 flex-wrap gap-2 flex-shrink-0">
     <div class="flex items-center gap-1 bg-charcoal-100 rounded-lg p-0.5">
       ${_reqTab === 'inbox' ? `
         <button onclick="_reqFilter='pending';renderAll()" class="px-3 py-1.5 rounded-md text-[10px] font-medium ${_reqFilter==='pending'?'bg-white shadow-sm text-charcoal-900':'text-charcoal-500'}">Pending HR${pendingHR.length?` <span class="badge badge-red text-[9px]">${pendingHR.length}</span>`:''}</button>
@@ -45,27 +45,27 @@ function renderRequests() {
         <option value="all">All Types</option>
         ${Object.keys(REQ_ICONS).map(t=>`<option ${_reqType===t?'selected':''}>${t}</option>`).join('')}
       </select>
-      ${canDecide && pendingHR.length && _reqTab==='inbox' && _reqFilter==='pending' ? `<button onclick="showToast('All ' + ${pendingHR.length} + ' approved in bulk')" class="btn btn-sm btn-primary">Bulk Approve</button>` : ''}
+      ${canDecide && pendingHR.length && _reqTab==='inbox' && _reqFilter==='pending' ? `<button onclick="bulkApproveRequests()" class="btn btn-sm btn-primary">Bulk Approve</button>` : ''}
     </div>
   </div>`;
 
   if (!list.length) {
-    body += `<div class="bg-white rounded-xl border border-charcoal-200 p-8 text-center"><svg class="w-10 h-10 text-charcoal-300 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M5 13l4 4L19 7"/></svg><p class="text-xs text-charcoal-500">No requests here.</p></div>`;
+    body += `<div class="bg-white rounded-xl border border-charcoal-200 p-8 text-center flex-shrink-0"><svg class="w-10 h-10 text-charcoal-300 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M5 13l4 4L19 7"/></svg><p class="text-xs text-charcoal-500">No requests here.</p></div>`;
   } else {
-    body += `<div class="space-y-1.5">${list.map(renderRequestCard).join('')}</div>`;
+    body += `<div class="space-y-1.5 flex-1 min-h-0 overflow-y-auto pr-0.5">${list.map(renderRequestCard).join('')}</div>`;
   }
 
-  return `<div class="space-y-3">
-    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+  return `<div class="flex flex-col h-full min-h-0 gap-3">
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 flex-shrink-0">
       <div><h1 class="text-xl font-bold text-charcoal-900">Requests</h1><p class="text-xs text-charcoal-500 mt-0.5">Day off, leave early & approvals — BM & HR flow</p></div>
       <button onclick="openNewRequest()" class="btn btn-sm btn-secondary"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>New Request</button>
     </div>
     ${kpi}
-    <div class="flex border-b border-charcoal-100">
+    <div class="flex border-b border-charcoal-100 flex-shrink-0">
       ${tabs.map(t => `<button onclick="_reqTab='${t.id}';renderAll()" class="tab-btn ${_reqTab===t.id?'active':''}">${t.label}${t.count ? ` <span class="badge badge-red text-[9px] ml-0.5">${t.count}</span>` : ''}</button>`).join('')}
     </div>
     ${body}
-    ${!canDecide ? `<p class="text-[10px] text-charcoal-400 text-center">Final approve/reject requires <code>requests.approve</code> (HR Manager). You can view requests and BM decisions only.</p>` : ''}
+    ${!canDecide ? `<p class="text-[10px] text-charcoal-400 text-center flex-shrink-0">Final approve/reject requires <code>requests.approve</code>. You can view requests and BM decisions only.</p>` : ''}
   </div>`;
 }
 
@@ -93,6 +93,9 @@ function renderRequestCard(r) {
   const showAll = DEMO.showAll;
   const canDecide = showAll || hasPermission('requests.approve');
   const pendingHire = r.status === 'Pending HR Review';
+  const approved = r.status === 'Approved';
+  const revocable = approved && canDecide && !reqDatePassed(r);
+  const final = approved && reqDatePassed(r);
 
   const icon = REQ_ICONS[r.type] || 'M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z';
 
@@ -107,7 +110,7 @@ function renderRequestCard(r) {
       <div class="flex items-start gap-2.5">
         <div class="w-9 h-9 rounded-full bg-brand-100 text-brand-700 flex items-center justify-center flex-shrink-0"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="${icon}"/></svg></div>
         <div>
-          <div class="flex items-center gap-2 flex-wrap"><p class="text-xs font-medium text-charcoal-900">${r.employee}</p><span class="text-[9px] text-charcoal-400">${r.gym}</span>${statusBadge(r.status)}${pendingHire?urgencyTag(r):''}</div>
+          <div class="flex items-center gap-2 flex-wrap"><p class="text-xs font-medium text-charcoal-900">${r.employee}</p><span class="text-[9px] text-charcoal-400">${r.gym}</span>${statusBadge(r.status)}${pendingHire?urgencyTag(r):''}${final?'<span class="badge badge-gray text-[9px]">Final</span>':''}</div>
           <p class="text-[10px] text-charcoal-500 mt-0.5">${r.type} · ${r.requestedDate} · Submitted ${formatDate(r.submittedDate)}</p>
           ${r.reason ? `<p class="text-[10px] text-charcoal-600 mt-0.5">${r.reason}</p>` : ''}
         </div>
@@ -118,9 +121,11 @@ function renderRequestCard(r) {
       <p class="text-[9px] uppercase tracking-wide text-charcoal-500">BUILDING MANAGER DECISION</p>
       <p class="text-xs mt-0.5 ${r.bmDecision==='Approved'?'text-brand-700':'text-red-700'} font-medium">${r.bmDecision}${r.bmComment ? ` — ${r.bmComment}` : ''}</p>
     </div>` : ''}
-    ${pendingHire && timelineHtml ? `<div class="mt-2.5 bg-charcoal-50/60 rounded-lg p-2.5 space-y-1">${timelineHtml}</div>` : ''}
+    ${timelineHtml ? `<div class="mt-2.5 bg-charcoal-50/60 rounded-lg p-2.5 space-y-1">${timelineHtml}</div>` : ''}
+    ${revocable ? `<div class="mt-2 bg-orange-50 border border-orange-100 rounded-lg p-2 text-[10px] text-orange-700">Approved earlier — you can still reject because the requested date hasn't passed.</div>` : ''}
     <div class="flex gap-1.5 mt-2.5 flex-wrap">
       ${pendingHire && canDecide ? `<button onclick="openRequestDecision('${r.id}')" class="btn btn-sm btn-primary flex-1 min-w-[110px]">Approve</button><button onclick="openRequestDecision('${r.id}', 'reject')" class="btn btn-sm btn-danger-outline flex-1 min-w-[110px]">Reject</button>` : ''}
+      ${revocable ? `<button onclick="openRequestDecision('${r.id}', 'revoke')" class="btn btn-sm btn-danger-outline flex-1 min-w-[110px]">Reject (Revoke)</button>` : ''}
       <button onclick="openRequestDetail('${r.id}')" class="btn btn-sm btn-ghost flex-1 min-w-[90px]">${pendingHire && !canDecide ? 'View BM Log' : 'Detail'}</button>
       ${r.status !== 'Archived' ? `<button onclick="showToast('Archived')" class="btn btn-sm btn-ghost flex-1 min-w-[90px]">Archive</button>` : `<button onclick="showToast('Restored to inbox')" class="btn btn-sm btn-ghost flex-1 min-w-[90px]">Restore</button>`}
     </div>
@@ -131,14 +136,26 @@ function openRequestDecision(id, mode) {
   const r = MOCK.requests.find(x => x.id === id); if (!r) return;
   const canDecide = DEMO.showAll || hasPermission('requests.approve');
   if (!canDecide) { showToast('You do not have requests.approve', 'error'); return; }
-  const isReject = mode === 'reject';
+  const isReject = mode === 'reject' || mode === 'revoke';
+  const isRevoke = mode === 'revoke';
+  if (isRevoke && reqDatePassed(r)) { showToast('Decision is final — the requested date has passed', 'error'); return; }
+  const title = isRevoke ? 'Revoke Approval' : (isReject ? 'Reject Request' : 'Approve Request');
+  const decisionHint = isRevoke
+    ? '<div class="bg-orange-50 border border-orange-200 rounded-lg p-2.5 text-[10px] text-orange-800 leading-relaxed">This request was <b>already approved</b>. Because the requested date hasn&apos;t passed yet, the final approver may reverse the decision and reject it. Rejecting revokes the prior HR approval and notifies the employee.</div>'
+    : '<div class="bg-yellow-50 border border-yellow-200 rounded-lg p-2.5 text-[10px] text-yellow-800 leading-relaxed">You are the final approver. Your decision replaces the request status and becomes visible to the employee. An approval can still be rejected before the requested date passes.</div>';
 
   const timeline = (r.timeline || []).map(step => `<div class="flex items-start gap-2.5">
     <div class="flex flex-col items-center"><span class="w-3 h-3 rounded-full ${step.done?'bg-brand-500':'bg-charcoal-200'} mt-0.5"></span>${step.done?'<span class="w-0.5 h-5 bg-brand-500 mt-0.5"></span>':''}</div>
     <div class="pb-3"><p class="text-xs font-medium text-charcoal-800">${step.step}</p><p class="text-[9px] text-charcoal-400">${step.date}</p></div>
   </div>`).join('');
 
-  openModal(`Decide Request — ${r.employee}`, `<div class="space-y-3">
+  const applyBtn = isRevoke
+    ? `<button onclick="applyRequestDecision('${r.id}','revoke',document.getElementById('req-note').value)" class="btn btn-sm btn-danger">Revoke & Reject</button>`
+    : isReject
+      ? `<button onclick="applyRequestDecision('${r.id}','reject',document.getElementById('req-note').value)" class="btn btn-sm btn-danger-outline">Reject</button>`
+      : `<button onclick="applyRequestDecision('${r.id}','approve',document.getElementById('req-note').value)" class="btn btn-sm btn-primary">Approve</button>`;
+
+  openModal(`${title} — ${r.employee}`, `<div class="space-y-3">
     <div class="flex items-center gap-2 flex-wrap"><span class="badge badge-gray text-[9px]">${r.type}</span><span class="badge badge-gray text-[9px]">${r.gym}</span>${statusBadge(r.status)}${urgencyTag(r)}</div>
     <div class="grid grid-cols-2 gap-2 bg-charcoal-50 rounded-lg p-2.5 text-[11px]">
       <div><p class="text-[9px] uppercase text-charcoal-400">Requested for</p><p class="font-medium text-charcoal-800">${r.requestedDate}</p></div>
@@ -150,17 +167,38 @@ function openRequestDecision(id, mode) {
       <p class="text-xs mt-0.5 ${r.bmDecision==='Approved'?'text-brand-700':'text-red-700'} font-medium">${r.bmDecision}${r.bmComment ? ` — ${r.bmComment}` : ''}</p>
     </div>
     <div>${timeline || '<p class="text-[10px] text-charcoal-400">No timeline yet.</p>'}</div>
-    <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-2.5 text-[10px] text-yellow-800 leading-relaxed">You are the final approver. Your decision replaces the request's status and becomes visible to the employee.</div>
-    <div><label class="form-label">${isReject ? 'Rejection reason' : 'Approval note (optional)'}</label><textarea class="form-input" rows="2" placeholder="${isReject ? 'Required for rejection…' : 'Optional note…'}"></textarea></div>
+    ${decisionHint}
+    <div><label class="form-label">${isReject ? 'Rejection reason' : 'Approval note (optional)'}</label><textarea id="req-note" class="form-input" rows="2" placeholder="${isReject ? 'Required for rejection…' : 'Optional note…'}"></textarea></div>
   </div>`, { wide: true, footer:
-    `<button onclick="closeModal()" class="btn btn-sm btn-secondary">Cancel</button>
-     <button onclick="closeModal();showToast('Request rejected · employee notified','error')" class="btn btn-sm btn-danger-outline">Reject</button>
-     <button onclick="closeModal();showToast('Request approved · employee notified')" class="btn btn-sm btn-primary">Approve</button>` });
+    `<button onclick="closeModal()" class="btn btn-sm btn-secondary">Cancel</button>${applyBtn}` });
+}
+
+function applyRequestDecision(id, mode, note) {
+  const r = MOCK.requests.find(x => x.id === id); if (!r) return;
+  const canDecide = DEMO.showAll || hasPermission('requests.approve');
+  if (!canDecide) { showToast('You do not have requests.approve', 'error'); return; }
+  if (mode === 'approve') {
+    r.status = 'Approved';
+    r.hrDecision = 'Approved';
+    r.hrComment = note || '';
+    r.timeline.push({ step: 'HR Approved', date: 'Sep 9, 2026 · Now', done: true });
+    showToast(`Request approved · employee notified`);
+  } else {
+    if (mode === 'revoke' && reqDatePassed(r)) { showToast('Decision is final — the requested date has passed', 'error'); return; }
+    r.status = 'Rejected';
+    r.hrDecision = 'Rejected';
+    r.hrComment = note || '';
+    r.timeline.push({ step: mode === 'revoke' ? 'HR Rejected (revoked approval)' : 'HR Rejected', date: 'Sep 9, 2026 · Now', done: true });
+    showToast(mode === 'revoke' ? 'Approval revoked · request rejected' : 'Request rejected · employee notified', 'error');
+  }
+  closeModal();
+  renderAll();
 }
 
 function openRequestDetail(id) {
   const r = MOCK.requests.find(x => x.id === id); if (!r) return;
   const canDecide = DEMO.showAll || hasPermission('requests.approve');
+  const revocable = r.status === 'Approved' && canDecide && !reqDatePassed(r);
   const steps = (r.timeline || []).map(step => `<div class="flex items-start gap-2.5">
     <div class="flex flex-col items-center"><span class="w-3 h-3 rounded-full ${step.done?'bg-brand-500':'bg-charcoal-200'} mt-0.5"></span>${step.done?'<span class="w-0.5 h-5 bg-brand-500 mt-0.5"></span>':''}</div>
     <div class="pb-3"><p class="text-xs font-medium text-charcoal-800">${step.step}</p><p class="text-[9px] text-charcoal-400">${step.date}</p></div>
@@ -173,9 +211,24 @@ function openRequestDetail(id) {
       <p class="text-[9px] uppercase tracking-wide text-charcoal-500">BUILDING MANAGER DECISION</p>
       ${r.bmDecision ? `<p class="text-xs mt-0.5 ${r.bmDecision==='Approved'?'text-brand-700':'text-red-700'} font-medium">${r.bmDecision}${r.bmComment ? ` — ${r.bmComment}` : ''}</p>` : `<p class="text-xs mt-0.5 text-charcoal-400">No BM decision recorded yet.</p>`}
     </div>
+    ${r.hrDecision ? `<div class="bg-charcoal-50 rounded-lg p-2.5"><p class="text-[9px] uppercase tracking-wide text-charcoal-500">HR FINAL DECISION</p><p class="text-xs mt-0.5 ${r.hrDecision==='Approved'?'text-brand-700':'text-red-700'} font-medium">${r.hrDecision}${r.hrComment ? ` — ${r.hrComment}` : ''}</p></div>` : ''}
     <div>${steps || '<p class="text-[10px] text-charcoal-400">No timeline.</p>'}</div>
   </div>`, { wide: true, footer:
-    `${r.status==='Pending HR Review'&&canDecide ? `<button onclick="closeModal();openRequestDecision('${r.id}')" class="btn btn-sm btn-primary">Decide</button>`:''}<button onclick="closeModal()" class="btn btn-sm btn-secondary">Close</button>` });
+    `${r.status==='Pending HR Review'&&canDecide ? `<button onclick="closeModal();openRequestDecision('${r.id}')" class="btn btn-sm btn-primary">Decide</button>`:''}${revocable ? `<button onclick="closeModal();openRequestDecision('${r.id}','revoke')" class="btn btn-sm btn-danger-outline">Reject (Revoke)</button>`:''}<button onclick="closeModal()" class="btn btn-sm btn-secondary">Close</button>` });
+}
+
+function bulkApproveRequests() {
+  const canDecide = DEMO.showAll || hasPermission('requests.approve');
+  if (!canDecide) { showToast('You do not have requests.approve', 'error'); return; }
+  const list = MOCK.requests.filter(r => r.status === 'Pending HR Review');
+  list.forEach(r => {
+    r.status = 'Approved';
+    r.hrDecision = 'Approved';
+    r.hrComment = 'Bulk approved';
+    r.timeline.push({ step: 'HR Approved', date: 'Sep 9, 2026 · Now', done: true });
+  });
+  showToast(`All ${list.length} approved in bulk`);
+  renderAll();
 }
 
 function openNewRequest() {

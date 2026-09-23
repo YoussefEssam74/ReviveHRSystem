@@ -199,6 +199,15 @@ const MOCK = {
       overallComment: 'First quarter as a new hire. Ahmed is settling in well and showing promise.'
     },
   ],
+  leaveBalance: {
+    annualTotal: 12,   // total annual leave days per year
+    annualUsed: 4,     // days already taken
+    sickTotal: 7,
+    sickUsed: 1,
+    personalTotal: 3,
+    personalUsed: 0,
+    pendingRequests: 1, // currently pending day-off requests
+  },
   requests: [
     { id: 'r1', type: 'Day Off', submittedDate: '2026-08-26', requestedDate: 'Aug 29, 2026', status: 'Pending',
       reason: "Family event — cousin's wedding", reviewer: 'Pending Review', reviewerComment: '',
@@ -255,15 +264,29 @@ const MOCK = {
     { id: 't9', name: 'Fatma Hassan', position: 'Trainer', status: 'Late', checkIn: '08:20', initials: 'FH' },
     { id: 't10', name: 'Ahmed Zaki', position: 'Trainer', status: 'Present', checkIn: '07:45', initials: 'AZ' },
   ],
+  // Rich profile data for each team member — keyed by teamMembers[].id
+  teamProfiles: {
+    't1': { email:'karim.hassan@revive.com', phone:'+20 111 234 5678', dateOfBirth:'1993-07-22', gender:'Male', nationalId:'29307221234567', address:'5 El-Nasr St, Nasr City, Cairo', hireDate:'2024-02-01', employmentType:'Full-time', level:'Senior', gym:'Revive Gym — Nasr City', emergencyContact:{ name:'Hassan Karim', relationship:'Father', phone:'+20 111 876 5432' }, baseSalary:14000 },
+    't2': { email:'sara.ali@revive.com', phone:'+20 112 345 6789', dateOfBirth:'1996-11-05', gender:'Female', nationalId:'29611051234567', address:'12 El-Thawra St, Nasr City, Cairo', hireDate:'2024-06-15', employmentType:'Full-time', level:'Junior', gym:'Revive Gym — Nasr City', emergencyContact:{ name:'Ali Hassan', relationship:'Father', phone:'+20 112 876 5432' }, baseSalary:9000 },
+    't3': { email:'omar.youssef@revive.com', phone:'+20 113 456 7890', dateOfBirth:'1991-03-18', gender:'Male', nationalId:'29103181234567', address:'3 Makram Ebeid St, Nasr City, Cairo', hireDate:'2023-09-01', employmentType:'Full-time', level:'Senior', gym:'Revive Gym — Nasr City', emergencyContact:{ name:'Youssef Omar', relationship:'Father', phone:'+20 113 876 5432' }, baseSalary:15000 },
+    't4': { email:'nour.ibrahim@revive.com', phone:'+20 114 567 8901', dateOfBirth:'1988-01-30', gender:'Female', nationalId:'28801301234567', address:'20 El-Ahram St, Giza', hireDate:'2024-01-10', employmentType:'Full-time', level:'Junior', gym:'Revive Gym — Nasr City', emergencyContact:{ name:'Ibrahim Nour', relationship:'Father', phone:'+20 114 876 5432' }, baseSalary:6000 },
+    't5': { email:'yasmin.adel@revive.com', phone:'+20 115 678 9012', dateOfBirth:'1994-09-12', gender:'Female', nationalId:'29409121234567', address:'8 Abbas El-Akkad St, Nasr City, Cairo', hireDate:'2024-04-01', employmentType:'Part-time', level:'Mid', gym:'Revive Gym — Nasr City', emergencyContact:{ name:'Adel Youssef', relationship:'Father', phone:'+20 115 876 5432' }, baseSalary:8000 },
+    't6': { email:'tarek.nabil@revive.com', phone:'+20 116 789 0123', dateOfBirth:'1997-05-25', gender:'Male', nationalId:'29705251234567', address:'15 El-Hegaz St, Heliopolis, Cairo', hireDate:'2025-01-15', employmentType:'Full-time', level:'Junior', gym:'Revive Gym — Nasr City', emergencyContact:{ name:'Nabil Tarek', relationship:'Father', phone:'+20 116 876 5432' }, baseSalary:8500 },
+    't7': { email:'mona.said@revive.com', phone:'+20 117 890 1234', dateOfBirth:'1992-12-08', gender:'Female', nationalId:'29212081234567', address:'25 El-Merghany St, Heliopolis, Cairo', hireDate:'2023-03-01', employmentType:'Full-time', level:'Senior', gym:'Revive Gym — Nasr City', emergencyContact:{ name:'Said Hassan', relationship:'Father', phone:'+20 117 876 5432' }, baseSalary:16000 },
+    't8': { email:'hassan.ali@revive.com', phone:'+20 118 901 2345', dateOfBirth:'1985-06-14', gender:'Male', nationalId:'28506141234567', address:'30 El-Sudan St, Mohandessin, Giza', hireDate:'2023-01-01', employmentType:'Full-time', level:'Mid', gym:'Revive Gym — Nasr City', emergencyContact:{ name:'Ali Hassan', relationship:'Father', phone:'+20 118 876 5432' }, baseSalary:7000 },
+    't9': { email:'fatma.hassan@revive.com', phone:'+20 119 012 3456', dateOfBirth:'1995-02-20', gender:'Female', nationalId:'29502201234567', address:'10 El-Nasr St, Nasr City, Cairo', hireDate:'2024-08-01', employmentType:'Full-time', level:'Mid', gym:'Revive Gym — Nasr City', emergencyContact:{ name:'Hassan Farouk', relationship:'Father', phone:'+20 119 876 5432' }, baseSalary:10000 },
+    't10': { email:'ahmed.zaki@revive.com', phone:'+20 120 123 4567', dateOfBirth:'1990-10-01', gender:'Male', nationalId:'29010011234567', address:'7 El-Khalifa El-Maamoun St, Heliopolis, Cairo', hireDate:'2023-06-01', employmentType:'Full-time', level:'Senior', gym:'Revive Gym — Nasr City', emergencyContact:{ name:'Zaki Ahmed', relationship:'Father', phone:'+20 120 876 5432' }, baseSalary:14500 },
+  },
   teamStats: { total: 42, present: 38, late: 3, absent: 1, pendingRequests: 7, upcomingIssues: 4 },
   teamRequests: [
-    { id: 'tr1', employee: 'Karim Hassan', type: 'Day Off', date: 'Aug 30, 2026', submitted: 'Aug 25', status: 'Pending' },
-    { id: 'tr2', employee: 'Sara Ali', type: 'Late Arrival', date: 'Aug 27, 2026', submitted: 'Aug 26', status: 'Pending' },
-    { id: 'tr3', employee: 'Nour Ibrahim', type: 'Day Off', date: 'Sep 1, 2026', submitted: 'Aug 24', status: 'Pending' },
-    { id: 'tr4', employee: 'Omar Youssef', type: 'Leave Early', date: 'Aug 28, 2026', submitted: 'Aug 23', status: 'Approved' },
-    { id: 'tr5', employee: 'Yasmin Adel', type: 'Shift Swap', date: 'Aug 29-30', submitted: 'Aug 22', status: 'Pending' },
-    { id: 'tr6', employee: 'Mona Said', type: 'Day Off', date: 'Sep 5, 2026', submitted: 'Aug 21', status: 'Rejected' },
-    { id: 'tr7', employee: 'Fatma Hassan', type: 'Overtime', date: 'Aug 26, 2026', submitted: 'Aug 20', status: 'Pending' },
+    { id: 'tr1', employee: 'Karim Hassan', type: 'Day Off', date: 'Aug 30, 2026', submitted: 'Aug 25', status: 'Pending', reason: 'Family event — need the day off' },
+    { id: 'tr2', employee: 'Sara Ali', type: 'Late Arrival', date: 'Aug 27, 2026', submitted: 'Aug 26', status: 'Pending', reason: 'Traffic accident on the way to work' },
+    { id: 'tr3', employee: 'Nour Ibrahim', type: 'Day Off', date: 'Sep 1, 2026', submitted: 'Aug 24', status: 'Pending', reason: 'Medical appointment' },
+    { id: 'tr4', employee: 'Omar Youssef', type: 'Leave Early', date: 'Aug 28, 2026', submitted: 'Aug 23', status: 'Approved', reason: 'Family event', teamApprovedBy: 'Ahmed Mohamed', teamApprovedDate: 'Aug 24', hrApprovedBy: 'HR Manager', hrApprovedDate: 'Aug 25' },
+    { id: 'tr5', employee: 'Yasmin Adel', type: 'Shift Swap', date: 'Aug 29-30', submitted: 'Aug 22', status: 'Pending', reason: 'Swap with Omar for the evening shift' },
+    { id: 'tr6', employee: 'Mona Said', type: 'Day Off', date: 'Sep 5, 2026', submitted: 'Aug 21', status: 'Rejected', reason: 'Wants a long weekend', teamRejectedBy: 'Ahmed Mohamed', teamRejectedDate: 'Aug 22', hrRejectedBy: 'HR Manager', hrRejectedDate: 'Aug 23', rejectionReason: 'Insufficient trainer coverage that day' },
+    { id: 'tr7', employee: 'Fatma Hassan', type: 'Overtime', date: 'Aug 26, 2026', submitted: 'Aug 20', status: 'Pending', reason: 'Extra hours for the event setup' },
+    { id: 'tr8', employee: 'Tarek Nabil', type: 'Day Off', date: 'Sep 8, 2026', submitted: 'Aug 18', status: 'Rejected', reason: 'Personal day', rejectionType: 'expired', rejectionReason: 'No response within 48 hours' },
   ],
   followUpItems: [
     { id: 'f1', employee: 'Yasmin Adel', type: 'Absent', description: 'Absent today without prior notice', severity: 'high' },
@@ -339,8 +362,8 @@ const DEMO_USERS = {
     hireDate: '2026-01-12', employmentType: 'Full-time', status: 'Active',
     role: 'Team Leader',
     // Team-scoped only — scope is the assigned team, NOT the whole gym.
-    // requests.approve.team is intentionally NOT granted (usually held by BM/HR).
-    permissions: ['team.view','attendance.view.team','schedule.view.team','requests.view.team','evaluations.view.team','team.manage'],
+    // Team leader can approve/reject team requests; HR still signs off final approval.
+    permissions: ['team.view','attendance.view.team','schedule.view.team','requests.view.team','requests.approve.team','evaluations.view.team','team.manage'],
     dateOfBirth: '1995-03-15', nationalId: '29503151234567', gender: 'Male',
     address: '15 El-Thawra St, Nasr City, Cairo',
     emergencyContact: { name: 'Mohamed Ahmed', relationship: 'Father', phone: '+20 100 987 6543' },

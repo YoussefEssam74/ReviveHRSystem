@@ -51,10 +51,10 @@
   </script>
   <link rel="stylesheet" href="styles.css">
 </head>
-<body class="h-full flex flex-col bg-gray-50 font-sans text-charcoal-800 antialiased">
+<body class="h-full flex flex-col overflow-hidden bg-gray-50 font-sans text-charcoal-800 antialiased">
 
   <!-- ==================== PROTOTYPE PREVIEW TOOLBAR ==================== -->
-  <div id="demo-toolbar" class="flex-shrink-0 h-10 bg-charcoal-900 text-white flex items-center px-3 gap-2 text-xs z-[60]">
+  <div id="demo-toolbar" class="flex-shrink-0 h-8 bg-charcoal-900 text-white flex items-center px-3 gap-2 text-[11px] z-[60]">
     <div class="flex items-center gap-1.5 font-semibold text-charcoal-200 flex-shrink-0">
       <svg class="w-3.5 h-3.5 text-brand-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
       Prototype Preview
@@ -86,10 +86,10 @@
   <div id="app-shell" class="hidden lg:flex flex-1 min-h-0">
 
     <!-- SIDEBAR -->
-    <aside id="sidebar" class="fixed top-10 bottom-0 left-0 z-40 w-64 bg-white border-r border-charcoal-200 flex flex-col transition-transform duration-300 lg:translate-x-0 -translate-x-full" data-sidebar>
+    <aside id="sidebar" class="fixed top-8 bottom-0 left-0 z-40 w-56 bg-white border-r border-charcoal-200 flex flex-col transition-transform duration-300 lg:translate-x-0 -translate-x-full" data-sidebar>
 
       <!-- Logo -->
-      <div class="flex items-center gap-3 px-6 h-16 border-b border-charcoal-100 flex-shrink-0">
+      <div class="flex items-center gap-3 px-5 h-14 border-b border-charcoal-100 flex-shrink-0">
         <div class="w-8 h-8 bg-brand-600 rounded-lg flex items-center justify-center">
           <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
         </div>
@@ -117,10 +117,10 @@
     <div id="sidebar-overlay" class="fixed inset-0 bg-black/50 z-30 hidden lg:hidden" onclick="closeSidebar()"></div>
 
     <!-- MAIN AREA -->
-    <div class="flex-1 flex flex-col ml-64">
+    <div class="flex-1 flex flex-col ml-56 min-h-0 min-w-0">
 
       <!-- HEADER -->
-      <header class="sticky top-0 z-20 bg-white border-b border-charcoal-100 h-16 flex items-center px-4 lg:px-6 gap-4 flex-shrink-0">
+      <header class="sticky top-0 z-20 bg-white border-b border-charcoal-100 h-14 flex items-center px-4 lg:px-5 gap-4 flex-shrink-0">
 
         <!-- Mobile hamburger -->
         <button onclick="toggleSidebar()" class="lg:hidden p-2 -ml-2 rounded-lg hover:bg-charcoal-100" aria-label="Toggle menu">
@@ -190,7 +190,7 @@
       </header>
 
       <!-- MAIN CONTENT -->
-      <main class="flex-1 overflow-y-auto p-4 lg:p-6" id="main-content">
+      <main class="flex-1 min-h-0 min-w-0 overflow-y-auto p-3 lg:p-4" id="main-content">
         <!-- Page content rendered here by JS -->
       </main>
     </div>
@@ -224,7 +224,7 @@
     </main>
 
     <!-- Mobile Bottom Nav -->
-    <nav class="fixed bottom-0 left-0 right-0 bg-white border-t border-charcoal-100 z-30 flex items-center justify-around h-16 safe-bottom" id="mobile-bottom-nav">
+    <nav class="fixed bottom-0 left-0 right-0 bg-white border-t border-charcoal-100 z-30 flex items-center justify-around h-14 safe-bottom" id="mobile-bottom-nav"></nav>
       <button onclick="navigateTo('dashboard')" class="mobile-nav-btn flex flex-col items-center gap-0.5 px-3 py-1.5" data-page="dashboard">
         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>
         <span class="text-[10px] font-medium">Home</span>
@@ -239,7 +239,7 @@
       </button>
       <button onclick="navigateTo('notifications')" class="mobile-nav-btn flex flex-col items-center gap-0.5 px-3 py-1.5 relative" data-page="notifications">
         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/></svg>
-        <span class="absolute -top-0.5 right-1 w-4 h-4 bg-brand-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center">3</span>
+        <span class="absolute -top-0.5 right-1 w-4 h-4 bg-brand-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center" id="mobile-notif-badge">3</span>
         <span class="text-[10px] font-medium">Alerts</span>
       </button>
       <button onclick="toggleMobileMore()" class="mobile-nav-btn flex flex-col items-center gap-0.5 px-3 py-1.5" data-page="more">
@@ -291,11 +291,11 @@
   <div id="toast-container" class="fixed top-4 right-4 z-[100] space-y-2 pointer-events-none"></div>
 
   <!-- ==================== SCRIPTS ==================== -->
-  <script src="js/data.js?v=8"></script>
-  <script src="js/core.js?v=8"></script>
-  <script src="js/pages-employee.js?v=8"></script>
-  <script src="js/pages-employee2.js?v=8"></script>
-  <script src="js/pages-management.js?v=8"></script>
-  <script src="js/app.js?v=8"></script>
+  <script src="js/data.js?v=15"></script>
+  <script src="js/core.js?v=15"></script>
+  <script src="js/pages-employee.js?v=15"></script>
+  <script src="js/pages-employee2.js?v=10"></script>
+  <script src="js/pages-management.js?v=28"></script>
+  <script src="js/app.js?v=10"></script>
 </body>
 </html>

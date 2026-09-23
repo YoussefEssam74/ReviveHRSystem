@@ -8,6 +8,9 @@ function hasPermission(perm) {
   return perms.includes(perm);
 }
 function formatDate(s) { if (!s) return '—'; return new Date(s).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }); }
+const MOCK_TODAY = new Date('2026-09-09T00:00:00');
+function parseDisplayDate(s) { const d = new Date(s); return isNaN(d.getTime()) ? null : d; }
+function reqDatePassed(r) { const d = parseDisplayDate(r.requestedDate); return d ? d < MOCK_TODAY : false; }
 function getGreeting() { const h = new Date().getHours(); return h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening'; }
 function statusBadge(status) {
   const m = { 'On Time':'badge-green','Present':'badge-green','Approved':'badge-green','Valid':'badge-green','Paid':'badge-green','Completed':'badge-green','Published':'badge-blue','Exceeds':'badge-green','Meets':'badge-blue',
@@ -49,6 +52,80 @@ function openModal(title, content, opts={}) {
 }
 function closeModal(e) { if(e && e.target!==e.currentTarget) return; document.getElementById('modal-container').innerHTML=''; }
 
+// ==================== PENDING ACTION BADGES ====================
+// Centralized count computation — single source of truth for all sidebar badges.
+// Returns a map of { pageId: { count, level, label } }.
+function computePendingActions() {
+  const r = {};
+  function put(id, count, level, label) {
+    if (count > 0) r[id] = { count, level: level || 'action', label: label || '' };
+  }
+  // --- Main nav items ---
+  put('employees',
+    MOCK.employees.filter(e => e.status !== 'Active').length,
+    'action', 'flagged');
+  put('attendance',
+    MOCK.attendanceRecords.filter(r => ['Late','Absent'].includes(r.status)).length,
+    'action', 'today');
+  put('requests',
+    MOCK.requests.filter(r => r.status === 'Pending HR Review').length,
+    'action', 'awaiting review');
+  put('recruitment',
+    (MOCK.vacancyRequests || []).filter(v => v.status === 'Pending').length,
+    'action', 'pending');
+  put('payroll',
+    MOCK.payrollItems.reduce((s, p) => s + p.deductionLines.filter(d => d.status === 'Pending').length, 0),
+    'action', 'pending adjustments');
+  put('evaluations',
+    MOCK.evaluationHistory.filter(e => e.status === 'In Progress').length,
+    'info', 'in progress');
+  // --- Secondary nav items ---
+  put('notifications',
+    MOCK.notifications.filter(n => !n.read).length,
+    'info', 'unread');
+  put('events',
+    MOCK.events.filter(e => e.urgency === 'high').length,
+    'urgent', 'urgent');
+  return r;
+}
+
+// ---- Badge renderers --------------------------------------------------------
+const _badgeColors = {
+  urgent: 'bg-red-50 text-red-600 ring-1 ring-inset ring-red-200',
+  action: 'bg-amber-50 text-amber-600 ring-1 ring-inset ring-amber-200',
+  info:   'bg-blue-50 text-blue-600 ring-1 ring-inset ring-blue-200',
+};
+const _dotColors = {
+  urgent: 'bg-red-500',
+  action: 'bg-amber-500',
+  info:   'bg-blue-500',
+};
+function badgeHtml(badge) {
+  if (!badge || !badge.count || badge.count < 1) return '';
+  const c = _badgeColors[badge.level] || _badgeColors.action;
+  const txt = badge.count > 99 ? '99+' : String(badge.count);
+  return `<span class="ml-auto flex-shrink-0 inline-flex items-center rounded-md px-1.5 py-0.5 text-[10px] font-semibold leading-none ${c}" title="${badge.label || 'pending'}">${txt}</span>`;
+}
+function badgeDot(badge) {
+  if (!badge || !badge.count || badge.count < 1) return '';
+  const c = _dotColors[badge.level] || _dotColors.action;
+  const txt = badge.count > 99 ? '99+' : String(badge.count);
+  return `<span class="absolute -top-1 -right-1 min-w-[16px] h-4 px-0.5 ${c} text-white text-[8px] font-bold rounded-full flex items-center justify-center" title="${badge.count} ${badge.label || 'pending'}">${txt}</span>`;
+}
+function updateBadgeIndicators() {
+  const counts = computePendingActions();
+  const nb = counts['notifications'];
+  const n = nb ? nb.count : 0;
+  const dot = document.getElementById('header-notif-dot');
+  if (dot) {
+    if (n > 0) {
+      dot.className = 'absolute -top-0.5 right-0.5 min-w-[16px] h-4 px-0.5 bg-brand-500 text-white text-[8px] font-bold rounded-full flex items-center justify-center';
+      dot.textContent = n > 99 ? '99+' : String(n);
+      dot.style.display = '';
+    } else { dot.style.display = 'none'; }
+  }
+}
+
 // ==================== NAV ====================
 const mainNav = [
   {id:'dashboard',label:'Dashboard',icon:'M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6'},
@@ -80,17 +157,47 @@ function renderNavItems(id) {
   h += visSec.map(i => navItemHtml(i)).join('');
   c.innerHTML = h;
 }
-function navItemHtml(i) {
-  return `<a href="javascript:void(0)" onclick="navigateTo('${i.id}')" class="nav-item ${state.currentPage===i.id?'active':''}"><svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="${i.icon}"/></svg><span class="text-xs">${i.label}</span></a>`;
+// Single nav-item renderer with badge support.
+function navItemHtml(i, counts, opts) {
+  opts = opts || {};
+  const badge = counts[i.id] || null;
+  const badgeHtml_ = opts.grid ? badgeDot(badge) : badgeHtml(badge);
+  if (opts.grid) {
+    return `<button onclick="navigateTo('${i.id}');closeMobileMore()" class="flex flex-col items-center gap-1 p-2 rounded-lg hover:bg-charcoal-50 relative">
+      <div class="w-8 h-8 rounded-lg bg-charcoal-50 flex items-center justify-center text-charcoal-600 relative">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="${i.icon}"/></svg>${badgeHtml_}
+      </div>
+      <span class="text-[9px] font-medium text-charcoal-700 text-center leading-tight">${i.label}</span>
+    </button>`;
+  }
+  return `<a href="javascript:void(0)" onclick="navigateTo('${i.id}')" class="nav-item ${state.currentPage===i.id?'active':''}">
+    <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="${i.icon}"/></svg>
+    <span class="text-xs">${i.label}</span>${badgeHtml_}
+  </a>`;
+}
+
+function renderNavItems(id) {
+  const c = document.getElementById(id);
+  if(!c) return;
+  const showAll = DEMO.showAll;
+  const counts = computePendingActions();
+  const visMain = showAll ? mainNav : mainNav.filter(i => !i.permission || hasPermission(i.permission));
+  const visSec = showAll ? secondaryNav : secondaryNav.filter(i => !i.permission || hasPermission(i.permission));
+  let h = visMain.map(i => navItemHtml(i, counts)).join('');
+  h += '<div class="nav-section-title mt-3">Administration</div>';
+  h += visSec.map(i => navItemHtml(i, counts)).join('');
+  c.innerHTML = h;
+  updateBadgeIndicators();
 }
 
 function renderMobileMore() {
   const g = document.getElementById('mobile-more-grid');
   if(!g) return;
   const showAll = DEMO.showAll;
+  const counts = computePendingActions();
   const all = [...mainNav,...secondaryNav];
   const vis = showAll ? all : all.filter(i => !i.permission || hasPermission(i.permission));
-  g.innerHTML = vis.map(i=>`<button onclick="navigateTo('${i.id}');closeMobileMore()" class="flex flex-col items-center gap-1 p-2 rounded-lg hover:bg-charcoal-50"><div class="w-8 h-8 rounded-lg bg-charcoal-50 flex items-center justify-center text-charcoal-600"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="${i.icon}"/></svg></div><span class="text-[9px] font-medium text-charcoal-700 text-center leading-tight">${i.label}</span></button>`).join('');
+  g.innerHTML = vis.map(i => navItemHtml(i, counts, { grid: true })).join('');
 }
 
 // ==================== NAVIGATION ====================

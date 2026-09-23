@@ -16,8 +16,8 @@ function renderAttendance() {
   const weekLabels = ['W1', 'W2', 'W3', 'W4', 'W5', 'W6', 'Now'];
   const lateEmp = MOCK.teamMembers.filter(t => t.status === 'Late');
 
-  return `<div class="space-y-3">
-    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+  return `<div class="flex flex-col h-full min-h-0 gap-3">
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 flex-shrink-0">
       <div><h1 class="text-xl font-bold text-charcoal-900">Attendance</h1><p class="text-xs text-charcoal-500 mt-0.5">Sep 9, 2026 · ${total} records · ${present} present</p></div>
       <div class="flex items-center gap-1.5 flex-wrap">
         <select class="form-select w-auto" style="padding:0.375rem 2rem 0.375rem 0.625rem;font-size:0.8125rem"><option>All Gyms</option><option>Nasr City</option><option>Heliopolis</option><option>6th October</option></select>
@@ -27,7 +27,7 @@ function renderAttendance() {
     </div>
 
     <!-- Stats -->
-    <div class="grid grid-cols-2 sm:grid-cols-5 gap-2">
+    <div class="grid grid-cols-2 sm:grid-cols-5 gap-2 flex-shrink-0">
       <div class="bg-white rounded-xl border border-charcoal-200 p-3 border-l-4 border-l-brand-500"><p class="text-lg font-bold text-brand-600">${onTime}</p><p class="text-[10px] text-charcoal-500">On Time</p></div>
       <div class="bg-white rounded-xl border border-charcoal-200 p-3"><p class="text-lg font-bold text-yellow-600">${late}</p><p class="text-[10px] text-charcoal-500">Late</p></div>
       <div class="bg-white rounded-xl border border-charcoal-200 p-3"><p class="text-lg font-bold text-red-600">${absent}</p><p class="text-[10px] text-charcoal-500">Absent</p></div>
@@ -35,7 +35,7 @@ function renderAttendance() {
       <div class="bg-white rounded-xl border border-charcoal-200 p-3"><p class="text-lg font-bold text-charcoal-900">${attRate}%</p><p class="text-[10px] text-charcoal-500">Attendance Rate</p></div>
     </div>
 
-    <div class="grid grid-cols-1 lg:grid-cols-3 gap-3">
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-3 flex-shrink-0">
       <!-- Trend chart -->
       <div class="bg-white rounded-xl border border-charcoal-200 overflow-hidden lg:col-span-2">
         <div class="px-4 py-2.5 border-b border-charcoal-100 flex items-center justify-between bg-charcoal-50/50"><p class="bento-label">ATTENDANCE RATE — WEEKLY</p><span class="badge badge-brand text-[9px]">${attRate}% today</span></div>
@@ -70,9 +70,9 @@ function renderAttendance() {
       </div>
     </div>
 
-    <!-- Desktop Table -->
-    <div class="bg-white rounded-xl border border-charcoal-200 overflow-hidden hidden lg:block">
-      <div class="table-responsive"><table class="data-table"><thead><tr><th>Employee</th><th>Gym</th><th>Shift</th><th>Check In</th><th>Check Out</th><th>Source</th><th>Status</th><th></th></tr></thead>
+    <!-- Desktop Table (fills remaining viewport) -->
+    <div class="bg-white rounded-xl border border-charcoal-200 overflow-hidden hidden lg:flex flex-col flex-1 min-h-0">
+      <div class="flex-1 min-h-0 overflow-auto table-responsive rounded-b-xl"><table class="data-table h-full"><thead><tr><th>Employee</th><th>Gym</th><th>Shift</th><th>Check In</th><th>Check Out</th><th>Source</th><th>Status</th><th></th></tr></thead>
       <tbody>${records.map(r => `<tr>
         <td><div class="flex items-center gap-2.5"><div class="w-8 h-8 rounded-full bg-brand-100 text-brand-700 flex items-center justify-center text-[10px] font-semibold">${r.name.split(' ').map(w => w[0]).join('')}</div><div><p class="text-xs font-medium text-charcoal-900">${r.name}</p><p class="text-[10px] text-charcoal-500">${r.employeeId}</p></div></div></td>
         <td class="text-xs">${r.gym}</td>
@@ -94,7 +94,7 @@ function renderAttendance() {
       <div class="flex justify-between mt-2 text-[10px] text-charcoal-500"><span>In: ${r.checkIn || '—'}</span><span>Out: ${r.checkOut || '—'}</span>${canEdit ? `<button onclick="openAttendanceCorrection('${r.employeeId}')" class="btn btn-sm btn-ghost text-[9px] p-0.5">Correct</button>` : ''}</div>
     </div>`).join('')}</div>
 
-    ${!canEdit ? `<p class="text-[10px] text-charcoal-400 text-center">Manual correction is hidden — you do not have <code>attendance.edit</code>.</p>` : ''}
+    ${!canEdit ? `<p class="text-[10px] text-charcoal-400 text-center flex-shrink-0">Manual correction is hidden — you do not have <code>attendance.edit</code>.</p>` : ''}
   </div>`;
 }
 function mathMax(a, b) { return (a > b ? a : b); }

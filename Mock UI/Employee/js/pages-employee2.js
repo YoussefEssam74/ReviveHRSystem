@@ -30,25 +30,25 @@ function renderPayroll() {
   let currentCard = '';
   if (current) {
     currentCard = `
-      <div class="relative overflow-hidden rounded-2xl border border-brand-200 bg-gradient-to-br from-brand-50 via-white to-brand-50/50 p-5">
+      <div class="relative overflow-hidden rounded-2xl border border-brand-200 bg-gradient-to-br from-brand-50 via-white to-brand-50/50 p-2">
         <div class="absolute top-0 right-0 w-28 h-28 bg-brand-100/40 rounded-full -translate-y-1/2 translate-x-1/2"></div>
-        <div class="relative flex items-center gap-4">
-          <div class="w-14 h-14 rounded-2xl bg-brand-500 flex items-center justify-center shadow-md shadow-brand-200 flex-shrink-0">
-            <span class="material-icons text-white text-2xl">pending</span>
+        <div class="relative flex items-center gap-3">
+          <div class="w-10 h-10 rounded-2xl bg-brand-500 flex items-center justify-center shadow-md shadow-brand-200 flex-shrink-0">
+            <span class="material-icons text-white text-xl">pending</span>
           </div>
           <div class="flex-1 min-w-0">
             <p class="text-[10px] font-bold text-brand-600 uppercase tracking-wider">Current Period</p>
-            <p class="text-lg font-bold text-charcoal-900 mt-0.5">${current.period}</p>
-            <div class="flex items-center gap-2 mt-1.5">
+            <p class="text-base font-bold text-charcoal-900 mt-0.5">${current.period}</p>
+            <div class="flex items-center gap-2 mt-0.5">
               ${statusBadge('Processing')}
               <span class="text-[10px] text-charcoal-400">· Payout pending</span>
             </div>
           </div>
           <div class="text-right flex-shrink-0 hidden sm:block">
-            <div class="w-24 h-2.5 bg-brand-100 rounded-full overflow-hidden">
+            <div class="w-24 h-2 bg-brand-100 rounded-full overflow-hidden">
               <div class="h-full bg-brand-400 rounded-full animate-pulse" style="width:65%"></div>
             </div>
-            <p class="text-[10px] text-charcoal-400 mt-1.5">Being processed...</p>
+            <p class="text-[10px] text-charcoal-400 mt-1">Being processed...</p>
           </div>
         </div>
       </div>`;
@@ -66,14 +66,14 @@ function renderPayroll() {
     const leaveTotal = leaveUsed + leaveRem;
     const leavePct = leaveTotal ? Math.round((leaveUsed / leaveTotal) * 100) : 0;
     refCard = `
-      <div class="grid grid-cols-1 lg:grid-cols-2 gap-3">
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-2">
         <!-- Salary & Schedule -->
-        <div class="bg-white rounded-2xl border border-charcoal-100/80 shadow-sm p-4">
-          <div class="flex items-center justify-between mb-3">
+        <div class="bg-white rounded-2xl border border-charcoal-100/80 shadow-sm p-2">
+          <div class="flex items-center justify-between mb-1.5">
             <p class="bento-label text-charcoal-500">SALARY & SCHEDULE</p>
             <span class="text-[10px] font-semibold text-charcoal-400">${ref.period}</span>
           </div>
-          <div class="space-y-2">
+          <div class="space-y-1">
             <div class="flex items-center justify-between">
               <div class="flex items-center gap-2 text-xs text-charcoal-600">
                 <span class="material-icons text-[16px] text-charcoal-400">payments</span>Basic Salary
@@ -86,24 +86,24 @@ function renderPayroll() {
               </div>
               <span class="text-xs font-bold text-green-600">+EGP ${annualInc.toLocaleString()}</span>
             </div>
-            <div class="flex items-center justify-between bg-brand-50 border border-brand-100 rounded-lg px-2.5 py-2">
+            <div class="flex items-center justify-between bg-brand-50 border border-brand-100 rounded-lg px-2.5 py-1.5">
               <p class="text-xs font-bold text-brand-700">Contractual Salary / month</p>
               <p class="text-sm font-bold text-brand-700">EGP ${contractSal.toLocaleString()}</p>
             </div>
-            <div class="grid grid-cols-4 gap-2 text-center pt-1">
-              <div class="bg-charcoal-50 rounded-lg p-2">
+            <div class="grid grid-cols-4 gap-1.5 text-center pt-0.5">
+              <div class="bg-charcoal-50 rounded-lg p-1">
                 <p class="text-sm font-bold text-charcoal-900">${ref.workingDays}</p>
                 <p class="text-[9px] text-charcoal-500 leading-tight mt-0.5">Scheduled Work Days</p>
               </div>
-              <div class="bg-charcoal-50 rounded-lg p-2">
+              <div class="bg-charcoal-50 rounded-lg p-1">
                 <p class="text-sm font-bold text-charcoal-900">${ref.scheduledWeeklyDays || 6}</p>
                 <p class="text-[9px] text-charcoal-500 leading-tight mt-0.5">Weekly Days</p>
               </div>
-              <div class="bg-charcoal-50 rounded-lg p-2">
+              <div class="bg-charcoal-50 rounded-lg p-1">
                 <p class="text-sm font-bold text-brand-700">${ref.workedDays}</p>
                 <p class="text-[9px] text-charcoal-500 leading-tight mt-0.5">Attendance · ${attPct}%</p>
               </div>
-              <div class="bg-charcoal-50 rounded-lg p-2">
+              <div class="bg-charcoal-50 rounded-lg p-1">
                 <p class="text-sm font-bold ${ref.overtimeHours ? 'text-blue-700' : 'text-charcoal-400'}">${ref.overtimeHours || 0}h</p>
                 <p class="text-[9px] text-charcoal-500 leading-tight mt-0.5">Overtime</p>
               </div>
@@ -112,34 +112,34 @@ function renderPayroll() {
         </div>
 
         <!-- Annual Leave Balance -->
-        <div class="bg-white rounded-2xl border border-charcoal-100/80 shadow-sm p-4">
-          <div class="flex items-center justify-between mb-3">
+        <div class="bg-white rounded-2xl border border-charcoal-100/80 shadow-sm p-2">
+          <div class="flex items-center justify-between mb-1.5">
             <p class="bento-label text-charcoal-500">ANNUAL LEAVE BALANCE</p>
             <span class="text-[10px] font-semibold text-charcoal-400">Used ${leaveUsed} · Remaining ${leaveRem}</span>
           </div>
-          <div class="flex items-end justify-between gap-3 mb-2">
+          <div class="flex items-end justify-between gap-3 mb-1">
             <div>
-              <p class="text-2xl font-bold text-charcoal-900">${leaveUsed}<span class="text-xs text-charcoal-400 font-normal"> / ${leaveTotal} days</span></p>
+              <p class="text-xl font-bold text-charcoal-900">${leaveUsed}<span class="text-xs text-charcoal-400 font-normal"> / ${leaveTotal} days</span></p>
               <p class="text-[10px] text-charcoal-500">Used this year</p>
             </div>
             <div class="text-right">
-              <p class="text-2xl font-bold text-brand-700">${leaveRem}</p>
+              <p class="text-xl font-bold text-brand-700">${leaveRem}</p>
               <p class="text-[10px] text-charcoal-500">Remaining</p>
             </div>
           </div>
-          <div class="w-full h-2.5 bg-charcoal-100 rounded-full overflow-hidden mb-3">
+          <div class="w-full h-2 bg-charcoal-100 rounded-full overflow-hidden mb-2">
             <div class="h-full bg-brand-500 rounded-l-full transition-all" style="width:${leavePct}%"></div>
           </div>
-          <div class="grid grid-cols-3 gap-2">
-            <div class="bg-charcoal-50 rounded-lg p-2.5 text-center">
+          <div class="grid grid-cols-3 gap-1.5">
+            <div class="bg-charcoal-50 rounded-lg p-1.5 text-center">
               <p class="text-sm font-bold text-charcoal-900">${leaveUsed}</p>
               <p class="text-[9px] text-charcoal-500 mt-0.5">Used</p>
             </div>
-            <div class="bg-charcoal-50 rounded-lg p-2.5 text-center">
+            <div class="bg-charcoal-50 rounded-lg p-1.5 text-center">
               <p class="text-sm font-bold text-brand-700">${leaveRem}</p>
               <p class="text-[9px] text-charcoal-500 mt-0.5">Remaining</p>
             </div>
-            <div class="bg-charcoal-50 rounded-lg p-2.5 text-center">
+            <div class="bg-charcoal-50 rounded-lg p-1.5 text-center">
               <p class="text-sm font-bold text-charcoal-900">${ref.paidLeaveDays || 0}</p>
               <p class="text-[9px] text-charcoal-500 mt-0.5">Paid Leave</p>
             </div>
@@ -150,11 +150,11 @@ function renderPayroll() {
 
   // YTD Summary bento
   const ytdBento = `
-    <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
-      <div class="bg-white rounded-xl border border-charcoal-100/80 shadow-sm p-4 hover:shadow-md transition-shadow">
-        <div class="flex items-center gap-2.5">
-          <div class="w-10 h-10 rounded-xl bg-brand-50 flex items-center justify-center flex-shrink-0">
-            <span class="material-icons text-brand-500 text-xl">account_balance_wallet</span>
+    <div class="grid grid-cols-2 lg:grid-cols-4 gap-2">
+      <div class="bg-white rounded-xl border border-charcoal-100/80 shadow-sm p-2 hover:shadow-md transition-shadow">
+        <div class="flex items-center gap-2">
+          <div class="w-8 h-8 rounded-lg bg-brand-50 flex items-center justify-center flex-shrink-0">
+            <span class="material-icons text-brand-500 text-lg">account_balance_wallet</span>
           </div>
           <div class="min-w-0">
             <p class="text-[10px] font-semibold text-charcoal-400 uppercase tracking-wide truncate">Earned</p>
@@ -162,10 +162,10 @@ function renderPayroll() {
           </div>
         </div>
       </div>
-      <div class="bg-white rounded-xl border border-charcoal-100/80 shadow-sm p-4 hover:shadow-md transition-shadow">
-        <div class="flex items-center gap-2.5">
-          <div class="w-10 h-10 rounded-xl bg-red-50 flex items-center justify-center flex-shrink-0">
-            <span class="material-icons text-red-400 text-xl">remove_circle</span>
+      <div class="bg-white rounded-xl border border-charcoal-100/80 shadow-sm p-2 hover:shadow-md transition-shadow">
+        <div class="flex items-center gap-2">
+          <div class="w-8 h-8 rounded-lg bg-red-50 flex items-center justify-center flex-shrink-0">
+            <span class="material-icons text-red-400 text-lg">remove_circle</span>
           </div>
           <div class="min-w-0">
             <p class="text-[10px] font-semibold text-charcoal-400 uppercase tracking-wide truncate">Deductions</p>
@@ -173,10 +173,10 @@ function renderPayroll() {
           </div>
         </div>
       </div>
-      <div class="bg-white rounded-xl border border-charcoal-100/80 shadow-sm p-4 hover:shadow-md transition-shadow">
-        <div class="flex items-center gap-2.5">
-          <div class="w-10 h-10 rounded-xl bg-green-50 flex items-center justify-center flex-shrink-0">
-            <span class="material-icons text-green-500 text-xl">savings</span>
+      <div class="bg-white rounded-xl border border-charcoal-100/80 shadow-sm p-2 hover:shadow-md transition-shadow">
+        <div class="flex items-center gap-2">
+          <div class="w-8 h-8 rounded-lg bg-green-50 flex items-center justify-center flex-shrink-0">
+            <span class="material-icons text-green-500 text-lg">savings</span>
           </div>
           <div class="min-w-0">
             <p class="text-[10px] font-semibold text-charcoal-400 uppercase tracking-wide truncate">Net Pay</p>
@@ -184,10 +184,10 @@ function renderPayroll() {
           </div>
         </div>
       </div>
-      <div class="bg-white rounded-xl border border-charcoal-100/80 shadow-sm p-4 hover:shadow-md transition-shadow">
-        <div class="flex items-center gap-2.5">
-          <div class="w-10 h-10 rounded-xl bg-purple-50 flex items-center justify-center flex-shrink-0">
-            <span class="material-icons text-purple-500 text-xl">trending_up</span>
+      <div class="bg-white rounded-xl border border-charcoal-100/80 shadow-sm p-2 hover:shadow-md transition-shadow">
+        <div class="flex items-center gap-2">
+          <div class="w-8 h-8 rounded-lg bg-purple-50 flex items-center justify-center flex-shrink-0">
+            <span class="material-icons text-purple-500 text-lg">trending_up</span>
           </div>
           <div class="min-w-0">
             <p class="text-[10px] font-semibold text-charcoal-400 uppercase tracking-wide truncate">Avg / Month</p>
@@ -199,7 +199,7 @@ function renderPayroll() {
 
   // Monthly history cards
   const maxSalary = Math.max(...history.map(p => p.netSalary));
-  let historyCards = history.map(p => {
+  let historyCards = history.slice(0,2).map(p => {
     const earnings = p.items.filter(i => i.type === 'earning');
     const deductions = p.items.filter(i => i.type === 'deduction');
     const isExpanded = _payExpanded === p.id;
@@ -210,19 +210,19 @@ function renderPayroll() {
     return `
       <div class="bg-white rounded-2xl border border-charcoal-100/80 shadow-sm overflow-hidden transition-all duration-200 hover:shadow-md">
         <!-- Card Header -->
-        <div class="p-4 cursor-pointer hover:bg-charcoal-50/40 transition-colors" onclick="togglePayExpand('${p.id}')">
+        <div class="p-2.5 cursor-pointer hover:bg-charcoal-50/40 transition-colors" onclick="togglePayExpand('${p.id}')">
           <!-- Row 1: Period + Amount -->
           <div class="flex items-center justify-between gap-3">
-            <div class="flex items-center gap-3 min-w-0 flex-1">
-              <div class="w-11 h-11 rounded-xl bg-charcoal-100/70 flex items-center justify-center flex-shrink-0">
-                <span class="material-icons text-charcoal-500 text-lg">receipt_long</span>
+            <div class="flex items-center gap-2.5 min-w-0 flex-1">
+              <div class="w-8 h-8 rounded-lg bg-charcoal-100/70 flex items-center justify-center flex-shrink-0">
+                <span class="material-icons text-charcoal-500 text-base">receipt_long</span>
               </div>
               <div class="min-w-0 flex-1">
                 <p class="text-sm font-bold text-charcoal-900 truncate">${p.period}</p>
                 <p class="text-[10px] text-charcoal-400">Paid ${formatDate(p.paidDate)}</p>
               </div>
             </div>
-            <div class="flex items-center gap-2.5 flex-shrink-0">
+            <div class="flex items-center gap-2 flex-shrink-0">
               <span class="text-sm font-bold text-charcoal-900 whitespace-nowrap">EGP ${p.netSalary.toLocaleString()}</span>
               ${statusBadge(p.status)}
               <span class="material-icons text-charcoal-400 text-base transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}">expand_more</span>
@@ -230,32 +230,28 @@ function renderPayroll() {
           </div>
 
           <!-- Row 2: Progress bar -->
-          <div class="w-full h-2 bg-charcoal-100 rounded-full overflow-hidden mt-3">
+          <div class="w-full h-1.5 bg-charcoal-100 rounded-full overflow-hidden mt-1.5">
             <div class="h-full bg-gradient-to-r from-brand-500 to-brand-400 rounded-full transition-all duration-500" style="width:${barPct}%"></div>
           </div>
 
           <!-- Row 3: Stat chips -->
-          <div class="flex items-center gap-2 mt-3 flex-wrap">
-            <span class="inline-flex items-center gap-1 bg-green-50 text-green-700 rounded-full px-2.5 py-1 text-[10px] font-medium">
-              <span class="material-icons text-xs">add_circle</span>
+          <div class="flex items-center gap-1.5 mt-1.5 flex-wrap">
+            <span class="inline-flex items-center gap-1 bg-green-50 text-green-700 rounded-full px-2 py-0.5 text-[9px] font-medium">
+              <span class="material-icons text-[10px]">add_circle</span>
               ${earnings.length} earning${earnings.length !== 1 ? 's' : ''}
             </span>
-            <span class="inline-flex items-center gap-1 bg-red-50 text-red-600 rounded-full px-2.5 py-1 text-[10px] font-medium">
-              <span class="material-icons text-xs">remove_circle</span>
+            <span class="inline-flex items-center gap-1 bg-red-50 text-red-600 rounded-full px-2 py-0.5 text-[9px] font-medium">
+              <span class="material-icons text-[10px]">remove_circle</span>
               ${deductions.length} deduction${deductions.length !== 1 ? 's' : ''}
             </span>
-            ${attendanceCount > 0 ? `<span class="inline-flex items-center gap-1 bg-orange-50 text-orange-600 rounded-full px-2.5 py-1 text-[10px] font-medium">
-              <span class="material-icons text-xs">event_busy</span>
+            ${attendanceCount > 0 ? `<span class="inline-flex items-center gap-1 bg-orange-50 text-orange-600 rounded-full px-2 py-0.5 text-[9px] font-medium">
+              <span class="material-icons text-[10px]">event_busy</span>
               ${attendanceCount} late/absent
             </span>` : ''}
-            ${(p.overtimeHours || 0) > 0 ? `<span class="inline-flex items-center gap-1 bg-blue-50 text-blue-600 rounded-full px-2.5 py-1 text-[10px] font-medium">
-              <span class="material-icons text-xs">schedule</span>
+            ${(p.overtimeHours || 0) > 0 ? `<span class="inline-flex items-center gap-1 bg-blue-50 text-blue-600 rounded-full px-2 py-0.5 text-[9px] font-medium">
+              <span class="material-icons text-[10px]">schedule</span>
               ${p.overtimeHours}h overtime
             </span>` : ''}
-            <span class="inline-flex items-center gap-1 bg-blue-50 text-blue-600 rounded-full px-2.5 py-1 text-[10px] font-medium">
-              <span class="material-icons text-xs">calendar_today</span>
-              ${p.workedDays}/${p.workingDays} days
-            </span>
           </div>
         </div>
 
@@ -352,10 +348,9 @@ function renderPayroll() {
   }).join('');
 
   return `
-    <div class="space-y-6">
+    <div class="space-y-2">
       <div>
-        <h1 class="text-xl font-bold text-charcoal-900">My Payroll</h1>
-        <p class="text-[11px] text-charcoal-400 mt-0.5">${history.length} payslip${history.length !== 1 ? 's' : ''}</p>
+        <h1 class="text-lg font-bold text-charcoal-900">My Payroll <span class="text-[11px] font-normal text-charcoal-400">· ${history.length} payslips</span></h1>
       </div>
 
       ${currentCard}
@@ -365,14 +360,14 @@ function renderPayroll() {
 
       <!-- YTD Summary -->
       <div>
-        <p class="bento-label text-charcoal-400 mb-2.5">YEAR TO DATE</p>
+        <p class="bento-label text-charcoal-400 mb-1.5">YEAR TO DATE</p>
         ${ytdBento}
       </div>
 
       <!-- Monthly History -->
       <div>
-        <h2 class="text-sm font-bold text-charcoal-900 mb-3">Monthly Breakdown</h2>
-        <div class="space-y-3">${historyCards}</div>
+        <h2 class="text-sm font-bold text-charcoal-900 mb-1.5">Monthly Breakdown</h2>
+        <div class="space-y-2">${historyCards}</div>
       </div>
     </div>`;
 }
@@ -685,6 +680,8 @@ function updateReqForm() {
   const c=document.getElementById('req-form-fields');
   if(!t){c.innerHTML='';return;}
   let h='<div class="border-t border-charcoal-100 pt-3 space-y-3">';
+  /* Show leave balance banner when Day Off is selected */
+  if(t.id==='day-off') h+=leaveBalanceBannerHtml()+'<div class="border-t border-charcoal-100 pt-3">';
   t.fields.forEach(f=>{
     if(f==='date'||f==='date-from') h+=`<div><label class="form-label">${f==='date-from'?'From':'Date'}</label><input type="date" class="form-input" required></div>`;
     else if(f==='date-to') h+=`<div><label class="form-label">To Date</label><input type="date" class="form-input" required></div>`;
@@ -695,9 +692,29 @@ function updateReqForm() {
     else if(f==='correction-type') h+=`<div><label class="form-label">Type</label><select class="form-select" required><option value="">Select...</option><option>Missing Check-in</option><option>Missing Check-out</option><option>Wrong Time</option></select></div>`;
     else h+=`<div><label class="form-label">${f.charAt(0).toUpperCase()+f.slice(1).replace(/-/g,' ')}</label><textarea class="form-input" rows="2" placeholder="Details..." required></textarea></div>`;
   });
+  if(t.id==='day-off') h+='</div>';
   c.innerHTML=h+'</div>';
 }
-function submitNewRequest() { closeModal(); showToast('Request submitted'); }
+function submitNewRequest() {
+  const sel=document.getElementById('req-type-select');
+  const typeId=sel?sel.value:'';
+  /* Block day-off if no annual leave remaining */
+  if(typeId==='day-off' && annualLeaveRemaining()<=0){showToast('No annual leave days remaining — you cannot submit a day-off request','error');return;}
+  if(typeId==='day-off'){
+    /* Check for date conflicts */
+    const dateInput=document.querySelector('#req-form-fields input[type=date]');
+    if(dateInput && dateInput.value){
+      const dStr=formatDate(dateInput.value);
+      const conflict=MOCK.requests.find(r=>r.type==='Day Off' && r.status!=='Rejected' && r.requestedDate===dStr);
+      if(conflict){showToast('You already have a Day Off request for this date','error');return;}
+    }
+    /* Deduct from leave balance */
+    MOCK.leaveBalance.annualUsed++;
+  }
+  closeModal();
+  renderAll();
+  showToast('Request submitted');
+}
 function openReqDetail(id) {
   const r=MOCK.requests.find(x=>x.id===id); if(!r)return;
   state.selectedReq = id;
@@ -741,21 +758,21 @@ function openReqDetail(id) {
 // ==================== NOTIFICATIONS ====================
 function renderNotifications() {
   const unread = MOCK.notifications.filter(n=>!n.read).length;
-  return `<div class="space-y-3">
+  return `<div class="space-y-2">
     <div class="flex items-center justify-between">
-      <div><h1 class="text-xl font-bold text-charcoal-900">Notifications</h1><p class="text-xs text-charcoal-500 mt-0.5">${unread} unread</p></div>
+      <div><h1 class="text-lg font-bold text-charcoal-900">Notifications</h1><p class="text-[11px] text-charcoal-500 mt-0.5">${unread} unread</p></div>
       <button onclick="showToast('All marked as read')" class="btn btn-sm btn-secondary"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>Mark All Read</button>
     </div>
-    <div class="space-y-1">${MOCK.notifications.map(n=>`<div class="bg-white rounded-xl border ${n.read?'border-charcoal-200':'border-brand-200 bg-brand-50/30'} p-3 card-interactive transition-all" onclick="${n.link?`navigateTo('${n.link}')`:''}">
-      <div class="flex items-start gap-3">
-        <div class="w-9 h-9 rounded-full ${colorMap[n.color]} flex items-center justify-center flex-shrink-0">${catIcon(n.category)}</div>
+    <div class="space-y-1">${MOCK.notifications.map(n=>`<div class="bg-white rounded-xl border ${n.read?'border-charcoal-200':'border-brand-200 bg-brand-50/30'} p-2 card-interactive transition-all" onclick="${n.link?`navigateTo('${n.link}')`:''}">
+      <div class="flex items-start gap-2.5">
+        <div class="w-8 h-8 rounded-full ${colorMap[n.color]} flex items-center justify-center flex-shrink-0">${catIcon(n.category)}</div>
         <div class="flex-1 min-w-0">
           <div class="flex items-center gap-1.5">
             <p class="text-xs font-semibold text-charcoal-900 ${n.read?'font-medium':''}">${n.title}</p>
             ${!n.read?'<span class="w-2 h-2 bg-brand-500 rounded-full flex-shrink-0"></span>':''}
           </div>
           <p class="text-xs text-charcoal-600 mt-0.5">${n.description}</p>
-          <div class="flex items-center gap-2 mt-1.5">
+          <div class="flex items-center gap-2 mt-1">
             <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-charcoal-50 text-[9px] font-medium text-charcoal-600">${n.category}</span>
             <span class="text-[10px] text-charcoal-400">${n.date}</span>
           </div>
@@ -776,25 +793,25 @@ function renderSettings() {
     {k:'payrollNotifications',l:'Payroll Updates',desc:'Payslip availability'},
     {k:'requestNotifications',l:'Request Updates',desc:'Request status changes'},
   ];
-  return `<div class="space-y-3 max-w-xl">
-    <div><h1 class="text-xl font-bold text-charcoal-900">Settings</h1><p class="text-xs text-charcoal-500 mt-0.5">Manage your account and preferences</p></div>
+  return `<div class="space-y-1.5 max-w-xl">
+    <div><h1 class="text-lg font-bold text-charcoal-900">Settings</h1><p class="text-[11px] text-charcoal-500 mt-0.5">Manage your account and preferences</p></div>
 
     <!-- Account -->
     <div class="bg-white rounded-xl border border-charcoal-200 overflow-hidden">
-      <div class="px-4 py-2.5 border-b border-charcoal-100 bg-charcoal-50/50">
+      <div class="px-3 py-1.5 border-b border-charcoal-100 bg-charcoal-50/50">
         <p class="bento-label">ACCOUNT</p>
       </div>
-      <div class="p-3 space-y-1">
-        <button onclick="openChangePassword()" class="w-full flex items-center justify-between p-3 rounded-lg hover:bg-charcoal-50 transition-colors text-xs">
+      <div class="p-2 space-y-0.5">
+        <button onclick="openChangePassword()" class="w-full flex items-center justify-between p-1.5 rounded-lg hover:bg-charcoal-50 transition-colors text-xs">
           <div class="flex items-center gap-3">
-            <div class="w-9 h-9 rounded-lg bg-charcoal-100 flex items-center justify-center"><svg class="w-4 h-4 text-charcoal-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg></div>
+            <div class="w-8 h-8 rounded-lg bg-charcoal-100 flex items-center justify-center"><svg class="w-4 h-4 text-charcoal-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg></div>
             <div class="text-left"><p class="font-medium text-charcoal-900">Change Password</p><p class="text-[10px] text-charcoal-500">Last changed 45 days ago</p></div>
           </div>
           <svg class="w-4 h-4 text-charcoal-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
         </button>
-        <button onclick="handleLogout()" class="w-full flex items-center justify-between p-3 rounded-lg hover:bg-red-50 transition-colors text-xs">
+        <button onclick="handleLogout()" class="w-full flex items-center justify-between p-1.5 rounded-lg hover:bg-red-50 transition-colors text-xs">
           <div class="flex items-center gap-3">
-            <div class="w-9 h-9 rounded-lg bg-red-100 flex items-center justify-center"><svg class="w-4 h-4 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg></div>
+            <div class="w-8 h-8 rounded-lg bg-red-100 flex items-center justify-center"><svg class="w-4 h-4 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg></div>
             <p class="font-medium text-red-600">Logout</p>
           </div>
           <svg class="w-4 h-4 text-charcoal-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
@@ -804,20 +821,20 @@ function renderSettings() {
 
     <!-- Notifications -->
     <div class="bg-white rounded-xl border border-charcoal-200 overflow-hidden">
-      <div class="px-4 py-2.5 border-b border-charcoal-100 bg-charcoal-50/50">
+      <div class="px-3 py-1.5 border-b border-charcoal-100 bg-charcoal-50/50">
         <p class="bento-label">NOTIFICATIONS</p>
       </div>
-      <div class="p-3 space-y-0">
-        ${notifSettings.map((p,i)=>`<div class="flex items-center justify-between py-2.5 ${i<notifSettings.length-1?'border-b border-charcoal-50':''}"><div><p class="text-xs font-medium text-charcoal-900">${p.l}</p><p class="text-[10px] text-charcoal-500">${p.desc}</p></div><label class="relative inline-flex items-center cursor-pointer"><input type="checkbox" ${MOCK.settings[p.k]?'checked':''} class="sr-only peer"><div class="w-9 h-5 bg-charcoal-200 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-brand-600"></div></label></div>`).join('')}
+      <div class="p-2 space-y-0">
+        ${notifSettings.map((p,i)=>`<div class="flex items-center justify-between py-1 ${i<notifSettings.length-1?'border-b border-charcoal-50':''}"><div><p class="text-xs font-medium text-charcoal-900">${p.l}</p><p class="text-[10px] text-charcoal-500">${p.desc}</p></div><label class="relative inline-flex items-center cursor-pointer"><input type="checkbox" ${MOCK.settings[p.k]?'checked':''} class="sr-only peer"><div class="w-9 h-5 bg-charcoal-200 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-brand-600"></div></label></div>`).join('')}
       </div>
     </div>
 
     <!-- Language -->
     <div class="bg-white rounded-xl border border-charcoal-200 overflow-hidden">
-      <div class="px-4 py-2.5 border-b border-charcoal-100 bg-charcoal-50/50">
+      <div class="px-3 py-1.5 border-b border-charcoal-100 bg-charcoal-50/50">
         <p class="bento-label">PREFERENCES</p>
       </div>
-      <div class="p-3">
+      <div class="p-2">
         <label class="form-label">Language</label>
         <select class="form-select w-40" style="padding:0.375rem 2rem 0.375rem 0.625rem;font-size:0.8125rem"><option>English</option><option>Arabic</option></select>
       </div>

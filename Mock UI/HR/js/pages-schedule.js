@@ -1,38 +1,144 @@
 // ==================== SHIFTS & SCHEDULE ====================
 let _schedCycle = 'c4';
+let _selectedDay = 1; // 0=Mon..6=Sun, default today (Tue)
 
 function renderSchedule() {
   const showAll = DEMO.showAll;
-  const canEdit = showAll || hasPermission('schedule.edit');
+  const canEdit = showAll || hasPermission('schedule.manage');
   const cm = MOCK.scheduleCycles.find(c => c.id === _schedCycle) || MOCK.scheduleCycles[0];
   const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  const dayDates = ['Sep 3', 'Sep 4', 'Sep 5', 'Sep 6', 'Sep 7', 'Sep 8', 'Sep 9'];
   const todayIdx = 1;
-
-  const cols = days.map((d, di) => `<th class="p-2 text-left text-[9px] uppercase tracking-wide text-charcoal-500 whitespace-nowrap">${d}<p class="text-[8px] text-charcoal-400">${di < 5 ? `Sep ${3 + di}` : `Sep ${8 + di - 5}`}</p>${di === todayIdx ? ' <span class="text-brand-600">●</span>' : ''}</th>`).join('');
-
   const tmplById = {};
   MOCK.shiftTemplates.forEach(t => { tmplById[t.id] = t; });
-  const shiftShort = { 'Morning': 'M', 'Evening': 'E', 'Night': 'N', 'Off Day': '—' };
-  const shortMap = MOCK.shiftTemplates.reduce((m, t) => { m[t.name] = t.isOff ? '—' : t.name[0]; return m; }, {});
 
-  const rows = MOCK.teamMembers.map(tm => {
-    const tmpl = MOCK.teamSchedule[tm.id] || [];
-    const cell = (tid) => {
-      const t = tmplById[tid] || MOCK.shiftTemplates[3];
-      const txt = t.isOff ? '—' : t.name[0];
-      return `<div class="rounded-lg border px-1 py-1.5 text-center text-[9px] font-medium ${canEdit?'cursor-pointer':''}" style="background:${t.isOff?'#f1f3f5':t.bgColor};color:${t.isOff?'#6c7a71':t.textColor};border-color:${t.isOff?'#e9ecef':t.color}33" ${canEdit?`onclick="editShift('${tm.id}',${tmpl.indexOf(tid)})"`:''}>${txt}${t.isOff?'':` <span class="opacity-60">${t.start ? t.start.slice(0,2) : ''}</span>`}</div>`;
-    };
-    return `<tr>
-      <td class="p-2"><div class="flex items-center gap-2"><div class="w-8 h-8 rounded-full bg-brand-100 text-brand-700 flex items-center justify-center text-[10px] font-semibold">${tm.initials || tm.name.split(' ').map(w => w[0]).join('')}</div><div><p class="text-[11px] font-medium text-charcoal-900 whitespace-nowrap">${tm.name}</p><p class="text-[9px] text-charcoal-500 whitespace-nowrap">${tm.position} · ${tm.gym}</p></div></div></td>
-      ${days.map((d, di) => `<td class="p-1">${cell(tmpl[di])}</td>`).join('')}
-    </tr>`;
+  // --- Build per-day summary data ---
+  const daySummaries = days.map((d, di) => {
+    const onShift = MOCK.teamMembers.filter(tm => {
+      const tmpl = MOCK.teamSchedule[tm.id] || [];
+      const t = tmplById[tmpl[di]];
+      return t && !t.isOff;
+    });
+    const offDay = MOCK.teamMembers.filter(tm => {
+      const tmpl = MOCK.teamSchedule[tm.id] || [];
+      const t = tmplById[tmpl[di]];
+      return t && t.isOff;
+    });
+    const dayReqs = MOCK.requests.filter(r => {
+      const rDate = r.requestedDate || '';
+      return rDate.includes(dayDates[di].replace('Sep ', 'Sep '));
+    });
+    const morning = onShift.filter(tm => { const t = tmplById[(MOCK.teamSchedule[tm.id]||[])[di]]; return t && t.name === 'Morning'; });
+    const evening = onShift.filter(tm => { const t = tmplById[(MOCK.teamSchedule[tm.id]||[])[di]]; return t && t.name === 'Evening'; });
+    const night = onShift.filter(tm => { const t = tmplById[(MOCK.teamSchedule[tm.id]||[])[di]]; return t && t.name === 'Night'; });
+    return { day: d, date: dayDates[di], di, onShift, offDay, dayReqs, morning, evening, night, total: onShift.length, off: offDay.length };
+  });
+
+  // --- Compact calendar day cards ---
+  const calendarCards = daySummaries.map((ds, di) => {
+    const isSelected = di === _selectedDay;
+    const isToday = di === todayIdx;
+    const hasReqs = ds.dayReqs.length > 0;
+    return `<div class="sched-day-card ${isSelected ? 'sched-day-selected' : ''} ${isToday ? 'sched-day-today' : ''}" onclick="_selectedDay=${di};renderAll();">
+      <div class="flex items-center justify-between mb-1.5">
+        <span class="text-[10px] font-semibold ${isToday ? 'text-brand-600' : 'text-charcoal-700'}">${ds.day}</span>
+        ${isToday ? '<span class="text-[7px] bg-brand-500 text-white px-1.5 py-0.5 rounded-full font-semibold">TODAY</span>' : ''}
+      </div>
+      <p class="text-[9px] text-charcoal-400 mb-2">${ds.date}</p>
+      <div class="space-y-1 mb-2">
+        ${ds.morning.length > 0 ? `<div class="flex items-center gap-1"><span class="sched-dot" style="background:#2563eb"></span><span class="text-[9px] text-charcoal-600">Morning <span class="font-medium text-charcoal-800">${ds.morning.length}</span></span></div>` : ''}
+        ${ds.evening.length > 0 ? `<div class="flex items-center gap-1"><span class="sched-dot" style="background:#006c49"></span><span class="text-[9px] text-charcoal-600">Evening <span class="font-medium text-charcoal-800">${ds.evening.length}</span></span></div>` : ''}
+        ${ds.night.length > 0 ? `<div class="flex items-center gap-1"><span class="sched-dot" style="background:#7c3aed"></span><span class="text-[9px] text-charcoal-600">Night <span class="font-medium text-charcoal-800">${ds.night.length}</span></span></div>` : ''}
+      </div>
+      <div class="flex items-center justify-between pt-1.5 border-t border-charcoal-100">
+        <span class="text-[8px] text-charcoal-400">${ds.total} on · ${ds.off} off</span>
+        ${hasReqs ? `<span class="text-[8px] bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded-full font-medium">${ds.dayReqs.length} req</span>` : ''}
+      </div>
+    </div>`;
   }).join('');
+
+  // --- Detail panel (left side) ---
+  const ds = daySummaries[_selectedDay];
+  const detailPanel = `<div class="sched-detail-panel">
+    <div class="mb-3">
+      <div class="flex items-center justify-between mb-1">
+        <h3 class="text-sm font-bold text-charcoal-900">${ds.day} <span class="font-normal text-charcoal-400">${ds.date}</span></h3>
+        ${_selectedDay === todayIdx ? '<span class="text-[9px] bg-brand-100 text-brand-700 px-2 py-0.5 rounded-full font-semibold">Today</span>' : ''}
+      </div>
+      <p class="text-[10px] text-charcoal-500">${ds.total} employees on shift · ${ds.off} off</p>
+    </div>
+
+    <!-- Shift breakdown -->
+    ${ds.morning.length > 0 ? `<div class="mb-3">
+      <div class="flex items-center gap-1.5 mb-1.5"><span class="w-2 h-2 rounded-full" style="background:#2563eb"></span><p class="text-[10px] font-semibold text-charcoal-700 uppercase tracking-wide">Morning Shift · 08:00 – 16:00</p></div>
+      <div class="space-y-1">${ds.morning.map(tm => {
+        const att = MOCK.attendanceRecords.find(a => a.name === tm.name);
+        return `<div class="sched-detail-row">
+          <div class="flex items-center gap-2 min-w-0">
+            <div class="w-6 h-6 rounded-full bg-brand-100 text-brand-700 flex items-center justify-center text-[8px] font-semibold flex-shrink-0">${tm.initials || tm.name.split(' ').map(w=>w[0]).join('')}</div>
+            <div class="min-w-0"><p class="text-[11px] font-medium text-charcoal-900 truncate">${tm.name}</p><p class="text-[9px] text-charcoal-400">${tm.position} · ${tm.gym}</p></div>
+          </div>
+          <div class="text-right flex-shrink-0">
+            ${att ? `<p class="text-[10px] text-charcoal-600">In: <span class="font-medium ${att.status==='Late'?'text-yellow-600':'text-charcoal-800'}">${att.checkIn || '—'}</span></p>
+            <p class="text-[10px] text-charcoal-600">Out: <span class="font-medium">${att.checkOut || '—'}</span></p>` : '<p class="text-[9px] text-charcoal-400">No record</p>'}
+          </div>
+        </div>`;
+      }).join('')}</div>
+    </div>` : ''}
+
+    ${ds.evening.length > 0 ? `<div class="mb-3">
+      <div class="flex items-center gap-1.5 mb-1.5"><span class="w-2 h-2 rounded-full" style="background:#006c49"></span><p class="text-[10px] font-semibold text-charcoal-700 uppercase tracking-wide">Evening Shift · 16:00 – 00:00</p></div>
+      <div class="space-y-1">${ds.evening.map(tm => {
+        const att = MOCK.attendanceRecords.find(a => a.name === tm.name);
+        return `<div class="sched-detail-row">
+          <div class="flex items-center gap-2 min-w-0">
+            <div class="w-6 h-6 rounded-full bg-brand-100 text-brand-700 flex items-center justify-center text-[8px] font-semibold flex-shrink-0">${tm.initials || tm.name.split(' ').map(w=>w[0]).join('')}</div>
+            <div class="min-w-0"><p class="text-[11px] font-medium text-charcoal-900 truncate">${tm.name}</p><p class="text-[9px] text-charcoal-400">${tm.position} · ${tm.gym}</p></div>
+          </div>
+          <div class="text-right flex-shrink-0">
+            ${att ? `<p class="text-[10px] text-charcoal-600">In: <span class="font-medium ${att.status==='Late'?'text-yellow-600':'text-charcoal-800'}">${att.checkIn || '—'}</span></p>
+            <p class="text-[10px] text-charcoal-600">Out: <span class="font-medium">${att.checkOut || '—'}</span></p>` : '<p class="text-[9px] text-charcoal-400">No record</p>'}
+          </div>
+        </div>`;
+      }).join('')}</div>
+    </div>` : ''}
+
+    ${ds.night.length > 0 ? `<div class="mb-3">
+      <div class="flex items-center gap-1.5 mb-1.5"><span class="w-2 h-2 rounded-full" style="background:#7c3aed"></span><p class="text-[10px] font-semibold text-charcoal-700 uppercase tracking-wide">Night Shift · 00:00 – 08:00</p></div>
+      <div class="space-y-1">${ds.night.map(tm => `<div class="sched-detail-row">
+        <div class="flex items-center gap-2 min-w-0">
+          <div class="w-6 h-6 rounded-full bg-brand-100 text-brand-700 flex items-center justify-center text-[8px] font-semibold flex-shrink-0">${tm.initials || tm.name.split(' ').map(w=>w[0]).join('')}</div>
+          <div class="min-w-0"><p class="text-[11px] font-medium text-charcoal-900 truncate">${tm.name}</p><p class="text-[9px] text-charcoal-400">${tm.position} · ${tm.gym}</p></div>
+        </div>
+      </div>`).join('')}</div>
+    </div>` : ''}
+
+    ${ds.offDay.length > 0 ? `<div class="mb-3">
+      <div class="flex items-center gap-1.5 mb-1.5"><span class="w-2 h-2 rounded-full" style="background:#6b7280"></span><p class="text-[10px] font-semibold text-charcoal-700 uppercase tracking-wide">Off Day</p></div>
+      <div class="flex flex-wrap gap-1">${ds.offDay.map(tm => `<span class="text-[9px] bg-charcoal-50 text-charcoal-600 px-2 py-0.5 rounded-full">${tm.name.split(' ')[0]}</span>`).join('')}</div>
+    </div>` : ''}
+
+    <!-- Requests for this day -->
+    <div class="mb-2">
+      <div class="flex items-center gap-1.5 mb-1.5">
+        <svg class="w-3 h-3 text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+        <p class="text-[10px] font-semibold text-charcoal-700 uppercase tracking-wide">Requests</p>
+      </div>
+      ${ds.dayReqs.length > 0 ? `<div class="space-y-1">${ds.dayReqs.map(r => `<div class="bg-orange-50 border border-orange-100 rounded-lg p-2">
+        <div class="flex items-center justify-between mb-0.5">
+          <p class="text-[10px] font-medium text-charcoal-900">${r.employee}</p>
+          <span class="text-[8px] px-1.5 py-0.5 rounded-full ${r.status.includes('Pending') ? 'bg-yellow-100 text-yellow-700' : r.status === 'Approved' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}">${r.status}</span>
+        </div>
+        <p class="text-[9px] text-charcoal-500">${r.type} · ${r.reason}</p>
+      </div>`).join('')}</div>` : '<p class="text-[10px] text-charcoal-400 italic">No requests for this day</p>'}
+    </div>
+  </div>`;
 
   const legend = MOCK.shiftTemplates.map(t => `<span class="inline-flex items-center gap-1 text-[9px] text-charcoal-600"><span class="w-2.5 h-2.5 rounded" style="background:${t.isOff?'#f1f3f5':t.bgColor};border:${t.isOff?'1px solid #e9ecef':'1px solid '+t.color+'33'}"></span> ${t.name}</span>`).join('');
 
-  return `<div class="space-y-3">
-    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-      <div><h1 class="text-xl font-bold text-charcoal-900">Shifts & Schedule</h1><p class="text-xs text-charcoal-500 mt-0.5">Cycle ${cm.label} · ${cm.status}</p></div>
+  return `<div class="flex flex-col h-full min-h-0 gap-3">
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 flex-shrink-0">
+      <div><h1 class="text-xl font-bold text-charcoal-900">Shifts & Schedule</h1><p class="text-xs text-charcoal-500 mt-0.5">Cycle ${cm.label} · ${cm.status} · Click any day to see details</p></div>
       <div class="flex items-center gap-1.5 flex-wrap">
         ${canEdit ? `<button onclick="openNewCycle()" class="btn btn-sm btn-primary">New Cycle</button><button onclick="copyPreviousCycle()" class="btn btn-sm btn-secondary">Copy Previous</button>` : ''}
         <button onclick="publishSchedule()" class="btn btn-sm ${cm.status === 'Published' ? 'btn-disabled' : (canEdit ? 'btn-success' : 'btn-disabled')}" ${!canEdit || cm.status === 'Published' ? 'disabled' : ''}>${cm.status === 'Published' ? 'Published' : 'Publish'}</button>
@@ -40,12 +146,12 @@ function renderSchedule() {
     </div>
 
     <!-- Cycle selector -->
-    <div class="flex items-center gap-2 overflow-x-auto py-0.5">
+    <div class="flex items-center gap-2 overflow-x-auto py-0.5 flex-shrink-0">
       ${MOCK.scheduleCycles.map(c => `<button onclick="_schedCycle='${c.id}';renderAll()" class="px-3 py-1.5 rounded-lg border text-[10px] font-medium whitespace-nowrap ${c.id === _schedCycle ? 'border-brand-500 bg-brand-50 text-brand-700' : 'border-charcoal-200 text-charcoal-500'}">${c.label} · ${c.status}</button>`).join('')}
     </div>
 
     <!-- Coverage KPIs -->
-    <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
+    <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 flex-shrink-0">
       <div class="bg-white rounded-xl border border-charcoal-200 p-3 text-center border-l-4 border-l-brand-500"><p class="text-lg font-bold text-brand-600">10<span class="text-[10px] font-normal text-charcoal-400">/10</span></p><p class="text-[10px] text-charcoal-500">Employees Scheduled</p></div>
       <div class="bg-white rounded-xl border border-charcoal-200 p-3 text-center"><p class="text-lg font-bold text-red-600">2</p><p class="text-[10px] text-charcoal-500">Conflicts</p></div>
       <div class="bg-white rounded-xl border border-charcoal-200 p-3 text-center"><p class="text-lg font-bold text-green-600">${MOCK.scheduleCycles.filter(c=>c.status==='Published').length}</p><p class="text-[10px] text-charcoal-500">Published Cycles</p></div>
@@ -53,31 +159,51 @@ function renderSchedule() {
     </div>
 
     <!-- Conflict warnings -->
-    <div class="bg-white rounded-xl border border-red-200 border-l-4 border-l-red-500 p-3">
+    <div class="bg-white rounded-xl border border-red-200 border-l-4 border-l-red-500 p-3 flex-shrink-0">
       <p class="bento-label text-red-600 mb-1">CONFLICT WARNING</p>
       <p class="text-[11px] text-charcoal-600">2 employees have overlapping shifts in this cycle. Review <strong>Karim Hassan</strong> (Evening/Night) and <strong>Sara Ali</strong> (Morning/Evening on Tue).</p>
     </div>
 
-    <!-- Weekly grid -->
-    <div class="bg-white rounded-xl border border-charcoal-200 overflow-hidden">
-      <div class="px-4 py-2.5 border-b border-charcoal-100 flex items-center justify-between">
-        <p class="bento-label text-charcoal-500">WEEKLY ASSIGNMENTS</p>
-        <select class="form-select w-auto" style="padding:0.25rem 2rem 0.25rem 0.5rem;font-size:0.75rem"><option>All Gyms</option><option>Nasr City</option><option>Heliopolis</option><option>6th October</option></select>
+    <!-- Main layout: Detail panel + Calendar (fills remaining viewport) -->
+    <div class="flex flex-col lg:flex-row gap-3 flex-1 min-h-0">
+      <!-- Left: Day detail panel -->
+      ${detailPanel}
+
+      <!-- Right: Compact weekly calendar -->
+      <div class="flex-1 min-w-0 min-h-0 lg:overflow-y-auto flex flex-col gap-3">
+        <div class="bg-white rounded-xl border border-charcoal-200 overflow-hidden">
+          <div class="px-4 py-2.5 border-b border-charcoal-100 flex items-center justify-between bg-charcoal-50/50">
+            <p class="bento-label text-charcoal-500">WEEKLY OVERVIEW</p>
+            <select class="form-select w-auto" style="padding:0.25rem 2rem 0.25rem 0.5rem;font-size:0.75rem"><option>All Gyms</option><option>Nasr City</option><option>Heliopolis</option><option>6th October</option></select>
+          </div>
+          <div class="p-3 grid grid-cols-7 gap-2">${calendarCards}</div>
+          <div class="px-4 py-2 border-t border-charcoal-100 flex flex-wrap gap-2">${legend}</div>
+        </div>
+
+        <!-- Employee roster below calendar -->
+        <div class="bg-white rounded-xl border border-charcoal-200 overflow-hidden hidden lg:flex flex-col flex-1 min-h-0">
+          <div class="px-4 py-2.5 border-b border-charcoal-100 bg-charcoal-50/50 flex items-center justify-between">
+            <p class="bento-label text-charcoal-500">TEAM ROSTER — ALL SHIFTS</p>
+            <span class="text-[9px] text-charcoal-400">${ds.day}</span>
+          </div>
+          <div class="flex-1 min-h-0 overflow-auto table-responsive rounded-b-xl"><table class="data-table h-full"><thead><tr><th>Employee</th><th>Position</th><th>Gym</th><th>Shift</th><th>Hours</th></tr></thead><tbody>
+            ${MOCK.teamMembers.map(tm => {
+              const tmpl = MOCK.teamSchedule[tm.id] || [];
+              const t = tmplById[tmpl[_selectedDay]] || MOCK.shiftTemplates[3];
+              return `<tr>
+                <td><div class="flex items-center gap-2"><div class="w-7 h-7 rounded-full bg-brand-100 text-brand-700 flex items-center justify-center text-[9px] font-semibold">${tm.initials || tm.name.split(' ').map(w=>w[0]).join('')}</div><span class="text-[11px] font-medium text-charcoal-900">${tm.name}</span></div></td>
+                <td class="text-[10px] text-charcoal-600">${tm.position}</td>
+                <td class="text-[10px] text-charcoal-600">${tm.gym}</td>
+                <td><span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-medium" style="background:${t.isOff?'#f1f3f5':t.bgColor};color:${t.isOff?'#6c7a71':t.textColor};border:1px solid ${t.isOff?'#e9ecef':t.color+'33'}">${t.isOff ? 'Off Day' : t.name} ${!t.isOff ? `<span class="opacity-60">${t.start}–${t.end}</span>` : ''}</span></td>
+                <td class="text-[10px] ${t.isOff?'text-charcoal-400':'text-charcoal-600'}">${t.isOff ? '—' : `${t.start} – ${t.end}`}</td>
+              </tr>`;
+            }).join('')}
+          </tbody></table></div>
+        </div>
       </div>
-      <div class="table-responsive"><table class="data-table"><thead><tr><th class="p-2 text-left text-[9px] uppercase tracking-wide text-charcoal-500">Employee</th>${cols}</tr></thead><tbody>${rows}<tr class="bg-charcoal-50/70 border-t border-charcoal-100">
-        <td class="p-2"><p class="text-[10px] font-semibold text-charcoal-700">SHIFT COVERAGE</p></td>
-        ${days.map((d, di) => {
-          const counts = MOCK.shiftTemplates.filter(t=>!t.isOff).map(t => ({
-            n: MOCK.teamMembers.filter(tm => (MOCK.teamSchedule[tm.id]||[])[di] === t.id).length,
-            name: t.name[0]
-          }));
-          return `<td class="p-2"><div class="flex justify-center gap-1">${counts.map(c=>`<span class="text-[9px] px-1 py-0.5 rounded bg-white border border-charcoal-100 ${c.n===0?'text-charcoal-300':''}">${c.name} ${c.n}</span>`).join('')}</div></td>`;
-        }).join('')}
-      </tr></tbody></table></div>
-      <div class="px-4 py-2 border-t border-charcoal-100 flex flex-wrap gap-2">${legend}</div>
     </div>
 
-    ${!canEdit ? `<p class="text-[10px] text-charcoal-400 text-center">Cycle editing / publish is hidden — you do not have <code>schedule.edit</code>. View-only.</p>` : ''}
+    ${!canEdit ? `<p class="text-[10px] text-charcoal-400 text-center flex-shrink-0">Cycle editing / publish is hidden — you do not have <code>schedule.manage</code>. View-only.</p>` : ''}
   </div>`;
 }
 

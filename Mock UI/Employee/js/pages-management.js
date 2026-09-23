@@ -1,4 +1,4 @@
-// ==================== MY TEAM (Team Overview + Attendance) ====================
+﻿// ==================== MY TEAM (Team Overview + Attendance) ====================
 // Combines the team directory with today's attendance. Clicking a member opens
 // context-aware actions (Mark Present / Remind / Follow Up / Evaluate / History).
 function getTeamMemberTodayShift(m) {
@@ -99,52 +99,91 @@ function renderTeam() {
 }
 
 // ==================== TEAM REQUESTS ====================
+function setTeamRequestsTab(tab) { state.teamRequestsTab = tab; renderAll(); }
+
 function renderTeamRequests() {
-  const pending = MOCK.teamRequests.filter(r=>r.status==='Pending');
+  const needAction = MOCK.teamRequests.filter(r=>r.status==='Pending');
+  const pendingHR = MOCK.teamRequests.filter(r=>r.status==='Pending HR' || r.status==='Rejected Pending HR');
   const approved = MOCK.teamRequests.filter(r=>r.status==='Approved');
   const rejected = MOCK.teamRequests.filter(r=>r.status==='Rejected');
   const canApprove = hasPermission('requests.approve.team');
+  const active = state.teamRequestsTab || 'needAction';
+
+  const rejectNote = (r) => {
+    if (r.status==='Rejected Pending HR') return `<p class="text-[10px] text-red-500 mt-0.5">Rejected by ${r.teamRejectedBy||'Team Leader'} — awaiting HR confirmation</p>`;
+    if (r.status==='Rejected') {
+      if (r.rejectionType==='expired') return `<p class="text-[10px] text-red-500 mt-0.5">Rejected — time passed (${r.rejectionReason||'no response in time'})</p>`;
+      if (r.teamRejectedBy && r.hrRejectedBy) return `<p class="text-[10px] text-red-500 mt-0.5">Rejected by both Team Leader & HR</p>`;
+      if (r.teamRejectedBy) return `<p class="text-[10px] text-red-500 mt-0.5">Rejected by Team Leader (${r.teamRejectedBy})</p>`;
+      if (r.hrRejectedBy) return `<p class="text-[10px] text-red-500 mt-0.5">Rejected by HR (${r.hrRejectedBy})</p>`;
+    }
+    return '';
+  };
+
+  const row = (r, actions) => `<div class="p-3 hover:bg-charcoal-50/50 transition-colors">
+    <div class="flex items-center justify-between gap-2">
+      <div class="flex items-center gap-3 min-w-0">
+        <div class="w-9 h-9 rounded-full bg-brand-100 text-brand-700 flex items-center justify-center text-[10px] font-semibold flex-shrink-0">${r.employee.split(' ').map(w=>w[0]).join('')}</div>
+        <div class="min-w-0">
+          <p class="text-xs font-semibold text-charcoal-900">${r.employee}</p>
+          <p class="text-[10px] text-charcoal-500">${r.type} · ${r.date} · Submitted ${r.submitted}${r.teamApprovedBy?' · Team Leader: '+r.teamApprovedBy:''}</p>
+          ${r.reason?`<p class="text-[10px] text-charcoal-400 mt-0.5">${r.reason}</p>`:''}
+          ${rejectNote(r)}
+        </div>
+      </div>
+      <div class="flex items-center gap-1.5 flex-shrink-0">${actions}</div>
+    </div>
+  </div>`;
+
+  const tabBtn = (key, label, count, color) => `<button onclick="setTeamRequestsTab('${key}')" class="flex-1 min-w-0 px-2 py-2 rounded-lg text-[11px] font-semibold transition-colors ${active===key?color.active:color.idle}">
+    <span class="block truncate">${label}</span><span class="block text-[10px] font-bold mt-0.5">${count}</span>
+  </button>`;
+
+  const tabs = `<div class="bg-white rounded-xl border border-charcoal-200 p-1.5 flex gap-1.5">
+    ${tabBtn('needAction','NEED ACTION',needAction.length,{active:'bg-yellow-100 text-yellow-800',idle:'text-charcoal-500 hover:bg-charcoal-50'})}
+    ${tabBtn('pendingHR','PENDING HR',pendingHR.length,{active:'bg-purple-100 text-purple-800',idle:'text-charcoal-500 hover:bg-charcoal-50'})}
+    ${tabBtn('approved','APPROVED',approved.length,{active:'bg-green-100 text-green-800',idle:'text-charcoal-500 hover:bg-charcoal-50'})}
+    ${tabBtn('rejected','REJECTED',rejected.length,{active:'bg-red-100 text-red-800',idle:'text-charcoal-500 hover:bg-charcoal-50'})}
+  </div>`;
+
+  const list = (items, actionsFn, emptyMsg) => `<div class="bg-white rounded-xl border border-charcoal-200 overflow-hidden">
+    <div class="divide-y divide-charcoal-50">${items.length?items.map(r=>row(r, actionsFn(r))).join(''):`<div class="p-6 text-center"><p class="text-xs text-charcoal-500">${emptyMsg}</p></div>`}</div>
+  </div>`;
+
+  const viewBtn = (id) => `<button onclick="event.stopPropagation();viewRequest('${id}')" class="btn btn-sm btn-secondary"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>View</button>`;
+  const approveBtn = (id) => `<button onclick="event.stopPropagation();approveRequest('${id}')" class="btn btn-sm btn-primary"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>Approve</button>`;
+  const rejectBtn = (id) => `<button onclick="event.stopPropagation();rejectRequest('${id}')" class="btn btn-sm btn-danger-outline"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>Reject</button>`;
+  const editBtn = (id) => `<button onclick="event.stopPropagation();editTeamRequest('${id}')" class="btn btn-sm btn-secondary"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/></svg>Edit</button>`;
+
+  let body = '';
+  if (active==='needAction') {
+    body = list(needAction,
+      r=>canApprove?approveBtn(r.id)+rejectBtn(r.id):viewBtn(r.id),
+      'No requests waiting for action');
+  } else if (active==='pendingHR') {
+    body = list(pendingHR,
+      r=>{
+        if (r.status==='Rejected Pending HR') return canApprove?approveBtn(r.id)+viewBtn(r.id):viewBtn(r.id);
+        return canApprove?editBtn(r.id)+rejectBtn(r.id):viewBtn(r.id);
+      },
+      'No requests awaiting HR review');
+  } else if (active==='approved') {
+    body = list(approved,
+      r=>canApprove?editBtn(r.id)+rejectBtn(r.id):viewBtn(r.id),
+      'No approved requests');
+  } else {
+    body = list(rejected,
+      r=>canApprove?approveBtn(r.id)+viewBtn(r.id):viewBtn(r.id),
+      'No rejected requests');
+  }
 
   return `<div class="space-y-3">
-    <div class="flex items-center justify-between">
-      <div><h1 class="text-xl font-bold text-charcoal-900">Team Requests</h1><p class="text-xs text-charcoal-500 mt-0.5">${pending.length} pending ${canApprove?'approval':'review'}</p></div>
+    <div>
+      <h1 class="text-xl font-bold text-charcoal-900">Team Requests</h1>
+      <p class="text-xs text-charcoal-500 mt-0.5">${needAction.length} need action · ${pendingHR.length} pending HR review · ${approved.length} approved · ${rejected.length} rejected</p>
     </div>
-
-    <!-- Pending Approval -->
-    ${pending.length>0?`<div class="bg-white rounded-xl border border-charcoal-200 overflow-hidden">
-      <div class="px-4 py-2.5 border-b border-charcoal-100 bg-yellow-50/50">
-        <p class="bento-label flex items-center gap-1.5 text-yellow-700"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>PENDING ${canApprove?'APPROVAL':'REVIEW'} (${pending.length})</p>
-      </div>
-      <div class="divide-y divide-charcoal-50">${pending.map(r=>`<div class="p-3 hover:bg-charcoal-50/50 transition-colors">
-        <div class="flex items-center justify-between">
-          <div class="flex items-center gap-3">
-            <div class="w-9 h-9 rounded-full bg-brand-100 text-brand-700 flex items-center justify-center text-[10px] font-semibold flex-shrink-0">${r.employee.split(' ').map(w=>w[0]).join('')}</div>
-            <div>
-              <p class="text-xs font-semibold text-charcoal-900">${r.employee}</p>
-              <p class="text-[10px] text-charcoal-500">${r.type} · ${r.date} · Submitted ${r.submitted}</p>
-            </div>
-          </div>
-          <div class="flex items-center gap-1.5">
-            ${canApprove?`<button onclick="event.stopPropagation();approveRequest('${r.id}')" class="btn btn-sm btn-primary"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>Approve</button>
-            <button onclick="event.stopPropagation();rejectRequest('${r.id}')" class="btn btn-sm btn-danger-outline"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>Reject</button>`:`<button onclick="event.stopPropagation();viewRequest('${r.id}')" class="btn btn-sm btn-secondary"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>View</button>`}
-          </div>
-        </div>
-      </div>`).join('')}</div>
-    </div>`:''}
-
-    <!-- Recent Activity -->
-    <div class="bg-white rounded-xl border border-charcoal-200 overflow-hidden">
-      <div class="px-4 py-2.5 border-b border-charcoal-100 bg-charcoal-50/50">
-        <p class="bento-label">RECENT ACTIVITY</p>
-      </div>
-      <div class="divide-y divide-charcoal-50">${MOCK.teamRequests.map(r=>`<div class="p-3 hover:bg-charcoal-50/50 transition-colors flex items-center justify-between">
-        <div class="flex items-center gap-3">
-          <div class="w-8 h-8 rounded-full bg-brand-100 text-brand-700 flex items-center justify-center text-[10px] font-semibold flex-shrink-0">${r.employee.split(' ').map(w=>w[0]).join('')}</div>
-          <div><p class="text-xs font-medium text-charcoal-900">${r.employee}</p><p class="text-[10px] text-charcoal-500">${r.type} · ${r.date}</p></div>
-        </div>
-        <div class="flex items-center gap-2">${statusBadge(r.status)}</div>
-      </div>`).join('')}</div>
-    </div>
+    ${tabs}
+    ${body}
   </div>`;
 }
 
@@ -153,55 +192,136 @@ function renderTeamRequests() {
 function renderTeamAttendance() { return renderTeam(); }
 
 // ==================== TEAM MEMBER DETAIL & ACTIONS ====================
-// Clicking a team member opens a detail view with context-aware actions based
-// on their attendance status: Absent → Mark Present / Remind / Follow Up,
-// Late → Remind / Follow Up / History, Present → Evaluate / History / Message.
+// Clicking a team member opens their full profile page with all their data.
 function openTeamMember(id) {
-  const m = MOCK.teamMembers.find(x=>x.id===id); if(!m) return;
+  navigateTo('team-member-profile', { id });
+}
+
+// ==================== TEAM MEMBER FULL PROFILE ====================
+// Full profile page for a team member: personal info, contact, employment,
+// today's attendance, weekly schedule, requests and evaluations.
+function renderTeamMemberProfile() {
+  const id = (state.pageParams && state.pageParams.id) || 't1';
+  const m = MOCK.teamMembers.find(x=>x.id===id); if(!m) return '<div class="text-center py-20"><p class="text-charcoal-500">Employee not found</p></div>';
+  const p = MOCK.teamProfiles[id] || {};
   const shift = getTeamMemberTodayShift(m);
   const checkOut = (m.status==='Present'||m.status==='Late') ? '16:02' : '—';
   const isAbsent = m.status==='Absent';
   const isLate = m.status==='Late';
-  let actions = '';
-  if (isAbsent) {
-    actions = `<button onclick="markPresent('${m.id}')" class="btn btn-sm btn-primary"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>Mark Present</button>
-      <button onclick="sendReminder('${m.id}')" class="btn btn-sm btn-secondary">Send Reminder</button>
-      <button onclick="addTeamFollowUp('${m.id}')" class="btn btn-sm btn-secondary">Follow Up</button>`;
-  } else if (isLate) {
-    actions = `<button onclick="sendReminder('${m.id}')" class="btn btn-sm btn-secondary">Send Reminder</button>
-      <button onclick="addTeamFollowUp('${m.id}')" class="btn btn-sm btn-secondary">Follow Up</button>
-      <button onclick="openMemberAttendance('${m.id}')" class="btn btn-sm btn-secondary">History</button>`;
-  } else {
-    actions = `<button onclick="openEvaluateMember('${m.id}')" class="btn btn-sm btn-primary"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z"/></svg>Evaluate</button>
-      <button onclick="openMemberAttendance('${m.id}')" class="btn btn-sm btn-secondary">History</button>
-      <button onclick="sendMessage('${m.id}')" class="btn btn-sm btn-secondary">Message</button>`;
-  }
-  openModal(m.name, `<div class="space-y-3">
-    <div class="flex items-center gap-3">
-      <div class="w-12 h-12 rounded-full bg-brand-100 text-brand-700 flex items-center justify-center text-sm font-semibold">${m.initials}</div>
-      <div class="flex-1"><p class="text-sm font-bold text-charcoal-900">${m.name}</p><p class="text-[10px] text-charcoal-500">${m.position} · ${m.id.toUpperCase()}</p></div>
-      ${statusBadge(m.status)}
-    </div>
-    <div class="grid grid-cols-2 gap-2">
-      <div class="bg-charcoal-50 rounded-lg p-2.5"><p class="text-[10px] text-charcoal-500">SCHEDULED TODAY</p><p class="text-xs font-semibold text-charcoal-900 mt-0.5">${shiftLabel(shift)}</p></div>
-      <div class="bg-charcoal-50 rounded-lg p-2.5"><p class="text-[10px] text-charcoal-500">CHECK IN</p><p class="text-xs font-semibold text-charcoal-900 mt-0.5">${m.checkIn||'—'}</p></div>
-      <div class="bg-charcoal-50 rounded-lg p-2.5"><p class="text-[10px] text-charcoal-500">CHECK OUT</p><p class="text-xs font-semibold text-charcoal-900 mt-0.5">${checkOut}</p></div>
-      <div class="bg-charcoal-50 rounded-lg p-2.5"><p class="text-[10px] text-charcoal-500">SOURCE</p><p class="text-xs font-semibold text-charcoal-900 mt-0.5">Biometric Device</p></div>
-    </div>
-    <div>
-      <p class="bento-label text-charcoal-500 mb-1.5">ACTIONS</p>
-      <div class="flex flex-wrap gap-1.5">${actions}</div>
-    </div>
-    <div>
-      <p class="bento-label text-charcoal-500 mb-1.5">QUICK LINKS</p>
-      <div class="flex flex-wrap gap-1.5">
-        <button onclick="openEvaluateMember('${m.id}')" class="btn btn-sm btn-secondary">Evaluate</button>
-        <button onclick="openMemberAttendance('${m.id}')" class="btn btn-sm btn-secondary">Attendance History</button>
-        <button onclick="openMemberRequests('${m.id}')" class="btn btn-sm btn-secondary">Requests</button>
-        <button onclick="openMemberSchedule('${m.id}')" class="btn btn-sm btn-secondary">Schedule</button>
+  const reqs = MOCK.teamRequests.filter(r=>r.employee===m.name);
+  const evals = MOCK.teamEvaluations.filter(e=>e.employee===m.name);
+  const canApprove = hasPermission('requests.approve.team') || hasPermission('requests.approve');
+  const canEditEval = hasPermission('evaluations.manage') || hasPermission('evaluations.view.team') || hasPermission('team.manage');
+  const days = ['Mon 25','Tue 26','Wed 27','Thu 28','Fri 29','Sat 30','Sun 31'];
+  const schedIds = MOCK.teamSchedule[m.id] || days.map(()=>'st-off');
+
+  const infoCard = (label, value) => `<div class="bg-charcoal-50 rounded-lg p-2.5"><p class="text-[10px] text-charcoal-500">${label}</p><p class="text-xs font-semibold text-charcoal-900 mt-0.5">${value||'—'}</p></div>`;
+
+  return `<div class="space-y-3">
+    <!-- Back -->
+    <button onclick="navigateTo('team')" class="btn btn-sm btn-secondary"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/></svg>Back to My Team</button>
+
+    <!-- Header -->
+    <div class="bg-white rounded-xl border border-charcoal-200 p-4">
+      <div class="flex flex-col sm:flex-row sm:items-center gap-3">
+        <div class="w-14 h-14 rounded-full bg-brand-100 text-brand-700 flex items-center justify-center text-base font-semibold flex-shrink-0">${m.initials}</div>
+        <div class="flex-1 min-w-0">
+          <div class="flex items-center gap-2 flex-wrap"><h1 class="text-lg font-bold text-charcoal-900">${m.name}</h1>${statusBadge(m.status)}</div>
+          <p class="text-xs text-charcoal-500 mt-0.5">${m.position} · ${m.id.toUpperCase()} · ${p.gym||'Revive Gym — Nasr City'}</p>
+        </div>
+        <div class="flex flex-wrap gap-1.5">
+          <button onclick="sendMessage('${m.id}')" class="btn btn-sm btn-secondary"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/></svg>Message</button>
+          <button onclick="openEvaluateMember('${m.id}')" class="btn btn-sm btn-primary"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z"/></svg>Evaluate</button>
+          ${isAbsent?`<button onclick="markPresent('${m.id}')" class="btn btn-sm btn-primary"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>Mark Present</button>`:''}
+          ${isAbsent||isLate?`<button onclick="sendReminder('${m.id}')" class="btn btn-sm btn-secondary">Remind</button>`:''}
+        </div>
       </div>
     </div>
-  </div>`, { wide:true, footer:'<button onclick="closeModal()" class="btn btn-sm btn-secondary">Close</button>' });
+
+    <!-- Today's Attendance -->
+    <div class="bg-white rounded-xl border border-charcoal-200 p-4">
+      <p class="bento-label mb-2">TODAY'S ATTENDANCE</p>
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
+        ${infoCard('SCHEDULED TODAY', shiftLabel(shift))}
+        ${infoCard('CHECK IN', m.checkIn||'—')}
+        ${infoCard('CHECK OUT', checkOut)}
+        ${infoCard('SOURCE', 'Biometric Device')}
+      </div>
+    </div>
+
+    <!-- Personal & Contact -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-3">
+      <div class="bg-white rounded-xl border border-charcoal-200 p-4">
+        <p class="bento-label mb-2">PERSONAL INFO</p>
+        <div class="grid grid-cols-2 gap-2">
+          ${infoCard('Date of Birth', p.dateOfBirth)}
+          ${infoCard('Gender', p.gender)}
+          ${infoCard('National ID', p.nationalId)}
+          ${infoCard('Address', p.address)}
+        </div>
+      </div>
+      <div class="bg-white rounded-xl border border-charcoal-200 p-4">
+        <p class="bento-label mb-2">CONTACT & EMERGENCY</p>
+        <div class="grid grid-cols-2 gap-2">
+          ${infoCard('Email', p.email)}
+          ${infoCard('Phone', p.phone)}
+          ${infoCard('Emergency Contact', p.emergencyContact?p.emergencyContact.name:'—')}
+          ${infoCard('Relationship', p.emergencyContact?p.emergencyContact.relationship:'—')}
+          ${infoCard('Emergency Phone', p.emergencyContact?p.emergencyContact.phone:'—')}
+        </div>
+      </div>
+    </div>
+
+    <!-- Employment -->
+    <div class="bg-white rounded-xl border border-charcoal-200 p-4">
+      <p class="bento-label mb-2">EMPLOYMENT</p>
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
+        ${infoCard('Hire Date', p.hireDate)}
+        ${infoCard('Employment Type', p.employmentType)}
+        ${infoCard('Level', p.level)}
+        ${infoCard('Base Salary', p.baseSalary?('EGP '+p.baseSalary.toLocaleString()):'—')}
+      </div>
+    </div>
+
+    <!-- Weekly Schedule -->
+    <div class="bg-white rounded-xl border border-charcoal-200 p-4">
+      <p class="bento-label mb-2">WEEKLY SCHEDULE</p>
+      <div class="space-y-1.5">${schedIds.map((sid,i)=>{const t=getShiftTemplate(sid);const c=getShiftColor(t);const isToday=i===MOCK.todayIndex;return `<div class="flex items-center justify-between rounded-lg p-2.5 ${isToday?'ring-1 ring-brand-500 bg-brand-50/50':'bg-charcoal-50'}">
+        <div class="flex items-center gap-2"><p class="text-xs font-semibold text-charcoal-900 w-14">${days[i]}</p>${isToday?'<span class="badge badge-green">Today</span>':''}</div>
+        <span class="schedule-shift-badge text-[10px] border" style="background:${c.bg};color:${c.text};border-color:${c.border}40">${t.isOff?'OFF':t.start+'–'+t.end}</span>
+      </div>`;}).join('')}</div>
+    </div>
+
+    <!-- Requests -->
+    <div class="bg-white rounded-xl border border-charcoal-200 overflow-hidden">
+      <div class="px-4 py-2.5 border-b border-charcoal-100 bg-charcoal-50/50">
+        <p class="bento-label">REQUESTS (${reqs.length})</p>
+      </div>
+      <div class="divide-y divide-charcoal-50">${reqs.length?reqs.map(r=>`<div class="p-3 flex items-center justify-between gap-2">
+        <div class="min-w-0"><p class="text-xs font-medium text-charcoal-900">${r.type}</p><p class="text-[10px] text-charcoal-500">${r.date} · Submitted ${r.submitted}${r.teamApprovedBy?' · Team Leader: '+r.teamApprovedBy:''}</p>${r.reason?`<p class="text-[10px] text-charcoal-400 mt-0.5">${r.reason}</p>`:''}</div>
+        <div class="flex items-center gap-1.5 flex-shrink-0">
+          ${statusBadge(r.status)}
+          ${canApprove&&r.status==='Pending'?`<button onclick="approveRequest('${r.id}')" class="btn btn-sm btn-primary"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>Approve</button>
+          <button onclick="rejectRequest('${r.id}')" class="btn btn-sm btn-danger-outline"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>Reject</button>`:''}
+          ${canApprove&&r.status==='Pending HR'?`<button onclick="editTeamRequest('${r.id}')" class="btn btn-sm btn-secondary"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/></svg>Edit</button>`:''}
+        </div>
+      </div>`).join(''):`<div class="p-4 text-center"><p class="text-xs text-charcoal-500">No requests found</p></div>`}</div>
+    </div>
+
+    <!-- Evaluations -->
+    <div class="bg-white rounded-xl border border-charcoal-200 overflow-hidden">
+      <div class="px-4 py-2.5 border-b border-charcoal-100 bg-charcoal-50/50">
+        <p class="bento-label">EVALUATIONS (${evals.length})</p>
+      </div>
+      <div class="divide-y divide-charcoal-50">${evals.length?evals.map(e=>`<div class="p-3 flex items-center justify-between gap-2">
+        <div class="min-w-0"><p class="text-xs font-medium text-charcoal-900">${e.period}</p><p class="text-[10px] text-charcoal-500">Score ${e.score}/5 · ${e.result}</p></div>
+        <div class="flex items-center gap-1.5 flex-shrink-0">
+          ${statusBadge(e.status)}
+          ${canEditEval?`<button onclick="openEditTeamEvaluation('${e.id}')" class="btn btn-sm btn-secondary"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/></svg>Edit</button>`:''}
+        </div>
+      </div>`).join(''):`<div class="p-4 text-center"><p class="text-xs text-charcoal-500">No evaluations yet</p></div>`}</div>
+    </div>
+  </div>`;
 }
 function markPresent(id) {
   const m = MOCK.teamMembers.find(x=>x.id===id); if(!m) return;
@@ -292,13 +412,15 @@ function openEvaluateMember(id) { openNewTeamEvaluation(id); }
 // HISTORY behind the live month.
 function schAnchorYear()   { return 2026; }
 function schCurMonth()     { return 9; /* September 2026 */ }
-function schMonthWindow(nBack) {
-  // nBack = how many PAST months to offer beyond the current one.
+function schMonthWindow(nBack, nFwd) {
+  // nBack = how many PAST months to offer, nFwd = how many FUTURE months.
   const cur = schCurMonth(), yr = schAnchorYear();
   const arr = [];
-  for (let k = nBack; k >= 0; k--) {
-    const mm = cur - k;
-    arr.push({ ym: `${yr}-${String(mm).padStart(2,'0')}`, year: yr, month: mm });
+  for (let k = nBack; k >= -nFwd; k--) {
+    let mm = cur - k, y = yr;
+    if (mm < 1) { mm += 12; y -= 1; }
+    if (mm > 12) { mm -= 12; y += 1; }
+    arr.push({ ym: `${y}-${String(mm).padStart(2,'0')}`, year: y, month: mm });
   }
   return arr.reverse();
 }
@@ -334,7 +456,7 @@ function schPeriodsFor(y, mo) {
       dow: dt.toLocaleDateString('en-US', { weekday: 'short' }),
     });
   }
-  return Object.keys(buckets).sort().map(key => {
+  const auto = Object.keys(buckets).sort().map(key => {
     const ds = buckets[key];
     const fmt = o => new Date(o.iso+'T00:00:00Z').toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
     return {
@@ -345,6 +467,10 @@ function schPeriodsFor(y, mo) {
       days: ds,
     };
   });
+  // Merge custom periods for this month
+  const ym = `${y}-${String(mo).padStart(2,'0')}`;
+  const custom = (schCustomPeriods()[ym] || []);
+  return [...auto, ...custom];
 }
 function schDefaultYM() {
   return `${schAnchorYear()}-${String(schCurMonth()).padStart(2,'0')}`;
@@ -388,38 +514,58 @@ function tsSelPeriod(){
   return state.tsPeriod || (pers[pers.length-1] ? pers[pers.length-1].id : null);
 }
 function tsCanEdit(){
-  return schLockState(tsSelMonth()) === 'current';
+  return true; // all months are editable in this prototype
 }
 
 // --- Render ------------------------------------------------------------------
 function renderTeamSchedule() {
-  const win = schMonthWindow(3);                 // current + 3 past months
+  const win = schMonthWindow(8, 3);              // all 12 months of the year (Jan–Dec)
   const selMo = tsSelMonth();
   const [,selMm] = selMo.split('-');
   const periods = schPeriodsFor(+schAnchorYear(), +selMm);
   const selPer = tsSelPeriod();
   const period = periods.find(p => p.id === selPer) || periods[periods.length-1];
   const lock = schLockState(selMo);
-  const canEdit = lock === 'current';
+  const canEdit = true; // allow assigning/editing in every month
   const isEditMode = !!state.tsEditing && canEdit;
+  const isDeleting = !!state.tsDeleting && isEditMode;
   const teamRows = MOCK.teamMembers.slice(0, 8);
 
   // header meta
   const histDesc = lock === 'current'
     ? 'Live month — pick a period below to view or assign shifts.'
     : lock === 'past'
-      ? 'Historical month — viewing archived schedules (read-only).'
-      : 'Future month — drafts are locked until publication.';
+      ? 'Past month — archived schedules, still editable.'
+      : 'Future month — plan ahead and assign shifts.';
 
-  return `<div class="space-y-3">
-    <!-- Heading -->
+  // stats for the selected period
+  const assignedCount = period ? teamRows.reduce((acc, m) => {
+    const roster = schRoster(m.id, period.id, period.days.length);
+    return acc + roster.filter(sid => !getShiftTemplate(sid).isOff).length;
+  }, 0) : 0;
+  const legend = MOCK.shiftTemplates.filter(t => !t.isOff).map(t => `
+    <span class="inline-flex items-center gap-1"><span class="w-2.5 h-2.5 rounded inline-block border" style="background:${t.bgColor};border-color:${t.color}40"></span>${t.name}</span>
+  `).join('') + `<span class="inline-flex items-center gap-1"><span class="w-2.5 h-2.5 rounded inline-block border border-charcoal-200 bg-charcoal-100"></span>Off</span>`;
+  const monthLabel = schMonthLabel(+selMo.split('-')[0], +selMo.split('-')[1]);
+
+  return `<div class="space-y-4">
+    <!-- Header -->
     <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-      <div>
-        <h1 class="text-xl font-bold text-charcoal-900">Team Schedule</h1>
-        <p class="text-xs text-charcoal-500 mt-0.5">${histDesc}</p>
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-brand-50 text-brand-600 flex items-center justify-center shrink-0">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+        </div>
+        <div>
+          <h1 class="text-xl font-bold text-charcoal-900">Team Schedule</h1>
+          <p class="text-xs text-charcoal-500 mt-0.5">${histDesc}</p>
+        </div>
       </div>
-      <div class="flex gap-1.5">
+      <div class="flex gap-1.5 flex-wrap">
         ${canEdit ? `
+        <button onclick="openCreateScheduleModal()" class="btn btn-sm btn-primary">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/></svg>
+          Create New Schedule
+        </button>
         <button onclick="state.tsEditing=${isEditMode?'false':'true'};renderAll()" class="btn btn-sm ${isEditMode?'btn-primary':'btn-secondary'}">
           <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/></svg>
           ${isEditMode?'Finish Editing':'Assign Shifts'}
@@ -431,66 +577,57 @@ function renderTeamSchedule() {
       </div>
     </div>
 
-    <!-- Step 1 :: CHOOSE THE MONTH -->
-    <div class="bg-white rounded-xl border border-charcoal-200 p-3">
-      <p class="bento-label text-charcoal-500 mb-2">STEP 1 — CHOOSE MONTH</p>
-      <div class="flex items-center gap-2 flex-wrap">
-        ${win.map(m => {
-          const ym = m.ym;
-          const st = schLockState(ym);
-          const active = ym === selMo;
-          const chipCol = active ? 'bg-brand-600 text-white border-brand-600'
-                        : st === 'current' ? 'bg-brand-50 text-brand-700 border-brand-200'
-                        : 'bg-white text-charcoal-700 border-charcoal-200 hover:bg-charcoal-50';
-          const tag = st === 'current' ? '<span class="ml-1 text-[9px] uppercase tracking-wide opacity-80">● Live</span>'
-                     : st === 'past' ? ''
-                     : '<span class="ml-1 text-[9px] uppercase tracking-wide opacity-60">planned</span>';
-          return `<button onclick="selectTsMonth('${ym}')" class="px-3 py-1.5 rounded-lg border text-xs font-semibold transition-colors ${chipCol}">
-            ${schMonthLabel(m.year, m.month)}${tag}
-          </button>`;
-        }).join('')}
+    <!-- Combined: Month + Periods + Actions -->
+    <div class="bg-white rounded-xl border border-charcoal-200 overflow-hidden">
+      <!-- Month dropdown + Live badge + Actions -->
+      <div class="px-4 pt-3 pb-2 flex items-center gap-3 flex-wrap">
+        <label class="text-[10px] font-semibold text-charcoal-400 uppercase tracking-wide shrink-0">Month</label>
+        <select onchange="selectTsMonth(this.value)" class="flex-1 max-w-[220px] rounded-lg border border-charcoal-200 bg-white px-2.5 py-1.5 text-[11px] font-semibold text-charcoal-800 shadow-sm outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100 transition-all cursor-pointer">
+          ${win.map(m => {
+            const ym = m.ym;
+            const st = schLockState(ym);
+            return `<option value="${ym}" ${ym===selMo?'selected':''}>${schMonthLabel(m.year, m.month)}</option>`;
+          }).join('')}
+        </select>
+        <span class="flex items-center gap-1 text-[10px] font-semibold ${lock==='current'?'text-brand-600':lock==='past'?'text-charcoal-400':'text-charcoal-400'} shrink-0">
+          <span class="inline-block w-1.5 h-1.5 rounded-full ${lock==='current'?'bg-brand-500':lock==='past'?'bg-charcoal-300':'bg-charcoal-300'}"></span>
+          ${lock==='current'?'Live':lock==='past'?'Past':'Planned'}
+        </span>
+        <div class="ml-auto flex gap-1.5 shrink-0">
+          ${canEdit ? `
+          <button onclick="deleteTsSchedule('${period.id}')" class="btn btn-sm btn-danger-outline" ${isEditMode?'':'style=\"visibility:hidden\"'}>
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+            Delete Schedule
+          </button>
+          <button onclick="resetTsPeriod('${period.id}')" class="btn btn-sm btn-secondary" ${isEditMode?'':'style=\"visibility:hidden\"'}>Reset</button>` : ''}
+        </div>
       </div>
-    </div>
-
-    <!-- Step 2 :: CHOOSE THE PERIOD (history of schedules in this month) -->
-    <div class="bg-white rounded-xl border border-charcoal-200 p-3">
-      <div class="flex items-center justify-between mb-2">
-        <p class="bento-label text-charcoal-500">STEP 2 — SCHEDULE PERIODS OF THIS MONTH</p>
-        ${lock === 'current' ? `<span class="text-[10px] text-brand-600 font-semibold">Tap a period to view • tap “Assign” to edit it</span>` : `<span class="text-[10px] text-charcoal-400 font-semibold">Archive — read only</span>`}
-      </div>
-      <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
+      <!-- Period strip -->
+      <div class="px-4 pb-3 flex gap-1.5 overflow-x-auto">
         ${periods.map(p => {
           const active = p.id === selPer;
           const pub = schPubFlag(p.id);
-          return `<button onclick="selectTsPeriod('${p.id}')" class="text-left rounded-xl border p-3 transition-colors ${active?'border-brand-500 bg-brand-50/50 ring-1 ring-brand-500':'border-charcoal-200 hover:border-charcoal-300 hover:bg-charcoal-50/50'}">
-            <div class="flex items-center justify-between">
-              <p class="text-xs font-semibold text-charcoal-900">${p.label}</p>
-              ${pub ? `<span class="badge badge-blue">Published</span>` : lock==='current' ? `<span class="badge badge-yellow">Draft</span>` : `<span class="badge badge-gray">Closed</span>`}
+          const badge = p.custom ? '<span class="badge badge-purple">Custom</span>' : pub ? '<span class="badge badge-blue">Published</span>' : '<span class="badge badge-yellow">Draft</span>';
+          return `<button onclick="selectTsPeriod('${p.id}')" class="shrink-0 text-left rounded-lg border px-2.5 py-1.5 transition-all ${active?'border-brand-500 bg-brand-50/60 ring-1 ring-brand-500 shadow-sm':'border-charcoal-200 hover:border-charcoal-300 hover:bg-charcoal-50/60'}">
+            <div class="flex items-center gap-2">
+              <p class="text-[11px] font-bold text-charcoal-900 whitespace-nowrap">${p.label}</p>
+              ${badge}
             </div>
-            <p class="text-[10px] text-charcoal-500 mt-1">${p.days.length} days · ${teamRows.length} employees</p>
-            ${active && canEdit ? `<p class="text-[10px] text-brand-600 font-semibold mt-1.5">${isEditMode?'✎ Editing…':'· Tap “Assign Shifts” to edit'}</p>` : ''}
+            <p class="text-[9px] text-charcoal-500 mt-0.5 whitespace-nowrap">${p.days.length} days · ${teamRows.length} employees</p>
           </button>`;
         }).join('')}
       </div>
-    </div>
-
-    ${period ? `
-    <!-- Step 3 :: VIEW / ASSIGN THE CHOSEN PERIOD'S ROSTER -->
-    <div class="bg-white rounded-xl border border-charcoal-200 overflow-hidden">
-      <div class="px-4 py-2.5 border-b border-charcoal-100 flex items-center justify-between flex-wrap gap-2">
-        <div>
-          <p class="bento-label text-charcoal-500">PERIOD ROSTER — ${period.label}</p>
-          <p class="text-[10px] text-charcoal-400 mt-0.5">${canEdit?(isEditMode?'Editing enabled — click a shift cell to rotate it.':'Preview mode — read only.'):'Archived — read only.'}</p>
-        </div>
-        ${canEdit ? `<button onclick="resetTsPeriod('${period.id}')" class="btn btn-sm btn-secondary" ${isEditMode?'':'style=\"visibility:hidden\"'}>Reset period</button>` : ''}
+      ${period ? `
+      <!-- Period hint -->
+      <div class="px-4 py-2 border-t border-charcoal-100">
+        <p class="text-[10px] text-charcoal-400">${canEdit?(isEditMode?'Editing enabled — click a shift to rotate it.':'Preview — read only.'):''}</p>
       </div>
-
-      <!-- legend -->
-      <div class="flex items-center gap-4 text-[10px] text-charcoal-500 px-4 pb-2 flex-wrap">
-        ${MOCK.shiftTemplates.filter(t => !t.isOff).map(t => `
-          <span class="inline-flex items-center gap-1"><span class="w-3 h-3 rounded inline-block border" style="background:${t.bgColor};border-color:${t.color}40"></span>${t.name} (${t.start}–${t.end})</span>
-        `).join('')}
-        <span class="inline-flex items-center gap-1"><span class="w-3 h-3 rounded inline-block border border-charcoal-200 bg-charcoal-100"></span>Off</span>
+      <!-- stats + legend -->
+      <div class="flex items-center gap-4 px-4 py-2 border-b border-charcoal-100 bg-charcoal-50/40 text-[10px] text-charcoal-500 flex-wrap">
+        <span class="inline-flex items-center gap-1.5"><svg class="w-3.5 h-3.5 text-charcoal-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>${period.days.length} days</span>
+        <span class="inline-flex items-center gap-1.5"><svg class="w-3.5 h-3.5 text-charcoal-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/></svg>${teamRows.length} employees</span>
+        <span class="inline-flex items-center gap-1.5"><svg class="w-3.5 h-3.5 text-charcoal-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>${assignedCount} shifts assigned</span>
+        <span class="ml-auto inline-flex items-center gap-3 flex-wrap">${legend}</span>
       </div>
 
       <!-- desktop table -->
@@ -531,14 +668,16 @@ function renderTeamSchedule() {
 // Publication bookkeeping (prototype-grade: tracked in-memory per period).
 function schPubFlags(){ if(!MOCK.__pub){MOCK.__pub={};} return MOCK.__pub; }
 function schPubFlag(pid){ return !!schPubFlags()[pid]; }
+function schCustomPeriods(){ if(!MOCK.__customPeriods) MOCK.__customPeriods={}; return MOCK.__customPeriods; }
 
 // --- Interactions -------------------------------------------------------------
-function selectTsMonth(ym){ state.tsMonth = ym; delete state.tsPeriod; state.tsEditing = false; renderAll(); }
-function selectTsPeriod(pid){ state.tsPeriod = pid; state.tsEditing = false; renderAll(); }
+function selectTsMonth(ym){ state.tsMonth = ym; delete state.tsPeriod; state.tsEditing = false; state.tsDeleting = false; renderAll(); }
+function selectTsPeriod(pid){ state.tsPeriod = pid; state.tsEditing = false; state.tsDeleting = false; renderAll(); }
 function confirmTsPublish(pid){
   if(!pid) return;
   schPubFlags()[pid] = true;
   state.tsEditing = false;
+  state.tsDeleting = false;
   renderAll();
   showToast(`Schedule for ${pid} published 🎉`);
 }
@@ -547,6 +686,80 @@ function resetTsPeriod(pid){
   membs.forEach(m => { delete schOverrideStore()[`${m.id}|${pid}`]; });
   renderAll();
   showToast(`Period ${pid} reset to automatic draft`,'info');
+}
+function openCreateScheduleModal(){
+  const ym = tsSelMonth();
+  const [yr, mo] = ym.split('-').map(Number);
+  const dim = new Date(Date.UTC(yr, mo, 0)).getDate();
+  const monthLabel = schMonthLabel(yr, mo);
+  const content = `
+    <div class="space-y-4">
+      <div>
+        <label class="block text-[11px] font-medium text-charcoal-700 mb-1">Month</label>
+        <input type="text" value="${monthLabel}" readonly class="w-full px-3 py-2 rounded-lg border border-charcoal-200 bg-charcoal-50 text-xs text-charcoal-700 cursor-not-allowed">
+      </div>
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="block text-[11px] font-medium text-charcoal-700 mb-1">Start Date</label>
+          <input type="date" id="cs-start" value="${ym}-01" min="${ym}-01" max="${ym}-${String(dim).padStart(2,'0')}" class="w-full px-3 py-2 rounded-lg border border-charcoal-200 text-xs focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500">
+        </div>
+        <div>
+          <label class="block text-[11px] font-medium text-charcoal-700 mb-1">End Date</label>
+          <input type="date" id="cs-end" value="${ym}-${String(dim).padStart(2,'0')}" min="${ym}-01" max="${ym}-${String(dim).padStart(2,'0')}" class="w-full px-3 py-2 rounded-lg border border-charcoal-200 text-xs focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500">
+        </div>
+      </div>
+      <p class="text-[10px] text-charcoal-400">Choose a date range within ${monthLabel}. A new schedule period will be created and you can start assigning shifts immediately.</p>
+    </div>`;
+  openModal('Create New Schedule', content, {
+    wide: true,
+    footer: `<button onclick="closeModal()" class="btn btn-sm btn-secondary">Cancel</button>
+             <button onclick="confirmCreateSchedule()" class="btn btn-sm btn-primary">Create Schedule</button>`
+  });
+}
+function confirmCreateSchedule(){
+  const startEl = document.getElementById('cs-start');
+  const endEl = document.getElementById('cs-end');
+  if(!startEl||!endEl) return;
+  const startIso = startEl.value;
+  const endIso = endEl.value;
+  if(!startIso || !endIso){ showToast('Please select both dates','error'); return; }
+  if(startIso > endIso){ showToast('Start date must be before end date','error'); return; }
+  // Generate days array
+  const days = [];
+  const d = new Date(startIso+'T00:00:00Z');
+  const end = new Date(endIso+'T00:00:00Z');
+  while(d <= end){
+    days.push({
+      iso: d.toISOString().slice(0,10),
+      num: d.getUTCDate(),
+      dow: d.toLocaleDateString('en-US',{weekday:'short'}),
+    });
+    d.setUTCDate(d.getUTCDate()+1);
+  }
+  if(days.length === 0){ showToast('Date range is empty','error'); return; }
+  const fmt = o => new Date(o.iso+'T00:00:00Z').toLocaleDateString('en-US',{month:'short',day:'numeric'});
+  const ym = startIso.slice(0,7);
+  const periodId = 'custom-'+startIso.replace(/-/g,'')+'-'+endIso.replace(/-/g,'');
+  const period = {
+    id: periodId,
+    start: startIso,
+    end: endIso,
+    label: `${fmt(days[0])} – ${fmt(days[days.length-1])}`,
+    days: days,
+    custom: true,
+  };
+  // Store
+  if(!schCustomPeriods()[ym]) schCustomPeriods()[ym] = [];
+  // Remove existing custom with same id (re-create)
+  schCustomPeriods()[ym] = schCustomPeriods()[ym].filter(p => p.id !== periodId);
+  schCustomPeriods()[ym].push(period);
+  // Select and enter edit mode
+  state.tsMonth = ym;
+  state.tsPeriod = periodId;
+  state.tsEditing = true;
+  closeModal();
+  renderAll();
+  showToast(`Custom schedule created: ${period.label}`);
 }
 function rotateTsShift(btn, empId, periodId, dayIdx){
   const templates = MOCK.shiftTemplates;
@@ -567,6 +780,18 @@ function rotateTsShift(btn, empId, periodId, dayIdx){
   btn.style.background=c.bg; btn.style.color=c.text; btn.style.borderColor=c.border+'40';
   btn.textContent = t.isOff?'OFF':t.start+'–'+t.end;
   showToast(`${nsid.startsWith('st-off')?'Off day':t.name+' ('+(t.start??'')+'–'+(t.end??'')+')'} assigned to ${empId}`);
+}
+function deleteTsSchedule(periodId){
+  if(!confirm('Delete all shifts in this period? This cannot be undone.')) return;
+  const [,moStr] = tsSelMonth().split('-');
+  const pers = schPeriodsFor(+schAnchorYear(), +moStr);
+  const pp = pers.find(p=>p.id===periodId);
+  const len = pp ? pp.days.length : 7;
+  MOCK.teamMembers.forEach(m => {
+    schPersist(m.id, periodId, Array(len).fill('st-off'));
+  });
+  showToast('Schedule deleted — all shifts set to OFF');
+  renderAll();
 }
 
 // ==================== SHIFT MANAGEMENT ====================
@@ -1424,11 +1649,11 @@ function renderEmployees() {
     <!-- Desktop Table -->
     <div class="bg-white rounded-xl border border-charcoal-200 overflow-hidden hidden lg:block">
       <div class="table-responsive"><table class="data-table"><thead><tr><th>Employee</th><th>Position</th><th>Shift (Today)</th><th>Status</th><th></th></tr></thead>
-      <tbody>${emps.map(x=>`<tr class="cursor-pointer hover:bg-charcoal-50/50" onclick="showToast('Opening ${x.e.name}...','info')"><td><div class="flex items-center gap-2.5"><div class="w-8 h-8 rounded-full bg-brand-100 text-brand-700 flex items-center justify-center text-[10px] font-semibold">${x.e.initials}</div><div><p class="text-xs font-medium text-charcoal-900">${x.e.name}</p><p class="text-[10px] text-charcoal-500">${x.e.id}</p></div></div></td><td class="text-xs">${x.e.position}</td><td class="text-xs">${shiftLabel(x.shift)}</td><td><span class="badge ${x.badge}">${x.status}</span></td><td><div class="flex items-center gap-1"><button onclick="event.stopPropagation();openEditEmployee('${x.e.id}')" class="btn btn-sm btn-secondary" title="Edit employee"><svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/></svg></button><button onclick="event.stopPropagation();openChangeStatus('${x.e.id}')" class="btn btn-sm btn-secondary" title="Change employment status"><svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"/></svg></button></div></td></tr>`).join('')}</tbody></table></div>
+      <tbody>${emps.map(x=>`<tr class="cursor-pointer hover:bg-charcoal-50/50" onclick="openEmployeeProfile('${x.e.id}')"><td><div class="flex items-center gap-2.5"><div class="w-8 h-8 rounded-full bg-brand-100 text-brand-700 flex items-center justify-center text-[10px] font-semibold">${x.e.initials}</div><div><p class="text-xs font-medium text-charcoal-900">${x.e.name}</p><p class="text-[10px] text-charcoal-500">${x.e.id}</p></div></div></td><td class="text-xs">${x.e.position}</td><td class="text-xs">${shiftLabel(x.shift)}</td><td><span class="badge ${x.badge}">${x.status}</span></td><td><div class="flex items-center gap-1"><button onclick="event.stopPropagation();openEmployeeProfile('${x.e.id}')" class="btn btn-sm btn-secondary" title="View profile"><svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg></button><button onclick="event.stopPropagation();openEditEmployee('${x.e.id}')" class="btn btn-sm btn-secondary" title="Edit employee"><svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/></svg></button><button onclick="event.stopPropagation();openChangeStatus('${x.e.id}')" class="btn btn-sm btn-secondary" title="Change employment status"><svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"/></svg></button></div></td></tr>`).join('')}</tbody></table></div>
     </div>
 
     <!-- Mobile Cards -->
-    <div class="space-y-1.5 lg:hidden">${emps.map(x=>`<div class="bg-white rounded-xl border border-charcoal-200 p-3 card-interactive" onclick="showToast('Opening ${x.e.name}...','info')">
+    <div class="space-y-1.5 lg:hidden">${emps.map(x=>`<div class="bg-white rounded-xl border border-charcoal-200 p-3 card-interactive" onclick="openEmployeeProfile('${x.e.id}')">
       <div class="flex items-center justify-between">
         <div class="flex items-center gap-2.5">
           <div class="w-9 h-9 rounded-full bg-brand-100 text-brand-700 flex items-center justify-center text-[10px] font-semibold">${x.e.initials}</div>
@@ -1539,32 +1764,123 @@ function renderRequestsManagement() {
 }
 
 // ==================== REQUEST ACTIONS ====================
+// Team leader approves → request moves to "Pending HR" (still needs HR approval).
+// The team leader can edit a team-approved request before HR signs off.
 function approveRequest(id) {
   const r = MOCK.teamRequests.find(x=>x.id===id);
   if(!r) return;
-  r.status = 'Approved';
-  renderAll(); showToast(`${r.employee}'s ${r.type} request approved`);
+  r.status = 'Pending HR';
+  r.teamApproved = true;
+  r.teamApprovedBy = MOCK.currentUser.fullName;
+  r.teamRejectedBy = undefined; r.teamRejectedDate = undefined;
+  r.hrRejectedBy = undefined; r.hrRejectedDate = undefined;
+  r.rejectionReason = undefined; r.rejectionType = undefined;
+  renderAll(); showToast(`${r.employee}'s ${r.type} request approved by Team Leader — awaiting HR`);
 }
 function rejectRequest(id) {
   const r = MOCK.teamRequests.find(x=>x.id===id);
   if(!r) return;
-  r.status = 'Rejected';
-  renderAll(); showToast(`${r.employee}'s ${r.type} request rejected`, 'error');
+  openModal(`Reject Request — ${r.employee}`, `<form onsubmit="event.preventDefault();confirmRejectRequest('${id}')" class="space-y-3">
+    <div class="bg-charcoal-50 rounded-lg p-3">
+      <div class="flex items-center justify-between"><p class="text-xs font-semibold text-charcoal-900">${r.type} · ${r.date}</p>${statusBadge(r.status)}</div>
+      <p class="text-[10px] text-charcoal-500 mt-0.5">Submitted ${r.submitted}${r.teamApprovedBy?' · Team Leader approved by '+r.teamApprovedBy:''}</p>
+    </div>
+    <div><label class="form-label">Rejection reason (optional)</label><textarea id="reject-reason" class="form-input" rows="2" placeholder="Why are you rejecting this request?"></textarea></div>
+    <div class="flex justify-end gap-2 pt-1"><button type="button" onclick="closeModal()" class="btn btn-sm btn-secondary">Cancel</button><button type="submit" class="btn btn-sm btn-danger">Reject Request</button></div>
+  </form>`);
+}
+function confirmRejectRequest(id) {
+  const r = MOCK.teamRequests.find(x=>x.id===id);
+  if(!r) return;
+  const reason = (document.getElementById('reject-reason')||{}).value || '';
+  r.status = 'Rejected Pending HR';
+  r.teamRejectedBy = MOCK.currentUser.fullName;
+  r.teamRejectedDate = 'Sep 10';
+  if (reason) r.rejectionReason = reason;
+  closeModal(); renderAll(); showToast(`${r.employee}'s ${r.type} request rejected by Team Leader — awaiting HR confirmation`, 'error');
+}
+function editTeamRequest(id) {
+  const r = MOCK.teamRequests.find(x=>x.id===id);
+  if(!r) return;
+  openModal(`Edit Request — ${r.employee}`, `<form onsubmit="event.preventDefault();saveTeamRequestEdit('${id}')" class="space-y-3">
+    <div class="bg-charcoal-50 rounded-lg p-3">
+      <div class="flex items-center justify-between"><p class="text-xs font-semibold text-charcoal-900">${r.type} · ${r.date}</p>${statusBadge(r.status)}</div>
+      <p class="text-[10px] text-charcoal-500 mt-0.5">Submitted ${r.submitted} · ${r.teamApprovedBy?'Approved by '+r.teamApprovedBy:'Team Leader approved'}</p>
+    </div>
+    <div class="grid grid-cols-2 gap-3">
+      <div><label class="form-label">Type</label><select id="req-edit-type" class="form-select">${['Day Off','Late Arrival','Leave Early','Shift Swap','Overtime','Sick Leave'].map(t=>`<option ${t===r.type?'selected':''}>${t}</option>`).join('')}</select></div>
+      <div><label class="form-label">Date</label><input id="req-edit-date" type="text" class="form-input" value="${r.date}" required></div>
+    </div>
+    <div><label class="form-label">Reason / Note</label><textarea id="req-edit-reason" class="form-input" rows="2" placeholder="Add a note...">${r.reason||''}</textarea></div>
+    <div class="bg-blue-50 rounded-lg p-2.5 text-[10px] text-blue-700">This request was team-approved. Edits will still need <b>HR approval</b> before it is final.</div>
+    <div class="flex justify-end gap-2 pt-1"><button type="button" onclick="closeModal()" class="btn btn-sm btn-secondary">Cancel</button><button type="submit" class="btn btn-sm btn-primary">Save Changes</button></div>
+  </form>`, { wide:true });
+}
+function saveTeamRequestEdit(id) {
+  const r = MOCK.teamRequests.find(x=>x.id===id);
+  if(!r) return;
+  r.type = document.getElementById('req-edit-type').value;
+  r.date = document.getElementById('req-edit-date').value.trim();
+  r.reason = document.getElementById('req-edit-reason').value.trim();
+  closeModal(); renderAll(); showToast(`${r.employee}'s ${r.type} request updated — still needs HR approval`);
 }
 function viewRequest(id) {
   const r = MOCK.teamRequests.find(x=>x.id===id);
   if(!r) return;
-  openModal(`${r.type} Request`, `<div class="space-y-3">
-    <div class="flex items-center gap-3">
-      <div class="w-10 h-10 rounded-full bg-brand-100 text-brand-700 flex items-center justify-center text-[10px] font-semibold flex-shrink-0">${r.employee.split(' ').map(w=>w[0]).join('')}</div>
-      <div><p class="text-sm font-semibold text-charcoal-900">${r.employee}</p><p class="text-[10px] text-charcoal-500">${r.type} · ${r.date}</p></div>
+  const initials = r.employee.split(' ').map(w=>w[0]).join('');
+  const rejectedByTeam = !!r.teamRejectedBy;
+  const rejectedByHR = !!r.hrRejectedBy;
+
+  // Build approval timeline
+  const steps = [];
+  steps.push({ label:'Submitted', by:r.employee, date:r.submitted, ok:null });
+  if (r.teamApprovedBy) steps.push({ label:'Team Leader Approved', by:r.teamApprovedBy, date:r.teamApprovedDate||'—', ok:true });
+  if (r.teamRejectedBy) steps.push({ label:'Team Leader Rejected', by:r.teamRejectedBy, date:r.teamRejectedDate||'—', ok:false });
+  if (r.hrApprovedBy) steps.push({ label:'HR Approved', by:r.hrApprovedBy, date:r.hrApprovedDate||'—', ok:true });
+  if (r.hrRejectedBy) steps.push({ label:'HR Rejected', by:r.hrRejectedBy, date:r.hrRejectedDate||'—', ok:false });
+  if (r.rejectionType==='expired') steps.push({ label:'Rejected — time passed', by:'Time passed', date:r.hrRejectedDate||r.teamRejectedDate||'—', ok:false });
+  if (r.status==='Pending') steps.push({ label:'Team Leader Review', by:'Awaiting Team Leader approval', date:'', ok:'pending' });
+  if (r.status==='Pending HR') steps.push({ label:'HR Review', by:'Awaiting HR approval', date:'', ok:'pending' });
+  if (r.status==='Rejected Pending HR') steps.push({ label:'HR Rejection Review', by:'Awaiting HR confirmation', date:'', ok:'pending' });
+
+  const stepRow = (s,i) => `<div class="flex gap-3">
+    <div class="flex flex-col items-center">
+      <div class="w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 ${s.ok===true?'bg-green-100 text-green-700':s.ok===false?'bg-red-100 text-red-700':s.ok==='pending'?'bg-charcoal-100 text-charcoal-400':'bg-brand-100 text-brand-700'}">
+        ${s.ok===true?'<svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>':s.ok===false?'<svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>':s.ok==='pending'?'<svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>':'<svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/></svg>'}
+      </div>
+      ${i<steps.length-1?'<div class="w-px flex-1 bg-charcoal-100 my-0.5"></div>':''}
     </div>
+    <div class="pb-4 min-w-0">
+      <p class="text-xs font-semibold text-charcoal-900">${s.label}</p>
+      <p class="text-[10px] text-charcoal-500">${s.by}${s.date?' · '+s.date:''}</p>
+    </div>
+  </div>`;
+
+  const rejectionBanner = (r.status==='Rejected'||r.status==='Rejected Pending HR') ? `<div class="bg-red-50 border border-red-100 rounded-lg p-3">
+    <p class="text-xs font-semibold text-red-700 flex items-center gap-1.5"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>${r.status==='Rejected Pending HR'?'Rejected by Team Leader — awaiting HR confirmation':r.rejectionType==='expired'?'Rejected — time passed':rejectedByTeam&&rejectedByHR?'Rejected by both Team Leader & HR':rejectedByTeam?'Rejected by Team Leader':rejectedByHR?'Rejected by HR':'Rejected'}</p>
+    ${r.rejectionReason?`<p class="text-[10px] text-red-600 mt-1">${r.rejectionReason}</p>`:''}
+  </div>` : '';
+
+  openModal(`Request Review — ${r.employee}`, `<div class="space-y-3">
+    <div class="flex items-center gap-3">
+      <div class="w-10 h-10 rounded-full bg-brand-100 text-brand-700 flex items-center justify-center text-[10px] font-semibold flex-shrink-0">${initials}</div>
+      <div class="flex-1 min-w-0"><p class="text-sm font-semibold text-charcoal-900">${r.employee}</p><p class="text-[10px] text-charcoal-500">${r.type} · ${r.date}</p></div>
+      ${statusBadge(r.status)}
+    </div>
+    ${rejectionBanner}
     <div class="grid grid-cols-2 gap-2">
+      <div class="bg-charcoal-50 rounded-lg p-2.5"><p class="text-[10px] text-charcoal-500">Request Type</p><p class="text-xs font-semibold text-charcoal-900">${r.type}</p></div>
+      <div class="bg-charcoal-50 rounded-lg p-2.5"><p class="text-[10px] text-charcoal-500">Date</p><p class="text-xs font-semibold text-charcoal-900">${r.date}</p></div>
       <div class="bg-charcoal-50 rounded-lg p-2.5"><p class="text-[10px] text-charcoal-500">Submitted</p><p class="text-xs font-semibold text-charcoal-900">${r.submitted}</p></div>
       <div class="bg-charcoal-50 rounded-lg p-2.5"><p class="text-[10px] text-charcoal-500">Status</p><div>${statusBadge(r.status)}</div></div>
     </div>
+    ${r.reason?`<div class="bg-charcoal-50 rounded-lg p-2.5"><p class="text-[10px] text-charcoal-500">Reason / Note</p><p class="text-xs text-charcoal-800 mt-0.5">${r.reason}</p></div>`:''}
+    <div>
+      <p class="bento-label mb-2">APPROVAL TIMELINE</p>
+      <div>${steps.map(stepRow).join('')}</div>
+    </div>
     <div class="flex justify-end gap-2 pt-1"><button type="button" onclick="closeModal()" class="btn btn-sm btn-secondary">Close</button></div>
-  </div>`);
+  </div>`, { wide:true });
 }
 function openRequestComment(id) {
   const r = MOCK.teamRequests.find(x=>x.id===id);
@@ -1607,6 +1923,14 @@ function saveFollowUp(id) {
 }
 
 // ==================== EMPLOYEE ACTIONS ====================
+// Open a branch employee's full profile. Branch employees use RV-XXXX ids,
+// so map to the matching team member (by name) for the profile page.
+function openEmployeeProfile(id) {
+  const e = MOCK.branchEmployees.find(x=>x.id===id); if(!e) return;
+  const tm = MOCK.teamMembers.find(x=>x.name===e.name);
+  if (tm) { navigateTo('team-member-profile', { id: tm.id }); return; }
+  showToast(`No profile data for ${e.name}`,'info');
+}
 function openNewEmployee() {
   openModal('New Employee', `<form onsubmit="event.preventDefault();saveNewEmployee()" class="space-y-3">
     <div><label class="form-label">Full Name</label><input id="emp-new-name" type="text" class="form-input" placeholder="e.g. Mohamed Ali" required></div>

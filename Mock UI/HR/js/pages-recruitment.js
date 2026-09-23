@@ -70,15 +70,15 @@ function renderRecruitment() {
 
   const kpiLine = `${openVacancies.length} open · ${totalCandidates} candidates · ${pendingVR.length} requests pending`;
 
-  return `<div class="space-y-3">
-    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+  return `<div class="flex flex-col h-full min-h-0 gap-3">
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 flex-shrink-0">
       <div><h1 class="text-xl font-bold text-charcoal-900">Recruitment & Hiring</h1><p class="text-xs text-charcoal-500 mt-0.5">${kpiLine} · ${thisWeek} interviews this week</p></div>
       ${canManageVac?`<button onclick="openNewVacancy()" class="btn btn-md btn-primary"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>Create Vacancy</button>`:''}
     </div>
-    <div class="flex border-b border-charcoal-100 overflow-x-auto">
+    <div class="flex border-b border-charcoal-100 overflow-x-auto flex-shrink-0">
       ${tabs.map(t=>`<button onclick="_recTab='${t.id}';renderAll()" class="tab-btn ${_recTab===t.id?'active':''}">${t.label}${t.id==='vacancy-requests'&&pendingVR.length?` <span class="badge badge-red text-[9px] ml-0.5">${pendingVR.length}</span>`:''}</button>`).join('')}
     </div>
-    ${body}
+    <div class="flex flex-col flex-1 min-h-0 gap-3">${body}</div>
   </div>`;
 }
 
@@ -184,12 +184,12 @@ function vacanciesBody(canManage) {
     const matched = MOCK.candidates.filter(c=>c.position===v.position);
     return { ...v, matched };
   });
-  return `<div class="flex items-center justify-between mb-3">
+  return `<div class="flex items-center justify-between mb-3 flex-shrink-0">
     <p class="bento-label text-charcoal-500">VACANCY MANAGEMENT</p>
     <button onclick="showToast('Vacancy filter — simulated','info')" class="btn btn-sm btn-secondary"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4h18M6 12h12M10 20h4"/></svg>Filter</button>
   </div>
-  <div class="bg-white rounded-xl border border-charcoal-200 overflow-hidden">
-    <div class="table-responsive"><table class="data-table"><thead><tr><th>Position</th><th>Gym</th><th>Headcount</th><th>Urgency</th><th>Candidates</th><th>Status</th><th></th></tr></thead>
+  <div class="bg-white rounded-xl border border-charcoal-200 overflow-hidden flex flex-col flex-1 min-h-0">
+    <div class="flex-1 min-h-0 overflow-auto table-responsive rounded-b-xl"><table class="data-table h-full"><thead><tr><th>Position</th><th>Gym</th><th>Headcount</th><th>Urgency</th><th>Candidates</th><th>Status</th><th></th></tr></thead>
     <tbody>${vRows.map(v=>`<tr onclick="openVacancyDetail('${v.id}')" class="cursor-pointer">
       <td><div><p class="text-xs font-medium text-charcoal-900">${v.position}</p><p class="text-[9px] text-charcoal-400">Created ${formatDate(v.createdDate)}</p></div></td>
       <td class="text-xs">${v.gym}</td>
@@ -215,8 +215,8 @@ function candidatesBody(canHire, canCandidates, showAll) {
 
   const allChecked = list.length>0 && list.every(c=>_recSel.includes(c.id));
 
-  return `<div class="space-y-2.5">
-    <div class="flex flex-col sm:flex-row gap-2 flex-wrap">
+  return `<div class="flex flex-col flex-1 min-h-0 gap-2.5">
+    <div class="flex flex-col sm:flex-row gap-2 flex-wrap flex-shrink-0">
       <input value="${_recSearch}" oninput="_recSearch=this.value;renderAll()" placeholder="Search candidates..." class="form-input sm:max-w-[220px]" style="padding:0.375rem 0.625rem;font-size:0.8125rem">
       <select onchange="_recStage=this.value;renderAll()" class="form-select" style="padding:0.375rem 2rem 0.375rem 0.625rem;font-size:0.8125rem;width:auto">
         ${stageOpts.map(s=>`<option ${_recStage===s?'selected':''}>${s}</option>`).join('')}
@@ -228,8 +228,8 @@ function candidatesBody(canHire, canCandidates, showAll) {
       <span class="text-[10px] text-charcoal-400 self-center ml-auto">${list.length} of ${MOCK.candidates.length} candidates</span>
     </div>
 
-    <div class="bg-white rounded-xl border border-charcoal-200 overflow-hidden hidden lg:block">
-      <div class="table-responsive"><table class="data-table"><thead><tr>
+    <div class="bg-white rounded-xl border border-charcoal-200 overflow-hidden hidden lg:flex flex-col flex-1 min-h-0">
+      <div class="flex-1 min-h-0 overflow-auto table-responsive rounded-b-xl"><table class="data-table h-full"><thead><tr>
         <th class="w-8"><input type="checkbox" class="rounded" ${allChecked?'checked':''} onchange="if(this.checked){_recSel=MOCK.candidates.map(c=>c.id);}else{_recSel=[];}renderAll()"></th>
         <th>Candidate</th><th>Position</th><th>Stage</th><th>Applied</th><th>Rating</th><th>Source</th><th></th></tr></thead>
       <tbody>${list.map(c=>{
@@ -253,7 +253,7 @@ function candidatesBody(canHire, canCandidates, showAll) {
       }).join('')}</tbody></table></div>
     </div>
 
-    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 lg:hidden">
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 lg:hidden flex-shrink-0">
       ${list.map(c=>{const p=_candProfile[c.id]||{};return `<div class="bg-white rounded-xl border border-charcoal-200 p-3">
         <div class="flex items-center gap-3">
           <div class="w-9 h-9 rounded-full bg-brand-100 text-brand-700 flex items-center justify-center text-[10px] font-semibold flex-shrink-0">${_initials(c.name)}</div>
@@ -271,7 +271,7 @@ function candidatesBody(canHire, canCandidates, showAll) {
       </div>`;}).join('')||'<div class="lg:col-span-3 bg-white rounded-xl border border-charcoal-200 p-6 text-center text-xs text-charcoal-400">No candidates match your filters.</div>'}
     </div>
 
-    ${!canCandidates?`<p class="text-[10px] text-charcoal-400 text-center">Managing candidates requires <code>recruitment.candidates.manage</code>.</p>`:''}
+    ${!canCandidates?`<p class="text-[10px] text-charcoal-400 text-center flex-shrink-0">Managing candidates requires <code>recruitment.candidates.manage</code>.</p>`:''}
   </div>`;
 }
 

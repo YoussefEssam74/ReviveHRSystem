@@ -49,7 +49,7 @@
   </script>
   <link rel="stylesheet" href="styles.css">
 </head>
-<body class="h-full flex flex-col bg-gray-50 font-sans text-charcoal-800 antialiased">
+<body class="h-dvh overflow-hidden flex flex-col bg-gray-50 font-sans text-charcoal-800 antialiased">
 
   <!-- ==================== PROTOTYPE PREVIEW TOOLBAR ==================== -->
   <div id="demo-toolbar" class="flex-shrink-0 h-10 bg-charcoal-800 text-white flex items-center px-3 gap-2 text-xs z-[60]">
@@ -98,7 +98,7 @@
     <div id="sidebar-overlay" class="fixed inset-0 bg-black/50 z-30 hidden lg:hidden" onclick="closeSidebar()"></div>
 
     <!-- MAIN AREA -->
-    <div class="flex-1 flex flex-col ml-64">
+    <div class="flex-1 flex flex-col ml-64 min-h-0 min-w-0">
       <header class="sticky top-0 z-20 bg-white border-b border-charcoal-100 h-16 flex items-center px-4 lg:px-6 gap-4 flex-shrink-0">
         <button onclick="toggleSidebar()" class="lg:hidden p-2 -ml-2 rounded-lg hover:bg-charcoal-100" aria-label="Toggle menu">
           <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
@@ -136,7 +136,7 @@
           </div>
         </div>
       </header>
-      <main class="flex-1 overflow-y-auto p-4 lg:p-6" id="main-content"></main>
+      <main class="flex-1 min-h-0 overflow-y-auto p-4 lg:p-6" id="main-content"></main>
     </div>
   </div>
 
@@ -159,7 +159,7 @@
       </button>
       <div class="w-8 h-8 rounded-full bg-brand-100 text-brand-700 flex items-center justify-center text-xs font-semibold cursor-pointer" onclick="navigateTo('my-access')">ME</div>
     </header>
-    <main class="flex-1 overflow-y-auto pb-20" id="mobile-content"></main>
+    <main class="flex-1 min-h-0 overflow-y-auto pb-20" id="mobile-content"></main>
     <nav class="fixed bottom-0 left-0 right-0 bg-white border-t border-charcoal-100 z-30 flex items-center justify-around h-16 safe-bottom" id="mobile-bottom-nav">
       <button onclick="navigateTo('dashboard')" class="mobile-nav-btn flex flex-col items-center gap-0.5 px-3 py-1.5" data-page="dashboard">
         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>
@@ -216,12 +216,12 @@
 
   <!-- ==================== SCRIPTS ==================== -->
   <script src="js/data.js?v=1"></script>
-  <script src="js/core.js?v=1"></script>
+  <script src="js/core.js?v=4"></script>
   <script src="js/pages-dashboard.js?v=1"></script>
   <script src="js/pages-employees.js?v=1"></script>
   <script src="js/pages-recruitment.js?v=1"></script>
   <script src="js/pages-attendance.js?v=1"></script>
-  <script src="js/pages-schedule.js?v=1"></script>
+  <script src="js/pages-schedule.js?v=2"></script>
   <script src="js/pages-requests.js?v=1"></script>
   <script src="js/pages-payroll.js?v=1"></script>
   <script src="js/pages-evaluations.js?v=1"></script>

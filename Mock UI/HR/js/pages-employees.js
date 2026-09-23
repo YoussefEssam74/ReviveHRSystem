@@ -31,8 +31,8 @@ function renderEmployees(page='directory') {
     ${canOffboard?`<button onclick="state.empView='offboarding';renderAll()" class="px-3 py-1.5 rounded-md text-[10px] font-medium ${state.empView==='offboarding'?'bg-white shadow-sm text-charcoal-900':'text-charcoal-500'}">Offboarding & Separations</button>`:''}
   </div>`;
 
-  return `<div class="space-y-3">
-    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+  return `<div class="flex flex-col h-full min-h-0 gap-3">
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 flex-shrink-0">
       <div class="flex flex-col sm:flex-row sm:items-center gap-2.5">
         <div>
           <h1 class="text-xl font-bold text-charcoal-900">Employees</h1>
@@ -47,7 +47,7 @@ function renderEmployees(page='directory') {
     </div>
 
     <!-- Filters -->
-    <div class="bg-white rounded-xl border border-charcoal-200 px-3 py-2 flex items-center gap-3 flex-wrap">
+    <div class="bg-white rounded-xl border border-charcoal-200 px-3 py-2 flex items-center gap-3 flex-wrap flex-shrink-0">
       <div class="relative">
         <svg class="w-4 h-4 text-charcoal-400 absolute left-2.5 top-1/2 -translate-y-1/2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
         <input type="text" oninput="_empFilter.search=this.value;renderAll()" class="form-input" placeholder="Search employees..." style="padding:0.375rem 0.625rem 0.375rem 2rem;font-size:0.8125rem;width:200px">
@@ -66,16 +66,16 @@ function renderEmployees(page='directory') {
     </div>
 
     <!-- Stats strip -->
-    <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
+    <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 flex-shrink-0">
       <div class="bg-white rounded-xl border border-charcoal-200 p-3 text-center"><p class="text-lg font-bold text-brand-600">${MOCK.employees.filter(e=>e.status==='Active').length}</p><p class="text-[10px] text-charcoal-500">Active</p></div>
       <div class="bg-white rounded-xl border border-charcoal-200 p-3 text-center"><p class="text-lg font-bold text-yellow-600">${MOCK.employees.filter(e=>e.status==='On Leave').length}</p><p class="text-[10px] text-charcoal-500">On Leave</p></div>
       <div class="bg-white rounded-xl border border-charcoal-200 p-3 text-center"><p class="text-lg font-bold text-orange-600">${MOCK.employees.filter(e=>e.status==='Notice Period').length}</p><p class="text-[10px] text-charcoal-500">Notice Period</p></div>
       <div class="bg-white rounded-xl border border-charcoal-200 p-3 text-center"><p class="text-lg font-bold text-red-600">${MOCK.employees.filter(e=>e.status==='Suspended').length}</p><p class="text-[10px] text-charcoal-500">Suspended</p></div>
     </div>
 
-    <!-- Desktop Table -->
-    <div class="bg-white rounded-xl border border-charcoal-200 overflow-hidden hidden lg:block">
-      <div class="table-responsive"><table class="data-table"><thead><tr><th>Employee</th><th>Position</th><th>Level</th><th>Gym</th><th>Status</th><th></th></tr></thead>
+    <!-- Desktop Table (fills remaining viewport) -->
+    <div class="bg-white rounded-xl border border-charcoal-200 overflow-hidden hidden lg:flex flex-col flex-1 min-h-0">
+      <div class="flex-1 min-h-0 overflow-auto table-responsive rounded-b-xl"><table class="data-table h-full"><thead><tr><th>Employee</th><th>Position</th><th>Level</th><th>Gym</th><th>Status</th><th></th></tr></thead>
       <tbody>${list.map(e=>`<tr class="cursor-pointer hover:bg-charcoal-50/50" onclick="openEmployeeProfile('${e.id}')">
         <td><div class="flex items-center gap-2.5"><div class="w-8 h-8 rounded-full bg-brand-100 text-brand-700 flex items-center justify-center text-[10px] font-semibold">${e.initials}</div><div><p class="text-xs font-medium text-charcoal-900">${e.name}</p><p class="text-[10px] text-charcoal-500">${e.id}</p></div></div></td>
         <td class="text-xs">${e.position}</td>
@@ -87,7 +87,7 @@ function renderEmployees(page='directory') {
     </div>
 
     <!-- Mobile Cards -->
-    <div class="space-y-1.5 lg:hidden">${list.map(e=>`<div class="bg-white rounded-xl border border-charcoal-200 p-3 card-interactive" onclick="openEmployeeProfile('${e.id}')">
+    <div class="space-y-1.5 lg:hidden flex-shrink-0">${list.map(e=>`<div class="bg-white rounded-xl border border-charcoal-200 p-3 card-interactive" onclick="openEmployeeProfile('${e.id}')">
       <div class="flex items-center justify-between">
         <div class="flex items-center gap-2.5">
           <div class="w-9 h-9 rounded-full bg-brand-100 text-brand-700 flex items-center justify-center text-[10px] font-semibold">${e.initials}</div>
@@ -98,7 +98,7 @@ function renderEmployees(page='directory') {
     </div>`).join('')}</div>
 
     <!-- Permission hint for lifecycle actions -->
-    <div class="bg-white rounded-xl border border-charcoal-200 p-3 text-[11px] text-charcoal-500 leading-relaxed">
+    <div class="bg-white rounded-xl border border-charcoal-200 p-3 text-[11px] text-charcoal-500 leading-relaxed flex-shrink-0">
       <span class="font-semibold text-charcoal-700">Lifecycle actions:</span>
       ${canTransfer?'· Transfer Gym':'<span class="text-charcoal-300">· Transfer Gym (hidden — not granted)</span>'}
       ${canCompensate?'· Manage Compensation':'<span class="text-charcoal-300">· Manage Compensation (hidden — not granted)</span>'}
@@ -120,16 +120,16 @@ function renderOffboarding() {
 
   const sepBadge = s => s.status === 'Completed' ? 'badge-success' : s.status === 'Notice Period' ? 'badge-blue' : s.status === 'Terminated' ? 'badge-red' : 'badge-yellow';
 
-  return `<div class="space-y-3">
-    <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
+  return `<div class="flex flex-col h-full min-h-0 gap-3">
+    <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 flex-shrink-0">
       <div class="bg-white rounded-xl border border-charcoal-200 p-3 text-center border-l-4 border-l-red-500"><p class="text-lg font-bold text-red-600">${MOCK.separations.filter(s=>s.status==='Notice Period').length}</p><p class="text-[10px] text-charcoal-500">Notice Period</p></div>
       <div class="bg-white rounded-xl border border-charcoal-200 p-3 text-center"><p class="text-lg font-bold text-yellow-600">${MOCK.separations.filter(s=>s.status==='In Progress').length}</p><p class="text-[10px] text-charcoal-500">Checklist In Progress</p></div>
       <div class="bg-white rounded-xl border border-charcoal-200 p-3 text-center"><p class="text-lg font-bold text-orange-600">${MOCK.separations.filter(s=>s.status==='In Review').length}</p><p class="text-[10px] text-charcoal-500">In Review / Litigation</p></div>
       <div class="bg-white rounded-xl border border-charcoal-200 p-3 text-center"><p class="text-lg font-bold text-charcoal-900">${completed}</p><p class="text-[10px] text-charcoal-500">Completed YTD</p></div>
     </div>
 
-    <div class="bg-white rounded-xl border border-charcoal-200 overflow-hidden hidden lg:block">
-      <div class="table-responsive"><table class="data-table"><thead><tr><th>Employee</th><th>Gym</th><th>Last Day</th><th>Reason</th><th>Status</th><th>Exit Checklist</th><th></th></tr></thead>
+    <div class="bg-white rounded-xl border border-charcoal-200 overflow-hidden hidden lg:flex flex-col flex-1 min-h-0">
+      <div class="flex-1 min-h-0 overflow-auto table-responsive rounded-b-xl"><table class="data-table h-full"><thead><tr><th>Employee</th><th>Gym</th><th>Last Day</th><th>Reason</th><th>Status</th><th>Exit Checklist</th><th></th></tr></thead>
       <tbody>${active.map(s=>{
         const done = s.checklist.filter(c=>c[1]).length;
         return `<tr>
@@ -144,7 +144,7 @@ function renderOffboarding() {
       }).join('')}</tbody></table></div>
     </div>
 
-    <div class="space-y-1.5 lg:hidden">${active.map(s=>{
+    <div class="space-y-1.5 lg:hidden flex-shrink-0">${active.map(s=>{
       const done = s.checklist.filter(c=>c[1]).length;
       return `<div class="bg-white rounded-xl border border-charcoal-200 p-3">
         <div class="flex items-center justify-between"><div class="flex items-center gap-2.5"><div class="w-9 h-9 rounded-full bg-red-100 text-red-700 flex items-center justify-center text-[10px] font-semibold">${s.employee.split(' ').map(w=>w[0]).join('')}</div><div><p class="text-xs font-medium text-charcoal-900">${s.employee}</p><p class="text-[10px] text-charcoal-500">${s.position} · ${s.gym}</p></div></div>${sepBadge(s)}</div>
@@ -154,7 +154,7 @@ function renderOffboarding() {
       </div>`;
     }).join('')}</div>
 
-    <div class="bg-white rounded-xl border border-brand-200 border-l-4 border-l-brand-500 p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+    <div class="bg-white rounded-xl border border-brand-200 border-l-4 border-l-brand-500 p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2 flex-shrink-0">
       <div><p class="text-xs font-semibold text-charcoal-900">EXIT PROCESS</p><p class="text-[10px] text-charcoal-500">Standard ${exitSteps}-step offboarding: Exit interview → Handover → Uniform/asset return → Access revocation → Final settlement.</p></div>
       ${canOffboard?`<button onclick="showToast('Initiate offboarding — simulated')" class="btn btn-sm btn-primary">+ Initiate Offboarding</button>`:''}
     </div>

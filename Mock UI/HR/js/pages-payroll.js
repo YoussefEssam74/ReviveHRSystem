@@ -6,12 +6,12 @@ function renderPayroll() {
   const showAll = DEMO.showAll;
   const canEdit = showAll || hasPermission('payroll.edit');
   const canApprove = showAll || hasPermission('payroll.approve');
-  const canExport = showAll || hasPermission('payroll.export');
+  const canExport = showAll || hasPermission('payroll.view');
 
   const payroll = MOCK.payrollItems;
   const totalGross = payroll.reduce((s, p) => s + p.gross, 0);
-  const totalNet = payroll.reduce((s, p) => s + p.net, 0);
-  const totalDed = payroll.reduce((s, p) => s + p.deductions, 0);
+  const totalNet = payroll.reduce((s, p) => s + netOf(p), 0);
+  const totalDed = payroll.reduce((s, p) => s + dedTotal(p), 0);
   const approved = payroll.filter(p => p.status === 'Approved').length;
   const locked = payroll.filter(p => p.status === 'Locked').length;
   const drafts = payroll.filter(p => p.status === 'Draft');
@@ -28,7 +28,7 @@ function renderPayroll() {
     { t: 'Deduction batch: social insurance + loans', when: 'Sep 8, 16:22', by: 'Mona El-Sayed' },
   ];
 
-  const stepper = `<div class="bg-white rounded-xl border border-charcoal-200 p-3">
+  const stepper = `<div class="bg-white rounded-xl border border-charcoal-200 p-3 flex-shrink-0">
     <div class="flex items-center">
       ${steps.map((s, i) => {
         const n = i + 1;
@@ -45,8 +45,8 @@ function renderPayroll() {
     </div>
   </div>`;
 
-  return `<div class="space-y-3">
-    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+  return `<div class="flex flex-col h-full min-h-0 gap-3">
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 flex-shrink-0">
       <div><h1 class="text-xl font-bold text-charcoal-900">Payroll</h1><p class="text-xs text-charcoal-500 mt-0.5">${_payPeriod} pay cycle · ${payroll.length} records loaded</p></div>
       <div class="flex items-center gap-1.5 flex-wrap">
         <select class="form-select w-auto" style="padding:0.375rem 2rem 0.375rem 0.625rem;font-size:0.8125rem"><option>Aug 2026</option><option>Jul 2026</option><option>Jun 2026</option></select>
@@ -60,41 +60,44 @@ function renderPayroll() {
     ${stepper}
 
     <!-- Move step buttons -->
-    <div class="flex items-center gap-2">
+    <div class="flex items-center gap-2 flex-shrink-0">
       ${canApprove ? `<button onclick="_payStep=Math.max(1,_payStep-1);renderAll()" class="btn btn-sm btn-secondary">◀ Previous step</button>
       ${_payStep === 3 ? `<button onclick="showToast('Payroll cycle approved & published for 25th');_payStep=4;renderAll();" class="btn btn-sm btn-success">Approve & Publish Cycle</button>` : `<button onclick="_payStep=Math.min(4,_payStep+1);renderAll()" class="btn btn-sm btn-primary">Next step ▶</button>`}` : ''}
       <span class="text-[10px] text-charcoal-400">Step ${_payStep} of 4 — ${steps[_payStep - 1]}</span>
     </div>
 
     <!-- Summary -->
-    <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
+    <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 flex-shrink-0">
       <div class="bg-white rounded-xl border border-charcoal-200 p-3 text-center border-l-4 border-l-brand-500"><p class="text-lg font-bold text-brand-600">EGP ${fmtMoney(totalNet)}</p><p class="text-[10px] text-charcoal-500">Total Net Pay</p><p class="text-[9px] text-green-600 mt-0.5">▲ ${monthDelta > 0 ? monthDelta : Math.abs(monthDelta)}% vs July</p></div>
       <div class="bg-white rounded-xl border border-charcoal-200 p-3 text-center"><p class="text-lg font-bold text-charcoal-900">EGP ${fmtMoney(totalGross)}</p><p class="text-[10px] text-charcoal-500">Total Gross</p><p class="text-[9px] text-charcoal-400 mt-0.5">${totalDed > 0 ? `EGP ${fmtMoney(totalDed)} in deductions` : ''}</p></div>
       <div class="bg-white rounded-xl border border-charcoal-200 p-3 text-center"><p class="text-lg font-bold text-charcoal-900">${approved}<span class="text-[10px] font-normal text-charcoal-400">/${payroll.length}</span></p><p class="text-[10px] text-charcoal-500">Approved</p><p class="text-[9px] text-charcoal-400 mt-0.5">${drafts.length} still editable</p></div>
       <div class="bg-white rounded-xl border border-charcoal-200 p-3 text-center"><p class="text-lg font-bold text-green-600">${locked}</p><p class="text-[10px] text-charcoal-500">Released / Locked</p><p class="text-[9px] text-charcoal-400 mt-0.5">Payday: 25th</p></div>
     </div>
 
-    <!-- Table + activity -->
-    <div class="grid grid-cols-1 lg:grid-cols-3 gap-3">
-      <div class="lg:col-span-2 bg-white rounded-xl border border-charcoal-200 overflow-hidden hidden lg:block">
-        <div class="table-responsive"><table class="data-table"><thead><tr><th>Employee</th><th>Gym</th><th>Days</th><th>Overtime</th><th class="text-right">Gross</th><th class="text-right">Deductions</th><th class="text-right">Net</th><th>Status</th><th></th></tr></thead>
+    <!-- Table + activity (fills remaining viewport) -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-3 flex-1 min-h-0">
+      <div class="lg:col-span-2 bg-white rounded-xl border border-charcoal-200 overflow-hidden hidden lg:flex flex-col min-h-0">
+        <div class="flex-1 min-h-0 overflow-auto table-responsive rounded-b-xl"><table class="data-table h-full"><thead><tr><th>Employee</th><th>Gym</th><th>Days</th><th>Overtime</th><th class="text-right">Gross</th><th class="text-right">Deductions</th><th class="text-right">Net</th><th>Status</th><th></th></tr></thead>
         <tbody>${payroll.map(p => `<tr>
           <td><div class="flex items-center gap-2.5"><div class="w-8 h-8 rounded-full bg-brand-100 text-brand-700 flex items-center justify-center text-[10px] font-semibold">${p.name.split(' ').map(w => w[0]).join('')}</div><div><p class="text-xs font-medium text-charcoal-900">${p.name}</p><p class="text-[10px] text-charcoal-500">${p.employeeId}</p></div></div></td>
           <td class="text-xs">${p.gym}</td>
           <td class="text-xs">${p.days}</td>
           <td class="text-xs">${p.overtime}h</td>
           <td class="text-xs text-right font-medium text-charcoal-700">EGP ${fmtMoney(p.gross)}</td>
-          <td class="text-xs text-right text-red-600">- ${fmtMoney(p.deductions)}</td>
-          <td class="text-xs text-right font-bold text-charcoal-900">EGP ${fmtMoney(p.net)}</td>
+          <td class="text-xs text-right text-red-600">- ${fmtMoney(dedTotal(p))}${pendingOf(p) ? ` <span class="badge badge-yellow text-[9px]">${pendingOf(p)} pending</span>` : ''}</td>
+          <td class="text-xs text-right font-bold text-charcoal-900">EGP ${fmtMoney(netOf(p))}</td>
           <td>${payslipStatusBadge(p.status)}</td>
-          <td><div class="flex justify-end gap-1">${canEdit && p.status === 'Draft' ? `<button onclick="openPayrollEdit('${p.employeeId}')" class="btn btn-sm btn-ghost"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/></svg></button>` : ''}<button onclick="openPayslip('${p.employeeId}')" class="btn btn-sm btn-ghost">Payslip</button></div></td>
+          <td><div class="flex justify-end gap-1">
+            ${canEdit && p.status === 'Draft' ? `<button onclick="openPayrollEdit('${p.employeeId}')" class="btn btn-sm btn-ghost" title="Edit"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/></svg></button>` : ''}
+            ${(canEdit && (p.deductionLines || []).some(l => l.status === 'Pending')) ? `<button onclick="openDeductions('${p.employeeId}')" class="btn btn-sm btn-secondary">Decide Deductions<span class="badge badge-yellow text-[9px] ml-1">${pendingOf(p)}</span></button>` : `<button onclick="openDeductions('${p.employeeId}')" class="btn btn-sm btn-ghost">Deductions</button>`}
+          <button onclick="openPayslip('${p.employeeId}')" class="btn btn-sm btn-ghost">Payslip</button></div></td>
         </tr>`).join('')}</tbody></table></div>
       </div>
 
       <!-- Activity feed -->
-      <div class="bg-white rounded-xl border border-charcoal-200 overflow-hidden">
+      <div class="bg-white rounded-xl border border-charcoal-200 overflow-hidden flex flex-col min-h-0">
         <div class="px-4 py-2.5 border-b border-charcoal-100 bg-charcoal-50/50"><p class="bento-label">CYCLCE ACTIVITY</p></div>
-        <div class="divide-y divide-charcoal-50">${activity.map(a => `<div class="p-3 flex items-start gap-2.5">
+        <div class="divide-y divide-charcoal-50 flex-1 min-h-0 overflow-auto">${activity.map(a => `<div class="p-3 flex items-start gap-2.5">
           <span class="w-2 h-2 rounded-full bg-brand-400 mt-1.5 flex-shrink-0"></span>
           <div><p class="text-[11px] text-charcoal-800 leading-snug">${a.t}</p><p class="text-[9px] text-charcoal-400 mt-0.5">${a.when} · by ${a.by}</p></div>
         </div>`).join('')}</div>
@@ -102,18 +105,18 @@ function renderPayroll() {
     </div>
 
     <!-- Mobile Cards -->
-    <div class="space-y-1.5 lg:hidden">${payroll.map(p => `<div class="bg-white rounded-xl border border-charcoal-200 p-3">
+    <div class="space-y-1.5 lg:hidden flex-shrink-0">${payroll.map(p => `<div class="bg-white rounded-xl border border-charcoal-200 p-3">
       <div class="flex items-center justify-between">
         <div class="flex items-center gap-2.5"><div class="w-8 h-8 rounded-full bg-brand-100 text-brand-700 flex items-center justify-center text-[10px] font-semibold">${p.name.split(' ').map(w => w[0]).join('')}</div><div><p class="text-xs font-medium text-charcoal-900">${p.name}</p><p class="text-[10px] text-charcoal-500">${p.gym}</p></div></div>
         ${payslipStatusBadge(p.status)}
       </div>
-      <div class="flex justify-between mt-2 text-[11px]"><span class="text-charcoal-500">Net Pay</span><span class="font-bold text-charcoal-900">EGP ${fmtMoney(p.net)}</span></div>
-      <div class="flex justify-between text-[10px] text-charcoal-400"><span>Gross ${fmtMoney(p.gross)}</span><span>Deduct - ${fmtMoney(p.deductions)}</span></div>
-      <div class="flex gap-1.5 mt-2">${canEdit && p.status === 'Draft' ? `<button onclick="openPayrollEdit('${p.employeeId}')" class="btn btn-sm btn-secondary flex-1 text-[10px]">Edit</button>` : ''}<button onclick="openPayslip('${p.employeeId}')" class="btn btn-sm btn-secondary flex-1 text-[10px]">Payslip</button></div>
+      <div class="flex justify-between mt-2 text-[11px]"><span class="text-charcoal-500">Net Pay</span><span class="font-bold text-charcoal-900">EGP ${fmtMoney(netOf(p))}</span></div>
+      <div class="flex justify-between text-[10px] text-charcoal-400"><span>Gross ${fmtMoney(p.gross)}</span><span>Deduct - ${fmtMoney(dedTotal(p))}${pendingOf(p) ? ` <span class="badge badge-yellow text-[9px]">${pendingOf(p)} pending</span>` : ''}</span></div>
+      <div class="flex gap-1.5 mt-2">${canEdit && p.status === 'Draft' ? `<button onclick="openPayrollEdit('${p.employeeId}')" class="btn btn-sm btn-secondary flex-1 text-[10px]">Edit</button>` : ''}<button onclick="openDeductions('${p.employeeId}')" class="btn btn-sm btn-secondary flex-1 text-[10px]">Deductions</button><button onclick="openPayslip('${p.employeeId}')" class="btn btn-sm btn-secondary flex-1 text-[10px]">Payslip</button></div>
     </div>`).join('')}</div>
 
     <!-- Action banner -->
-    <div class="bg-white rounded-xl border border-brand-200 border-l-4 border-l-brand-500 p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+    <div class="bg-white rounded-xl border border-brand-200 border-l-4 border-l-brand-500 p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2 flex-shrink-0">
       <div>
         <p class="text-xs font-semibold text-charcoal-900">PAYROLL — ${_payPeriod}</p>
         <p class="text-[10px] text-charcoal-500">${drafts.length} draft payslips ${canEdit ? 'editable until approved.' : ''} Payments scheduled for the 25th. ${locked} of ${payroll.length} released.</p>
@@ -124,7 +127,7 @@ function renderPayroll() {
       </div>
     </div>
 
-    ${!canEdit ? `<p class="text-[10px] text-charcoal-400 text-center">Payroll edits require <code>payroll.edit</code> (HR Manager). View-only.</p>` : ''}
+    ${!canEdit ? `<p class="text-[10px] text-charcoal-400 text-center flex-shrink-0">Payroll edits require <code>payroll.edit</code> (HR Manager). View-only.</p>` : ''}
   </div>`;
 }
 
@@ -133,30 +136,36 @@ function payslipStatusBadge(s) {
   return `<span class="badge ${map[s] || 'badge-gray'} text-[9px]">${s}</span>`;
 }
 
+function dedTotal(p) { return (p.deductionLines || []).filter(l => l.status !== 'Rejected').reduce((s, l) => s + l.amount, 0); }
+function netOf(p) { return p.gross - dedTotal(p); }
+function pendingOf(p) { return (p.deductionLines || []).filter(l => l.status === 'Pending').length; }
+
 function fmtMoney(n) { return n.toLocaleString('en-US', { maximumFractionDigits: 0 }); }
 function mathMax(a, b) { return a > b ? a : b; }
 
 function openPayrollEdit(id) {
   const p = MOCK.payrollItems.find(x => x.employeeId === id); if (!p) return;
+  const pending = (p.deductionLines || []).filter(l => l.status === 'Pending').length;
   openModal(`Edit Payroll — ${p.name}`, `<form onsubmit="event.preventDefault();showToast('Payroll updated');closeModal();" class="space-y-3">
     <div class="bg-charcoal-50 rounded-lg p-2.5 flex justify-between text-xs"><span class="text-charcoal-500">Gross Salary</span><span class="font-semibold text-charcoal-900">EGP ${fmtMoney(p.gross)}</span></div>
     <div><label class="form-label">Days Worked</label><input type="number" class="form-input" value="${p.days}"></div>
     <div><label class="form-label">Overtime Hours</label><input type="number" class="form-input" value="${p.overtime}"></div>
-    <div><label class="form-label">Deductions (EGP)</label><input type="number" step="1" class="form-input" value="${p.deductions}"></div>
+    <div><label class="form-label">Deductions (EGP)</label><input type="number" step="1" class="form-input" value="${dedTotal(p)}"></div>
     <div class="grid grid-cols-2 gap-3">
-      <div class="bg-brand-50 rounded-lg p-2.5 text-center"><p class="text-[9px] text-brand-700 uppercase">Net (auto)</p><p class="text-sm font-bold text-brand-700">EGP ${fmtMoney(p.net)}</p></div>
+      <div class="bg-brand-50 rounded-lg p-2.5 text-center"><p class="text-[9px] text-brand-700 uppercase">Net (auto)</p><p class="text-sm font-bold text-brand-700">EGP ${fmtMoney(netOf(p))}</p></div>
       <div><label class="form-label">Status</label><select class="form-select"><option>Draft</option><option>Approved</option><option>Locked</option></select></div>
     </div>
+    ${pending ? `<div class="bg-yellow-50 border border-yellow-200 rounded-lg p-2.5 text-[10px] text-yellow-800">${pending} deduction line${pending>1?'s':''} still pending HR decision — review via <button type="button" onclick="openDeductions('${p.employeeId}')" class="text-brand-700 font-semibold underline">Deductions</button>.</div>` : ''}
     <div class="flex justify-end gap-2 pt-1"><button type="button" onclick="closeModal()" class="btn btn-sm btn-secondary">Cancel</button><button type="submit" class="btn btn-sm btn-primary">Save</button></div>
   </form>`);
 }
 
 function openPayslip(id) {
   const p = MOCK.payrollItems.find(x => x.employeeId === id); if (!p) return;
-  const allowExport = DEMO.showAll || hasPermission('payroll.export');
+  const allowExport = DEMO.showAll || hasPermission('payroll.view');
   const basic = p.gross;
   const otPay = Math.round(p.gross / 22 / 8 * p.overtime * 1.5);
-  const total = basic + otPay - p.deductions;
+  const total = basic + otPay - dedTotal(p);
   openModal(`Payslip — ${_payPeriod}`, `<div class="payslip">
     <div class="flex justify-between items-start border-b-2 border-charcoal-200 pb-3">
       <div><p class="text-base font-bold text-brand-700">REVIVE GYM</p><p class="text-[10px] text-charcoal-500">Human Resources · Payroll</p></div>
@@ -168,10 +177,13 @@ function openPayslip(id) {
       <div><p class="text-[9px] uppercase text-charcoal-400">Gym</p><p class="font-medium text-charcoal-800">${p.gym}</p></div>
       <div><p class="text-[9px] uppercase text-charcoal-400">Days / OT</p><p class="font-medium text-charcoal-800">${p.days} days · ${p.overtime}h</p></div>
     </div>
-    <div class="grid grid-cols-2 gap-y-1.5 border-t border-charcoal-100 py-3 text-[11px]">
+    <div class="grid grid-cols-1 gap-y-1.5 border-t border-charcoal-100 py-3 text-[11px]">
       <p class="text-charcoal-500">Basic Salary</p><p class="text-right text-charcoal-800">EGP ${fmtMoney(basic)}</p>
       <p class="text-charcoal-500">Overtime (${p.overtime}h × 1.5x)</p><p class="text-right text-charcoal-800">EGP ${fmtMoney(otPay)}</p>
-      <p class="text-charcoal-500 text-red-600">Deductions</p><p class="text-right text-red-600">- EGP ${fmtMoney(p.deductions)}</p>
+      <div class="border-t border-charcoal-100 col-span-2 pt-2"><p class="text-[10px] font-semibold text-charcoal-700 mb-1">Deduction lines:</p>${(p.deductionLines || []).map(l => `<div class="flex items-center justify-between py-0.5">
+        <div class="flex items-center gap-1.5"><span class="text-[9px] ${l.status === 'Rejected' ? 'line-through text-charcoal-400' : 'text-red-600'}">- EGP ${fmtMoney(l.amount)}</span><span class="text-[9px] text-charcoal-500">${l.label} · ${l.date}</span></div>
+        <span class="badge text-[8px] ${l.status === 'Rejected' ? 'badge-gray' : l.status === 'Accepted' ? 'badge-success' : 'badge-yellow'}">${l.status}</span>
+      </div>`).join('') || '<p class="text-[10px] text-charcoal-400">No deduction lines.</p>'}</div>
       <div class="border-t border-charcoal-100 col-span-2 flex justify-between pt-2"><p class="font-semibold text-charcoal-900">NET PAY</p><p class="font-bold text-brand-700">EGP ${fmtMoney(total)}</p></div>
     </div>
     <div class="flex items-center justify-between border-t border-dashed border-charcoal-200 pt-3">
@@ -179,6 +191,69 @@ function openPayslip(id) {
       ${allowExport ? `<button onclick="showToast('Payslip exported as PDF')" class="btn btn-sm btn-secondary">Export PDF</button>` : ''}
     </div>
   </div>`, { wide: true, footer: '<button onclick="closeModal()" class="btn btn-sm btn-secondary">Close</button>' });
+}
+
+function openDeductions(id) {
+  const p = MOCK.payrollItems.find(x => x.employeeId === id); if (!p) return;
+  const showAll = DEMO.showAll;
+  const canEdit = showAll || hasPermission('payroll.edit');
+  const lines = p.deductionLines || [];
+  const rows = lines.map(l => {
+    const req = l.requestId ? MOCK.requests.find(r => r.id === l.requestId) : null;
+    const reqHtml = req ? `<div class="bg-orange-50 border border-orange-100 rounded-lg p-2.5 mt-2">
+      <p class="text-[9px] uppercase tracking-wide text-orange-500">Employee request on this date</p>
+      <p class="text-[11px] font-medium text-charcoal-800 mt-0.5">${req.type} · ${req.requestedDate} · ${statusBadge(req.status)}</p>
+      <p class="text-[10px] text-charcoal-600 mt-0.5">"${req.reason || ''}"</p>
+      ${req.bmDecision ? `<p class="text-[9px] text-charcoal-400 mt-1">BM ${req.bmDecision}: ${req.bmComment || ''}</p>` : ''}
+    </div>` : '';
+    const statusBadge2 = l.status === 'Accepted' ? `<span class="badge badge-success text-[9px]">Accepted</span>` : l.status === 'Rejected' ? `<span class="badge badge-gray text-[9px]">Rejected</span>` : `<span class="badge badge-yellow text-[9px]">Pending</span>`;
+    const actions = l.status === 'Pending' && canEdit ? `<div class="flex gap-1.5 mt-2">
+      <button onclick="decideDeduction('${p.employeeId}','${l.id}',1)" class="btn btn-sm btn-success flex-1 text-[10px]">Accept</button>
+      <button onclick="decideDeduction('${p.employeeId}','${l.id}',0)" class="btn btn-sm btn-danger-outline flex-1 text-[10px]">Reject</button>
+    </div>` : '';
+    return `<div class="bg-white rounded-lg border border-charcoal-200 p-3">
+      <div class="flex items-center justify-between">
+        <div><p class="text-xs font-semibold text-charcoal-900">${l.label}</p><p class="text-[9px] text-charcoal-400">${l.date} · ${l.reason || ''}</p></div>
+        <div class="text-right"><p class="text-xs font-bold text-red-600">- EGP ${fmtMoney(l.amount)}</p>${statusBadge2}</div>
+      </div>
+      ${reqHtml}
+      ${actions}
+    </div>`;
+  }).join('');
+  const pending = lines.filter(l => l.status === 'Pending').length;
+  openModal(`Deductions — ${p.name}`, `<div class="space-y-2">
+    <div class="flex items-center justify-between bg-charcoal-50 rounded-lg p-2.5 text-[11px]">
+      <span class="text-charcoal-600">Total (excluding rejected)</span>
+      <span class="font-bold text-charcoal-900">- EGP ${fmtMoney(dedTotal(p))}</span>
+    </div>
+    ${pending && canEdit ? `<div class="text-[10px] text-brand-700 bg-brand-50 border border-brand-100 rounded-lg p-2.5">${pending} pending deduction line${pending > 1 ? 's' : ''} — decide accept/reject. Linked employee requests (if any) shown for context.</div>` : ''}
+    ${rows || '<p class="text-xs text-charcoal-500">No deduction lines.</p>'}
+  </div>`, { wide: true, footer: `${canEdit && pending ? `<button onclick="acceptAllDeductions('${p.employeeId}')" class="btn btn-sm btn-primary">Accept All Pending</button>` : ''}<button onclick="closeModal()" class="btn btn-sm btn-secondary">Close</button>` });
+}
+
+function acceptAllDeductions(empId) {
+  const p = MOCK.payrollItems.find(x => x.employeeId === empId); if (!p) return;
+  let n = 0;
+  (p.deductionLines || []).forEach(l => { if (l.status === 'Pending') { l.status = 'Accepted'; n++; } });
+  showToast(`${n} deduction${n !== 1 ? 's' : ''} accepted for ${p.name}`);
+  openDeductions(empId);
+  renderPayrollMount();
+}
+
+function decideDeduction(empId, lineId, accept) {
+  const p = MOCK.payrollItems.find(x => x.employeeId === empId); if (!p) return;
+  const l = (p.deductionLines || []).find(x => x.id === lineId); if (!l) return;
+  l.status = accept ? 'Accepted' : 'Rejected';
+  showToast(accept ? `Deduction accepted — ${l.label}` : `Deduction rejected — ${l.label}`, accept ? 'success' : 'error');
+  openDeductions(empId);
+  renderPayrollMount();
+}
+
+function renderPayrollMount() {
+  const mc = document.getElementById('main-content');
+  if (mc) mc.innerHTML = renderPayroll();
+  const mb = document.getElementById('mobile-content');
+  if (mb) mb.innerHTML = renderPayroll();
 }
 
 function exportPayroll() {

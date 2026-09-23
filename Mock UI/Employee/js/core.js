@@ -16,11 +16,148 @@ function hasMgmt() {
   return [...teamItems, ...branchItems].some(i => !i.permission || perms.includes(i.permission) || perms.includes('*'));
 }
 
+// ==================== PENDING ACTION BADGES ====================
+// Centralized count computation — single source of truth for all sidebar badges.
+// Returns a map of { pageId: { count, level, label } }.
+//   level: 'urgent' | 'action' | 'info' — drives badge color.
+//   label: short text shown next to the count (e.g. "pending", "unread").
+// Called once per renderNavItems() invocation.
+function computePendingActions() {
+  const r = {};
+  // Helper: register a badge only when count > 0
+  function put(id, count, level, label) {
+    if (count > 0) r[id] = { count, level: level || 'action', label: label || '' };
+  }
+  // --- Core nav items (personal) ---
+  put('requests',
+    MOCK.requests.filter(x => x.status === 'Pending').length,
+    'action', 'pending');
+  put('documents',
+    MOCK.documents.filter(x => x.status === 'Expiring Soon' || x.status === 'Expired').length +
+    MOCK.requiredDocs.filter(x => !x.docId).length,
+    'urgent', 'needs attention');
+  put('attendance',
+    MOCK.attendanceRecords.filter(x => ['Late','Absent','Early Checkout','Missing Checkout'].includes(x.status)).length,
+    'action', 'issues');
+  put('events',
+    MOCK.events.filter(x => x.urgent).length,
+    'urgent', 'urgent');
+  put('notifications',
+    MOCK.notifications.filter(x => !x.read).length,
+    'info', 'unread');
+  // --- Team items (permission-gated) ---
+  if (hasPermission('team.view'))
+    put('team', MOCK.followUpItems.length, 'action', 'need review');
+  if (hasPermission('schedule.view.team')) {
+    // Incomplete schedule: team members whose current-period roster is all OFF
+    // or has no entries — they haven't been scheduled yet.
+    const incomplete = MOCK.teamMembers.filter(m => {
+      const sched = MOCK.teamSchedule[m.id];
+      if (!sched || sched.length === 0) return true;
+      return sched.every(s => s === 'st-off');
+    }).length;
+    put('team-schedule', incomplete, 'action', 'unscheduled');
+  }
+  if (hasPermission('requests.view.team'))
+    put('team-requests',
+      MOCK.teamRequests.filter(x => x.status === 'Pending').length,
+      'action', 'awaiting action');
+  // --- Branch items (permission-gated) ---
+  if (hasPermission('employees.view'))
+    put('employees',
+      MOCK.branchEmployees.filter(x => x.status !== 'Active').length,
+      'action', 'flagged');
+  if (hasPermission('attendance.view'))
+    put('attendance-management',
+      MOCK.teamMembers.filter(x => x.status === 'Late' || x.status === 'Absent').length,
+      'action', 'today');
+  if (hasPermission('requests.view'))
+    put('requests-management',
+      MOCK.teamRequests.filter(x => x.status === 'Pending').length,
+      'action', 'awaiting action');
+  if (hasPermission('payroll.view'))
+    put('payroll',
+      MOCK.payroll.filter(x => x.status === 'Processing').length,
+      'info', 'processing');
+  if (hasPermission('evaluations.view'))
+    put('evaluations',
+      MOCK.evaluations.filter(x => x.status !== 'Completed').length,
+      'info', 'in progress');
+  if (hasPermission('recruitment.vacancy_request.create'))
+    put('recruitment',
+      MOCK.recruitmentRequests.filter(x => x.status === 'Pending' || x.status === 'Submitted').length,
+      'action', 'pending');
+  if (hasPermission('employees.offboard'))
+    put('leaving', MOCK.employeeLeaving.length, 'action', 'notice period');
+  return r;
+}
+
+// ---- Badge renderers --------------------------------------------------------
+// Each returns an HTML snippet or '' when count is 0.
+// level → color mapping:
+//   urgent → red ring + red text
+//   action → amber ring + amber text
+//   info   → blue ring + blue text
+const _badgeColors = {
+  urgent: 'bg-red-50 text-red-600 ring-1 ring-inset ring-red-200',
+  action: 'bg-amber-50 text-amber-600 ring-1 ring-inset ring-amber-200',
+  info:   'bg-blue-50 text-blue-600 ring-1 ring-inset ring-blue-200',
+};
+const _dotColors = {
+  urgent: 'bg-red-500',
+  action: 'bg-amber-500',
+  info:   'bg-blue-500',
+};
+
+// Sidebar badge — compact pill, number only.
+function badgeHtml(badge) {
+  if (!badge || !badge.count || badge.count < 1) return '';
+  const c = _badgeColors[badge.level] || _badgeColors.action;
+  const txt = badge.count > 99 ? '99+' : String(badge.count);
+  return `<span class="ml-auto flex-shrink-0 inline-flex items-center rounded-md px-1.5 py-0.5 text-[10px] font-semibold leading-none ${c}" title="${badge.label || 'pending'}">${txt}</span>`;
+}
+
+// Mobile grid badge — small colored dot with number overlay.
+function badgeDot(badge) {
+  if (!badge || !badge.count || badge.count < 1) return '';
+  const c = _dotColors[badge.level] || _dotColors.action;
+  const txt = badge.count > 99 ? '99+' : String(badge.count);
+  return `<span class="absolute -top-1 -right-1 min-w-[16px] h-4 px-0.5 ${c} text-white text-[8px] font-bold rounded-full flex items-center justify-center" title="${badge.count} ${badge.label || 'pending'}">${txt}</span>`;
+}
+
+// Update header notification bell count + mobile bottom-nav notification badge.
+function updateBadgeIndicators() {
+  const counts = computePendingActions();
+  const nb = counts['notifications'];
+  const n = nb ? nb.count : 0;
+  // Header bell — replace the small dot with a count badge
+  const dot = document.getElementById('header-notif-dot');
+  if (dot) {
+    if (n > 0) {
+      dot.className = 'absolute -top-0.5 right-0.5 min-w-[16px] h-4 px-0.5 bg-brand-500 text-white text-[8px] font-bold rounded-full flex items-center justify-center';
+      dot.textContent = n > 99 ? '99+' : String(n);
+      dot.style.display = '';
+    } else {
+      dot.style.display = 'none';
+    }
+  }
+  // Mobile bottom-nav notification badge
+  const mbadge = document.getElementById('mobile-notif-badge');
+  if (mbadge) {
+    if (n > 0) {
+      mbadge.textContent = n > 99 ? '99+' : String(n);
+      mbadge.style.display = '';
+    } else {
+      mbadge.style.display = 'none';
+    }
+  }
+}
+
 function formatDate(s) { if (!s) return '—'; return new Date(s).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }); }
 function getGreeting() { const h = new Date().getHours(); return h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening'; }
 function statusBadge(status) {
   const m = { 'On Time':'badge-green','Present':'badge-green','Approved':'badge-green','Valid':'badge-green','Paid':'badge-green','Completed':'badge-green','Published':'badge-blue',
-    'Late':'badge-yellow','Pending':'badge-yellow','Processing':'badge-yellow','Expiring Soon':'badge-orange',
+    'Late':'badge-yellow','Pending':'badge-yellow','Processing':'badge-yellow','Expiring Soon':'badge-orange','Pending HR':'badge-purple','Rejected Pending HR':'badge-red',
     'Absent':'badge-red','Rejected':'badge-red','Early Checkout':'badge-blue','Off':'badge-gray','Cancelled':'badge-gray','Submitted':'badge-purple','Notice Period':'badge-yellow','Draft':'badge-gray' };
   return `<span class="badge ${m[status]||'badge-gray'}">${status}</span>`;
 }
@@ -142,29 +279,53 @@ const extraPages = [
   {id:'settings',label:'Settings',icon:'M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z M15 12a3 3 0 11-6 0 3 3 0 016 0z'},
 ];
 
+// Single nav-item renderer used by both desktop sidebar and mobile grid.
+// Includes a badge when computePendingActions() returns a count > 0 for the item.
+function navItemHtml(i, counts, opts) {
+  opts = opts || {};
+  const badge = counts[i.id] || null;
+  const badgeHtml_ = opts.grid ? badgeDot(badge) : badgeHtml(badge);
+  if (opts.grid) {
+    return `<button onclick="navigateTo('${i.id}');closeMobileMore()" class="flex flex-col items-center gap-1 p-2 rounded-lg hover:bg-charcoal-50 relative">
+      <div class="w-8 h-8 rounded-lg bg-charcoal-50 flex items-center justify-center text-charcoal-600 relative">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="${i.icon}"/></svg>${badgeHtml_}
+      </div>
+      <span class="text-[9px] font-medium text-charcoal-700 text-center leading-tight">${i.label}</span>
+    </button>`;
+  }
+  return `<a href="javascript:void(0)" onclick="navigateTo('${i.id}')" class="nav-item ${state.currentPage===i.id?'active':''}">
+    <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="${i.icon}"/></svg>
+    <span class="text-xs">${i.label}</span>${badgeHtml_}
+  </a>`;
+}
+
 function renderNavItems(id) {
   const c = document.getElementById(id);
   if(!c) return;
   const showAll = DEMO.showAll;
+  const counts = computePendingActions();
   const visibleTeam = showAll ? teamItems : teamItems.filter(i => !i.permission || hasPermission(i.permission));
   const visibleBranch = showAll ? branchItems : branchItems.filter(i => !i.permission || hasPermission(i.permission));
-  let h = navItems.map(i => `<a href="javascript:void(0)" onclick="navigateTo('${i.id}')" class="nav-item ${state.currentPage===i.id?'active':''}"><svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="${i.icon}"/></svg><span class="text-xs">${i.label}</span></a>`).join('');
+  let h = navItems.map(i => navItemHtml(i, counts)).join('');
   if(showAll) {
-    h += '<div class="nav-section-title mt-3">Self-Service</div>' + extraPages.map(i => `<a href="javascript:void(0)" onclick="navigateTo('${i.id}')" class="nav-item ${state.currentPage===i.id?'active':''}"><svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="${i.icon}"/></svg><span class="text-xs">${i.label}</span></a>`).join('');
+    h += '<div class="nav-section-title mt-3">Self-Service</div>' + extraPages.map(i => navItemHtml(i, counts)).join('');
   }
-  if(showAll || visibleTeam.length) { h += '<div class="nav-section-title mt-3">Team</div>' + visibleTeam.map(i => `<a href="javascript:void(0)" onclick="navigateTo('${i.id}')" class="nav-item ${state.currentPage===i.id?'active':''}"><svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="${i.icon}"/></svg><span class="text-xs">${i.label}</span></a>`).join(''); }
-  if(showAll || visibleBranch.length) { h += '<div class="nav-section-title mt-3">Branch</div>' + visibleBranch.map(i => `<a href="javascript:void(0)" onclick="navigateTo('${i.id}')" class="nav-item ${state.currentPage===i.id?'active':''}"><svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="${i.icon}"/></svg><span class="text-xs">${i.label}</span></a>`).join(''); }
+  if(showAll || visibleTeam.length) { h += '<div class="nav-section-title mt-3">Team</div>' + visibleTeam.map(i => navItemHtml(i, counts)).join(''); }
+  if(showAll || visibleBranch.length) { h += '<div class="nav-section-title mt-3">Branch</div>' + visibleBranch.map(i => navItemHtml(i, counts)).join(''); }
   c.innerHTML = h;
+  // Update header bell + mobile bottom-nav badges on every render
+  updateBadgeIndicators();
 }
 
 function renderMobileMore() {
   const g = document.getElementById('mobile-more-grid');
   if(!g) return;
   const showAll = DEMO.showAll;
+  const counts = computePendingActions();
   const visibleTeam = showAll ? teamItems : teamItems.filter(i => !i.permission || hasPermission(i.permission));
   const visibleBranch = showAll ? branchItems : branchItems.filter(i => !i.permission || hasPermission(i.permission));
   const items = [...navItems.filter(i=>!['dashboard','schedule','requests','notifications'].includes(i.id)),...(showAll?extraPages:[]),...visibleTeam,...visibleBranch];
-  g.innerHTML = items.map(i=>`<button onclick="navigateTo('${i.id}');closeMobileMore()" class="flex flex-col items-center gap-1 p-2 rounded-lg hover:bg-charcoal-50"><div class="w-8 h-8 rounded-lg bg-charcoal-50 flex items-center justify-center text-charcoal-600"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="${i.icon}"/></svg></div><span class="text-[9px] font-medium text-charcoal-700 text-center leading-tight">${i.label}</span></button>`).join('');
+  g.innerHTML = items.map(i => navItemHtml(i, counts, { grid: true })).join('');
 }
 
 // ==================== NAVIGATION ====================
