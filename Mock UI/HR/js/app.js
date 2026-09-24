@@ -2,6 +2,8 @@
 const pageRenderers = {
   'dashboard': renderDashboard,
   'employees': renderEmployees,
+  'offboarding': renderEmployees,
+  'terminations': renderTerminations,
   'recruitment': renderRecruitment,
   'attendance': renderAttendance,
   'schedule': renderSchedule,
@@ -20,6 +22,8 @@ const pageRenderers = {
 const pageTitles = {
   'dashboard': 'Dashboard',
   'employees': 'Employees',
+  'offboarding': 'Offboarding & Separations',
+  'terminations': 'Terminations',
   'recruitment': 'Recruitment & Hiring',
   'attendance': 'Attendance',
   'schedule': 'Shifts & Schedule',
