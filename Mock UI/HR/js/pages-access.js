@@ -3,7 +3,7 @@ let _repPeriod = '30d';
 
 function renderReports() {
   const canView = DEMO.showAll || hasPermission('reports.view');
-  if (!canView) return `<div class="space-y-3"><h1 class="text-xl font-bold text-charcoal-900">Reports & Analytics</h1><div class="bg-white rounded-xl border border-charcoal-200 p-6 text-center"><p class="text-xs text-charcoal-500">You do not have permission to view reports (<code>reports.view</code>).</p></div></div>`;
+  if (!canView) return `<div class="space-y-3"><h1 class="text-base font-bold text-charcoal-900">Reports & Analytics</h1><div class="bg-white rounded-xl border border-charcoal-200 p-6 text-center"><p class="text-xs text-charcoal-500">You do not have permission to view reports (<code>reports.view</code>).</p></div></div>`;
 
   const headcount = MOCK.gymList.reduce((s, g) => s + g.employees, 0);
   const activeEmps = MOCK.employees.filter(e => e.status === 'Active').length;
@@ -54,9 +54,9 @@ function renderReports() {
   ];
   const kpiColors = { brand:['bg-brand-100','text-brand-600'], green:['bg-green-100','text-green-600'], blue:['bg-blue-100','text-blue-600'], red:['bg-red-100','text-red-600'], yellow:['bg-yellow-100','text-yellow-600'] };
 
-  return `<div class="space-y-3">
+  return `<div class="flex flex-col h-full min-h-0 gap-2">
     <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-      <div><h1 class="text-xl font-bold text-charcoal-900">Reports & Analytics</h1><p class="text-xs text-charcoal-500 mt-0.5">Headcount, attendance, recruiting & request analytics</p></div>
+      <div><h1 class="text-base font-bold text-charcoal-900">Reports & Analytics</h1><p class="text-xs text-charcoal-500 mt-0.5">Headcount, attendance, recruiting & request analytics</p></div>
       <div class="flex items-center gap-1.5">
         <select class="form-select w-auto" style="padding:0.375rem 2rem 0.375rem 0.625rem;font-size:0.8125rem"><option>Last 30 days</option><option>This quarter</option><option>This year</option></select>
         <button onclick="showToast('Report exported')" class="btn btn-sm btn-secondary"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>Export</button>
@@ -64,7 +64,7 @@ function renderReports() {
     </div>
 
     <!-- KPI cards -->
-    <div class="grid grid-cols-2 lg:grid-cols-5 gap-2">
+    <div class="grid grid-cols-2 lg:grid-cols-5 gap-2 flex-shrink-0">
       ${kpis.map(([label, val, color, icon, sub], i) => `<div class="stat-tile ${i === 0 ? 'stat-tile-accent' : ''}">
         <div class="flex items-center gap-2.5">
           <div class="w-9 h-9 rounded-lg ${kpiColors[color][0]} flex items-center justify-center flex-shrink-0"><svg class="w-4.5 h-4.5 ${kpiColors[color][1]}" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="${icon}"/></svg></div>
@@ -73,6 +73,7 @@ function renderReports() {
         <p class="text-[9px] text-charcoal-400 mt-1.5">${sub}</p>
       </div>`).join('')}
     </div>
+    <div class="flex-1 min-h-0 overflow-y-auto space-y-2 pr-0.5">
 
     <!-- Headcount + Attendance + Donut -->
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-3">
@@ -147,7 +148,7 @@ function renderReports() {
           <div class="px-4 py-2.5 border-b border-charcoal-100 bg-charcoal-50/50"><p class="bento-label">REQUEST VOLUME (SEPT)</p></div>
           <div class="p-3">
             <div class="flex justify-around text-center py-2">
-              ${reqTypes.map(t => `<div><p class="text-lg font-bold text-brand-600">${t.val}</p><p class="text-[9px] text-charcoal-500">${t.label}</p></div>`).join('')}
+              ${reqTypes.map(t => `<div><p class="text-base font-bold text-brand-600">${t.val}</p><p class="text-[9px] text-charcoal-500">${t.label}</p></div>`).join('')}
             </div>
             <div class="flex justify-between text-[10px] text-charcoal-500 border-t border-charcoal-100 pt-2">
               <span>Pending HR: <strong class="text-charcoal-800">${reqs.filter(r => r.status === 'Pending HR Review').length}</strong></span>
@@ -157,6 +158,7 @@ function renderReports() {
         </div>
       </div>
     </div>
+    </div>
   </div>`;
 }
 
@@ -165,13 +167,14 @@ function renderPositions() {
   const canManage = DEMO.showAll || hasPermission('positions.manage');
   const positions = MOCK.positions;
   const totalOpen = positions.reduce((s, p) => s + Math.max(0, p.headcount - p.active), 0);
-  return `<div class="flex flex-col h-full min-h-0 gap-3">
-    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 flex-shrink-0">
-      <div><h1 class="text-xl font-bold text-charcoal-900">Positions & Levels</h1><p class="text-xs text-charcoal-500 mt-0.5">${positions.length} positions · ${positions.reduce((s, p) => s + p.headcount, 0)} headcount slots · ${totalOpen} currently open</p></div>
+  return `<div class="space-y-2.5">
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+      <div><h1 class="text-base font-bold text-charcoal-900">Positions & Levels</h1><p class="text-xs text-charcoal-500 mt-0.5">${positions.length} positions · ${positions.reduce((s, p) => s + p.headcount, 0)} headcount slots · ${totalOpen} currently open</p></div>
       ${canManage ? `<button onclick="showToast('Position creation — simulated')" class="btn btn-sm btn-primary"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>New Position</button>` : ''}
     </div>
-    <div class="bg-white rounded-xl border border-charcoal-200 overflow-hidden hidden lg:flex flex-col flex-1 min-h-0">
-      <div class="flex-1 min-h-0 overflow-auto table-responsive rounded-b-xl"><table class="data-table h-full"><thead><tr><th>Position</th><th>Department</th><th>Levels</th><th>Created</th><th>Filled</th><th>Open</th><th>Fill rate</th><th></th></tr></thead>
+    <div class="bg-white rounded-xl border border-charcoal-200 overflow-hidden hidden lg:block">
+      <table class="data-table">
+        <thead class="sticky top-0 z-10 bg-[#f9f9ff]"><tr><th>Position</th><th>Department</th><th>Levels</th><th>Created</th><th>Filled</th><th>Open</th><th>Fill rate</th><th></th></tr></thead>
       <tbody>${positions.map(p => {
         const fill = Math.round((p.active / mathMax(p.headcount, 1)) * 100);
         const open = p.headcount - p.active;
@@ -185,7 +188,7 @@ function renderPositions() {
           <td><div class="flex items-center gap-2"><div class="w-16 h-1.5 bg-charcoal-100 rounded-full"><div class="h-full bg-brand-500 rounded-full" style="width:${fill}%"></div></div><span class="text-[9px] text-charcoal-500">${fill}%</span></div></td>
           <td>${canManage ? `<button onclick="showToast('Position edited — simulated')" class="btn btn-sm btn-ghost"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/></svg></button>` : ''}</td>
         </tr>`;
-      }).join('')}</tbody></table></div>
+      }).join('')}</tbody></table>
     </div>
     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 lg:hidden flex-shrink-0">
       ${positions.map(p => `<div class="bg-white rounded-xl border border-charcoal-200 p-3">
@@ -219,7 +222,7 @@ function renderNotifications() {
       <p class="text-xs text-charcoal-500">${unread} unread notifications</p>
       <button onclick="showToast('All marked as read')" class="btn btn-sm btn-ghost text-brand-600">Mark all read</button>
     </div>
-    <div class="space-y-1.5">${notifs.map(n => `<div class="bg-white rounded-xl border border-charcoal-200 p-3 flex items-start gap-3 ${n.read ? 'opacity-70' : ''}">
+    <div class="flex-1 min-h-0 overflow-y-auto space-y-1 pr-0.5">${notifs.map(n => `<div class="bg-white rounded-xl border border-charcoal-200 p-3 flex items-start gap-3 ${n.read ? 'opacity-70' : ''}">
       <div class="w-8 h-8 rounded-full ${colorMap[n.color] || 'bg-charcoal-100 text-charcoal-600'} flex items-center justify-center flex-shrink-0"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/></svg></div>
       <div class="flex-1 min-w-0">
         <div class="flex items-center justify-between gap-2"><p class="text-xs font-medium text-charcoal-900">${n.title}${!n.read ? '<span class="w-2 h-2 rounded-full bg-brand-500 inline-block ml-1.5"></span>' : ''}</p><span class="text-[9px] text-charcoal-400 whitespace-nowrap">${n.date}</span></div>
@@ -228,7 +231,7 @@ function renderNotifications() {
       </div>
     </div>`).join('')}</div>`;
   } else {
-    body = `<div class="space-y-1.5">${MOCK.announcements.map(a => `<div class="bg-white rounded-xl border border-charcoal-200 p-3">
+    body = `<div class="flex-1 min-h-0 overflow-y-auto space-y-1 pr-0.5">${MOCK.announcements.map(a => `<div class="bg-white rounded-xl border border-charcoal-200 p-3">
       <div class="flex items-center justify-between"><p class="text-xs font-semibold text-charcoal-900">${a.title}</p>${statusBadge(a.status)}</div>
       <div class="flex items-center gap-3 mt-1.5 text-[10px] text-charcoal-500">
         <span><svg class="w-3 h-3 inline mr-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/></svg>${a.audience}</span>
@@ -245,8 +248,8 @@ function renderNotifications() {
     { id: 'announcements', label: 'Announcements', count: MOCK.announcements.length },
   ];
 
-  return `<div class="space-y-3">
-    <div><h1 class="text-xl font-bold text-charcoal-900">Notifications & Announcements</h1><p class="text-xs text-charcoal-500 mt-0.5">System notifications and company announcements</p></div>
+  return `<div class="flex flex-col h-full min-h-0 gap-2">
+    <div><h1 class="text-base font-bold text-charcoal-900">Notifications & Announcements</h1><p class="text-xs text-charcoal-500 mt-0.5">System notifications and company announcements</p></div>
     <div class="flex border-b border-charcoal-100">${tabs.map(t => `<button onclick="_notifTab='${t.id}';renderAll()" class="tab-btn ${_notifTab === t.id ? 'active' : ''}">${t.label}${t.count ? ` <span class="badge badge-red text-[9px] ml-0.5">${t.count}</span>` : ''}</button>`).join('')}</div>
     ${body}
     ${!canManage ? `<p class="text-[10px] text-charcoal-400 text-center">Composing announcements requires <code>announcements.manage</code> (HR Manager).</p>` : ''}
@@ -268,24 +271,24 @@ function openComposeAnnouncement() {
 // ==================== ACTIVITY / AUDIT LOG ====================
 function renderAuditLog() {
   const canView = DEMO.showAll || hasPermission('audit.view');
-  if (!canView) return `<div class="space-y-3"><h1 class="text-xl font-bold text-charcoal-900">Activity / Audit Log</h1><div class="bg-white rounded-xl border border-charcoal-200 p-6 text-center"><p class="text-xs text-charcoal-500">You do not have permission to view the audit log (<code>audit.view</code>).</p></div></div>`;
-  return `<div class="flex flex-col h-full min-h-0 gap-3">
-    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 flex-shrink-0">
-      <div><h1 class="text-xl font-bold text-charcoal-900">Activity / Audit Log</h1><p class="text-xs text-charcoal-500 mt-0.5">${MOCK.auditLog.length} recorded events · HR Manager only</p></div>
+  if (!canView) return `<div class="space-y-3"><h1 class="text-base font-bold text-charcoal-900">Activity / Audit Log</h1><div class="bg-white rounded-xl border border-charcoal-200 p-6 text-center"><p class="text-xs text-charcoal-500">You do not have permission to view the audit log (<code>audit.view</code>).</p></div></div>`;
+  return `<div class="space-y-2.5">
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+      <div><h1 class="text-base font-bold text-charcoal-900">Activity / Audit Log</h1><p class="text-xs text-charcoal-500 mt-0.5">${MOCK.auditLog.length} recorded events · HR Manager only</p></div>
       <div class="flex items-center gap-1.5">
-        <select class="form-select w-auto" style="padding:0.375rem 2rem 0.375rem 0.625rem;font-size:0.75rem"><option>All Actions</option><option>Employee</option><option>Payroll</option><option>Recruitment</option><option>Bulk Import</option></select>
-        <select class="form-select w-auto" style="padding:0.375rem 2rem 0.375rem 0.625rem;font-size:0.75rem"><option>All Gyms</option><option>Nasr City</option><option>Heliopolis</option><option>6th October</option></select>
+        <select class="form-select w-auto" style="font-size:0.75rem"><option>All Actions</option><option>Employee</option><option>Payroll</option><option>Recruitment</option><option>Bulk Import</option></select>
+        <select class="form-select w-auto" style="font-size:0.75rem"><option>All Gyms</option><option>Nasr City</option><option>Heliopolis</option><option>6th October</option></select>
       </div>
     </div>
-    <div class="bg-white rounded-xl border border-charcoal-200 divide-y divide-charcoal-50 flex flex-col flex-1 min-h-0 overflow-hidden">
-      <div class="flex-1 min-h-0 overflow-y-auto">${MOCK.auditLog.map(a => `<div class="p-3 flex items-start gap-3">
+    <div class="bg-white rounded-xl border border-charcoal-200 divide-y divide-charcoal-50 overflow-hidden">
+      ${MOCK.auditLog.map(a => `<div class="p-2.5 flex items-start gap-2.5">
         <div class="w-8 h-8 rounded-full bg-charcoal-50 text-charcoal-400 flex items-center justify-center flex-shrink-0"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg></div>
         <div class="flex-1 min-w-0">
           <div class="flex items-center justify-between gap-2"><p class="text-xs font-medium text-charcoal-900">${a.action}<span class="text-charcoal-400 font-normal"> — ${a.target}</span></p><span class="text-[9px] text-charcoal-400 whitespace-nowrap">${a.timestamp}</span></div>
           <p class="text-[10px] text-charcoal-600 mt-0.5">${a.detail}</p>
           <div class="flex gap-2 mt-1 text-[9px] text-charcoal-400"><span>By: ${a.user}</span><span>·</span><span>${a.gym}</span></div>
         </div>
-      </div>`).join('')}</div>
+      </div>`).join('')}
     </div>
   </div>`;
 }
@@ -294,15 +297,15 @@ function renderAuditLog() {
 function renderEvents() {
   const urgMap = { high: 'badge-red', medium: 'badge-yellow', low: 'badge-gray' };
   const sorted = [...MOCK.events].sort((a, b) => (a.date > b.date ? 1 : -1));
-  return `<div class="flex flex-col h-full min-h-0 gap-3">
-    <div class="flex-shrink-0"><h1 class="text-xl font-bold text-charcoal-900">Events</h1><p class="text-xs text-charcoal-500 mt-0.5">Upcoming HR events and expiry tracking</p></div>
-    <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 flex-shrink-0">
-      <div class="bg-white rounded-xl border border-charcoal-200 p-3 text-center border-l-4 border-l-red-500"><p class="text-lg font-bold text-red-600">${MOCK.events.filter(e => e.urgency === 'high').length}</p><p class="text-[10px] text-charcoal-500">High urgency</p></div>
-      <div class="bg-white rounded-xl border border-charcoal-200 p-3 text-center"><p class="text-lg font-bold text-yellow-600">${MOCK.events.filter(e => e.urgency === 'medium').length}</p><p class="text-[10px] text-charcoal-500">Upcoming</p></div>
-      <div class="bg-white rounded-xl border border-charcoal-200 p-3 text-center"><p class="text-lg font-bold text-charcoal-900">${MOCK.events.filter(e => e.type === 'Document Expiry' || e.type === 'Contract Expiry').length}</p><p class="text-[10px] text-charcoal-500">Expiries</p></div>
-      <div class="bg-white rounded-xl border border-charcoal-200 p-3 text-center"><p class="text-lg font-bold text-purple-600">${MOCK.events.filter(e => e.type === 'Resignation').length}</p><p class="text-[10px] text-charcoal-500">Resignations</p></div>
+  return `<div class="space-y-2.5">
+    <div><h1 class="text-base font-bold text-charcoal-900">Events</h1><p class="text-xs text-charcoal-500 mt-0.5">Upcoming HR events and expiry tracking</p></div>
+    <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
+      <div class="bg-white rounded-xl border border-charcoal-200 p-2.5 text-center border-l-4 border-l-red-500"><p class="text-base font-bold text-red-600">${MOCK.events.filter(e => e.urgency === 'high').length}</p><p class="text-[10px] text-charcoal-500">High urgency</p></div>
+      <div class="bg-white rounded-xl border border-charcoal-200 p-2.5 text-center"><p class="text-base font-bold text-yellow-600">${MOCK.events.filter(e => e.urgency === 'medium').length}</p><p class="text-[10px] text-charcoal-500">Upcoming</p></div>
+      <div class="bg-white rounded-xl border border-charcoal-200 p-2.5 text-center"><p class="text-base font-bold text-charcoal-900">${MOCK.events.filter(e => e.type === 'Document Expiry' || e.type === 'Contract Expiry').length}</p><p class="text-[10px] text-charcoal-500">Expiries</p></div>
+      <div class="bg-white rounded-xl border border-charcoal-200 p-2.5 text-center"><p class="text-base font-bold text-purple-600">${MOCK.events.filter(e => e.type === 'Resignation').length}</p><p class="text-[10px] text-charcoal-500">Resignations</p></div>
     </div>
-    <div class="space-y-1.5 flex-1 min-h-0 overflow-y-auto pr-0.5">${sorted.map(e => `<div class="bg-white rounded-xl border border-charcoal-200 p-3 flex items-start gap-3 border-l-4 ${e.urgency === 'high' ? 'border-l-red-500' : e.urgency === 'medium' ? 'border-l-yellow-400' : 'border-l-gray-300'}">
+    <div class="space-y-1.5">${sorted.map(e => `<div class="bg-white rounded-xl border border-charcoal-200 p-2.5 flex items-start gap-2.5 border-l-4 ${e.urgency === 'high' ? 'border-l-red-500' : e.urgency === 'medium' ? 'border-l-yellow-400' : 'border-l-gray-300'}">
       <div class="w-9 h-9 rounded-lg bg-charcoal-50 flex items-center justify-center flex-shrink-0"><svg class="w-4 h-4 text-charcoal-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg></div>
       <div class="flex-1 min-w-0">
         <div class="flex items-center justify-between gap-2 flex-wrap"><p class="text-xs font-medium text-charcoal-900">${e.title}</p><span class="badge ${urgMap[e.urgency] || 'badge-gray'} text-[9px]">${e.type}</span></div>
@@ -370,30 +373,28 @@ function renderMyAccess() {
     </div>`;
   }).join('');
 
-  return `<div class="flex flex-col h-full min-h-0 gap-3">
-    <div class="flex-shrink-0"><h1 class="text-xl font-bold text-charcoal-900">My Access</h1><p class="text-xs text-charcoal-500 mt-0.5">Gyms you cover and permissions granted to your ${u.role} role</p></div>
-    <div class="grid grid-cols-1 lg:grid-cols-3 gap-3 flex-shrink-0">
-      <div class="bg-white rounded-xl border border-brand-200 border-l-4 border-l-brand-500 p-3">
+  return `<div class="space-y-2.5">
+    <div><h1 class="text-base font-bold text-charcoal-900">My Access</h1><p class="text-xs text-charcoal-500 mt-0.5">Gyms you cover and permissions granted to your ${u.role} role</p></div>
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-2.5">
+      <div class="bg-white rounded-xl border border-brand-200 border-l-4 border-l-brand-500 p-2.5">
         <p class="bento-label text-brand-700 mb-2">ASSIGNED GYMS</p>
-        <div class="space-y-2">${u.gyms.map(g => `<div class="flex items-center gap-2.5">
+        <div class="space-y-1.5">${u.gyms.map(g => `<div class="flex items-center gap-2">
           <span class="w-2 h-2 rounded-full bg-brand-500 flex-shrink-0"></span>
           <div><p class="text-xs font-medium text-charcoal-900">${g.name}</p><p class="text-[10px] text-charcoal-500">${g.branch}</p></div>
         </div>`).join('')}</div>
       </div>
-      <div class="lg:col-span-2 bg-white rounded-xl border border-charcoal-200 p-3">
+      <div class="lg:col-span-2 bg-white rounded-xl border border-charcoal-200 p-2.5">
         <p class="bento-label text-charcoal-500 mb-2">PERMISSION SUMMARY</p>
         <div class="flex flex-wrap gap-2">
           <span class="badge badge-brand">${granted} granted</span>
           <span class="badge badge-gray">${allPerms.size} tracked</span>
         </div>
-        <div class="w-full h-2 bg-charcoal-100 rounded-full mt-3"><div class="h-full bg-brand-500 rounded-full" style="width:${Math.round((granted / mathMax(allPerms.size, 1)) * 100)}%"></div></div>
+        <div class="w-full h-1.5 bg-charcoal-100 rounded-full mt-2.5"><div class="h-full bg-brand-500 rounded-full" style="width:${Math.round((granted / mathMax(allPerms.size, 1)) * 100)}%"></div></div>
         <p class="text-[9px] text-charcoal-400 mt-1">${Math.round((granted / mathMax(allPerms.size, 1)) * 100)}% of HR trackable permissions</p>
       </div>
     </div>
-    <div class="flex flex-col flex-1 min-h-0 gap-3 overflow-y-auto pr-0.5">
-      ${showMatrix ? matrixGrid : ''}
+    ${showMatrix ? matrixGrid : ''}
     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">${groupHtml}</div>
     ${perms.includes('*') ? `<p class="text-[10px] text-charcoal-400 text-center">Wildcard access (`*`) present — all permissions granted.</p>` : ''}
-    </div>
   </div>`;
 }

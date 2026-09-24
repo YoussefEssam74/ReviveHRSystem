@@ -70,15 +70,15 @@ function renderRecruitment() {
 
   const kpiLine = `${openVacancies.length} open · ${totalCandidates} candidates · ${pendingVR.length} requests pending`;
 
-  return `<div class="flex flex-col h-full min-h-0 gap-3">
-    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 flex-shrink-0">
-      <div><h1 class="text-xl font-bold text-charcoal-900">Recruitment & Hiring</h1><p class="text-xs text-charcoal-500 mt-0.5">${kpiLine} · ${thisWeek} interviews this week</p></div>
-      ${canManageVac?`<button onclick="openNewVacancy()" class="btn btn-md btn-primary"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>Create Vacancy</button>`:''}
+  return `<div class="space-y-2.5">
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+      <div><h1 class="text-base font-bold text-charcoal-900">Recruitment & Hiring</h1><p class="text-xs text-charcoal-500 mt-0.5">${kpiLine} · ${thisWeek} interviews this week</p></div>
+      ${canManageVac?`<button onclick="openNewVacancy()" class="btn btn-sm btn-primary"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>Create Vacancy</button>`:''}
     </div>
-    <div class="flex border-b border-charcoal-100 overflow-x-auto flex-shrink-0">
+    <div class="flex border-b border-charcoal-100 overflow-x-auto">
       ${tabs.map(t=>`<button onclick="_recTab='${t.id}';renderAll()" class="tab-btn ${_recTab===t.id?'active':''}">${t.label}${t.id==='vacancy-requests'&&pendingVR.length?` <span class="badge badge-red text-[9px] ml-0.5">${pendingVR.length}</span>`:''}</button>`).join('')}
     </div>
-    <div class="flex flex-col flex-1 min-h-0 gap-3">${body}</div>
+    <div>${body}</div>
   </div>`;
 }
 
@@ -279,8 +279,8 @@ function vacanciesBody(canManage) {
     <p class="bento-label text-charcoal-500">VACANCY MANAGEMENT</p>
     <button onclick="showToast('Vacancy filter — simulated','info')" class="btn btn-sm btn-secondary"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4h18M6 12h12M10 20h4"/></svg>Filter</button>
   </div>
-  <div class="bg-white rounded-xl border border-charcoal-200 overflow-hidden flex flex-col flex-1 min-h-0">
-    <div class="flex-1 min-h-0 overflow-auto table-responsive rounded-b-xl"><table class="data-table h-full"><thead><tr><th>Position</th><th>Gym</th><th>Headcount</th><th>Urgency</th><th>Candidates</th><th>Status</th><th></th></tr></thead>
+  <div class="bg-white rounded-xl border border-charcoal-200 overflow-hidden hidden lg:block">
+    <table class="data-table"><thead class="sticky top-0 z-10 bg-[#f9f9ff]"><tr><th>Position</th><th>Gym</th><th>Headcount</th><th>Urgency</th><th>Candidates</th><th>Status</th><th></th></tr></thead>
     <tbody>${vRows.map(v=>`<tr onclick="openVacancyDetail('${v.id}')" class="cursor-pointer">
       <td><div><p class="text-xs font-medium text-charcoal-900">${v.position}</p><p class="text-[9px] text-charcoal-400">Created ${formatDate(v.createdDate)}</p></div></td>
       <td class="text-xs">${v.gym}</td>
@@ -289,7 +289,7 @@ function vacanciesBody(canManage) {
       <td class="text-xs">${v.matched.length} <span class="text-charcoal-300">/</span> <span class="text-charcoal-500">${v.candidates}</span></td>
       <td>${statusBadge(v.status)}</td>
       <td>${canManage?`<button onclick="event.stopPropagation();showToast('Edit vacancy — simulated')" class="btn btn-sm btn-ghost"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/></svg></button>`:''}</td>
-    </tr>`).join('')}</tbody></table></div>
+    </tr>`).join('')}</tbody></table>
   </div>
   ${!canManage?`<p class="text-[10px] text-charcoal-400 text-center">Vacancy management (create/edit/close) is hidden — you do not have <code>recruitment.vacancies.manage</code>. View-only.</p>`:''}`;
 }
@@ -319,29 +319,31 @@ function candidatesBody(canHire, canCandidates, showAll) {
       <span class="text-[10px] text-charcoal-400 self-center ml-auto">${list.length} of ${MOCK.candidates.length} candidates</span>
     </div>
 
-    <div class="bg-white rounded-xl border border-charcoal-200 overflow-hidden hidden lg:flex flex-col flex-1 min-h-0">
-      <div class="flex-1 min-h-0 overflow-auto table-responsive rounded-b-xl"><table class="data-table h-full"><thead><tr>
-        <th class="w-8"><input type="checkbox" class="rounded" ${allChecked?'checked':''} onchange="if(this.checked){_recSel=MOCK.candidates.map(c=>c.id);}else{_recSel=[];}renderAll()"></th>
-        <th>Candidate</th><th>Position</th><th>Stage</th><th>Applied</th><th>Rating</th><th>Source</th><th></th></tr></thead>
-      <tbody>${list.map(c=>{
-        const p = c.form||{};
-        return `<tr onclick="openCandidateDetail('${c.id}')" class="cursor-pointer">
-          <td onclick="event.stopPropagation()"><input type="checkbox" class="rounded" ${_recSel.includes(c.id)?'checked':''} onchange="toggleBulk('${c.id}',this.checked)"></td>
-          <td><div class="flex items-center gap-2.5"><div class="w-8 h-8 rounded-full bg-brand-100 text-brand-700 flex items-center justify-center text-[10px] font-semibold">${_initials(c.name)}</div><div><p class="text-xs font-medium text-charcoal-900">${c.name}</p><p class="text-[9px] text-charcoal-400">${p.email||''}</p></div></div></td>
-          <td class="text-xs">${c.position}</td>
-          <td>${_stageBadge(c.stage)}</td>
-          <td class="text-xs">${formatDate(c.appliedDate)}</td>
-          <td class="text-xs text-yellow-500">${'★'.repeat(c.rating)}${'☆'.repeat(Math.max(0,5-c.rating))}</td>
-          <td class="text-xs">${p.source||'—'}</td>
-          <td onclick="event.stopPropagation()" class="whitespace-nowrap">
-            <div class="flex gap-1">
-              <button onclick="openCandidateDetail('${c.id}')" class="btn btn-sm btn-ghost"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0zm-3 7a9 9 0 019-9v0a9 9 0 01-9 9v0a9 9 0 01-9-9v0a9 9 0 019-9zM12 3H8a5 5 0 014 5v0"/></svg></button>
-              ${canCandidates?`<button onclick="showToast('Advanced to next stage')" class="btn btn-sm btn-ghost"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3"/></svg></button>`:''}
-              ${canHire&&(c.stage==='Accepted')?`<button onclick="openHireWizard('${c.id}')" class="btn btn-sm btn-primary">Hire</button>`:''}
-            </div>
-          </td>
-        </tr>`;
-      }).join('')}</tbody></table></div>
+    <div class="bg-white rounded-xl border border-charcoal-200 overflow-hidden hidden lg:block">
+      <table class="data-table">
+        <thead class="sticky top-0 z-10 bg-[#f9f9ff]"><tr>
+          <th class="w-8"><input type="checkbox" class="rounded" ${allChecked?'checked':''} onchange="if(this.checked){_recSel=MOCK.candidates.map(c=>c.id);}else{_recSel=[];}renderAll()"></th>
+          <th>Candidate</th><th>Position</th><th>Stage</th><th>Applied</th><th>Rating</th><th>Source</th><th></th></tr></thead>
+        <tbody>${list.map(c=>{
+          const p = c.form||{};
+          return `<tr onclick="openCandidateDetail('${c.id}')" class="cursor-pointer">
+            <td onclick="event.stopPropagation()"><input type="checkbox" class="rounded" ${_recSel.includes(c.id)?'checked':''} onchange="toggleBulk('${c.id}',this.checked)"></td>
+            <td><div class="flex items-center gap-2"><div class="w-7 h-7 rounded-full bg-brand-100 text-brand-700 flex items-center justify-center text-[10px] font-semibold">${_initials(c.name)}</div><div><p class="text-xs font-medium text-charcoal-900">${c.name}</p><p class="text-[9px] text-charcoal-400">${p.email||''}</p></div></div></td>
+            <td class="text-xs">${c.position}</td>
+            <td>${_stageBadge(c.stage)}</td>
+            <td class="text-xs">${formatDate(c.appliedDate)}</td>
+            <td class="text-xs text-yellow-500">${'★'.repeat(c.rating)}${'☆'.repeat(Math.max(0,5-c.rating))}</td>
+            <td class="text-xs">${p.source||'—'}</td>
+            <td onclick="event.stopPropagation()" class="whitespace-nowrap">
+              <div class="flex gap-1">
+                <button onclick="openCandidateDetail('${c.id}')" class="btn btn-sm btn-ghost"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0zm-3 7a9 9 0 019-9v0a9 9 0 01-9 9v0a9 9 0 01-9-9v0a9 9 0 019-9zM12 3H8a5 5 0 014 5v0"/></svg></button>
+                ${canCandidates?`<button onclick="showToast('Advanced to next stage')" class="btn btn-sm btn-ghost"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3"/></svg></button>`:''}
+                ${canHire&&(c.stage==='Accepted')?`<button onclick="openHireWizard('${c.id}')" class="btn btn-sm btn-primary">Hire</button>`:''}
+              </div>
+            </td>
+          </tr>`;
+        }).join('')}</tbody>
+      </table>
     </div>
 
     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 lg:hidden flex-shrink-0">

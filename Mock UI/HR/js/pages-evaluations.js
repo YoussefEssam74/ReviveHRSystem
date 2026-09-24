@@ -88,10 +88,10 @@ function renderEvaluations() {
     </div>`).join('');
     const cycleChips = MOCK.performanceCycles.map(c => `<span class="px-2.5 py-1.5 rounded-lg border text-[10px] font-medium ${c.status==='Upcoming'?'border-charcoal-200 text-charcoal-500':c.status==='In Progress'?'border-brand-300 bg-brand-50 text-brand-700':'bg-charcoal-50 text-charcoal-500'}">${c.name} · ${c.status}</span>`).join('');
     body = `<div class="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3">
-      <div class="bg-white rounded-xl border border-charcoal-200 p-3 text-center border-l-4 border-l-brand-500"><p class="text-lg font-bold text-brand-600">${overallAvg}%</p><p class="text-[10px] text-charcoal-500">Avg Score</p></div>
-      <div class="bg-white rounded-xl border border-charcoal-200 p-3 text-center"><p class="text-lg font-bold text-charcoal-900">${done}</p><p class="text-[10px] text-charcoal-500">Completed</p></div>
-      <div class="bg-white rounded-xl border border-charcoal-200 p-3 text-center"><p class="text-lg font-bold text-blue-600">${inProgress}</p><p class="text-[10px] text-charcoal-500">In Progress</p></div>
-      <div class="bg-white rounded-xl border border-charcoal-200 p-3 text-center"><p class="text-lg font-bold text-charcoal-900">${history.filter(h=>h.score<60).length}</p><p class="text-[10px] text-charcoal-500">Below Target</p></div>
+      <div class="bg-white rounded-xl border border-charcoal-200 p-3 text-center border-l-4 border-l-brand-500"><p class="text-base font-bold text-brand-600">${overallAvg}%</p><p class="text-[10px] text-charcoal-500">Avg Score</p></div>
+      <div class="bg-white rounded-xl border border-charcoal-200 p-3 text-center"><p class="text-base font-bold text-charcoal-900">${done}</p><p class="text-[10px] text-charcoal-500">Completed</p></div>
+      <div class="bg-white rounded-xl border border-charcoal-200 p-3 text-center"><p class="text-base font-bold text-blue-600">${inProgress}</p><p class="text-[10px] text-charcoal-500">In Progress</p></div>
+      <div class="bg-white rounded-xl border border-charcoal-200 p-3 text-center"><p class="text-base font-bold text-charcoal-900">${history.filter(h=>h.score<60).length}</p><p class="text-[10px] text-charcoal-500">Below Target</p></div>
     </div>
 
     <div class="bg-white rounded-xl border border-charcoal-200 p-3">
@@ -126,8 +126,8 @@ function renderEvaluations() {
 
   const tabs = [{ id: 'forms', label: 'Evaluation Forms' }, { id: 'run', label: 'Run Evaluation' }, { id: 'history', label: 'History & Trends' }];
 
-  return `<div class="space-y-3">
-    <div><h1 class="text-xl font-bold text-charcoal-900">Evaluations</h1><p class="text-xs text-charcoal-500 mt-0.5">Build custom review criteria, run evaluations with live scoring, track performance trends</p></div>
+  return `<div class="space-y-2.5">
+    <div><h1 class="text-base font-bold text-charcoal-900">Evaluations</h1><p class="text-xs text-charcoal-500 mt-0.5">Build custom review criteria, run evaluations with live scoring, track performance trends</p></div>
     <div class="flex border-b border-charcoal-100">${tabs.map(t => `<button onclick="_evalTab='${t.id}';renderAll()" class="tab-btn ${_evalTab === t.id ? 'active' : ''}">${t.label}</button>`).join('')}</div>
     ${body}
   </div>`;

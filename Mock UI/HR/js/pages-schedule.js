@@ -1,4 +1,4 @@
-// ==================== SHIFTS & SCHEDULE ====================
+﻿// ==================== SHIFTS & SCHEDULE ====================
 let _schedCycle = 'c4';
 let _selectedDay = 1; // 0=Mon..6=Sun, default today (Tue)
 
@@ -136,74 +136,80 @@ function renderSchedule() {
 
   const legend = MOCK.shiftTemplates.map(t => `<span class="inline-flex items-center gap-1 text-[9px] text-charcoal-600"><span class="w-2.5 h-2.5 rounded" style="background:${t.isOff?'#f1f3f5':t.bgColor};border:${t.isOff?'1px solid #e9ecef':'1px solid '+t.color+'33'}"></span> ${t.name}</span>`).join('');
 
-  return `<div class="flex flex-col h-full min-h-0 gap-3">
-    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 flex-shrink-0">
-      <div><h1 class="text-xl font-bold text-charcoal-900">Shifts & Schedule</h1><p class="text-xs text-charcoal-500 mt-0.5">Cycle ${cm.label} · ${cm.status} · Click any day to see details</p></div>
+  return `<div class="flex flex-col h-full min-h-0 gap-1.5">
+    <!-- Header: Title + Actions -->
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-1 flex-shrink-0">
+      <div>
+        <h1 class="text-sm font-bold text-charcoal-900 leading-tight">Shifts & Schedule</h1>
+        <p class="text-[10px] text-charcoal-500">Cycle ${cm.label} · <span class="font-medium text-brand-700">${cm.status}</span> · Click any day</p>
+      </div>
       <div class="flex items-center gap-1.5 flex-wrap">
-        ${canEdit ? `<button onclick="openNewCycle()" class="btn btn-sm btn-primary">New Cycle</button><button onclick="copyPreviousCycle()" class="btn btn-sm btn-secondary">Copy Previous</button>` : ''}
-        <button onclick="publishSchedule()" class="btn btn-sm ${cm.status === 'Published' ? 'btn-disabled' : (canEdit ? 'btn-success' : 'btn-disabled')}" ${!canEdit || cm.status === 'Published' ? 'disabled' : ''}>${cm.status === 'Published' ? 'Published' : 'Publish'}</button>
+        ${canEdit ? `<button onclick="openNewCycle()" class="btn btn-sm btn-primary h-7 text-[10px] px-2.5">New Cycle</button><button onclick="copyPreviousCycle()" class="btn btn-sm btn-secondary h-7 text-[10px] px-2.5">Copy Previous</button>` : ''}
+        <button onclick="publishSchedule()" class="btn btn-sm ${cm.status === 'Published' ? 'btn-disabled' : (canEdit ? 'btn-success' : 'btn-disabled')} h-7 text-[10px] px-2.5" ${!canEdit || cm.status === 'Published' ? 'disabled' : ''}>${cm.status === 'Published' ? 'Published' : 'Publish'}</button>
       </div>
     </div>
 
-    <!-- Cycle selector -->
-    <div class="flex items-center gap-2 overflow-x-auto py-0.5 flex-shrink-0">
-      ${MOCK.scheduleCycles.map(c => `<button onclick="_schedCycle='${c.id}';renderAll()" class="px-3 py-1.5 rounded-lg border text-[10px] font-medium whitespace-nowrap ${c.id === _schedCycle ? 'border-brand-500 bg-brand-50 text-brand-700' : 'border-charcoal-200 text-charcoal-500'}">${c.label} · ${c.status}</button>`).join('')}
+    <!-- Integrated Toolbar: Cycle Selector + Coverage Stats + Conflict Pill -->
+    <div class="bg-white rounded-lg border border-charcoal-200 px-2 py-1 flex items-center justify-between gap-2 flex-wrap flex-shrink-0">
+      <div class="flex items-center gap-1 overflow-x-auto py-0.5">
+        ${MOCK.scheduleCycles.map(c => `<button onclick="_schedCycle='${c.id}';renderAll()" class="px-2 py-0.5 rounded border text-[9px] font-medium whitespace-nowrap ${c.id === _schedCycle ? 'border-brand-500 bg-brand-50 text-brand-700' : 'border-charcoal-200 text-charcoal-500'}">${c.label}</button>`).join('')}
+      </div>
+
+      <div class="flex items-center gap-2 text-[10px]">
+        <span class="stat-pill"><span class="w-1.5 h-1.5 rounded-full bg-brand-500"></span><strong class="text-brand-700">10/10</strong> Scheduled</span>
+        <span class="stat-pill"><span class="w-1.5 h-1.5 rounded-full bg-red-500"></span><strong class="text-red-700">2</strong> Conflicts</span>
+        <span class="badge badge-red text-[8px]">Overlapping shifts flagged</span>
+      </div>
     </div>
 
-    <!-- Coverage KPIs -->
-    <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 flex-shrink-0">
-      <div class="bg-white rounded-xl border border-charcoal-200 p-3 text-center border-l-4 border-l-brand-500"><p class="text-lg font-bold text-brand-600">10<span class="text-[10px] font-normal text-charcoal-400">/10</span></p><p class="text-[10px] text-charcoal-500">Employees Scheduled</p></div>
-      <div class="bg-white rounded-xl border border-charcoal-200 p-3 text-center"><p class="text-lg font-bold text-red-600">2</p><p class="text-[10px] text-charcoal-500">Conflicts</p></div>
-      <div class="bg-white rounded-xl border border-charcoal-200 p-3 text-center"><p class="text-lg font-bold text-green-600">${MOCK.scheduleCycles.filter(c=>c.status==='Published').length}</p><p class="text-[10px] text-charcoal-500">Published Cycles</p></div>
-      <div class="bg-white rounded-xl border border-charcoal-200 p-3 text-center"><p class="text-lg font-bold text-charcoal-900">0</p><p class="text-[10px] text-charcoal-500">Unconfirmed Shifts</p></div>
-    </div>
-
-    <!-- Conflict warnings -->
-    <div class="bg-white rounded-xl border border-red-200 border-l-4 border-l-red-500 p-3 flex-shrink-0">
-      <p class="bento-label text-red-600 mb-1">CONFLICT WARNING</p>
-      <p class="text-[11px] text-charcoal-600">2 employees have overlapping shifts in this cycle. Review <strong>Karim Hassan</strong> (Evening/Night) and <strong>Sara Ali</strong> (Morning/Evening on Tue).</p>
-    </div>
-
-    <!-- Main layout: Detail panel + Calendar (fills remaining viewport) -->
-    <div class="flex flex-col lg:flex-row gap-3 flex-1 min-h-0">
+    <!-- Main layout: Day Detail Panel + Calendar & Roster (fills 100% of viewport) -->
+    <div class="flex flex-col lg:flex-row gap-1.5 flex-1 min-h-0">
       <!-- Left: Day detail panel -->
       ${detailPanel}
 
-      <!-- Right: Compact weekly calendar -->
-      <div class="flex-1 min-w-0 min-h-0 lg:overflow-y-auto flex flex-col gap-3">
-        <div class="bg-white rounded-xl border border-charcoal-200 overflow-hidden">
-          <div class="px-4 py-2.5 border-b border-charcoal-100 flex items-center justify-between bg-charcoal-50/50">
+      <!-- Right: Compact weekly calendar + Team Roster -->
+      <div class="flex-1 min-w-0 flex flex-col min-h-0 gap-1.5">
+        <!-- Calendar cards -->
+        <div class="bg-white rounded-lg border border-charcoal-200 overflow-hidden flex-shrink-0">
+          <div class="px-3 py-1 border-b border-charcoal-100 flex items-center justify-between bg-charcoal-50/50">
             <p class="bento-label text-charcoal-500">WEEKLY OVERVIEW</p>
-            <select class="form-select w-auto" style="padding:0.25rem 2rem 0.25rem 0.5rem;font-size:0.75rem"><option>All Gyms</option><option>Nasr City</option><option>Heliopolis</option><option>6th October</option></select>
+            <div class="flex items-center gap-2">
+              <select class="form-select w-auto h-6 text-[9px] py-0"><option>All Gyms</option><option>Nasr City</option><option>Heliopolis</option><option>6th October</option></select>
+            </div>
           </div>
-          <div class="p-3 grid grid-cols-7 gap-2">${calendarCards}</div>
-          <div class="px-4 py-2 border-t border-charcoal-100 flex flex-wrap gap-2">${legend}</div>
+          <div class="p-1.5 grid grid-cols-7 gap-1">${calendarCards}</div>
+          <div class="px-2.5 py-1 border-t border-charcoal-100 flex flex-wrap gap-2 text-[8px]">${legend}</div>
         </div>
 
-        <!-- Employee roster below calendar -->
-        <div class="bg-white rounded-xl border border-charcoal-200 overflow-hidden hidden lg:flex flex-col flex-1 min-h-0">
-          <div class="px-4 py-2.5 border-b border-charcoal-100 bg-charcoal-50/50 flex items-center justify-between">
+        <!-- Employee roster (fills remaining space) -->
+        <div class="bg-white rounded-lg border border-charcoal-200 overflow-hidden hidden lg:flex flex-col flex-1 min-h-0">
+          <div class="px-3 py-1 border-b border-charcoal-100 bg-charcoal-50/50 flex items-center justify-between flex-shrink-0">
             <p class="bento-label text-charcoal-500">TEAM ROSTER — ALL SHIFTS</p>
             <span class="text-[9px] text-charcoal-400">${ds.day}</span>
           </div>
-          <div class="flex-1 min-h-0 overflow-auto table-responsive rounded-b-xl"><table class="data-table h-full"><thead><tr><th>Employee</th><th>Position</th><th>Gym</th><th>Shift</th><th>Hours</th></tr></thead><tbody>
-            ${MOCK.teamMembers.map(tm => {
-              const tmpl = MOCK.teamSchedule[tm.id] || [];
-              const t = tmplById[tmpl[_selectedDay]] || MOCK.shiftTemplates[3];
-              return `<tr>
-                <td><div class="flex items-center gap-2"><div class="w-7 h-7 rounded-full bg-brand-100 text-brand-700 flex items-center justify-center text-[9px] font-semibold">${tm.initials || tm.name.split(' ').map(w=>w[0]).join('')}</div><span class="text-[11px] font-medium text-charcoal-900">${tm.name}</span></div></td>
-                <td class="text-[10px] text-charcoal-600">${tm.position}</td>
-                <td class="text-[10px] text-charcoal-600">${tm.gym}</td>
-                <td><span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-medium" style="background:${t.isOff?'#f1f3f5':t.bgColor};color:${t.isOff?'#6c7a71':t.textColor};border:1px solid ${t.isOff?'#e9ecef':t.color+'33'}">${t.isOff ? 'Off Day' : t.name} ${!t.isOff ? `<span class="opacity-60">${t.start}–${t.end}</span>` : ''}</span></td>
-                <td class="text-[10px] ${t.isOff?'text-charcoal-400':'text-charcoal-600'}">${t.isOff ? '—' : `${t.start} – ${t.end}`}</td>
-              </tr>`;
-            }).join('')}
-          </tbody></table></div>
+          <div class="flex-1 min-h-0 overflow-y-auto">
+            <table class="data-table">
+              <thead class="sticky top-0 z-10 bg-[#f9f9ff]"><tr><th>Employee</th><th>Position</th><th>Gym</th><th>Shift</th><th>Hours</th></tr></thead>
+              <tbody>
+                ${MOCK.teamMembers.map(tm => {
+                  const tmpl = MOCK.teamSchedule[tm.id] || [];
+                  const t = tmplById[tmpl[_selectedDay]] || MOCK.shiftTemplates[3];
+                  return `<tr>
+                    <td><div class="flex items-center gap-1.5"><div class="w-6 h-6 rounded-full bg-brand-100 text-brand-700 flex items-center justify-center text-[9px] font-semibold">${tm.initials || tm.name.split(' ').map(w=>w[0]).join('')}</div><span class="text-[11px] font-medium text-charcoal-900">${tm.name}</span></div></td>
+                    <td class="text-[10px] text-charcoal-600">${tm.position}</td>
+                    <td class="text-[10px] text-charcoal-600">${tm.gym}</td>
+                    <td><span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[8px] font-medium" style="background:${t.isOff?'#f1f3f5':t.bgColor};color:${t.isOff?'#6c7a71':t.textColor};border:1px solid ${t.isOff?'#e9ecef':t.color+'33'}">${t.isOff ? 'Off Day' : t.name} ${!t.isOff ? `<span class="opacity-60">${t.start}–${t.end}</span>` : ''}</span></td>
+                    <td class="text-[10px] ${t.isOff?'text-charcoal-400':'text-charcoal-600'}">${t.isOff ? '—' : `${t.start} – ${t.end}`}</td>
+                  </tr>`;
+                }).join('')}
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
     </div>
 
-    ${!canEdit ? `<p class="text-[10px] text-charcoal-400 text-center flex-shrink-0">Cycle editing / publish is hidden — you do not have <code>schedule.manage</code>. View-only.</p>` : ''}
+    ${!canEdit ? `<p class="text-[9px] text-charcoal-400 text-center flex-shrink-0">Cycle editing / publish is hidden — view-only.</p>` : ''}
   </div>`;
 }
 

@@ -89,25 +89,25 @@ function renderHRTeam() {
   const showAll = DEMO.showAll;
   const canManage = showAll || hasPermission('team.manage');
   if (!canManage && !(showAll || hasPermission('team.view'))) {
-    return '<div class="space-y-3"><h1 class="text-xl font-bold text-charcoal-900">HR Team Management</h1><div class="bg-white rounded-xl border border-charcoal-200 p-6 text-center"><p class="text-xs text-charcoal-500">You do not have permission to view the HR team (<code>team.view</code>).</p></div></div>';
+    return '<div class="space-y-3"><h1 class="text-base font-bold text-charcoal-900">HR Team Management</h1><div class="bg-white rounded-xl border border-charcoal-200 p-6 text-center"><p class="text-xs text-charcoal-500">You do not have permission to view the HR team (<code>team.view</code>).</p></div></div>';
   }
   const tabs = [{ id:'team',label:'HR Team' },{ id:'templates',label:'Role Templates' }];
   let body = _hrtTab==='team' ? renderHRTeamList(canManage) : renderRoleTemplates(canManage);
-  return '<div class="flex flex-col h-full min-h-0 gap-3">' +
-    '<div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 flex-shrink-0">' +
-      '<div><h1 class="text-xl font-bold text-charcoal-900">HR Team Management</h1>' +
+  return '<div class="space-y-2.5">' +
+    '<div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">' +
+      '<div><h1 class="text-base font-bold text-charcoal-900">HR Team Management</h1>' +
       '<p class="text-xs text-charcoal-500 mt-0.5">' + MOCK.hrTeamMembers.length + ' HR staff \u00b7 ' + MOCK.currentUser.gyms.length + ' gyms under management</p></div>' +
-      (canManage ? '<button onclick="openHRAccountWizard()" class="btn btn-md btn-primary"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>Create HR Account</button>' : '') +
+      (canManage ? '<button onclick="openHRAccountWizard()" class="btn btn-sm btn-primary"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>Create HR Account</button>' : '') +
     '</div>' +
-    '<div class="grid grid-cols-2 sm:grid-cols-4 gap-2 flex-shrink-0">' +
-      '<div class="bg-white rounded-xl border border-charcoal-200 p-3 text-center border-l-4 border-l-brand-500"><p class="text-lg font-bold text-brand-600">' + MOCK.hrTeamMembers.filter(m=>m.status==='Active').length + '</p><p class="text-[10px] text-charcoal-500">Active HR Staff</p></div>' +
-      '<div class="bg-white rounded-xl border border-charcoal-200 p-3 text-center"><p class="text-lg font-bold text-charcoal-900">' + MOCK.roleTemplates.length + '</p><p class="text-[10px] text-charcoal-500">Role Templates</p></div>' +
-      '<div class="bg-white rounded-xl border border-charcoal-200 p-3 text-center"><p class="text-lg font-bold text-blue-600">' + MOCK.currentUser.gyms.length + '</p><p class="text-[10px] text-charcoal-500">Gyms Under You</p></div>' +
-      '<div class="bg-white rounded-xl border border-charcoal-200 p-3 text-center"><p class="text-lg font-bold text-red-600">' + MOCK.hrTeamMembers.filter(m=>m.status==='Suspended').length + '</p><p class="text-[10px] text-charcoal-500">Suspended</p></div>' +
+    '<div class="grid grid-cols-2 sm:grid-cols-4 gap-2">' +
+      '<div class="bg-white rounded-xl border border-charcoal-200 p-2.5 text-center border-l-4 border-l-brand-500"><p class="text-base font-bold text-brand-600">' + MOCK.hrTeamMembers.filter(m=>m.status==='Active').length + '</p><p class="text-[10px] text-charcoal-500">Active HR Staff</p></div>' +
+      '<div class="bg-white rounded-xl border border-charcoal-200 p-2.5 text-center"><p class="text-base font-bold text-charcoal-900">' + MOCK.roleTemplates.length + '</p><p class="text-[10px] text-charcoal-500">Role Templates</p></div>' +
+      '<div class="bg-white rounded-xl border border-charcoal-200 p-2.5 text-center"><p class="text-base font-bold text-blue-600">' + MOCK.currentUser.gyms.length + '</p><p class="text-[10px] text-charcoal-500">Gyms Under You</p></div>' +
+      '<div class="bg-white rounded-xl border border-charcoal-200 p-2.5 text-center"><p class="text-base font-bold text-red-600">' + MOCK.hrTeamMembers.filter(m=>m.status==='Suspended').length + '</p><p class="text-[10px] text-charcoal-500">Suspended</p></div>' +
     '</div>' +
-    '<div class="flex border-b border-charcoal-100 flex-shrink-0">' + tabs.map(t=>'<button onclick="_hrtTab=\''+t.id+'\';renderAll()" class="tab-btn '+(_hrtTab===t.id?'active':'')+'">'+t.label+'</button>').join('') + '</div>' +
+    '<div class="flex border-b border-charcoal-100">' + tabs.map(t=>'<button onclick="_hrtTab=\''+t.id+'\';renderAll()" class="tab-btn '+(_hrtTab===t.id?'active':'')+'">'+t.label+'</button>').join('') + '</div>' +
     body +
-    (!canManage ? '<p class="text-[10px] text-charcoal-400 text-center flex-shrink-0">Creating &amp; editing HR accounts requires <code>team.manage</code> (HR Manager).</p>' : '') +
+    (!canManage ? '<p class="text-[10px] text-charcoal-400 text-center">Creating &amp; editing HR accounts requires <code>team.manage</code> (HR Manager).</p>' : '') +
   '</div>';
 }
 
@@ -142,12 +142,11 @@ function renderHRTeamList(canManage) {
     (canManage?'<div class="flex gap-1.5 mt-2"><button onclick="event.stopPropagation();openHRMemberEdit(\''+m.id+'\')" class="btn btn-sm btn-secondary flex-1">Edit Permissions</button><button onclick="event.stopPropagation();toggleHRMemberStatus(\''+m.id+'\')" class="btn btn-sm btn-ghost flex-1 '+(m.status==='Active'?'text-red-600':'text-brand-600')+'">'+(m.status==='Active'?'Suspend':'Reactivate')+'</button></div>':'')+
   '</div>').join('');
 
-  return '<div class="bg-white rounded-xl border border-charcoal-200 overflow-hidden hidden lg:flex flex-col flex-1 min-h-0">'+
-    '<div class="flex-1 min-h-0 overflow-auto table-responsive rounded-b-xl">'+
-      '<table class="data-table h-full"><thead><tr><th>HR Staff</th><th>Role Template</th><th>Gyms</th><th>Permissions</th><th>Status</th><th>Last Login</th><th></th></tr></thead>'+
-      '<tbody>'+rows+'</tbody></table>'+
-    '</div></div>'+
-    '<div class="space-y-1.5 lg:hidden flex-shrink-0">'+mobileCards+'</div>';
+  return '<div class="bg-white rounded-xl border border-charcoal-200 overflow-hidden hidden lg:block">'+
+    '<table class="data-table"><thead class="sticky top-0 z-10 bg-[#f9f9ff]"><tr><th>HR Staff</th><th>Role Template</th><th>Gyms</th><th>Permissions</th><th>Status</th><th>Last Login</th><th></th></tr></thead>'+
+    '<tbody>'+rows+'</tbody></table>'+
+  '</div>'+
+  '<div class="space-y-1.5 lg:hidden">'+mobileCards+'</div>';
 }
 
 function renderRoleTemplates(canManage) {

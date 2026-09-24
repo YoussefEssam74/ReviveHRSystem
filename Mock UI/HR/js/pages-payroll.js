@@ -45,12 +45,12 @@ function renderPayroll() {
     </div>
   </div>`;
 
-  return `<div class="flex flex-col h-full min-h-0 gap-3">
-    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 flex-shrink-0">
-      <div><h1 class="text-xl font-bold text-charcoal-900">Payroll</h1><p class="text-xs text-charcoal-500 mt-0.5">${_payPeriod} pay cycle · ${payroll.length} records loaded</p></div>
+  return `<div class="space-y-2.5">
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+      <div><h1 class="text-base font-bold text-charcoal-900">Payroll</h1><p class="text-xs text-charcoal-500 mt-0.5">${_payPeriod} pay cycle · ${payroll.length} records loaded</p></div>
       <div class="flex items-center gap-1.5 flex-wrap">
-        <select class="form-select w-auto" style="padding:0.375rem 2rem 0.375rem 0.625rem;font-size:0.8125rem"><option>Aug 2026</option><option>Jul 2026</option><option>Jun 2026</option></select>
-        <select class="form-select w-auto" style="padding:0.375rem 2rem 0.375rem 0.625rem;font-size:0.8125rem"><option>All Gyms</option><option>Nasr City</option><option>Heliopolis</option><option>6th October</option></select>
+        <select class="form-select w-auto"><option>Aug 2026</option><option>Jul 2026</option><option>Jun 2026</option></select>
+        <select class="form-select w-auto"><option>All Gyms</option><option>Nasr City</option><option>Heliopolis</option><option>6th October</option></select>
         ${canExport ? `<button onclick="exportPayroll()" class="btn btn-sm btn-secondary"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>Export</button>` : ''}
         ${canEdit ? `<button onclick="openPayrollSettings()" class="btn btn-sm btn-ghost">Settings</button>` : ''}
       </div>
@@ -60,24 +60,27 @@ function renderPayroll() {
     ${stepper}
 
     <!-- Move step buttons -->
-    <div class="flex items-center gap-2 flex-shrink-0">
+    <div class="flex items-center gap-2">
       ${canApprove ? `<button onclick="_payStep=Math.max(1,_payStep-1);renderAll()" class="btn btn-sm btn-secondary">◀ Previous step</button>
       ${_payStep === 3 ? `<button onclick="showToast('Payroll cycle approved & published for 25th');_payStep=4;renderAll();" class="btn btn-sm btn-success">Approve & Publish Cycle</button>` : `<button onclick="_payStep=Math.min(4,_payStep+1);renderAll()" class="btn btn-sm btn-primary">Next step ▶</button>`}` : ''}
       <span class="text-[10px] text-charcoal-400">Step ${_payStep} of 4 — ${steps[_payStep - 1]}</span>
     </div>
 
     <!-- Summary -->
-    <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 flex-shrink-0">
-      <div class="bg-white rounded-xl border border-charcoal-200 p-3 text-center border-l-4 border-l-brand-500"><p class="text-lg font-bold text-brand-600">EGP ${fmtMoney(totalNet)}</p><p class="text-[10px] text-charcoal-500">Total Net Pay</p><p class="text-[9px] text-green-600 mt-0.5">▲ ${monthDelta > 0 ? monthDelta : Math.abs(monthDelta)}% vs July</p></div>
-      <div class="bg-white rounded-xl border border-charcoal-200 p-3 text-center"><p class="text-lg font-bold text-charcoal-900">EGP ${fmtMoney(totalGross)}</p><p class="text-[10px] text-charcoal-500">Total Gross</p><p class="text-[9px] text-charcoal-400 mt-0.5">${totalDed > 0 ? `EGP ${fmtMoney(totalDed)} in deductions` : ''}</p></div>
-      <div class="bg-white rounded-xl border border-charcoal-200 p-3 text-center"><p class="text-lg font-bold text-charcoal-900">${approved}<span class="text-[10px] font-normal text-charcoal-400">/${payroll.length}</span></p><p class="text-[10px] text-charcoal-500">Approved</p><p class="text-[9px] text-charcoal-400 mt-0.5">${drafts.length} still editable</p></div>
-      <div class="bg-white rounded-xl border border-charcoal-200 p-3 text-center"><p class="text-lg font-bold text-green-600">${locked}</p><p class="text-[10px] text-charcoal-500">Released / Locked</p><p class="text-[9px] text-charcoal-400 mt-0.5">Payday: 25th</p></div>
+    <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
+      <div class="bg-white rounded-xl border border-charcoal-200 p-2.5 text-center border-l-4 border-l-brand-500"><p class="text-base font-bold text-brand-600">EGP ${fmtMoney(totalNet)}</p><p class="text-[10px] text-charcoal-500">Total Net Pay</p><p class="text-[9px] text-green-600 mt-0.5">▲ ${monthDelta > 0 ? monthDelta : Math.abs(monthDelta)}% vs July</p></div>
+      <div class="bg-white rounded-xl border border-charcoal-200 p-2.5 text-center"><p class="text-base font-bold text-charcoal-900">EGP ${fmtMoney(totalGross)}</p><p class="text-[10px] text-charcoal-500">Total Gross</p><p class="text-[9px] text-charcoal-400 mt-0.5">${totalDed > 0 ? `EGP ${fmtMoney(totalDed)} in deductions` : ''}</p></div>
+      <div class="bg-white rounded-xl border border-charcoal-200 p-2.5 text-center"><p class="text-base font-bold text-charcoal-900">${approved}<span class="text-[10px] font-normal text-charcoal-400">/${payroll.length}</span></p><p class="text-[10px] text-charcoal-500">Approved</p><p class="text-[9px] text-charcoal-400 mt-0.5">${drafts.length} still editable</p></div>
+      <div class="bg-white rounded-xl border border-charcoal-200 p-2.5 text-center"><p class="text-base font-bold text-green-600">${locked}</p><p class="text-[10px] text-charcoal-500">Released / Locked</p><p class="text-[9px] text-charcoal-400 mt-0.5">Payday: 25th</p></div>
     </div>
 
-    <!-- Table + activity (fills remaining viewport) -->
-    <div class="grid grid-cols-1 lg:grid-cols-3 gap-3 flex-1 min-h-0">
-      <div class="lg:col-span-2 bg-white rounded-xl border border-charcoal-200 overflow-hidden hidden lg:flex flex-col min-h-0">
-        <div class="flex-1 min-h-0 overflow-auto table-responsive rounded-b-xl"><table class="data-table h-full"><thead><tr><th>Employee</th><th>Gym</th><th>Days</th><th>Overtime</th><th class="text-right">Gross</th><th class="text-right">Deductions</th><th class="text-right">Net</th><th>Status</th><th></th></tr></thead>
+    <!-- Table + activity (natural single-container scrolling) -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-2.5">
+      <div class="lg:col-span-2 bg-white rounded-xl border border-charcoal-200 overflow-hidden hidden lg:block">
+        <table class="data-table">
+          <thead class="sticky top-0 z-10 bg-[#f9f9ff]">
+            <tr><th>Employee</th><th>Gym</th><th>Days</th><th>Overtime</th><th class="text-right">Gross</th><th class="text-right">Deductions</th><th class="text-right">Net</th><th>Status</th><th></th></tr>
+          </thead>
         <tbody>${payroll.map(p => `<tr>
           <td><div class="flex items-center gap-2.5"><div class="w-8 h-8 rounded-full bg-brand-100 text-brand-700 flex items-center justify-center text-[10px] font-semibold">${p.name.split(' ').map(w => w[0]).join('')}</div><div><p class="text-xs font-medium text-charcoal-900">${p.name}</p><p class="text-[10px] text-charcoal-500">${p.employeeId}</p></div></div></td>
           <td class="text-xs">${p.gym}</td>
@@ -91,7 +94,7 @@ function renderPayroll() {
             ${canEdit && p.status === 'Draft' ? `<button onclick="openPayrollEdit('${p.employeeId}')" class="btn btn-sm btn-ghost" title="Edit"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/></svg></button>` : ''}
             ${(canEdit && (p.deductionLines || []).some(l => l.status === 'Pending')) ? `<button onclick="openDeductions('${p.employeeId}')" class="btn btn-sm btn-secondary">Decide Deductions<span class="badge badge-yellow text-[9px] ml-1">${pendingOf(p)}</span></button>` : `<button onclick="openDeductions('${p.employeeId}')" class="btn btn-sm btn-ghost">Deductions</button>`}
           <button onclick="openPayslip('${p.employeeId}')" class="btn btn-sm btn-ghost">Payslip</button></div></td>
-        </tr>`).join('')}</tbody></table></div>
+        </tr>`).join('')}</tbody></table>
       </div>
 
       <!-- Activity feed -->

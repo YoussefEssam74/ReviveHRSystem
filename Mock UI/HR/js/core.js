@@ -1,4 +1,4 @@
-// ==================== HR STATE & UTILITIES ====================
+﻿// ==================== HR STATE & UTILITIES ====================
 let state = { currentPage: 'dashboard', sidebarOpen: false, userMenuOpen: false, mobileMoreOpen: false };
 const DEMO = { showAll: true, role: 'hrManager' };
 
@@ -79,6 +79,9 @@ function computePendingActions() {
   put('evaluations',
     MOCK.evaluationHistory.filter(e => e.status === 'In Progress').length,
     'info', 'in progress');
+  put('terminations',
+    MOCK.separations.filter(s => s.status !== 'Completed').length,
+    'info', 'active exits');
   // --- Secondary nav items ---
   put('notifications',
     MOCK.notifications.filter(n => !n.read).length,
@@ -133,6 +136,7 @@ function updateBadgeIndicators() {
 const mainNav = [
   {id:'dashboard',label:'Dashboard',icon:'M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6'},
   {id:'employees',label:'Employees',icon:'M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z', permission:'employees.view'},
+  {id:'terminations',label:'Terminations',icon:'M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1', permission:'employees.view'},
   {id:'recruitment',label:'Recruitment & Hiring',icon:'M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z', permission:'recruitment.view'},
   {id:'attendance',label:'Attendance',icon:'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4', permission:'attendance.view'},
   {id:'schedule',label:'Shifts & Schedule',icon:'M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z', permission:'schedule.manage'},
@@ -150,17 +154,6 @@ const secondaryNav = [
   {id:'my-access',label:'My Access',icon:'M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z'},
 ];
 
-function renderNavItems(id) {
-  const c = document.getElementById(id);
-  if(!c) return;
-  const showAll = DEMO.showAll;
-  const visMain = showAll ? mainNav : mainNav.filter(i => !i.permission || hasPermission(i.permission));
-  const visSec = showAll ? secondaryNav : secondaryNav.filter(i => !i.permission || hasPermission(i.permission));
-  let h = visMain.map(i => navItemHtml(i)).join('');
-  h += '<div class="nav-section-title mt-3">Administration</div>';
-  h += visSec.map(i => navItemHtml(i)).join('');
-  c.innerHTML = h;
-}
 // Single nav-item renderer with badge support.
 function navItemHtml(i, counts, opts) {
   opts = opts || {};
@@ -188,7 +181,7 @@ function renderNavItems(id) {
   const visMain = showAll ? mainNav : mainNav.filter(i => !i.permission || hasPermission(i.permission));
   const visSec = showAll ? secondaryNav : secondaryNav.filter(i => !i.permission || hasPermission(i.permission));
   let h = visMain.map(i => navItemHtml(i, counts)).join('');
-  h += '<div class="nav-section-title mt-3">Administration</div>';
+  h += '<div class="nav-section-title mt-2">Administration</div>';
   h += visSec.map(i => navItemHtml(i, counts)).join('');
   c.innerHTML = h;
   updateBadgeIndicators();
@@ -206,6 +199,7 @@ function renderMobileMore() {
 
 // ==================== NAVIGATION ====================
 function navigateTo(page) {
+  if (page === 'employees') state.empView = 'directory';
   state.currentPage = page;
   renderAll(); closeSidebar(); closeMobileMore();
   const m = document.getElementById('main-content'); if(m) m.scrollTop=0;

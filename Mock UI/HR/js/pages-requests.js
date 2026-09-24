@@ -26,10 +26,10 @@ function renderRequests() {
   ];
 
   const kpi = `<div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
-    <div class="bg-white rounded-xl border border-charcoal-200 p-3 text-center border-l-4 border-l-red-500"><p class="text-lg font-bold text-red-600">${urgent}<span class="text-[10px] font-normal text-charcoal-400">/${pendingHR.length}</span></p><p class="text-[10px] text-charcoal-500">Urgent — Pending HR</p></div>
-    <div class="bg-white rounded-xl border border-charcoal-200 p-3 text-center"><p class="text-lg font-bold text-brand-600">${approvedThisMonth}</p><p class="text-[10px] text-charcoal-500">Approved (Sept)</p></div>
-    <div class="bg-white rounded-xl border border-charcoal-200 p-3 text-center"><p class="text-lg font-bold text-charcoal-900">${bmRejected}</p><p class="text-[10px] text-charcoal-500">BM Rejected</p></div>
-    <div class="bg-white rounded-xl border border-charcoal-200 p-3 text-center"><p class="text-lg font-bold text-yellow-600">${all.filter(r=>r.type==='Day Off').length}</p><p class="text-[10px] text-charcoal-500">Day-Off Requests</p></div>
+    <div class="bg-white rounded-xl border border-charcoal-200 p-3 text-center border-l-4 border-l-red-500"><p class="text-base font-bold text-red-600">${urgent}<span class="text-[10px] font-normal text-charcoal-400">/${pendingHR.length}</span></p><p class="text-[10px] text-charcoal-500">Urgent — Pending HR</p></div>
+    <div class="bg-white rounded-xl border border-charcoal-200 p-3 text-center"><p class="text-base font-bold text-brand-600">${approvedThisMonth}</p><p class="text-[10px] text-charcoal-500">Approved (Sept)</p></div>
+    <div class="bg-white rounded-xl border border-charcoal-200 p-3 text-center"><p class="text-base font-bold text-charcoal-900">${bmRejected}</p><p class="text-[10px] text-charcoal-500">BM Rejected</p></div>
+    <div class="bg-white rounded-xl border border-charcoal-200 p-3 text-center"><p class="text-base font-bold text-yellow-600">${all.filter(r=>r.type==='Day Off').length}</p><p class="text-[10px] text-charcoal-500">Day-Off Requests</p></div>
   </div>`;
 
   let body = `<div class="flex items-center justify-between mb-2 flex-wrap gap-2 flex-shrink-0">
@@ -50,22 +50,22 @@ function renderRequests() {
   </div>`;
 
   if (!list.length) {
-    body += `<div class="bg-white rounded-xl border border-charcoal-200 p-6 text-center flex-shrink-0"><svg class="w-10 h-10 text-charcoal-300 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M5 13l4 4L19 7"/></svg><p class="text-xs text-charcoal-500">No requests here.</p></div>`;
+    body += `<div class="bg-white rounded-xl border border-charcoal-200 p-4 text-center"><svg class="w-8 h-8 text-charcoal-300 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M5 13l4 4L19 7"/></svg><p class="text-xs text-charcoal-500">No requests here.</p></div>`;
   } else {
-    body += `<div class="space-y-1.5 flex-1 min-h-0 overflow-y-auto pr-0.5">${list.map(renderRequestCard).join('')}</div>`;
+    body += `<div class="space-y-1.5">${list.map(renderRequestCard).join('')}</div>`;
   }
 
-  return `<div class="flex flex-col h-full min-h-0 gap-3">
-    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 flex-shrink-0">
-      <div><h1 class="text-xl font-bold text-charcoal-900">Requests</h1><p class="text-xs text-charcoal-500 mt-0.5">Day off, leave early & approvals — BM & HR flow</p></div>
+  return `<div class="space-y-2.5">
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+      <div><h1 class="text-base font-bold text-charcoal-900">Requests</h1><p class="text-xs text-charcoal-500 mt-0.5">Day off, leave early & approvals — BM & HR flow</p></div>
       <button onclick="openNewRequest()" class="btn btn-sm btn-secondary"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>New Request</button>
     </div>
     ${kpi}
-    <div class="flex border-b border-charcoal-100 flex-shrink-0">
+    <div class="flex border-b border-charcoal-100">
       ${tabs.map(t => `<button onclick="_reqTab='${t.id}';renderAll()" class="tab-btn ${_reqTab===t.id?'active':''}">${t.label}${t.count ? ` <span class="badge badge-red text-[9px] ml-0.5">${t.count}</span>` : ''}</button>`).join('')}
     </div>
     ${body}
-    ${!canDecide ? `<p class="text-[10px] text-charcoal-400 text-center flex-shrink-0">Final approve/reject requires <code>requests.approve</code>. You can view requests and BM decisions only.</p>` : ''}
+    ${!canDecide ? `<p class="text-[10px] text-charcoal-400 text-center">Final approve/reject requires <code>requests.approve</code>. You can view requests and BM decisions only.</p>` : ''}
   </div>`;
 }
 
@@ -227,6 +227,9 @@ function triggerOffboardingFromRequest(empName, gym, lastDay, reason) {
       gym: gym,
       lastDay: lastDay,
       reason: reason || 'Resignation',
+      requestedBy: 'Resignation — BM approved',
+      requestedByUser: MOCK.currentUser.fullName,
+      submittedDate: 'Sep 9, 2026',
       status: 'Notice Period',
       progress: 0,
       checklist: [
@@ -235,7 +238,8 @@ function triggerOffboardingFromRequest(empName, gym, lastDay, reason) {
         ['Uniform returned', false],
         ['Access cards revoked', false],
         ['Final settlement', false]
-      ]
+      ],
+      verdict: null
     };
     MOCK.separations.unshift(sep);
     MOCK.auditLog.unshift({
@@ -249,9 +253,7 @@ function triggerOffboardingFromRequest(empName, gym, lastDay, reason) {
     });
   }
   showToast(`Offboarding initiated for ${empName}`);
-  navigateTo('employees');
-  state.empView = 'offboarding';
-  renderAll();
+  navigateTo('terminations');
   setTimeout(() => openSeparation(sep.id), 200);
 }
 
