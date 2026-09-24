@@ -50,7 +50,7 @@ function renderRequests() {
   </div>`;
 
   if (!list.length) {
-    body += `<div class="bg-white rounded-xl border border-charcoal-200 p-8 text-center flex-shrink-0"><svg class="w-10 h-10 text-charcoal-300 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M5 13l4 4L19 7"/></svg><p class="text-xs text-charcoal-500">No requests here.</p></div>`;
+    body += `<div class="bg-white rounded-xl border border-charcoal-200 p-6 text-center flex-shrink-0"><svg class="w-10 h-10 text-charcoal-300 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M5 13l4 4L19 7"/></svg><p class="text-xs text-charcoal-500">No requests here.</p></div>`;
   } else {
     body += `<div class="space-y-1.5 flex-1 min-h-0 overflow-y-auto pr-0.5">${list.map(renderRequestCard).join('')}</div>`;
   }
@@ -74,9 +74,11 @@ const REQ_ICONS = {
   'Leave Early': 'M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z',
   'Late Arrival': 'M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z',
   'Shift Swap': 'M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4',
+  'Resignation': 'M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1',
 };
 
 function reqUrgency(r) {
+  if (r.type === 'Resignation') return 'Notice';
   if (r.type === 'Late Arrival' || r.type === 'Leave Early') return 'Urgent';
   if (r.bmDecision === 'Rejected') return 'Review';
   return 'Normal';
@@ -84,6 +86,7 @@ function reqUrgency(r) {
 
 function urgencyTag(r) {
   const u = reqUrgency(r);
+  if (u === 'Notice') return `<span class="badge badge-purple text-[9px]">Notice Period</span>`;
   if (u === 'Urgent') return `<span class="badge badge-red text-[9px]">Urgent</span>`;
   if (u === 'Review') return `<span class="badge badge-yellow text-[9px]">BM Rejected</span>`;
   return `<span class="badge badge-blue text-[9px]">Normal</span>`;
@@ -183,6 +186,23 @@ function applyRequestDecision(id, mode, note) {
     r.hrComment = note || '';
     r.timeline.push({ step: 'HR Approved', date: 'Sep 9, 2026 · Now', done: true });
     showToast(`Request approved · employee notified`);
+    if (r.type === 'Resignation') {
+      const emp = MOCK.employees.find(e => e.name === r.employee);
+      if (emp) emp.status = 'Notice Period';
+      closeModal();
+      renderAll();
+      openModal('Resignation Approved — Start Offboarding?', `<div class="space-y-3">
+        <div class="bg-brand-50 border border-brand-200 rounded-lg p-3 text-xs text-brand-800">
+          <strong>${r.employee}'s</strong> resignation has been approved for <strong>${r.requestedDate}</strong>.
+          <p class="mt-1 text-[11px] text-brand-700">Would you like to initiate the exit & separation checklist (handover, uniform return, settlement) now?</p>
+        </div>
+        <div class="flex justify-end gap-2 pt-1">
+          <button onclick="closeModal()" class="btn btn-sm btn-secondary">Later</button>
+          <button onclick="closeModal();triggerOffboardingFromRequest('${r.employee}','${r.gym}','${r.requestedDate}','${(r.reason||'Resignation').replace(/'/g, "\\'")}')" class="btn btn-sm btn-primary">Start Offboarding Checklist →</button>
+        </div>
+      </div>`);
+      return;
+    }
   } else {
     if (mode === 'revoke' && reqDatePassed(r)) { showToast('Decision is final — the requested date has passed', 'error'); return; }
     r.status = 'Rejected';
@@ -193,6 +213,46 @@ function applyRequestDecision(id, mode, note) {
   }
   closeModal();
   renderAll();
+}
+
+function triggerOffboardingFromRequest(empName, gym, lastDay, reason) {
+  let sep = MOCK.separations.find(s => s.employee === empName);
+  const emp = MOCK.employees.find(e => e.name === empName);
+  if (emp) emp.status = 'Notice Period';
+  if (!sep) {
+    sep = {
+      id: 'sep-' + Date.now(),
+      employee: empName,
+      position: emp ? `${emp.position} — ${emp.level}` : 'Staff',
+      gym: gym,
+      lastDay: lastDay,
+      reason: reason || 'Resignation',
+      status: 'Notice Period',
+      progress: 0,
+      checklist: [
+        ['Exit interview scheduled', false],
+        ['Handover completed', false],
+        ['Uniform returned', false],
+        ['Access cards revoked', false],
+        ['Final settlement', false]
+      ]
+    };
+    MOCK.separations.unshift(sep);
+    MOCK.auditLog.unshift({
+      id: 'al-' + Date.now(),
+      action: 'Offboarding Initiated',
+      user: MOCK.currentUser.fullName,
+      target: empName,
+      detail: `Separation workflow created from approved resignation (Last Day: ${lastDay})`,
+      timestamp: '2026-09-09',
+      gym: gym
+    });
+  }
+  showToast(`Offboarding initiated for ${empName}`);
+  navigateTo('employees');
+  state.empView = 'offboarding';
+  renderAll();
+  setTimeout(() => openSeparation(sep.id), 200);
 }
 
 function openRequestDetail(id) {
@@ -232,11 +292,40 @@ function bulkApproveRequests() {
 }
 
 function openNewRequest() {
-  openModal('New Request', `<form onsubmit="event.preventDefault();showToast('Request submitted to Building Manager');closeModal();" class="space-y-3">
-    <div><label class="form-label">Employee</label><select class="form-select"><option>Omar Youssef</option><option>Yasmin Adel</option><option>Mohamed Adel</option></select></div>
-    <div><label class="form-label">Type</label><select class="form-select"><option>Day Off</option><option>Leave Early</option><option>Late Arrival</option><option>Shift Swap</option></select></div>
-    <div class="grid grid-cols-2 gap-3"><div><label class="form-label">Date</label><input type="date" class="form-input" value="2026-09-14"></div><div><label class="form-label">End</label><input type="date" class="form-input" value="2026-09-16"></div></div>
-    <div><label class="form-label">Reason</label><textarea class="form-input" rows="2" placeholder="Reason..."></textarea></div>
+  openModal('New Request', `<form onsubmit="event.preventDefault();submitNewRequest();" class="space-y-3">
+    <div><label class="form-label">Employee</label><select id="new-req-emp" class="form-select">${MOCK.employees.map(e=>`<option value="${e.name}">${e.name} (${e.gym})</option>`).join('')}</select></div>
+    <div><label class="form-label">Type</label><select id="new-req-type" class="form-select"><option>Day Off</option><option>Leave Early</option><option>Late Arrival</option><option>Shift Swap</option><option>Resignation</option></select></div>
+    <div class="grid grid-cols-2 gap-3"><div><label class="form-label">Date</label><input id="new-req-date" type="date" class="form-input" value="2026-09-14"></div><div><label class="form-label">End / Last Day</label><input id="new-req-end" type="date" class="form-input" value="2026-09-16"></div></div>
+    <div><label class="form-label">Reason</label><textarea id="new-req-reason" class="form-input" rows="2" placeholder="Reason..."></textarea></div>
     <div class="flex justify-end gap-2 pt-1"><button type="button" onclick="closeModal()" class="btn btn-sm btn-secondary">Cancel</button><button type="submit" class="btn btn-sm btn-primary">Submit Request</button></div>
   </form>`);
+}
+
+function submitNewRequest() {
+  const empName = document.getElementById('new-req-emp')?.value;
+  const type = document.getElementById('new-req-type')?.value;
+  const date = document.getElementById('new-req-date')?.value;
+  const reason = document.getElementById('new-req-reason')?.value || '';
+  const emp = MOCK.employees.find(e => e.name === empName);
+  const newReq = {
+    id: 'r' + (MOCK.requests.length + 1),
+    employee: empName,
+    gym: emp ? emp.gym : 'Nasr City',
+    type: type,
+    submittedDate: new Date().toISOString().slice(0, 10),
+    requestedDate: date || 'Sep 15, 2026',
+    status: 'Pending HR Review',
+    bmDecision: 'Approved',
+    bmComment: 'Submitted via HR portal',
+    reason: reason,
+    timeline: [
+      { step: 'Submitted', date: 'Just now', done: true },
+      { step: 'BM Approved', date: 'Auto-verified', done: true },
+      { step: 'HR Review', date: 'Pending', done: false }
+    ]
+  };
+  MOCK.requests.unshift(newReq);
+  showToast(`Request created for ${empName}`);
+  closeModal();
+  renderAll();
 }

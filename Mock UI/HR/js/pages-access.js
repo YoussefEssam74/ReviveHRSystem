@@ -3,7 +3,7 @@ let _repPeriod = '30d';
 
 function renderReports() {
   const canView = DEMO.showAll || hasPermission('reports.view');
-  if (!canView) return `<div class="space-y-3"><h1 class="text-xl font-bold text-charcoal-900">Reports & Analytics</h1><div class="bg-white rounded-xl border border-charcoal-200 p-10 text-center"><p class="text-xs text-charcoal-500">You do not have permission to view reports (<code>reports.view</code>).</p></div></div>`;
+  if (!canView) return `<div class="space-y-3"><h1 class="text-xl font-bold text-charcoal-900">Reports & Analytics</h1><div class="bg-white rounded-xl border border-charcoal-200 p-6 text-center"><p class="text-xs text-charcoal-500">You do not have permission to view reports (<code>reports.view</code>).</p></div></div>`;
 
   const headcount = MOCK.gymList.reduce((s, g) => s + g.employees, 0);
   const activeEmps = MOCK.employees.filter(e => e.status === 'Active').length;
@@ -31,9 +31,10 @@ function renderReports() {
 
   const funnel = [
     ['Applied', MOCK.candidates.length],
-    ['Screening', MOCK.candidates.filter(c => ['Screening','Interview','Offer','Hired'].includes(c.stage)).length],
-    ['Interview', MOCK.candidates.filter(c => ['Interview','Offer','Hired'].includes(c.stage)).length],
-    ['Offer', MOCK.candidates.filter(c => ['Offer','Hired'].includes(c.stage)).length],
+    ['Screening', MOCK.candidates.filter(c => ['Screening','First Interview','Second Interview','Accepted','Hired'].includes(c.stage)).length],
+    ['First Interview', MOCK.candidates.filter(c => ['First Interview','Second Interview','Accepted','Hired'].includes(c.stage)).length],
+    ['Second Interview', MOCK.candidates.filter(c => ['Second Interview','Accepted','Hired'].includes(c.stage)).length],
+    ['Accepted', MOCK.candidates.filter(c => ['Accepted','Hired'].includes(c.stage)).length],
     ['Hired', MOCK.candidates.filter(c => c.stage === 'Hired').length],
   ];
   const funnelMax = Math.max(...funnel.map(f => f[1]), 1);
@@ -64,10 +65,10 @@ function renderReports() {
 
     <!-- KPI cards -->
     <div class="grid grid-cols-2 lg:grid-cols-5 gap-2">
-      ${kpis.map(([label, val, color, icon, sub], i) => `<div class="bg-white rounded-xl border border-charcoal-200 p-3 ${i === 0 ? 'border-l-4 border-l-brand-500' : ''}">
+      ${kpis.map(([label, val, color, icon, sub], i) => `<div class="stat-tile ${i === 0 ? 'stat-tile-accent' : ''}">
         <div class="flex items-center gap-2.5">
           <div class="w-9 h-9 rounded-lg ${kpiColors[color][0]} flex items-center justify-center flex-shrink-0"><svg class="w-4.5 h-4.5 ${kpiColors[color][1]}" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="${icon}"/></svg></div>
-          <div><p class="text-xl font-bold text-charcoal-900">${val}</p><p class="text-[10px] text-charcoal-500">${label}</p></div>
+          <div><p class="stat-value">${val}</p><p class="stat-label">${label}</p></div>
         </div>
         <p class="text-[9px] text-charcoal-400 mt-1.5">${sub}</p>
       </div>`).join('')}
@@ -267,7 +268,7 @@ function openComposeAnnouncement() {
 // ==================== ACTIVITY / AUDIT LOG ====================
 function renderAuditLog() {
   const canView = DEMO.showAll || hasPermission('audit.view');
-  if (!canView) return `<div class="space-y-3"><h1 class="text-xl font-bold text-charcoal-900">Activity / Audit Log</h1><div class="bg-white rounded-xl border border-charcoal-200 p-10 text-center"><p class="text-xs text-charcoal-500">You do not have permission to view the audit log (<code>audit.view</code>).</p></div></div>`;
+  if (!canView) return `<div class="space-y-3"><h1 class="text-xl font-bold text-charcoal-900">Activity / Audit Log</h1><div class="bg-white rounded-xl border border-charcoal-200 p-6 text-center"><p class="text-xs text-charcoal-500">You do not have permission to view the audit log (<code>audit.view</code>).</p></div></div>`;
   return `<div class="flex flex-col h-full min-h-0 gap-3">
     <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 flex-shrink-0">
       <div><h1 class="text-xl font-bold text-charcoal-900">Activity / Audit Log</h1><p class="text-xs text-charcoal-500 mt-0.5">${MOCK.auditLog.length} recorded events · HR Manager only</p></div>

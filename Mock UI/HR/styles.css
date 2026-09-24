@@ -10,9 +10,22 @@ body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; 
 
 .safe-bottom { padding-bottom: env(safe-area-inset-bottom, 0px); }
 
+/* Density tokens — single source of truth for shared component sizing */
+:root {
+  --btn-h: 40px;
+  --btn-h-sm: 36px;
+  --btn-h-md: 40px;
+  --btn-px: 1rem;
+  --btn-font: 0.875rem;
+  --nav-item-gap: 0.625rem;
+  --nav-item-py: 0.4375rem;
+  --content-pad: 1rem;
+  --stat-tile-pad: 0.75rem;
+}
+
 .nav-item {
-  display: flex; align-items: center; gap: 0.75rem;
-  padding: 0.5rem 0.75rem; border-radius: 0.5rem;
+  display: flex; align-items: center; gap: var(--nav-item-gap);
+  padding: var(--nav-item-py) 0.75rem; border-radius: 0.5rem;
   font-size: 0.875rem; font-weight: 500; color: #495057;
   transition: all 0.15s ease; cursor: pointer; text-decoration: none;
 }
@@ -22,7 +35,7 @@ body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; 
 .nav-section-title {
   font-size: 0.6875rem; font-weight: 600; color: #adb5bd;
   text-transform: uppercase; letter-spacing: 0.05em;
-  padding: 0.75rem 0.75rem 0.375rem;
+  padding: 0.5rem 0.75rem 0.25rem;
 }
 
 .mobile-nav-btn { color: #6c757d; transition: color 0.15s; }
@@ -82,9 +95,11 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .form-select { width: 100%; padding: 0.5rem 2rem 0.5rem 0.75rem; border: 1px solid #dee2e6; border-radius: 0.5rem; font-size: 0.875rem; color: #212529; background: white url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236c7a71' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e") right 0.5rem center / 1.5em 1.5em no-repeat; appearance: none; transition: border-color 0.15s, box-shadow 0.15s; }
 .form-select:focus { outline: none; border-color: #006c49; box-shadow: 0 0 0 3px rgba(0,108,73,0.1); }
 
-.btn { display: inline-flex; align-items: center; justify-content: center; gap: 0.375rem; font-size: 0.8125rem; font-weight: 500; border-radius: 0.5rem; transition: all 0.15s; cursor: pointer; white-space: nowrap; line-height: 1; }
-.btn-sm { padding: 0.375rem 0.75rem; font-size: 0.75rem; }
-.btn-md { padding: 0.4375rem 0.875rem; }
+.btn, .btn-sm, .btn-md, .btn-icon { box-sizing: border-box; }
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 0.375rem; font-size: var(--btn-font); font-weight: 500; border-radius: 0.5rem; transition: all 0.15s; cursor: pointer; white-space: nowrap; line-height: 1; height: var(--btn-h); padding: 0 var(--btn-px); }
+.btn-sm { height: var(--btn-h-sm); padding: 0 1rem; }
+.btn-md { height: var(--btn-h-md); padding: 0 1.25rem; }
+.btn-icon { height: 36px; width: 36px; padding: 0; flex-shrink: 0; }
 .btn-primary { background: #006c49; color: white; border: 1px solid #006c49; }
 .btn-primary:hover { background: #005236; border-color: #005236; }
 .btn-secondary { background: white; color: #495057; border: 1px solid #dee2e6; }
@@ -102,7 +117,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .btn-link:hover { color: #005236; text-decoration: underline; }
 .btn[disabled] { opacity: 0.4; cursor: not-allowed; pointer-events: none; }
 
-.tab-btn { padding: 0.375rem 0.75rem; font-size: 0.8125rem; font-weight: 500; color: #6c7a71; border-bottom: 2px solid transparent; transition: all 0.15s; cursor: pointer; white-space: nowrap; }
+.tab-btn { padding: 0.5rem 0.875rem; font-size: 0.875rem; font-weight: 500; color: #6c7a71; border-bottom: 2px solid transparent; transition: all 0.15s; cursor: pointer; white-space: nowrap; }
 .tab-btn:hover { color: #343a40; }
 .tab-btn.active { color: #006c49; border-bottom-color: #006c49; font-weight: 600; }
 
@@ -123,6 +138,12 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .schedule-cell-today { background: #f0fdf4; }
 
 .stat-highlight { background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%); border: 1px solid #bbf7d0; }
+
+/* Stat tiles (page-level KPI strips) */
+.stat-tile { background: #fff; border: 1px solid #e9ecef; border-radius: 0.75rem; padding: var(--stat-tile-pad); }
+.stat-tile-accent { border-left: 4px solid #006c49; }
+.stat-value { font-size: 1.125rem; font-weight: 700; color: #111c2d; line-height: 1.25; }
+.stat-label { font-size: 0.625rem; color: #6c7a71; line-height: 1.25; }
 .empty-state svg { color: #ced4da; }
 
 @media print { .no-print { display: none !important; } body { background: white; } .card { box-shadow: none; border: 1px solid #dee2e6; } }

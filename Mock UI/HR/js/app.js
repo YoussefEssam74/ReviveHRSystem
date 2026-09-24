@@ -13,6 +13,7 @@ const pageRenderers = {
   'notifications': renderNotifications,
   'audit': renderAuditLog,
   'events': renderEvents,
+  'hr-team': renderHRTeam,
   'my-access': renderMyAccess,
 };
 
@@ -30,6 +31,7 @@ const pageTitles = {
   'notifications': 'Notifications & Announcements',
   'audit': 'Activity / Audit Log',
   'events': 'Events',
+  'hr-team': 'HR Team Management',
   'my-access': 'My Access',
 };
 

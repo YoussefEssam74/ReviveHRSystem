@@ -80,12 +80,12 @@ function renderDashboard() {
     <div class="grid grid-cols-2 lg:grid-cols-5 gap-2">
       ${kpiRows.map(([label,val,color,icon,sub],i)=>{
         const c = kpiColors[color];
-        return `<div class="bg-white rounded-xl border border-charcoal-200 p-3 ${i===0?'border-l-4 border-l-brand-500':''}">
+        return `<div class="stat-tile ${i===0?'stat-tile-accent':''}">
           <div class="flex items-center gap-2.5">
             <div class="w-9 h-9 rounded-lg ${c[0]} flex items-center justify-center flex-shrink-0"><svg class="w-4.5 h-4.5 ${c[1]}" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="${icon}"/></svg></div>
             <div class="min-w-0">
-              <p class="text-xl font-bold text-charcoal-900 cursor-pointer" onclick="${label==='Total Employees'?`navigateTo('employees')`:label==='Pending Requests'?`navigateTo('requests')`:label==='Open Vacancies'?`navigateTo('recruitment')`:''}">${val}</p>
-              <p class="text-[10px] text-charcoal-500 leading-tight">${label}</p>
+              <p class="stat-value cursor-pointer" onclick="${label==='Total Employees'?`navigateTo('employees')`:label==='Pending Requests'?`navigateTo('requests')`:label==='Open Vacancies'?`navigateTo('recruitment')`:''}">${val}</p>
+              <p class="stat-label leading-tight">${label}</p>
             </div>
           </div>
           <p class="text-[9px] text-charcoal-400 mt-1.5 flex items-center gap-1">${trendUp}<span class="text-charcoal-400">${sub}</span></p>
@@ -125,7 +125,7 @@ function renderDashboard() {
                 <p class="text-[10px] text-charcoal-600 mt-0.5">${a.desc}</p>
               </div>
             </div>
-            <button onclick="${a.click}" class="btn btn-sm btn-secondary text-[10px] flex-shrink-0">${a.cta}</button>
+            <button onclick="${a.click}" class="btn btn-sm btn-secondary flex-shrink-0">${a.cta}</button>
           </div>`).join('')}
           ${criticalAlerts.length===0?`<div class="p-6 text-center"><p class="text-xs text-charcoal-400">No pending actions. 🎉</p></div>`:''}
         </div>
@@ -200,7 +200,7 @@ function renderDashboard() {
               </div>
             </div>
             <div class="flex items-center gap-2 flex-shrink-0">
-              <button onclick="openRequestDecision('${r.id}')" class="btn btn-sm btn-primary text-[10px]">Decide</button>
+              <button onclick="openRequestDecision('${r.id}')" class="btn btn-sm btn-primary">Decide</button>
               ${statusBadge(r.status)}
             </div>
           </div>`).join('')}
@@ -216,7 +216,7 @@ function openBulkImport() {
       <svg class="w-4 h-4 text-brand-600 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
       <p class="text-xs text-brand-800">Import employees in bulk from a CSV file. Required columns: First Name, Last Name, Email, Position, Level, Gym, Start Date. <strong>HR Manager</strong> access only.</p>
     </div>
-    <div class="border-2 border-dashed border-charcoal-300 rounded-xl p-8 text-center">
+    <div class="border-2 border-dashed border-charcoal-300 rounded-xl p-6 text-center">
       <svg class="w-10 h-10 text-charcoal-300 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
       <p class="text-xs text-charcoal-600">Drag & drop your CSV file here, or</p>
       <button type="button" onclick="showToast('File import simulated')" class="btn btn-sm btn-primary mt-2">Browse Files</button>

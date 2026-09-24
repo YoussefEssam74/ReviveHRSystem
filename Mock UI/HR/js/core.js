@@ -86,6 +86,9 @@ function computePendingActions() {
   put('events',
     MOCK.events.filter(e => e.urgency === 'high').length,
     'urgent', 'urgent');
+  put('hr-team',
+    (MOCK.hrTeamMembers||[]).filter(m => m.status === 'Suspended').length,
+    'action', 'suspended');
   return r;
 }
 
@@ -143,6 +146,7 @@ const secondaryNav = [
   {id:'notifications',label:'Notifications & Announcements',icon:'M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9', permission:'announcements.view'},
   {id:'audit',label:'Activity / Audit Log',icon:'M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z', permission:'audit.view'},
   {id:'events',label:'Events',icon:'M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2zm9-5l-3-3 2-2 .5.5L19 8l1 1z'},
+  {id:'hr-team',label:'HR Team Management',icon:'M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z', permission:'team.view'},
   {id:'my-access',label:'My Access',icon:'M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z'},
 ];
 

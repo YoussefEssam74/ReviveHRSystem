@@ -89,7 +89,7 @@ function renderHRTeam() {
   const showAll = DEMO.showAll;
   const canManage = showAll || hasPermission('team.manage');
   if (!canManage && !(showAll || hasPermission('team.view'))) {
-    return '<div class="space-y-3"><h1 class="text-xl font-bold text-charcoal-900">HR Team Management</h1><div class="bg-white rounded-xl border border-charcoal-200 p-10 text-center"><p class="text-xs text-charcoal-500">You do not have permission to view the HR team (<code>team.view</code>).</p></div></div>';
+    return '<div class="space-y-3"><h1 class="text-xl font-bold text-charcoal-900">HR Team Management</h1><div class="bg-white rounded-xl border border-charcoal-200 p-6 text-center"><p class="text-xs text-charcoal-500">You do not have permission to view the HR team (<code>team.view</code>).</p></div></div>';
   }
   const tabs = [{ id:'team',label:'HR Team' },{ id:'templates',label:'Role Templates' }];
   let body = _hrtTab==='team' ? renderHRTeamList(canManage) : renderRoleTemplates(canManage);
@@ -139,7 +139,7 @@ function renderHRTeamList(canManage) {
       (m.status==='Active'?'<span class="badge badge-green text-[9px]">Active</span>':'<span class="badge badge-red text-[9px]">Suspended</span>')+
     '</div>'+
     '<div class="flex items-center justify-between mt-2 text-[10px] text-charcoal-500"><span><code>'+m.preset+'</code></span><span>'+m.permissions.length+' permissions</span></div>'+
-    (canManage?'<div class="flex gap-1.5 mt-2"><button onclick="event.stopPropagation();openHRMemberEdit(\''+m.id+'\')" class="btn btn-sm btn-secondary flex-1 text-[10px]">Edit Permissions</button><button onclick="event.stopPropagation();toggleHRMemberStatus(\''+m.id+'\')" class="btn btn-sm btn-ghost flex-1 text-[10px] '+(m.status==='Active'?'text-red-600':'text-brand-600')+'">'+(m.status==='Active'?'Suspend':'Reactivate')+'</button></div>':'')+
+    (canManage?'<div class="flex gap-1.5 mt-2"><button onclick="event.stopPropagation();openHRMemberEdit(\''+m.id+'\')" class="btn btn-sm btn-secondary flex-1">Edit Permissions</button><button onclick="event.stopPropagation();toggleHRMemberStatus(\''+m.id+'\')" class="btn btn-sm btn-ghost flex-1 '+(m.status==='Active'?'text-red-600':'text-brand-600')+'">'+(m.status==='Active'?'Suspend':'Reactivate')+'</button></div>':'')+
   '</div>').join('');
 
   return '<div class="bg-white rounded-xl border border-charcoal-200 overflow-hidden hidden lg:flex flex-col flex-1 min-h-0">'+
@@ -162,8 +162,8 @@ function renderRoleTemplates(canManage) {
       '<p class="text-[10px] text-charcoal-500">'+t.description+'</p>'+
       '<div class="flex flex-wrap gap-1">'+t.permissions.slice(0,6).map(p=>'<span class="badge badge-gray text-[9px]">'+p.split('.').slice(-1)[0]+'</span>').join('')+(t.permissions.length>6?'<span class="badge badge-gray text-[9px]">+' +(t.permissions.length-6)+' more</span>':'')+
       '</div><div class="flex gap-1.5 mt-1">'+
-        '<button onclick="openTemplateDetail(\''+t.id+'\')" class="btn btn-sm btn-ghost flex-1 text-[10px]">View All</button>'+
-        (canManage?'<button onclick="openEditTemplateModal(\''+t.id+'\')" class="btn btn-sm btn-secondary flex-1 text-[10px]">Edit</button>':'')+
+        '<button onclick="openTemplateDetail(\''+t.id+'\')" class="btn btn-sm btn-ghost flex-1">View All</button>'+
+        (canManage?'<button onclick="openEditTemplateModal(\''+t.id+'\')" class="btn btn-sm btn-secondary flex-1">Edit</button>':'')+
       '</div></div></div>').join('');
   return '<div class="flex flex-col flex-1 min-h-0 gap-3">'+
     '<div class="flex items-center justify-between">'+

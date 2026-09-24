@@ -139,7 +139,7 @@ function renderOffboarding() {
           <td class="text-xs text-charcoal-600 max-w-[180px] truncate">${s.reason}</td>
           <td>${sepBadge(s)}</td>
           <td><div class="flex items-center gap-2"><div class="w-20 h-1.5 bg-charcoal-100 rounded-full overflow-hidden"><div class="h-full ${s.status==='Completed'?'bg-green-500':s.status==='Notice Period'?'bg-brand-500':'bg-yellow-500'} rounded-full" style="width:${s.progress}%"></div></div><span class="text-[9px] text-charcoal-500">${done}/${s.checklist.length}</span></div></td>
-          <td><button onclick="openSeparation('${s.id}')" class="btn btn-sm btn-secondary text-[10px]">Manage</button></td>
+          <td><button onclick="openSeparation('${s.id}')" class="btn btn-sm btn-secondary">Manage</button></td>
         </tr>`;
       }).join('')}</tbody></table></div>
     </div>
@@ -150,13 +150,13 @@ function renderOffboarding() {
         <div class="flex items-center justify-between"><div class="flex items-center gap-2.5"><div class="w-9 h-9 rounded-full bg-red-100 text-red-700 flex items-center justify-center text-[10px] font-semibold">${s.employee.split(' ').map(w=>w[0]).join('')}</div><div><p class="text-xs font-medium text-charcoal-900">${s.employee}</p><p class="text-[10px] text-charcoal-500">${s.position} · ${s.gym}</p></div></div>${sepBadge(s)}</div>
         <div class="flex justify-between text-[10px] text-charcoal-500 mt-2"><span>Last day ${s.lastDay}</span><span>${done}/${s.checklist.length} steps</span></div>
         <div class="w-full h-1.5 bg-charcoal-100 rounded-full mt-1.5 overflow-hidden"><div class="h-full ${s.status==='Completed'?'bg-green-500':'bg-yellow-500'} rounded-full" style="width:${s.progress}%"></div></div>
-        <div class="flex justify-end mt-2"><button onclick="openSeparation('${s.id}')" class="btn btn-sm btn-secondary text-[10px]">Manage Checklist</button></div>
+        <div class="flex justify-end mt-2"><button onclick="openSeparation('${s.id}')" class="btn btn-sm btn-secondary">Manage Checklist</button></div>
       </div>`;
     }).join('')}</div>
 
     <div class="bg-white rounded-xl border border-brand-200 border-l-4 border-l-brand-500 p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2 flex-shrink-0">
       <div><p class="text-xs font-semibold text-charcoal-900">EXIT PROCESS</p><p class="text-[10px] text-charcoal-500">Standard ${exitSteps}-step offboarding: Exit interview → Handover → Uniform/asset return → Access revocation → Final settlement.</p></div>
-      ${canOffboard?`<button onclick="showToast('Initiate offboarding — simulated')" class="btn btn-sm btn-primary">+ Initiate Offboarding</button>`:''}
+      ${canOffboard?`<button onclick="openInitiateOffboarding()" class="btn btn-sm btn-primary">+ Initiate Offboarding</button>`:''}
     </div>
   </div>`;
 }
@@ -164,7 +164,17 @@ function renderOffboarding() {
 function openSeparation(id) {
   const s = MOCK.separations.find(x=>x.id===id); if(!s) return;
   const canOffboard = DEMO.showAll || hasPermission('employees.offboard');
-  const items = (label, done) => `<label class="flex items-center justify-between bg-charcoal-50 rounded-lg p-2.5 cursor-pointer"><span class="text-xs text-charcoal-800">${label}</span><input type="checkbox" ${done?'checked':''} ${canOffboard?'':'disabled'} class="rounded border-charcoal-300 text-brand-500 w-4 h-4" onchange="this.closest('label').classList.toggle('opacity-50')"></label>`;
+  const doneCount = s.checklist.filter(c=>c[1]).length;
+  const allDone = doneCount === s.checklist.length;
+
+  const items = (label, done, idx) => `<label class="flex items-center justify-between bg-charcoal-50 rounded-lg p-2.5 cursor-pointer hover:bg-charcoal-100 transition-colors">
+    <div class="flex items-center gap-2">
+      <span class="w-2 h-2 rounded-full ${done?'bg-green-500':'bg-charcoal-300'}"></span>
+      <span class="text-xs ${done?'line-through text-charcoal-400':'text-charcoal-800 font-medium'}">${label}</span>
+    </div>
+    <input type="checkbox" ${done?'checked':''} ${canOffboard?'':'disabled'} class="rounded border-charcoal-300 text-brand-500 w-4 h-4 cursor-pointer" onchange="toggleSepChecklist('${s.id}', ${idx}, this.checked)">
+  </label>`;
+
   openModal(`Offboarding — ${s.employee}`, `<div class="space-y-3">
     <div class="bg-charcoal-50 rounded-lg p-3 grid grid-cols-2 gap-y-1.5 text-[11px]">
       <div><p class="text-[9px] uppercase text-charcoal-400">Position</p><p class="font-medium text-charcoal-800">${s.position}</p></div>
@@ -172,9 +182,135 @@ function openSeparation(id) {
       <div><p class="text-[9px] uppercase text-charcoal-400">Last Day</p><p class="font-medium text-charcoal-800">${s.lastDay}</p></div>
       <div><p class="text-[9px] uppercase text-charcoal-400">Reason</p><p class="font-medium text-charcoal-800">${s.reason}</p></div>
     </div>
-    <div class="grid grid-cols-1 sm:grid-cols-2 gap-1.5">${s.checklist.map(c=>items(c[0],c[1])).join('')}</div>
-    ${canOffboard?`<div class="pt-1 flex justify-end"><button onclick="showToast('Final settlement calculated & exit completed');closeModal();" class="btn btn-sm btn-danger-outline">Finalize Separation</button></div>`:`<p class="text-[10px] text-charcoal-400">You cannot modify this checklist — requires <code>employees.offboard</code>. Use the toggles only if your role grants it.</p>`}
+    <div class="flex items-center justify-between text-xs font-semibold px-1">
+      <span class="text-charcoal-700">Checklist Completion</span>
+      <span class="${allDone?'text-green-600':'text-brand-600'}">${doneCount}/${s.checklist.length} (${s.progress}%)</span>
+    </div>
+    <div class="w-full h-2 bg-charcoal-100 rounded-full overflow-hidden">
+      <div class="h-full ${s.status==='Completed'?'bg-green-500':'bg-brand-500'} rounded-full transition-all" style="width:${s.progress}%"></div>
+    </div>
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-1.5">${s.checklist.map((c, i)=>items(c[0], c[1], i)).join('')}</div>
+    ${canOffboard && s.status !== 'Completed' ? `<div class="pt-2 flex justify-between items-center border-t border-charcoal-100">
+      <span class="text-[10px] text-charcoal-500">${allDone ? 'All steps verified!' : 'Complete remaining steps to finalize.'}</span>
+      <button onclick="finalizeSeparation('${s.id}')" class="btn btn-sm btn-danger">${allDone ? 'Finalize Separation ✓' : 'Force Finalize Separation'}</button>
+    </div>` : s.status === 'Completed' ? `<div class="bg-green-50 border border-green-200 rounded-lg p-2.5 text-center text-xs font-semibold text-green-800">Separation finalized — employee records archived.</div>` : `<p class="text-[10px] text-charcoal-400">Requires <code>employees.offboard</code> to update checklist.</p>`}
   </div>`, { wide:true, footer:'<button onclick="closeModal()" class="btn btn-sm btn-secondary">Close</button>' });
+}
+
+function toggleSepChecklist(sepId, idx, checked) {
+  const s = MOCK.separations.find(x=>x.id===sepId); if(!s) return;
+  s.checklist[idx][1] = checked;
+  const done = s.checklist.filter(c=>c[1]).length;
+  s.progress = Math.round((done / s.checklist.length) * 100);
+  if (done > 0 && s.status === 'Notice Period') {
+    s.status = 'In Progress';
+  }
+  openSeparation(sepId);
+  renderAll();
+}
+
+function finalizeSeparation(sepId) {
+  const s = MOCK.separations.find(x=>x.id===sepId); if(!s) return;
+  s.status = 'Completed';
+  s.progress = 100;
+  s.checklist.forEach(c => c[1] = true);
+  const emp = MOCK.employees.find(e => e.name === s.employee);
+  if (emp) emp.status = 'Suspended';
+  MOCK.auditLog.unshift({
+    id: 'al-' + Date.now(),
+    action: 'Employee Offboarded',
+    user: MOCK.currentUser.fullName,
+    target: s.employee,
+    detail: `Exit checklist completed. Separation finalized (Reason: ${s.reason})`,
+    timestamp: '2026-09-09',
+    gym: s.gym
+  });
+  showToast(`Separation completed for ${s.employee}`);
+  openSeparation(sepId);
+  renderAll();
+}
+
+function openInitiateOffboarding(preselectedEmpId) {
+  const empList = MOCK.employees.filter(e => e.status !== 'Suspended');
+  const targetEmp = preselectedEmpId ? MOCK.employees.find(e => e.id === preselectedEmpId) : empList[0];
+
+  openModal('Initiate Offboarding', `<form onsubmit="event.preventDefault();submitInitiateOffboarding();" class="space-y-3">
+    <div>
+      <label class="form-label">Employee *</label>
+      <select id="off-emp-name" class="form-select" required>
+        ${empList.map(e => `<option value="${e.name}" ${targetEmp && targetEmp.id===e.id?'selected':''}>${e.name} (${e.position} · ${e.gym})</option>`).join('')}
+      </select>
+    </div>
+    <div class="grid grid-cols-2 gap-3">
+      <div>
+        <label class="form-label">Last Working Day *</label>
+        <input id="off-last-day" type="date" class="form-input" value="2026-09-30" required>
+      </div>
+      <div>
+        <label class="form-label">Separation Reason *</label>
+        <select id="off-reason" class="form-select">
+          <option>Resignation</option>
+          <option>End of Contract</option>
+          <option>Mutual Agreement</option>
+          <option>Performance Termination</option>
+          <option>Relocation / Personal</option>
+        </select>
+      </div>
+    </div>
+    <div>
+      <label class="form-label">Handover & Exit Notes</label>
+      <textarea id="off-notes" class="form-input" rows="2" placeholder="Specify handover partner, asset returns, replacement vacancy..."></textarea>
+    </div>
+    <div class="flex justify-end gap-2 pt-2 border-t border-charcoal-100">
+      <button type="button" onclick="closeModal()" class="btn btn-sm btn-secondary">Cancel</button>
+      <button type="submit" class="btn btn-sm btn-primary">Create Offboarding Checklist →</button>
+    </div>
+  </form>`, { wide: true });
+}
+
+function submitInitiateOffboarding() {
+  const empName = document.getElementById('off-emp-name')?.value;
+  const lastDay = document.getElementById('off-last-day')?.value || '2026-09-30';
+  const reason = document.getElementById('off-reason')?.value || 'Resignation';
+  const notes = document.getElementById('off-notes')?.value.trim() || '';
+
+  const emp = MOCK.employees.find(e => e.name === empName);
+  if (emp) emp.status = 'Notice Period';
+
+  const newSep = {
+    id: 'sep-' + Date.now(),
+    employee: empName,
+    position: emp ? `${emp.position} — ${emp.level}` : 'Staff',
+    gym: emp ? emp.gym : 'Nasr City',
+    lastDay: lastDay,
+    reason: `${reason}${notes ? ` — ${notes}` : ''}`,
+    status: 'Notice Period',
+    progress: 0,
+    checklist: [
+      ['Exit interview scheduled', false],
+      ['Handover completed', false],
+      ['Uniform returned', false],
+      ['Access cards revoked', false],
+      ['Final settlement', false]
+    ]
+  };
+
+  MOCK.separations.unshift(newSep);
+  MOCK.auditLog.unshift({
+    id: 'al-' + Date.now(),
+    action: 'Offboarding Initiated',
+    user: MOCK.currentUser.fullName,
+    target: empName,
+    detail: `Offboarding initiated (Last Day: ${lastDay}, Reason: ${reason})`,
+    timestamp: '2026-09-09',
+    gym: emp ? emp.gym : 'Nasr City'
+  });
+
+  closeModal();
+  showToast(`Offboarding initiated for ${empName}`);
+  state.empView = 'offboarding';
+  renderAll();
+  setTimeout(() => openSeparation(newSep.id), 200);
 }
 
 function openEmployeeProfile(id) {
@@ -212,7 +348,7 @@ function renderEmployeeProfile(id) {
   if (canRole) lifecycleActions += `<button onclick="openChangeRole('${e.id}')" class="btn btn-sm btn-secondary">Change System Role</button>`;
   if (canCompensate) lifecycleActions += `<button onclick="showToast('Manage Compensation — simulated')" class="btn btn-sm btn-secondary">Manage Compensation</button>`;
   if (canContract) lifecycleActions += `<button onclick="showToast('Manage Contract — simulated')" class="btn btn-sm btn-secondary">Manage Contract</button>`;
-  if (canOffboard) lifecycleActions += `<button onclick="showToast('Offboard (Exit Form) — simulated')" class="btn btn-sm btn-danger-outline">Offboard</button>`;
+  if (canOffboard) lifecycleActions += `<button onclick="openInitiateOffboarding('${e.id}')" class="btn btn-sm btn-danger-outline">Offboard</button>`;
 
   const tabContent = {
     personal: `<div class="grid grid-cols-2 gap-2">
@@ -319,23 +455,80 @@ function openChangeRole(id) {
 }
 
 function openAddEmployee() {
-  openModal('Add Employee', `<form onsubmit="event.preventDefault();showToast(\'Employee added\');closeModal();" class="space-y-3">
+  openModal('Add Employee', `<form onsubmit="event.preventDefault();submitAddEmployee();" class="space-y-3">
     <div class="grid grid-cols-2 gap-3">
-      <div><label class="form-label">First Name</label><input class="form-input" required></div>
-      <div><label class="form-label">Last Name</label><input class="form-input" required></div>
+      <div><label class="form-label">First Name *</label><input id="add-emp-fn" class="form-input" placeholder="e.g. Youssef" required></div>
+      <div><label class="form-label">Last Name *</label><input id="add-emp-ln" class="form-input" placeholder="e.g. Essam" required></div>
     </div>
     <div class="grid grid-cols-2 gap-3">
-      <div><label class="form-label">Email</label><input type="email" class="form-input" required></div>
-      <div><label class="form-label">Phone</label><input class="form-input" required></div>
+      <div><label class="form-label">Email *</label><input id="add-emp-email" type="email" class="form-input" placeholder="youssef@revive.com" required></div>
+      <div><label class="form-label">Phone *</label><input id="add-emp-phone" class="form-input" placeholder="+20 1XX XXX XXXX" required></div>
+    </div>
+    <div class="grid grid-cols-3 gap-3">
+      <div><label class="form-label">Position</label><select id="add-emp-pos" class="form-select"><option>Trainer</option><option>Receptionist</option><option>Cleaner</option><option>Maintenance</option><option>Branch Manager</option></select></div>
+      <div><label class="form-label">Level</label><select id="add-emp-lvl" class="form-select"><option>Junior</option><option>Mid</option><option>Senior</option><option>Manager</option></select></div>
+      <div><label class="form-label">Gross Salary (EGP)</label><input id="add-emp-sal" type="number" class="form-input" value="9500"></div>
     </div>
     <div class="grid grid-cols-2 gap-3">
-      <div><label class="form-label">Position</label><select class="form-select"><option>Trainer</option><option>Receptionist</option><option>Cleaner</option><option>Maintenance</option></select></div>
-      <div><label class="form-label">Level</label><select class="form-select"><option>Junior</option><option>Mid</option><option>Senior</option></select></div>
+      <div><label class="form-label">Gym *</label><select id="add-emp-gym" class="form-select"><option>Nasr City</option><option>Heliopolis</option><option>6th October</option></select></div>
+      <div><label class="form-label">Start Date *</label><input id="add-emp-date" type="date" class="form-input" value="2026-10-01" required></div>
     </div>
-    <div class="grid grid-cols-2 gap-3">
-      <div><label class="form-label">Gym</label><select class="form-select"><option>Nasr City</option><option>Heliopolis</option><option>6th October</option></select></div>
-      <div><label class="form-label">Start Date</label><input type="date" class="form-input" required></div>
+    <div class="flex justify-end gap-2 pt-2 border-t border-charcoal-100">
+      <button type="button" onclick="closeModal()" class="btn btn-sm btn-secondary">Cancel</button>
+      <button type="submit" class="btn btn-sm btn-primary">Create Employee Record ✓</button>
     </div>
-    <div class="flex justify-end gap-2 pt-1"><button type="button" onclick="closeModal()" class="btn btn-sm btn-secondary">Cancel</button><button type="submit" class="btn btn-sm btn-primary">Save Employee</button></div>
   </form>`, { wide:true });
+}
+
+function submitAddEmployee() {
+  const fn = document.getElementById('add-emp-fn')?.value.trim();
+  const ln = document.getElementById('add-emp-ln')?.value.trim();
+  const email = document.getElementById('add-emp-email')?.value.trim();
+  const phone = document.getElementById('add-emp-phone')?.value.trim();
+  const pos = document.getElementById('add-emp-pos')?.value;
+  const lvl = document.getElementById('add-emp-lvl')?.value;
+  const gym = document.getElementById('add-emp-gym')?.value;
+  const hireDate = document.getElementById('add-emp-date')?.value || new Date().toISOString().slice(0, 10);
+  const salary = parseFloat(document.getElementById('add-emp-sal')?.value) || 9000;
+
+  if (!fn || !ln || !email) {
+    showToast('Name and email are required', 'error');
+    return;
+  }
+
+  const fullName = `${fn} ${ln}`;
+  const initials = `${fn[0]}${ln[0]}`.toUpperCase();
+  const newId = 'RV-00' + (140 + MOCK.employees.length);
+
+  const newEmp = {
+    id: newId,
+    name: fullName,
+    position: pos,
+    level: lvl,
+    gym: gym,
+    status: 'Active',
+    initials: initials,
+    hireDate: hireDate,
+    salary: salary,
+    phone: phone,
+    email: email
+  };
+
+  MOCK.employees.push(newEmp);
+  if (MOCK.dashboardStats) MOCK.dashboardStats.totalEmployees++;
+
+  MOCK.auditLog.unshift({
+    id: 'al-' + Date.now(),
+    action: 'Employee Created',
+    user: MOCK.currentUser.fullName,
+    target: fullName,
+    detail: `New staff member onboarded as ${lvl} ${pos} at ${gym}`,
+    timestamp: '2026-09-09',
+    gym: gym
+  });
+
+  closeModal();
+  showToast(`Employee ${fullName} created (${newId})`);
+  state.empView = 'directory';
+  renderAll();
 }

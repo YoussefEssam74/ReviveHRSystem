@@ -91,7 +91,7 @@ function renderAttendance() {
         <div class="flex items-center gap-2.5"><div class="w-9 h-9 rounded-full bg-brand-100 text-brand-700 flex items-center justify-center text-[10px] font-semibold">${r.name.split(' ').map(w => w[0]).join('')}</div><div><p class="text-xs font-medium text-charcoal-900">${r.name}</p><p class="text-[10px] text-charcoal-500">${r.gym} · ${r.shift}</p></div></div>
         ${statusBadge(r.status)}
       </div>
-      <div class="flex justify-between mt-2 text-[10px] text-charcoal-500"><span>In: ${r.checkIn || '—'}</span><span>Out: ${r.checkOut || '—'}</span>${canEdit ? `<button onclick="openAttendanceCorrection('${r.employeeId}')" class="btn btn-sm btn-ghost text-[9px] p-0.5">Correct</button>` : ''}</div>
+      <div class="flex justify-between mt-2 text-[10px] text-charcoal-500"><span>In: ${r.checkIn || '—'}</span><span>Out: ${r.checkOut || '—'}</span>${canEdit ? `<button onclick="openAttendanceCorrection('${r.employeeId}')" class="btn btn-sm btn-ghost p-0.5">Correct</button>` : ''}</div>
     </div>`).join('')}</div>
 
     ${!canEdit ? `<p class="text-[10px] text-charcoal-400 text-center flex-shrink-0">Manual correction is hidden — you do not have <code>attendance.edit</code>.</p>` : ''}

@@ -1,128 +1,107 @@
 ---
 name: Revive HR System
 colors:
-  surface: "#f9f9ff"
-  surface-dim: "#cfdaf2"
-  surface-bright: "#f9f9ff"
-  surface-container-lowest: "#ffffff"
-  surface-container-low: "#f0f3ff"
-  surface-container: "#e7eeff"
-  surface-container-high: "#dee8ff"
-  surface-container-highest: "#d8e3fb"
-  on-surface: "#111c2d"
-  on-surface-variant: "#3c4a42"
-  inverse-surface: "#263143"
-  inverse-on-surface: "#ecf1ff"
-  outline: "#6c7a71"
-  outline-variant: "#bbcabf"
-  surface-tint: "#006c49"
   primary: "#006c49"
-  on-primary: "#ffffff"
-  primary-container: "#10b981"
-  on-primary-container: "#00422b"
-  inverse-primary: "#4edea3"
-  secondary: "#2b6954"
-  on-secondary: "#ffffff"
-  secondary-container: "#adedd3"
-  on-secondary-container: "#306d58"
-  tertiary: "#55615a"
-  on-tertiary: "#ffffff"
-  tertiary-container: "#99a69e"
-  on-tertiary-container: "#303c36"
-  error: "#ba1a1a"
-  on-error: "#ffffff"
-  error-container: "#ffdad6"
-  on-error-container: "#93000a"
-  primary-fixed: "#6ffbbe"
-  primary-fixed-dim: "#4edea3"
-  on-primary-fixed: "#002113"
-  on-primary-fixed-variant: "#005236"
-  secondary-fixed: "#b0f0d6"
-  secondary-fixed-dim: "#95d3ba"
-  on-secondary-fixed: "#002117"
-  on-secondary-fixed-variant: "#0b513d"
-  tertiary-fixed: "#d9e6dd"
-  tertiary-fixed-dim: "#bdcac1"
-  on-tertiary-fixed: "#131e19"
-  on-tertiary-fixed-variant: "#3e4943"
-  background: "#f9f9ff"
-  on-background: "#111c2d"
-  surface-variant: "#d8e3fb"
+  primary-hover: "#005236"
+  brand-50: "#f0fdf4"
+  brand-100: "#dcfce7"
+  brand-200: "#bbf7d0"
+  brand-300: "#86efac"
+  brand-400: "#4ade80"
+  brand-500: "#10b981"
+  brand-600: "#006c49"
+  brand-700: "#005236"
+  brand-800: "#00422b"
+  brand-900: "#002113"
+  charcoal-50: "#f9f9ff"
+  charcoal-100: "#f1f3f5"
+  charcoal-200: "#e9ecef"
+  charcoal-300: "#dee2e6"
+  charcoal-400: "#adb5bd"
+  charcoal-500: "#6c7a71"
+  charcoal-600: "#495057"
+  charcoal-700: "#343a40"
+  charcoal-800: "#111c2d"
+  charcoal-900: "#212529"
+  surface: "#f9f9ff"
+  on-surface: "#111c2d"
+  success: "#16a34a"
+  danger: "#dc2626"
+  warning: "#d97706"
+  info: "#2563eb"
 typography:
-  display-lg:
-    fontFamily: Inter
-    fontSize: 36px
-    fontWeight: "700"
-    lineHeight: 44px
-    letterSpacing: -0.02em
-  headline-lg:
-    fontFamily: Inter
-    fontSize: 24px
-    fontWeight: "600"
-    lineHeight: 32px
-    letterSpacing: -0.01em
-  headline-md:
-    fontFamily: Inter
+  page-title:
     fontSize: 20px
-    fontWeight: "600"
+    fontWeight: "700"
     lineHeight: 28px
-  title-lg:
-    fontFamily: Inter
-    fontSize: 18px
-    fontWeight: "600"
-    lineHeight: 24px
-  title-md:
-    fontFamily: Inter
-    fontSize: 16px
-    fontWeight: "600"
-    lineHeight: 24px
-  body-lg:
-    fontFamily: Inter
-    fontSize: 16px
-    fontWeight: "400"
-    lineHeight: 24px
-  body-md:
-    fontFamily: Inter
+  card-title:
     fontSize: 14px
-    fontWeight: "400"
+    fontWeight: "600"
     lineHeight: 20px
-  body-sm:
-    fontFamily: Inter
-    fontSize: 13px
-    fontWeight: "400"
-    lineHeight: 18px
-  label-md:
-    fontFamily: Inter
+  table-header:
     fontSize: 12px
     fontWeight: "600"
     lineHeight: 16px
-    letterSpacing: 0.05em
-  label-sm:
-    fontFamily: Inter
-    fontSize: 11px
+    textTransform: uppercase
+    letterSpacing: 0.03em
+  table-body:
+    fontSize: 14px
+    fontWeight: "400"
+    lineHeight: 20px
+  button:
+    fontSize: 14px
     fontWeight: "500"
-    lineHeight: 14px
+    lineHeight: 1
+  button-sm:
+    fontSize: 14px
+    fontWeight: "500"
+    lineHeight: 1
+  stat-value:
+    fontSize: 18px
+    fontWeight: "700"
+    lineHeight: 1.25
+  stat-label:
+    fontSize: 10px
+    fontWeight: "400"
+    lineHeight: 1.25
+  bento-label:
+    fontSize: 11px
+    fontWeight: "600"
+    lineHeight: 16px
+    textTransform: uppercase
+    letterSpacing: 0.05em
+  form-label:
+    fontSize: 13px
+    fontWeight: "500"
+    lineHeight: 18px
+  form-input:
+    fontSize: 14px
+    fontWeight: "400"
+    lineHeight: 20px
 rounded:
-  sm: 0.25rem
-  DEFAULT: 0.5rem
-  md: 0.75rem
-  lg: 1rem
-  xl: 1.5rem
-  full: 9999px
+  button: 8px
+  card: 12px
+  stat-tile: 12px
+  small-chip: 4px
+  pill: 9999px
 spacing:
   unit: 4px
-  container-padding: 24px
-  gutter: 16px
-  section-gap: 32px
-  element-tight: 8px
-  element-loose: 12px
+  stat-tile-padding: 12px
+  card-header-padding: "16px 10px"
+  table-cell-padding: "12px 16px"
+  table-header-padding: "10px 16px"
+  btn-height: 40px
+  btn-sm-height: 36px
+  btn-md-height: 40px
+  btn-icon-size: "36px x 36px"
+  gutter: 8px
 ---
 
 ## Brand & Style
 
 The design system is engineered for high-performance enterprise HR environments. It balances the vitality of human-centric management with the precision of data-heavy administrative tools. The brand personality is professional, growth-oriented, and highly reliable.
 
-The design style is **Corporate / Modern** with a focus on high-density information architecture. It utilizes a "Clean Slate" approach: heavy reliance on white space, meticulous alignment, and a restrained color palette to reduce cognitive load during complex tasks like payroll processing or organizational mapping.
+The design style is **Corporate / Modern** with a focus on high-density information architecture. It utilizes a "Clean Slate" approach: heavy reliance on white space, meticulous alignment, and a restrained color palette.
 
 The aesthetic is characterized by:
 
@@ -132,75 +111,102 @@ The aesthetic is characterized by:
 
 ## Colors
 
-This design system uses a refreshing yet authoritative "Emerald & Slate" palette designed for long-duration desktop usage.
+A refreshing yet authoritative **"Emerald & Slate"** palette designed for long-duration desktop usage.
 
-- **Primary (Emerald):** Used for primary actions, progress indicators, and active states. It represents growth and "go" states.
-- **Secondary (Dark Green):** Reserved for high-level headings and brand touchpoints to provide grounding and authority.
-- **Neutral (Slate):** Used for body text and secondary UI elements to ensure high legibility and a modern feel.
-- **Backgrounds:** A tiered system using Pure White (`#ffffff`) for primary workspace areas and Mint Green (`#f0fdf4`) for subtle grouping or sidebar backgrounds.
-- **Borders:** A consistent light Slate (`#f1f5f9`) is used for all structural containment to maintain a "soft-grid" look without the heaviness of dark lines.
+- **Primary (Emerald #006c49):** Primary actions, progress indicators, active states, focus rings, and the "go" state.
+- **Brand scale:** 50 `#f0fdf4` (mint tint backgrounds) → 500 `#10b981` (accent green) → 600 `#006c49` (primary) → 700 `#005236` (hover) → 900 `#002113`.
+- **Charcoal/Slate scale:** 100 `#f1f3f5` (hover fills), 200 `#e9ecef` (card borders, dividers), 300 `#dee2e6` (input borders), 400 `#adb5bd` (placeholder/subcopy), 500 `#6c7a71` (secondary text), 800 `#111c2d` (headings), 900 `#212529` (body text).
+- **Surface:** `#f9f9ff` (page/app background, charcoal-50). Cards are pure white.
+- **Semantic:** success `#16a34a`, danger `#dc2626`, warning `#d97706`, info `#2563eb` — used for badges, KPI color accents, and status pills.
 
 ## Typography
 
-The design system utilizes **Inter** for all roles to leverage its exceptional legibility in data-heavy environments.
+**Inter** is used for all roles.
 
-- **Scale:** The system leans into a smaller base size (14px for standard body) to accommodate dense HR tables and dashboards.
-- **Hierarchy:** High contrast in weight (Bold 700 vs Regular 400) is used to differentiate between labels and data values.
-- **Data Display:** For numerical values in tables, use tabular lining figures to ensure columns of numbers align perfectly for visual scanning.
-- **Labels:** Uppercase labels with slight letter spacing are reserved for category headers or table column titles.
+- Page titles: 20px Bold.
+- Card titles / table body: 14px.
+- Table headers: 12px SemiBold, uppercased with slight tracking.
+- Buttons: 14px medium (`.btn`); compact buttons 14px (`.btn-sm`).
+- Stat values 18px Bold; stat labels 10px.
+- Section/card headers (`.bento-label`): 11px SemiBold, uppercase, 0.05em tracking.
+- Form labels 13px medium; form input text 14px.
+- Labels and metadata throughout lean on the 10px size (`text-[10px]`).
 
 ## Layout & Spacing
 
-This design system follows a **Fixed Grid** philosophy for desktop layouts to ensure consistency across varying enterprise monitor sizes.
-
-- **Grid:** A 12-column grid with a 1200px max-width for primary content. Gutters are fixed at 16px.
-- **Density:** To handle high-volume HR data, the spacing rhythm is built on a 4px scale. "Compact" modes for tables should reduce vertical cell padding to 8px, while "Standard" modes use 12px.
-- **Desktop-First:** Sidebars are persistent (240px or 280px width) to allow for deep navigation.
-- **Mobile Adaptivity:** On mobile devices, the 12-column grid collapses to a single column with 16px side margins. Multi-step forms should transition from horizontal steppers to vertical or simplified progress bars.
+- Spacing scales on a **4px unit**.
+- Stat tiles and cards use **12px inner padding** (`p-3`).
+- Card headers use `16px × 10px` padding with a subtle bottom border.
+- Table cells: 12px vertical × 16px horizontal; headers 10px × 16px.
+- KPI strips are `grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2` (dashboard/access use 5 columns).
+- Main content area uses uniform `p-4` (16px) padding (no `lg:p-6`).
+- Shell chrome: top header `h-16` (64px, cap 56–64px), sidebar `w-64` with brand block `h-16`; sidebar nav rows ~36px tall, `gap 10px`, `py-3` container padding.
+- **Desktop-first** with sidebar navigation; mobile collapses to card/row layouts already implemented.
 
 ## Elevation & Depth
 
-To maintain a professional and "flat" enterprise aesthetic, the design system avoids heavy shadows.
+Kept flat — depth is communicated through 1px borders, not shadows.
 
-- **Low-Contrast Outlines:** Depth is primarily communicated through borders (`#f1f5f9`). Every card, input field, and section divider uses this subtle line to define boundaries.
-- **Surface Layering:**
-  - **Level 0 (Background):** Pure White or Mint Green.
-  - **Level 1 (Cards):** Pure White with a 1px Slate border.
-  - **Level 2 (Dropdowns/Modals):** Pure White with a slightly more pronounced shadow (e.g., `0 4px 6px -1px rgb(0 0 0 / 0.1)`) to indicate temporary overlay.
-- **Interactive States:** On hover, cards may transition to a slightly darker border color (`#e2e8f0`) rather than lifting with a shadow.
+- **Cards/Tiles:** Pure white, 1px `#e9ecef` border, radius 12px. Optional accent: 4px brand left border on the first tile of a strip (`.stat-tile-accent`).
+- **Hover:** cards shift border color rather than lift; buttons darken their background on hover.
+- **Modals:** white with a stronger shadow to indicate a temporary overlay; scale-in animation.
 
 ## Shapes
 
-The design system adopts a **Rounded (8px)** corner strategy to soften the industrial nature of HR data without appearing overly casual or "bubbly."
-
-- **Standard Elements:** Buttons, Input Fields, and Checkboxes utilize the `rounded` (8px) token.
-- **Large Containers:** Cards and Modals use the `rounded-lg` (16px) token to provide a clear frame for content.
-- **Indicator Elements:** Badges and Chips use the `rounded-xl` (24px) token to create a "pill" look, helping them stand out as discrete status markers.
+- **Buttons & inputs:** 8px radius.
+- **Cards & stat tiles:** 12px radius.
+- **Badges, pills, avatars:** full pill (9999px).
+- **Small chips inside tables/cards:** 4px radius.
 
 ## Components
 
-### Data Tables
-
-Tables are the core of the HR system. Use a fixed header for long lists. Column headers use `label-md` with `neutral_color_hex`. Row hover states should use a background tint of `tertiary_color_hex`.
-
 ### Buttons
 
-- **Primary:** Emerald Green background with White text. No shadow.
-- **Secondary:** Transparent background with Emerald Green border and text.
-- **Ghost:** No background or border; uses Primary color for text. Used for less prominent actions within tables.
+- Base `.btn`: 14px medium, 8px radius, inline-flex centered, **40px tall**.
+- `.btn-sm`: **36px tall**, 14px text.
+- `.btn-md`: **40px tall**, 14px text.
+- `.btn-icon`: **36px × 36px square**, padding 0, content centered — used for compact icon-only actions (e.g. kanban move arrows, "View" on pipeline cards).
+- Height is enforced via the CSS `height` property with `box-sizing: border-box` — do not override with ad-hoc `text-[Npx]` utilities.
+- Variants: `.btn-primary` (emerald bg, white text), `.btn-secondary` (white bg, slate text, 1px border), `.btn-ghost` (transparent), `.btn-danger`, `.btn-danger-outline`, `.btn-success`, `.btn-disabled`, `.btn-link`.
 
-### Multi-Step Forms
+### Stat Tiles (page-level KPI strips)
 
-Horizontal steppers should use a "Completed / Active / Upcoming" visual logic. Completed steps show an Emerald Green checkmark; Active steps show a Primary border; Upcoming steps use a Slate border.
+The standard tile on page-level KPI strips:
 
-### Permission Selectors
+- Container: `.stat-tile` — white, 1px `#e9ecef` border, 12px radius, 12px padding. First tile in a strip uses `.stat-tile-accent` (4px brand left border).
+- Value: `.stat-value` — 18px Bold `#111c2d`.
+- Label: `.stat-label` — 10px `#6c7a71`.
+- Optional `.text-[9px]` sub-line under the label for secondary copy (e.g. trend deltas).
 
-Use a nested list structure with checkboxes. Use a "Mixed" state (dash icon) for parent categories when only some child permissions are selected.
+### Secondary Scale (nested card stats)
+
+Nested statistics **inside** profiles, positions, and detail cards intentionally use a smaller/alternate scale and are **not** stat tiles:
+
+- **Profile summary "hero" metric** (e.g. attendance rate in an employee profile): value up to 24px Bold (`text-2xl`) for a single highlighted percentage.
+- **Profile summary line values** (e.g. shift window): 20px Bold (`text-xl`) when the "value" is descriptive text rather than a bare number.
+- **Compact position slivers** (Created / Filled / Open inside a position card): 14px Bold value (`text-sm`) with a 9px label, rendered inline without icons.
+
+Treat these as deliberate exceptions — do not convert them to `.stat-tile`.
+
+### Cards
+
+- White, 1px `#e9ecef` border, 12px radius (Tailwind `rounded-xl border border-charcoal-200`).
+- Header row: `px-4 py-2.5` with `.bento-label` title and optional action button.
+
+### Data Tables
+
+- Header: 12px SemiBold uppercase, `#6c7a71`, padding 10px × 16px.
+- Body: 14px `#343a40`, padding 12px × 16px, row hover `#f8f9fa`.
 
 ### Input Fields
 
-Standard height of 40px. Use `border_color_hex` for the default state and `primary_color_hex` for the focus state. Placeholder text should be `body-sm` in a light grey.
+- 14px text, padding `8px 12px`, 1px `#dee2e6` border, 8px radius → ~36px rendered height.
+- Focus: 1px `#006c49` border + 3px emerald-tinted ring.
+
+### Multi-Step Forms
+
+Horizontal steppers use a "Completed / Active / Upcoming" logic (emerald checkmark / primary border / slate border).
 
 ### Icons
 
-Use **Lucide-style** outline icons with a 1.5px or 2px stroke weight. Icons should always be accompanied by labels in primary navigation to ensure accessibility.
+Lucide-style outline icons, 1.5px–2px stroke. Icons in primary navigation always paired with labels.

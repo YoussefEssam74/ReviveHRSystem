@@ -16,23 +16,23 @@ function toggleBulk(id, checked) {
 const _stageMeta = {
   'Applied': { cls: 'bg-purple-100 text-purple-800', dot: 'bg-purple-500' },
   'Screening': { cls: 'bg-blue-100 text-blue-800', dot: 'bg-blue-500' },
-  'Interview': { cls: 'bg-yellow-100 text-yellow-800', dot: 'bg-yellow-500' },
-  'Offer': { cls: 'bg-orange-100 text-orange-800', dot: 'bg-orange-500' },
-  'Hired': { cls: 'bg-green-100 text-green-800', dot: 'bg-green-500' },
+  'First Interview': { cls: 'bg-yellow-100 text-yellow-800', dot: 'bg-yellow-500' },
+  'Second Interview': { cls: 'bg-orange-100 text-orange-800', dot: 'bg-orange-500' },
+  'Accepted': { cls: 'bg-green-100 text-green-800', dot: 'bg-green-500' },
+  'Rejected': { cls: 'bg-red-100 text-red-800', dot: 'bg-red-500' },
+  'Hired': { cls: 'bg-teal-100 text-teal-800', dot: 'bg-teal-500' },
 };
+const _pipStages = ['Applied','Screening','First Interview','Second Interview','Accepted','Rejected','Hired'];
+const _pipColors = { Applied:'#7c3aed', Screening:'#2563eb', 'First Interview':'#d97706', 'Second Interview':'#ea580c', Accepted:'#16a34a', Rejected:'#ef4444', Hired:'#0d9488' };
 function _stageBadge(s) { const m = _stageMeta[s]||_stageMeta.Applied; return `<span class="badge ${m.cls} text-[9px]">${s}</span>`; }
 function _initials(n) { return (n||'?').split(' ').map(w=>w[0]).slice(0,2).join('').toUpperCase(); }
-
-const _candProfile = {
-  'c1': { email:'mohamed.salah@mail.com', source:'LinkedIn', location:'Cairo', experience:'6 yrs — group training', education:'B.Sc. Physical Education', skills:['Group PT','HIIT','Nutrition basics'], notes:'Strong trial session. Wants evening shifts.', appliedVia:'career@revive.com' },
-  'c2': { email:'nada.khaled@mail.com', source:'Referral — Omar', location:'Nasr City', experience:'3 yrs — crossfit', education:'B.Sc. Sports Science', skills:['CrossFit','Recovery','Coaching'], notes:'Good energy. Availability from Oct 1.', appliedVia:'Referral link' },
-  'c3': { email:'tamer.hosny@mail.com', source:'Previous employee', location:'Heliopolis', experience:'8 yrs — competitive bodybuilding', education:'Cert. PT (ACE)', skills:['Bodybuilding','Injury prevention','Sales'], notes:'Known to the gym. Accepts current salary band.', appliedVia:'Walk-in resume' },
-  'c4': { email:'salma.nagib@mail.com', source:'Reception referral', location:'Heliopolis', experience:'2 yrs — front desk hotel', education:'Diploma — Tourism', skills:['CRM','Upselling','Member care'], notes:'Fluency in English + French.', appliedVia:'OLX ad' },
-  'c5': { email:'amr.diab@mail.com', source:'LinkedIn', location:'New Cairo', experience:'1 yr — cafe supervisor', education:'High school', skills:['Cash handling','Time management'], notes:'Enthusiastic, needs grooming.', appliedVia:'career@revive.com' },
-  'c6': { email:'shereen.adel@mail.com', source:'Referral — Fatma', location:'6th October', experience:'5 yrs — women\'s training', education:'B.Sc. Sports Science', skills:['Women\'s bootcamp','Pilates'], notes:'Completed onboarding Sep 1.', appliedVia:'Referral link' },
-  'c7': { email:'mostafa.nabil@mail.com', source:'OLX ad', location:'6th October', experience:'4 yrs — facility ops', education:'Technical diploma', skills:['Cleaning ops','Stock'], notes:'References being checked.', appliedVia:'OLX ad' },
-  'c8': { email:'heba.said@mail.com', source:'Career fair', location:'Cairo', experience:'3 yrs — Pilates instructor', education:'Cert. Pilates', skills:['Pilates','Reformer'], notes:'Prefers Nasr City branch.', appliedVia:'Career fair booth' },
-};
+function _evalStars(r) { if(!r||!(r>0)) return '<span class="text-[9px] text-charcoal-300">N/A</span>'; return `<span class="text-[10px] text-yellow-500">${'★'.repeat(Math.min(5,Math.round(r||0)))}${'☆'.repeat(Math.max(0,5-Math.round(r||0)))}</span>`; }
+function _formLine(c) { const f=c.form||{}; return `Applied ${formatDate(c.appliedDate)} · ${f.shift||'Any'} shift` + (f.salaryExp?` · ${f.salaryExp.toLocaleString()} EGP expected`:''); }
+function _matchingVacancies(position) {
+  const open = MOCK.vacancies.filter(v=>v.status==='Open');
+  return open.filter(v=>v.position.toLowerCase()===String(position).toLowerCase());
+}
+function _gymOptions() { return ['Nasr City','Heliopolis','6th October'].map(g=>`<option>${g}</option>`).join(''); }
 
 function renderRecruitment() {
   const showAll = DEMO.showAll;
@@ -91,80 +91,45 @@ function overviewBody(openVacs,pendingVR,pendVRArr,candTotal) {
   const interviews = MOCK.interviews.length;
   const waiting = MOCK.waitingList.length;
   const newcomers = MOCK.newComers.filter(n=>n.progress<100).length;
-  const bench = MOCK.goals.filter(g=>g.status==='On Track').length;
+  const activeCandidates = MOCK.candidates.filter(c=>c.stage!=='Rejected').length;
 
   const kpis = [
     ['Open Vacancies', openVacs.length, 'brand', 'M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z','v'+openVacs.reduce((s,v)=>s+v.headcount,0)+' headcount'],
-    ['Candidates', candTotal, 'blue', 'M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z','in pipeline'],
+    ['Active Candidates', activeCandidates, 'blue', 'M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z','in pipeline'],
     ['Interview week', interviews, 'yellow', 'M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z','marked in calendar'],
     ['Requests pending', pendVRArr.length, 'red', 'M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z','need sign-off'],
-    ['Waiting List', waiting, 'purple', 'M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z','on hold'],
+    ['Waiting List', waiting, 'purple', 'M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z','matching vacancies'],
     ['New Comers', newcomers, 'green', 'M13 7l5 5-5 5M7 7l5 5-5 5','in onboarding'],
   ];
   const col = { brand:['bg-brand-100','text-brand-600'], blue:['bg-blue-100','text-blue-600'], yellow:['bg-yellow-100','text-yellow-600'], red:['bg-red-100','text-red-600'], purple:['bg-purple-100','text-purple-600'], green:['bg-green-100','text-green-600'] };
 
-  const funnel = [
-    ['Applied', MOCK.candidates.filter(c=>['Applied','Screening','Interview','Offer','Hired'].includes(c.stage)).length],
-    ['Screening', MOCK.candidates.filter(c=>['Screening','Interview','Offer','Hired'].includes(c.stage)).length],
-    ['Interview', MOCK.candidates.filter(c=>['Interview','Offer','Hired'].includes(c.stage)).length],
-    ['Offer', MOCK.candidates.filter(c=>['Offer','Hired'].includes(c.stage)).length],
-    ['Hired', MOCK.candidates.filter(c=>c.stage==='Hired').length],
-  ];
-  const fMax = Math.max(...funnel.map(f=>f[1]),1);
-
   return `<div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
-    ${kpis.map(([label,val,color,icon,sub],i)=>`<div class="bg-white rounded-xl border border-charcoal-200 p-3 ${i===0?'border-l-4 border-l-brand-500':''}">
+    ${kpis.map(([label,val,color,icon,sub],i)=>`<div class="stat-tile ${i===0?'stat-tile-accent':''}">
       <div class="flex items-center gap-2.5">
         <div class="w-9 h-9 rounded-lg ${col[color][0]} flex items-center justify-center flex-shrink-0"><svg class="w-4.5 h-4.5 ${col[color][1]}" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="${icon}"/></svg></div>
-        <div><p class="text-xl font-bold text-charcoal-900">${val}</p><p class="text-[10px] text-charcoal-500 leading-tight">${label}</p></div>
+        <div><p class="stat-value">${val}</p><p class="stat-label leading-tight">${label}</p></div>
       </div>
       <p class="text-[9px] text-charcoal-400 mt-1.5">${sub}</p>
     </div>`).join('')}
   </div>
 
-  <div class="grid grid-cols-1 lg:grid-cols-3 gap-3">
-    <!-- Funnel -->
-    <div class="bg-white rounded-xl border border-charcoal-200 overflow-hidden">
-      <div class="px-4 py-2.5 border-b border-charcoal-100 bg-charcoal-50/50"><p class="bento-label">CANDIDATE FUNNEL</p></div>
-      <div class="p-3 space-y-1.5">
-        ${funnel.map(([stage,n],i)=>`<div class="flex items-center gap-2">
-          <span class="w-20 flex-shrink-0 text-[10px] text-charcoal-600 font-medium">${stage}</span>
-          <div class="flex-1 h-6 bg-charcoal-50 rounded-md flex items-center ${i===funnel.length-1?'bg-green-50':''}" style="width:${Math.max(24, Math.round((n/fMax)*100))}%">
-            <span class="mx-auto text-[10px] font-bold ${i===funnel.length-1?'text-green-700':'text-charcoal-700'}">${n}</span>
-          </div>
-        </div>`).join('')}
-        <p class="text-[9px] text-charcoal-400 pt-1">Overall convert to hire: ${Math.round((funnel[4][1]/Math.max(funnel[0][1],1))*100)}%</p>
-      </div>
-    </div>
+  ${pipelineBoardHTML(openVacs)}
 
-    <!-- Open vacancies -->
-    <div class="bg-white rounded-xl border border-charcoal-200 overflow-hidden">
-      <div class="px-4 py-2.5 border-b border-charcoal-100 flex items-center justify-between bg-charcoal-50/50"><p class="bento-label">OPEN VACANCIES</p><button onclick="_recTab='vacancies';renderAll()" class="text-[10px] text-brand-600 font-semibold hover:underline">View All</button></div>
-      <div class="divide-y divide-charcoal-50">${openVacs.slice(0,4).map(v=>`<div class="p-3 flex items-center justify-between gap-2" onclick="openVacancyDetail('${v.id}')" style="cursor:pointer">
+  <div class="grid grid-cols-1 lg:grid-cols-2 gap-3">
+    ${waitingMatchHTML()}
+    ${openVacs.length?`<div class="bg-white rounded-xl border border-charcoal-200 overflow-hidden">
+      <div class="px-4 py-2.5 border-b border-charcoal-100 flex items-center justify-between bg-charcoal-50/50"><p class="bento-label">OPEN VACANCIES</p><button onclick="_recTab='vacancies';renderAll()" class="text-[10px] text-brand-600 font-semibold hover:underline">Manage</button></div>
+      <div class="divide-y divide-charcoal-50">${openVacs.map(v=>`<div class="p-3 flex items-center justify-between gap-2" onclick="openVacancyDetail('${v.id}')" style="cursor:pointer">
         <div class="min-w-0">
           <p class="text-xs font-semibold text-charcoal-900">${v.position}</p>
           <p class="text-[10px] text-charcoal-500 mt-0.5">${v.gym} · ${v.headcount} position${v.headcount>1?'s':''}</p>
         </div>
         <div class="flex items-center gap-2 flex-shrink-0">
           <span class="badge ${v.urgency==='High'?'badge-red':v.urgency==='Medium'?'badge-yellow':'badge-blue'} text-[9px]">${v.urgency}</span>
-          <span class="text-[10px] font-bold text-brand-600">${v.candidates}</span>
-        </div>
-      </div>`).join('')||'<div class="p-6 text-center text-xs text-charcoal-400">No open vacancies</div>'}</div>
-    </div>
-
-    <!-- Recent candidates -->
-    <div class="bg-white rounded-xl border border-charcoal-200 overflow-hidden">
-      <div class="px-4 py-2.5 border-b border-charcoal-100 flex items-center justify-between bg-charcoal-50/50"><p class="bento-label">RECENT CANDIDATES</p><button onclick="_recTab='candidates';renderAll()" class="text-[10px] text-brand-600 font-semibold hover:underline">All</button></div>
-      <div class="divide-y divide-charcoal-50">${MOCK.candidates.slice(0,4).map(c=>`<div class="p-3 flex items-center justify-between gap-2" onclick="openCandidateDetail('${c.id}')" style="cursor:pointer">
-        <div class="flex items-center gap-2.5 min-w-0">
-          <div class="w-8 h-8 rounded-full bg-brand-100 text-brand-700 flex items-center justify-center text-[10px] font-semibold flex-shrink-0">${_initials(c.name)}</div>
-          <div class="min-w-0"><p class="text-[11px] font-medium text-charcoal-900 truncate">${c.name}</p><p class="text-[10px] text-charcoal-500">${c.position}</p></div>
-        </div>
-        <div class="flex items-center gap-1.5 flex-shrink-0">${_stageBadge(c.stage)}
-          <span class="text-[10px] text-yellow-500">${'★'.repeat(c.rating)}${'☆'.repeat(Math.max(0,5-c.rating))}</span>
+          <span class="text-[10px] font-bold text-brand-600">${v.candidates}<span class="text-charcoal-400 font-normal"> app</span></span>
         </div>
       </div>`).join('')}</div>
-    </div>
+    </div>`:''}
   </div>
 
   <!-- Vacancy requests banner -->
@@ -172,10 +137,136 @@ function overviewBody(openVacs,pendingVR,pendVRArr,candTotal) {
     ${pendVRArr.map(r=>`<div class="bg-white rounded-xl border border-yellow-200 border-l-4 border-l-yellow-400 p-3 flex items-center justify-between gap-2">
       <div class="min-w-0"><p class="text-[11px] font-semibold text-charcoal-900">${r.position} — ${r.gym}</p><p class="text-[10px] text-charcoal-500 mt-0.5">By ${r.submittedBy} · ${r.urgency} urgency</p></div>
       <div class="flex gap-1.5 flex-shrink-0">
-        <button onclick="_recTab='vacancy-requests';renderAll()" class="btn btn-sm btn-primary text-[10px]">Review</button>
+        <button onclick="_recTab='vacancy-requests';renderAll()" class="btn btn-sm btn-primary">Review</button>
       </div>
     </div>`).join('')}
   </div>`:''}`;
+}
+
+// ==================== PIPELINE BOARD ====================
+function pipelineBoardHTML(openVacs) {
+  return `<div class="bg-white rounded-xl border border-charcoal-200 overflow-hidden flex flex-col flex-1 min-h-0">
+    <div class="px-4 py-2.5 border-b border-charcoal-100 flex items-center justify-between bg-charcoal-50/50 flex-shrink-0">
+      <p class="bento-label">HIRING PIPELINE</p>
+      <div class="hidden md:flex items-center gap-2.5 text-[9px] text-charcoal-500">${_pipStages.map(s=>`<span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full" style="background:${_pipColors[s]}"></span>${s}</span>`).join('')}</div>
+    </div>
+    <div class="flex-1 min-h-0 overflow-x-auto overflow-y-auto">
+      <div class="flex items-stretch gap-2 p-2.5 min-w-[900px]">
+        ${_pipStages.map(stage=>{
+          const list = MOCK.candidates.filter(c=>c.stage===stage);
+          return `<div class="flex-1 min-w-[190px] max-w-[240px] bg-charcoal-50 rounded-xl p-2 flex flex-col ${stage==='Rejected'?'bg-red-50/50':''}">
+            <div class="flex items-center justify-between px-1 mb-1.5 flex-shrink-0">
+              <p class="text-[10px] font-semibold uppercase tracking-wide ${stage==='Rejected'?'text-red-500':'text-charcoal-500'} flex items-center gap-1.5"><span class="w-2 h-2 rounded-full" style="background:${_pipColors[stage]}"></span>${stage}</p>
+              <span class="badge badge-gray">${list.length}</span>
+            </div>
+            <div class="space-y-1.5 min-h-[80px] flex-1 overflow-y-auto pr-0.5 candidate-scroll">
+              ${list.map(c=>_pipelineCard(c, stage)).join('')||`<div class="bg-white rounded-lg border border-dashed border-charcoal-200 p-3 text-center"><p class="text-[10px] text-charcoal-400">No candidates</p></div>`}
+            </div>
+          </div>`;
+        }).join('')}
+      </div>
+    </div>
+    <div class="px-3 py-2 border-t border-charcoal-100 text-[9px] text-charcoal-400 flex-shrink-0">Pipeline follows Applied → Screening → 1st / 2nd interview → decision. Accepted candidates either match an open vacancy or join the Waiting List below for later assignment.</div>
+  </div>`;
+}
+
+function _pipelineCard(c, stage) {
+  const f = c.form||{};
+  let detailRows = '';
+  if (stage==='Applied') {
+    detailRows = `<p class="text-[9px] text-charcoal-500">${f.source||'—'} · ${f.gymPref||'—'}</p><p class="text-[9px] text-charcoal-500">${f.expYears||'?'} yrs exp · ${_formLine(c)}</p>`;
+  } else if (stage==='Screening') {
+    detailRows = c.screen ? `<p class="text-[9px] text-charcoal-500">Screened by <b>${c.screen.by}</b> · ${formatDate(c.screen.date)}</p><div class="flex items-center gap-1.5 mt-0.5">${_evalStars(c.screen.eval)}<span class="badge ${c.screen.verdict==='Pass'?'badge-success':'badge-red'} text-[8px]">${c.screen.verdict}</span></div>` : `<p class="text-[9px] text-charcoal-400">Screening pending</p>`;
+  } else if (stage==='First Interview') {
+    const iv=c.iv1;
+    detailRows = iv ? `<p class="text-[9px] text-charcoal-500">With <b>${iv.by}</b> · ${iv.date} · ${iv.type}</p>${iv.verdict==='Scheduled'||iv.verdict==='Invited'?`<span class="badge badge-blue text-[8px]">${iv.verdict}</span>`:`<div class="flex items-center gap-1.5 mt-0.5">${_evalStars(iv.eval)}<span class="badge ${iv.verdict==='Pass'?'badge-success':'badge-red'} text-[8px]">${iv.verdict}</span></div>`}` : `<p class="text-[9px] text-charcoal-400">Not scheduled</p>`;
+  } else if (stage==='Second Interview') {
+    const iv=c.iv2;
+    detailRows = iv ? `<p class="text-[9px] text-charcoal-500">With <b>${iv.by}</b> · ${iv.date} · ${iv.type}</p>${iv.verdict==='Scheduled'||iv.verdict==='Invited'?`<span class="badge badge-blue text-[8px]">${iv.verdict}</span>`:`<div class="flex items-center gap-1.5 mt-0.5">${_evalStars(iv.eval)}<span class="badge ${iv.verdict==='Pass'?'badge-success':'badge-red'} text-[8px]">${iv.verdict}</span></div>`}` : `<p class="text-[9px] text-charcoal-400">Not scheduled</p>`;
+  } else if (stage==='Accepted') {
+    const d=c.decision;
+    const m=_matchingVacancies(c.position);
+    detailRows = `<p class="text-[9px] text-charcoal-500">By <b>${d?d.by:'—'}</b> · ${d?formatDate(d.date):''}${d&&d.note?` — ${d.note}`:''}</p>${m.length?`<p class="text-[9px] text-brand-700">Matches: ${m.map(v=>v.position+' @ '+v.gym).join(', ')}</p>`:''}`;
+  } else if (stage==='Rejected') {
+    detailRows = `<p class="text-[9px] text-red-600">${c.rejectReason||'—'}</p><p class="text-[9px] text-charcoal-400">Rejected ${formatDate(c.rejectedDate)} by ${c.rejectedBy||'—'}</p>`;
+  } else if (stage==='Hired') {
+    detailRows = `<p class="text-[9px] text-charcoal-500">Starts ${formatDate(c.hiredDate)}</p>`;
+  }
+  return `<div class="bg-white rounded-lg border ${stage==='Rejected'?'border-red-100':'border-charcoal-200'} p-2.5 shadow-sm cursor-pointer hover:shadow-md transition-shadow" onclick="openCandidateDetail('${c.id}')">
+    <div class="flex items-center justify-between gap-2">
+      <p class="text-[11px] font-semibold text-charcoal-900 truncate">${c.name}</p>
+      ${c.rating?`<span class="text-[10px] text-yellow-500 flex-shrink-0">${'★'.repeat(c.rating)}</span>`:''}
+    </div>
+    <p class="text-[9px] text-charcoal-500 mb-1">${c.position}</p>
+    ${detailRows}
+    <div class="flex justify-end mt-1.5"><span class="text-[8px] text-brand-600 font-semibold uppercase">View details →</span></div>
+  </div>`;
+}
+
+// ==================== WAITING LIST + MATCH ====================
+function waitingMatchHTML() {
+  const entries = MOCK.waitingList;
+  const canCandidates = DEMO.showAll || hasPermission('recruitment.candidates.manage');
+  return `<div class="bg-white rounded-xl border border-charcoal-200 overflow-hidden flex flex-col min-h-0">
+    <div class="px-4 py-2.5 border-b border-charcoal-100 flex items-center justify-between bg-charcoal-50/50">
+      <p class="bento-label">WAITING LIST — AWAITING MATCH</p>
+      <button onclick="_recTab='waiting';renderAll()" class="text-[10px] text-brand-600 font-semibold hover:underline">View All</button>
+    </div>
+    <div class="divide-y divide-charcoal-50 flex-1 min-h-0 overflow-y-auto">
+      ${entries.map(w=>{
+        const matches=_matchingVacancies(w.position||'');
+        return `<div class="p-3">
+          <div class="flex items-center justify-between gap-2">
+            <div class="flex items-center gap-2.5 min-w-0">
+              <div class="w-8 h-8 rounded-full bg-purple-100 text-purple-700 flex items-center justify-center text-[10px] font-semibold flex-shrink-0">${_initials(w.name)}</div>
+              <div class="min-w-0"><p class="text-[11px] font-medium text-charcoal-900 truncate">${w.name}</p><p class="text-[9px] text-charcoal-500">${w.position||'Any'} · since ${formatDate(w.since)}</p></div>
+            </div>
+            <span class="text-[9px] text-charcoal-400 flex-shrink-0">${w.source||'—'}</span>
+          </div>
+          <div class="flex flex-wrap gap-1 mt-1.5">${(w.skills||[]).map(s=>`<span class="badge badge-purple text-[8px]">${s}</span>`).join('')}</div>
+          <p class="text-[9px] text-charcoal-600 mt-1">${w.note||''}</p>
+          <div class="flex items-center justify-between gap-2 mt-2">
+            <div class="min-w-0">
+              ${matches.length?`<p class="text-[9px] text-brand-700 font-semibold">✓ Match: ${matches.map(v=>v.position+' @ '+v.gym).join(', ')}</p>`:`<p class="text-[9px] text-charcoal-400">No open vacancy for this role yet.</p>`}
+            </div>
+            ${canCandidates?`<button onclick="assignWaitingToGym('${w.id}')" class="btn btn-sm btn-primary flex-shrink-0">Assign to Gym</button>`:''}
+          </div>
+        </div>`;
+      }).join('')||'<div class="p-6 text-center text-xs text-charcoal-400">Waiting list empty</div>'}
+    </div>
+  </div>`;
+}
+
+function assignWaitingToGym(wid) {
+  const w = MOCK.waitingList.find(x=>x.id===wid); if(!w) return;
+  const matches = _matchingVacancies(w.position||'');
+  const target = matches[0] || null;
+  if(!target) { showToast('No open matching vacancy — create one first','info'); return; }
+  openModal(`Assign ${w.name} to a Gym`, `<div class="space-y-3">
+    <div class="bg-purple-50 border border-purple-100 rounded-lg p-3 text-[11px] text-purple-800">Assigning ${w.name} (${w.position||'Any role'}) to a gym converts the accepted waiting-list candidate into an active hire at the chosen gym and starts their onboarding checklist.</div>
+    <div class="grid grid-cols-2 gap-2">
+      <div class="bg-charcoal-50 rounded-lg p-2.5"><p class="text-[10px] text-charcoal-500">Matching vacancy</p><p class="text-xs font-semibold text-charcoal-900">${target.position}</p></div>
+      <div class="bg-charcoal-50 rounded-lg p-2.5"><p class="text-[10px] text-charcoal-500">Gym</p><select id="assign-gym" class="form-select" style="font-size:0.8125rem;width:100%">${_gymOptions()}</select></div>
+    </div>
+    <div><label class="form-label">Start date</label><input id="assign-start" type="date" value="2026-10-01" class="form-input"></div>
+    <div class="bg-yellow-50 border border-yellow-100 rounded-lg p-2.5 text-[10px] text-yellow-800">The headcount for the matching vacancy decrements and an employee record is created.</div>
+  </div>`, { footer:`<button onclick="closeModal()" class="btn btn-sm btn-secondary">Cancel</button><button onclick="confirmWaitingAssign('${w.id}','${target.position}')" class="btn btn-sm btn-primary">Assign & Hire</button>` });
+}
+
+function confirmWaitingAssign(wid, position) {
+  const w = MOCK.waitingList.find(x=>x.id===wid); if(!w) return;
+  const gym = document.getElementById('assign-gym')?.value || 'Nasr City';
+  const start = document.getElementById('assign-start')?.value || '2026-10-01';
+  const initials = w.name.split(' ').map(x=>x[0]).join('').toUpperCase().slice(0,2);
+  const newEmp = { id:'EMP-'+Math.floor(Math.random()*900+100), name:w.name, initials, position, level:'Junior', gym, status:'Active', startDate:start, phone:'—', email:w.name.toLowerCase().replace(' ','.')+'.new@revive.com', nationalId:'—', contractType:'Full-time', salary:8000, daysOff:21, daysUsed:0, documents:[], medicalHistory:[], notes:'Assigned from recruitment waiting list on Sep 9, 2026.' };
+  MOCK.employees.push(newEmp);
+  MOCK.newComers.unshift({ id:'NC-'+Date.now(), name:w.name, position:position+' — Junior', startDate:start, progress:0, checklist:[['ID & contract signed',false],['Uniform issued',false],['System access created',false],['Branch tour completed',false],['Welcome meeting with BM',false]] });
+  MOCK.auditLog.unshift({ id:'al-'+Date.now(), action:'Waiting-list candidate assigned to gym', user:MOCK.currentUser.fullName, target:w.name, detail:position+' @ '+gym, timestamp:'2026-09-09 '+new Date().toLocaleTimeString(), gym });
+  // remove from waiting list
+  MOCK.waitingList = MOCK.waitingList.filter(x=>x.id!==wid);
+  closeModal();
+  showToast(w.name+' hired at '+gym+' — onboarding started','success');
+  renderAll();
 }
 
 // ==================== VACANCIES ====================
@@ -210,7 +301,7 @@ function candidatesBody(canHire, canCandidates, showAll) {
   if (_recStage!=='All') list = list.filter(c=>c.stage===_recStage);
   if (_recVac!=='All') list = list.filter(c=>c.position===_recVac);
 
-  const stageOpts = ['All','Applied','Screening','Interview','Offer','Hired'];
+  const stageOpts = ['All',..._pipStages];
   const vacOpts = ['All',...new Set(MOCK.candidates.map(c=>c.position))];
 
   const allChecked = list.length>0 && list.every(c=>_recSel.includes(c.id));
@@ -233,7 +324,7 @@ function candidatesBody(canHire, canCandidates, showAll) {
         <th class="w-8"><input type="checkbox" class="rounded" ${allChecked?'checked':''} onchange="if(this.checked){_recSel=MOCK.candidates.map(c=>c.id);}else{_recSel=[];}renderAll()"></th>
         <th>Candidate</th><th>Position</th><th>Stage</th><th>Applied</th><th>Rating</th><th>Source</th><th></th></tr></thead>
       <tbody>${list.map(c=>{
-        const p = _candProfile[c.id]||{};
+        const p = c.form||{};
         return `<tr onclick="openCandidateDetail('${c.id}')" class="cursor-pointer">
           <td onclick="event.stopPropagation()"><input type="checkbox" class="rounded" ${_recSel.includes(c.id)?'checked':''} onchange="toggleBulk('${c.id}',this.checked)"></td>
           <td><div class="flex items-center gap-2.5"><div class="w-8 h-8 rounded-full bg-brand-100 text-brand-700 flex items-center justify-center text-[10px] font-semibold">${_initials(c.name)}</div><div><p class="text-xs font-medium text-charcoal-900">${c.name}</p><p class="text-[9px] text-charcoal-400">${p.email||''}</p></div></div></td>
@@ -246,7 +337,7 @@ function candidatesBody(canHire, canCandidates, showAll) {
             <div class="flex gap-1">
               <button onclick="openCandidateDetail('${c.id}')" class="btn btn-sm btn-ghost"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0zm-3 7a9 9 0 019-9v0a9 9 0 01-9 9v0a9 9 0 01-9-9v0a9 9 0 019-9zM12 3H8a5 5 0 014 5v0"/></svg></button>
               ${canCandidates?`<button onclick="showToast('Advanced to next stage')" class="btn btn-sm btn-ghost"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3"/></svg></button>`:''}
-              ${canHire&&(c.stage==='Offer')?`<button onclick="openHireWizard('${c.id}')" class="btn btn-sm btn-primary">Hire</button>`:''}
+              ${canHire&&(c.stage==='Accepted')?`<button onclick="openHireWizard('${c.id}')" class="btn btn-sm btn-primary">Hire</button>`:''}
             </div>
           </td>
         </tr>`;
@@ -254,7 +345,7 @@ function candidatesBody(canHire, canCandidates, showAll) {
     </div>
 
     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 lg:hidden flex-shrink-0">
-      ${list.map(c=>{const p=_candProfile[c.id]||{};return `<div class="bg-white rounded-xl border border-charcoal-200 p-3">
+      ${list.map(c=>{const p=c.form||{};return `<div class="bg-white rounded-xl border border-charcoal-200 p-3">
         <div class="flex items-center gap-3">
           <div class="w-9 h-9 rounded-full bg-brand-100 text-brand-700 flex items-center justify-center text-[10px] font-semibold flex-shrink-0">${_initials(c.name)}</div>
           <div class="min-w-0 flex-1"><p class="text-xs font-medium text-charcoal-900 truncate">${c.name}</p><p class="text-[10px] text-charcoal-500">${c.position}</p></div>
@@ -265,8 +356,8 @@ function candidatesBody(canHire, canCandidates, showAll) {
           <span>${formatDate(c.appliedDate)}</span>
         </div>
         <div class="flex gap-1.5 mt-2">
-          <button onclick="openCandidateDetail('${c.id}')" class="btn btn-sm btn-secondary flex-1 text-[10px]">Profile</button>
-          ${canHire&&c.stage==='Offer'?`<button onclick="openHireWizard('${c.id}')" class="btn btn-sm btn-primary flex-1 text-[10px]">Hire</button>`:''}
+          <button onclick="openCandidateDetail('${c.id}')" class="btn btn-sm btn-secondary flex-1">Profile</button>
+          ${canHire&&c.stage==='Accepted'?`<button onclick="openHireWizard('${c.id}')" class="btn btn-sm btn-primary flex-1">Hire</button>`:''}
         </div>
       </div>`;}).join('')||'<div class="lg:col-span-3 bg-white rounded-xl border border-charcoal-200 p-6 text-center text-xs text-charcoal-400">No candidates match your filters.</div>'}
     </div>
@@ -277,17 +368,16 @@ function candidatesBody(canHire, canCandidates, showAll) {
 
 // ==================== PIPELINE (KANBAN) ====================
 function pipelineBody(canHire, showAll) {
-  const stages = ['Applied','Screening','Interview','Offer','Hired'];
-  const stageMetaColor = { Applied:'#7c3aed', Screening:'#2563eb', Interview:'#d97706', Offer:'#ea580c', Hired:'#16a34a' };
+  const stages = _pipStages;
   return `<div class="flex items-center justify-between mb-2 flex-wrap gap-2">
     <div class="flex items-center gap-2">
       <select onchange="_recView=this.value;renderAll()" class="form-select" style="padding:0.375rem 2rem 0.375rem 0.625rem;font-size:0.75rem;width:auto">
         <option value="kanban" ${_recView==='kanban'?'selected':''}>Kanban</option>
         <option value="list" ${_recView==='list'?'selected':''}>List</option>
       </select>
-      <div class="hidden sm:flex items-center gap-2 text-[9px] text-charcoal-400">${stages.map(s=>`<span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full" style="background:${stageMetaColor[s]}"></span>${s}</span>`).join('')}</div>
+      <div class="hidden sm:flex items-center gap-2 text-[9px] text-charcoal-400">${stages.map(s=>`<span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full" style="background:${_pipColors[s]}"></span>${s}</span>`).join('')}</div>
     </div>
-    <span class="text-[10px] text-charcoal-400">Drag or use arrows to move; HR Manager approves the final hire.</span>
+    <span class="text-[10px] text-charcoal-400">Move candidates forward; final hire is reserved for HR Manager.</span>
   </div>`;
 
   if (_recView==='list') {
@@ -310,31 +400,50 @@ function pipelineBody(canHire, showAll) {
   return `<div class="flex items-start gap-2 overflow-x-auto pb-1">
     ${stages.map((s,si)=>{
       const stageCandidates = MOCK.candidates.filter(c=>c.stage===s);
-      return `<div class="flex-1 min-w-[230px] max-w-[320px] bg-charcoal-50 rounded-xl p-2">
+      const prevStage = stages[si-1]||null;
+      const nextStage = s==='Rejected'||s==='Hired'?null:stages[si+1]||null;
+      return `<div class="flex-1 min-w-[230px] max-w-[320px] bg-charcoal-50 rounded-xl p-2 ${s==='Rejected'?'bg-red-50/50':''}">
         <div class="flex items-center justify-between px-1 mb-2">
-          <p class="text-[10px] font-semibold uppercase tracking-wide text-charcoal-500 flex items-center gap-1.5"><span class="w-2 h-2 rounded-full" style="background:${stageMetaColor[s]}"></span>${s}</p>
+          <p class="text-[10px] font-semibold uppercase tracking-wide ${s==='Rejected'?'text-red-500':'text-charcoal-500'} flex items-center gap-1.5"><span class="w-2 h-2 rounded-full" style="background:${_pipColors[s]}"></span>${s}</p>
           <span class="badge badge-gray">${stageCandidates.length}</span>
         </div>
         <div class="space-y-1.5 min-h-[120px]">
           ${stageCandidates.map(c=>{
-            const p=_candProfile[c.id]||{};
-            return `<div class="bg-white rounded-lg border border-charcoal-200 p-2.5 shadow-sm">
-              <div class="flex items-center justify-between gap-2"><p class="text-[11px] font-semibold text-charcoal-900">${c.name}</p><span class="text-[10px] text-yellow-500">${c.rating>0?'★'+c.rating:''}</span></div>
-              <p class="text-[9px] text-charcoal-500">${c.position} · ${p.source||'—'}</p>
-              <p class="text-[9px] text-charcoal-400 mt-1">Applied ${formatDate(c.appliedDate)}</p>
-              <div class="flex items-center gap-1 mt-1.5">
-                <button onclick="showToast('Moved back')" class="btn btn-sm btn-ghost text-[9px] p-1"><svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16l-4-4m0 0l4-4m-4 4h18"/></svg></button>
-                <button onclick="openCandidateDetail('${c.id}')" class="btn btn-sm btn-ghost text-[9px] p-1 mx-auto">View</button>
-                <button onclick="showToast('Moved forward')" class="btn btn-sm btn-ghost text-[9px] p-1"><svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3"/></svg></button>
+            const appliedMs=new Date(c.appliedDate).getTime();
+            const daysSince=Math.floor((new Date('2026-09-09').getTime()-appliedMs)/86400000);
+            const isStale=daysSince>5 && s!=='Hired' && s!=='Rejected';
+            const nextActionLabel={Applied:'Schedule screening',Screening:'Schedule 1st interview','First Interview':'Schedule 2nd interview','Second Interview':'Make decision',Accepted:'Match vacancy / hire',Rejected:'',Hired:''}[s]||'';
+            return `<div class="bg-white rounded-lg border ${isStale?'border-red-200':'border-charcoal-200'} p-2.5 shadow-sm">
+              <div class="flex items-center justify-between gap-2">
+                <p class="text-[11px] font-semibold text-charcoal-900">${c.name}</p>
+                ${isStale?`<span class="badge badge-red text-[8px] flex items-center gap-0.5"><svg class="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>${daysSince}d</span>`:`<span class="text-[10px] text-yellow-500">${c.rating>0?'★'+c.rating:''}</span>`}
               </div>
-              ${canHire&&s==='Offer'?`<button onclick="openHireWizard('${c.id}')" class="btn btn-sm btn-primary w-full mt-1 text-[10px]"><svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>Hire</button>`:''}
+              <p class="text-[9px] text-charcoal-500">${c.position} · ${(c.form||{}).source||'—'}</p>
+              ${isStale?`<p class="text-[9px] text-red-500 font-medium mt-0.5">⚠ Overdue · Next: ${nextActionLabel}</p>`:`<p class="text-[9px] text-brand-600 mt-0.5">${nextActionLabel}</p>`}
+              <div class="flex items-center gap-1 mt-1.5">
+                ${prevStage&&s!=='Rejected'?`<button onclick="advanceCandidate('${c.id}','${prevStage}')" class="btn btn-icon btn-ghost" title="Move to ${prevStage}"><svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16l-4-4m0 0l4-4m-4 4h18"/></svg></button>`:'<span class="w-6"></span>'}
+                <button onclick="openCandidateDetail('${c.id}')" class="btn btn-icon btn-ghost mx-auto">View</button>
+                ${nextStage?`<button onclick="advanceCandidate('${c.id}','${nextStage}')" class="btn btn-icon btn-ghost" title="Move to ${nextStage}"><svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3"/></svg></button>`:'<span class="w-6"></span>'}
+              </div>
+              ${canHire&&s==='Accepted'?`<button onclick="openHireWizard('${c.id}')" class="btn btn-sm btn-primary w-full mt-1"><svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>Hire</button>`:''}
             </div>`;
           }).join('')||`<div class="bg-white rounded-lg border border-dashed border-charcoal-200 p-3 text-center"><p class="text-[10px] text-charcoal-400">No candidates</p></div>`}
         </div>
       </div>`;
     }).join('')}
   </div>
-  <p class="text-[10px] text-charcoal-400 text-center mt-2">${showAll?'Demo shows all stages. Real moves are permission-gated by candidates.manage.':'You can move candidates through stages; final Hire (ready on Offer) is reserved for HR Manager (`recruitment.hire.approve`).'}</p>`;
+  <p class="text-[10px] text-charcoal-400 text-center mt-2">${showAll?'Demo shows all stages. Real moves are permission-gated by candidates.manage.':'You can move candidates through stages; final Hire (ready on Accepted) is reserved for HR Manager.'}</p>`;
+}
+
+function advanceCandidate(cid, newStage) {
+  const c=MOCK.candidates.find(x=>x.id===cid);
+  if(!c) return;
+  if(!_pipStages.includes(newStage)) return;
+  const oldStage=c.stage;
+  c.stage=newStage;
+  if(newStage==='Second Interview' && !c.iv2) c.iv2={ date:'2026-09-16', by:'Mona El-Sayed', type:'Panel', verdict:'Scheduled', eval:null, room:'HQ — Boardroom' };
+  showToast(c.name+' moved: '+oldStage+' → '+newStage);
+  renderAll();
 }
 
 // ==================== INTERVIEWS ====================
@@ -399,22 +508,28 @@ function interviewsBody(list) {
 
 // ==================== WAITING LIST ====================
 function waitingBody() {
+  const canCandidates = DEMO.showAll || hasPermission('recruitment.candidates.manage');
   return `<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-    ${MOCK.waitingList.map(w=>`<div class="bg-white rounded-xl border border-charcoal-200 p-3 border-l-4 border-l-purple-400">
+    ${MOCK.waitingList.map(w=>{
+      const matches = _matchingVacancies(w.position||'');
+      return `<div class="bg-white rounded-xl border border-charcoal-200 p-3 border-l-4 border-l-purple-400">
       <div class="flex items-start justify-between gap-2">
         <div class="flex items-center gap-2.5">
           <div class="w-9 h-9 rounded-full bg-purple-100 text-purple-700 flex items-center justify-center text-[10px] font-semibold flex-shrink-0">${_initials(w.name)}</div>
-          <div><p class="text-xs font-semibold text-charcoal-900">${w.name}</p><p class="text-[10px] text-charcoal-500">${w.position}</p></div>
+          <div><p class="text-xs font-semibold text-charcoal-900">${w.name}</p><p class="text-[10px] text-charcoal-500">${w.position||'Any role'}</p></div>
         </div>
         <span class="badge badge-purple text-[9px] flex-shrink-0 flex items-center gap-1"><svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>${Math.max(1,Math.round((new Date()-new Date(w.since))/86400000))}d</span>
       </div>
+      <div class="flex flex-wrap gap-1 mt-1.5">${(w.skills||[]).map(s=>`<span class="badge badge-purple text-[8px]">${s}</span>`).join('')}</div>
       <p class="text-[10px] text-charcoal-600 mt-2">${w.note}</p>
+      ${matches.length?`<div class="mt-2 bg-green-50 border border-green-100 rounded-lg p-2"><p class="text-[9px] text-green-800 font-semibold">✓ Matching vacancy: ${matches.map(m=>m.position+' @ '+m.gym).join(', ')}</p></div>`:`<div class="mt-2 bg-charcoal-50 rounded-lg p-2"><p class="text-[9px] text-charcoal-500">No open vacancy for this role yet.</p></div>`}
       <div class="flex items-center justify-between mt-2.5 text-[9px] text-charcoal-400"><span>${w.source} · since ${formatDate(w.since)}</span></div>
       <div class="flex gap-1.5 mt-2">
-        <button onclick="showToast('Moved to pipeline')" class="btn btn-sm btn-primary flex-1 text-[10px]">Promote</button>
-        <button onclick="showToast('Removed from waiting list','info')" class="btn btn-sm btn-ghost text-[10px]">Remove</button>
+        ${canCandidates?`<button onclick="assignWaitingToGym('${w.id}')" class="btn btn-sm btn-primary flex-1">Assign to Gym</button>`:''}
+        <button onclick="showToast('Removed from waiting list','info')" class="btn btn-sm btn-ghost">Remove</button>
       </div>
-    </div>`).join('')}
+    </div>`;
+    }).join('')}
   </div>`;
 }
 
@@ -458,7 +573,7 @@ function openVacancyDetail(id) {
   const showAll = DEMO.showAll;
   const canHire = showAll || hasPermission('recruitment.hire.approve');
   const related = MOCK.candidates.filter(c=>c.position===v.position);
-  const funnel = ['Applied','Screening','Interview','Offer','Hired'].map(s=>[s, related.filter(c=>c.stage===s).length]);
+  const funnel = _pipStages.filter(s=>s!=='Rejected').map(s=>[s, related.filter(c=>c.stage===s).length]);
   const fMax = Math.max(...funnel.map(f=>f[1]),1);
   openModal(`${v.position}`, `<div class="space-y-3">
     <div class="grid grid-cols-2 gap-2">
@@ -500,49 +615,109 @@ function openNewVacancy() {
 function openCandidateDetail(cid) {
   const c = MOCK.candidates.find(x=>x.id===cid);
   if(!c) return;
-  const p = _candProfile[cid]||{};
+  const f = c.form||{};
+
+  const ivBlock = (iv, title) => `<div class="bg-white rounded-xl border border-charcoal-200 p-3">
+    <p class="bento-label text-charcoal-500 mb-2">${title}</p>
+    ${iv?`<div class="grid grid-cols-2 gap-2">
+      <div class="bg-charcoal-50 rounded-lg p-2"><p class="text-[9px] text-charcoal-500">Interviewer</p><p class="text-[11px] font-semibold text-charcoal-900">${iv.by}</p></div>
+      <div class="bg-charcoal-50 rounded-lg p-2"><p class="text-[9px] text-charcoal-500">Date</p><p class="text-[11px] font-semibold text-charcoal-900">${iv.date} · ${iv.type}</p></div>
+      <div class="col-span-2 bg-charcoal-50 rounded-lg p-2"><p class="text-[9px] text-charcoal-500">Evaluation</p>
+        <div class="flex items-center gap-2 mt-0.5">${_evalStars(iv.eval)}<span class="badge ${iv.verdict==='Pass'?'badge-success':(iv.verdict==='Fail'?'badge-red':'badge-blue')} text-[9px]">${iv.verdict}</span>${iv.room?`<span class="text-[9px] text-charcoal-400">${iv.room}</span>`:''}</div>
+      </div>
+      ${iv.notes?`<div class="col-span-2 bg-yellow-50 border border-yellow-100 rounded-lg p-2"><p class="text-[9px] font-semibold text-yellow-800">NOTES</p><p class="text-[10px] text-yellow-800/80 mt-0.5">${iv.notes}</p></div>`:''}
+    </div>`:`<p class="text-[10px] text-charcoal-400">Not scheduled yet.</p>`}
+  </div>`;
+
+  const screenBlock = c.screen?`<div class="bg-white rounded-xl border border-charcoal-200 p-3">
+    <p class="bento-label text-charcoal-500 mb-2">SCREENING</p>
+    <div class="grid grid-cols-2 gap-2">
+      <div class="bg-charcoal-50 rounded-lg p-2"><p class="text-[9px] text-charcoal-500">Screened by</p><p class="text-[11px] font-semibold text-charcoal-900">${c.screen.by}</p></div>
+      <div class="bg-charcoal-50 rounded-lg p-2"><p class="text-[9px] text-charcoal-500">Date</p><p class="text-[11px] font-semibold text-charcoal-900">${formatDate(c.screen.date)}</p></div>
+      <div class="col-span-2 bg-charcoal-50 rounded-lg p-2"><p class="text-[9px] text-charcoal-500">Evaluation</p><div class="flex items-center gap-2 mt-0.5">${_evalStars(c.screen.eval)}<span class="badge ${c.screen.verdict==='Pass'?'badge-success':'badge-red'} text-[9px]">${c.screen.verdict}</span></div></div>
+      ${c.screen.notes?`<div class="col-span-2 bg-yellow-50 border border-yellow-100 rounded-lg p-2"><p class="text-[9px] font-semibold text-yellow-800">NOTES</p><p class="text-[10px] text-yellow-800/80 mt-0.5">${c.screen.notes}</p></div>`:''}
+    </div>
+  </div>`:'';
+
+  const decisionBlock = c.decision?`<div class="bg-white rounded-xl border border-charcoal-200 p-3">
+    <p class="bento-label text-charcoal-500 mb-2">FINAL DECISION</p>
+    <div class="grid grid-cols-2 gap-2">
+      <div class="bg-charcoal-50 rounded-lg p-2"><p class="text-[9px] text-charcoal-500">Decision</p><p class="text-[11px] font-semibold ${c.decision.verdict==='Accepted'?'text-green-700':'text-red-700'}">${c.decision.verdict}</p></div>
+      <div class="bg-charcoal-50 rounded-lg p-2"><p class="text-[9px] text-charcoal-500">By / date</p><p class="text-[11px] font-semibold text-charcoal-900">${c.decision.by} · ${formatDate(c.decision.date)}</p></div>
+      ${c.decision.note?`<div class="col-span-2 bg-purple-50 border border-purple-100 rounded-lg p-2"><p class="text-[9px] font-semibold text-purple-800">NOTE</p><p class="text-[10px] text-purple-800/80 mt-0.5">${c.decision.note}</p></div>`:''}
+    </div>
+  </div>`:(c.stage==='Rejected'?`<div class="bg-white rounded-xl border border-red-100 p-3">
+    <p class="bento-label text-red-500 mb-2">REJECTED</p>
+    <p class="text-[10px] text-red-600">${c.rejectReason||''}</p>
+    <p class="text-[9px] text-charcoal-400 mt-1">Rejected ${formatDate(c.rejectedDate)} by ${c.rejectedBy}</p>
+  </div>`:'');
+
+  const vacancyMatch = (c.stage==='Accepted'||c.stage==='Hired')?(()=>{
+    const m=_matchingVacancies(c.position);
+    return m.length?`<div class="bg-green-50 border border-green-100 rounded-lg p-2.5"><p class="text-[9px] font-semibold text-green-800">MATCHING OPEN VACANCY</p><p class="text-[11px] text-green-800 mt-0.5">${m.map(v=>v.position+' — '+v.gym).join(' · ')}</p></div>`:`<div class="bg-charcoal-50 rounded-lg p-2.5"><p class="text-[9px] text-charcoal-500">No open vacancy for this role right now — candidate can join the waiting list.</p></div>`;
+  })():'';
+
   const timeline = [
     { t:`Applied for ${c.position}`, d:formatDate(c.appliedDate), st:'done' },
-    ...(c.stage!=='Applied'?[{ t:'Screening call passed', d:'', st:'done' }]:[]),
-    ...(['Interview','Offer','Hired'].includes(c.stage)?[{ t:'Technical interview scheduled', d:c.stage==='Interview'?'Pending':'Review', st:c.stage==='Interview'?'pending':'done' }]:[]),
-    ...(c.stage==='Offer'?[{ t:'Offer being prepared', d:'', st:'current' }]:[]),
+    ...(c.screen?[{ t:'Screening passed', d:formatDate(c.screen.date)+' · by '+c.screen.by, st:'done' }]:[]),
+    ...(c.iv1?[{ t: c.iv1.verdict==='Scheduled'||c.iv1.verdict==='Invited' ? '1st interview scheduled' : '1st interview '+c.iv1.verdict, d:c.iv1.verdict==='Scheduled'||c.iv1.verdict==='Invited'?c.iv1.date:c.iv1.date+' · '+_evalStars(c.iv1.eval), st: c.iv1.verdict==='Pass'?'done':(c.iv1.verdict==='Fail'?'current':'pending') }]:[]),
+    ...(c.iv2?[{ t: c.iv2.verdict==='Scheduled'||c.iv2.verdict==='Invited' ? '2nd interview scheduled' : '2nd interview '+c.iv2.verdict, d:c.iv2.date + (c.iv2.verdict==='Pass'?' · '+_evalStars(c.iv2.eval):''), st: c.iv2.verdict==='Pass'?'done':(c.iv2.verdict==='Fail'?'current':'pending') }]:[]),
+    ...(c.decision?[{ t:`Decision: ${c.decision.verdict}`, d:formatDate(c.decision.date)+' · by '+c.decision.by, st:'done' }]:[]),
     ...(c.stage==='Hired'?[{ t:`Hired — starts ${formatDate(c.hiredDate)}`, d:formatDate(c.hiredDate), st:'done' }]:[]),
   ];
+
   openModal(`${c.name}`, `<div class="space-y-3">
     <div class="flex items-center gap-3">
       <div class="w-14 h-14 rounded-full bg-brand-100 text-brand-700 flex items-center justify-center text-sm font-bold flex-shrink-0">${_initials(c.name)}</div>
       <div>
-        <div class="flex items-center gap-2"><p class="text-sm font-bold text-charcoal-900">${c.name}</p>${_stageBadge(c.stage)}</div>
+        <div class="flex items-center gap-2 flex-wrap"><p class="text-sm font-bold text-charcoal-900">${c.name}</p>${_stageBadge(c.stage)}</div>
         <p class="text-[11px] text-charcoal-500">${c.position} · ${c.phone}</p>
         <p class="text-[10px] text-yellow-500 mt-0.5">${'★'.repeat(c.rating)}${'☆'.repeat(Math.max(0,5-c.rating))} rating</p>
       </div>
     </div>
-    <div class="grid grid-cols-3 gap-2 text-center">
-      <div class="bg-charcoal-50 rounded-lg py-1.5"><p class="text-xs font-bold text-charcoal-900">${p.source||'—'}</p><p class="text-[8px] text-charcoal-500">Source</p></div>
-      <div class="bg-charcoal-50 rounded-lg py-1.5"><p class="text-xs font-bold text-charcoal-900">${p.experience||'—'}</p><p class="text-[8px] text-charcoal-500">Experience</p></div>
-      <div class="bg-charcoal-50 rounded-lg py-1.5"><p class="text-xs font-bold text-charcoal-900">${p.location||'—'}</p><p class="text-[8px] text-charcoal-500">Location</p></div>
+
+    <div class="bg-white rounded-xl border border-charcoal-200 p-3">
+      <p class="bento-label text-charcoal-500 mb-2">APPLICATION FORM</p>
+      <div class="grid grid-cols-2 sm:grid-cols-3 gap-2">
+        <div class="bg-charcoal-50 rounded-lg p-2"><p class="text-[9px] text-charcoal-500">Email</p><p class="text-[10px] font-semibold text-charcoal-900 break-all">${f.email||'—'}</p></div>
+        <div class="bg-charcoal-50 rounded-lg p-2"><p class="text-[9px] text-charcoal-500">Source</p><p class="text-[10px] font-semibold text-charcoal-900">${f.source||'—'}</p></div>
+        <div class="bg-charcoal-50 rounded-lg p-2"><p class="text-[9px] text-charcoal-500">Preferred gym</p><p class="text-[10px] font-semibold text-charcoal-900">${f.gymPref||'—'}</p></div>
+        <div class="bg-charcoal-50 rounded-lg p-2"><p class="text-[9px] text-charcoal-500">Experience</p><p class="text-[10px] font-semibold text-charcoal-900">${f.expYears?f.expYears+' yrs':(f.experience||'—')}</p></div>
+        <div class="bg-charcoal-50 rounded-lg p-2"><p class="text-[9px] text-charcoal-500">Education</p><p class="text-[10px] font-semibold text-charcoal-900">${f.education||'—'}</p></div>
+        <div class="bg-charcoal-50 rounded-lg p-2"><p class="text-[9px] text-charcoal-500">Shift</p><p class="text-[10px] font-semibold text-charcoal-900">${f.shift||'—'}</p></div>
+        <div class="bg-charcoal-50 rounded-lg p-2"><p class="text-[9px] text-charcoal-500">Salary expectation</p><p class="text-[10px] font-semibold text-charcoal-900">${f.salaryExp?f.salaryExp.toLocaleString()+' EGP':'—'}</p></div>
+        <div class="bg-charcoal-50 rounded-lg p-2"><p class="text-[9px] text-charcoal-500">Availability</p><p class="text-[10px] font-semibold text-charcoal-900">${f.availability||'—'}</p></div>
+        <div class="bg-charcoal-50 rounded-lg p-2"><p class="text-[9px] text-charcoal-500">Languages</p><p class="text-[10px] font-semibold text-charcoal-900">${(f.languages||[]).join(', ')||'—'}</p></div>
+      </div>
+      <div class="mt-2"><p class="text-[9px] text-charcoal-500 mb-1">SKILLS</p><div class="flex flex-wrap gap-1">${(f.skills||[]).map(s=>`<span class="badge badge-brand text-[9px]">${s}</span>`).join('')||'<span class="text-[10px] text-charcoal-400">—</span>'}</div></div>
     </div>
-    <div>
-      <p class="bento-label text-charcoal-500 mb-1">SKILLS</p>
-      <div class="flex flex-wrap gap-1">${(p.skills||[]).map(s=>`<span class="badge badge-brand text-[9px]">${s}</span>`).join('')}</div>
-    </div>
-    <div class="bg-yellow-50 border border-yellow-100 rounded-lg p-3">
-      <p class="text-[10px] font-semibold text-yellow-800 mb-1">INTERNAL NOTES</p>
-      <p class="text-[10px] text-yellow-800/80">${p.notes||'No notes yet.'}</p>
-    </div>
+
+    ${screenBlock}
+    ${c.iv1?ivBlock(c.iv1,'FIRST INTERVIEW'):''}
+    ${c.iv2?ivBlock(c.iv2,'SECOND INTERVIEW'):''}
+    ${decisionBlock}
+    ${vacancyMatch}
+    ${c.stage==='Accepted'?`<div class="flex gap-2"><button onclick="closeModal();openHireWizard('${c.id}')" class="btn btn-sm btn-primary flex-1">Hire Now</button><button onclick="closeModal();_recTab='waiting';renderAll()" class="btn btn-sm btn-secondary flex-1">Send to Waiting List</button></div>`:''}
+
     <div>
       <p class="bento-label text-charcoal-500 mb-2">ACTIVITY</p>
       <div class="space-y-0">
         ${timeline.map((t,i)=>`<div class="flex gap-2.5">
           <div class="flex flex-col items-center">
-            <span class="w-2.5 h-2.5 rounded-full ${t.st==='done'?'bg-brand-500':t.st==='current'?'bg-yellow-500':'bg-charcoal-200'} mt-0.5 flex-shrink-0"></span>
+            <span class="w-2.5 h-2.5 rounded-full ${t.st==='done'?'bg-brand-500':t.st==='current'?'bg-red-500':'bg-charcoal-200'} mt-0.5 flex-shrink-0"></span>
             ${i<timeline.length-1?'<span class="w-px bg-charcoal-100 flex-1"></span>':''}
           </div>
           <div class="pb-3"><p class="text-[11px] font-medium text-charcoal-900">${t.t}</p><p class="text-[9px] text-charcoal-400">${t.d}</p></div>
         </div>`).join('')}
       </div>
     </div>
-  </div>`, { wide:true, footer:`<button onclick="closeModal()" class="btn btn-sm btn-secondary">Close</button>${DEMO.showAll||hasPermission('recruitment.candidates.manage')?`<button onclick="showToast('Advanced to next stage');closeModal();" class="btn btn-sm btn-primary">Advance Stage</button>`:''}${DEMO.showAll||hasPermission('recruitment.hire.approve')?(c.stage==='Offer'?`<button onclick="closeModal();openHireWizard('${c.id}')" class="btn btn-sm btn-success">Hire Candidate</button>`:''):''}` });
+  </div>`, { wide:true, footer:`<button onclick="closeModal()" class="btn btn-sm btn-secondary">Close</button>${DEMO.showAll||hasPermission('recruitment.candidates.manage')?`<button onclick="closeModal();advanceCandidate('${c.id}','${_nextStage(c.stage)}');" class="btn btn-sm btn-primary">Advance to ${_nextStage(c.stage)}</button>`:''}${DEMO.showAll||hasPermission('recruitment.hire.approve')?(c.stage==='Accepted'?`<button onclick="closeModal();openHireWizard('${c.id}')" class="btn btn-sm btn-success">Hire Candidate</button>`:''):''}` });
+}
+
+function _nextStage(s) {
+  const i=_pipStages.indexOf(s);
+  if(s==='Rejected'||s==='Hired') return s;
+  return _pipStages[Math.min(i+1,_pipStages.length-1)];
 }
 
 function openInterviewDetail(id) {
@@ -565,7 +740,7 @@ function openInterviewDetail(id) {
 
 function openNewInterview() {
   openModal('Schedule Interview', `<form onsubmit="event.preventDefault();showToast('Interview scheduled');closeModal();" class="space-y-3">
-    <div><label class="form-label">Candidate</label><select class="form-select">${MOCK.candidates.filter(c=>c.stage==='Interview'||c.stage==='Screening').map(c=>`<option>${c.name} — ${c.position}</option>`).join('')}</select></div>
+    <div><label class="form-label">Candidate</label><select class="form-select">${MOCK.candidates.filter(c=>['First Interview','Second Interview','Screening'].includes(c.stage)).map(c=>`<option>${c.name} — ${c.position}</option>`).join('')}</select></div>
     <div class="grid grid-cols-2 gap-3">
       <div><label class="form-label">Date</label><input type="date" class="form-input" value="2026-09-14"></div>
       <div><label class="form-label">Time</label><input type="time" class="form-input" value="11:00"></div>
@@ -627,7 +802,7 @@ function hireWizardRender(cid) {
   }
 
   const footer = `<button onclick="_recWizStep=Math.max(1,_recWizStep-1); hireWizardRender('${c.id}');" class="btn btn-sm btn-secondary ${_recWizStep===1?'hidden':''}">Back</button>
-    ${_recWizStep<3?`<button onclick="_recWizStep++; hireWizardRender('${c.id}');" class="btn btn-sm btn-primary">Continue</button>`:`<button onclick="showToast('Employee created from candidate');closeModal();" class="btn btn-sm btn-success">Confirm Hire</button>`}`;
+    ${_recWizStep<3?`<button onclick="_recWizStep++; hireWizardRender('${c.id}');" class="btn btn-sm btn-primary">Continue</button>`:`<button onclick="confirmHireCandidate('${c.id}')" class="btn btn-sm btn-success">Confirm Hire &amp; Create Employee</button>`}`;
 
   const stepperHtml = `<div class="flex items-center gap-1.5">
     ${steps.map((sl,i)=>{
@@ -643,4 +818,57 @@ function hireWizardRender(cid) {
     ${stepperHtml}
     ${content}
   </div>`, { wide:true, footer });
+}
+
+function confirmHireCandidate(cid) {
+  const c = MOCK.candidates.find(x=>x.id===cid); if(!c) return;
+  const f = c.form||{};
+  // Mark candidate as Hired
+  c.stage = 'Hired';
+  c.hiredDate = '2026-10-01';
+  c.decision = c.decision || { by: MOCK.currentUser.fullName, date: '2026-09-09', verdict: 'Accepted', note: 'Hired on Oct 1.' };
+  // Create employee record
+  const initials = c.name.split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2);
+  const newEmp = {
+    id: 'EMP-' + Math.floor(Math.random()*900+100),
+    name: c.name,
+    initials,
+    position: c.position,
+    level: 'Junior',
+    gym: 'Nasr City',
+    status: 'Active',
+    startDate: '2026-10-01',
+    phone: c.phone,
+    email: f.email || c.name.toLowerCase().replace(' ','.')+'.new@revive.com',
+    nationalId: '—',
+    contractType: 'Full-time',
+    salary: 10000,
+    daysOff: 21,
+    daysUsed: 0,
+    documents: [],
+    medicalHistory: [],
+    notes: 'Hired from recruitment pipeline on Sep 9, 2026.',
+  };
+  MOCK.employees.push(newEmp);
+  // Add to new comers with onboarding checklist
+  MOCK.newComers.unshift({
+    id: 'NC-'+Date.now(),
+    name: c.name,
+    position: c.position,
+    startDate: '2026-10-01',
+    progress: 0,
+    checklist: [
+      ['ID & contract signed', false],
+      ['Uniform issued', false],
+      ['System access created', false],
+      ['Branch tour completed', false],
+      ['Welcome meeting with BM', false],
+    ],
+  });
+  // Audit log
+  MOCK.auditLog.unshift({ id:'al-'+Date.now(), action:'Employee Hired from Recruitment', user:MOCK.currentUser.fullName, target:c.name, detail:'Candidate converted to employee — '+c.position, timestamp:'2026-09-09 '+new Date().toLocaleTimeString(), gym:'Nasr City' });
+  closeModal();
+  showToast(c.name + ' hired! Employee profile created + onboarding checklist started.', 'success');
+  _recTab = 'newcomers';
+  renderAll();
 }

@@ -112,7 +112,7 @@ function renderPayroll() {
       </div>
       <div class="flex justify-between mt-2 text-[11px]"><span class="text-charcoal-500">Net Pay</span><span class="font-bold text-charcoal-900">EGP ${fmtMoney(netOf(p))}</span></div>
       <div class="flex justify-between text-[10px] text-charcoal-400"><span>Gross ${fmtMoney(p.gross)}</span><span>Deduct - ${fmtMoney(dedTotal(p))}${pendingOf(p) ? ` <span class="badge badge-yellow text-[9px]">${pendingOf(p)} pending</span>` : ''}</span></div>
-      <div class="flex gap-1.5 mt-2">${canEdit && p.status === 'Draft' ? `<button onclick="openPayrollEdit('${p.employeeId}')" class="btn btn-sm btn-secondary flex-1 text-[10px]">Edit</button>` : ''}<button onclick="openDeductions('${p.employeeId}')" class="btn btn-sm btn-secondary flex-1 text-[10px]">Deductions</button><button onclick="openPayslip('${p.employeeId}')" class="btn btn-sm btn-secondary flex-1 text-[10px]">Payslip</button></div>
+      <div class="flex gap-1.5 mt-2">${canEdit && p.status === 'Draft' ? `<button onclick="openPayrollEdit('${p.employeeId}')" class="btn btn-sm btn-secondary flex-1">Edit</button>` : ''}<button onclick="openDeductions('${p.employeeId}')" class="btn btn-sm btn-secondary flex-1">Deductions</button><button onclick="openPayslip('${p.employeeId}')" class="btn btn-sm btn-secondary flex-1">Payslip</button></div>
     </div>`).join('')}</div>
 
     <!-- Action banner -->
@@ -122,8 +122,8 @@ function renderPayroll() {
         <p class="text-[10px] text-charcoal-500">${drafts.length} draft payslips ${canEdit ? 'editable until approved.' : ''} Payments scheduled for the 25th. ${locked} of ${payroll.length} released.</p>
       </div>
       <div class="flex gap-1.5 flex-wrap">
-        ${canApprove ? `<button onclick="showToast('All drafts approved')" class="btn btn-sm btn-secondary">Approve Drafts</button>` : ''}
-        ${canApprove ? `<button onclick="showToast('Payroll locked & scheduled for 25th');_payStep=4;renderAll();" class="btn btn-sm btn-primary">Lock Cycle</button>` : ''}
+        ${canApprove ? `<button onclick="approveAllDrafts()" class="btn btn-sm btn-secondary">Approve Drafts</button>` : ''}
+        ${canApprove ? `<button onclick="lockPayrollCycle()" class="btn btn-sm btn-primary">Lock Cycle</button>` : ''}
       </div>
     </div>
 
@@ -208,8 +208,8 @@ function openDeductions(id) {
     </div>` : '';
     const statusBadge2 = l.status === 'Accepted' ? `<span class="badge badge-success text-[9px]">Accepted</span>` : l.status === 'Rejected' ? `<span class="badge badge-gray text-[9px]">Rejected</span>` : `<span class="badge badge-yellow text-[9px]">Pending</span>`;
     const actions = l.status === 'Pending' && canEdit ? `<div class="flex gap-1.5 mt-2">
-      <button onclick="decideDeduction('${p.employeeId}','${l.id}',1)" class="btn btn-sm btn-success flex-1 text-[10px]">Accept</button>
-      <button onclick="decideDeduction('${p.employeeId}','${l.id}',0)" class="btn btn-sm btn-danger-outline flex-1 text-[10px]">Reject</button>
+      <button onclick="decideDeduction('${p.employeeId}','${l.id}',1)" class="btn btn-sm btn-success flex-1">Accept</button>
+      <button onclick="decideDeduction('${p.employeeId}','${l.id}',0)" class="btn btn-sm btn-danger-outline flex-1">Reject</button>
     </div>` : '';
     return `<div class="bg-white rounded-lg border border-charcoal-200 p-3">
       <div class="flex items-center justify-between">
@@ -228,7 +228,47 @@ function openDeductions(id) {
     </div>
     ${pending && canEdit ? `<div class="text-[10px] text-brand-700 bg-brand-50 border border-brand-100 rounded-lg p-2.5">${pending} pending deduction line${pending > 1 ? 's' : ''} — decide accept/reject. Linked employee requests (if any) shown for context.</div>` : ''}
     ${rows || '<p class="text-xs text-charcoal-500">No deduction lines.</p>'}
-  </div>`, { wide: true, footer: `${canEdit && pending ? `<button onclick="acceptAllDeductions('${p.employeeId}')" class="btn btn-sm btn-primary">Accept All Pending</button>` : ''}<button onclick="closeModal()" class="btn btn-sm btn-secondary">Close</button>` });
+  </div>`, { wide: true, footer: `${canEdit && pending ? `<button onclick="acceptAllDeductions('${p.employeeId}')" class="btn btn-sm btn-primary">Accept All Pending</button>` : ''}${canEdit ? `<button onclick="openAddDeductionModal('${p.employeeId}')" class="btn btn-sm btn-secondary">+ Add Deduction Line</button>` : ''}<button onclick="closeModal()" class="btn btn-sm btn-secondary">Close</button>` });
+}
+
+function openAddDeductionModal(empId) {
+  const p = MOCK.payrollItems.find(x => x.employeeId === empId); if (!p) return;
+  openModal(`Add Deduction — ${p.name}`, `<form onsubmit="event.preventDefault();saveNewDeductionLine('${p.employeeId}');" class="space-y-3">
+    <div><label class="form-label">Deduction Type / Label *</label><input id="ded-label" class="form-input" placeholder="e.g. Unexcused Tardiness, Equipment Penalty, Loan" required></div>
+    <div class="grid grid-cols-2 gap-3">
+      <div><label class="form-label">Amount (EGP) *</label><input id="ded-amount" type="number" step="50" min="10" class="form-input" placeholder="300" required></div>
+      <div><label class="form-label">Date *</label><input id="ded-date" type="date" class="form-input" value="2026-09-08" required></div>
+    </div>
+    <div><label class="form-label">Reason / Justification</label><textarea id="ded-reason" class="form-input" rows="2" placeholder="Details of the violation or deduction..."></textarea></div>
+    <div class="flex justify-end gap-2 pt-1">
+      <button type="button" onclick="openDeductions('${p.employeeId}')" class="btn btn-sm btn-secondary">Back to Deductions</button>
+      <button type="submit" class="btn btn-sm btn-primary">Add Deduction Line</button>
+    </div>
+  </form>`);
+}
+
+function saveNewDeductionLine(empId) {
+  const p = MOCK.payrollItems.find(x => x.employeeId === empId); if (!p) return;
+  const label = document.getElementById('ded-label')?.value.trim();
+  const amount = parseFloat(document.getElementById('ded-amount')?.value) || 0;
+  const date = document.getElementById('ded-date')?.value || '2026-09-08';
+  const reason = document.getElementById('ded-reason')?.value.trim() || '';
+  if (!label || !amount) { showToast('Label and amount are required', 'error'); return; }
+  p.deductionLines = p.deductionLines || [];
+  const newLine = {
+    id: 'ded-' + Date.now(),
+    label,
+    amount,
+    date,
+    reason,
+    status: 'Accepted'
+  };
+  p.deductionLines.push(newLine);
+  p.deductions = dedTotal(p);
+  p.net = netOf(p);
+  showToast(`Deduction of EGP ${amount} added for ${p.name}`);
+  openDeductions(empId);
+  renderPayrollMount();
 }
 
 function acceptAllDeductions(empId) {
@@ -247,6 +287,27 @@ function decideDeduction(empId, lineId, accept) {
   showToast(accept ? `Deduction accepted — ${l.label}` : `Deduction rejected — ${l.label}`, accept ? 'success' : 'error');
   openDeductions(empId);
   renderPayrollMount();
+}
+
+function approveAllDrafts() {
+  let n = 0;
+  MOCK.payrollItems.forEach(p => { if (p.status === 'Draft') { p.status = 'Approved'; n++; } });
+  showToast(n + ' payslip' + (n !== 1 ? 's' : '') + ' approved');
+  if (_payStep < 3) _payStep = 3;
+  renderAll();
+}
+
+function lockPayrollCycle() {
+  const pending = MOCK.payrollItems.reduce((s, p) => s + (p.deductionLines || []).filter(l => l.status === 'Pending').length, 0);
+  if (pending > 0) {
+    showToast(pending + ' pending deduction decisions — resolve before locking', 'error');
+    return;
+  }
+  MOCK.payrollItems.forEach(p => { p.status = 'Locked'; });
+  _payStep = 4;
+  MOCK.auditLog.unshift({ id: 'al-' + Date.now(), action: 'Payroll Locked', user: MOCK.currentUser.fullName, target: _payPeriod, detail: MOCK.payrollItems.length + ' payslips locked and scheduled for payment on 25th', timestamp: '2026-09-09', gym: 'All' });
+  showToast('Payroll cycle locked — payments scheduled for the 25th');
+  renderAll();
 }
 
 function renderPayrollMount() {
