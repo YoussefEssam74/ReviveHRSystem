@@ -1,11 +1,11 @@
 // ====================================================================================
-// ==================== REDESIGNED EMPLOYEE PAYROLL & EXPENSE SETTLEMENT ====================
+// ==================== COMPACT EMPLOYEE PAYROLL & EXPENSE SETTLEMENT =================
 // ====================================================================================
 
 let _payPeriod = 'August 2026';
-let _payrollView = 'detail'; // 'detail' for Employee Settlement Sheet, 'overview' for All Staff Table
+let _payrollView = 'overview'; // DEFAULT: Always show All Staff table first when clicking Payroll!
 let _payrollGym = 'Nasr City';
-let _payrollEmployeeIdValue = 'RV-00124'; // Default to Ahmed Mohamed
+let _payrollEmployeeIdValue = 'RV-00124';
 let _showAddDeductionForm = false;
 
 const PAYROLL_GYMS = ['Nasr City', 'Heliopolis', '6th October'];
@@ -40,7 +40,6 @@ function baseSalaryOf(item) { return Number(item.baseSalary !== undefined ? item
 function bonusOf(item) { return Number(item.bonus || 0); }
 function overtimeHoursOf(item) { return Number(item.overtime || 0); }
 function overtimePayOf(item) { 
-  // Standard overtime: (Base / 22 / 8) * 1.5 * overtimeHours
   const base = baseSalaryOf(item);
   const hourly = (base / 176) * 1.5;
   return Math.round(hourly * overtimeHoursOf(item));
@@ -50,18 +49,6 @@ function grossOf(item) { return baseSalaryOf(item) + bonusOf(item) + overtimePay
 function approvedDedTotal(item) {
   return (item.deductionLines || [])
     .filter(line => line.status === 'Accepted' || line.status === 'Approved')
-    .reduce((sum, line) => sum + (Number(line.amount) || 0), 0);
-}
-
-function pendingDedTotal(item) {
-  return (item.deductionLines || [])
-    .filter(line => line.status === 'Pending')
-    .reduce((sum, line) => sum + (Number(line.amount) || 0), 0);
-}
-
-function allDedTotal(item) {
-  return (item.deductionLines || [])
-    .filter(line => line.status !== 'Rejected')
     .reduce((sum, line) => sum + (Number(line.amount) || 0), 0);
 }
 
@@ -106,18 +93,6 @@ function payrollRequestsFor(item) {
   return (MOCK.requests || []).filter(r => ids.has(r.id) || r.employee === item.name);
 }
 
-function payrollAttendanceRows(item) {
-  const exceptions = (MOCK.attendanceExceptions || []).filter(r => r.employeeId === item.employeeId).map(r => ({
-    id: r.id, date: r.date, title: r.exception, detail: r.detail,
-    firstIn: r.firstIn, lastOut: r.lastOut, device: r.device, kind: 'exception', status: 'Exception'
-  }));
-  const board = (MOCK.attendanceRecords || []).filter(r => r.employeeId === item.employeeId).map(r => ({
-    id: `BOARD-${r.date}`, date: r.date, title: r.status, detail: r.notes || (r.shift ? `Shift ${r.shift}` : ''),
-    firstIn: r.checkIn, lastOut: r.checkOut, device: r.source, kind: 'board', status: r.status
-  }));
-  return exceptions.concat(board).sort((a, b) => String(b.date).localeCompare(String(a.date)));
-}
-
 function formatEGP(val) {
   return 'EGP ' + Number(val || 0).toLocaleString('en-US');
 }
@@ -127,7 +102,6 @@ function renderPayroll() {
   const gym = getEffectivePayrollGym();
   const items = payrollItemsForGym(gym);
 
-  // Ensure current employee exists
   let currentItem = items.find(i => i.employeeId === _payrollEmployeeIdValue);
   if (!currentItem && items.length > 0) {
     currentItem = items[0];
@@ -135,11 +109,7 @@ function renderPayroll() {
   }
 
   return `
-    <div class="space-y-3 font-sans text-charcoal-800 pb-12 max-w-7xl mx-auto">
-      <!-- TOP CONTROLS & SCOPE HEADER -->
-      ${renderPayrollTopHeader(gym, items)}
-
-      <!-- CONDITIONAL VIEW: DETAIL SETTLEMENT SHEET vs ALL STAFF TABLE -->
+    <div class="h-full flex flex-col font-sans text-charcoal-800 overflow-hidden">
       ${_payrollView === 'detail' && currentItem 
         ? renderPayrollSettlementSheet(currentItem, items) 
         : renderPayrollOverviewTable(items, gym)
@@ -148,56 +118,164 @@ function renderPayroll() {
   `;
 }
 
-// ==================== TOP CONTROLS HEADER ====================
-function renderPayrollTopHeader(gym, items) {
+// ====================================================================================
+// ==================== VIEW 1: DEFAULT ALL STAFF OVERVIEW TABLE ======================
+// ====================================================================================
+function renderPayrollOverviewTable(items, gym) {
   const locked = payrollPeriodLocked(gym);
   const closedCount = items.filter(payrollIsReviewed).length;
-  const totalCount = items.length;
+  const pendingCount = items.filter(i => !payrollIsReviewed(i)).length;
+  const totalNet = items.reduce((sum, i) => sum + netOf(i), 0);
+  const totalGross = items.reduce((sum, i) => sum + grossOf(i), 0);
 
   return `
-    <div class="bg-white rounded-xl border border-charcoal-200 p-3 shadow-2xs flex flex-col md:flex-row md:items-center justify-between gap-3">
-      <div>
+    <div class="h-full flex flex-col gap-2.5 overflow-hidden">
+      <!-- COMPACT HEADER (Single line, no bloated section) -->
+      <div class="flex items-center justify-between flex-shrink-0 pt-0.5">
         <div class="flex items-center gap-2">
-          <h1 class="text-base font-bold text-charcoal-900 tracking-tight">Monthly Payroll &amp; Expense Settlement</h1>
-          <span class="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold ${
+          <h1 class="text-base font-bold text-charcoal-900 tracking-tight">Staff Payroll &amp; Expense Accounts</h1>
+          <span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold ${
             locked ? 'bg-charcoal-100 text-charcoal-700' : 'bg-brand-50 text-brand-700 border border-brand-200'
           }">
-            ${locked ? '🔒 Period Locked' : '🟢 Open for Reconciliation'}
+            ${locked ? '🔒 Locked' : '🟢 Open for Reconciliation'}
           </span>
         </div>
-        <p class="text-[11px] text-charcoal-500 mt-0.5">
-          Verify attendance exceptions, reconcile manager expense charges, and close employee monthly accounts.
-        </p>
-      </div>
 
-      <!-- Scope Selectors & View Toggle -->
-      <div class="flex items-center gap-2 flex-wrap">
-        <!-- View Toggle Pills -->
-        <div class="flex items-center bg-charcoal-100 p-0.5 rounded-lg text-xs font-semibold">
-          <button onclick="_payrollView='detail';renderAll()" class="px-2.5 py-1 rounded-md transition-all ${
-            _payrollView === 'detail' ? 'bg-white text-charcoal-900 shadow-2xs font-bold' : 'text-charcoal-600 hover:text-charcoal-900'
-          }">
-            📄 Employee Sheet
-          </button>
-          <button onclick="_payrollView='overview';renderAll()" class="px-2.5 py-1 rounded-md transition-all ${
-            _payrollView === 'overview' ? 'bg-white text-charcoal-900 shadow-2xs font-bold' : 'text-charcoal-600 hover:text-charcoal-900'
-          }">
-            📋 All Staff (${totalCount})
-          </button>
-        </div>
-
-        <!-- Branch Selector -->
-        <div class="flex items-center gap-1.5 text-xs">
+        <div class="flex items-center gap-2">
+          <!-- Gym Branch selector -->
           <select onchange="setPayrollGym(this.value)" class="form-select text-xs py-1 px-2.5 font-semibold bg-white border border-charcoal-200 rounded-lg">
             ${PAYROLL_GYMS.map(g => `<option value="${g}" ${g === gym ? 'selected' : ''}>${g} Branch</option>`).join('')}
           </select>
-        </div>
 
-        <!-- Period Selector -->
-        <div class="flex items-center gap-1.5 text-xs">
+          <!-- Period selector -->
           <select onchange="setPayrollPeriod(this.value)" class="form-select text-xs py-1 px-2.5 font-semibold bg-white border border-charcoal-200 rounded-lg">
             ${PAYROLL_PERIODS.map(p => `<option value="${p}" ${p === _payPeriod ? 'selected' : ''}>${p}</option>`).join('')}
           </select>
+
+          <!-- Publish Button -->
+          ${closedCount === items.length && !locked && items.length > 0 ? `
+            <button onclick="publishPayroll()" class="btn btn-sm btn-primary text-xs h-7 px-3 font-bold shadow-2xs">
+              ✓ Publish &amp; Lock Branch
+            </button>
+          ` : locked ? `
+            <span class="text-xs text-charcoal-500 font-semibold px-2 py-1 bg-charcoal-100 rounded-lg">Published</span>
+          ` : `
+            <button onclick="publishPayroll()" class="btn btn-sm btn-secondary text-xs h-7 px-2.5 opacity-60" disabled title="Reconcile all staff sheets first">
+              Publish (${items.length - closedCount} pending)
+            </button>
+          `}
+        </div>
+      </div>
+
+      <!-- 4 COMPACT STAT CARDS -->
+      <div class="grid grid-cols-4 gap-2 flex-shrink-0">
+        <div class="bg-white rounded-lg border border-charcoal-200 px-3 py-2 flex items-center justify-between">
+          <div>
+            <p class="text-[10px] font-semibold text-charcoal-400 uppercase tracking-wide">Total Staff</p>
+            <p class="text-lg font-extrabold text-charcoal-900 leading-tight">${items.length}</p>
+          </div>
+          <span class="text-[10px] text-charcoal-400 font-medium">${gym}</span>
+        </div>
+
+        <div class="bg-white rounded-lg border border-charcoal-200 px-3 py-2 flex items-center justify-between">
+          <div>
+            <p class="text-[10px] font-semibold text-charcoal-400 uppercase tracking-wide">Settled &amp; Closed</p>
+            <p class="text-lg font-extrabold text-emerald-600 leading-tight">${closedCount} / ${items.length}</p>
+          </div>
+          <span class="text-[10px] text-emerald-700 font-bold bg-emerald-50 px-1.5 py-0.5 rounded">
+            ${items.length ? Math.round((closedCount / items.length) * 100) : 0}%
+          </span>
+        </div>
+
+        <div class="bg-white rounded-lg border border-charcoal-200 px-3 py-2 flex items-center justify-between">
+          <div>
+            <p class="text-[10px] font-semibold text-charcoal-400 uppercase tracking-wide">Pending Review</p>
+            <p class="text-lg font-extrabold ${pendingCount > 0 ? 'text-amber-600' : 'text-charcoal-900'} leading-tight">${pendingCount}</p>
+          </div>
+          <span class="text-[10px] text-amber-700 font-bold bg-amber-50 px-1.5 py-0.5 rounded">
+            ${pendingCount > 0 ? 'Action Needed' : 'All Clear'}
+          </span>
+        </div>
+
+        <div class="bg-white rounded-lg border border-charcoal-200 px-3 py-2 flex items-center justify-between">
+          <div>
+            <p class="text-[10px] font-semibold text-charcoal-400 uppercase tracking-wide">Net Disbursed</p>
+            <p class="text-lg font-extrabold text-brand-800 leading-tight">${formatEGP(totalNet)}</p>
+          </div>
+          <span class="text-[10px] text-charcoal-400 font-medium">Gross: ${formatEGP(totalGross)}</span>
+        </div>
+      </div>
+
+      <!-- MAIN STAFF TABLE (Fills remaining height, inner scroll only) -->
+      <div class="bg-white rounded-xl border border-charcoal-200 shadow-2xs flex-1 min-h-0 flex flex-col overflow-hidden">
+        <div class="px-3 py-2 border-b border-charcoal-150 flex items-center justify-between bg-charcoal-50/60 flex-shrink-0">
+          <div>
+            <h2 class="text-[11px] font-bold text-charcoal-900 uppercase tracking-wide">Branch Staff Expense &amp; Payroll Ledger</h2>
+            <p class="text-[10px] text-charcoal-400">Select any employee to review their source attendance, deductions, and close their monthly account</p>
+          </div>
+          <span class="text-[10px] text-charcoal-500 font-semibold">${items.length} records</span>
+        </div>
+
+        <div class="flex-1 min-h-0 overflow-y-auto">
+          <table class="w-full text-left border-collapse text-xs">
+            <thead class="sticky top-0 z-10 bg-charcoal-50 border-b border-charcoal-200">
+              <tr class="text-[10px] font-semibold text-charcoal-500 uppercase tracking-wider">
+                <th class="py-2 px-3">Employee</th>
+                <th class="py-2 px-3">Role</th>
+                <th class="py-2 px-3 text-right">Base Salary</th>
+                <th class="py-2 px-3 text-right">OT &amp; Bonus</th>
+                <th class="py-2 px-3 text-right">Deductions</th>
+                <th class="py-2 px-3 text-right">Net Final</th>
+                <th class="py-2 px-3">Status</th>
+                <th class="py-2 px-3 text-right">Action</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-charcoal-100">
+              ${items.map(it => {
+                const isClosed = payrollIsReviewed(it);
+                const pCount = pendingCountOf(it);
+                const base = baseSalaryOf(it);
+                const additions = bonusOf(it) + overtimePayOf(it);
+                const deds = approvedDedTotal(it);
+                const net = netOf(it);
+
+                return `
+                  <tr onclick="openPayrollDetail('${it.employeeId}')" class="hover:bg-charcoal-50 cursor-pointer transition-colors">
+                    <td class="py-2 px-3">
+                      <div class="flex items-center gap-2">
+                        <div class="w-7 h-7 rounded-lg bg-charcoal-100 text-charcoal-700 flex items-center justify-center font-bold text-[10px] flex-shrink-0">
+                          ${it.initials || 'EM'}
+                        </div>
+                        <div>
+                          <p class="font-bold text-charcoal-900 text-xs">${it.name}</p>
+                          <p class="text-[10px] text-charcoal-400 font-mono">${it.employeeId}</p>
+                        </div>
+                      </div>
+                    </td>
+                    <td class="py-2 px-3 text-charcoal-600 font-medium">${it.position}</td>
+                    <td class="py-2 px-3 text-right font-semibold text-charcoal-900">${formatEGP(base)}</td>
+                    <td class="py-2 px-3 text-right text-emerald-600 font-semibold">+ ${formatEGP(additions)}</td>
+                    <td class="py-2 px-3 text-right ${deds > 0 ? 'text-red-600' : 'text-charcoal-400'} font-semibold">
+                      ${deds > 0 ? `− ${formatEGP(deds)}` : '—'}
+                    </td>
+                    <td class="py-2 px-3 text-right font-extrabold text-charcoal-900">${formatEGP(net)}</td>
+                    <td class="py-2 px-3">
+                      <span class="badge ${
+                        isClosed ? 'badge-green' : pCount > 0 ? 'badge-yellow' : 'badge-blue'
+                      } text-[9px] font-bold">
+                        ${isClosed ? 'Closed & Settled' : pCount > 0 ? `${pCount} Actions Needed` : 'Ready to Close'}
+                      </span>
+                    </td>
+                    <td class="py-2 px-3 text-right">
+                      <button onclick="event.stopPropagation();openPayrollDetail('${it.employeeId}')" class="btn btn-sm btn-secondary text-[11px] h-6 px-2.5 text-brand-600 font-semibold hover:border-brand-300">
+                        Review Sheet →
+                      </button>
+                    </td>
+                  </tr>
+                `;
+              }).join('')}
+            </tbody>
+          </table>
         </div>
       </div>
     </div>
@@ -205,7 +283,7 @@ function renderPayrollTopHeader(gym, items) {
 }
 
 // ====================================================================================
-// ==================== DETAILED EMPLOYEE SETTLEMENT SHEET ============================
+// ==================== VIEW 2: COMPACT EMPLOYEE SETTLEMENT SHEET =====================
 // ====================================================================================
 function renderPayrollSettlementSheet(item, items) {
   const employee = payrollEmployeeRecord(item);
@@ -218,7 +296,7 @@ function renderPayrollSettlementSheet(item, items) {
   const prevEmp = currentIndex > 0 ? items[currentIndex - 1] : null;
   const nextEmp = currentIndex < items.length - 1 ? items[currentIndex + 1] : null;
 
-  // Calculation figures
+  // Financial figures
   const base = baseSalaryOf(item);
   const bonus = bonusOf(item);
   const otHours = overtimeHoursOf(item);
@@ -228,427 +306,299 @@ function renderPayrollSettlementSheet(item, items) {
   const net = netOf(item);
 
   return `
-    <div class="space-y-3">
+    <div class="h-full flex flex-col gap-2 overflow-hidden">
 
-      <!-- 1. EMPLOYEE SELECTOR & APPROVAL FLOW STRIP -->
-      <div class="bg-white rounded-xl border border-charcoal-200 p-2.5 shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
-        <!-- Switcher Dropdown & Arrows -->
+      <!-- SINGLE COMPACT HEADER BAR (Replaces sections 1 & 2!) -->
+      <div class="bg-white rounded-lg border border-charcoal-200 px-3 py-1.5 shadow-2xs flex items-center justify-between gap-3 flex-shrink-0">
+        <!-- Left: Back button + Employee Switcher -->
         <div class="flex items-center gap-2 min-w-0">
-          <div class="flex items-center gap-1">
-            <button onclick="openPayrollDetail('${prevEmp ? prevEmp.employeeId : ''}')" ${!prevEmp ? 'disabled' : ''} class="btn btn-sm btn-secondary h-7 w-7 p-0 flex items-center justify-center disabled:opacity-30" title="Previous Staff">
-              ←
-            </button>
-            <button onclick="openPayrollDetail('${nextEmp ? nextEmp.employeeId : ''}')" ${!nextEmp ? 'disabled' : ''} class="btn btn-sm btn-secondary h-7 w-7 p-0 flex items-center justify-center disabled:opacity-30" title="Next Staff">
-              →
-            </button>
+          <button onclick="closePayrollDetail()" class="btn btn-sm btn-secondary text-xs h-7 px-2 flex items-center gap-1 font-semibold" title="Back to All Staff">
+            ← All Staff
+          </button>
+
+          <span class="text-charcoal-300">|</span>
+
+          <!-- Prev/Next -->
+          <div class="flex items-center gap-0.5">
+            <button onclick="openPayrollDetail('${prevEmp ? prevEmp.employeeId : ''}')" ${!prevEmp ? 'disabled' : ''} class="h-6 w-6 rounded bg-charcoal-100 hover:bg-charcoal-200 flex items-center justify-center text-xs text-charcoal-700 disabled:opacity-30">‹</button>
+            <button onclick="openPayrollDetail('${nextEmp ? nextEmp.employeeId : ''}')" ${!nextEmp ? 'disabled' : ''} class="h-6 w-6 rounded bg-charcoal-100 hover:bg-charcoal-200 flex items-center justify-center text-xs text-charcoal-700 disabled:opacity-30">›</button>
           </div>
 
-          <div class="min-w-0">
-            <select onchange="openPayrollDetail(this.value)" class="form-select text-xs font-bold py-1 px-2.5 bg-charcoal-50 border border-charcoal-200 rounded-lg text-charcoal-900 truncate">
-              ${items.map(it => {
-                const pCount = pendingCountOf(it);
-                const tag = it.status === 'Reviewed' || it.status === 'Locked' ? '✓ Closed' : pCount > 0 ? `⚠️ ${pCount} Pending` : 'Ready to Close';
-                return `<option value="${it.employeeId}" ${it.employeeId === item.employeeId ? 'selected' : ''}>${it.name} (${it.position}) · ${tag}</option>`;
-              }).join('')}
-            </select>
-          </div>
-          <span class="text-[11px] text-charcoal-400 font-medium">(${currentIndex + 1} of ${items.length})</span>
+          <!-- Employee Dropdown Selector -->
+          <select onchange="openPayrollDetail(this.value)" class="form-select text-xs font-bold py-0.5 px-2 bg-charcoal-50 border border-charcoal-200 rounded max-w-[220px] truncate">
+            ${items.map(it => `
+              <option value="${it.employeeId}" ${it.employeeId === item.employeeId ? 'selected' : ''}>
+                ${it.name} (${it.position}) · ${payrollStatus(it)}
+              </option>
+            `).join('')}
+          </select>
+
+          <!-- Status badge -->
+          <span class="badge ${isClosed ? 'badge-green' : pendingCount > 0 ? 'badge-yellow' : 'badge-blue'} text-[9px] font-bold">
+            ${isClosed ? 'Closed & Settled' : pendingCount > 0 ? `${pendingCount} Actions Needed` : 'Ready to Close'}
+          </span>
         </div>
 
-        <!-- Approval Workflow Status Badges -->
-        <div class="flex items-center gap-2">
-          <!-- Step 1: Branch Manager -->
-          <div class="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-800 text-[11px]">
-            <svg class="w-3.5 h-3.5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
-            <span class="font-bold">BM Signed-off</span>
+        <!-- Right: Net Pay Callout & Main Closing Action -->
+        <div class="flex items-center gap-3 flex-shrink-0">
+          <div class="text-right">
+            <span class="text-[9px] text-charcoal-400 font-semibold uppercase tracking-wider block">Net Final Pay</span>
+            <span class="text-sm font-black text-brand-800">${formatEGP(net)}</span>
           </div>
 
-          <span class="text-charcoal-300">→</span>
-
-          <!-- Step 2: HR Reconciliation -->
-          <div class="flex items-center gap-1.5 px-2 py-1 rounded-lg ${
-            isClosed 
-              ? 'bg-emerald-50 border border-emerald-200 text-emerald-800' 
-              : pendingCount > 0 
-                ? 'bg-amber-50 border border-amber-200 text-amber-800' 
-                : 'bg-blue-50 border border-blue-200 text-blue-800'
-          } text-[11px]">
-            ${isClosed ? `
-              <svg class="w-3.5 h-3.5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
-              <span class="font-bold">HR Account Closed</span>
-            ` : pendingCount > 0 ? `
-              <svg class="w-3.5 h-3.5 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"/></svg>
-              <span class="font-bold">${pendingCount} Pending Decision${pendingCount > 1 ? 's' : ''}</span>
-            ` : `
-              <span class="font-bold">Ready to Close</span>
-            `}
-          </div>
-        </div>
-      </div>
-
-      <!-- 2. EMPLOYEE IDENTITY COMPACT STRIP -->
-      <div class="bg-white rounded-xl border border-charcoal-200 p-3 shadow-2xs flex flex-col md:flex-row md:items-center justify-between gap-3">
-        <div class="flex items-center gap-3">
-          <div class="w-10 h-10 rounded-xl bg-brand-600 text-white flex items-center justify-center font-bold text-sm shadow-xs flex-shrink-0">
-            ${item.initials || 'EM'}
-          </div>
-          <div>
-            <div class="flex items-center gap-2">
-              <h2 class="text-sm font-bold text-charcoal-900">${item.name}</h2>
-              <span class="badge badge-brand text-[10px] font-mono">${item.employeeId}</span>
-              <span class="badge ${item.employmentStatus === 'Active' ? 'badge-green' : 'badge-yellow'} text-[10px]">
-                ${item.employmentStatus || 'Active'}
+          ${isClosed ? `
+            <div class="flex items-center gap-1.5">
+              <span class="px-2.5 py-1 rounded-md bg-emerald-100 text-emerald-800 text-[11px] font-bold flex items-center gap-1">
+                ✓ Account Closed
               </span>
+              ${!locked ? `
+                <button onclick="reopenPayrollEmployee('${item.employeeId}')" class="btn btn-sm btn-secondary text-[10px] h-6 px-1.5 text-charcoal-500 hover:text-charcoal-900" title="Re-open for adjustments">
+                  Edit
+                </button>
+              ` : ''}
             </div>
-            <p class="text-xs text-charcoal-500 mt-0.5">
-              ${item.position} · ${item.gym} Branch · Hired: ${employee && employee.hireDate ? employee.hireDate : '2025-01-15'}
-            </p>
-          </div>
-        </div>
-
-        <div class="flex items-center gap-4 text-xs border-t md:border-t-0 md:border-l border-charcoal-150 pt-2 md:pt-0 md:pl-4">
-          <div>
-            <span class="text-[10px] text-charcoal-400 uppercase tracking-wider font-semibold block">Base Contract</span>
-            <span class="text-sm font-extrabold text-charcoal-900">${formatEGP(base)}</span>
-          </div>
-          <div>
-            <span class="text-[10px] text-charcoal-400 uppercase tracking-wider font-semibold block">Settlement Period</span>
-            <span class="text-xs font-bold text-charcoal-700">${_payPeriod}</span>
-          </div>
+          ` : pendingCount > 0 ? `
+            <button disabled class="btn btn-sm btn-secondary text-xs h-7 px-2.5 opacity-60 cursor-not-allowed" title="Approve or waive all deductions first">
+              Resolve ${pendingCount} Action${pendingCount > 1 ? 's' : ''} First
+            </button>
+          ` : `
+            <button onclick="acceptPayrollEmployee('${item.employeeId}')" class="btn btn-sm btn-primary text-xs h-7 px-3 font-bold flex items-center gap-1 shadow-2xs">
+              ✓ Close &amp; Settle Account
+            </button>
+          `}
         </div>
       </div>
 
-      <!-- 3. MAIN SETTLEMENT 2-COLUMN WORKSPACE -->
-      <div class="grid grid-cols-1 lg:grid-cols-12 gap-3 items-start">
+      <!-- MAIN 2-COLUMN COMPACT WORKSPACE (Fills remaining height) -->
+      <div class="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-12 gap-2.5 overflow-hidden">
 
-        <!-- ==================== LEFT COLUMN (7 COLS / 60%): SETTLEMENT & DEDUCTIONS ==================== -->
-        <div class="lg:col-span-7 space-y-3">
+        <!-- ==================== LEFT (7 COLS / 60%): FINANCIAL RECONCILIATION ==================== -->
+        <div class="lg:col-span-7 flex flex-col gap-2 min-h-0 overflow-y-auto pr-0.5">
 
-          <!-- CARD A: EARNINGS & ADDITIONS -->
-          <div class="bg-white rounded-xl border border-charcoal-200 p-3.5 shadow-2xs">
-            <div class="flex items-center justify-between pb-2 border-b border-charcoal-150 mb-2.5">
-              <div>
-                <h3 class="text-xs font-bold text-charcoal-900 uppercase tracking-wide">1. Monthly Earnings &amp; Additions</h3>
-                <p class="text-[11px] text-charcoal-400">Base contract salary plus overtime and bonuses</p>
-              </div>
-              <span class="badge badge-green text-[10px] font-bold">Gross: ${formatEGP(gross)}</span>
+          <!-- CARD 1: EARNINGS & GROSS PAY -->
+          <div class="bg-white rounded-lg border border-charcoal-200 p-2.5 shadow-2xs flex-shrink-0">
+            <div class="flex items-center justify-between pb-1.5 border-b border-charcoal-150 mb-1.5">
+              <h3 class="text-[11px] font-bold text-charcoal-900 uppercase tracking-wide">1. Monthly Earnings &amp; Additions</h3>
+              <span class="text-xs font-extrabold text-charcoal-900">Gross: ${formatEGP(gross)}</span>
             </div>
 
-            <div class="space-y-2 text-xs">
-              <div class="flex items-center justify-between py-1 px-2 rounded-lg bg-charcoal-50">
-                <span class="text-charcoal-600 font-medium">Base Contract Salary</span>
-                <span class="font-bold text-charcoal-900">${formatEGP(base)}</span>
+            <div class="grid grid-cols-3 gap-2 text-xs">
+              <div class="p-1.5 rounded bg-charcoal-50 border border-charcoal-100">
+                <span class="text-[10px] text-charcoal-500 block">Base Contract Salary</span>
+                <span class="font-bold text-charcoal-900 text-xs">${formatEGP(base)}</span>
               </div>
 
-              <div class="flex items-center justify-between py-1 px-2 rounded-lg bg-charcoal-50">
+              <div class="p-1.5 rounded bg-charcoal-50 border border-charcoal-100">
+                <span class="text-[10px] text-charcoal-500 block">Overtime (${otHours}h logged)</span>
+                <span class="font-bold text-emerald-600 text-xs">+ ${formatEGP(otPay)}</span>
+              </div>
+
+              <div class="p-1.5 rounded bg-brand-50/50 border border-brand-200 flex items-center justify-between">
                 <div>
-                  <span class="text-charcoal-600 font-medium">Overtime Hours Pay</span>
-                  <span class="text-[10px] text-charcoal-400 block">${otHours} hrs logged</span>
+                  <span class="text-[10px] text-brand-800 block font-semibold">Bonus / Incentive</span>
+                  <span class="text-[9px] text-charcoal-400">Editable</span>
                 </div>
-                <span class="font-bold text-charcoal-900">+ ${formatEGP(otPay)}</span>
-              </div>
-
-              <!-- Editable Bonus Row -->
-              <div class="flex items-center justify-between py-1.5 px-2 rounded-lg bg-brand-50/40 border border-brand-200">
-                <div>
-                  <span class="font-semibold text-brand-900">Performance Bonus / Incentive</span>
-                  <span class="text-[10px] text-charcoal-400 block">Editable by HR Manager</span>
-                </div>
-                <div class="flex items-center gap-1.5">
-                  <input type="number" min="0" step="50" value="${bonus}" 
-                    onchange="commitPayrollBonus('${item.employeeId}', this.value)"
-                    ${locked || isClosed ? 'disabled' : ''}
-                    class="form-input text-xs h-7 w-20 text-right font-bold text-brand-900 rounded border-brand-300" />
-                  <span class="text-xs font-bold text-brand-700">EGP</span>
-                </div>
-              </div>
-
-              <!-- Subtotal Row -->
-              <div class="flex items-center justify-between pt-1 px-2 font-bold text-charcoal-900 border-t border-charcoal-150">
-                <span>Total Gross Pay</span>
-                <span class="text-sm font-extrabold text-charcoal-900">${formatEGP(gross)}</span>
+                <input type="number" min="0" step="50" value="${bonus}" 
+                  onchange="commitPayrollBonus('${item.employeeId}', this.value)"
+                  ${locked || isClosed ? 'disabled' : ''}
+                  class="form-input text-xs h-6 w-16 text-right font-bold text-brand-900 rounded border-brand-300 py-0 px-1" />
               </div>
             </div>
           </div>
 
-          <!-- CARD B: DEDUCTIONS & EXPENSE ACCOUNT RECOVERIES (THE CORE RECONCILIATION) -->
-          <div class="bg-white rounded-xl border border-charcoal-200 p-3.5 shadow-2xs">
-            <div class="flex items-center justify-between pb-2 border-b border-charcoal-150 mb-2.5">
-              <div>
-                <h3 class="text-xs font-bold text-charcoal-900 uppercase tracking-wide">2. Deductions &amp; Expense Recoveries</h3>
-                <p class="text-[11px] text-charcoal-400">Review and decide each penalty or expense line</p>
-              </div>
-              <div class="text-right">
-                <span class="badge ${approvedDeds > 0 ? 'badge-red' : 'badge-gray'} text-[10px] font-bold">
+          <!-- CARD 2: DEDUCTIONS & EXPENSE RECOVERIES (THE CORE WORK) -->
+          <div class="bg-white rounded-lg border border-charcoal-200 p-2.5 shadow-2xs flex flex-col flex-1 min-h-0">
+            <div class="flex items-center justify-between pb-1.5 border-b border-charcoal-150 mb-2 flex-shrink-0">
+              <div class="flex items-center gap-2">
+                <h3 class="text-[11px] font-bold text-charcoal-900 uppercase tracking-wide">2. Deductions &amp; Expense Recoveries</h3>
+                <span class="badge ${approvedDeds > 0 ? 'badge-red' : 'badge-gray'} text-[9px] font-bold">
                   − ${formatEGP(approvedDeds)}
                 </span>
               </div>
+              
+              <button onclick="_showAddDeductionForm=!_showAddDeductionForm;renderAll()" ${locked || isClosed ? 'disabled' : ''} class="text-[10px] text-brand-600 hover:text-brand-800 font-bold flex items-center gap-0.5">
+                ${_showAddDeductionForm ? '✕ Close Form' : '+ Add Line'}
+              </button>
             </div>
 
-            <!-- List of Deduction Lines -->
-            ${deductions.length === 0 ? `
-              <div class="py-6 text-center text-xs text-charcoal-400 border border-dashed border-charcoal-200 rounded-lg">
-                ✓ No deductions or expense recoveries recorded for this employee.
-              </div>
-            ` : `
-              <div class="space-y-2">
-                ${deductions.map(line => {
-                  const isPending = line.status === 'Pending';
-                  const isAccepted = line.status === 'Accepted' || line.status === 'Approved';
-                  const isRejected = line.status === 'Rejected';
-                  const isBiometric = line.source === 'biometric';
+            <!-- Inline Add Form if opened -->
+            ${_showAddDeductionForm ? `
+              <form onsubmit="savePayrollDeductionInline(event, '${item.employeeId}')" class="p-2 rounded bg-charcoal-50 border border-charcoal-200 mb-2 space-y-1.5 text-xs flex-shrink-0">
+                <div class="grid grid-cols-3 gap-1.5">
+                  <select name="source" class="form-select text-[11px] py-0.5 px-1.5">
+                    <option value="manager">Manager Operational Charge</option>
+                    <option value="biometric">Biometric Penalty</option>
+                  </select>
+                  <input name="reason" required placeholder="Reason / Description" class="form-input text-[11px] py-0.5 px-1.5" />
+                  <div class="flex gap-1">
+                    <input name="amount" type="number" min="0" step="50" required placeholder="Amount (EGP)" class="form-input text-[11px] py-0.5 px-1.5 w-full" />
+                    <button type="submit" class="btn btn-sm btn-primary text-[10px] h-6 px-2 flex-shrink-0">Add</button>
+                  </div>
+                </div>
+              </form>
+            ` : ''}
 
-                  return `
-                    <div class="p-2.5 rounded-lg border transition-all ${
-                      isPending 
-                        ? 'bg-amber-50/50 border-amber-200 ring-1 ring-amber-100' 
-                        : isAccepted 
-                          ? 'bg-charcoal-50/60 border-charcoal-200' 
-                          : 'bg-gray-50 border-gray-200 opacity-60'
-                    }">
-                      <div class="flex items-start justify-between gap-2">
-                        <div class="min-w-0 flex-1">
-                          <div class="flex items-center gap-1.5 flex-wrap">
-                            <span class="badge ${isBiometric ? 'badge-blue' : 'badge-purple'} text-[9px] font-bold">
-                              ${isBiometric ? 'Biometric Attendance' : 'Manager Recovery'}
-                            </span>
-                            <span class="text-xs font-bold text-charcoal-900">${line.label || line.reason}</span>
-                            
-                            <!-- Status Tag -->
-                            <span class="text-[10px] font-bold ${
-                              isPending ? 'text-amber-700 bg-amber-100 px-1.5 py-0.2 rounded' :
-                              isAccepted ? 'text-emerald-700 bg-emerald-100 px-1.5 py-0.2 rounded' :
-                              'text-red-700 bg-red-100 px-1.5 py-0.2 rounded line-through'
-                            }">
-                              ${isPending ? 'Decision Required' : isAccepted ? 'Approved' : 'Waived / Rejected'}
-                            </span>
-                          </div>
+            <!-- Deductions List (scrollable) -->
+            <div class="space-y-1.5 overflow-y-auto flex-1 min-h-0 pr-0.5">
+              ${deductions.length === 0 ? `
+                <div class="py-6 text-center text-xs text-charcoal-400">
+                  ✓ No deductions or expense recoveries recorded for this employee.
+                </div>
+              ` : deductions.map(line => {
+                const isPending = line.status === 'Pending';
+                const isAccepted = line.status === 'Accepted' || line.status === 'Approved';
+                const isRejected = line.status === 'Rejected';
+                const isBiometric = line.source === 'biometric';
 
-                          <p class="text-[11px] text-charcoal-600 mt-1">${line.reason || '—'}</p>
-
-                          <div class="flex items-center gap-3 text-[10px] text-charcoal-400 mt-1 flex-wrap">
-                            <span>Date: <b>${line.date || '—'}</b></span>
-                            ${line.attendanceRef ? `
-                              <span>Ref: <button onclick="openPayrollAttendanceRef('${line.attendanceRef}', '${item.employeeId}')" class="text-brand-600 hover:underline font-bold">${line.attendanceRef}</button></span>
-                            ` : ''}
-                          </div>
-                        </div>
-
-                        <!-- Amount & Action Controls -->
-                        <div class="flex flex-col items-end gap-1.5 flex-shrink-0">
-                          <span class="text-xs font-bold ${isRejected ? 'line-through text-charcoal-400' : 'text-red-600'}">
-                            − ${formatEGP(line.amount)}
+                return `
+                  <div class="p-2 rounded-lg border transition-all text-xs ${
+                    isPending 
+                      ? 'bg-amber-50/60 border-amber-200 ring-1 ring-amber-100' 
+                      : isAccepted 
+                        ? 'bg-charcoal-50/70 border-charcoal-200' 
+                        : 'bg-gray-50 border-gray-200 opacity-50'
+                  }">
+                    <div class="flex items-center justify-between gap-2">
+                      <div class="min-w-0 flex-1">
+                        <div class="flex items-center gap-1.5">
+                          <span class="badge ${isBiometric ? 'badge-blue' : 'badge-purple'} text-[8px] font-bold">
+                            ${isBiometric ? 'Biometric' : 'Manager'}
                           </span>
-
-                          ${isPending && !locked && !isClosed ? `
-                            <div class="flex items-center gap-1 mt-0.5">
-                              <button onclick="decidePayrollDeduction('${item.employeeId}', '${line.id}', true)" 
-                                class="btn btn-sm btn-success h-6 px-2 text-[11px] shadow-2xs font-semibold" title="Approve this charge">
-                                Approve
-                              </button>
-                              <button onclick="decidePayrollDeduction('${item.employeeId}', '${line.id}', false)" 
-                                class="btn btn-sm btn-secondary h-6 px-2 text-[11px] text-red-600 hover:bg-red-50 font-semibold" title="Waive / reject this charge">
-                                Waive
-                              </button>
-                            </div>
-                          ` : isAccepted && !locked && !isClosed ? `
-                            <button onclick="decidePayrollDeduction('${item.employeeId}', '${line.id}', false)" 
-                              class="text-[10px] text-charcoal-400 hover:text-red-600 hover:underline">
-                              Change to Waive
-                            </button>
-                          ` : isRejected && !locked && !isClosed ? `
-                            <button onclick="decidePayrollDeduction('${item.employeeId}', '${line.id}', true)" 
-                              class="text-[10px] text-charcoal-400 hover:text-emerald-600 hover:underline">
-                              Restore to Approve
-                            </button>
-                          ` : ''}
+                          <span class="font-bold text-charcoal-900 truncate text-xs">${line.label || line.reason}</span>
+                          <span class="text-[9px] font-semibold text-charcoal-400">· ${line.date || ''}</span>
                         </div>
+                        <p class="text-[10px] text-charcoal-500 mt-0.5 truncate">${line.reason || '—'}</p>
+                      </div>
+
+                      <div class="flex items-center gap-2 flex-shrink-0">
+                        <span class="font-bold text-xs ${isRejected ? 'line-through text-charcoal-400' : 'text-red-600'}">
+                          − ${formatEGP(line.amount)}
+                        </span>
+
+                        ${isPending && !locked && !isClosed ? `
+                          <div class="flex items-center gap-1">
+                            <button onclick="decidePayrollDeduction('${item.employeeId}', '${line.id}', true)" 
+                              class="btn btn-sm btn-success h-5 px-1.5 text-[10px] font-bold">
+                              Approve
+                            </button>
+                            <button onclick="decidePayrollDeduction('${item.employeeId}', '${line.id}', false)" 
+                              class="btn btn-sm btn-secondary h-5 px-1.5 text-[10px] text-red-600 font-bold hover:bg-red-50">
+                              Waive
+                            </button>
+                          </div>
+                        ` : isAccepted ? `
+                          <span class="text-[9px] text-emerald-700 font-bold bg-emerald-100 px-1 py-0.2 rounded">Approved</span>
+                        ` : `
+                          <span class="text-[9px] text-charcoal-400 font-bold bg-charcoal-100 px-1 py-0.2 rounded line-through">Waived</span>
+                        `}
                       </div>
                     </div>
-                  `;
-                }).join('')}
-              </div>
-            `}
-
-            <!-- INLINE ADD DEDUCTION FORM TOGGLE -->
-            <div class="mt-3 pt-2.5 border-t border-charcoal-150">
-              ${!_showAddDeductionForm ? `
-                <button onclick="_showAddDeductionForm=true;renderAll()" ${locked || isClosed ? 'disabled' : ''} class="text-xs text-brand-600 hover:text-brand-800 font-semibold flex items-center gap-1">
-                  <span>+ Add Manual Deduction / Expense Charge</span>
-                </button>
-              ` : `
-                <form onsubmit="savePayrollDeductionInline(event, '${item.employeeId}')" class="bg-charcoal-50 p-2.5 rounded-lg border border-charcoal-200 space-y-2">
-                  <div class="flex items-center justify-between">
-                    <span class="text-xs font-bold text-charcoal-800">Add Deduction / Recovery Line</span>
-                    <button type="button" onclick="_showAddDeductionForm=false;renderAll()" class="text-xs text-charcoal-400 hover:text-charcoal-700">✕ Cancel</button>
                   </div>
-                  <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
-                    <div>
-                      <label class="block text-[10px] font-semibold text-charcoal-500 mb-0.5">Source Type</label>
-                      <select name="source" class="form-select text-xs py-1 px-2 w-full">
-                        <option value="manager">Manager Operational Charge</option>
-                        <option value="biometric">Biometric Attendance Penalty</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label class="block text-[10px] font-semibold text-charcoal-500 mb-0.5">Reason / Description</label>
-                      <input name="reason" required placeholder="e.g. Lost locker key / damaged tool" class="form-input text-xs py-1 px-2 w-full" />
-                    </div>
-                    <div>
-                      <label class="block text-[10px] font-semibold text-charcoal-500 mb-0.5">Amount (EGP)</label>
-                      <input name="amount" type="number" min="0" step="50" required placeholder="150" class="form-input text-xs py-1 px-2 w-full" />
-                    </div>
-                  </div>
-                  <div class="flex justify-end gap-2 pt-1">
-                    <button type="button" onclick="_showAddDeductionForm=false;renderAll()" class="btn btn-sm btn-secondary text-xs h-7 px-2">Cancel</button>
-                    <button type="submit" class="btn btn-sm btn-primary text-xs h-7 px-3">Add Charge</button>
-                  </div>
-                </form>
-              `}
+                `;
+              }).join('')}
             </div>
-          </div>
 
-          <!-- CARD C: FINAL MONTHLY SETTLEMENT & ACCOUNT CLOSING -->
-          <div class="bg-brand-50/60 rounded-xl border border-brand-200 p-4 shadow-2xs">
-            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-              <div>
-                <span class="text-[10px] uppercase tracking-wider font-extrabold text-brand-800 block">Final Monthly Settlement</span>
-                <div class="flex items-baseline gap-2 mt-0.5">
-                  <span class="text-2xl font-black text-brand-900">${formatEGP(net)}</span>
-                  <span class="text-xs text-charcoal-500">
-                    (${formatEGP(gross)} gross − ${formatEGP(approvedDeds)} deductions)
-                  </span>
-                </div>
-              </div>
-
-              <!-- Close Account Action Button -->
-              <div>
-                ${isClosed ? `
-                  <div class="flex items-center gap-2">
-                    <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 text-white text-xs font-bold shadow-xs">
-                      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
-                      Account Closed &amp; Settled
-                    </span>
-                    ${!locked ? `
-                      <button onclick="reopenPayrollEmployee('${item.employeeId}')" class="btn btn-sm btn-secondary text-xs h-8 px-2 text-charcoal-600 hover:text-charcoal-900" title="Re-open this employee's account for edits">
-                        Re-open
-                      </button>
-                    ` : ''}
-                  </div>
-                ` : pendingCount > 0 ? `
-                  <div class="text-right">
-                    <button disabled class="btn btn-sm btn-secondary text-xs h-8 px-3 opacity-60 cursor-not-allowed">
-                      Resolve ${pendingCount} Decisions First
-                    </button>
-                    <span class="block text-[10px] text-amber-700 mt-0.5 font-medium">Decide Approve/Waive on all lines above</span>
-                  </div>
-                ` : `
-                  <button onclick="acceptPayrollEmployee('${item.employeeId}')" class="btn btn-sm btn-primary text-xs h-9 px-4 font-bold shadow-xs flex items-center gap-1.5">
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
-                    Close &amp; Approve Account for ${_payPeriod}
-                  </button>
-                `}
+            <!-- Net Calculation Summary Strip -->
+            <div class="mt-2 pt-2 border-t border-charcoal-150 flex items-center justify-between text-xs flex-shrink-0">
+              <span class="text-charcoal-500 font-medium">
+                ${formatEGP(gross)} gross − ${formatEGP(approvedDeds)} deductions
+              </span>
+              <div class="flex items-center gap-1.5 font-bold">
+                <span class="text-charcoal-700">Net Pay:</span>
+                <span class="text-sm font-black text-brand-800">${formatEGP(net)}</span>
               </div>
             </div>
           </div>
 
         </div>
 
-        <!-- ==================== RIGHT COLUMN (5 COLS / 40%): SOURCE AUDIT EVIDENCE ==================== -->
-        <div class="lg:col-span-5 space-y-3">
+        <!-- ==================== RIGHT (5 COLS / 40%): SOURCE AUDIT & EVIDENCE ==================== -->
+        <div class="lg:col-span-5 flex flex-col gap-2 min-h-0 overflow-y-auto pl-0.5">
 
           <!-- 1. WORKING DAYS & ATTENDANCE LEDGER -->
-          <div class="bg-white rounded-xl border border-charcoal-200 p-3.5 shadow-2xs">
-            <div class="flex items-center justify-between pb-2 border-b border-charcoal-150 mb-2.5">
-              <div>
-                <h3 class="text-xs font-bold text-charcoal-900 uppercase tracking-wide">Working Days &amp; Leaves</h3>
-                <p class="text-[10px] text-charcoal-400">${_payPeriod} · 31 Days Cycle</p>
-              </div>
-              <span class="badge badge-gray text-[10px] font-bold">22 Paid Days</span>
+          <div class="bg-white rounded-lg border border-charcoal-200 p-2.5 shadow-2xs flex-shrink-0">
+            <div class="flex items-center justify-between pb-1 border-b border-charcoal-150 mb-1.5">
+              <h3 class="text-[11px] font-bold text-charcoal-900 uppercase tracking-wide">Work Days &amp; Attendance Log</h3>
+              <span class="text-[10px] text-charcoal-400 font-semibold">${_payPeriod}</span>
             </div>
 
-            <table class="w-full text-xs">
-              <tbody class="divide-y divide-charcoal-100">
-                <tr><td class="py-1 text-charcoal-600">Working Days Attended</td><td class="py-1 text-right font-bold text-charcoal-900">${item.days || 22} days</td></tr>
-                <tr><td class="py-1 text-charcoal-600">Weekly Scheduled Offs</td><td class="py-1 text-right font-bold text-charcoal-900">4 days</td></tr>
-                <tr><td class="py-1 text-charcoal-600">Annual Leave Taken</td><td class="py-1 text-right font-bold text-charcoal-900">0 days</td></tr>
-                <tr><td class="py-1 text-charcoal-600">Sick / Medical Leave</td><td class="py-1 text-right font-bold text-charcoal-900">0 days</td></tr>
-                <tr><td class="py-1 text-charcoal-600">Overtime Logged</td><td class="py-1 text-right font-bold text-brand-700">${otHours} hrs</td></tr>
-                <tr>
-                  <td class="py-1 text-charcoal-600">Late Arrivals Count</td>
-                  <td class="py-1 text-right font-bold ${deductions.some(d => d.source==='biometric') ? 'text-amber-600' : 'text-charcoal-900'}">
-                    1 incident
-                  </td>
-                </tr>
-                <tr><td class="py-1 text-charcoal-600">Unexcused Absences</td><td class="py-1 text-right font-bold text-charcoal-900">0 days</td></tr>
-              </tbody>
-            </table>
+            <div class="grid grid-cols-2 gap-x-3 gap-y-1 text-xs">
+              <div class="flex justify-between py-0.5 border-b border-charcoal-100">
+                <span class="text-charcoal-500">Days Attended</span>
+                <span class="font-bold text-charcoal-900">${item.days || 22} days</span>
+              </div>
+              <div class="flex justify-between py-0.5 border-b border-charcoal-100">
+                <span class="text-charcoal-500">Weekly Offs</span>
+                <span class="font-bold text-charcoal-900">4 days</span>
+              </div>
+              <div class="flex justify-between py-0.5 border-b border-charcoal-100">
+                <span class="text-charcoal-500">Approved Leaves</span>
+                <span class="font-bold text-charcoal-900">0 days</span>
+              </div>
+              <div class="flex justify-between py-0.5 border-b border-charcoal-100">
+                <span class="text-charcoal-500">Overtime Logged</span>
+                <span class="font-bold text-brand-700">${otHours} hrs</span>
+              </div>
+              <div class="flex justify-between py-0.5">
+                <span class="text-charcoal-500">Late Arrivals</span>
+                <span class="font-bold ${deductions.some(d => d.source==='biometric') ? 'text-amber-600' : 'text-charcoal-900'}">
+                  1 incident
+                </span>
+              </div>
+              <div class="flex justify-between py-0.5">
+                <span class="text-charcoal-500">Unexcused Absences</span>
+                <span class="font-bold text-charcoal-900">0 days</span>
+              </div>
+            </div>
           </div>
 
-          <!-- 2. BIOMETRIC ATTENDANCE PUNCHES PROOF -->
-          <div class="bg-white rounded-xl border border-charcoal-200 p-3.5 shadow-2xs">
-            <div class="flex items-center justify-between pb-2 border-b border-charcoal-150 mb-2">
-              <div>
-                <h3 class="text-xs font-bold text-charcoal-900 uppercase tracking-wide">Biometric Punch Proof</h3>
-                <p class="text-[10px] text-charcoal-400">Punches logged for this month</p>
-              </div>
-              <button onclick="navigateTo('attendance')" class="text-[11px] text-brand-600 hover:underline font-semibold">Attendance Log →</button>
+          <!-- 2. BIOMETRIC PUNCH EVIDENCE -->
+          <div class="bg-white rounded-lg border border-charcoal-200 p-2.5 shadow-2xs flex-shrink-0">
+            <div class="flex items-center justify-between pb-1 border-b border-charcoal-150 mb-1.5">
+              <h3 class="text-[11px] font-bold text-charcoal-900 uppercase tracking-wide">Biometric Punch Proof</h3>
+              <button onclick="navigateTo('attendance')" class="text-[10px] text-brand-600 hover:underline font-bold">Attendance Module →</button>
             </div>
 
-            <div class="space-y-1.5 text-xs">
-              <div class="p-2 rounded-lg bg-amber-50/70 border border-amber-200 flex items-center justify-between">
+            <div class="space-y-1 text-xs">
+              <div class="p-1.5 rounded bg-amber-50 border border-amber-200 flex items-center justify-between">
                 <div>
-                  <div class="flex items-center gap-1.5">
-                    <span class="w-2 h-2 rounded-full bg-amber-500"></span>
-                    <span class="font-bold text-amber-900">Aug 19 (Late Arrival)</span>
-                  </div>
-                  <p class="text-[10px] text-charcoal-500 mt-0.5">Punch: 08:41 In → 16:02 Out · Terminal #1</p>
+                  <p class="font-bold text-amber-900 text-[11px]">Aug 19 (Late Arrival Exception)</p>
+                  <p class="text-[10px] text-charcoal-500">Punch: 08:41 In → 16:02 Out · Terminal #1</p>
                 </div>
-                <button onclick="openPayrollAttendanceRef('ATT-2608-0417', '${item.employeeId}')" class="btn btn-sm btn-secondary text-[10px] h-6 px-1.5">
-                  Verify Log
+                <button onclick="openPayrollAttendanceRef('ATT-2608-0417', '${item.employeeId}')" class="btn btn-sm btn-secondary text-[9px] h-5 px-1 font-bold">
+                  View Log
                 </button>
               </div>
 
-              <div class="p-2 rounded-lg bg-charcoal-50 flex items-center justify-between">
+              <div class="p-1.5 rounded bg-charcoal-50 flex items-center justify-between">
                 <div>
-                  <div class="flex items-center gap-1.5">
-                    <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
-                    <span class="font-bold text-charcoal-900">Sep 09 (On Time)</span>
-                  </div>
-                  <p class="text-[10px] text-charcoal-400 mt-0.5">Punch: 08:02 In → 16:00 Out · Biometric</p>
+                  <p class="font-bold text-charcoal-900 text-[11px]">Sep 09 (Regular Punch)</p>
+                  <p class="text-[10px] text-charcoal-400">Punch: 08:02 In → 16:00 Out · Biometric</p>
                 </div>
-                <span class="text-[10px] text-emerald-600 font-bold">On Time</span>
+                <span class="text-[9px] text-emerald-600 font-bold">On Time</span>
               </div>
             </div>
           </div>
 
-          <!-- 3. RELATED REQUESTS & DECISIONS -->
-          <div class="bg-white rounded-xl border border-charcoal-200 p-3.5 shadow-2xs">
-            <div class="flex items-center justify-between pb-2 border-b border-charcoal-150 mb-2">
-              <div>
-                <h3 class="text-xs font-bold text-charcoal-900 uppercase tracking-wide">Linked Employee Requests</h3>
-                <p class="text-[10px] text-charcoal-400">Context for leave and deductions</p>
-              </div>
-              <button onclick="navigateTo('requests')" class="text-[11px] text-brand-600 hover:underline font-semibold">View All →</button>
+          <!-- 3. LINKED REQUESTS & BM COMMENTS -->
+          <div class="bg-white rounded-lg border border-charcoal-200 p-2.5 shadow-2xs flex-1 min-h-0 overflow-y-auto">
+            <div class="flex items-center justify-between pb-1 border-b border-charcoal-150 mb-1.5 flex-shrink-0">
+              <h3 class="text-[11px] font-bold text-charcoal-900 uppercase tracking-wide">Linked Employee Requests</h3>
+              <span class="text-[10px] text-charcoal-400">Context for decisions</span>
             </div>
 
             ${payrollRequestsFor(item).length === 0 ? `
-              <p class="text-xs text-charcoal-400 py-3 text-center">No leave or exception requests logged for this period.</p>
+              <p class="text-xs text-charcoal-400 py-2 text-center">No leave or exception requests logged for this period.</p>
             ` : `
-              <div class="space-y-1.5">
+              <div class="space-y-1">
                 ${payrollRequestsFor(item).map(req => `
-                  <div class="p-2 rounded-lg bg-charcoal-50 border border-charcoal-100 flex items-start justify-between gap-2 text-xs">
-                    <div>
-                      <div class="flex items-center gap-1.5">
-                        <span class="font-bold text-charcoal-900">${req.type}</span>
-                        <span class="badge ${req.status === 'Approved' ? 'badge-green' : 'badge-red'} text-[9px]">${req.status}</span>
-                      </div>
-                      <p class="text-[10px] text-charcoal-500 mt-0.5">${req.reason || 'No reason'}</p>
-                      <p class="text-[9px] text-charcoal-400 mt-0.5">BM Decision: <b>${req.bmDecision || '—'}</b> (${req.bmComment || 'Reviewed'})</p>
+                  <div class="p-1.5 rounded bg-charcoal-50 border border-charcoal-150 text-xs">
+                    <div class="flex items-center justify-between">
+                      <span class="font-bold text-charcoal-900 text-[11px]">${req.type}</span>
+                      <span class="badge ${req.status === 'Approved' ? 'badge-green' : 'badge-red'} text-[8px]">${req.status}</span>
                     </div>
-                    <button onclick="openRequestDetail('${req.id}')" class="btn btn-sm btn-secondary text-[10px] h-6 px-1.5 flex-shrink-0">
-                      View
-                    </button>
+                    <p class="text-[10px] text-charcoal-600 mt-0.5 truncate">${req.reason || 'No reason'}</p>
+                    <p class="text-[9px] text-charcoal-400 mt-0.5">BM Decision: <b>${req.bmDecision || '—'}</b> (${req.bmComment || 'Reviewed'})</p>
                   </div>
                 `).join('')}
               </div>
@@ -664,137 +614,7 @@ function renderPayrollSettlementSheet(item, items) {
 }
 
 // ====================================================================================
-// ==================== ALL STAFF OVERVIEW TABLE VIEW =================================
-// ====================================================================================
-function renderPayrollOverviewTable(items, gym) {
-  const locked = payrollPeriodLocked(gym);
-  const closedCount = items.filter(payrollIsReviewed).length;
-  const pendingCount = items.filter(i => !payrollIsReviewed(i)).length;
-  const totalNet = items.reduce((sum, i) => sum + netOf(i), 0);
-  const totalGross = items.reduce((sum, i) => sum + grossOf(i), 0);
-
-  return `
-    <div class="space-y-3">
-      <!-- 4 KPI SUMMARY TILES -->
-      <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-        <div class="bg-white rounded-xl border border-charcoal-200 p-3 shadow-2xs">
-          <span class="text-[10px] font-semibold text-charcoal-400 uppercase tracking-wider block">Total Staff In Branch</span>
-          <p class="text-xl font-extrabold text-charcoal-900 mt-1">${items.length}</p>
-          <p class="text-[10px] text-charcoal-500 mt-0.5">${gym} Branch</p>
-        </div>
-
-        <div class="bg-white rounded-xl border border-charcoal-200 p-3 shadow-2xs">
-          <span class="text-[10px] font-semibold text-charcoal-400 uppercase tracking-wider block">Accounts Closed</span>
-          <p class="text-xl font-extrabold text-emerald-600 mt-1">${closedCount} / ${items.length}</p>
-          <p class="text-[10px] text-charcoal-500 mt-0.5">${items.length ? Math.round((closedCount/items.length)*100) : 0}% reconciled</p>
-        </div>
-
-        <div class="bg-white rounded-xl border border-charcoal-200 p-3 shadow-2xs">
-          <span class="text-[10px] font-semibold text-charcoal-400 uppercase tracking-wider block">Pending HR Review</span>
-          <p class="text-xl font-extrabold ${pendingCount > 0 ? 'text-amber-600' : 'text-charcoal-900'} mt-1">${pendingCount}</p>
-          <p class="text-[10px] text-charcoal-500 mt-0.5">Need approval/closing</p>
-        </div>
-
-        <div class="bg-white rounded-xl border border-charcoal-200 p-3 shadow-2xs">
-          <span class="text-[10px] font-semibold text-charcoal-400 uppercase tracking-wider block">Total Net Payroll</span>
-          <p class="text-xl font-extrabold text-brand-800 mt-1">${formatEGP(totalNet)}</p>
-          <p class="text-[10px] text-charcoal-500 mt-0.5">Gross: ${formatEGP(totalGross)}</p>
-        </div>
-      </div>
-
-      <!-- MAIN TABLE CARD -->
-      <div class="bg-white rounded-xl border border-charcoal-200 shadow-2xs overflow-hidden">
-        <div class="p-3 border-b border-charcoal-150 flex items-center justify-between bg-charcoal-50/60">
-          <div>
-            <h3 class="text-xs font-bold text-charcoal-900 uppercase tracking-wide">Staff Payroll Ledger</h3>
-            <p class="text-[10px] text-charcoal-400">Click any row to open their monthly closing sheet</p>
-          </div>
-
-          <div class="flex items-center gap-2">
-            ${closedCount === items.length && !locked ? `
-              <button onclick="publishPayroll()" class="btn btn-sm btn-primary text-xs h-7 px-3 font-bold">
-                ✓ Publish &amp; Lock Branch Payroll
-              </button>
-            ` : locked ? `
-              <span class="badge badge-gray text-xs">🔒 Period Published &amp; Locked</span>
-            ` : `
-              <button onclick="publishPayroll()" class="btn btn-sm btn-secondary text-xs h-7 px-3 opacity-60" disabled title="Close all employee sheets before publishing">
-                Publish &amp; Lock (${items.length - closedCount} pending)
-              </button>
-            `}
-          </div>
-        </div>
-
-        <div class="overflow-x-auto">
-          <table class="w-full text-left border-collapse text-xs">
-            <thead>
-              <tr class="border-b border-charcoal-150 bg-charcoal-50/40 text-[10px] font-semibold text-charcoal-500 uppercase tracking-wider">
-                <th class="py-2.5 px-3">Employee</th>
-                <th class="py-2.5 px-3">Position</th>
-                <th class="py-2.5 px-3 text-right">Base</th>
-                <th class="py-2.5 px-3 text-right">Bonus / OT</th>
-                <th class="py-2.5 px-3 text-right">Deductions</th>
-                <th class="py-2.5 px-3 text-right">Net Final</th>
-                <th class="py-2.5 px-3">Status</th>
-                <th class="py-2.5 px-3 text-right">Action</th>
-              </tr>
-            </thead>
-            <tbody class="divide-y divide-charcoal-100">
-              ${items.map(it => {
-                const isClosed = payrollIsReviewed(it);
-                const pCount = pendingCountOf(it);
-                const base = baseSalaryOf(it);
-                const additions = bonusOf(it) + overtimePayOf(it);
-                const deds = approvedDedTotal(it);
-                const net = netOf(it);
-
-                return `
-                  <tr onclick="openPayrollDetail('${it.employeeId}')" class="hover:bg-charcoal-50 cursor-pointer transition-colors ${
-                    it.employeeId === _payrollEmployeeIdValue ? 'bg-brand-50/30' : ''
-                  }">
-                    <td class="py-2.5 px-3">
-                      <div class="flex items-center gap-2">
-                        <div class="w-7 h-7 rounded-lg bg-charcoal-100 text-charcoal-700 flex items-center justify-center font-bold text-[10px] flex-shrink-0">
-                          ${it.initials || 'EM'}
-                        </div>
-                        <div>
-                          <p class="font-bold text-charcoal-900 text-xs">${it.name}</p>
-                          <p class="text-[10px] text-charcoal-400 font-mono">${it.employeeId}</p>
-                        </div>
-                      </div>
-                    </td>
-                    <td class="py-2.5 px-3 text-charcoal-600 font-medium">${it.position}</td>
-                    <td class="py-2.5 px-3 text-right font-semibold text-charcoal-900">${formatEGP(base)}</td>
-                    <td class="py-2.5 px-3 text-right text-emerald-600 font-semibold">+ ${formatEGP(additions)}</td>
-                    <td class="py-2.5 px-3 text-right ${deds > 0 ? 'text-red-600' : 'text-charcoal-400'} font-semibold">
-                      ${deds > 0 ? `− ${formatEGP(deds)}` : '—'}
-                    </td>
-                    <td class="py-2.5 px-3 text-right font-extrabold text-charcoal-900">${formatEGP(net)}</td>
-                    <td class="py-2.5 px-3">
-                      <span class="badge ${
-                        isClosed ? 'badge-green' : pCount > 0 ? 'badge-yellow' : 'badge-blue'
-                      } text-[10px] font-bold">
-                        ${isClosed ? 'Closed & Settled' : pCount > 0 ? `${pCount} Decisions Needed` : 'Ready to Close'}
-                      </span>
-                    </td>
-                    <td class="py-2.5 px-3 text-right">
-                      <button onclick="event.stopPropagation();openPayrollDetail('${it.employeeId}')" class="btn btn-sm btn-secondary text-[11px] h-6 px-2 text-brand-600 font-semibold">
-                        Open Sheet →
-                      </button>
-                    </td>
-                  </tr>
-                `;
-              }).join('')}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-  `;
-}
-
-// ====================================================================================
-// ==================== INTERACTIVE PAYROLL ACTIONS ===================================
+// ==================== INTERACTIVE ACTIONS ===========================================
 // ====================================================================================
 
 function openPayrollDetail(id) {
@@ -803,8 +623,6 @@ function openPayrollDetail(id) {
   _payrollView = 'detail';
   _showAddDeductionForm = false;
   renderAll();
-  const main = document.getElementById('main-content');
-  if (main) main.scrollTop = 0;
 }
 
 function closePayrollDetail() {
@@ -884,7 +702,7 @@ function savePayrollDeductionInline(e, empId) {
   payrollSyncTotals(item);
   _showAddDeductionForm = false;
   renderAll();
-  showToast(`Deduction added for ${item.name} (${formatEGP(amount)}). Decision pending.`);
+  showToast(`Deduction added for ${item.name} (${formatEGP(amount)}).`);
 }
 
 function acceptPayrollEmployee(id) {
