@@ -1,4 +1,4 @@
-﻿// ==================== HR STATE & UTILITIES ====================
+// ==================== HR STATE & UTILITIES ====================
 let state = { currentPage: 'dashboard', sidebarOpen: false, userMenuOpen: false, mobileMoreOpen: false };
 const DEMO = { showAll: true, role: 'hrManager' };
 
@@ -211,12 +211,26 @@ function toggleSidebar() {
   if(state.sidebarOpen){s.classList.remove('-translate-x-full');o.classList.remove('hidden');}else{s.classList.add('-translate-x-full');o.classList.add('hidden');}
 }
 function closeSidebar() { state.sidebarOpen=false; const s=document.getElementById('mobile-sidebar'),o=document.getElementById('mobile-sidebar-overlay'); if(s)s.classList.add('-translate-x-full'); if(o)o.classList.add('hidden'); }
-function toggleUserMenu() { state.userMenuOpen=!state.userMenuOpen; const d=document.getElementById('user-menu-dropdown'); if(state.userMenuOpen)d.classList.remove('hidden');else d.classList.add('hidden'); }
+function toggleUserMenu() { state.userMenuOpen=!state.userMenuOpen; const d=document.getElementById('user-menu-dropdown'); if(state.userMenuOpen){closeNotifMenu();d.classList.remove('hidden');}else d.classList.add('hidden'); }
 function closeUserMenu() { state.userMenuOpen=false; const d=document.getElementById('user-menu-dropdown'); if(d)d.classList.add('hidden'); }
+
+function toggleNotifMenu() {
+  const d = document.getElementById('notif-menu-dropdown');
+  if(!d) return;
+  const isHidden = d.classList.contains('hidden');
+  if(isHidden) { closeUserMenu(); d.classList.remove('hidden'); }
+  else { d.classList.add('hidden'); }
+}
+function closeNotifMenu() { const d=document.getElementById('notif-menu-dropdown'); if(d)d.classList.add('hidden'); }
+
 function toggleMobileMore() { state.mobileMoreOpen=!state.mobileMoreOpen; const m=document.getElementById('mobile-more-menu'); if(state.mobileMoreOpen){renderMobileMore();m.classList.remove('hidden');}else m.classList.add('hidden'); }
 function closeMobileMore() { state.mobileMoreOpen=false; const m=document.getElementById('mobile-more-menu'); if(m)m.classList.add('hidden'); }
 function handleLogout() { openModal('Confirm Logout','<p class="text-xs text-charcoal-600 mb-3">Are you sure you want to log out?</p>',{footer:'<button onclick="closeModal()" class="btn btn-sm btn-secondary">Cancel</button><button onclick="showToast(\'Logged out\');closeModal();" class="btn btn-sm btn-danger">Logout</button>'}); }
-document.addEventListener('click', e => { if(!e.target.closest('#user-menu-container')) closeUserMenu(); });
+
+document.addEventListener('click', e => {
+  if(!e.target.closest('#user-menu-container')) closeUserMenu();
+  if(!e.target.closest('#notif-menu-container')) closeNotifMenu();
+});
 
 // ==================== DEMO CONTROLS ====================
 function updateUserUI() {
@@ -229,7 +243,16 @@ function updateUserUI() {
   set('header-user-name', u.fullName);
   set('header-user-meta', `${u.position} · ${u.gyms.length} gyms`);
   set('menu-user-name', u.fullName);
-  set('menu-user-email', u.email);
+  set('menu-user-role', `${u.role} · ${u.position}`);
+  set('menu-user-gyms', `Assigned: ${u.gyms.length} Gyms (${u.gyms.map(g=>g.branch).join(', ')})`);
+  
+  // Sync topbar gym selector options
+  const topSelect = document.getElementById('topbar-gym-select');
+  if (topSelect) {
+    topSelect.innerHTML = `<option value="all">All my gyms (${u.gyms.length})</option>` + 
+      u.gyms.map(g => `<option value="${g.id}" ${u.selectedGym===g.id?'selected':''}>${g.name} — ${g.branch}</option>`).join('');
+  }
+
   const roleBtn = document.getElementById('demo-role-label');
   if(roleBtn) roleBtn.textContent = u.role;
   const showAllBtn = document.getElementById('demo-showall');

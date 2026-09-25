@@ -104,31 +104,83 @@
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
         </button>
         <h1 class="lg:hidden text-sm font-semibold text-charcoal-900" id="mobile-page-title">Dashboard</h1>
+        <!-- Gym selector dropdown (defaults to "All my gyms") -->
+        <div id="topbar-gym-selector" class="hidden sm:flex items-center">
+          <select id="topbar-gym-select" onchange="setGymFilter(this.value)" class="form-select bg-neutral-50 hover:bg-neutral-100 border border-neutral-200 text-xs py-1 px-2.5 rounded font-medium text-neutral-800 transition-colors cursor-pointer">
+            <option value="all">All my gyms (3)</option>
+            <option value="gym-1">Revive Gym — Nasr City</option>
+            <option value="gym-2">Revive Gym — Heliopolis</option>
+            <option value="gym-3">Revive Fitness — 6th October</option>
+          </select>
+        </div>
+
         <div class="flex-1"></div>
+
         <div class="flex items-center gap-2">
-          <button onclick="navigateTo('notifications')" class="relative p-1.5 rounded hover:bg-charcoal-100 transition-colors" aria-label="Notifications">
-            <svg class="w-4 h-4 text-charcoal-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/></svg>
-            <span class="absolute -top-0.5 -right-0.5 min-w-[14px] h-3.5 px-0.5 bg-brand-500 text-white text-[8px] font-bold rounded-full flex items-center justify-center hidden" id="header-notif-dot"></span>
-          </button>
+          <!-- Notification Bell with Dropdown Panel -->
+          <div class="relative" id="notif-menu-container">
+            <button onclick="toggleNotifMenu()" class="relative p-1.5 rounded hover:bg-neutral-100 transition-colors" aria-label="Notifications">
+              <svg class="w-4 h-4 text-neutral-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/></svg>
+              <span class="absolute -top-0.5 -right-0.5 min-w-[14px] h-3.5 px-0.5 bg-brand-600 text-white text-[8px] font-bold rounded-full flex items-center justify-center" id="header-notif-dot">4</span>
+            </button>
+            <div id="notif-menu-dropdown" class="hidden absolute right-0 mt-1.5 w-80 bg-white rounded-lg shadow-xl border border-neutral-200 py-2 z-50">
+              <div class="px-3 pb-2 border-b border-neutral-150 flex items-center justify-between">
+                <span class="text-xs font-bold text-neutral-900">Notifications & Alerts</span>
+                <span class="badge badge-brand text-[9px]">4 Action Items</span>
+              </div>
+              <div class="divide-y divide-neutral-100 max-h-72 overflow-y-auto text-xs" id="notif-dropdown-items">
+                <div class="p-2.5 hover:bg-neutral-50 transition-colors cursor-pointer" onclick="openStalledCandidateModal();closeNotifMenu();">
+                  <div class="flex items-center justify-between">
+                    <span class="badge badge-red text-[8px] font-bold">Candidate</span>
+                    <span class="text-[10px] text-neutral-400">6d ago</span>
+                  </div>
+                  <p class="font-bold text-neutral-900 text-xs mt-0.5">Ahmed Karim stalled in 2nd Interview</p>
+                  <p class="text-[11px] text-neutral-500">Nasr City · Needs final sign-off</p>
+                </div>
+                <div class="p-2.5 hover:bg-neutral-50 transition-colors cursor-pointer" onclick="openAttendanceExceptionsModal();closeNotifMenu();">
+                  <div class="flex items-center justify-between">
+                    <span class="badge badge-yellow text-[8px] font-bold">Attendance</span>
+                    <span class="text-[10px] text-neutral-400">Yesterday</span>
+                  </div>
+                  <p class="font-bold text-neutral-900 text-xs mt-0.5">4 Unresolved attendance exceptions</p>
+                  <p class="text-[11px] text-neutral-500">Heliopolis · Evening shift checkouts</p>
+                </div>
+                <div class="p-2.5 hover:bg-neutral-50 transition-colors cursor-pointer" onclick="openPublishCycleModal();closeNotifMenu();">
+                  <div class="flex items-center justify-between">
+                    <span class="badge badge-red text-[8px] font-bold">Schedule</span>
+                    <span class="text-[10px] text-neutral-400">3d left</span>
+                  </div>
+                  <p class="font-bold text-neutral-900 text-xs mt-0.5">Shift Cycle #19 still in draft</p>
+                  <p class="text-[11px] text-neutral-500">All branches require schedule publication</p>
+                </div>
+              </div>
+              <div class="pt-2 px-3 border-t border-neutral-150 text-center">
+                <button onclick="navigateTo('notifications'); closeNotifMenu();" class="text-[11px] text-brand-600 hover:text-brand-700 font-semibold">View Full Activity Log →</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Profile Menu (avatar → name/position/role/gym) -->
           <div class="relative" id="user-menu-container">
-            <button onclick="toggleUserMenu()" class="flex items-center gap-2 px-2 py-1 rounded hover:bg-charcoal-50 transition-colors" aria-label="User menu">
+            <button onclick="toggleUserMenu()" class="flex items-center gap-2 px-2 py-1 rounded hover:bg-neutral-50 transition-colors" aria-label="User menu">
               <div class="w-7 h-7 rounded-full bg-brand-100 text-brand-700 flex items-center justify-center text-[10px] font-semibold" id="header-avatar">ME</div>
               <div class="hidden md:block text-left">
-                <p class="text-xs font-semibold text-charcoal-900 leading-tight" id="header-user-name">Mona El-Sayed</p>
-                <p class="text-[10px] text-charcoal-500 leading-tight" id="header-user-meta">HR Manager · Revive Gym</p>
+                <p class="text-xs font-semibold text-neutral-900 leading-tight" id="header-user-name">Mona El-Sayed</p>
+                <p class="text-[10px] text-neutral-500 leading-tight" id="header-user-meta">HR Manager · 3 gyms</p>
               </div>
-              <svg class="w-3.5 h-3.5 text-charcoal-400 hidden md:block" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+              <svg class="w-3.5 h-3.5 text-neutral-400 hidden md:block" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
             </button>
-            <div id="user-menu-dropdown" class="hidden absolute right-0 mt-1.5 w-44 bg-white rounded-lg shadow-lg border border-charcoal-100 py-1.5 z-50">
-              <div class="px-3 py-1.5 border-b border-charcoal-100">
-                <p class="text-xs font-medium text-charcoal-900" id="menu-user-name">Mona El-Sayed</p>
-                <p class="text-[10px] text-charcoal-500" id="menu-user-email">mona.elsayed@revive.com</p>
+            <div id="user-menu-dropdown" class="hidden absolute right-0 mt-1.5 w-52 bg-white rounded-lg shadow-xl border border-neutral-200 py-1.5 z-50">
+              <div class="px-3 py-2 border-b border-neutral-150">
+                <p class="text-xs font-bold text-neutral-900" id="menu-user-name">Mona El-Sayed</p>
+                <p class="text-[10px] text-neutral-500" id="menu-user-role">HR Manager · Corporate</p>
+                <p class="text-[10px] text-brand-700 font-medium mt-0.5" id="menu-user-gyms">Assigned: 3 Gyms</p>
               </div>
-              <button onclick="navigateTo('my-access'); closeUserMenu()" class="w-full text-left px-3 py-1.5 text-xs text-charcoal-700 hover:bg-charcoal-50 flex items-center gap-2">
+              <button onclick="navigateTo('my-access'); closeUserMenu()" class="w-full text-left px-3 py-2 text-xs text-neutral-700 hover:bg-neutral-50 flex items-center gap-2">
                 <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
-                My Access
+                My Access & Permissions
               </button>
-              <button onclick="handleLogout()" class="w-full text-left px-3 py-1.5 text-xs text-red-600 hover:bg-red-50 flex items-center gap-2 mt-0.5">
+              <button onclick="handleLogout()" class="w-full text-left px-3 py-2 text-xs text-red-600 hover:bg-red-50 flex items-center gap-2 border-t border-neutral-100">
                 <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg>
                 Logout
               </button>
@@ -215,18 +267,18 @@
   <div id="toast-container" class="fixed top-3 right-3 z-[100] space-y-1.5 pointer-events-none"></div>
 
   <!-- ==================== SCRIPTS ==================== -->
-  <script src="js/data.js?v=30"></script>
-  <script src="js/core.js?v=30"></script>
-  <script src="js/pages-dashboard.js?v=30"></script>
-  <script src="js/pages-employees.js?v=30"></script>
-  <script src="js/pages-recruitment.js?v=30"></script>
-  <script src="js/pages-attendance.js?v=30"></script>
-  <script src="js/pages-schedule.js?v=30"></script>
-  <script src="js/pages-requests.js?v=30"></script>
-  <script src="js/pages-payroll.js?v=30"></script>
-  <script src="js/pages-evaluations.js?v=30"></script>
-  <script src="js/pages-access.js?v=30"></script>
-  <script src="js/pages-hr-team.js?v=30"></script>
-  <script src="js/app.js?v=30"></script>
+  <script src="js/data.js?v=35"></script>
+  <script src="js/core.js?v=35"></script>
+  <script src="js/pages-dashboard.js?v=35"></script>
+  <script src="js/pages-employees.js?v=35"></script>
+  <script src="js/pages-recruitment.js?v=35"></script>
+  <script src="js/pages-attendance.js?v=35"></script>
+  <script src="js/pages-schedule.js?v=35"></script>
+  <script src="js/pages-requests.js?v=35"></script>
+  <script src="js/pages-payroll.js?v=35"></script>
+  <script src="js/pages-evaluations.js?v=35"></script>
+  <script src="js/pages-access.js?v=35"></script>
+  <script src="js/pages-hr-team.js?v=35"></script>
+  <script src="js/app.js?v=35"></script>
 </body>
 </html>
