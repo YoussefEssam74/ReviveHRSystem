@@ -14,6 +14,7 @@ function renderGymSelector() {
 function setGymFilter(id) {
   const u = MOCK.currentUser;
   u.selectedGym = id;
+  updateGymChip();
   renderAll();
   showToast(id==='all' ? 'Showing all branches' : 'Branch filter applied', 'info');
 }
@@ -307,24 +308,44 @@ function submitEvaluationForm() {
 
 // ==================== GYMS OVERVIEW MODAL ====================
 function openGymsOverviewModal() {
-  openModal('All Gym Branches Overview', `
+  openModal('All Gym Branches Overview &amp; Required Actions', `
     <div class="space-y-3">
       <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
         ${MOCK.gymList.map(g => {
-          const openVac = MOCK.vacancies.filter(v => v.gym === g.branch && v.status === 'Open').length;
-          const pending = MOCK.requests.filter(r => r.gym === g.branch && r.status === 'Pending HR Review').length;
+          const openVac = (MOCK.vacancies || []).filter(v => v.gym === g.branch && v.status === 'Open').length;
+          const act = typeof getGymRequiredActions === 'function' ? getGymRequiredActions(g.branch) : { total: 0, summaryText: 'All clear' };
           return `
-            <div class="bg-charcoal-50 border border-charcoal-200 rounded-xl p-3.5 flex flex-col justify-between">
+            <div class="bg-white border ${act.total > 0 ? 'border-amber-200 ring-1 ring-amber-100' : 'border-charcoal-200'} rounded-xl p-3.5 flex flex-col justify-between shadow-2xs">
               <div>
-                <span class="badge badge-brand text-[9px] mb-1 inline-block">${g.name}</span>
+                <div class="flex items-center justify-between mb-1">
+                  <span class="badge badge-brand text-[9px]">${g.name}</span>
+                  ${act.total > 0 
+                    ? `<span class="badge bg-amber-100 text-amber-800 text-[9px] font-bold">${act.total} Action${act.total > 1 ? 's' : ''} Needed</span>` 
+                    : `<span class="badge bg-emerald-50 text-emerald-700 text-[9px]">All clear</span>`
+                  }
+                </div>
                 <h4 class="text-sm font-bold text-charcoal-900">${g.branch} Branch</h4>
-                <div class="mt-2.5 space-y-1 text-xs text-charcoal-600">
-                  <p class="flex items-center justify-between"><span>Employees:</span> <b class="text-charcoal-900">${g.employees} Staff</b></p>
+                
+                <div class="mt-2.5 space-y-1.5 text-xs text-charcoal-600">
+                  <p class="flex items-center justify-between"><span>Total Staff:</span> <b class="text-charcoal-900">${g.employees} Employees</b></p>
                   <p class="flex items-center justify-between"><span>Open Vacancies:</span> <b class="text-charcoal-900">${openVac}</b></p>
-                  <p class="flex items-center justify-between"><span>Pending Requests:</span> <b class="${pending>0?'text-amber-600 font-bold':'text-charcoal-900'}">${pending}</b></p>
+                  <p class="flex items-center justify-between"><span>Pending Requests:</span> <b class="${act.requestsCount > 0 ? 'text-amber-600 font-bold' : 'text-charcoal-900'}">${act.requestsCount || 0}</b></p>
+                  <p class="flex items-center justify-between"><span>Urgent / Expiry:</span> <b class="${act.contractsCount > 0 ? 'text-orange-600 font-bold' : 'text-charcoal-900'}">${act.contractsCount || 0}</b></p>
+                </div>
+
+                <!-- Required Actions Box -->
+                <div class="mt-3 p-2.5 rounded-lg ${act.total > 0 ? 'bg-amber-50/80 border border-amber-200' : 'bg-charcoal-50 border border-charcoal-150'} text-xs">
+                  <div class="flex items-center justify-between">
+                    <span class="font-bold ${act.total > 0 ? 'text-amber-900' : 'text-charcoal-700'}">Required Actions</span>
+                    <span class="font-extrabold ${act.total > 0 ? 'text-amber-700 text-xs' : 'text-charcoal-500'}">${act.total}</span>
+                  </div>
+                  <p class="text-[10px] mt-1 ${act.total > 0 ? 'text-amber-800' : 'text-charcoal-500'}">${act.summaryText}</p>
                 </div>
               </div>
-              <button onclick="closeModal();setGymFilter('${g.id}')" class="btn btn-sm btn-secondary w-full mt-3 text-xs">Filter to ${g.branch}</button>
+              <button onclick="closeModal();setGymFilter('${g.id}')" class="btn btn-sm btn-secondary w-full mt-3 text-xs flex items-center justify-center gap-1 font-semibold">
+                <span>Filter Dashboard to ${g.branch}</span>
+                <span class="text-brand-600">→</span>
+              </button>
             </div>
           `;
         }).join('')}
@@ -856,26 +877,37 @@ function renderDashboard() {
           <div class="flex items-center justify-between mb-2 flex-shrink-0">
             <div>
               <h3 class="text-[11px] font-bold text-charcoal-900 uppercase tracking-wide">Branches Overview</h3>
-              <p class="text-[10px] text-charcoal-400">Headcount per branch · click to filter</p>
+              <p class="text-[10px] text-charcoal-400">Headcount &amp; required actions · click to filter</p>
             </div>
             <button onclick="openGymsOverviewModal()" class="text-[11px] text-brand-600 hover:text-brand-800 font-semibold">Details →</button>
           </div>
           <div class="flex-1 min-h-0 overflow-y-auto space-y-1.5">
-            ${MOCK.gymList.map(g => `
-              <div onclick="setGymFilter('${g.id}')" class="px-2.5 py-2 rounded-lg bg-charcoal-50 hover:bg-charcoal-100 transition-colors flex items-center justify-between cursor-pointer border border-charcoal-100 hover:border-charcoal-200">
-                <div class="flex items-center gap-2">
-                  <div class="w-2 h-2 rounded-full bg-emerald-500 flex-shrink-0"></div>
-                  <div>
-                    <p class="text-xs font-bold text-charcoal-900">${g.branch}</p>
-                    <p class="text-[10px] text-charcoal-400">${g.name}</p>
+            ${MOCK.gymList.map(g => {
+              const act = typeof getGymRequiredActions === 'function' ? getGymRequiredActions(g.branch) : { total: 0, summaryText: 'All clear' };
+              const isSelected = u.selectedGym === g.id;
+              return `
+              <div onclick="setGymFilter('${g.id}')" class="px-2.5 py-2 rounded-lg transition-all flex items-center justify-between cursor-pointer border ${
+                isSelected ? 'bg-brand-50/70 border-brand-300 ring-1 ring-brand-300' : 'bg-charcoal-50 hover:bg-charcoal-100 border-charcoal-100 hover:border-charcoal-200'
+              }">
+                <div class="flex items-center gap-2 min-w-0">
+                  <div class="w-2.5 h-2.5 rounded-full ${act.total > 0 ? 'bg-amber-500 ring-2 ring-amber-200' : 'bg-emerald-500'} flex-shrink-0"></div>
+                  <div class="min-w-0">
+                    <div class="flex items-center gap-1.5">
+                      <p class="text-xs font-bold text-charcoal-900 truncate">${g.branch}</p>
+                      ${act.total > 0 
+                        ? `<span class="px-1.5 py-0.2 rounded text-[9px] font-bold bg-amber-100 text-amber-800 border border-amber-200 flex-shrink-0">${act.total} action${act.total > 1 ? 's' : ''}</span>` 
+                        : `<span class="px-1.5 py-0.2 rounded text-[9px] font-medium bg-emerald-50 text-emerald-700 flex-shrink-0">Clear</span>`
+                      }
+                    </div>
+                    <p class="text-[10px] text-charcoal-400 truncate">${act.total > 0 ? act.summaryText : `${g.name} · All clear`}</p>
                   </div>
                 </div>
-                <div class="text-right flex-shrink-0">
+                <div class="text-right flex-shrink-0 ml-2">
                   <span class="text-xs font-bold text-charcoal-900">${g.employees}</span>
                   <span class="text-[10px] text-charcoal-400 ml-0.5">staff</span>
                 </div>
               </div>
-            `).join('')}
+            `;}).join('')}
           </div>
         </div>
 

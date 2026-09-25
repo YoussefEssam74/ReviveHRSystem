@@ -2,6 +2,248 @@
 let state = { currentPage: 'dashboard', sidebarOpen: false, userMenuOpen: false, mobileMoreOpen: false };
 const DEMO = { showAll: true, role: 'hrManager' };
 
+// ==================== GYM REQUIRED ACTIONS HELPER ====================
+function getGymRequiredActions(branchName) {
+  // Pending Employee Requests awaiting HR
+  const reqs = (MOCK.requests || []).filter(r => 
+    r.status === 'Pending HR Review' && (!branchName || branchName === 'all' || r.gym === branchName)
+  );
+  
+  // Pending Branch Vacancies awaiting HR approval
+  const vacs = (MOCK.vacancyRequests || []).filter(v => 
+    v.status === 'Pending' && (!branchName || branchName === 'all' || v.gym === branchName)
+  );
+
+  // Expiring Contracts & High Urgency compliance events
+  const contracts = (MOCK.events || []).filter(e => {
+    if (e.type !== 'Contract Expiry' && e.urgency !== 'high') return false;
+    if (!branchName || branchName === 'all') return true;
+    if (e.branch) return e.branch === branchName;
+    const emp = (MOCK.employees || []).find(emp => e.title && e.title.includes(emp.name));
+    return emp ? emp.gym === branchName : false;
+  });
+
+  const total = reqs.length + vacs.length + contracts.length;
+  
+  const tags = [];
+  if (reqs.length > 0) tags.push(`${reqs.length} request${reqs.length > 1 ? 's' : ''}`);
+  if (vacs.length > 0) tags.push(`${vacs.length} vacanc${vacs.length > 1 ? 'ies' : 'y'}`);
+  if (contracts.length > 0) tags.push(`${contracts.length} contract${contracts.length > 1 ? 's' : ''}`);
+
+  return {
+    total,
+    requestsCount: reqs.length,
+    vacanciesCount: vacs.length,
+    contractsCount: contracts.length,
+    summaryText: tags.length > 0 ? tags.join(' · ') : 'All clear',
+    tags
+  };
+}
+
+// ==================== GYM PICKER ====================
+function showGymPicker() {
+  const u = MOCK.currentUser;
+  const nameEl = document.getElementById('gym-picker-name');
+  if (nameEl) nameEl.textContent = u.firstName;
+
+  // Show close button only if a gym is already chosen (not first login forced pick)
+  const closeBtn = document.getElementById('gym-picker-close-btn');
+  if (closeBtn) {
+    if (u.selectedGym !== null) {
+      closeBtn.classList.remove('hidden');
+    } else {
+      closeBtn.classList.add('hidden');
+    }
+  }
+
+  const list = document.getElementById('gym-picker-list');
+  if (list) {
+    list.innerHTML = u.gyms.map(g => {
+      const gymData = (MOCK.gymList || []).find(gl => gl.id === g.id || gl.branch === g.branch);
+      const staffCount = gymData ? gymData.employees : 0;
+      const act = getGymRequiredActions(g.branch);
+      const isSelected = u.selectedGym === g.id;
+
+      return `
+        <button onclick="selectGym('${g.id}')" class="w-full flex items-center justify-between p-3.5 rounded-xl border transition-all text-left group ${
+          isSelected 
+            ? 'border-brand-500 bg-brand-50/40 ring-1 ring-brand-500' 
+            : 'border-charcoal-200 bg-white hover:border-brand-400 hover:bg-charcoal-50/60'
+        }">
+          <div class="flex items-start gap-3 min-w-0">
+            <div class="w-10 h-10 rounded-xl ${
+              act.total > 0 ? 'bg-amber-50 text-amber-700 border border-amber-200' : 'bg-charcoal-100 text-charcoal-700'
+            } flex items-center justify-center group-hover:bg-brand-100 group-hover:text-brand-800 transition-colors flex-shrink-0 font-extrabold text-sm">
+              ${g.branch.charAt(0)}
+            </div>
+            <div class="min-w-0 flex-1">
+              <div class="flex items-center gap-2">
+                <p class="text-xs font-bold text-charcoal-900 group-hover:text-brand-900">${g.branch} Branch</p>
+                <span class="text-[10px] text-charcoal-400 font-medium">· ${staffCount} Staff</span>
+                ${isSelected ? '<span class="px-1.5 py-0.2 rounded-md text-[9px] font-bold bg-brand-100 text-brand-800">Current</span>' : ''}
+              </div>
+              <p class="text-[10px] text-charcoal-500 truncate">${g.name}</p>
+              
+              <!-- Required Action Indicator -->
+              <div class="mt-2 flex items-center gap-1.5 flex-wrap">
+                ${act.total > 0 ? `
+                  <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-200">
+                    <svg class="w-2.5 h-2.5 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"/></svg>
+                    ${act.total} Required Action${act.total > 1 ? 's' : ''}
+                  </span>
+                  <span class="text-[10px] text-charcoal-500 font-medium">${act.summaryText}</span>
+                ` : `
+                  <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                    <svg class="w-2.5 h-2.5 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
+                    All clear · No pending actions
+                  </span>
+                `}
+              </div>
+            </div>
+          </div>
+
+          <div class="flex flex-col items-end gap-1 flex-shrink-0 ml-3">
+            ${act.total > 0 
+              ? `<span class="min-w-[20px] h-5 px-1.5 rounded-full text-[10px] font-bold bg-amber-500 text-white flex items-center justify-center">${act.total}</span>` 
+              : `<span class="w-5 h-5 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center text-[10px] font-bold">✓</span>`
+            }
+            <span class="text-[10px] text-charcoal-400 group-hover:text-brand-600 font-semibold mt-1">Select →</span>
+          </div>
+        </button>
+      `;
+    }).join('');
+  }
+
+  const allContainer = document.getElementById('gym-picker-all-container');
+  if (allContainer) {
+    const allAct = getGymRequiredActions('all');
+    const isAllSelected = u.selectedGym === 'all';
+    allContainer.innerHTML = `
+      <button onclick="selectGym('all')" class="mt-3 w-full flex items-center justify-between p-3.5 rounded-xl border-2 border-dashed transition-all text-left group ${
+        isAllSelected 
+          ? 'border-brand-500 bg-brand-50/40 ring-1 ring-brand-500' 
+          : 'border-charcoal-200 bg-white hover:border-brand-400 hover:bg-brand-50/30'
+      }">
+        <div class="flex items-start gap-3 min-w-0">
+          <div class="w-10 h-10 rounded-xl bg-charcoal-100 flex items-center justify-center text-charcoal-600 group-hover:bg-brand-100 group-hover:text-brand-700 transition-colors flex-shrink-0">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/></svg>
+          </div>
+          <div class="min-w-0 flex-1">
+            <div class="flex items-center gap-2">
+              <p class="text-xs font-bold text-charcoal-900 group-hover:text-brand-800">All Branches Combined</p>
+              <span class="text-[10px] text-charcoal-400 font-medium">· Corporate Scope</span>
+              ${isAllSelected ? '<span class="px-1.5 py-0.2 rounded-md text-[9px] font-bold bg-brand-100 text-brand-800">Current</span>' : ''}
+            </div>
+            <p class="text-[10px] text-charcoal-500">View aggregated multi-branch data</p>
+            <div class="mt-2 flex items-center gap-1.5">
+              <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-200">
+                <svg class="w-2.5 h-2.5 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"/></svg>
+                ${allAct.total} Total Actions Across All Gyms
+              </span>
+              <span class="text-[10px] text-charcoal-500 font-medium">${allAct.summaryText}</span>
+            </div>
+          </div>
+        </div>
+        <div class="flex flex-col items-end gap-1 flex-shrink-0 ml-3">
+          <span class="min-w-[20px] h-5 px-1.5 rounded-full text-[10px] font-bold bg-amber-500 text-white flex items-center justify-center">${allAct.total}</span>
+          <span class="text-[10px] text-charcoal-400 group-hover:text-brand-600 font-semibold mt-1">Select →</span>
+        </div>
+      </button>
+    `;
+  }
+
+  const picker = document.getElementById('gym-picker');
+  if (picker) picker.classList.remove('hidden');
+}
+
+function closeGymPicker() {
+  if (MOCK.currentUser.selectedGym !== null) {
+    const picker = document.getElementById('gym-picker');
+    if (picker) picker.classList.add('hidden');
+  }
+}
+
+function selectGym(gymId) {
+  MOCK.currentUser.selectedGym = gymId;
+  const picker = document.getElementById('gym-picker');
+  if (picker) picker.classList.add('hidden');
+
+  // Update topbar chip label
+  updateGymChip();
+  renderAll();
+
+  const u = MOCK.currentUser;
+  if (gymId === 'all') {
+    showToast('Viewing all branches', 'info');
+  } else {
+    const g = u.gyms.find(g => g.id === gymId);
+    showToast(g ? `Viewing ${g.branch} branch` : 'Branch selected', 'info');
+  }
+}
+
+function updateGymChip() {
+  const u = MOCK.currentUser;
+  const label = document.getElementById('gym-switcher-label');
+  const btn = document.getElementById('gym-switcher-btn');
+  const badge = document.getElementById('gym-switcher-badge');
+  const dot = document.getElementById('gym-switcher-dot');
+
+  // Mobile elements
+  const mLabel = document.getElementById('mobile-gym-switcher-label');
+  const mBadge = document.getElementById('mobile-gym-switcher-badge');
+
+  if (!label || !btn) return;
+  
+  let branchName = 'all';
+  let displayName = 'All Branches';
+  let shortName = 'All';
+
+  if (u.selectedGym === 'all' || !u.selectedGym) {
+    branchName = 'all';
+    displayName = 'All Branches';
+    shortName = 'All';
+  } else {
+    const g = u.gyms.find(g => g.id === u.selectedGym);
+    if (g) {
+      branchName = g.branch;
+      displayName = g.branch;
+      shortName = g.branch;
+    }
+  }
+
+  label.textContent = displayName;
+  if (mLabel) mLabel.textContent = shortName;
+
+  const act = getGymRequiredActions(branchName);
+
+  if (badge) {
+    if (act.total > 0) {
+      badge.textContent = `${act.total} action${act.total > 1 ? 's' : ''}`;
+      badge.className = 'px-1.5 py-0.2 rounded-full text-[9px] font-bold bg-amber-100 text-amber-800 border border-amber-200';
+      badge.style.display = 'inline-flex';
+    } else {
+      badge.style.display = 'none';
+    }
+  }
+
+  if (dot) {
+    dot.className = `w-2 h-2 rounded-full flex-shrink-0 ${act.total > 0 ? 'bg-amber-500' : 'bg-emerald-500'}`;
+  }
+
+  if (mBadge) {
+    if (act.total > 0) {
+      mBadge.textContent = act.total;
+      mBadge.className = 'px-1 rounded-full text-[8px] font-bold bg-amber-500 text-white';
+      mBadge.style.display = 'inline-flex';
+    } else {
+      mBadge.style.display = 'none';
+    }
+  }
+
+  btn.classList.remove('hidden');
+  btn.classList.add('md:flex');
+}
+
 function hasPermission(perm) {
   const perms = MOCK.currentUser.permissions || [];
   if (perms.includes('*')) return true;
@@ -234,17 +476,18 @@ function updateUserUI() {
   if(roleBtn) roleBtn.textContent = u.role;
   const showAllBtn = document.getElementById('demo-showall');
   if(showAllBtn) showAllBtn.classList.toggle('active', DEMO.showAll);
+  updateGymChip();
 }
 
 function switchRole(roleId) {
   const u = DEMO_USERS[roleId];
   if(!u) return;
+  u.selectedGym = null; // Reset so gym picker appears for new role
   MOCK.currentUser = u;
   DEMO.role = u.role;
   updateUserUI();
-  renderAll();
   closeUserMenu();
-  showToast(`Previewing as ${u.role}`, 'info');
+  showGymPicker(); // Show picker for the newly logged-in user
 }
 
 function toggleShowAll() {
