@@ -73,10 +73,5 @@ function gymFilter() {
 // ==================== INIT ====================
 document.addEventListener('DOMContentLoaded', () => {
   updateUserUI();
-  if (!MOCK.currentUser.selectedGym) {
-    // First load — show gym picker before rendering the app
-    showGymPicker();
-  } else {
-    renderAll();
-  }
+  renderAll();
 });

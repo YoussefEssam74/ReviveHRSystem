@@ -86,6 +86,16 @@ const MOCK = {
     { id: 't9', name: 'Fatma Hassan', position: 'Trainer', gym: '6th October', status: 'Late', checkIn: '08:20', initials: 'FH' },
     { id: 't10', name: 'Ahmed Zaki', position: 'Trainer', gym: 'Nasr City', status: 'Present', checkIn: '07:45', initials: 'AZ' },
   ],
+  attendanceExceptions: [
+    { id: 'ATT-2608-0417', employeeId: 'RV-00124', date: '2026-08-19', firstIn: '08:41', lastOut: '16:02', exception: 'Late arrival', detail: 'Check-in 41 minutes after the scheduled start; no supporting request was approved.', device: 'Terminal A-02' },
+    { id: 'ATT-2608-0502', employeeId: 'RV-00125', date: '2026-08-12', firstIn: null, lastOut: null, exception: 'Unpaid day off', detail: 'No check-in or check-out recorded; leave balance was already exhausted.', device: 'Terminal A-02' },
+    { id: 'ATT-2608-0731', employeeId: 'RV-00126', date: '2026-08-08', firstIn: '08:26', lastOut: '16:04', exception: 'Late arrival', detail: 'Check-in 26 minutes after the scheduled start; request approved as a medical appointment.', device: 'Terminal A-01' },
+    { id: 'ATT-2608-0614', employeeId: 'RV-00128', date: '2026-08-15', firstIn: null, lastOut: null, exception: 'Unpaid day off', detail: 'No check-in or check-out recorded; leave balance was already exhausted.', device: 'Terminal A-04' },
+    { id: 'ATT-2608-0288', employeeId: 'RV-00129', date: '2026-08-26', firstIn: null, lastOut: null, exception: 'Unpaid absence', detail: 'Nine consecutive absence days recorded without a paid leave balance.', device: 'Terminal B-01' },
+    { id: 'ATT-2608-0512', employeeId: 'RV-00130', date: '2026-08-20', firstIn: null, lastOut: null, exception: 'Unpaid day off', detail: 'No check-in or check-out recorded; leave balance was already exhausted.', device: 'Terminal B-01' },
+    { id: 'ATT-2608-0712', employeeId: 'RV-00133', date: '2026-08-09', firstIn: '07:58', lastOut: '14:01', exception: 'Early checkout', detail: 'Check-out recorded two hours before the scheduled shift end.', device: 'Terminal C-03' },
+    { id: 'ATT-2608-0355', employeeId: 'RV-00135', date: '2026-08-28', firstIn: null, lastOut: null, exception: 'Unpaid absence', detail: 'Fourteen absence days recorded during the suspension period.', device: 'Terminal C-01' },
+  ],
   requests: [
     { id: 'r1', employee: 'Karim Hassan', gym: 'Nasr City', type: 'Day Off', submittedDate: '2026-09-07', requestedDate: 'Sep 12, 2026', status: 'Pending HR Review', bmDecision: 'Approved', bmComment: 'No scheduling conflict.', reason: 'Family event', timeline: [{ step: 'Submitted', date: 'Sep 7, 09:42 AM', done: true },{ step: 'BM Approved', date: 'Sep 7, 11:00 AM', done: true },{ step: 'HR Review', date: 'Pending', done: false }] },
     { id: 'r2', employee: 'Sara Ali', gym: 'Nasr City', type: 'Late Arrival', submittedDate: '2026-09-06', requestedDate: 'Sep 8, 2026', status: 'Approved', bmDecision: 'Approved', bmComment: 'Approved.', reason: 'Medical appointment', timeline: [{ step: 'Submitted', date: 'Sep 6, 08:15 AM', done: true },{ step: 'BM Approved', date: 'Sep 6, 09:00 AM', done: true },{ step: 'HR Approved', date: 'Sep 6, 10:00 AM', done: true }] },
@@ -168,75 +178,49 @@ const MOCK = {
     { id: 'vr2', position: 'Receptionist', gym: 'Heliopolis', urgency: 'Medium', status: 'Pending', submittedBy: 'Hana Mostafa', submittedDate: '2026-08-15', reason: 'Evening shift coverage needed.' },
   ],
   payrollItems: [
-    { employeeId: 'RV-00124', name: 'Ahmed Mohamed', initials: 'AM', gym: 'Nasr City', position: 'Trainer', employmentStatus: 'Active', days: 22, overtime: 8, baseSalary: 11000, bonus: 500, gross: 11500, deductions: 1050, net: 10450, status: 'Draft', relatedRequestIds: ['r8'], deductionLines: [
-      { id: 'ah1', date: '2026-08-01', label: 'Social insurance share', amount: 400, reason: 'Auto — social insurance', source: 'biometric', requestId: null, status: 'Accepted' },
-      { id: 'ah2', date: '2026-08-12', label: 'Training loan installment', amount: 300, reason: 'Auto — loan schedule', source: 'biometric', requestId: null, status: 'Accepted' },
-      { id: 'ah3', date: '2026-08-19', label: 'Late arrival penalty', amount: 200, reason: 'Unapproved 3rd late this month', source: 'biometric', attendanceRef: 'ATT-2608-0417', requestId: 'r8', status: 'Pending' },
-      { id: 'ah4', date: '2026-08-24', label: 'Equipment replacement share', amount: 150, reason: 'Issued by branch manager after cable replacement', source: 'manager', requestId: null, status: 'Pending' },
+    { employeeId: 'RV-00124', name: 'Ahmed Mohamed', initials: 'AM', gym: 'Nasr City', position: 'Trainer', employmentStatus: 'Active', days: 22, overtime: 8, baseSalary: 11000, bonus: 500, gross: 11500, deductions: 350, net: 11150, status: 'Draft', relatedRequestIds: ['r8'], deductionLines: [
+      { id: 'ah3', date: '2026-08-19', label: 'Late arrival penalty', amount: 200, reason: 'Unapproved third late arrival this month', source: 'biometric', attendanceRef: 'ATT-2608-0417', requestId: 'r8', status: 'Pending' },
+      { id: 'ah4', date: '2026-08-24', label: 'Equipment replacement share', amount: 150, reason: 'Issued after branch manager verified the cable replacement', source: 'manager', requestId: null, status: 'Pending' },
     ] },
-    { employeeId: 'RV-00125', name: 'Karim Hassan', initials: 'KH', gym: 'Nasr City', position: 'Trainer', employmentStatus: 'Active', days: 21, overtime: 12, baseSalary: 9500, bonus: 300, gross: 9800, deductions: 1200, net: 8600, status: 'Draft', relatedRequestIds: ['r1'], deductionLines: [
-      { id: 'kh1', date: '2026-08-01', label: 'Social insurance share', amount: 380, reason: 'Auto — social insurance', source: 'biometric', requestId: null, status: 'Accepted' },
-      { id: 'kh2', date: '2026-08-12', label: 'Day-off deduction', amount: 400, reason: 'Unpaid day off (no balance)', source: 'biometric', attendanceRef: 'ATT-2608-0502', requestId: 'r1', status: 'Pending' },
-      { id: 'kh3', date: '2026-08-15', label: 'Training loan installment', amount: 300, reason: 'Auto — loan schedule', source: 'biometric', requestId: null, status: 'Accepted' },
-      { id: 'kh4', date: '2026-08-18', label: 'Locker key loss', amount: 120, reason: 'Replacement charge approved by branch manager', source: 'manager', requestId: null, status: 'Accepted' },
+    { employeeId: 'RV-00125', name: 'Karim Hassan', initials: 'KH', gym: 'Nasr City', position: 'Trainer', employmentStatus: 'Active', days: 21, overtime: 12, baseSalary: 9500, bonus: 300, gross: 9800, deductions: 520, net: 9280, status: 'Draft', relatedRequestIds: ['r1'], deductionLines: [
+      { id: 'kh2', date: '2026-08-12', label: 'Day-off deduction', amount: 400, reason: 'Unpaid day off with no available balance', source: 'biometric', attendanceRef: 'ATT-2608-0502', requestId: 'r1', status: 'Pending' },
+      { id: 'kh4', date: '2026-08-18', label: 'Locker key loss', amount: 120, reason: 'Replacement charge confirmed by the branch manager', source: 'manager', requestId: null, status: 'Accepted' },
     ] },
-    { employeeId: 'RV-00126', name: 'Sara Ali', initials: 'SA', gym: 'Nasr City', position: 'Receptionist', employmentStatus: 'Active', days: 22, overtime: 0, baseSalary: 7000, bonus: 0, gross: 7000, deductions: 500, net: 6500, status: 'Draft', relatedRequestIds: ['r2'], deductionLines: [
-      { id: 'sa1', date: '2026-08-08', label: 'Approved late arrival', amount: 0, reason: 'Medical appointment — penalty waived by HR', source: 'biometric', attendanceRef: 'ATT-2608-0731', requestId: 'r2', status: 'Accepted' },
-      { id: 'sa2', date: '2026-08-01', label: 'Social insurance share', amount: 250, reason: 'Auto — social insurance', source: 'biometric', requestId: null, status: 'Accepted' },
-      { id: 'sa3', date: '2026-08-15', label: 'Training loan installment', amount: 150, reason: 'Auto — loan schedule', source: 'biometric', requestId: null, status: 'Accepted' },
-      { id: 'sa4', date: '2026-08-20', label: 'Reception supplies shortfall', amount: 100, reason: 'Missing printer cartridge logged by branch manager', source: 'manager', requestId: null, status: 'Accepted' },
+    { employeeId: 'RV-00126', name: 'Sara Ali', initials: 'SA', gym: 'Nasr City', position: 'Receptionist', employmentStatus: 'Active', days: 22, overtime: 0, baseSalary: 7000, bonus: 0, gross: 7000, deductions: 100, net: 6900, status: 'Draft', relatedRequestIds: ['r2'], deductionLines: [
+      { id: 'sa1', date: '2026-08-08', label: 'Approved late arrival', amount: 0, reason: 'Medical appointment; attendance exception approved by HR', source: 'biometric', attendanceRef: 'ATT-2608-0731', requestId: 'r2', status: 'Accepted' },
+      { id: 'sa4', date: '2026-08-20', label: 'Reception supplies shortfall', amount: 100, reason: 'Missing printer cartridge logged by the branch manager', source: 'manager', requestId: null, status: 'Accepted' },
     ] },
-    { employeeId: 'RV-00127', name: 'Omar Youssef', initials: 'OY', gym: 'Nasr City', position: 'Trainer', employmentStatus: 'Active', days: 22, overtime: 16, baseSalary: 12500, bonus: 500, gross: 13000, deductions: 1200, net: 11800, status: 'Approved', relatedRequestIds: ['r4'], deductionLines: [
-      { id: 'oy1', date: '2026-08-10', label: 'Shift swap adjustment', amount: 400, reason: 'Overtime offset after swap', source: 'manager', requestId: 'r4', status: 'Accepted' },
-      { id: 'oy2', date: '2026-08-01', label: 'Social insurance share', amount: 500, reason: 'Auto — social insurance', source: 'biometric', requestId: null, status: 'Accepted' },
-      { id: 'oy3', date: '2026-08-15', label: 'Training loan installment', amount: 300, reason: 'Auto — loan schedule', source: 'biometric', requestId: null, status: 'Accepted' },
+    { employeeId: 'RV-00127', name: 'Omar Youssef', initials: 'OY', gym: 'Nasr City', position: 'Trainer', employmentStatus: 'Active', days: 22, overtime: 16, baseSalary: 12500, bonus: 500, gross: 13000, deductions: 400, net: 12600, status: 'Approved', relatedRequestIds: ['r4'], deductionLines: [
+      { id: 'oy1', date: '2026-08-10', label: 'Shift swap adjustment', amount: 400, reason: 'Overtime offset after the approved shift swap', source: 'manager', requestId: 'r4', status: 'Accepted' },
     ] },
-    { employeeId: 'RV-00128', name: 'Nour Ibrahim', initials: 'NI', gym: 'Nasr City', position: 'Cleaner', employmentStatus: 'Active', days: 21, overtime: 4, baseSalary: 5000, bonus: 0, gross: 5000, deductions: 500, net: 4500, status: 'Draft', relatedRequestIds: ['r3'], deductionLines: [
-      { id: 'ni1', date: '2026-08-15', label: 'Day-off deduction', amount: 150, reason: 'Unpaid day off (no balance)', source: 'biometric', attendanceRef: 'ATT-2608-0614', requestId: 'r3', status: 'Pending' },
-      { id: 'ni2', date: '2026-08-01', label: 'Social insurance share', amount: 150, reason: 'Auto — social insurance', source: 'biometric', requestId: null, status: 'Accepted' },
-      { id: 'ni3', date: '2026-08-20', label: 'Training loan installment', amount: 100, reason: 'Auto — loan schedule', source: 'biometric', requestId: null, status: 'Accepted' },
-      { id: 'ni4', date: '2026-08-25', label: 'Transport allowance advance', amount: 100, reason: 'Advance recovery agreed with branch manager', source: 'manager', requestId: null, status: 'Pending' },
+    { employeeId: 'RV-00128', name: 'Nour Ibrahim', initials: 'NI', gym: 'Nasr City', position: 'Cleaner', employmentStatus: 'Active', days: 21, overtime: 4, baseSalary: 5000, bonus: 0, gross: 5000, deductions: 250, net: 4750, status: 'Draft', relatedRequestIds: ['r3'], deductionLines: [
+      { id: 'ni1', date: '2026-08-15', label: 'Day-off deduction', amount: 150, reason: 'Unpaid day off with no available balance', source: 'biometric', attendanceRef: 'ATT-2608-0614', requestId: 'r3', status: 'Pending' },
+      { id: 'ni4', date: '2026-08-25', label: 'Transport allowance recovery', amount: 100, reason: 'Advance recovery confirmed by the branch manager', source: 'manager', requestId: null, status: 'Pending' },
     ] },
-    { employeeId: 'RV-00134', name: 'Ahmed Zaki', initials: 'AZ', gym: 'Nasr City', position: 'Trainer', employmentStatus: 'Active', days: 22, overtime: 6, baseSalary: 8000, bonus: 250, gross: 8250, deductions: 480, net: 7770, status: 'Draft', relatedRequestIds: ['r7'], deductionLines: [
-      { id: 'az1', date: '2026-08-01', label: 'Social insurance share', amount: 300, reason: 'Auto — social insurance', source: 'biometric', requestId: null, status: 'Accepted' },
-      { id: 'az2', date: '2026-08-18', label: 'Cleaning tools replacement', amount: 180, reason: 'Lost kit reimbursed after manager confirmation', source: 'manager', requestId: null, status: 'Accepted' },
-      { id: 'az3', date: '2026-08-22', label: 'Full attendance bonus', amount: 0, reason: '22 of 22 days present', source: 'biometric', attendanceRef: 'ATT-2608-0000', requestId: null, status: 'Accepted' },
+    { employeeId: 'RV-00134', name: 'Ahmed Zaki', initials: 'AZ', gym: 'Nasr City', position: 'Trainer', employmentStatus: 'Active', days: 22, overtime: 6, baseSalary: 8000, bonus: 250, gross: 8250, deductions: 180, net: 8070, status: 'Draft', relatedRequestIds: ['r7'], deductionLines: [
+      { id: 'az2', date: '2026-08-18', label: 'Cleaning tools replacement', amount: 180, reason: 'Lost kit reimbursed after branch manager confirmation', source: 'manager', requestId: null, status: 'Accepted' },
     ] },
-    { employeeId: 'RV-00136', name: 'Youssef Kamal', initials: 'YK', gym: 'Nasr City', position: 'Branch Manager', employmentStatus: 'Active', days: 24, overtime: 10, baseSalary: 18000, bonus: 1000, gross: 19000, deductions: 1200, net: 17800, status: 'Approved', relatedRequestIds: [], deductionLines: [
-      { id: 'yk1', date: '2026-08-01', label: 'Social insurance share', amount: 700, reason: 'Auto — social insurance', source: 'biometric', requestId: null, status: 'Accepted' },
-      { id: 'yk2', date: '2026-08-16', label: 'Staff shortage recovery', amount: 500, reason: 'Covered two open shifts in the peak week', source: 'manager', requestId: null, status: 'Accepted' },
+    { employeeId: 'RV-00136', name: 'Youssef Kamal', initials: 'YK', gym: 'Nasr City', position: 'Branch Manager', employmentStatus: 'Active', days: 24, overtime: 10, baseSalary: 18000, bonus: 1000, gross: 19000, deductions: 500, net: 18500, status: 'Approved', relatedRequestIds: [], deductionLines: [
+      { id: 'yk2', date: '2026-08-16', label: 'Unapproved access after closing', amount: 500, reason: 'Issued by the area manager after the access log review', source: 'manager', requestId: null, status: 'Accepted' },
     ] },
-    { employeeId: 'RV-00129', name: 'Yasmin Adel', initials: 'YA', gym: 'Heliopolis', position: 'Trainer', employmentStatus: 'On Leave', days: 14, overtime: 0, baseSalary: 11000, bonus: 0, gross: 11000, deductions: 2650, net: 8350, status: 'Draft', relatedRequestIds: [], deductionLines: [
-      { id: 'ya1', date: '2026-08-01', label: 'Social insurance share', amount: 450, reason: 'Auto — social insurance', source: 'biometric', requestId: null, status: 'Accepted' },
-      { id: 'ya2', date: '2026-08-26', label: 'Unpaid medical leave', amount: 2200, reason: '9 unpaid days — medical leave without balance', source: 'biometric', attendanceRef: 'ATT-2608-0288', requestId: null, status: 'Pending' },
+    { employeeId: 'RV-00129', name: 'Yasmin Adel', initials: 'YA', gym: 'Heliopolis', position: 'Trainer', employmentStatus: 'On Leave', days: 14, overtime: 0, baseSalary: 11000, bonus: 0, gross: 11000, deductions: 2200, net: 8800, status: 'Draft', relatedRequestIds: [], deductionLines: [
+      { id: 'ya2', date: '2026-08-26', label: 'Unpaid medical leave', amount: 2200, reason: 'Nine unpaid absence days recorded by the biometric system', source: 'biometric', attendanceRef: 'ATT-2608-0288', requestId: null, status: 'Pending' },
     ] },
-    { employeeId: 'RV-00130', name: 'Tarek Nabil', initials: 'TN', gym: 'Heliopolis', position: 'Receptionist', employmentStatus: 'Active', days: 20, overtime: 6, baseSalary: 7500, bonus: 200, gross: 7700, deductions: 750, net: 6950, status: 'Approved', relatedRequestIds: ['r6'], deductionLines: [
-      { id: 'tn1', date: '2026-08-20', label: 'Day-off deduction', amount: 250, reason: 'Unpaid day off (no balance)', source: 'biometric', attendanceRef: 'ATT-2608-0512', requestId: 'r6', status: 'Accepted' },
-      { id: 'tn2', date: '2026-08-01', label: 'Social insurance share', amount: 300, reason: 'Auto — social insurance', source: 'biometric', requestId: null, status: 'Accepted' },
-      { id: 'tn3', date: '2026-08-15', label: 'Training loan installment', amount: 200, reason: 'Auto — loan schedule', source: 'biometric', requestId: null, status: 'Accepted' },
+    { employeeId: 'RV-00130', name: 'Tarek Nabil', initials: 'TN', gym: 'Heliopolis', position: 'Receptionist', employmentStatus: 'Active', days: 20, overtime: 6, baseSalary: 7500, bonus: 200, gross: 7700, deductions: 250, net: 7450, status: 'Approved', relatedRequestIds: ['r6'], deductionLines: [
+      { id: 'tn1', date: '2026-08-20', label: 'Day-off deduction', amount: 250, reason: 'Unpaid day off with no available balance', source: 'biometric', attendanceRef: 'ATT-2608-0512', requestId: 'r6', status: 'Accepted' },
     ] },
-    { employeeId: 'RV-00131', name: 'Mona Said', initials: 'MS', gym: 'Heliopolis', position: 'Trainer', employmentStatus: 'Notice Period', days: 22, overtime: 4, baseSalary: 14000, bonus: 500, gross: 14500, deductions: 1550, net: 12950, status: 'Draft', relatedRequestIds: [], deductionLines: [
-      { id: 'ms1', date: '2026-08-01', label: 'Social insurance share', amount: 550, reason: 'Auto — social insurance', source: 'biometric', requestId: null, status: 'Accepted' },
-      { id: 'ms2', date: '2026-08-15', label: 'Training loan installment', amount: 500, reason: 'Auto — loan schedule', source: 'biometric', requestId: null, status: 'Accepted' },
-      { id: 'ms3', date: '2026-08-24', label: 'Early notice training coverage', amount: 500, reason: 'Delivered 3 sessions during notice period', source: 'manager', requestId: null, status: 'Pending' },
+    { employeeId: 'RV-00131', name: 'Mona Said', initials: 'MS', gym: 'Heliopolis', position: 'Trainer', employmentStatus: 'Notice Period', days: 22, overtime: 4, baseSalary: 14000, bonus: 500, gross: 14500, deductions: 500, net: 14000, status: 'Draft', relatedRequestIds: [], deductionLines: [
+      { id: 'ms3', date: '2026-08-24', label: 'Missed handover session', amount: 500, reason: 'Required exit handover session was not completed', source: 'manager', requestId: null, status: 'Pending' },
     ] },
-    { employeeId: 'RV-00137', name: 'Hana Mostafa', initials: 'HM', gym: 'Heliopolis', position: 'Trainer', employmentStatus: 'Active', days: 22, overtime: 12, baseSalary: 12500, bonus: 0, gross: 12500, deductions: 900, net: 11600, status: 'Approved', relatedRequestIds: [], deductionLines: [
-      { id: 'hm1', date: '2026-08-01', label: 'Social insurance share', amount: 500, reason: 'Auto — social insurance', source: 'biometric', requestId: null, status: 'Accepted' },
-      { id: 'hm2', date: '2026-08-15', label: 'Training loan installment', amount: 400, reason: 'Auto — loan schedule', source: 'biometric', requestId: null, status: 'Accepted' },
+    { employeeId: 'RV-00137', name: 'Hana Mostafa', initials: 'HM', gym: 'Heliopolis', position: 'Trainer', employmentStatus: 'Active', days: 22, overtime: 12, baseSalary: 12500, bonus: 0, gross: 12500, deductions: 0, net: 12500, status: 'Approved', relatedRequestIds: [], deductionLines: [] },
+    { employeeId: 'RV-00132', name: 'Hassan Ali', initials: 'HA', gym: '6th October', position: 'Maintenance', employmentStatus: 'Active', days: 22, overtime: 10, baseSalary: 6000, bonus: 0, gross: 6000, deductions: 150, net: 5850, status: 'Draft', relatedRequestIds: [], deductionLines: [
+      { id: 'ha1', date: '2026-08-02', label: 'Equipment damage recovery', amount: 150, reason: 'Broken treadmill cable verified by the branch manager', source: 'manager', requestId: null, status: 'Pending' },
     ] },
-    { employeeId: 'RV-00132', name: 'Hassan Ali', initials: 'HA', gym: '6th October', position: 'Maintenance', employmentStatus: 'Active', days: 22, overtime: 10, baseSalary: 6000, bonus: 0, gross: 6000, deductions: 500, net: 5500, status: 'Draft', relatedRequestIds: [], deductionLines: [
-      { id: 'ha1', date: '2026-08-02', label: 'Equipment damage recovery', amount: 150, reason: 'Broken treadmill cable', source: 'manager', requestId: null, status: 'Pending' },
-      { id: 'ha2', date: '2026-08-01', label: 'Social insurance share', amount: 200, reason: 'Auto — social insurance', source: 'biometric', requestId: null, status: 'Accepted' },
-      { id: 'ha3', date: '2026-08-15', label: 'Training loan installment', amount: 150, reason: 'Auto — loan schedule', source: 'biometric', requestId: null, status: 'Accepted' },
+    { employeeId: 'RV-00133', name: 'Fatma Hassan', initials: 'FH', gym: '6th October', position: 'Trainer', employmentStatus: 'Active', days: 22, overtime: 14, baseSalary: 10500, bonus: 500, gross: 11000, deductions: 300, net: 10700, status: 'Draft', relatedRequestIds: ['r5'], deductionLines: [
+      { id: 'fh1', date: '2026-08-09', label: 'Early checkout penalty', amount: 300, reason: 'Checkout recorded two hours before the scheduled shift end', source: 'biometric', attendanceRef: 'ATT-2608-0712', requestId: 'r5', status: 'Accepted' },
     ] },
-    { employeeId: 'RV-00133', name: 'Fatma Hassan', initials: 'FH', gym: '6th October', position: 'Trainer', employmentStatus: 'Active', days: 22, overtime: 14, baseSalary: 10500, bonus: 500, gross: 11000, deductions: 1000, net: 10000, status: 'Draft', relatedRequestIds: ['r5'], deductionLines: [
-      { id: 'fh1', date: '2026-08-09', label: 'Leave-early penalty', amount: 300, reason: 'Left 2h early — request approved as sick leave', source: 'biometric', attendanceRef: 'ATT-2608-0712', requestId: 'r5', status: 'Accepted' },
-      { id: 'fh2', date: '2026-08-01', label: 'Social insurance share', amount: 400, reason: 'Auto — social insurance', source: 'biometric', requestId: null, status: 'Accepted' },
-      { id: 'fh3', date: '2026-08-15', label: 'Training loan installment', amount: 300, reason: 'Auto — loan schedule', source: 'biometric', requestId: null, status: 'Accepted' },
-    ] },
-    { employeeId: 'RV-00135', name: 'Laila Mostafa', initials: 'LM', gym: '6th October', position: 'Receptionist', employmentStatus: 'Suspended', days: 8, overtime: 0, baseSalary: 9000, bonus: 0, gross: 9000, deductions: 2750, net: 6250, status: 'Draft', relatedRequestIds: [], deductionLines: [
-      { id: 'lm1', date: '2026-08-01', label: 'Social insurance share', amount: 350, reason: 'Auto — social insurance', source: 'biometric', requestId: null, status: 'Accepted' },
-      { id: 'lm2', date: '2026-08-28', label: 'Unpaid suspension period', amount: 2400, reason: '14 unpaid days during suspension', source: 'biometric', attendanceRef: 'ATT-2608-0355', requestId: null, status: 'Pending' },
+    { employeeId: 'RV-00135', name: 'Laila Mostafa', initials: 'LM', gym: '6th October', position: 'Receptionist', employmentStatus: 'Suspended', days: 8, overtime: 0, baseSalary: 9000, bonus: 0, gross: 9000, deductions: 2400, net: 6600, status: 'Draft', relatedRequestIds: [], deductionLines: [
+      { id: 'lm2', date: '2026-08-28', label: 'Unpaid suspension period', amount: 2400, reason: 'Fourteen unpaid absence days during suspension', source: 'biometric', attendanceRef: 'ATT-2608-0355', requestId: null, status: 'Pending' },
     ] },
   ],
   evaluationHistory: [

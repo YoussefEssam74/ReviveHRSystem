@@ -1,406 +1,1018 @@
+// ====================================================================================
+// ==================== REDESIGNED EMPLOYEE PAYROLL & EXPENSE SETTLEMENT ====================
+// ====================================================================================
+
 let _payPeriod = 'August 2026';
-let _payStep = 1;
-let _payrollView = 'overview';
+let _payrollView = 'detail'; // 'detail' for Employee Settlement Sheet, 'overview' for All Staff Table
 let _payrollGym = 'Nasr City';
-let _payrollLanguage = 'en';
-let _payrollPayslipOpen = false;
-let _payrollEmployeeIdValue = '';
-let _payrollDraftSavedAt = null;
+let _payrollEmployeeIdValue = 'RV-00124'; // Default to Ahmed Mohamed
+let _showAddDeductionForm = false;
 
 const PAYROLL_GYMS = ['Nasr City', 'Heliopolis', '6th October'];
-const PAYROLL_COPY = {
-  en: {
-    pageTitle: 'Payroll', pageSubtitle: 'Review, reconcile, and publish payroll with confidence.', employeeReview: 'Employee payroll review', employeeReviewSubtitle: 'Review source records, resolve deductions, and confirm net pay.', gym: 'Gym', payPeriod: 'Pay period', language: 'Language', english: 'English', arabic: 'Arabic', saveDraft: 'Save Draft', saveDraftHint: 'Keep this payroll run as a draft and return later.', publishPayroll: 'Publish Payroll', publishReady: 'All employees are reviewed and ready to publish.', publishProgress: '{reviewed} of {total} employees reviewed', reviewRequired: '{remaining} employee(s) still need attention before publishing.', allReviewed: 'All employees reviewed', published: 'Published & Locked', publishedLocked: 'This period is published. Payroll details are read-only.', periodOpen: 'Open period', periodPartiallyPublished: 'Partially published', periodPublished: 'Published', totalEmployees: 'Total employees', reviewed: 'Reviewed', pending: 'Pending review', needsAttention: 'Needs attention', employeeList: 'Employee payroll', employeeListHint: 'Select an employee to review source records and deductions.', employee: 'Employee', position: 'Position', baseSalary: 'Base salary', totalDeductions: 'Total deductions', bonuses: 'Bonuses', netPay: 'Net pay', status: 'Status', pendingReview: 'Pending Review', reviewedStatus: 'Reviewed', needsAttentionStatus: 'Needs Attention', openEmployee: 'Open payroll for {name}', backToOverview: 'Back to payroll overview', employmentStatus: 'Employment status', readOnly: 'Read-only', editable: 'Editable', liveCalculation: 'Live calculation', biometricDeductions: 'Biometric-based deductions', biometricHint: 'Generated from attendance and biometric source records.', managerDeductions: 'Manager-issued deductions', managerHint: 'Manually issued lines require a reason and review decision.', date: 'Date', reason: 'Reason', amount: 'Amount', linkedAttendance: 'Linked attendance record', viewAttendance: 'View attendance reference', approve: 'Approve', reject: 'Reject', pendingDecision: 'Decision pending', accepted: 'Accepted', rejected: 'Rejected', addDeduction: 'Add deduction', addDeductionHint: 'New lines are created as pending review items.', source: 'Source', biometric: 'Biometric', manager: 'Manager', attendanceReference: 'Attendance reference', relatedRequests: 'Related requests', relatedRequestsHint: 'Request records linked to this employee or deduction line.', openRequest: 'Open request', noRelatedRequests: 'No related requests are linked to this payroll record.', payslipPreview: 'Payslip preview', showPayslip: 'Show payslip', hidePayslip: 'Hide payslip', saveContinue: 'Save & Continue Later', acceptReviewed: 'Accept & Mark Reviewed', markedReviewed: 'Marked Reviewed', acceptBlocked: 'Resolve every pending deduction before accepting this employee.', draftSaved: 'Payroll draft saved', confirmPublishTitle: 'Publish payroll?', confirmPublishText: 'Publishing {period} for {gym} will lock these {count} employee records and prevent further changes.', confirmPublish: 'Publish and lock', cancel: 'Cancel', attendanceReferenceToast: 'Attendance record {ref} is available in the attendance module.', periodLockedToast: 'This payroll period is published and read-only.', permissionToast: 'You do not have permission to perform this payroll action.', noEmployees: 'No payroll employees are available for this gym.', bonusSaved: 'Bonus updated. Net pay recalculated.', deductionUpdated: 'Deduction amount updated. Net pay recalculated.', deductionAdded: 'Deduction added for {name}. It is pending review.', acceptedToast: '{name} marked Reviewed.', emptyRequests: 'No linked records.', sourceRecord: 'Source record'
-  },
-  ar: {
-    pageTitle: 'الرواتب', pageSubtitle: 'راجع الرواتب وطابقها وانشرها بثقة.', employeeReview: 'مراجعة رواتب الموظف', employeeReviewSubtitle: 'راجع السجلات المصدرية وحل الخصومات وأكّد صافي الراتب.', gym: 'النادي', payPeriod: 'فترة الدفع', language: 'اللغة', english: 'الإنجليزية', arabic: 'العربية', saveDraft: 'حفظ المسودة', saveDraftHint: 'احتفظ بهذه الدورة كمسودة وعد لاحقًا.', publishPayroll: 'نشر الرواتب', publishReady: 'تمت مراجعة جميع الموظفين والرواتب جاهزة للنشر.', publishProgress: 'تمت مراجعة {reviewed} من {total} موظفين', reviewRequired: 'لا يزال هناك {remaining} موظف يحتاجون إلى متابعة قبل النشر.', allReviewed: 'تمت مراجعة جميع الموظفين', published: 'منشورة ومقفلة', publishedLocked: 'تم نشر هذه الفترة. تفاصيل الرواتب للقراءة فقط.', periodOpen: 'فترة مفتوحة', periodPartiallyPublished: 'تم النشر جزئيًا', periodPublished: 'منشورة', totalEmployees: 'إجمالي الموظفين', reviewed: 'تمت المراجعة', pending: 'بانتظار المراجعة', needsAttention: 'يحتاج إلى متابعة', employeeList: 'رواتب الموظفين', employeeListHint: 'اختر موظفًا لمراجعة السجلات المصدرية والخصومات.', employee: 'الموظف', position: 'الوظيفة', baseSalary: 'الراتب الأساسي', totalDeductions: 'إجمالي الخصومات', bonuses: 'المكافآت', netPay: 'صافي الراتب', status: 'الحالة', pendingReview: 'بانتظار المراجعة', reviewedStatus: 'تمت المراجعة', needsAttentionStatus: 'يحتاج إلى متابعة', openEmployee: 'فتح رواتب {name}', backToOverview: 'العودة إلى نظرة عامة الرواتب', employmentStatus: 'حالة التوظيف', readOnly: 'للقراءة فقط', editable: 'قابل للتعديل', liveCalculation: 'حساب مباشر', biometricDeductions: 'الخصومات المستندة إلى البصمة', biometricHint: 'مولدة من سجلات الحضور والبصمة.', managerDeductions: 'الخصومات الصادرة من المدير', managerHint: 'البنود الصادرة يدويًا تتطلب سببًا وقرار مراجعة.', date: 'التاريخ', reason: 'السبب', amount: 'المبلغ', linkedAttendance: 'سجل الحضور المرتبط', viewAttendance: 'عرض مرجع الحضور', approve: 'الموافقة', reject: 'الرفض', pendingDecision: 'القرار مطلوب', accepted: 'مقبول', rejected: 'مرفوض', addDeduction: 'إضافة خصم', addDeductionHint: 'تُنشأ البنود الجديدة كبنود بانتظار المراجعة.', source: 'المصدر', biometric: 'البصمة', manager: 'المدير', attendanceReference: 'مرجع الحضور', relatedRequests: 'الطلبات المرتبطة', relatedRequestsHint: 'سجلات الطلبات المرتبطة بهذا الموظف أو بند الخصم.', openRequest: 'فتح الطلب', noRelatedRequests: 'لا توجد طلبات مرتبطة بسجل الرواتب هذا.', payslipPreview: 'معاينة قسيمة الراتب', showPayslip: 'عرض القسيمة', hidePayslip: 'إخفاء القسيمة', saveContinue: 'حفظ والمتابعة لاحقًا', acceptReviewed: 'قبول ووضع علامة تمت المراجعة', markedReviewed: 'تم وضع علامة تمت المراجعة', acceptBlocked: 'عالج كل خصم بانتظار القرار قبل قبول الموظف.', draftSaved: 'تم حفظ مسودة الرواتب', confirmPublishTitle: 'نشر الرواتب؟', confirmPublishText: 'سيؤدي نشر {period} لـ {gym} إلى إغلاق سجلات {count} من الموظفين ومنع أي تعديلات إضافية.', confirmPublish: 'نشر وقفل', cancel: 'إلغاء', attendanceReferenceToast: 'سجل الحضور {ref} متاح في وحدة الحضور.', periodLockedToast: 'فترة الرواتب هذه منشورة وهي للقراءة فقط.', permissionToast: 'ليس لديك صلاحية تنفيذ هذا الإجراء.', noEmployees: 'لا يوجد موظفو رواتب لهذا النادي.', bonusSaved: 'تم تحديث المكافأة وإعادة حساب صافي الراتب.', deductionUpdated: 'تم تحديث مبلغ الخصم وإعادة حساب صافي الراتب.', deductionAdded: 'تمت إضافة خصم لـ {name} وهو بانتظار المراجعة.', acceptedToast: 'تم وضع علامة تمت المراجعة لـ {name}.', emptyRequests: 'لا توجد سجلات مرتبطة.', sourceRecord: 'السجل المصدر'
+const PAYROLL_PERIODS = ['August 2026', 'July 2026', 'June 2026'];
+
+// Sync with active topbar gym if applicable
+function getEffectivePayrollGym() {
+  const u = MOCK.currentUser;
+  if (u && u.selectedGym && u.selectedGym !== 'all') {
+    const g = (u.gyms || []).find(gym => gym.id === u.selectedGym);
+    if (g) return g.branch;
   }
-};
-
-const PAYROLL_STATUS_KEYS = { 'Pending Review': 'pendingReview', Reviewed: 'reviewedStatus', 'Needs Attention': 'needsAttentionStatus', Draft: 'pendingReview', Processing: 'pendingReview', Approved: 'reviewedStatus', Locked: 'reviewedStatus', Accepted: 'accepted', Rejected: 'rejected', Pending: 'pendingDecision' };
-
-function payrollT(key, vars) {
-  const table = PAYROLL_COPY[_payrollLanguage] || PAYROLL_COPY.en;
-  const value = table[key] || PAYROLL_COPY.en[key] || key;
-  return String(value).replace(/\{(\w+)\}/g, (match, name) => vars && vars[name] !== undefined ? String(vars[name]) : match);
-}
-
-function payrollEscape(value) {
-  return String(value === null || value === undefined ? '' : value).replace(/[&<>"']/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[character]));
-}
-
-function payrollInitials(name, initials) {
-  return initials || String(name || '').split(/\s+/).filter(Boolean).slice(0, 2).map(part => part[0]).join('').toUpperCase() || '—';
-}
-
-function payrollDate(value) {
-  if (!value) return '—';
-  const date = new Date(/^\d{4}-\d{2}-\d{2}$/.test(String(value)) ? `${value}T00:00:00` : value);
-  if (isNaN(date.getTime())) return String(value);
-  return date.toLocaleDateString(_payrollLanguage === 'ar' ? 'ar-EG' : 'en-US', { day: '2-digit', month: 'short', year: 'numeric' });
-}
-
-function payrollMoney(value) {
-  return Number(value || 0).toLocaleString(_payrollLanguage === 'ar' ? 'ar-EG' : 'en-US', { maximumFractionDigits: 0 });
-}
-
-function payrollAmount(value) {
-  return `${_payrollLanguage === 'ar' ? 'ج.م' : 'EGP'} ${payrollMoney(value)}`;
-}
-
-function payrollGymDisplay(gym) {
-  const values = { 'Nasr City': { en: 'Nasr City', ar: 'مدينة نصر' }, Heliopolis: { en: 'Heliopolis', ar: 'مصر الجديدة' }, '6th October': { en: '6th October', ar: 'السادس من أكتوبر' } };
-  return values[gym] ? values[gym][_payrollLanguage] || values[gym].en : gym;
-}
-
-function payrollPeriodDisplay(period) {
-  const values = { 'August 2026': { en: 'August 2026', ar: 'أغسطس 2026' }, 'July 2026': { en: 'July 2026', ar: 'يوليو 2026' }, 'June 2026': { en: 'June 2026', ar: 'يونيو 2026' } };
-  return values[period] ? values[period][_payrollLanguage] || values[period].en : period;
-}
-
-function payrollPeriodRecord() {
-  return (MOCK.payroll || []).find(record => record.period === _payPeriod) || { period: _payPeriod, status: 'Open', locked: false, publishedGyms: [] };
-}
-
-function payrollPeriodLocked(gym) {
-  const record = payrollPeriodRecord();
-  return !!record.locked || (record.publishedGyms || []).includes(gym || _payrollGym);
+  return _payrollGym;
 }
 
 function payrollItemsForGym(gym) {
-  return (MOCK.payrollItems || []).filter(item => item.gym === (gym || _payrollGym));
+  const targetGym = gym || getEffectivePayrollGym();
+  return (MOCK.payrollItems || []).filter(item => item.gym === targetGym);
 }
 
+function payrollPeriodRecord() {
+  return (MOCK.payroll || []).find(r => r.period === _payPeriod) || { period: _payPeriod, status: 'Open', locked: false, publishedGyms: [] };
+}
+
+function payrollPeriodLocked(gym) {
+  const r = payrollPeriodRecord();
+  return !!r.locked || (r.publishedGyms || []).includes(gym || getEffectivePayrollGym());
+}
+
+// Math and calculation helpers
 function baseSalaryOf(item) { return Number(item.baseSalary !== undefined ? item.baseSalary : item.gross || 0); }
 function bonusOf(item) { return Number(item.bonus || 0); }
-function grossOf(item) { return baseSalaryOf(item) + bonusOf(item); }
-function dedTotal(item) { return (item.deductionLines || []).filter(line => line.status !== 'Rejected').reduce((sum, line) => sum + (Number(line.amount) || 0), 0); }
-function netOf(item) { return grossOf(item) - dedTotal(item); }
-function pendingOf(item) { return (item.deductionLines || []).filter(line => line.status === 'Pending').length; }
-function payrollSyncTotals(item) { item.gross = grossOf(item); item.deductions = dedTotal(item); item.net = netOf(item); }
+function overtimeHoursOf(item) { return Number(item.overtime || 0); }
+function overtimePayOf(item) { 
+  // Standard overtime: (Base / 22 / 8) * 1.5 * overtimeHours
+  const base = baseSalaryOf(item);
+  const hourly = (base / 176) * 1.5;
+  return Math.round(hourly * overtimeHoursOf(item));
+}
+function grossOf(item) { return baseSalaryOf(item) + bonusOf(item) + overtimePayOf(item); }
 
-function payrollStatus(item) {
-  if (payrollPeriodLocked(item && item.gym)) return 'Reviewed';
-  const status = item && item.status ? item.status : 'Pending Review';
-  if (status === 'Draft' || status === 'Processing') return pendingOf(item) > 0 ? 'Needs Attention' : 'Pending Review';
-  if (status === 'Approved' || status === 'Locked') return pendingOf(item) > 0 ? 'Needs Attention' : 'Reviewed';
-  return status;
+function approvedDedTotal(item) {
+  return (item.deductionLines || [])
+    .filter(line => line.status === 'Accepted' || line.status === 'Approved')
+    .reduce((sum, line) => sum + (Number(line.amount) || 0), 0);
 }
 
-function payrollIsReviewed(item) { return payrollStatus(item) === 'Reviewed' || !!(item && item.reviewed && pendingOf(item) === 0); }
-function payrollNeedsAttention(item) { return payrollStatus(item) === 'Needs Attention'; }
-function payrollAllReviewed(items) { return items.length > 0 && items.every(payrollIsReviewed); }
-function payrollCanEdit() { return !payrollPeriodLocked() && (DEMO.showAll || hasPermission('payroll.edit')); }
-function payrollCanApprove() { return !payrollPeriodLocked() && (DEMO.showAll || hasPermission('payroll.approve')); }
-function payrollStatusText(status) { return payrollT(PAYROLL_STATUS_KEYS[status] || 'status'); }
-function payrollStatusClass(status) { if (['Reviewed', 'Accepted', 'Approved', 'Locked'].includes(status)) return 'reviewed'; if (['Needs Attention', 'Rejected'].includes(status)) return 'attention'; return 'pending'; }
-function payrollStatusBadge(status) { return `<span class="payroll-status payroll-status-${payrollStatusClass(status)}"><span class="payroll-status-dot" aria-hidden="true"></span>${payrollEscape(payrollStatusText(status))}</span>`; }
-function payslipStatusBadge(status) { return payrollStatusBadge(status); }
-function payrollLineSource(line) { return line && line.source ? line.source : line && line.attendanceRef ? 'biometric' : 'manager'; }
-function payrollLineDate(line) { return payrollDate(line && line.date); }
+function pendingDedTotal(item) {
+  return (item.deductionLines || [])
+    .filter(line => line.status === 'Pending')
+    .reduce((sum, line) => sum + (Number(line.amount) || 0), 0);
+}
+
+function allDedTotal(item) {
+  return (item.deductionLines || [])
+    .filter(line => line.status !== 'Rejected')
+    .reduce((sum, line) => sum + (Number(line.amount) || 0), 0);
+}
+
+function netOf(item) {
+  return grossOf(item) - approvedDedTotal(item);
+}
+
+function pendingCountOf(item) {
+  return (item.deductionLines || []).filter(line => line.status === 'Pending').length;
+}
+
+function payrollSyncTotals(item) {
+  item.gross = grossOf(item);
+  item.deductions = approvedDedTotal(item);
+  item.net = netOf(item);
+}
+
+function payrollStatus(item) {
+  if (payrollPeriodLocked(item && item.gym)) return 'Closed';
+  if (item && (item.status === 'Reviewed' || item.status === 'Approved' || item.status === 'Locked' || item.reviewed)) {
+    return 'Closed';
+  }
+  if (pendingCountOf(item) > 0) return 'Needs Attention';
+  return 'Ready to Close';
+}
+
+function payrollIsReviewed(item) {
+  return payrollStatus(item) === 'Closed';
+}
+
+function payrollAllReviewed(items) {
+  return items.length > 0 && items.every(payrollIsReviewed);
+}
+
+function payrollEmployeeRecord(item) {
+  return (MOCK.employees || []).find(e => e.id === item.employeeId) || null;
+}
+
 function payrollRequestsFor(item) {
   const ids = new Set(item.relatedRequestIds || []);
   (item.deductionLines || []).forEach(line => { if (line.requestId) ids.add(line.requestId); });
-  return (MOCK.requests || []).filter(request => ids.has(request.id) || request.employee === item.name);
+  return (MOCK.requests || []).filter(r => ids.has(r.id) || r.employee === item.name);
 }
 
-function setPayrollDocumentLanguage() {
-  if (typeof document === 'undefined') return;
-  const direction = _payrollLanguage === 'ar' ? 'rtl' : 'ltr';
-  document.documentElement.setAttribute('lang', _payrollLanguage);
-  document.documentElement.setAttribute('dir', direction);
+function payrollAttendanceRows(item) {
+  const exceptions = (MOCK.attendanceExceptions || []).filter(r => r.employeeId === item.employeeId).map(r => ({
+    id: r.id, date: r.date, title: r.exception, detail: r.detail,
+    firstIn: r.firstIn, lastOut: r.lastOut, device: r.device, kind: 'exception', status: 'Exception'
+  }));
+  const board = (MOCK.attendanceRecords || []).filter(r => r.employeeId === item.employeeId).map(r => ({
+    id: `BOARD-${r.date}`, date: r.date, title: r.status, detail: r.notes || (r.shift ? `Shift ${r.shift}` : ''),
+    firstIn: r.checkIn, lastOut: r.checkOut, device: r.source, kind: 'board', status: r.status
+  }));
+  return exceptions.concat(board).sort((a, b) => String(b.date).localeCompare(String(a.date)));
 }
 
+function formatEGP(val) {
+  return 'EGP ' + Number(val || 0).toLocaleString('en-US');
+}
+
+// ==================== MAIN PAGE RENDERER ====================
 function renderPayroll() {
-  setPayrollDocumentLanguage();
-  const direction = _payrollLanguage === 'ar' ? 'rtl' : 'ltr';
-  return `<section class="payroll-shell" lang="${_payrollLanguage}" dir="${direction}">${_payrollView === 'detail' ? renderPayrollDetail() : renderPayrollOverview()}</section>`;
+  const gym = getEffectivePayrollGym();
+  const items = payrollItemsForGym(gym);
+
+  // Ensure current employee exists
+  let currentItem = items.find(i => i.employeeId === _payrollEmployeeIdValue);
+  if (!currentItem && items.length > 0) {
+    currentItem = items[0];
+    _payrollEmployeeIdValue = currentItem.employeeId;
+  }
+
+  return `
+    <div class="space-y-3 font-sans text-charcoal-800 pb-12 max-w-7xl mx-auto">
+      <!-- TOP CONTROLS & SCOPE HEADER -->
+      ${renderPayrollTopHeader(gym, items)}
+
+      <!-- CONDITIONAL VIEW: DETAIL SETTLEMENT SHEET vs ALL STAFF TABLE -->
+      ${_payrollView === 'detail' && currentItem 
+        ? renderPayrollSettlementSheet(currentItem, items) 
+        : renderPayrollOverviewTable(items, gym)
+      }
+    </div>
+  `;
 }
 
-function renderPayrollPageHeader(detail, locked) {
-  const title = detail ? payrollT('employeeReview') : payrollT('pageTitle');
-  const subtitle = detail ? payrollT('employeeReviewSubtitle') : payrollT('pageSubtitle');
-  const back = detail ? `<button type="button" class="payroll-back-button" onclick="closePayrollDetail()"><span aria-hidden="true">←</span>${payrollT('backToOverview')}</button>` : '';
-  return `<header class="payroll-page-header"><div class="payroll-heading-block">${back}<p class="payroll-eyebrow">${payrollT('sourceRecord')}</p><h1>${title}</h1><p class="payroll-page-subtitle">${subtitle}</p></div><div class="payroll-header-controls"><div class="payroll-selector-fields"><label class="payroll-field"><span>${payrollT('gym')}</span><select class="form-select payroll-control" onchange="setPayrollGym(this.value)" aria-label="${payrollEscape(payrollT('gym'))}">${PAYROLL_GYMS.map(gym => `<option value="${payrollEscape(gym)}" ${gym === _payrollGym ? 'selected' : ''}>${payrollEscape(payrollGymDisplay(gym))}</option>`).join('')}</select></label><label class="payroll-field"><span>${payrollT('payPeriod')}</span><select class="form-select payroll-control" onchange="setPayrollPeriod(this.value)" aria-label="${payrollEscape(payrollT('payPeriod'))}">${['August 2026', 'July 2026', 'June 2026'].map(period => `<option value="${period}" ${period === _payPeriod ? 'selected' : ''}>${payrollEscape(payrollPeriodDisplay(period))}</option>`).join('')}</select></label></div><div class="payroll-language-wrap"><span class="payroll-language-label">${payrollT('language')}</span><div class="payroll-language-switch" role="group" aria-label="${payrollEscape(payrollT('language'))}"><button type="button" class="payroll-language-button ${_payrollLanguage === 'en' ? 'is-active' : ''}" aria-pressed="${_payrollLanguage === 'en'}" onclick="togglePayrollLanguage()">EN</button><button type="button" class="payroll-language-button ${_payrollLanguage === 'ar' ? 'is-active' : ''}" aria-pressed="${_payrollLanguage === 'ar'}" onclick="togglePayrollLanguage()">ع</button></div></div>${locked ? `<span class="payroll-locked-pill">${payrollT('published')}</span>` : ''}</div></header>`;
+// ==================== TOP CONTROLS HEADER ====================
+function renderPayrollTopHeader(gym, items) {
+  const locked = payrollPeriodLocked(gym);
+  const closedCount = items.filter(payrollIsReviewed).length;
+  const totalCount = items.length;
+
+  return `
+    <div class="bg-white rounded-xl border border-charcoal-200 p-3 shadow-2xs flex flex-col md:flex-row md:items-center justify-between gap-3">
+      <div>
+        <div class="flex items-center gap-2">
+          <h1 class="text-base font-bold text-charcoal-900 tracking-tight">Monthly Payroll &amp; Expense Settlement</h1>
+          <span class="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold ${
+            locked ? 'bg-charcoal-100 text-charcoal-700' : 'bg-brand-50 text-brand-700 border border-brand-200'
+          }">
+            ${locked ? '🔒 Period Locked' : '🟢 Open for Reconciliation'}
+          </span>
+        </div>
+        <p class="text-[11px] text-charcoal-500 mt-0.5">
+          Verify attendance exceptions, reconcile manager expense charges, and close employee monthly accounts.
+        </p>
+      </div>
+
+      <!-- Scope Selectors & View Toggle -->
+      <div class="flex items-center gap-2 flex-wrap">
+        <!-- View Toggle Pills -->
+        <div class="flex items-center bg-charcoal-100 p-0.5 rounded-lg text-xs font-semibold">
+          <button onclick="_payrollView='detail';renderAll()" class="px-2.5 py-1 rounded-md transition-all ${
+            _payrollView === 'detail' ? 'bg-white text-charcoal-900 shadow-2xs font-bold' : 'text-charcoal-600 hover:text-charcoal-900'
+          }">
+            📄 Employee Sheet
+          </button>
+          <button onclick="_payrollView='overview';renderAll()" class="px-2.5 py-1 rounded-md transition-all ${
+            _payrollView === 'overview' ? 'bg-white text-charcoal-900 shadow-2xs font-bold' : 'text-charcoal-600 hover:text-charcoal-900'
+          }">
+            📋 All Staff (${totalCount})
+          </button>
+        </div>
+
+        <!-- Branch Selector -->
+        <div class="flex items-center gap-1.5 text-xs">
+          <select onchange="setPayrollGym(this.value)" class="form-select text-xs py-1 px-2.5 font-semibold bg-white border border-charcoal-200 rounded-lg">
+            ${PAYROLL_GYMS.map(g => `<option value="${g}" ${g === gym ? 'selected' : ''}>${g} Branch</option>`).join('')}
+          </select>
+        </div>
+
+        <!-- Period Selector -->
+        <div class="flex items-center gap-1.5 text-xs">
+          <select onchange="setPayrollPeriod(this.value)" class="form-select text-xs py-1 px-2.5 font-semibold bg-white border border-charcoal-200 rounded-lg">
+            ${PAYROLL_PERIODS.map(p => `<option value="${p}" ${p === _payPeriod ? 'selected' : ''}>${p}</option>`).join('')}
+          </select>
+        </div>
+      </div>
+    </div>
+  `;
 }
 
-function renderPayrollOverview() {
-  const items = payrollItemsForGym();
-  const locked = payrollPeriodLocked();
-  return `${renderPayrollPageHeader(false, locked)}${locked ? renderPayrollLockedBanner() : ''}${renderPayrollPublishPanel(items, locked)}${renderPayrollStatusStrip(items)}<section class="payroll-list-section" aria-labelledby="payroll-employee-list-title"><div class="payroll-section-heading"><div><h2 id="payroll-employee-list-title">${payrollT('employeeList')}</h2><p>${payrollT('employeeListHint')}</p></div><span class="payroll-record-count">${items.length} ${payrollT('totalEmployees').toLowerCase()}</span></div>${items.length ? `${renderPayrollTable(items)}${renderPayrollCards(items)}` : `<div class="payroll-empty-state">${payrollT('noEmployees')}</div>`}</section>`;
-}
-
-function renderPayrollLockedBanner() {
-  return `<div class="payroll-locked-banner" role="status"><span class="payroll-lock-icon" aria-hidden="true">▣</span><div><strong>${payrollT('publishedLocked')}</strong><p>${payrollT('published')} · ${payrollT('periodPublished')}</p></div></div>`;
-}
-
-function renderPayrollPublishPanel(items, locked) {
-  const total = items.length;
-  const reviewed = items.filter(payrollIsReviewed).length;
-  const allReviewed = payrollAllReviewed(items);
-  const remaining = total - reviewed;
-  const progress = total ? Math.round((reviewed / total) * 100) : 0;
-  const canPublish = !locked && allReviewed && payrollCanApprove();
-  const canSave = !locked && payrollCanEdit();
-  const progressText = allReviewed ? payrollT('publishReady') : payrollT('reviewRequired', { remaining });
-  return `<section class="payroll-publish-panel" aria-labelledby="payroll-publish-title"><div class="payroll-publish-copy"><div class="payroll-publish-icon" aria-hidden="true">${locked ? '▣' : '✓'}</div><div><p class="payroll-eyebrow">${locked ? payrollT('periodPublished') : payrollT('periodOpen')}</p><h2 id="payroll-publish-title">${locked ? payrollT('published') : payrollT('publishPayroll')}</h2><p class="payroll-publish-progress">${payrollT('publishProgress', { reviewed, total })} · ${progressText}</p></div></div><div class="payroll-publish-progress-wrap"><div class="payroll-progress-track" role="progressbar" aria-label="${payrollEscape(payrollT('publishProgress', { reviewed, total }))}" aria-valuemin="0" aria-valuemax="${total}" aria-valuenow="${reviewed}"><span style="width:${progress}%"></span></div><div class="payroll-progress-meta"><span>${payrollT('reviewed')}</span><strong>${reviewed} / ${total}</strong><span>${remaining ? `${remaining} ${payrollT('pending').toLowerCase()}` : payrollT('allReviewed')}</span></div></div><div class="payroll-publish-actions"><button type="button" class="btn btn-secondary payroll-control-button" onclick="savePayrollDraft()" ${canSave ? '' : 'disabled'}>${payrollT('saveDraft')}</button><button type="button" class="btn btn-primary payroll-publish-button" onclick="publishPayroll()" ${canPublish ? '' : 'disabled'}>${locked ? payrollT('published') : payrollT('publishPayroll')}</button></div></section>`;
-}
-
-function renderPayrollStatusStrip(items) {
-  const total = items.length;
-  const reviewed = items.filter(payrollIsReviewed).length;
-  const pending = items.filter(item => payrollStatus(item) === 'Pending Review').length;
-  const attention = items.filter(payrollNeedsAttention).length;
-  return `<section class="payroll-status-strip" role="list" aria-label="${payrollEscape(payrollT('employeeList'))}"><div class="payroll-status-summary payroll-summary-total" role="listitem"><span>${payrollT('totalEmployees')}</span><strong>${total}</strong><small>${payrollGymDisplay(_payrollGym)}</small></div><div class="payroll-status-summary payroll-summary-reviewed" role="listitem"><span>${payrollT('reviewed')}</span><strong>${reviewed}</strong><small>${total ? Math.round((reviewed / total) * 100) : 0}% complete</small></div><div class="payroll-status-summary payroll-summary-pending" role="listitem"><span>${payrollT('pending')}</span><strong>${pending}</strong><small>${payrollT('pendingReview')}</small></div><div class="payroll-status-summary payroll-summary-attention" role="listitem"><span>${payrollT('needsAttention')}</span><strong>${attention}</strong><small>${payrollT('needsAttentionStatus')}</small></div></section>`;
-}
-
-function renderPayrollTable(items) {
-  return `<div class="payroll-table-region"><div class="payroll-table-scroll" role="region" aria-label="${payrollEscape(payrollT('employeeList'))}" tabindex="0"><table class="payroll-table"><caption class="payroll-sr-only">${payrollT('employeeList')}</caption><thead><tr><th scope="col">${payrollT('employee')}</th><th scope="col">${payrollT('position')}</th><th scope="col">${payrollT('baseSalary')}</th><th scope="col">${payrollT('totalDeductions')}</th><th scope="col">${payrollT('bonuses')}</th><th scope="col">${payrollT('netPay')}</th><th scope="col">${payrollT('status')}</th></tr></thead><tbody>${items.map(renderPayrollTableRow).join('')}</tbody></table></div></div>`;
-}
-
-function renderPayrollTableRow(item) {
-  const openLabel = payrollEscape(payrollT('openEmployee', { name: item.name }));
-  return `<tr class="payroll-table-row" onclick="openPayrollDetail('${payrollEscape(item.employeeId)}')"><td><button type="button" class="payroll-row-open" onclick="event.stopPropagation();openPayrollDetail('${payrollEscape(item.employeeId)}')" aria-label="${openLabel}"><span class="payroll-avatar payroll-avatar-small" aria-hidden="true">${payrollEscape(payrollInitials(item.name, item.initials))}</span><span class="payroll-row-person"><strong>${payrollEscape(item.name)}</strong><span>${payrollEscape(item.position || '—')} · ${payrollEscape(item.employeeId)}</span></span></button></td><td>${payrollEscape(item.position || '—')}</td><td class="payroll-money-cell">${payrollAmount(baseSalaryOf(item))}</td><td class="payroll-money-cell payroll-deduction-value">− ${payrollAmount(dedTotal(item))}</td><td class="payroll-money-cell">${payrollAmount(bonusOf(item))}</td><td class="payroll-money-cell payroll-net-value" data-payroll-net="${payrollEscape(item.employeeId)}">${payrollAmount(netOf(item))}</td><td>${payrollStatusBadge(payrollStatus(item))}</td></tr>`;
-}
-
-function renderPayrollCards(items) { return `<div class="payroll-card-region">${items.map(renderPayrollEmployeeCard).join('')}</div>`; }
-
-function renderPayrollEmployeeCard(item) {
-  return `<button type="button" class="payroll-employee-card" aria-label="${payrollEscape(payrollT('openEmployee', { name: item.name }))}" onclick="openPayrollDetail('${payrollEscape(item.employeeId)}')"><span class="payroll-card-top"><span class="payroll-person-cell"><span class="payroll-avatar payroll-avatar-small" aria-hidden="true">${payrollEscape(payrollInitials(item.name, item.initials))}</span><span class="payroll-row-person"><strong>${payrollEscape(item.name)}</strong><span>${payrollEscape(item.position || '—')} · ${payrollEscape(item.employeeId)}</span></span></span>${payrollStatusBadge(payrollStatus(item))}</span><span class="payroll-card-metrics"><span><span>${payrollT('baseSalary')}</span><strong>${payrollAmount(baseSalaryOf(item))}</strong></span><span><span>${payrollT('totalDeductions')}</span><strong>− ${payrollAmount(dedTotal(item))}</strong></span><span><span>${payrollT('bonuses')}</span><strong>${payrollAmount(bonusOf(item))}</strong></span><span class="payroll-card-net"><span>${payrollT('netPay')}</span><strong data-payroll-net="${payrollEscape(item.employeeId)}">${payrollAmount(netOf(item))}</strong></span></span><span class="payroll-card-open">${payrollT('openEmployee', { name: item.name })} <span aria-hidden="true">→</span></span></button>`;
-}
-
-function renderPayrollDetail() {
-  const item = (MOCK.payrollItems || []).find(payrollItem => payrollItem.employeeId === _payrollEmployeeIdValue);
-  if (!item) { _payrollView = 'overview'; return renderPayrollOverview(); }
+// ====================================================================================
+// ==================== DETAILED EMPLOYEE SETTLEMENT SHEET ============================
+// ====================================================================================
+function renderPayrollSettlementSheet(item, items) {
+  const employee = payrollEmployeeRecord(item);
   const locked = payrollPeriodLocked(item.gym);
-  const canEdit = payrollCanEdit();
-  const canApprove = payrollCanApprove();
-  return `${renderPayrollPageHeader(true, locked)}${locked ? renderPayrollLockedBanner() : ''}<div class="payroll-detail-content">${renderPayrollEmployeeHero(item)}${renderPayrollMoneySummary(item, canEdit)}${renderPayrollDeductionSections(item, canEdit, locked)}${renderPayrollRequestsPanel(item)}${renderPayrollPayslipSection(item)}${renderPayrollActionBar(item, canEdit, canApprove, locked)}</div>`;
+  const status = payrollStatus(item);
+  const isClosed = status === 'Closed';
+  const pendingCount = pendingCountOf(item);
+  const deductions = item.deductionLines || [];
+  const currentIndex = items.findIndex(i => i.employeeId === item.employeeId);
+  const prevEmp = currentIndex > 0 ? items[currentIndex - 1] : null;
+  const nextEmp = currentIndex < items.length - 1 ? items[currentIndex + 1] : null;
+
+  // Calculation figures
+  const base = baseSalaryOf(item);
+  const bonus = bonusOf(item);
+  const otHours = overtimeHoursOf(item);
+  const otPay = overtimePayOf(item);
+  const gross = grossOf(item);
+  const approvedDeds = approvedDedTotal(item);
+  const net = netOf(item);
+
+  return `
+    <div class="space-y-3">
+
+      <!-- 1. EMPLOYEE SELECTOR & APPROVAL FLOW STRIP -->
+      <div class="bg-white rounded-xl border border-charcoal-200 p-2.5 shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+        <!-- Switcher Dropdown & Arrows -->
+        <div class="flex items-center gap-2 min-w-0">
+          <div class="flex items-center gap-1">
+            <button onclick="openPayrollDetail('${prevEmp ? prevEmp.employeeId : ''}')" ${!prevEmp ? 'disabled' : ''} class="btn btn-sm btn-secondary h-7 w-7 p-0 flex items-center justify-center disabled:opacity-30" title="Previous Staff">
+              ←
+            </button>
+            <button onclick="openPayrollDetail('${nextEmp ? nextEmp.employeeId : ''}')" ${!nextEmp ? 'disabled' : ''} class="btn btn-sm btn-secondary h-7 w-7 p-0 flex items-center justify-center disabled:opacity-30" title="Next Staff">
+              →
+            </button>
+          </div>
+
+          <div class="min-w-0">
+            <select onchange="openPayrollDetail(this.value)" class="form-select text-xs font-bold py-1 px-2.5 bg-charcoal-50 border border-charcoal-200 rounded-lg text-charcoal-900 truncate">
+              ${items.map(it => {
+                const pCount = pendingCountOf(it);
+                const tag = it.status === 'Reviewed' || it.status === 'Locked' ? '✓ Closed' : pCount > 0 ? `⚠️ ${pCount} Pending` : 'Ready to Close';
+                return `<option value="${it.employeeId}" ${it.employeeId === item.employeeId ? 'selected' : ''}>${it.name} (${it.position}) · ${tag}</option>`;
+              }).join('')}
+            </select>
+          </div>
+          <span class="text-[11px] text-charcoal-400 font-medium">(${currentIndex + 1} of ${items.length})</span>
+        </div>
+
+        <!-- Approval Workflow Status Badges -->
+        <div class="flex items-center gap-2">
+          <!-- Step 1: Branch Manager -->
+          <div class="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-800 text-[11px]">
+            <svg class="w-3.5 h-3.5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
+            <span class="font-bold">BM Signed-off</span>
+          </div>
+
+          <span class="text-charcoal-300">→</span>
+
+          <!-- Step 2: HR Reconciliation -->
+          <div class="flex items-center gap-1.5 px-2 py-1 rounded-lg ${
+            isClosed 
+              ? 'bg-emerald-50 border border-emerald-200 text-emerald-800' 
+              : pendingCount > 0 
+                ? 'bg-amber-50 border border-amber-200 text-amber-800' 
+                : 'bg-blue-50 border border-blue-200 text-blue-800'
+          } text-[11px]">
+            ${isClosed ? `
+              <svg class="w-3.5 h-3.5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
+              <span class="font-bold">HR Account Closed</span>
+            ` : pendingCount > 0 ? `
+              <svg class="w-3.5 h-3.5 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"/></svg>
+              <span class="font-bold">${pendingCount} Pending Decision${pendingCount > 1 ? 's' : ''}</span>
+            ` : `
+              <span class="font-bold">Ready to Close</span>
+            `}
+          </div>
+        </div>
+      </div>
+
+      <!-- 2. EMPLOYEE IDENTITY COMPACT STRIP -->
+      <div class="bg-white rounded-xl border border-charcoal-200 p-3 shadow-2xs flex flex-col md:flex-row md:items-center justify-between gap-3">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-xl bg-brand-600 text-white flex items-center justify-center font-bold text-sm shadow-xs flex-shrink-0">
+            ${item.initials || 'EM'}
+          </div>
+          <div>
+            <div class="flex items-center gap-2">
+              <h2 class="text-sm font-bold text-charcoal-900">${item.name}</h2>
+              <span class="badge badge-brand text-[10px] font-mono">${item.employeeId}</span>
+              <span class="badge ${item.employmentStatus === 'Active' ? 'badge-green' : 'badge-yellow'} text-[10px]">
+                ${item.employmentStatus || 'Active'}
+              </span>
+            </div>
+            <p class="text-xs text-charcoal-500 mt-0.5">
+              ${item.position} · ${item.gym} Branch · Hired: ${employee && employee.hireDate ? employee.hireDate : '2025-01-15'}
+            </p>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-4 text-xs border-t md:border-t-0 md:border-l border-charcoal-150 pt-2 md:pt-0 md:pl-4">
+          <div>
+            <span class="text-[10px] text-charcoal-400 uppercase tracking-wider font-semibold block">Base Contract</span>
+            <span class="text-sm font-extrabold text-charcoal-900">${formatEGP(base)}</span>
+          </div>
+          <div>
+            <span class="text-[10px] text-charcoal-400 uppercase tracking-wider font-semibold block">Settlement Period</span>
+            <span class="text-xs font-bold text-charcoal-700">${_payPeriod}</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- 3. MAIN SETTLEMENT 2-COLUMN WORKSPACE -->
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-3 items-start">
+
+        <!-- ==================== LEFT COLUMN (7 COLS / 60%): SETTLEMENT & DEDUCTIONS ==================== -->
+        <div class="lg:col-span-7 space-y-3">
+
+          <!-- CARD A: EARNINGS & ADDITIONS -->
+          <div class="bg-white rounded-xl border border-charcoal-200 p-3.5 shadow-2xs">
+            <div class="flex items-center justify-between pb-2 border-b border-charcoal-150 mb-2.5">
+              <div>
+                <h3 class="text-xs font-bold text-charcoal-900 uppercase tracking-wide">1. Monthly Earnings &amp; Additions</h3>
+                <p class="text-[11px] text-charcoal-400">Base contract salary plus overtime and bonuses</p>
+              </div>
+              <span class="badge badge-green text-[10px] font-bold">Gross: ${formatEGP(gross)}</span>
+            </div>
+
+            <div class="space-y-2 text-xs">
+              <div class="flex items-center justify-between py-1 px-2 rounded-lg bg-charcoal-50">
+                <span class="text-charcoal-600 font-medium">Base Contract Salary</span>
+                <span class="font-bold text-charcoal-900">${formatEGP(base)}</span>
+              </div>
+
+              <div class="flex items-center justify-between py-1 px-2 rounded-lg bg-charcoal-50">
+                <div>
+                  <span class="text-charcoal-600 font-medium">Overtime Hours Pay</span>
+                  <span class="text-[10px] text-charcoal-400 block">${otHours} hrs logged</span>
+                </div>
+                <span class="font-bold text-charcoal-900">+ ${formatEGP(otPay)}</span>
+              </div>
+
+              <!-- Editable Bonus Row -->
+              <div class="flex items-center justify-between py-1.5 px-2 rounded-lg bg-brand-50/40 border border-brand-200">
+                <div>
+                  <span class="font-semibold text-brand-900">Performance Bonus / Incentive</span>
+                  <span class="text-[10px] text-charcoal-400 block">Editable by HR Manager</span>
+                </div>
+                <div class="flex items-center gap-1.5">
+                  <input type="number" min="0" step="50" value="${bonus}" 
+                    onchange="commitPayrollBonus('${item.employeeId}', this.value)"
+                    ${locked || isClosed ? 'disabled' : ''}
+                    class="form-input text-xs h-7 w-20 text-right font-bold text-brand-900 rounded border-brand-300" />
+                  <span class="text-xs font-bold text-brand-700">EGP</span>
+                </div>
+              </div>
+
+              <!-- Subtotal Row -->
+              <div class="flex items-center justify-between pt-1 px-2 font-bold text-charcoal-900 border-t border-charcoal-150">
+                <span>Total Gross Pay</span>
+                <span class="text-sm font-extrabold text-charcoal-900">${formatEGP(gross)}</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- CARD B: DEDUCTIONS & EXPENSE ACCOUNT RECOVERIES (THE CORE RECONCILIATION) -->
+          <div class="bg-white rounded-xl border border-charcoal-200 p-3.5 shadow-2xs">
+            <div class="flex items-center justify-between pb-2 border-b border-charcoal-150 mb-2.5">
+              <div>
+                <h3 class="text-xs font-bold text-charcoal-900 uppercase tracking-wide">2. Deductions &amp; Expense Recoveries</h3>
+                <p class="text-[11px] text-charcoal-400">Review and decide each penalty or expense line</p>
+              </div>
+              <div class="text-right">
+                <span class="badge ${approvedDeds > 0 ? 'badge-red' : 'badge-gray'} text-[10px] font-bold">
+                  − ${formatEGP(approvedDeds)}
+                </span>
+              </div>
+            </div>
+
+            <!-- List of Deduction Lines -->
+            ${deductions.length === 0 ? `
+              <div class="py-6 text-center text-xs text-charcoal-400 border border-dashed border-charcoal-200 rounded-lg">
+                ✓ No deductions or expense recoveries recorded for this employee.
+              </div>
+            ` : `
+              <div class="space-y-2">
+                ${deductions.map(line => {
+                  const isPending = line.status === 'Pending';
+                  const isAccepted = line.status === 'Accepted' || line.status === 'Approved';
+                  const isRejected = line.status === 'Rejected';
+                  const isBiometric = line.source === 'biometric';
+
+                  return `
+                    <div class="p-2.5 rounded-lg border transition-all ${
+                      isPending 
+                        ? 'bg-amber-50/50 border-amber-200 ring-1 ring-amber-100' 
+                        : isAccepted 
+                          ? 'bg-charcoal-50/60 border-charcoal-200' 
+                          : 'bg-gray-50 border-gray-200 opacity-60'
+                    }">
+                      <div class="flex items-start justify-between gap-2">
+                        <div class="min-w-0 flex-1">
+                          <div class="flex items-center gap-1.5 flex-wrap">
+                            <span class="badge ${isBiometric ? 'badge-blue' : 'badge-purple'} text-[9px] font-bold">
+                              ${isBiometric ? 'Biometric Attendance' : 'Manager Recovery'}
+                            </span>
+                            <span class="text-xs font-bold text-charcoal-900">${line.label || line.reason}</span>
+                            
+                            <!-- Status Tag -->
+                            <span class="text-[10px] font-bold ${
+                              isPending ? 'text-amber-700 bg-amber-100 px-1.5 py-0.2 rounded' :
+                              isAccepted ? 'text-emerald-700 bg-emerald-100 px-1.5 py-0.2 rounded' :
+                              'text-red-700 bg-red-100 px-1.5 py-0.2 rounded line-through'
+                            }">
+                              ${isPending ? 'Decision Required' : isAccepted ? 'Approved' : 'Waived / Rejected'}
+                            </span>
+                          </div>
+
+                          <p class="text-[11px] text-charcoal-600 mt-1">${line.reason || '—'}</p>
+
+                          <div class="flex items-center gap-3 text-[10px] text-charcoal-400 mt-1 flex-wrap">
+                            <span>Date: <b>${line.date || '—'}</b></span>
+                            ${line.attendanceRef ? `
+                              <span>Ref: <button onclick="openPayrollAttendanceRef('${line.attendanceRef}', '${item.employeeId}')" class="text-brand-600 hover:underline font-bold">${line.attendanceRef}</button></span>
+                            ` : ''}
+                          </div>
+                        </div>
+
+                        <!-- Amount & Action Controls -->
+                        <div class="flex flex-col items-end gap-1.5 flex-shrink-0">
+                          <span class="text-xs font-bold ${isRejected ? 'line-through text-charcoal-400' : 'text-red-600'}">
+                            − ${formatEGP(line.amount)}
+                          </span>
+
+                          ${isPending && !locked && !isClosed ? `
+                            <div class="flex items-center gap-1 mt-0.5">
+                              <button onclick="decidePayrollDeduction('${item.employeeId}', '${line.id}', true)" 
+                                class="btn btn-sm btn-success h-6 px-2 text-[11px] shadow-2xs font-semibold" title="Approve this charge">
+                                Approve
+                              </button>
+                              <button onclick="decidePayrollDeduction('${item.employeeId}', '${line.id}', false)" 
+                                class="btn btn-sm btn-secondary h-6 px-2 text-[11px] text-red-600 hover:bg-red-50 font-semibold" title="Waive / reject this charge">
+                                Waive
+                              </button>
+                            </div>
+                          ` : isAccepted && !locked && !isClosed ? `
+                            <button onclick="decidePayrollDeduction('${item.employeeId}', '${line.id}', false)" 
+                              class="text-[10px] text-charcoal-400 hover:text-red-600 hover:underline">
+                              Change to Waive
+                            </button>
+                          ` : isRejected && !locked && !isClosed ? `
+                            <button onclick="decidePayrollDeduction('${item.employeeId}', '${line.id}', true)" 
+                              class="text-[10px] text-charcoal-400 hover:text-emerald-600 hover:underline">
+                              Restore to Approve
+                            </button>
+                          ` : ''}
+                        </div>
+                      </div>
+                    </div>
+                  `;
+                }).join('')}
+              </div>
+            `}
+
+            <!-- INLINE ADD DEDUCTION FORM TOGGLE -->
+            <div class="mt-3 pt-2.5 border-t border-charcoal-150">
+              ${!_showAddDeductionForm ? `
+                <button onclick="_showAddDeductionForm=true;renderAll()" ${locked || isClosed ? 'disabled' : ''} class="text-xs text-brand-600 hover:text-brand-800 font-semibold flex items-center gap-1">
+                  <span>+ Add Manual Deduction / Expense Charge</span>
+                </button>
+              ` : `
+                <form onsubmit="savePayrollDeductionInline(event, '${item.employeeId}')" class="bg-charcoal-50 p-2.5 rounded-lg border border-charcoal-200 space-y-2">
+                  <div class="flex items-center justify-between">
+                    <span class="text-xs font-bold text-charcoal-800">Add Deduction / Recovery Line</span>
+                    <button type="button" onclick="_showAddDeductionForm=false;renderAll()" class="text-xs text-charcoal-400 hover:text-charcoal-700">✕ Cancel</button>
+                  </div>
+                  <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
+                    <div>
+                      <label class="block text-[10px] font-semibold text-charcoal-500 mb-0.5">Source Type</label>
+                      <select name="source" class="form-select text-xs py-1 px-2 w-full">
+                        <option value="manager">Manager Operational Charge</option>
+                        <option value="biometric">Biometric Attendance Penalty</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label class="block text-[10px] font-semibold text-charcoal-500 mb-0.5">Reason / Description</label>
+                      <input name="reason" required placeholder="e.g. Lost locker key / damaged tool" class="form-input text-xs py-1 px-2 w-full" />
+                    </div>
+                    <div>
+                      <label class="block text-[10px] font-semibold text-charcoal-500 mb-0.5">Amount (EGP)</label>
+                      <input name="amount" type="number" min="0" step="50" required placeholder="150" class="form-input text-xs py-1 px-2 w-full" />
+                    </div>
+                  </div>
+                  <div class="flex justify-end gap-2 pt-1">
+                    <button type="button" onclick="_showAddDeductionForm=false;renderAll()" class="btn btn-sm btn-secondary text-xs h-7 px-2">Cancel</button>
+                    <button type="submit" class="btn btn-sm btn-primary text-xs h-7 px-3">Add Charge</button>
+                  </div>
+                </form>
+              `}
+            </div>
+          </div>
+
+          <!-- CARD C: FINAL MONTHLY SETTLEMENT & ACCOUNT CLOSING -->
+          <div class="bg-brand-50/60 rounded-xl border border-brand-200 p-4 shadow-2xs">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <span class="text-[10px] uppercase tracking-wider font-extrabold text-brand-800 block">Final Monthly Settlement</span>
+                <div class="flex items-baseline gap-2 mt-0.5">
+                  <span class="text-2xl font-black text-brand-900">${formatEGP(net)}</span>
+                  <span class="text-xs text-charcoal-500">
+                    (${formatEGP(gross)} gross − ${formatEGP(approvedDeds)} deductions)
+                  </span>
+                </div>
+              </div>
+
+              <!-- Close Account Action Button -->
+              <div>
+                ${isClosed ? `
+                  <div class="flex items-center gap-2">
+                    <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 text-white text-xs font-bold shadow-xs">
+                      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
+                      Account Closed &amp; Settled
+                    </span>
+                    ${!locked ? `
+                      <button onclick="reopenPayrollEmployee('${item.employeeId}')" class="btn btn-sm btn-secondary text-xs h-8 px-2 text-charcoal-600 hover:text-charcoal-900" title="Re-open this employee's account for edits">
+                        Re-open
+                      </button>
+                    ` : ''}
+                  </div>
+                ` : pendingCount > 0 ? `
+                  <div class="text-right">
+                    <button disabled class="btn btn-sm btn-secondary text-xs h-8 px-3 opacity-60 cursor-not-allowed">
+                      Resolve ${pendingCount} Decisions First
+                    </button>
+                    <span class="block text-[10px] text-amber-700 mt-0.5 font-medium">Decide Approve/Waive on all lines above</span>
+                  </div>
+                ` : `
+                  <button onclick="acceptPayrollEmployee('${item.employeeId}')" class="btn btn-sm btn-primary text-xs h-9 px-4 font-bold shadow-xs flex items-center gap-1.5">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
+                    Close &amp; Approve Account for ${_payPeriod}
+                  </button>
+                `}
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- ==================== RIGHT COLUMN (5 COLS / 40%): SOURCE AUDIT EVIDENCE ==================== -->
+        <div class="lg:col-span-5 space-y-3">
+
+          <!-- 1. WORKING DAYS & ATTENDANCE LEDGER -->
+          <div class="bg-white rounded-xl border border-charcoal-200 p-3.5 shadow-2xs">
+            <div class="flex items-center justify-between pb-2 border-b border-charcoal-150 mb-2.5">
+              <div>
+                <h3 class="text-xs font-bold text-charcoal-900 uppercase tracking-wide">Working Days &amp; Leaves</h3>
+                <p class="text-[10px] text-charcoal-400">${_payPeriod} · 31 Days Cycle</p>
+              </div>
+              <span class="badge badge-gray text-[10px] font-bold">22 Paid Days</span>
+            </div>
+
+            <table class="w-full text-xs">
+              <tbody class="divide-y divide-charcoal-100">
+                <tr><td class="py-1 text-charcoal-600">Working Days Attended</td><td class="py-1 text-right font-bold text-charcoal-900">${item.days || 22} days</td></tr>
+                <tr><td class="py-1 text-charcoal-600">Weekly Scheduled Offs</td><td class="py-1 text-right font-bold text-charcoal-900">4 days</td></tr>
+                <tr><td class="py-1 text-charcoal-600">Annual Leave Taken</td><td class="py-1 text-right font-bold text-charcoal-900">0 days</td></tr>
+                <tr><td class="py-1 text-charcoal-600">Sick / Medical Leave</td><td class="py-1 text-right font-bold text-charcoal-900">0 days</td></tr>
+                <tr><td class="py-1 text-charcoal-600">Overtime Logged</td><td class="py-1 text-right font-bold text-brand-700">${otHours} hrs</td></tr>
+                <tr>
+                  <td class="py-1 text-charcoal-600">Late Arrivals Count</td>
+                  <td class="py-1 text-right font-bold ${deductions.some(d => d.source==='biometric') ? 'text-amber-600' : 'text-charcoal-900'}">
+                    1 incident
+                  </td>
+                </tr>
+                <tr><td class="py-1 text-charcoal-600">Unexcused Absences</td><td class="py-1 text-right font-bold text-charcoal-900">0 days</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <!-- 2. BIOMETRIC ATTENDANCE PUNCHES PROOF -->
+          <div class="bg-white rounded-xl border border-charcoal-200 p-3.5 shadow-2xs">
+            <div class="flex items-center justify-between pb-2 border-b border-charcoal-150 mb-2">
+              <div>
+                <h3 class="text-xs font-bold text-charcoal-900 uppercase tracking-wide">Biometric Punch Proof</h3>
+                <p class="text-[10px] text-charcoal-400">Punches logged for this month</p>
+              </div>
+              <button onclick="navigateTo('attendance')" class="text-[11px] text-brand-600 hover:underline font-semibold">Attendance Log →</button>
+            </div>
+
+            <div class="space-y-1.5 text-xs">
+              <div class="p-2 rounded-lg bg-amber-50/70 border border-amber-200 flex items-center justify-between">
+                <div>
+                  <div class="flex items-center gap-1.5">
+                    <span class="w-2 h-2 rounded-full bg-amber-500"></span>
+                    <span class="font-bold text-amber-900">Aug 19 (Late Arrival)</span>
+                  </div>
+                  <p class="text-[10px] text-charcoal-500 mt-0.5">Punch: 08:41 In → 16:02 Out · Terminal #1</p>
+                </div>
+                <button onclick="openPayrollAttendanceRef('ATT-2608-0417', '${item.employeeId}')" class="btn btn-sm btn-secondary text-[10px] h-6 px-1.5">
+                  Verify Log
+                </button>
+              </div>
+
+              <div class="p-2 rounded-lg bg-charcoal-50 flex items-center justify-between">
+                <div>
+                  <div class="flex items-center gap-1.5">
+                    <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+                    <span class="font-bold text-charcoal-900">Sep 09 (On Time)</span>
+                  </div>
+                  <p class="text-[10px] text-charcoal-400 mt-0.5">Punch: 08:02 In → 16:00 Out · Biometric</p>
+                </div>
+                <span class="text-[10px] text-emerald-600 font-bold">On Time</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- 3. RELATED REQUESTS & DECISIONS -->
+          <div class="bg-white rounded-xl border border-charcoal-200 p-3.5 shadow-2xs">
+            <div class="flex items-center justify-between pb-2 border-b border-charcoal-150 mb-2">
+              <div>
+                <h3 class="text-xs font-bold text-charcoal-900 uppercase tracking-wide">Linked Employee Requests</h3>
+                <p class="text-[10px] text-charcoal-400">Context for leave and deductions</p>
+              </div>
+              <button onclick="navigateTo('requests')" class="text-[11px] text-brand-600 hover:underline font-semibold">View All →</button>
+            </div>
+
+            ${payrollRequestsFor(item).length === 0 ? `
+              <p class="text-xs text-charcoal-400 py-3 text-center">No leave or exception requests logged for this period.</p>
+            ` : `
+              <div class="space-y-1.5">
+                ${payrollRequestsFor(item).map(req => `
+                  <div class="p-2 rounded-lg bg-charcoal-50 border border-charcoal-100 flex items-start justify-between gap-2 text-xs">
+                    <div>
+                      <div class="flex items-center gap-1.5">
+                        <span class="font-bold text-charcoal-900">${req.type}</span>
+                        <span class="badge ${req.status === 'Approved' ? 'badge-green' : 'badge-red'} text-[9px]">${req.status}</span>
+                      </div>
+                      <p class="text-[10px] text-charcoal-500 mt-0.5">${req.reason || 'No reason'}</p>
+                      <p class="text-[9px] text-charcoal-400 mt-0.5">BM Decision: <b>${req.bmDecision || '—'}</b> (${req.bmComment || 'Reviewed'})</p>
+                    </div>
+                    <button onclick="openRequestDetail('${req.id}')" class="btn btn-sm btn-secondary text-[10px] h-6 px-1.5 flex-shrink-0">
+                      View
+                    </button>
+                  </div>
+                `).join('')}
+              </div>
+            `}
+          </div>
+
+        </div>
+
+      </div>
+
+    </div>
+  `;
 }
 
-function renderPayrollEmployeeHero(item) {
-  const employee = (MOCK.employees || []).find(candidate => candidate.id === item.employeeId);
-  const employmentStatus = item.employmentStatus || (employee && employee.status) || 'Active';
-  return `<section class="payroll-employee-hero" aria-labelledby="payroll-employee-name"><div class="payroll-hero-avatar-wrap"><div class="payroll-avatar payroll-avatar-large" aria-label="${payrollEscape(payrollT('employee'))}">${payrollEscape(payrollInitials(item.name, item.initials))}</div><span class="payroll-avatar-photo-label">${payrollEscape(item.employeeId)}</span></div><div class="payroll-hero-copy"><div class="payroll-hero-kicker"><span>${payrollEscape(item.employeeId)}</span>${payrollStatusBadge(payrollStatus(item))}</div><h2 id="payroll-employee-name">${payrollEscape(item.name)}</h2><p>${payrollEscape(item.position || '—')} <span aria-hidden="true">·</span> ${payrollEscape(payrollGymDisplay(item.gym))}</p><div class="payroll-employment"><span>${payrollT('employmentStatus')}</span>${statusBadge(employmentStatus)}</div></div><div class="payroll-hero-summary"><span>${payrollT('baseSalary')}</span><strong>${payrollAmount(baseSalaryOf(item))}</strong><small>${payrollT('readOnly')}</small></div></section>`;
+// ====================================================================================
+// ==================== ALL STAFF OVERVIEW TABLE VIEW =================================
+// ====================================================================================
+function renderPayrollOverviewTable(items, gym) {
+  const locked = payrollPeriodLocked(gym);
+  const closedCount = items.filter(payrollIsReviewed).length;
+  const pendingCount = items.filter(i => !payrollIsReviewed(i)).length;
+  const totalNet = items.reduce((sum, i) => sum + netOf(i), 0);
+  const totalGross = items.reduce((sum, i) => sum + grossOf(i), 0);
+
+  return `
+    <div class="space-y-3">
+      <!-- 4 KPI SUMMARY TILES -->
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+        <div class="bg-white rounded-xl border border-charcoal-200 p-3 shadow-2xs">
+          <span class="text-[10px] font-semibold text-charcoal-400 uppercase tracking-wider block">Total Staff In Branch</span>
+          <p class="text-xl font-extrabold text-charcoal-900 mt-1">${items.length}</p>
+          <p class="text-[10px] text-charcoal-500 mt-0.5">${gym} Branch</p>
+        </div>
+
+        <div class="bg-white rounded-xl border border-charcoal-200 p-3 shadow-2xs">
+          <span class="text-[10px] font-semibold text-charcoal-400 uppercase tracking-wider block">Accounts Closed</span>
+          <p class="text-xl font-extrabold text-emerald-600 mt-1">${closedCount} / ${items.length}</p>
+          <p class="text-[10px] text-charcoal-500 mt-0.5">${items.length ? Math.round((closedCount/items.length)*100) : 0}% reconciled</p>
+        </div>
+
+        <div class="bg-white rounded-xl border border-charcoal-200 p-3 shadow-2xs">
+          <span class="text-[10px] font-semibold text-charcoal-400 uppercase tracking-wider block">Pending HR Review</span>
+          <p class="text-xl font-extrabold ${pendingCount > 0 ? 'text-amber-600' : 'text-charcoal-900'} mt-1">${pendingCount}</p>
+          <p class="text-[10px] text-charcoal-500 mt-0.5">Need approval/closing</p>
+        </div>
+
+        <div class="bg-white rounded-xl border border-charcoal-200 p-3 shadow-2xs">
+          <span class="text-[10px] font-semibold text-charcoal-400 uppercase tracking-wider block">Total Net Payroll</span>
+          <p class="text-xl font-extrabold text-brand-800 mt-1">${formatEGP(totalNet)}</p>
+          <p class="text-[10px] text-charcoal-500 mt-0.5">Gross: ${formatEGP(totalGross)}</p>
+        </div>
+      </div>
+
+      <!-- MAIN TABLE CARD -->
+      <div class="bg-white rounded-xl border border-charcoal-200 shadow-2xs overflow-hidden">
+        <div class="p-3 border-b border-charcoal-150 flex items-center justify-between bg-charcoal-50/60">
+          <div>
+            <h3 class="text-xs font-bold text-charcoal-900 uppercase tracking-wide">Staff Payroll Ledger</h3>
+            <p class="text-[10px] text-charcoal-400">Click any row to open their monthly closing sheet</p>
+          </div>
+
+          <div class="flex items-center gap-2">
+            ${closedCount === items.length && !locked ? `
+              <button onclick="publishPayroll()" class="btn btn-sm btn-primary text-xs h-7 px-3 font-bold">
+                ✓ Publish &amp; Lock Branch Payroll
+              </button>
+            ` : locked ? `
+              <span class="badge badge-gray text-xs">🔒 Period Published &amp; Locked</span>
+            ` : `
+              <button onclick="publishPayroll()" class="btn btn-sm btn-secondary text-xs h-7 px-3 opacity-60" disabled title="Close all employee sheets before publishing">
+                Publish &amp; Lock (${items.length - closedCount} pending)
+              </button>
+            `}
+          </div>
+        </div>
+
+        <div class="overflow-x-auto">
+          <table class="w-full text-left border-collapse text-xs">
+            <thead>
+              <tr class="border-b border-charcoal-150 bg-charcoal-50/40 text-[10px] font-semibold text-charcoal-500 uppercase tracking-wider">
+                <th class="py-2.5 px-3">Employee</th>
+                <th class="py-2.5 px-3">Position</th>
+                <th class="py-2.5 px-3 text-right">Base</th>
+                <th class="py-2.5 px-3 text-right">Bonus / OT</th>
+                <th class="py-2.5 px-3 text-right">Deductions</th>
+                <th class="py-2.5 px-3 text-right">Net Final</th>
+                <th class="py-2.5 px-3">Status</th>
+                <th class="py-2.5 px-3 text-right">Action</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-charcoal-100">
+              ${items.map(it => {
+                const isClosed = payrollIsReviewed(it);
+                const pCount = pendingCountOf(it);
+                const base = baseSalaryOf(it);
+                const additions = bonusOf(it) + overtimePayOf(it);
+                const deds = approvedDedTotal(it);
+                const net = netOf(it);
+
+                return `
+                  <tr onclick="openPayrollDetail('${it.employeeId}')" class="hover:bg-charcoal-50 cursor-pointer transition-colors ${
+                    it.employeeId === _payrollEmployeeIdValue ? 'bg-brand-50/30' : ''
+                  }">
+                    <td class="py-2.5 px-3">
+                      <div class="flex items-center gap-2">
+                        <div class="w-7 h-7 rounded-lg bg-charcoal-100 text-charcoal-700 flex items-center justify-center font-bold text-[10px] flex-shrink-0">
+                          ${it.initials || 'EM'}
+                        </div>
+                        <div>
+                          <p class="font-bold text-charcoal-900 text-xs">${it.name}</p>
+                          <p class="text-[10px] text-charcoal-400 font-mono">${it.employeeId}</p>
+                        </div>
+                      </div>
+                    </td>
+                    <td class="py-2.5 px-3 text-charcoal-600 font-medium">${it.position}</td>
+                    <td class="py-2.5 px-3 text-right font-semibold text-charcoal-900">${formatEGP(base)}</td>
+                    <td class="py-2.5 px-3 text-right text-emerald-600 font-semibold">+ ${formatEGP(additions)}</td>
+                    <td class="py-2.5 px-3 text-right ${deds > 0 ? 'text-red-600' : 'text-charcoal-400'} font-semibold">
+                      ${deds > 0 ? `− ${formatEGP(deds)}` : '—'}
+                    </td>
+                    <td class="py-2.5 px-3 text-right font-extrabold text-charcoal-900">${formatEGP(net)}</td>
+                    <td class="py-2.5 px-3">
+                      <span class="badge ${
+                        isClosed ? 'badge-green' : pCount > 0 ? 'badge-yellow' : 'badge-blue'
+                      } text-[10px] font-bold">
+                        ${isClosed ? 'Closed & Settled' : pCount > 0 ? `${pCount} Decisions Needed` : 'Ready to Close'}
+                      </span>
+                    </td>
+                    <td class="py-2.5 px-3 text-right">
+                      <button onclick="event.stopPropagation();openPayrollDetail('${it.employeeId}')" class="btn btn-sm btn-secondary text-[11px] h-6 px-2 text-brand-600 font-semibold">
+                        Open Sheet →
+                      </button>
+                    </td>
+                  </tr>
+                `;
+              }).join('')}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  `;
 }
 
-function renderPayrollMoneySummary(item, canEdit) {
-  const payslipVisible = _payrollPayslipOpen;
-  return `<section class="payroll-money-summary-wrap" aria-label="${payrollEscape(payrollT('netPay'))}"><div class="payroll-money-summary-toolbar"><p class="payroll-eyebrow">${payrollT('liveCalculation')}</p><button type="button" class="payroll-payslip-toggle" aria-expanded="${payslipVisible}" aria-controls="payroll-payslip-preview" onclick="togglePayrollPayslip()"><span aria-hidden="true">${payslipVisible ? '▾' : '▸'}</span>${payslipVisible ? payrollT('hidePayslip') : payrollT('showPayslip')}</button></div><div class="payroll-money-summary"><div class="payroll-money-cell-panel"><span>${payrollT('baseSalary')}</span><strong>${payrollAmount(baseSalaryOf(item))}</strong><small>${payrollT('readOnly')}</small></div><label class="payroll-money-cell-panel payroll-bonus-panel"><span>${payrollT('bonuses')}</span><input class="form-input payroll-control payroll-money-input" type="number" min="0" step="50" value="${bonusOf(item)}" data-payroll-bonus="${payrollEscape(item.employeeId)}" oninput="updatePayrollBonus('${payrollEscape(item.employeeId)}', this.value)" onchange="commitPayrollBonus('${payrollEscape(item.employeeId)}', this.value)" ${canEdit ? '' : 'disabled'} aria-label="${payrollEscape(payrollT('bonuses'))}"><small>${payrollT('editable')}</small></label><div class="payroll-money-cell-panel payroll-net-panel"><span>${payrollT('netPay')}</span><strong data-payroll-net="${payrollEscape(item.employeeId)}">${payrollAmount(netOf(item))}</strong><small>${payrollT('liveCalculation')}</small></div></div></section>`;
+// ====================================================================================
+// ==================== INTERACTIVE PAYROLL ACTIONS ===================================
+// ====================================================================================
+
+function openPayrollDetail(id) {
+  if (!id) return;
+  _payrollEmployeeIdValue = id;
+  _payrollView = 'detail';
+  _showAddDeductionForm = false;
+  renderAll();
+  const main = document.getElementById('main-content');
+  if (main) main.scrollTop = 0;
 }
 
-function renderPayrollDeductionSections(item, canEdit, locked) {
-  const biometric = (item.deductionLines || []).filter(line => payrollLineSource(line) === 'biometric');
-  const manager = (item.deductionLines || []).filter(line => payrollLineSource(line) === 'manager');
-  return `<div class="payroll-deduction-grid"><section class="payroll-deduction-section payroll-biometric-section" aria-labelledby="payroll-biometric-title"><div class="payroll-deduction-heading"><div><p class="payroll-eyebrow">${payrollT('source')}</p><h2 id="payroll-biometric-title">${payrollT('biometricDeductions')}</h2><p>${payrollT('biometricHint')}</p></div><span class="payroll-section-count">${biometric.length}</span></div><div class="payroll-deduction-lines">${biometric.length ? biometric.map(line => renderPayrollDeductionLine(item, line, canEdit, locked)).join('') : `<div class="payroll-line-empty">${payrollT('emptyRequests')}</div>`}</div></section><section class="payroll-deduction-section payroll-manager-section" aria-labelledby="payroll-manager-title"><div class="payroll-deduction-heading"><div><p class="payroll-eyebrow">${payrollT('source')}</p><h2 id="payroll-manager-title">${payrollT('managerDeductions')}</h2><p>${payrollT('managerHint')}</p></div><span class="payroll-section-count">${manager.length}</span></div><div class="payroll-deduction-lines">${manager.length ? manager.map(line => renderPayrollDeductionLine(item, line, canEdit, locked)).join('') : `<div class="payroll-line-empty">${payrollT('emptyRequests')}</div>`}</div>${renderPayrollAddDeduction(item, canEdit, locked)}</section></div>`;
-}
-
-function renderPayrollDeductionLine(item, line, canEdit, locked) {
-  const source = payrollLineSource(line);
-  const canDecide = canEdit && !locked && line.status === 'Pending';
-  const isManager = source === 'manager';
-  const attendanceRef = line.attendanceRef || '';
-  return `<article class="payroll-deduction-line"><div class="payroll-line-main"><div class="payroll-line-title"><span class="payroll-source-tag payroll-source-${source}">${payrollT(source)}</span><strong>${payrollEscape(line.label || line.reason || '—')}</strong></div><p class="payroll-line-reason">${payrollEscape(line.reason || '—')}</p><div class="payroll-line-meta"><span><b>${payrollT('date')}</b> ${payrollEscape(payrollLineDate(line))}</span>${isManager ? '' : `<span class="payroll-attendance-ref"><b>${payrollT('linkedAttendance')}</b> ${attendanceRef ? `<button type="button" class="payroll-attendance-link" onclick="openPayrollAttendanceRef('${payrollEscape(attendanceRef)}')">${payrollEscape(attendanceRef)}</button>` : '—'}</span>`}</div></div><div class="payroll-line-side">${isManager ? `<label class="payroll-line-amount"><span>${payrollT('amount')}</span><input class="form-input payroll-control payroll-amount-input" type="number" min="0" step="50" value="${Number(line.amount) || 0}" onchange="updatePayrollDeduction('${payrollEscape(item.employeeId)}','${payrollEscape(line.id)}',this.value)" ${canEdit ? '' : 'disabled'} aria-label="${payrollEscape(payrollT('amount'))}"></label>` : `<div class="payroll-line-amount payroll-line-amount-readonly"><span>${payrollT('amount')}</span><strong>− ${payrollAmount(line.amount)}</strong></div>`}<div class="payroll-line-status">${payrollStatusBadge(line.status)}${canDecide ? `<div class="payroll-line-actions"><button type="button" class="btn btn-sm btn-success payroll-line-action" onclick="decidePayrollDeduction('${payrollEscape(item.employeeId)}','${payrollEscape(line.id)}',true)">${payrollT('approve')}</button><button type="button" class="btn btn-sm btn-danger-outline payroll-line-action" onclick="decidePayrollDeduction('${payrollEscape(item.employeeId)}','${payrollEscape(line.id)}',false)">${payrollT('reject')}</button></div>` : line.status === 'Pending' ? `<span class="payroll-pending-note">${payrollT('pendingDecision')}</span>` : ''}</div></div></article>`;
-}
-
-function renderPayrollAddDeduction(item, canEdit, locked) {
-  const disabled = !canEdit || locked;
-  return `<form class="payroll-add-deduction" onsubmit="event.preventDefault();savePayrollDeductionInline(event,'${payrollEscape(item.employeeId)}')"><div class="payroll-add-heading"><div><strong>${payrollT('addDeduction')}</strong><span>${payrollT('addDeductionHint')}</span></div><button type="submit" class="btn btn-secondary payroll-add-button" ${disabled ? 'disabled' : ''}>+ ${payrollT('addDeduction')}</button></div><fieldset class="payroll-add-fields" ${disabled ? 'disabled' : ''}><label class="payroll-field"><span>${payrollT('source')}</span><select name="source" class="form-select payroll-control"><option value="manager">${payrollT('manager')}</option><option value="biometric">${payrollT('biometric')}</option></select></label><label class="payroll-field"><span>${payrollT('reason')}</span><input name="reason" class="form-input payroll-control" required placeholder="${payrollEscape(payrollT('reason'))}"></label><label class="payroll-field"><span>${payrollT('date')}</span><input name="date" type="date" class="form-input payroll-control" value="2026-08-31" required></label><label class="payroll-field"><span>${payrollT('amount')}</span><input name="amount" type="number" min="0" step="50" class="form-input payroll-control" required placeholder="0"></label><label class="payroll-field payroll-attendance-field"><span>${payrollT('attendanceReference')}</span><input name="attendanceRef" class="form-input payroll-control" placeholder="ATT-2026-08-31-01"></label></fieldset></form>`;
-}
-
-function renderPayrollRequestsPanel(item) {
-  const requests = payrollRequestsFor(item);
-  return `<section class="payroll-requests-panel" aria-labelledby="payroll-requests-title"><div class="payroll-panel-heading"><div><p class="payroll-eyebrow">${payrollT('sourceRecord')}</p><h2 id="payroll-requests-title">${payrollT('relatedRequests')}</h2><p>${payrollT('relatedRequestsHint')}</p></div><span class="payroll-section-count">${requests.length}</span></div>${requests.length ? `<div class="payroll-request-list">${requests.map(request => `<div class="payroll-request-row"><div class="payroll-request-copy"><strong>${payrollEscape(request.type)}</strong><span>${payrollEscape(request.requestedDate || request.submittedDate || '—')}</span><small>${payrollEscape(request.reason || '')}</small></div><div class="payroll-request-actions">${statusBadge(request.status)}<button type="button" class="btn btn-sm btn-secondary payroll-request-button" onclick="openRequestDetail('${payrollEscape(request.id)}')">${payrollT('openRequest')}</button></div></div>`).join('')}</div>` : `<div class="payroll-panel-empty">${payrollT('noRelatedRequests')}</div>`}</section>`;
-}
-
-function renderPayrollPayslipSection(item) {
-  const lines = item.deductionLines || [];
-  return `<section id="payroll-payslip-preview" class="payroll-payslip-section"${_payrollPayslipOpen ? '' : ' hidden'} aria-labelledby="payroll-payslip-title"><div class="payroll-panel-heading"><div><p class="payroll-eyebrow">${payrollT('payslipPreview')}</p><h2 id="payroll-payslip-title">${payrollT('payslipPreview')}</h2><p>${payrollT('netPay')} · ${payrollEscape(payrollPeriodDisplay(_payPeriod))}</p></div><button type="button" class="payroll-icon-button" onclick="togglePayrollPayslip()" aria-label="${payrollEscape(payrollT('hidePayslip'))}">×</button></div><div class="payroll-payslip-grid"><div><span>${payrollT('baseSalary')}</span><strong>${payrollAmount(baseSalaryOf(item))}</strong></div><div><span>${payrollT('bonuses')}</span><strong>${payrollAmount(bonusOf(item))}</strong></div><div><span>${payrollT('totalDeductions')}</span><strong>− ${payrollAmount(dedTotal(item))}</strong></div><div class="payroll-payslip-total"><span>${payrollT('netPay')}</span><strong data-payroll-net="${payrollEscape(item.employeeId)}">${payrollAmount(netOf(item))}</strong></div></div><div class="payroll-payslip-lines">${lines.length ? lines.map(line => `<div class="payroll-payslip-line"><span>${payrollEscape(line.label || line.reason || '—')}</span><span>− ${payrollAmount(line.amount)}</span>${payrollStatusBadge(line.status)}</div>`).join('') : `<div class="payroll-panel-empty">${payrollT('emptyRequests')}</div>`}</div></section>`;
-}
-
-function renderPayrollActionBar(item, canEdit, canApprove, locked) {
-  const pending = pendingOf(item);
-  const alreadyReviewed = payrollStatus(item) === 'Reviewed';
-  const canSave = canEdit && !locked;
-  const canAccept = canApprove && !locked && !pending && !alreadyReviewed;
-  return `<footer class="payroll-sticky-actions"><div class="payroll-action-message">${locked ? `<span class="payroll-action-lock">${payrollT('publishedLocked')}</span>` : pending ? `<span class="payroll-action-warning">${payrollT('acceptBlocked')}</span>` : `<span>${alreadyReviewed ? payrollT('markedReviewed') : payrollT('saveDraftHint')}</span>`}</div><div class="payroll-action-buttons"><button type="button" class="btn btn-secondary payroll-action-button" onclick="savePayrollDraft('${payrollEscape(item.employeeId)}')" ${canSave ? '' : 'disabled'}>${payrollT('saveContinue')}</button><button type="button" class="btn btn-primary payroll-action-button" onclick="acceptPayrollEmployee('${payrollEscape(item.employeeId)}')" ${canAccept ? '' : 'disabled'}>${alreadyReviewed ? payrollT('markedReviewed') : payrollT('acceptReviewed')}</button></div></footer>`;
+function closePayrollDetail() {
+  _payrollView = 'overview';
+  renderAll();
 }
 
 function setPayrollGym(gym) {
-  if (PAYROLL_GYMS.indexOf(gym) === -1) return;
   _payrollGym = gym;
-  _payrollView = 'overview';
-  _payrollPayslipOpen = false;
+  const items = payrollItemsForGym(gym);
+  if (items.length > 0) {
+    _payrollEmployeeIdValue = items[0].employeeId;
+  }
   renderAll();
 }
 
 function setPayrollPeriod(period) {
-  if (['August 2026', 'July 2026', 'June 2026'].indexOf(period) === -1) return;
   _payPeriod = period;
-  _payrollView = 'overview';
-  _payrollPayslipOpen = false;
   renderAll();
 }
 
-function togglePayrollLanguage() {
-  _payrollLanguage = _payrollLanguage === 'en' ? 'ar' : 'en';
-  renderAll();
-}
-
-function openPayrollDetail(id) {
-  const item = (MOCK.payrollItems || []).find(payrollItem => payrollItem.employeeId === id);
+function decidePayrollDeduction(empId, lineId, accept) {
+  if (payrollPeriodLocked()) { showToast('This period is locked', 'error'); return; }
+  const item = (MOCK.payrollItems || []).find(i => i.employeeId === empId);
   if (!item) return;
-  _payrollEmployeeIdValue = id;
-  _payrollView = 'detail';
-  _payrollPayslipOpen = false;
-  renderAll();
-  const main = document.getElementById('main-content');
-  if (main) main.scrollTop = 0;
-  const mobile = document.getElementById('mobile-content');
-  if (mobile) mobile.scrollTop = 0;
-}
-
-function closePayrollDetail() { _payrollView = 'overview'; _payrollPayslipOpen = false; renderAll(); }
-function togglePayrollPayslip() { _payrollPayslipOpen = !_payrollPayslipOpen; renderAll(); }
-
-function savePayrollDraft(id) {
-  if (payrollPeriodLocked()) { showToast(payrollT('periodLockedToast'), 'error'); return; }
-  const items = id ? (MOCK.payrollItems || []).filter(item => item.employeeId === id) : payrollItemsForGym();
-  if (!items.length) return;
-  if (!payrollCanEdit()) { showToast(payrollT('permissionToast'), 'error'); return; }
-  _payrollDraftSavedAt = new Date().toISOString();
-  items.forEach(item => { item.draftSavedAt = _payrollDraftSavedAt; payrollSyncTotals(item); });
-  showToast(payrollT('draftSaved'));
-  if (id) closePayrollDetail(); else renderAll();
-}
-
-function updatePayrollBonus(id, rawValue) {
-  const item = (MOCK.payrollItems || []).find(payrollItem => payrollItem.employeeId === id);
-  if (!item || !payrollCanEdit()) return;
-  item.bonus = Math.max(0, Number(rawValue) || 0);
-  payrollSyncTotals(item);
-  document.querySelectorAll(`[data-payroll-net="${id}"]`).forEach(element => { element.textContent = payrollAmount(netOf(item)); });
-  document.querySelectorAll(`[data-payroll-bonus="${id}"]`).forEach(element => { if (document.activeElement !== element) element.value = bonusOf(item); });
-}
-
-function commitPayrollBonus(id, rawValue) { updatePayrollBonus(id, rawValue); showToast(payrollT('bonusSaved')); }
-
-function updatePayrollDeduction(id, lineId, rawValue) {
-  const item = (MOCK.payrollItems || []).find(payrollItem => payrollItem.employeeId === id);
-  const line = item && (item.deductionLines || []).find(candidate => candidate.id === lineId);
-  if (!line || !payrollCanEdit()) return;
-  line.amount = Math.max(0, Number(rawValue) || 0);
-  payrollSyncTotals(item);
-  showToast(payrollT('deductionUpdated'));
-  renderAll();
-}
-
-function decidePayrollDeduction(id, lineId, accept) {
-  if (payrollPeriodLocked()) { showToast(payrollT('periodLockedToast'), 'error'); return; }
-  const item = (MOCK.payrollItems || []).find(payrollItem => payrollItem.employeeId === id);
-  const line = item && (item.deductionLines || []).find(candidate => candidate.id === lineId);
+  const line = (item.deductionLines || []).find(l => l.id === lineId);
   if (!line) return;
-  if (!payrollCanApprove()) { showToast(payrollT('permissionToast'), 'error'); return; }
-  if (line.status !== 'Pending') return;
+
   line.status = accept ? 'Accepted' : 'Rejected';
   line.decidedAt = new Date().toISOString();
   payrollSyncTotals(item);
   renderAll();
-  if (accept) showToast(payrollT('accepted'));
+  showToast(accept ? `Deduction of ${formatEGP(line.amount)} approved` : `Deduction of ${formatEGP(line.amount)} waived`);
 }
 
-function savePayrollDeductionInline(event, id) {
-  if (payrollPeriodLocked()) { showToast(payrollT('periodLockedToast'), 'error'); return; }
-  const item = (MOCK.payrollItems || []).find(payrollItem => payrollItem.employeeId === id);
+function commitPayrollBonus(empId, rawVal) {
+  const item = (MOCK.payrollItems || []).find(i => i.employeeId === empId);
   if (!item) return;
-  if (!payrollCanEdit()) { showToast(payrollT('permissionToast'), 'error'); return; }
-  const form = event && event.currentTarget ? event.currentTarget : event && event.target ? event.target.closest('form') : null;
-  if (!form) return;
+  item.bonus = Math.max(0, Number(rawVal) || 0);
+  payrollSyncTotals(item);
+  renderAll();
+  showToast(`Bonus updated to ${formatEGP(item.bonus)}. Net pay recalculated.`);
+}
+
+function savePayrollDeductionInline(e, empId) {
+  e.preventDefault();
+  if (payrollPeriodLocked()) { showToast('Period is locked', 'error'); return; }
+  const item = (MOCK.payrollItems || []).find(i => i.employeeId === empId);
+  if (!item) return;
+
+  const form = e.target;
   const data = new FormData(form);
   const amount = Math.max(0, Number(data.get('amount')) || 0);
   const reason = String(data.get('reason') || '').trim();
-  if (!reason || !amount) return;
   const source = data.get('source') === 'biometric' ? 'biometric' : 'manager';
-  const line = {
+
+  if (!reason || !amount) {
+    showToast('Please specify reason and amount', 'error');
+    return;
+  }
+
+  const newLine = {
     id: `dn-${item.employeeId}-${Date.now()}`,
     label: reason,
-    reason,
-    source,
-    date: String(data.get('date') || ''),
-    amount,
+    reason: reason,
+    source: source,
+    date: new Date().toISOString().slice(0, 10),
+    amount: amount,
     status: 'Pending',
-    attendanceRef: source === 'biometric' ? String(data.get('attendanceRef') || '').trim() : ''
+    attendanceRef: source === 'biometric' ? 'ATT-MANUAL' : ''
   };
+
   item.deductionLines = item.deductionLines || [];
-  item.deductionLines.push(line);
-  item.status = 'Needs Attention';
+  item.deductionLines.push(newLine);
+  item.status = 'Draft';
+  item.reviewed = false;
   payrollSyncTotals(item);
-  showToast(payrollT('deductionAdded', { name: item.name }));
+  _showAddDeductionForm = false;
   renderAll();
+  showToast(`Deduction added for ${item.name} (${formatEGP(amount)}). Decision pending.`);
 }
 
 function acceptPayrollEmployee(id) {
-  if (payrollPeriodLocked()) { showToast(payrollT('periodLockedToast'), 'error'); return; }
-  const item = (MOCK.payrollItems || []).find(payrollItem => payrollItem.employeeId === id);
+  if (payrollPeriodLocked()) { showToast('Period is locked', 'error'); return; }
+  const item = (MOCK.payrollItems || []).find(i => i.employeeId === id);
   if (!item) return;
-  if (!payrollCanApprove()) { showToast(payrollT('permissionToast'), 'error'); return; }
-  if (pendingOf(item) > 0) { showToast(payrollT('acceptBlocked'), 'error'); return; }
+
+  if (pendingCountOf(item) > 0) {
+    showToast('Please resolve all pending deductions before closing this account', 'error');
+    return;
+  }
+
   item.status = 'Reviewed';
   item.reviewed = true;
   item.reviewedAt = new Date().toISOString();
   payrollSyncTotals(item);
-  showToast(payrollT('acceptedToast', { name: item.name }));
-  closePayrollDetail();
+  showToast(`✓ Monthly payroll & expense account closed for ${item.name}! Net Pay: ${formatEGP(netOf(item))}`);
+  renderAll();
+}
+
+function reopenPayrollEmployee(id) {
+  if (payrollPeriodLocked()) { showToast('Period is locked', 'error'); return; }
+  const item = (MOCK.payrollItems || []).find(i => i.employeeId === id);
+  if (!item) return;
+
+  item.status = 'Draft';
+  item.reviewed = false;
+  payrollSyncTotals(item);
+  showToast(`Account re-opened for edits: ${item.name}`);
+  renderAll();
 }
 
 function publishPayroll() {
-  if (payrollPeriodLocked()) { showToast(payrollT('periodLockedToast'), 'error'); return; }
-  const items = payrollItemsForGym();
-  if (!items.length) { showToast(payrollT('noEmployees'), 'error'); return; }
-  if (!payrollCanApprove()) { showToast(payrollT('permissionToast'), 'error'); return; }
-  if (!payrollAllReviewed(items)) { showToast(payrollT('reviewRequired', { remaining: items.length - items.filter(payrollIsReviewed).length }), 'error'); return; }
-  openModal(payrollT('confirmPublishTitle'), `<p class="payroll-confirm-text">${payrollEscape(payrollT('confirmPublishText', { period: payrollPeriodDisplay(_payPeriod), gym: payrollGymDisplay(_payrollGym), count: items.length }))}</p>`, { footer: `<button onclick="closeModal()" class="btn btn-sm btn-secondary">${payrollEscape(payrollT('cancel'))}</button><button onclick="confirmPublishPayroll()" class="btn btn-sm btn-primary">${payrollEscape(payrollT('confirmPublish'))}</button>` });
+  const gym = getEffectivePayrollGym();
+  const items = payrollItemsForGym(gym);
+  if (!payrollAllReviewed(items)) {
+    const remaining = items.filter(i => !payrollIsReviewed(i)).length;
+    showToast(`${remaining} employee account(s) still need to be reviewed and closed before publishing.`, 'error');
+    return;
+  }
+
+  openModal('Publish &amp; Lock Branch Payroll', `
+    <div class="space-y-3 text-xs">
+      <p class="text-charcoal-700">
+        You are about to publish and lock the payroll for <b>${gym} Branch</b> for the period <b>${_payPeriod}</b>.
+      </p>
+      <div class="bg-charcoal-50 p-3 rounded-lg border border-charcoal-200">
+        <div class="flex justify-between py-1"><span>Total Employees:</span> <b>${items.length}</b></div>
+        <div class="flex justify-between py-1"><span>All Accounts Settled:</span> <b class="text-emerald-600">Yes (100%)</b></div>
+        <div class="flex justify-between py-1 border-t border-charcoal-200 pt-1 font-bold">
+          <span>Total Net Disbursed:</span> <b>${formatEGP(items.reduce((s, i) => s + netOf(i), 0))}</b>
+        </div>
+      </div>
+      <p class="text-charcoal-500 text-[11px]">
+        Locking will finalize all deduction decisions and make records read-only.
+      </p>
+    </div>
+  `, {
+    footer: `
+      <button onclick="closeModal()" class="btn btn-sm btn-secondary">Cancel</button>
+      <button onclick="confirmPublishPayroll()" class="btn btn-sm btn-primary">Publish and Lock Period</button>
+    `
+  });
 }
 
 function confirmPublishPayroll() {
-  const items = payrollItemsForGym();
-  if (!items.length || !payrollAllReviewed(items)) { closeModal(); return; }
-  let record = (MOCK.payroll || []).find(candidate => candidate.period === _payPeriod);
-  if (!record) { record = { period: _payPeriod, status: 'Open', locked: false, publishedGyms: [] }; MOCK.payroll.push(record); }
+  const gym = getEffectivePayrollGym();
+  const items = payrollItemsForGym(gym);
+  let record = (MOCK.payroll || []).find(r => r.period === _payPeriod);
+  if (!record) {
+    record = { period: _payPeriod, status: 'Open', locked: false, publishedGyms: [] };
+    MOCK.payroll.push(record);
+  }
   record.publishedGyms = record.publishedGyms || [];
-  if (record.publishedGyms.indexOf(_payrollGym) === -1) record.publishedGyms.push(_payrollGym);
-  const gyms = PAYROLL_GYMS.filter(gym => (MOCK.payrollItems || []).some(item => item.gym === gym));
-  record.status = gyms.every(gym => (record.publishedGyms || []).includes(gym)) ? 'Published' : 'Partially Published';
-  record.locked = gyms.every(gym => (record.publishedGyms || []).includes(gym));
-  record.publishedAt = new Date().toISOString();
-  items.forEach(item => { item.status = 'Locked'; item.reviewed = true; item.publishedAt = record.publishedAt; });
+  if (!record.publishedGyms.includes(gym)) record.publishedGyms.push(gym);
+
+  const allGymsPublished = PAYROLL_GYMS.every(g => record.publishedGyms.includes(g));
+  record.status = allGymsPublished ? 'Published' : 'Partially Published';
+  record.locked = allGymsPublished;
+
+  items.forEach(it => {
+    it.status = 'Locked';
+    it.reviewed = true;
+  });
+
   closeModal();
   renderAll();
-  showToast(payrollT('published'));
+  showToast(`Payroll published and locked for ${gym} (${_payPeriod})!`);
 }
 
-function openPayrollAttendanceRef(ref) { showToast(payrollT('attendanceReferenceToast', { ref })); }
+function openPayrollAttendanceRef(ref, empId) {
+  const item = (MOCK.payrollItems || []).find(i => i.employeeId === empId);
+  const log = (MOCK.attendanceExceptions || []).find(r => r.id === ref);
+  const record = log || { id: ref, date: '2026-08-19', exception: 'Late arrival penalty (Biometric)', detail: 'Check-in was logged at 08:41 (41 min past shift start). Terminal: Nasr City Entrance #1', firstIn: '08:41', lastOut: '16:02', device: 'Terminal #1' };
 
-function currentPayPeriod() { return _payPeriod; }
-function payStepText() { return ['Import', 'Review', 'Approve', 'Publish'][_payStep] || 'Review'; }
-function getPayStep() { return _payStep; }
-function setPayStep(step) { _payStep = Number(step) || 1; renderAll(); }
-function periodKey() { return _payPeriod; }
-function togglePayslip() { togglePayrollPayslip(); }
-function acceptItem(id) { acceptPayrollEmployee(id); }
-function decideLine(itemId, lineId, decision) { decidePayrollDeduction(itemId, lineId, decision === true || decision === 'accept' || decision === 'Approved'); }
-function netPayOf(item) { return netOf(item); }
-function isPeriodLocked() { return payrollPeriodLocked(); }
-function gymOptions() { return PAYROLL_GYMS; }
-function renderPayrollItemCards() { return renderPayrollCards(payrollItemsForGym()); }
-function renderPayrollItemTable() { return renderPayrollTable(payrollItemsForGym()); }
-function renderPayrollOverviewSection() { return renderPayrollOverview(); }
-function renderPayrollDetailSection() { return renderPayrollDetail(); }
-function statusText(status) { return payrollStatusText(status); }
-function currentEmployee() { return (MOCK.payrollItems || []).find(item => item.employeeId === _payrollEmployeeIdValue) || null; }
-function currentEmployeeId() { return _payrollEmployeeIdValue; }
-function getPayrollItems() { return MOCK.payrollItems || []; }
-function gymIdOf(item) { return item && item.gym; }
-function esc(value) { return payrollEscape(value); }
-function getPayPeriod() { return _payPeriod; }
+  openModal('Biometric Punch Audit Trail', `
+    <div class="space-y-3 text-xs">
+      <div class="bg-charcoal-50 p-3 rounded-xl border border-charcoal-200">
+        <div class="flex items-center justify-between">
+          <span class="badge badge-blue text-[10px] font-bold">Biometric Punch Record</span>
+          <span class="font-mono text-[10px] text-charcoal-500">${ref}</span>
+        </div>
+        <p class="font-bold text-charcoal-900 text-sm mt-1.5">${item ? item.name : 'Employee'}</p>
+        <p class="text-[11px] text-charcoal-500">${item ? item.position : ''} · ${item ? item.gym : ''}</p>
+      </div>
 
+      <div class="space-y-2">
+        <div class="flex justify-between py-1 border-b border-charcoal-150">
+          <span class="text-charcoal-500">Record Date:</span>
+          <b>${record.date}</b>
+        </div>
+        <div class="flex justify-between py-1 border-b border-charcoal-150">
+          <span class="text-charcoal-500">Punch In / Out:</span>
+          <b>${record.firstIn} → ${record.lastOut}</b>
+        </div>
+        <div class="flex justify-between py-1 border-b border-charcoal-150">
+          <span class="text-charcoal-500">Terminal Source:</span>
+          <b>${record.device || 'Entrance Biometric Terminal'}</b>
+        </div>
+        <div class="py-1">
+          <span class="text-charcoal-500 block mb-1">System Exception Notes:</span>
+          <div class="p-2 rounded bg-amber-50 text-amber-900 text-[11px] border border-amber-200 font-medium">
+            ${record.detail || record.exception}
+          </div>
+        </div>
+      </div>
+    </div>
+  `, {
+    footer: '<button onclick="closeModal()" class="btn btn-sm btn-secondary">Close Audit</button>'
+  });
+}
