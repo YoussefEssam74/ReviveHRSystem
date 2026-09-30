@@ -75,7 +75,7 @@ function renderRecruitment() {
       <div><h1 class="text-base font-bold text-charcoal-900">Recruitment & Hiring</h1><p class="text-xs text-charcoal-500 mt-0.5">${kpiLine} · ${thisWeek} interviews this week</p></div>
       ${canManageVac?`<button onclick="openNewVacancy()" class="btn btn-sm btn-primary"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>Create Vacancy</button>`:''}
     </div>
-    <div class="flex border-b border-charcoal-100 overflow-x-auto">
+    <div class="inline-flex flex-wrap items-center gap-1 bg-charcoal-100 rounded-xl p-1 border border-charcoal-200">
       ${tabs.map(t=>`<button onclick="_recTab='${t.id}';renderAll()" class="tab-btn ${_recTab===t.id?'active':''}">${t.label}${t.id==='vacancy-requests'&&pendingVR.length?` <span class="badge badge-red text-[9px] ml-0.5">${pendingVR.length}</span>`:''}</button>`).join('')}
     </div>
     <div>${body}</div>

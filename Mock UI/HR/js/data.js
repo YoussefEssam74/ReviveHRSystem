@@ -12,7 +12,7 @@ const MOCK = {
     selectedGym: null,
     hireDate: '2024-03-15', employmentType: 'Full-time', status: 'Active',
     role: 'HR Manager',
-    permissions: ['employees.view','employees.create','employees.edit','employees.transfer','employees.position.change','employees.role.assign','employees.status.change','employees.compensation.manage','employees.contract.manage','employees.offboard','employees.documents.view','employees.documents.manage','employees.bulk_import','employees.leave_balance.manage','positions.view','positions.manage','attendance.view','attendance.edit','attendance.manual_entry','schedule.view','schedule.manage','requests.view','requests.approve','payroll.view','payroll.edit','payroll.approve','evaluations.view','evaluations.manage','reports.view','announcements.view','announcements.manage','audit.view','team.view','team.manage','recruitment.view','recruitment.vacancies.manage','recruitment.candidates.manage','recruitment.hire.approve','recruitment.vacancy_request.approve'],
+    permissions: ['employees.view','employees.create','employees.edit','employees.transfer','employees.position.change','employees.role.assign','employees.status.change','employees.compensation.manage','employees.contract.manage','employees.offboard','employees.documents.view','employees.documents.manage','employees.bulk_import','employees.leave_balance.manage','positions.view','positions.manage','attendance.view','attendance.edit','attendance.manual_entry','schedule.view','schedule.manage','schedule.hr_team','requests.view','requests.approve','payroll.view','payroll.edit','payroll.approve','evaluations.view','evaluations.manage','evaluations.forms.manage','reports.view','announcements.view','announcements.manage','audit.view','team.view','team.manage','recruitment.view','recruitment.vacancies.manage','recruitment.candidates.manage','recruitment.hire.approve','recruitment.vacancy_request.approve','events.view'],
     dateOfBirth: '1988-07-08', nationalId: '28807081234567', gender: 'Female',
     address: '22 Abbas El-Akkad St, Nasr City, Cairo',
     emergencyContact: { name: 'El-Sayed Mahmoud', relationship: 'Father', phone: '+20 100 333 4444' },
@@ -39,6 +39,22 @@ const MOCK = {
     { id: 'RV-00136', name: 'Youssef Kamal', position: 'Branch Manager', level: 'Manager', gym: 'Nasr City', status: 'Active', initials: 'YK', hireDate: '2024-06-01', salary: 18000, phone: '+20 112 456 7890', email: 'youssef.kamal@revive.com' },
     { id: 'RV-00137', name: 'Hana Mostafa', position: 'Trainer', level: 'Senior', gym: 'Heliopolis', status: 'Active', initials: 'HM', hireDate: '2025-02-15', salary: 12500, phone: '+20 113 567 8901', email: 'hana.mostafa@revive.com' },
   ],
+  leaveBalances: {
+    'Ahmed Mohamed': { dayOff: { used: 13, total: 21 }, sick: { used: 2, total: 10 }, unpaid: { used: 0, total: 5 } },
+    'Karim Hassan': { dayOff: { used: 21, total: 21 }, sick: { used: 4, total: 10 }, unpaid: { used: 1, total: 5 } },
+    'Sara Ali': { dayOff: { used: 6, total: 21 }, sick: { used: 7, total: 10 }, unpaid: { used: 0, total: 5 } },
+    'Omar Youssef': { dayOff: { used: 7, total: 21 }, sick: { used: 1, total: 10 }, unpaid: { used: 0, total: 5 } },
+    'Nour Ibrahim': { dayOff: { used: 21, total: 21 }, sick: { used: 3, total: 10 }, unpaid: { used: 2, total: 5 } },
+    'Yasmin Adel': { dayOff: { used: 21, total: 21 }, sick: { used: 10, total: 10 }, unpaid: { used: 5, total: 5 } },
+    'Tarek Nabil': { dayOff: { used: 21, total: 21 }, sick: { used: 5, total: 10 }, unpaid: { used: 1, total: 5 } },
+    'Mona Said': { dayOff: { used: 18, total: 21 }, sick: { used: 2, total: 10 }, unpaid: { used: 0, total: 5 } },
+    'Hassan Ali': { dayOff: { used: 9, total: 21 }, sick: { used: 4, total: 10 }, unpaid: { used: 0, total: 5 } },
+    'Fatma Hassan': { dayOff: { used: 11, total: 21 }, sick: { used: 3, total: 10 }, unpaid: { used: 0, total: 5 } },
+    'Ahmed Zaki': { dayOff: { used: 12, total: 21 }, sick: { used: 2, total: 10 }, unpaid: { used: 0, total: 5 } },
+    'Laila Mostafa': { dayOff: { used: 21, total: 21 }, sick: { used: 6, total: 10 }, unpaid: { used: 5, total: 5 } },
+    'Youssef Kamal': { dayOff: { used: 8, total: 21 }, sick: { used: 1, total: 10 }, unpaid: { used: 0, total: 5 } },
+    'Hana Mostafa': { dayOff: { used: 4, total: 21 }, sick: { used: 10, total: 10 }, unpaid: { used: 0, total: 5 } },
+  },
   attendanceRecords: [
     { employeeId: 'RV-00124', name: 'Ahmed Mohamed', gym: 'Nasr City', date: '2026-09-09', shift: '08:00–16:00', checkIn: '08:02', checkOut: null, status: 'On Time', source: 'Biometric' },
     { employeeId: 'RV-00125', name: 'Karim Hassan', gym: 'Nasr City', date: '2026-09-09', shift: '08:00–16:00', checkIn: '08:18', checkOut: null, status: 'Late', source: 'Biometric' },
@@ -105,6 +121,13 @@ const MOCK = {
     { id: 'r6', employee: 'Tarek Nabil', gym: 'Heliopolis', type: 'Day Off', submittedDate: '2026-09-03', requestedDate: 'Sep 20, 2026', status: 'Approved', bmDecision: 'Approved', bmComment: 'Approved.', reason: 'Wedding anniversary', timeline: [{ step: 'Submitted', date: 'Sep 3, 10:00 AM', done: true },{ step: 'BM Approved', date: 'Sep 3, 01:00 PM', done: true },{ step: 'HR Approved', date: 'Sep 4, 09:00 AM', done: true }] },
     { id: 'r7', employee: 'Ahmed Zaki', gym: 'Nasr City', type: 'Resignation', submittedDate: '2026-09-08', requestedDate: 'Oct 08, 2026', status: 'Pending HR Review', bmDecision: 'Approved', bmComment: 'Handover plan prepared with AM.', reason: 'Pursuing master studies abroad. Requesting 30-day notice period.', timeline: [{ step: 'Submitted', date: 'Sep 8, 10:00 AM', done: true },{ step: 'BM Approved', date: 'Sep 8, 02:00 PM', done: true },{ step: 'HR Review', date: 'Pending', done: false }] },
     { id: 'r8', employee: 'Ahmed Mohamed', gym: 'Nasr City', type: 'Late Arrival', submittedDate: '2026-08-19', requestedDate: 'Aug 19, 2026', status: 'Rejected', bmDecision: 'Rejected', bmComment: 'Third unexcused late arrival in the same month.', reason: 'Traffic incident on the ring road — no supporting document.', timeline: [{ step: 'Submitted', date: 'Aug 19, 07:52 AM', done: true },{ step: 'BM Rejected', date: 'Aug 19, 09:15 AM', done: true },{ step: 'HR Review', date: 'Aug 20, 10:30 AM', done: true }] },
+    { id: 'r9', employee: 'Nour Ibrahim', gym: 'Nasr City', type: 'Late Arrival', submittedDate: '2026-09-07', requestedDate: 'Sep 11, 2026', status: 'Approved', bmDecision: 'Approved', bmComment: 'Traffic on the ring road, verified by the branch.', reason: 'Heavy traffic — 20 minutes', timeline: [{ step: 'Submitted', date: 'Sep 7, 08:10 AM', done: true },{ step: 'BM Approved', date: 'Sep 7, 09:05 AM', done: true },{ step: 'HR Approved', date: 'Sep 8, 10:15 AM', done: true }] },
+    { id: 'r10', employee: 'Omar Youssef', gym: 'Nasr City', type: 'Day Off', submittedDate: '2026-09-06', requestedDate: 'Sep 17, 2026', status: 'Pending HR Review', bmDecision: 'Approved', bmComment: 'Evening cover arranged with Karim Hassan.', reason: 'Attending a family wedding out of town.', timeline: [{ step: 'Submitted', date: 'Sep 6, 06:20 PM', done: true },{ step: 'BM Approved', date: 'Sep 6, 07:05 PM', done: true },{ step: 'HR Review', date: 'Pending', done: false }] },
+    { id: 'r11', employee: 'Hana Mostafa', gym: 'Heliopolis', type: 'Leave Early', submittedDate: '2026-09-08', requestedDate: 'Sep 22, 2026', status: 'Pending HR Review', bmDecision: 'Approved', bmComment: 'Handover to Tarek Nabil confirmed.', reason: 'University final exam.', timeline: [{ step: 'Submitted', date: 'Sep 8, 09:30 AM', done: true },{ step: 'BM Approved', date: 'Sep 8, 11:00 AM', done: true },{ step: 'HR Review', date: 'Pending', done: false }] },
+    { id: 'r12', employee: 'Ahmed Mohamed', gym: 'Nasr City', type: 'Day Off', submittedDate: '2026-09-08', requestedDate: 'Sep 4, 2026', status: 'Approved', bmDecision: 'Approved', bmComment: 'Approved.', reason: 'Family visit out of town.', timeline: [{ step: 'Submitted', date: 'Sep 2, 01:00 PM', done: true },{ step: 'BM Approved', date: 'Sep 2, 02:10 PM', done: true },{ step: 'HR Approved', date: 'Sep 3, 09:20 AM', done: true }] },
+    { id: 'r13', employee: 'Sara Ali', gym: 'Nasr City', type: 'Late Arrival', submittedDate: '2026-09-08', requestedDate: 'Sep 3, 2026', status: 'Pending HR Review', bmDecision: 'Approved', bmComment: 'Reception covered by Nour for 30 minutes.', reason: 'Doctor appointment.', timeline: [{ step: 'Submitted', date: 'Sep 8, 07:15 AM', done: true },{ step: 'BM Approved', date: 'Sep 8, 08:00 AM', done: true },{ step: 'HR Review', date: 'Pending', done: false }] },
+    { id: 'r14', employee: 'Sara Ali', gym: 'Nasr City', type: 'Sick Leave', submittedDate: '2026-09-09', requestedDate: 'Sep 14, 2026', status: 'Pending HR Review', bmDecision: 'Approved', bmComment: 'Rest days approved, reception coverage arranged.', reason: 'Viral fever — doctor advised three days of rest.', timeline: [{ step: 'Submitted', date: 'Sep 9, 07:50 AM', done: true },{ step: 'BM Approved', date: 'Sep 9, 08:30 AM', done: true },{ step: 'HR Review', date: 'Pending', done: false }] },
+    { id: 'r15', employee: 'Hana Mostafa', gym: 'Heliopolis', type: 'Sick Leave', submittedDate: '2026-09-08', requestedDate: 'Sep 16, 2026', status: 'Pending HR Review', bmDecision: 'Approved', bmComment: 'Coverage by Tarek confirmed.', reason: 'Tonsillitis — medical report attached.', timeline: [{ step: 'Submitted', date: 'Sep 8, 06:40 PM', done: true },{ step: 'BM Approved', date: 'Sep 8, 07:20 PM', done: true },{ step: 'HR Review', date: 'Pending', done: false }] },
   ],
   vacancies: [
     { id: 'v1', position: 'Senior Trainer', gym: 'Nasr City', headcount: 1, urgency: 'High', status: 'Open', createdDate: '2026-08-20', candidates: 5 },
@@ -173,6 +196,61 @@ const MOCK = {
       iv2: { date: '2026-09-14', by: 'Mona El-Sayed', type: 'Panel', verdict: 'Scheduled', eval: null, room: 'HQ — Boardroom' },
       decision: null },
   ],
+  hiringForms: [
+    { id: 'hf1', name: 'Trainer Application Form', position: 'Trainer', gym: 'All', status: 'Open', createdDate: '2026-08-15',
+      questionList: [
+        { type: 'text', text: 'Tell us about your training experience', options: [] },
+        { type: 'checkbox', text: 'Which certifications do you hold?', options: ['First Aid', 'CrossFit L1', 'Nutrition Coach', 'Pilates'] },
+        { type: 'choose', text: 'Preferred shift', options: ['Morning', 'Evening', 'Flexible'] },
+        { type: 'text', text: 'Expected salary (EGP)', options: [] },
+      ] },
+    { id: 'hf2', name: 'Receptionist Application Form', position: 'Receptionist', gym: 'All', status: 'Open', createdDate: '2026-08-20',
+      questionList: [
+        { type: 'text', text: 'Why do you want to work at Revive?', options: [] },
+        { type: 'choose', text: 'Customer service experience', options: ['2+ years', '1 year', 'Less than a year'] },
+        { type: 'checkbox', text: 'Languages spoken', options: ['Arabic', 'English', 'French', 'German'] },
+      ] },
+  ],
+  hiringApplicants: [
+    { id: 'ha1', name: 'Mariam Adel', email: 'mariam.adel@mail.com', phone: '+20 130 111 2222', gym: 'Nasr City',
+      formId: 'hf1', formName: 'Trainer Application Form', position: 'Trainer', appliedDate: '2026-09-07', status: 'New',
+      answers: [
+        { question: 'Tell us about your training experience', type: 'text', answer: '4 years of group-class coaching at boutique gyms. Built a 40-member weekly HIIT program.' },
+        { question: 'Which certifications do you hold?', type: 'checkbox', answer: ['First Aid', 'Pilates'] },
+        { question: 'Preferred shift', type: 'choose', answer: 'Morning' },
+        { question: 'Expected salary (EGP)', type: 'text', answer: '9,500' },
+      ] },
+    { id: 'ha2', name: 'Mostafa Kamal', email: 'mostafa.kamal@mail.com', phone: '+20 130 222 3333', gym: 'Heliopolis',
+      formId: 'hf1', formName: 'Trainer Application Form', position: 'Trainer', appliedDate: '2026-09-06', status: 'In Review',
+      answers: [
+        { question: 'Tell us about your training experience', type: 'text', answer: 'Former competitive swimmer — 2 years personal training, mostly strength & conditioning.' },
+        { question: 'Which certifications do you hold?', type: 'checkbox', answer: ['CrossFit L1'] },
+        { question: 'Preferred shift', type: 'choose', answer: 'Evening' },
+        { question: 'Expected salary (EGP)', type: 'text', answer: '11,000' },
+      ] },
+    { id: 'ha3', name: 'Nourhan Salah', email: 'nourhan.salah@mail.com', phone: '+20 130 333 4444', gym: 'Nasr City',
+      formId: 'hf1', formName: 'Trainer Application Form', position: 'Trainer', appliedDate: '2026-09-04', status: 'Shortlisted',
+      answers: [
+        { question: 'Tell us about your training experience', type: 'text', answer: '3 years as a fitness instructor, women-only classes specialist.' },
+        { question: 'Which certifications do you hold?', type: 'checkbox', answer: ['First Aid', 'Nutrition Coach'] },
+        { question: 'Preferred shift', type: 'choose', answer: 'Flexible' },
+        { question: 'Expected salary (EGP)', type: 'text', answer: '8,500' },
+      ] },
+    { id: 'ha4', name: 'Dina Emad', email: 'dina.emad@mail.com', phone: '+20 130 444 5555', gym: 'Heliopolis',
+      formId: 'hf2', formName: 'Receptionist Application Form', position: 'Receptionist', appliedDate: '2026-09-08', status: 'New',
+      answers: [
+        { question: 'Why do you want to work at Revive?', type: 'text', answer: 'I enjoy helping members and I live 10 minutes from the Heliopolis branch.' },
+        { question: 'Customer service experience', type: 'choose', answer: '1 year' },
+        { question: 'Languages spoken', type: 'checkbox', answer: ['Arabic', 'English'] },
+      ] },
+    { id: 'ha5', name: 'Hossam Rifaat', email: 'hossam.rifaat@mail.com', phone: '+20 130 555 6666', gym: '6th October',
+      formId: 'hf2', formName: 'Receptionist Application Form', position: 'Receptionist', appliedDate: '2026-09-05', status: 'In Review',
+      answers: [
+        { question: 'Why do you want to work at Revive?', type: 'text', answer: 'Front desk at a hotel for 2 years — I want a gym environment with a strong team culture.' },
+        { question: 'Customer service experience', type: 'choose', answer: '2+ years' },
+        { question: 'Languages spoken', type: 'checkbox', answer: ['Arabic', 'English', 'French'] },
+      ] },
+  ],
   vacancyRequests: [
     { id: 'vr1', position: 'Senior Trainer', gym: 'Nasr City', urgency: 'High', status: 'Pending', submittedBy: 'Youssef Kamal', submittedDate: '2026-08-10', reason: 'Replacing departing trainer.' },
     { id: 'vr2', position: 'Receptionist', gym: 'Heliopolis', urgency: 'Medium', status: 'Pending', submittedBy: 'Hana Mostafa', submittedDate: '2026-08-15', reason: 'Evening shift coverage needed.' },
@@ -224,10 +302,16 @@ const MOCK = {
     ] },
   ],
   evaluationHistory: [
-    { id: 'eh1', employee: 'Ahmed Mohamed', form: 'Trainer Evaluation Q3 2026', period: 'Q3 2026', score: 82, status: 'Completed', notes: 'Strong member feedback. Recommend advanced certification.' },
-    { id: 'eh2', employee: 'Karim Hassan', form: 'Trainer Evaluation Q3 2026', period: 'Q3 2026', score: 70, status: 'Completed', notes: 'Attendance needs attention. 3 late arrivals this month.' },
-    { id: 'eh3', employee: 'Sara Ali', form: 'Receptionist Evaluation Q2 2026', period: 'Q2 2026', score: 88, status: 'Completed' },
-    { id: 'eh4', employee: 'Omar Youssef', form: 'Trainer Evaluation Q3 2026', period: 'Q3 2026', score: 74, status: 'In Progress', notes: 'Punctuality issues flagged.' },
+    { id: 'eh1', employee: 'Ahmed Mohamed', form: 'Trainer Evaluation Q3 2026', formId: 'ef1', period: 'Q3 2026', score: 82, status: 'Completed', notes: 'Strong member feedback. Recommend advanced certification.', reviewedBy: 'Mona El-Sayed', reviewedDate: '2026-09-05',
+      answers: [
+        { question: 'How consistently does this trainer adhere to their shift schedule?', type: 'text', answer: 'Missed one shift in July, otherwise punctual. Usually arrives early to set up equipment.' },
+        { question: 'Quality of training sessions & member coaching', type: 'text', answer: 'Sessions are well structured; several members specifically request him for personal training.' },
+        { question: 'Overall member feedback rating', type: 'choose', answer: 'Excellent' },
+        { question: 'Certifications held', type: 'checkbox', answer: ['First Aid', 'CrossFit'] },
+      ] },
+    { id: 'eh2', employee: 'Karim Hassan', form: 'Trainer Evaluation Q3 2026', formId: 'ef1', period: 'Q3 2026', score: 70, status: 'Completed', notes: 'Attendance needs attention. 3 late arrivals this month.' },
+    { id: 'eh3', employee: 'Sara Ali', form: 'Receptionist Evaluation Q2 2026', formId: 'ef2', period: 'Q2 2026', score: 88, status: 'Completed' },
+    { id: 'eh4', employee: 'Omar Youssef', form: 'Trainer Evaluation Q3 2026', formId: 'ef1', period: 'Q3 2026', score: 74, status: 'In Progress', notes: 'Punctuality issues flagged.' },
     { id: 'eh5', employee: 'Yasmin Adel', form: 'Probation Review', period: 'Q2 2026', score: 55, status: 'Completed', notes: 'On leave since June. Needs improvement plan.' },
   ],
   payroll: [
@@ -245,7 +329,15 @@ const MOCK = {
     { id: 'p4', period: 'May 2026', status: 'Paid', paidDate: '2026-06-05', totalEmployees: 138, totalGross: 1440000, totalDeductions: 178000, totalNet: 1262000, visible: true },
   ],
   evaluationForms: [
-    { id: 'ef1', name: 'Trainer Evaluation Q3 2026', gym: 'All', position: 'Trainer', questions: 8, status: 'Active', createdDate: '2026-08-01' },
+    { id: 'ef1', name: 'Trainer Evaluation Q3 2026', gym: 'All', position: 'Trainer', questions: 6, status: 'Active', createdDate: '2026-08-01',
+      questionList: [
+        { type: 'text', text: 'How consistently does this trainer adhere to their shift schedule?', options: [] },
+        { type: 'text', text: 'Quality of training sessions & member coaching', options: [] },
+        { type: 'choose', text: 'Overall member feedback rating', options: ['Excellent', 'Good', 'Average', 'Poor'] },
+        { type: 'checkbox', text: 'Certifications held', options: ['First Aid', 'CrossFit', 'Nutrition Coach', 'Pilates'] },
+        { type: 'text', text: 'Team collaboration, respect & gym rules adherence', options: [] },
+        { type: 'choose', text: 'Punctuality this quarter', options: ['Always on time', 'Occasionally late', 'Frequently late'] },
+      ] },
     { id: 'ef2', name: 'Receptionist Evaluation Q2 2026', gym: 'All', position: 'Receptionist', questions: 6, status: 'Completed', createdDate: '2026-05-01' },
     { id: 'ef3', name: 'Staff Onboarding Checklist', gym: 'All', position: 'All', questions: 12, status: 'Active', createdDate: '2026-01-01' },
   ],
@@ -278,13 +370,73 @@ const MOCK = {
     { id: 'al6', action: 'Evaluation Completed', user: 'Mona El-Sayed', target: 'Ahmed Mohamed', detail: 'Q2 2026 evaluation — Score: 4.2/5', timestamp: '2026-08-01 16:00', gym: 'Nasr City' },
     { id: 'al7', action: 'Bulk Import', user: 'Mona El-Sayed', target: '14 employees', detail: 'CSV import completed — 14 records added', timestamp: '2026-03-01 10:30', gym: 'All' },
   ],
+  // Events is the HR action queue. `tab` groups rows into the Events page tabs;
+  // the legacy flat fields (type/title/date/urgency/detail/branch/permission) are kept
+  // because the sidebar badges and the dashboard read them directly.
   events: [
-    { id: 'ev1', type: 'Document Expiry', title: 'First Aid Cert — Ahmed Mohamed', date: '2026-09-10', urgency: 'high', detail: 'Cert expires in 1 day' },
-    { id: 'ev2', type: 'Contract Expiry', title: 'Contract — Mona Said', date: '2026-09-30', urgency: 'medium', detail: 'Contract expires in 21 days. Employee is on notice period.' },
-    { id: 'ev3', type: 'PendingHRReview', title: 'Request — Karim Hassan (Day Off)', date: '2026-09-12', urgency: 'medium', detail: 'BM approved. Awaiting HR final decision.' },
-    { id: 'ev4', type: 'PendingHRReview', title: 'Request — Fatma Hassan (Leave Early)', date: '2026-09-09', urgency: 'high', detail: 'BM approved. Request is for today.' },
-    { id: 'ev5', type: 'PendingVacancyRequest', title: 'Vacancy Request — Senior Trainer', date: '2026-08-10', urgency: 'medium', detail: 'Branch Manager request pending HR approval.' },
-    { id: 'ev6', type: 'Resignation', title: 'Mona Said — Notice Period', date: '2026-09-30', urgency: 'low', detail: 'Last day Sep 30. Exit checklist in progress.' },
+    // ---------- Documents & Contracts ----------
+    { id: 'ev1', tab: 'documents', type: 'Document Expiry', title: 'First Aid Certificate — Ahmed Mohamed', date: '2026-09-10', urgency: 'high', branch: 'Nasr City', detail: 'Cert expires in 1 day.',
+      employee: 'Ahmed Mohamed', employeeId: 'RV-00124', docType: 'First Aid Certificate', docNo: 'CERT-FA-2214', expiresOn: '2026-09-10', editableByEmployee: true, renewalPath: 'Employee uploads replacement from My Documents' },
+    { id: 'ev2', tab: 'documents', type: 'Contract Expiry', title: 'Contract — Mona Said', date: '2026-09-30', urgency: 'medium', branch: 'Heliopolis', detail: 'Contract expires in 21 days. Employee is on notice period.',
+      employee: 'Mona Said', employeeId: 'RV-00131', docType: 'Employment Contract', docNo: 'CTR-2024-0118', expiresOn: '2026-09-30', editableByEmployee: false, renewalPath: 'HR-only — decide renewal or separation' },
+    { id: 'ev10', tab: 'documents', type: 'Document Expiry', title: 'National ID Copy — Sara Ali', date: '2026-09-05', urgency: 'high', branch: 'Nasr City', detail: 'Document expired 4 days ago and blocks payroll ID verification.',
+      employee: 'Sara Ali', employeeId: 'RV-00126', docType: 'National ID', docNo: 'NAT-88213', expiresOn: '2026-09-05', editableByEmployee: false, renewalPath: 'HR-only — request a fresh copy from the branch', resolved: true, resolvedOn: '2026-09-08', resolvedBy: 'Mona El-Sayed' },
+    { id: 'ev11', tab: 'documents', type: 'Document Expiry', title: 'Insurance Card — Tarek Nabil', date: '2026-10-15', urgency: 'low', branch: 'Heliopolis', detail: 'Insurance card expires in 36 days.',
+      employee: 'Tarek Nabil', employeeId: 'RV-00130', docType: 'Insurance Card', docNo: 'INS-4471', expiresOn: '2026-10-15', editableByEmployee: true, renewalPath: 'Employee uploads replacement from My Documents' },
+
+    // ---------- Employee Requests (Pending HR Review) ----------
+    { id: 'ev3', tab: 'requests', type: 'PendingHRReview', title: 'Request — Karim Hassan (Day Off)', date: '2026-09-12', urgency: 'medium', branch: 'Nasr City', detail: 'BM approved. Awaiting HR final decision.',
+      requestId: 'r1', employee: 'Karim Hassan', requestType: 'Day Off', forDate: '2026-09-12', submittedOn: '2026-09-07', reason: 'Family event', bmDecision: 'Approved', bmComment: 'No scheduling conflict.' },
+    { id: 'ev4', tab: 'requests', type: 'PendingHRReview', title: 'Request — Fatma Hassan (Leave Early)', date: '2026-09-09', urgency: 'high', branch: '6th October', detail: 'BM approved. Request is for today.',
+      requestId: 'r5', employee: 'Fatma Hassan', requestType: 'Leave Early', forDate: '2026-09-09', submittedOn: '2026-09-08', reason: 'Child sick', bmDecision: 'Approved', bmComment: 'Handover to Hassan complete.' },
+    { id: 'ev12', tab: 'requests', type: 'PendingHRReview', title: 'Request — Ahmed Zaki (Resignation)', date: '2026-10-08', urgency: 'high', branch: 'Nasr City', detail: 'Resignation notice — BM approved handover plan.',
+      requestId: 'r7', employee: 'Ahmed Zaki', requestType: 'Resignation', forDate: '2026-10-08', submittedOn: '2026-09-08', reason: 'Pursuing master studies abroad. Requesting 30-day notice period.', bmDecision: 'Approved', bmComment: 'Handover plan prepared with AM.' },
+    { id: 'ev13', tab: 'requests', type: 'PendingHRReview', title: 'Request — Nour Ibrahim (Day Off)', date: '2026-09-15', urgency: 'medium', branch: 'Nasr City', detail: 'BM rejected — shortage on that date. HR final call still required.',
+      requestId: 'r3', employee: 'Nour Ibrahim', requestType: 'Day Off', forDate: '2026-09-15', submittedOn: '2026-09-05', reason: 'Personal errand', bmDecision: 'Rejected', bmComment: 'High shortage on Sep 15.' },
+
+    // ---------- Offboarding / Leaving ----------
+    { id: 'ev6', tab: 'offboarding', type: 'Resignation', title: 'Mona Said — Notice Period', date: '2026-09-30', urgency: 'low', branch: 'Heliopolis', detail: 'Last day Sep 30. Exit checklist in progress.',
+      employee: 'Mona Said', employeeId: 'RV-00131', position: 'Trainer — Senior', lastDay: '2026-09-30', reason: 'Resignation — relocating abroad', requestedBy: 'Branch Manager', separationId: 'sep1', checklistDone: 0, checklistTotal: 5 },
+    { id: 'ev14', tab: 'offboarding', type: 'Resignation', title: 'Yasmin Adel — Contract Non-Renewal', date: '2026-09-20', urgency: 'medium', branch: 'Heliopolis', detail: 'Contract ends Sep 20. Separation raised by HR Manager.',
+      employee: 'Yasmin Adel', employeeId: 'RV-00129', position: 'Trainer — Mid', lastDay: '2026-09-20', reason: 'Contract non-renewal', requestedBy: 'HR Manager', separationId: 'sep2', checklistDone: 0, checklistTotal: 5 },
+    { id: 'ev15', tab: 'offboarding', type: 'Termination', title: 'Laila Mostafa — Exit In Progress', date: '2026-09-25', urgency: 'medium', branch: '6th October', detail: 'Exit interview done; handover and settlement outstanding.',
+      employee: 'Laila Mostafa', employeeId: 'RV-00135', position: 'Receptionist — Senior', lastDay: '2026-09-25', reason: 'Termination — repeated tardiness', requestedBy: 'Branch Manager', separationId: 'sep3', checklistDone: 1, checklistTotal: 5 },
+
+    // ---------- Transfer Requests ----------
+    { id: 'ev7', tab: 'transfers', type: 'TransferRequest', title: 'Transfer Request — Sara Ali (HR raised)', date: '2026-10-01', urgency: 'medium', branch: 'Nasr City', detail: 'Sarah Hassan requested moving Sara Ali from Nasr City to Heliopolis.', permission: 'employees.transfer',
+      employee: 'Sara Ali', employeeId: 'RV-00126', fromGym: 'Nasr City', toGym: 'Heliopolis', effectiveDate: '2026-10-01', raisedBy: 'Sarah Hassan', justification: 'Relocation — moved closer to Heliopolis branch.' },
+    { id: 'ev9', tab: 'transfers', type: 'TransferRequest', title: 'Transfer Request — Karim Hassan (HR raised)', date: '2026-10-05', urgency: 'low', branch: 'Nasr City', detail: 'Sarah Hassan requested moving Karim Hassan to 6th October branch.', permission: 'employees.transfer',
+      employee: 'Karim Hassan', employeeId: 'RV-00125', fromGym: 'Nasr City', toGym: '6th October', effectiveDate: '2026-10-05', raisedBy: 'Sarah Hassan', justification: 'Evening shift coverage at 6th October is short.' },
+
+    // ---------- Vacancy Requests ----------
+    { id: 'ev5', tab: 'vacancies', type: 'PendingVacancyRequest', title: 'Vacancy Request — Senior Trainer', date: '2026-08-10', urgency: 'medium', branch: 'Nasr City', detail: 'Branch Manager request pending HR approval.', permission: 'recruitment.vacancy_request.approve',
+      vacancyRequestId: 'vr1', position: 'Senior Trainer', gym: 'Nasr City', headcount: 1, vrUrgency: 'High', submittedBy: 'Youssef Kamal', submittedOn: '2026-08-10', vrReason: 'Replacing departing trainer.' },
+    { id: 'ev16', tab: 'vacancies', type: 'PendingVacancyRequest', title: 'Vacancy Request — Receptionist', date: '2026-08-15', urgency: 'low', branch: 'Heliopolis', detail: 'Branch Manager request pending HR approval.', permission: 'recruitment.vacancy_request.approve',
+      vacancyRequestId: 'vr2', position: 'Receptionist', gym: 'Heliopolis', headcount: 1, vrUrgency: 'Medium', submittedBy: 'Hana Mostafa', submittedOn: '2026-08-15', vrReason: 'Evening shift coverage needed.' },
+
+    // ---------- Payroll ----------
+    { id: 'ev8', tab: 'payroll', type: 'PayrollApproval', title: 'Payroll Run Awaiting Approval — Heliopolis', date: '2026-09-14', urgency: 'high', branch: 'Heliopolis', detail: 'August 2026 payroll is reconciled and ready for HR Manager sign-off.', permission: 'payroll.approve',
+      period: 'August 2026', gym: 'Heliopolis', headcount: 45, grossTotal: 412500, netTotal: 384900, preparedOn: '2026-09-12', pendingDeductions: 6 },
+  ],
+
+  actionRequests: [
+    { id: 'ar-1', employeeId: 'RV-00124', employee: 'Ahmed Mohamed', position: 'Trainer — Senior',
+      actionType: 'Transfer',
+      proposedDetails: { fromGym: 'Nasr City', toGym: 'Heliopolis', effectiveDate: '2026-10-01' },
+      justification: 'Relocation — moved closer to Heliopolis branch.',
+      requestedBy: 'Sarah Hassan', status: 'Pending', submittedDate: '2026-09-08' },
+    { id: 'ar-2', employeeId: 'RV-00125', employee: 'Karim Hassan', position: 'Trainer — Mid',
+      actionType: 'CompensationChange',
+      proposedDetails: { currentSalary: 10000, newSalary: 12500, effectiveDate: '2026-10-01' },
+      justification: 'Promotion track to Senior Trainer — market adjustment after Q3 appraisals.',
+      requestedBy: 'Sarah Hassan', status: 'Pending', submittedDate: '2026-09-09' },
+    { id: 'ar-3', employeeId: 'RV-00126', employee: 'Sara Ali', position: 'Receptionist — Junior',
+      actionType: 'RoleAssign',
+      proposedDetails: { systemRole: 'Team Leader' },
+      justification: 'Covering front-desk team lead duties on night shift.',
+      requestedBy: 'Sarah Hassan', status: 'Rejected', submittedDate: '2026-09-05',
+      reviewedBy: 'Mona El-Sayed', reviewedDate: '2026-09-06',
+      reviewComment: 'Team Leader role at Heliopolis is filled — revisit after the Q4 restructuring.' },
   ],
   notifications: [
     { id: 'n1', category: 'Requests', title: 'New Request Pending', description: 'Karim Hassan submitted a Day Off request for Sep 12.', date: '2026-09-07 09:42', read: false, color: 'yellow', link: 'requests' },
@@ -365,7 +517,9 @@ const DEMO_USERS = {
     selectedGym: null,
     hireDate: '2024-03-15', employmentType: 'Full-time', status: 'Active',
     role: 'HR Manager',
-    permissions: ['employees.view','employees.create','employees.edit','employees.transfer','employees.position.change','employees.role.assign','employees.status.change','employees.compensation.manage','employees.contract.manage','employees.offboard','employees.documents.view','employees.documents.manage','employees.bulk_import','employees.leave_balance.manage','positions.view','positions.manage','attendance.view','attendance.edit','attendance.manual_entry','schedule.view','schedule.manage','requests.view','requests.approve','payroll.view','payroll.edit','payroll.approve','evaluations.view','evaluations.manage','reports.view','announcements.view','announcements.manage','audit.view','team.view','team.manage','recruitment.view','recruitment.vacancies.manage','recruitment.candidates.manage','recruitment.hire.approve','recruitment.vacancy_request.approve'],
+    // HR Manager preset — governance/oversight: direct lifecycle actions, vacancy creation,
+    // Hire approval, payroll approve/lock, evaluation form builder, reports + audit.
+    permissions: ['employees.view','employees.create','employees.edit','employees.transfer','employees.position.change','employees.role.assign','employees.status.change','employees.compensation.manage','employees.contract.manage','employees.offboard','employees.documents.view','employees.documents.manage','employees.bulk_import','employees.leave_balance.manage','positions.view','positions.manage','attendance.view','attendance.edit','attendance.manual_entry','schedule.view','schedule.manage','schedule.hr_team','requests.view','requests.approve','payroll.view','payroll.edit','payroll.approve','evaluations.view','evaluations.manage','evaluations.forms.manage','reports.view','announcements.view','announcements.manage','audit.view','team.view','team.manage','recruitment.view','recruitment.vacancies.manage','recruitment.candidates.manage','recruitment.hire.approve','recruitment.vacancy_request.approve','events.view'],
   },
   hr: {
     id: 'RV-00201', firstName: 'Sarah', lastName: 'Hassan', fullName: 'Sarah Hassan',
@@ -378,6 +532,11 @@ const DEMO_USERS = {
     selectedGym: null,
     hireDate: '2025-06-01', employmentType: 'Full-time', status: 'Active',
     role: 'HR',
-    permissions: ['employees.view','employees.create','employees.edit','employees.position.change','employees.status.change','employees.contract.manage','employees.documents.view','employees.documents.manage','positions.view','attendance.view','attendance.edit','attendance.manual_entry','schedule.view','schedule.manage','requests.view','requests.approve','payroll.view','recruitment.view','recruitment.candidates.manage','evaluations.view','announcements.view','team.view'],
+    // HR preset — operational executor: no direct Transfer/Compensation/Role/Offboard/BulkImport —
+    // instead holds employees.request_action (same buttons render as "Request [Action]" and create
+    // an EmployeeActionRequest for the HR Manager to review). Holds payroll.view+edit+approve
+    // (scoped to own gyms) and evaluations.manage (run cycles with forms HR Manager built —
+    // but NOT evaluations.forms.manage, so no form builder). No reports.view / audit.view.
+    permissions: ['employees.view','employees.create','employees.edit','employees.request_action','employees.position.change','employees.status.change','employees.contract.manage','employees.documents.view','employees.documents.manage','positions.view','attendance.view','attendance.edit','attendance.manual_entry','schedule.view','schedule.manage','requests.view','requests.approve','payroll.view','payroll.edit','payroll.approve','recruitment.view','recruitment.candidates.manage','evaluations.view','evaluations.manage','announcements.view','events.view'],
   },
 };

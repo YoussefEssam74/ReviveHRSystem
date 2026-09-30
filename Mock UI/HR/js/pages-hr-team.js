@@ -105,7 +105,7 @@ function renderHRTeam() {
       '<div class="bg-white rounded-xl border border-charcoal-200 p-2.5 text-center"><p class="text-base font-bold text-blue-600">' + MOCK.currentUser.gyms.length + '</p><p class="text-[10px] text-charcoal-500">Gyms Under You</p></div>' +
       '<div class="bg-white rounded-xl border border-charcoal-200 p-2.5 text-center"><p class="text-base font-bold text-red-600">' + MOCK.hrTeamMembers.filter(m=>m.status==='Suspended').length + '</p><p class="text-[10px] text-charcoal-500">Suspended</p></div>' +
     '</div>' +
-    '<div class="flex border-b border-charcoal-100">' + tabs.map(t=>'<button onclick="_hrtTab=\''+t.id+'\';renderAll()" class="tab-btn '+(_hrtTab===t.id?'active':'')+'">'+t.label+'</button>').join('') + '</div>' +
+    '<div class="inline-flex flex-wrap items-center gap-1 bg-charcoal-100 rounded-xl p-1 border border-charcoal-200">' + tabs.map(t=>'<button onclick="_hrtTab=\''+t.id+'\';renderAll()" class="tab-btn '+(_hrtTab===t.id?'active':'')+'">'+t.label+'</button>').join('') + '</div>' +
     body +
     (!canManage ? '<p class="text-[10px] text-charcoal-400 text-center">Creating &amp; editing HR accounts requires <code>team.manage</code> (HR Manager).</p>' : '') +
   '</div>';

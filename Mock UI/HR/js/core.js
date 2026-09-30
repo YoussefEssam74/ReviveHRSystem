@@ -1,40 +1,76 @@
 // ==================== HR STATE & UTILITIES ====================
 let state = { currentPage: 'dashboard', sidebarOpen: false, userMenuOpen: false, mobileMoreOpen: false };
-const DEMO = { showAll: true, role: 'hrManager' };
+// "Show All Pages" was removed — the role filter (HR Manager / HR) always drives
+// permission-based visibility, so each preset only sees its own pages & functions.
+const DEMO = { showAll: false, role: 'hrManager' };
+
+// Lifecycle actions that escalate through an EmployeeActionRequest.
+// Each type maps to the permission required to perform it directly — held by the
+// HR Manager preset. The HR preset instead holds employees.request_action, which
+// renders the same buttons as "Request [Action]".
+const ACTION_TYPES = {
+  'Transfer':           { perm: 'employees.transfer',            label: 'Transfer Gym' },
+  'CompensationChange': { perm: 'employees.compensation.manage', label: 'Compensation Change' },
+  'RoleAssign':         { perm: 'employees.role.assign',         label: 'Role Assign' },
+  'Offboard':           { perm: 'employees.offboard',            label: 'Offboard' },
+  'BulkImport':         { perm: 'employees.bulk_import',         label: 'Bulk Import' },
+};
+
+// Human-readable one-liner for an EmployeeActionRequest's proposedDetails
+function actionSummary(a) {
+  const d = a.proposedDetails || {};
+  if (a.actionType === 'Transfer') return `${d.fromGym} → ${d.toGym} · Effective ${formatDate(d.effectiveDate)}`;
+  if (a.actionType === 'CompensationChange') return `Salary EGP ${Number(d.currentSalary || 0).toLocaleString()} → EGP ${Number(d.newSalary || 0).toLocaleString()} · Effective ${formatDate(d.effectiveDate)}`;
+  if (a.actionType === 'RoleAssign') return `System role → ${d.systemRole || 'None (Employee)'}`;
+  if (a.actionType === 'Offboard') return `Last day ${formatDate(d.lastDay)} · Reason: ${d.reason || '—'}`;
+  if (a.actionType === 'BulkImport') return `${d.source || 'Records queued for import'}`;
+  return '';
+}
 
 // ==================== GYM REQUIRED ACTIONS HELPER ====================
 function getGymRequiredActions(branchName) {
-  // Pending Employee Requests awaiting HR
-  const reqs = (MOCK.requests || []).filter(r => 
-    r.status === 'Pending HR Review' && (!branchName || branchName === 'all' || r.gym === branchName)
-  );
-  
-  // Pending Branch Vacancies awaiting HR approval
-  const vacs = (MOCK.vacancyRequests || []).filter(v => 
-    v.status === 'Pending' && (!branchName || branchName === 'all' || v.gym === branchName)
+  const inScope = (g) => !branchName || branchName === 'all' || g === branchName;
+
+  // Pending Employee Requests awaiting HR (both presets hold requests.approve)
+  const reqs = (MOCK.requests || []).filter(r =>
+    r.status === 'Pending HR Review' && inScope(r.gym)
   );
 
-  // Expiring Contracts & High Urgency compliance events
-  const contracts = (MOCK.events || []).filter(e => {
-    if (e.type !== 'Contract Expiry' && e.urgency !== 'high') return false;
-    if (!branchName || branchName === 'all') return true;
+  // Pending Branch Vacancies — HR Manager only (recruitment.vacancy_request.approve)
+  const vacs = (DEMO.showAll || hasPermission('recruitment.vacancy_request.approve'))
+    ? (MOCK.vacancyRequests || []).filter(v => v.status === 'Pending' && inScope(v.gym))
+    : [];
+
+  // Permission-visible events (expiries, resignations, transfer tickets, payroll approvals)
+  const events = (MOCK.events || []).filter(e => {
+    if (e.permission && !(DEMO.showAll || hasPermission(e.permission))) return false;
+    if (inScope('all')) return true;
     if (e.branch) return e.branch === branchName;
     const emp = (MOCK.employees || []).find(emp => e.title && e.title.includes(emp.name));
     return emp ? emp.gym === branchName : false;
   });
+  const urgent = events.filter(e => e.type === 'Contract Expiry' || e.type === 'Document Expiry' || e.urgency === 'high');
 
-  const total = reqs.length + vacs.length + contracts.length;
-  
+  // Escalated lifecycle actions (EmployeeActionRequest) awaiting a permission this user holds
+  const actionRequests = (MOCK.actionRequests || []).filter(a => {
+    if (a.status !== 'Pending') return false;
+    const meta = ACTION_TYPES[a.actionType];
+    return meta && (DEMO.showAll || hasPermission(meta.perm));
+  });
+
+  const total = reqs.length + vacs.length + urgent.length + actionRequests.length;
+
   const tags = [];
   if (reqs.length > 0) tags.push(`${reqs.length} request${reqs.length > 1 ? 's' : ''}`);
   if (vacs.length > 0) tags.push(`${vacs.length} vacanc${vacs.length > 1 ? 'ies' : 'y'}`);
-  if (contracts.length > 0) tags.push(`${contracts.length} contract${contracts.length > 1 ? 's' : ''}`);
+  if (urgent.length > 0) tags.push(`${urgent.length} event${urgent.length > 1 ? 's' : ''}`);
+  if (actionRequests.length > 0) tags.push(`${actionRequests.length} action request${actionRequests.length > 1 ? 's' : ''}`);
 
   return {
     total,
     requestsCount: reqs.length,
     vacanciesCount: vacs.length,
-    contractsCount: contracts.length,
+    contractsCount: urgent.length + actionRequests.length,
     summaryText: tags.length > 0 ? tags.join(' · ') : 'All clear',
     tags
   };
@@ -257,7 +293,7 @@ function getGreeting() { const h = new Date().getHours(); return h < 12 ? 'Good 
 function statusBadge(status) {
   const m = { 'On Time':'badge-green','Present':'badge-green','Approved':'badge-green','Valid':'badge-green','Paid':'badge-green','Completed':'badge-green','Published':'badge-blue','Exceeds':'badge-green','Meets':'badge-blue',
     'Late':'badge-yellow','Pending':'badge-yellow','Pending HR Review':'badge-yellow','Processing':'badge-yellow','Expiring Soon':'badge-orange','Draft':'badge-yellow','Below':'badge-red','Open':'badge-emerald',
-    'Absent':'badge-red','Rejected':'badge-red','Early Checkout':'badge-blue','Off':'badge-gray','Cancelled':'badge-gray','Submitted':'badge-purple','Notice Period':'badge-yellow','On Leave':'badge-yellow','Suspended':'badge-red','Closed':'badge-gray','Sent':'badge-blue' };
+    'Absent':'badge-red','Rejected':'badge-red','Early Checkout':'badge-blue','Scheduled':'badge-blue','Off':'badge-gray','Cancelled':'badge-gray','Submitted':'badge-purple','Notice Period':'badge-yellow','On Leave':'badge-yellow','Suspended':'badge-red','Closed':'badge-gray','Sent':'badge-blue' };
   return `<span class="badge ${m[status]||'badge-gray'}">${status}</span>`;
 }
 
@@ -374,6 +410,62 @@ function updateBadgeIndicators() {
   }
 }
 
+// ---- Header notification dropdown -------------------------------------------
+let _notifDdOpen = false, _notifDdAll = false;
+function toggleNotifDd(ev) {
+  if (ev) ev.stopPropagation();
+  _notifDdOpen = !_notifDdOpen;
+  if (_notifDdOpen) _notifDdAll = false;
+  renderNotifDd();
+}
+function closeNotifDd() { if (_notifDdOpen) { _notifDdOpen = false; renderNotifDd(); } }
+function notifDdMore(ev) { if (ev) ev.stopPropagation(); _notifDdAll = !_notifDdAll; renderNotifDd(); }
+function notifDdOpenItem(id, ev) {
+  if (ev) ev.stopPropagation();
+  const n = MOCK.notifications.find(x => x.id === id);
+  if (n) n.read = true;
+  _notifDdOpen = false;
+  renderNotifDd();
+  updateBadgeIndicators();
+  if (n && n.link && pageRenderers[n.link]) navigateTo(n.link);
+}
+function renderNotifDd() {
+  const dd = document.getElementById('header-notif-dd');
+  if (!dd) return;
+  if (!_notifDdOpen) { dd.classList.add('hidden'); dd.innerHTML = ''; return; }
+  // unread ("new") first, stable sort keeps recency within each group
+  const sorted = [...MOCK.notifications].sort((a, b) => (a.read === b.read ? 0 : a.read ? 1 : -1));
+  const unread = sorted.filter(n => !n.read).length;
+  const shown = _notifDdAll ? sorted : sorted.slice(0, 4);
+  const hiddenCount = sorted.length - shown.length;
+  const colorDot = { yellow: 'bg-yellow-500', green: 'bg-emerald-500', blue: 'bg-blue-500', red: 'bg-red-500', purple: 'bg-purple-500' };
+  dd.innerHTML = `
+    <div class="flex items-center justify-between px-3 py-2 border-b border-charcoal-100 bg-charcoal-50/60">
+      <p class="text-xs font-bold text-charcoal-900">Notifications</p>
+      ${unread ? `<span class="badge badge-red text-[9px]">${unread} new</span>` : '<span class="text-[9px] text-charcoal-400">All caught up</span>'}
+    </div>
+    <div class="max-h-72 overflow-y-auto divide-y divide-charcoal-100">
+      ${shown.map(n => `<button onclick="notifDdOpenItem('${n.id}', event)" class="w-full text-left px-3 py-2 flex items-start gap-2 hover:bg-charcoal-50 ${n.read ? 'opacity-60' : 'bg-white'}">
+        <span class="w-2 h-2 rounded-full mt-1 flex-shrink-0 ${n.read ? 'bg-charcoal-300' : (colorDot[n.color] || 'bg-brand-500')}"></span>
+        <span class="min-w-0 flex-1">
+          <span class="flex items-center justify-between gap-2"><span class="text-[11px] font-semibold text-charcoal-900 truncate">${n.title}</span><span class="text-[9px] text-charcoal-400 whitespace-nowrap">${n.date.slice(5, 16)}</span></span>
+          <span class="block text-[10px] text-charcoal-500 mt-0.5" style="display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">${n.description}</span>
+          <span class="badge badge-gray text-[8px] mt-1 inline-block">${n.category}</span>
+        </span>
+      </button>`).join('')}
+    </div>
+    ${hiddenCount > 0 || _notifDdAll ? `<div class="px-3 py-1.5 border-t border-charcoal-100 text-center bg-charcoal-50/40">
+      <button onclick="notifDdMore(event)" class="text-[10px] font-semibold text-brand-700 bg-brand-50 hover:bg-brand-100 border border-brand-200 rounded-full px-3 py-1">${_notifDdAll ? 'Show less' : `More (${hiddenCount})`}</button>
+    </div>` : ''}`;
+  dd.classList.remove('hidden');
+}
+document.addEventListener('click', e => {
+  if (!_notifDdOpen) return;
+  if (e.target.closest('#header-notif-dd') || e.target.closest('[aria-label="Notifications"]')) return;
+  closeNotifDd();
+});
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeNotifDd(); });
+
 // ==================== NAV ====================
 const mainNav = [
   {id:'dashboard',label:'Dashboard',icon:'M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6'},
@@ -381,17 +473,14 @@ const mainNav = [
   {id:'terminations',label:'Terminations',icon:'M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1', permission:'employees.view'},
   {id:'recruitment',label:'Recruitment & Hiring',icon:'M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z', permission:'recruitment.view'},
   {id:'attendance',label:'Attendance',icon:'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4', permission:'attendance.view'},
-  {id:'schedule',label:'Shifts & Schedule',icon:'M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z', permission:'schedule.manage'},
   {id:'requests',label:'Requests',icon:'M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z', permission:'requests.view'},
   {id:'payroll',label:'Payroll',icon:'M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z', permission:'payroll.view'},
-  {id:'evaluations',label:'Evaluations',icon:'M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z', permission:'evaluations.view'},
+  {id:'evaluations',label:'Form Builder',icon:'M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z', permission:'evaluations.view'},
 ];
 const secondaryNav = [
   {id:'reports',label:'Reports & Analytics',icon:'M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z', permission:'reports.view'},
   {id:'positions',label:'Positions & Levels',icon:'M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z', permission:'positions.view'},
-  {id:'notifications',label:'Notifications & Announcements',icon:'M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9', permission:'announcements.view'},
-  {id:'audit',label:'Activity / Audit Log',icon:'M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z', permission:'audit.view'},
-  {id:'events',label:'Events',icon:'M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2zm9-5l-3-3 2-2 .5.5L19 8l1 1z'},
+  {id:'events',label:'Events',icon:'M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2zm9-5l-3-3 2-2 .5.5L19 8l1 1z', permission:'events.view'},
   {id:'hr-team',label:'HR Team Management',icon:'M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z', permission:'team.view'},
   {id:'my-access',label:'My Access',icon:'M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z'},
 ];
@@ -474,8 +563,6 @@ function updateUserUI() {
   set('menu-user-email', u.email);
   const roleBtn = document.getElementById('demo-role-label');
   if(roleBtn) roleBtn.textContent = u.role;
-  const showAllBtn = document.getElementById('demo-showall');
-  if(showAllBtn) showAllBtn.classList.toggle('active', DEMO.showAll);
   updateGymChip();
 }
 
@@ -485,16 +572,12 @@ function switchRole(roleId) {
   u.selectedGym = null; // Reset so gym picker appears for new role
   MOCK.currentUser = u;
   DEMO.role = u.role;
+  // Show only the pages this preset may access — bounce off a page it can't see
+  const navItem = [...mainNav, ...secondaryNav].find(i => i.id === state.currentPage);
+  if (navItem && navItem.permission && !hasPermission(navItem.permission)) state.currentPage = 'dashboard';
   updateUserUI();
   closeUserMenu();
   showGymPicker(); // Show picker for the newly logged-in user
-}
-
-function toggleShowAll() {
-  DEMO.showAll = !DEMO.showAll;
-  updateUserUI();
-  renderAll();
-  showToast(DEMO.showAll ? 'Showing all pages' : 'Showing pages by permission', 'info');
 }
 
 function toggleDemoRoleMenu() {

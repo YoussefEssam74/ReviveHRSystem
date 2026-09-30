@@ -35,6 +35,11 @@ function payrollPeriodLocked(gym) {
   return !!r.locked || (r.publishedGyms || []).includes(gym || getEffectivePayrollGym());
 }
 
+// ==================== PAYROLL PERMISSION HELPERS ====================
+// HR Manager: edit + approve/lock the run. HR: edit deductions for own gym, no approve.
+function canEditPayroll() { return DEMO.showAll || hasPermission('payroll.edit'); }
+function canApprovePayroll() { return DEMO.showAll || hasPermission('payroll.approve'); }
+
 // Math and calculation helpers
 function baseSalaryOf(item) { return Number(item.baseSalary !== undefined ? item.baseSalary : item.gross || 0); }
 function bonusOf(item) { return Number(item.bonus || 0); }
@@ -152,8 +157,12 @@ function renderPayrollOverviewTable(items, gym) {
             ${PAYROLL_PERIODS.map(p => `<option value="${p}" ${p === _payPeriod ? 'selected' : ''}>${p}</option>`).join('')}
           </select>
 
-          <!-- Publish Button -->
-          ${closedCount === items.length && !locked && items.length > 0 ? `
+          <!-- Publish Button — HR Manager only (payroll.approve) -->
+          ${!canApprovePayroll() ? `
+            <span class="text-[10px] text-charcoal-500 font-semibold px-2 py-1 bg-charcoal-50 border border-charcoal-200 rounded-lg" title="Approving and locking a payroll run requires payroll.approve — held by both HR presets">
+              🔒 Approval requires HR Manager
+            </span>
+          ` : closedCount === items.length && !locked && items.length > 0 ? `
             <button onclick="publishPayroll()" class="btn btn-sm btn-primary text-xs h-7 px-3 font-bold shadow-2xs">
               ✓ Publish &amp; Lock Branch
             </button>
@@ -346,7 +355,11 @@ function renderPayrollSettlementSheet(item, items) {
             <span class="text-sm font-black text-brand-800">${formatEGP(net)}</span>
           </div>
 
-          ${isClosed ? `
+          ${!canEditPayroll() ? `
+            <span class="px-2.5 py-1 rounded-md bg-charcoal-100 text-charcoal-600 text-[11px] font-bold flex items-center gap-1" title="Editing payroll requires payroll.edit">
+              🔒 Read-only · payroll.edit required
+            </span>
+          ` : isClosed ? `
             <div class="flex items-center gap-1.5">
               <span class="px-2.5 py-1 rounded-md bg-emerald-100 text-emerald-800 text-[11px] font-bold flex items-center gap-1">
                 ✓ Account Closed
@@ -400,7 +413,7 @@ function renderPayrollSettlementSheet(item, items) {
                 </div>
                 <input type="number" min="0" step="50" value="${bonus}" 
                   onchange="commitPayrollBonus('${item.employeeId}', this.value)"
-                  ${locked || isClosed ? 'disabled' : ''}
+                  ${locked || isClosed || !canEditPayroll() ? 'disabled' : ''}
                   class="form-input text-xs h-6 w-16 text-right font-bold text-brand-900 rounded border-brand-300 py-0 px-1" />
               </div>
             </div>
@@ -416,13 +429,15 @@ function renderPayrollSettlementSheet(item, items) {
                 </span>
               </div>
               
-              <button onclick="_showAddDeductionForm=!_showAddDeductionForm;renderAll()" ${locked || isClosed ? 'disabled' : ''} class="text-[10px] text-brand-600 hover:text-brand-800 font-bold flex items-center gap-0.5">
-                ${_showAddDeductionForm ? '✕ Close Form' : '+ Add Line'}
-              </button>
+              ${canEditPayroll() ? `
+                <button onclick="_showAddDeductionForm=!_showAddDeductionForm;renderAll()" ${locked || isClosed ? 'disabled' : ''} class="text-[10px] text-brand-600 hover:text-brand-800 font-bold flex items-center gap-0.5">
+                  ${_showAddDeductionForm ? '✕ Close Form' : '+ Add Line'}
+                </button>
+              ` : `<span class="text-[10px] text-charcoal-400 font-semibold" title="Adding deductions requires payroll.edit">🔒 Add requires payroll.edit</span>`}
             </div>
 
             <!-- Inline Add Form if opened -->
-            ${_showAddDeductionForm ? `
+            ${_showAddDeductionForm && canEditPayroll() ? `
               <form onsubmit="savePayrollDeductionInline(event, '${item.employeeId}')" class="p-2 rounded bg-charcoal-50 border border-charcoal-200 mb-2 space-y-1.5 text-xs flex-shrink-0">
                 <div class="grid grid-cols-3 gap-1.5">
                   <select name="source" class="form-select text-[11px] py-0.5 px-1.5">
@@ -475,7 +490,7 @@ function renderPayrollSettlementSheet(item, items) {
                           − ${formatEGP(line.amount)}
                         </span>
 
-                        ${isPending && !locked && !isClosed ? `
+                        ${isPending && !locked && !isClosed ? (canEditPayroll() ? `
                           <div class="flex items-center gap-1">
                             <button onclick="decidePayrollDeduction('${item.employeeId}', '${line.id}', true)" 
                               class="btn btn-sm btn-success h-5 px-1.5 text-[10px] font-bold">
@@ -486,7 +501,7 @@ function renderPayrollSettlementSheet(item, items) {
                               Waive
                             </button>
                           </div>
-                        ` : isAccepted ? `
+                        ` : `<span class="text-[9px] text-charcoal-400 font-bold bg-charcoal-100 px-1 py-0.2 rounded" title="Resolving deductions requires payroll.edit">🔒 payroll.edit</span>`) : isAccepted ? `
                           <span class="text-[9px] text-emerald-700 font-bold bg-emerald-100 px-1 py-0.2 rounded">Approved</span>
                         ` : `
                           <span class="text-[9px] text-charcoal-400 font-bold bg-charcoal-100 px-1 py-0.2 rounded line-through">Waived</span>
@@ -645,6 +660,7 @@ function setPayrollPeriod(period) {
 }
 
 function decidePayrollDeduction(empId, lineId, accept) {
+  if (!canEditPayroll()) { showToast('Requires payroll.edit permission', 'error'); return; }
   if (payrollPeriodLocked()) { showToast('This period is locked', 'error'); return; }
   const item = (MOCK.payrollItems || []).find(i => i.employeeId === empId);
   if (!item) return;
@@ -659,6 +675,7 @@ function decidePayrollDeduction(empId, lineId, accept) {
 }
 
 function commitPayrollBonus(empId, rawVal) {
+  if (!canEditPayroll()) { showToast('Requires payroll.edit permission', 'error'); return; }
   const item = (MOCK.payrollItems || []).find(i => i.employeeId === empId);
   if (!item) return;
   item.bonus = Math.max(0, Number(rawVal) || 0);
@@ -669,6 +686,7 @@ function commitPayrollBonus(empId, rawVal) {
 
 function savePayrollDeductionInline(e, empId) {
   e.preventDefault();
+  if (!canEditPayroll()) { showToast('Requires payroll.edit permission', 'error'); return; }
   if (payrollPeriodLocked()) { showToast('Period is locked', 'error'); return; }
   const item = (MOCK.payrollItems || []).find(i => i.employeeId === empId);
   if (!item) return;
@@ -706,6 +724,7 @@ function savePayrollDeductionInline(e, empId) {
 }
 
 function acceptPayrollEmployee(id) {
+  if (!canEditPayroll()) { showToast('Requires payroll.edit permission', 'error'); return; }
   if (payrollPeriodLocked()) { showToast('Period is locked', 'error'); return; }
   const item = (MOCK.payrollItems || []).find(i => i.employeeId === id);
   if (!item) return;
@@ -724,6 +743,7 @@ function acceptPayrollEmployee(id) {
 }
 
 function reopenPayrollEmployee(id) {
+  if (!canEditPayroll()) { showToast('Requires payroll.edit permission', 'error'); return; }
   if (payrollPeriodLocked()) { showToast('Period is locked', 'error'); return; }
   const item = (MOCK.payrollItems || []).find(i => i.employeeId === id);
   if (!item) return;
@@ -736,6 +756,7 @@ function reopenPayrollEmployee(id) {
 }
 
 function publishPayroll() {
+  if (!canApprovePayroll()) { showToast('Approving & locking a payroll run requires payroll.approve', 'error'); return; }
   const gym = getEffectivePayrollGym();
   const items = payrollItemsForGym(gym);
   if (!payrollAllReviewed(items)) {

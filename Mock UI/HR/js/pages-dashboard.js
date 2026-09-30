@@ -533,7 +533,10 @@ function approveVacancyRequest(vrId) {
     id: 'v-' + Date.now(),
     position: vr.position,
     gym: vr.gym,
-    headcount: vr.headcount,
+    headcount: vr.headcount || 1,
+    candidates: 0,
+    urgency: vr.urgency || 'Normal',
+    createdDate: '2026-09-09',
     applied: 0,
     status: 'Open',
     postedDate: '2026-09-09'
@@ -630,8 +633,31 @@ function renderDashboard() {
 
   // Datasets filtered by selected branch
   const pendingReqs = MOCK.requests.filter(r => r.status === 'Pending HR Review' && (!gymBranch || r.gym === gymBranch));
-  const pendingVacancies = MOCK.vacancyRequests.filter(r => r.status === 'Pending' && (!gymBranch || r.gym === gymBranch));
-  const expiringContracts = MOCK.events.filter(e => e.type === 'Contract Expiry');
+
+  // Permission-gated dashboard visibility (never hard-code a role name)
+  const canApproveVacancies = DEMO.showAll || hasPermission('recruitment.vacancy_request.approve');
+  const canApprovePayroll = DEMO.showAll || hasPermission('payroll.approve');
+  const canManageTeam = DEMO.showAll || hasPermission('team.manage');
+
+  const pendingVacancies = canApproveVacancies
+    ? MOCK.vacancyRequests.filter(r => r.status === 'Pending' && (!gymBranch || r.gym === gymBranch))
+    : [];
+
+  // Permission-visible events (both presets see expiries; approval items need their permission)
+  const visibleEvents = (MOCK.events || []).filter(e => !e.permission || DEMO.showAll || hasPermission(e.permission));
+  const expiringContracts = visibleEvents.filter(e => e.type === 'Contract Expiry' || e.type === 'Document Expiry');
+  const payrollApprovals = canApprovePayroll
+    ? visibleEvents.filter(e => e.type === 'PayrollApproval' && (!gymBranch || (e.title || '').includes(gymBranch)))
+    : [];
+  // Escalated EmployeeActionRequests awaiting a permission this user holds (HR Manager queue)
+  const pendingActionRequests = (MOCK.actionRequests || []).filter(a => {
+    if (a.status !== 'Pending') return false;
+    const meta = ACTION_TYPES[a.actionType];
+    if (!meta || !(DEMO.showAll || hasPermission(meta.perm))) return false;
+    if (!gymBranch) return true;
+    const empGym = a.employeeId ? (MOCK.employees.find(x => x.id === a.employeeId) || {}).gym : null;
+    return !empGym || empGym === gymBranch;
+  });
 
   // Breakdown counts
   const totalGyms = MOCK.gymList.length;
@@ -689,6 +715,55 @@ function renderDashboard() {
     });
   });
 
+  // 4. Employee action requests raised by HR — whoever holds the permission reviews these
+  pendingActionRequests.forEach(a => {
+    const meta = ACTION_TYPES[a.actionType];
+    actionItems.push({
+      id: a.id,
+      type: 'action',
+      badge: meta.label,
+      badgeClass: 'badge-blue',
+      title: a.employee,
+      subtitle: actionSummary(a),
+      detail: `Raised by: ${a.requestedBy} (HR) · ${a.justification}`,
+      onApprove: `approveActionRequest('${a.id}')`,
+      onReject: `rejectActionRequest('${a.id}')`,
+      onReview: `navigateTo('events')`
+    });
+  });
+
+  // 5. Payroll runs awaiting HR Manager approval
+  payrollApprovals.forEach(e => {
+    actionItems.push({
+      id: e.id,
+      type: 'payroll',
+      badge: 'Payroll Approval',
+      badgeClass: 'badge-purple',
+      title: e.title,
+      subtitle: `Due: ${e.date}`,
+      detail: e.detail,
+      onApprove: `navigateTo('payroll')`,
+      onReject: `showToast('Payroll approval deferred', 'info')`,
+      onReview: `navigateTo('payroll')`
+    });
+  });
+
+  // 6. HR team attendance oversight — HR Manager only
+  if (canManageTeam) {
+    actionItems.push({
+      id: 'hr-team-att',
+      type: 'team',
+      badge: 'HR Team',
+      badgeClass: 'badge-green',
+      title: 'HR Team Attendance Review',
+      subtitle: 'Attendance of HR users under you',
+      detail: 'Two HR users reported lateness this week. Review before payroll cut-off.',
+      onApprove: `navigateTo('attendance')`,
+      onReject: `navigateTo('attendance')`,
+      onReview: `navigateTo('attendance')`
+    });
+  }
+
   // Filter actions if user selected a category tab
   let filteredActions = actionItems;
   if (_dashSectionFilter === 'requests') filteredActions = actionItems.filter(a => a.type === 'request');
@@ -704,7 +779,7 @@ function renderDashboard() {
         <div>
           <div class="flex items-center gap-2">
             <h1 class="text-base font-bold text-charcoal-900 tracking-tight">Good morning, ${u.firstName}</h1>
-            <span class="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold bg-brand-50 text-brand-700 border border-brand-200">HR Manager</span>
+            <span class="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold bg-brand-50 text-brand-700 border border-brand-200">${u.role}</span>
           </div>
           <p class="text-[11px] text-charcoal-400 mt-0.5">Multi-Branch Operational View · ${new Date().toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'short'})}</p>
         </div>

@@ -47,6 +47,9 @@ function renderEmployees(page='directory') {
   const canOffboard = showAll || hasPermission('employees.offboard');
   const canRole = showAll || hasPermission('employees.role.assign');
   const canLeaveBal = showAll || hasPermission('employees.leave_balance.manage');
+  // HR preset: no direct lifecycle perms, but employees.request_action renders the same
+  // buttons as "Request [Action]" → creates an EmployeeActionRequest for the HR Manager.
+  const canRequestAction = showAll || hasPermission('employees.request_action');
 
   let list = MOCK.employees.filter(e => e.id !== MOCK.currentUser.id);
   if (_empFilter.gym !== 'all') list = list.filter(e => e.gym === _empFilter.gym);
@@ -74,7 +77,8 @@ function renderEmployees(page='directory') {
         </div>
       </div>
       <div class="flex items-center gap-1.5 flex-wrap">
-        ${canBulk?`<button onclick="openBulkImport()" class="btn btn-sm btn-secondary"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>Bulk Import</button>`:''}
+        ${canBulk?`<button onclick="openBulkImport()" class="btn btn-sm btn-secondary"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>Bulk Import</button>`
+          :(canRequestAction?`<button onclick="openActionRequest('BulkImport')" class="btn btn-sm btn-secondary" title="Bulk imports are executed by an HR Manager — raise a request instead."><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>Request Bulk Import</button>`:'')}
         ${canCreate?`<button onclick="openAddEmployee()" class="btn btn-sm btn-primary"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>Add Employee</button>`:''}
       </div>
     </div>
@@ -140,7 +144,12 @@ function renderEmployees(page='directory') {
 
     <!-- Subtle Lifecycle Bar (clean, compact single line) -->
     <div class="flex items-center justify-between text-[10px] text-charcoal-400 px-1 py-0.5 flex-shrink-0">
-      <span>Lifecycle: ${canTransfer?'Transfer Gym · ':''}${canCompensate?'Compensation · ':''}${canOffboard?'Offboard · ':''}${canRole?'Role Assignment':''}</span>
+      <span>Lifecycle: ${[
+        canTransfer?'Transfer Gym':canRequestAction?'Request Transfer':null,
+        canCompensate?'Compensation':canRequestAction?'Request Compensation':null,
+        canOffboard?'Offboard':canRequestAction?'Request Offboard':null,
+        canRole?'Role Assignment':canRequestAction?'Request Role':null,
+      ].filter(Boolean).join(' · ') || 'View only'}</span>
       <span class="text-charcoal-500">${list.length} records displayed</span>
     </div>
   </div>`;
@@ -153,6 +162,7 @@ function renderEmployees(page='directory') {
 function renderTerminations() {
   const showAll = DEMO.showAll;
   const canOffboard = showAll || hasPermission('employees.offboard');
+  const canRequestAction = showAll || hasPermission('employees.request_action');
   const total = MOCK.separations.length;
   const shown = _sepGym === 'all' ? total : MOCK.separations.filter(s => s.gym === _sepGym).length;
   return `<div class="flex flex-col h-full min-h-0 gap-2">
@@ -163,7 +173,8 @@ function renderTerminations() {
       </div>
       <div class="flex items-center gap-1.5 flex-wrap">
         <button onclick="openRequestTermination()" class="btn btn-sm btn-danger-outline" title="Branch Manager submits who needs to leave">+ Request Termination (BM)</button>
-        ${canOffboard?`<button onclick="openInitiateOffboarding()" class="btn btn-sm btn-primary">+ Initiate Offboarding</button>`:''}
+        ${canOffboard?`<button onclick="openInitiateOffboarding()" class="btn btn-sm btn-primary">+ Initiate Offboarding</button>`
+          :(canRequestAction?`<button onclick="openActionRequest('Offboard')" class="btn btn-sm btn-danger-outline" title="Offboarding is executed by an HR Manager — raise a request instead.">+ Request Offboard</button>`:'')}
       </div>
     </div>
     <div class="bg-white rounded-lg border border-charcoal-200 px-2 py-1.5 flex items-center gap-1.5 flex-wrap flex-shrink-0">
@@ -202,7 +213,7 @@ function renderOffboarding() {
             <p class="text-[10px] font-semibold uppercase tracking-wide ${stage==='Completed'?'text-green-600':'text-charcoal-500'} flex items-center gap-1.5"><span class="w-2 h-2 rounded-full" style="background:${_sepStageColors[stage]}"></span>${stage}</p>
             <span class="text-[9px] text-charcoal-500">${list.length}</span>
           </div>
-          <div class="flex-1 min-h-0 overflow-y-auto p-2 space-y-2">${list.map(s=>_sepCard(s, stage, canOffboard)).join('')||`<div class="bg-white rounded-lg border border-dashed border-charcoal-200 p-3 text-center"><p class="text-[10px] text-charcoal-400">No exits here</p></div>`}</div>
+          <div class="flex-1 min-h-0 overflow-y-auto p-2 space-y-2">${list.map(s=>_sepCard(s, stage, canOffboard || s.requestedBy === 'Branch Manager')).join('')||`<div class="bg-white rounded-lg border border-dashed border-charcoal-200 p-3 text-center"><p class="text-[10px] text-charcoal-400">No exits here</p></div>`}</div>
         </div>`;
       }).join('')}
     </div>
@@ -334,7 +345,9 @@ function _sepVerdictHTML(s, canOffboard) {
 function openSeparation(id) {
   const s = MOCK.separations.find(x=>x.id===id); if(!s) return;
   _sepModalId = id;
-  const canOffboard = DEMO.showAll || hasPermission('employees.offboard');
+  // BM→HR handoff cases are NOT gated by employees.offboard — HR completes the Exit Form
+  // for terminations the Branch Manager initiated. Only HR-initiated offboarding needs it.
+  const canOffboard = DEMO.showAll || hasPermission('employees.offboard') || s.requestedBy === 'Branch Manager';
   const tabs = `<div class="flex items-center gap-1 bg-charcoal-100 rounded-lg p-0.5 w-full flex-shrink-0">
     <button onclick="openSepTab('workflow')" class="px-3 py-1.5 rounded-md text-[10px] font-medium transition-colors ${_sepTab==='workflow'?'bg-white shadow-sm text-charcoal-900':'text-charcoal-500 hover:text-charcoal-700'}">Exit Workflow</button>
     <button onclick="openSepTab('employee')" class="px-3 py-1.5 rounded-md text-[10px] font-medium transition-colors ${_sepTab==='employee'?'bg-white shadow-sm text-charcoal-900':'text-charcoal-500 hover:text-charcoal-700'}">Employee Data</button>
@@ -631,6 +644,227 @@ function finalizeSeparation(sepId) {
 
 const _bmsByGym = { 'Nasr City': 'Youssef Kamal', 'Heliopolis': 'Omar Hassan', '6th October': 'Heba Ibrahim' };
 
+// ==================== EMPLOYEE ACTION REQUESTS (HR → HR MANAGER ESCALATION) ====================
+// HR holds employees.request_action but NOT employees.transfer / compensation.manage /
+// role.assign / offboard / bulk_import. The same buttons render as "Request [Action]",
+// create an EmployeeActionRequest (proposedDetails + justification), and the HR Manager
+// reviews them in the Events queue — Approve auto-executes, Reject closes with a comment.
+function canRequestActions() {
+  return DEMO.showAll || hasPermission('employees.request_action');
+}
+
+function openRequestTransfer(empId) {
+  if (!canRequestActions()) {
+    showToast('Requires employees.request_action permission', 'error'); return;
+  }
+  const e = MOCK.employees.find(x => x.id === empId);
+  if (!e) return;
+  const myGyms = (MOCK.currentUser.gyms || []).map(g => g.branch);
+  const targetGyms = myGyms.filter(g => g !== e.gym);
+
+  openModal('Request Transfer — ' + e.name, `<form onsubmit="event.preventDefault();submitTransferRequest('${e.id}');" class="space-y-3">
+    <p class="text-[10px] text-charcoal-500">Transfers are executed by an <b class="text-brand-700">HR Manager</b>. Submitting raises an action request that appears in their <b>Events</b> queue — the employee is not moved until they approve it.</p>
+    <div class="bg-charcoal-50 rounded-lg p-2.5 text-[10px]">
+      <div class="flex justify-between"><span class="text-charcoal-500">Employee</span><span class="font-bold text-charcoal-900">${e.name}</span></div>
+      <div class="flex justify-between mt-1"><span class="text-charcoal-500">Current Gym</span><span class="font-bold text-charcoal-900">${e.gym}</span></div>
+      <div class="flex justify-between mt-1"><span class="text-charcoal-500">Position</span><span class="font-bold text-charcoal-900">${e.position} — ${e.level}</span></div>
+    </div>
+    <div><label class="form-label">Target Gym *</label>
+      <select id="trf-target" class="form-select" required>${targetGyms.map(g=>`<option value="${g}">${g} Branch</option>`).join('')}</select>
+    </div>
+    <div><label class="form-label">Effective Date *</label><input id="trf-date" type="date" class="form-input" value="2026-10-01" required></div>
+    <div><label class="form-label">Justification *</label><textarea id="trf-reason" class="form-input" rows="2" required placeholder="e.g. Relocation, staff shortage, personal request..."></textarea></div>
+    <div class="flex justify-end gap-2 pt-2 border-t border-charcoal-100">
+      <button type="button" onclick="closeModal()" class="btn btn-sm btn-secondary">Cancel</button>
+      <button type="submit" class="btn btn-sm btn-primary">Submit Request →</button>
+    </div>
+  </form>`, { wide: true });
+}
+
+function submitTransferRequest(empId) {
+  if (!canRequestActions()) {
+    showToast('Requires employees.request_action permission', 'error'); return;
+  }
+  const e = MOCK.employees.find(x => x.id === empId);
+  const target = document.getElementById('trf-target')?.value;
+  const date = document.getElementById('trf-date')?.value || '2026-10-01';
+  const reason = document.getElementById('trf-reason')?.value.trim();
+  if (!e || !reason) { showToast('Please provide a justification', 'error'); return; }
+
+  MOCK.actionRequests = MOCK.actionRequests || [];
+  MOCK.actionRequests.unshift({
+    id: 'ar-' + Date.now(),
+    employeeId: e.id, employee: e.name, position: `${e.position} — ${e.level}`,
+    actionType: 'Transfer',
+    proposedDetails: { fromGym: e.gym, toGym: target, effectiveDate: date },
+    justification: reason,
+    requestedBy: MOCK.currentUser.fullName, status: 'Pending',
+    submittedDate: '2026-09-09'
+  });
+
+  MOCK.auditLog = MOCK.auditLog || [];
+  MOCK.auditLog.unshift({
+    id: 'al-' + Date.now(), action: 'Transfer Requested',
+    user: MOCK.currentUser.fullName, target: e.name,
+    detail: `${e.gym} → ${target} (Effective ${date}). Justification: ${reason}`,
+    timestamp: '2026-09-09', gym: e.gym
+  });
+
+  closeModal();
+  showToast(`Transfer request raised for ${e.name} — awaiting HR Manager approval`);
+  renderAll();
+}
+
+// Generic escalation modal for CompensationChange / RoleAssign / Offboard / BulkImport
+function openActionRequest(type, empId) {
+  if (!canRequestActions()) { showToast('Requires employees.request_action permission', 'error'); return; }
+  const meta = ACTION_TYPES[type];
+  if (!meta) return;
+
+  if (type === 'BulkImport') {
+    openModal('Request Bulk Import', `<form onsubmit="event.preventDefault();submitActionRequest('BulkImport');" class="space-y-3">
+      <p class="text-[10px] text-charcoal-500">Bulk imports are executed by an <b class="text-brand-700">HR Manager</b>. Submitting queues the file for review — no records are added until they approve it.</p>
+      <div><label class="form-label">File / Records to import *</label><input id="ar-source" class="form-input" placeholder="e.g. new_hires_sep2026.csv — 12 rows" required></div>
+      <div><label class="form-label">Justification *</label><textarea id="ar-just" class="form-input" rows="2" required placeholder="Why do these records need to be imported?"></textarea></div>
+      <div class="flex justify-end gap-2 pt-2 border-t border-charcoal-100">
+        <button type="button" onclick="closeModal()" class="btn btn-sm btn-secondary">Cancel</button>
+        <button type="submit" class="btn btn-sm btn-primary">Submit Request →</button>
+      </div>
+    </form>`, { wide: true });
+    return;
+  }
+
+  const empList = MOCK.employees.filter(e => e.status !== 'Suspended');
+  const e = empId ? MOCK.employees.find(x => x.id === empId) : empList[0];
+  if (!e) return;
+  const empSelect = (disabled) => `<select id="ar-emp" class="form-select" ${disabled ? 'disabled' : ''}>${empList.map(x => `<option value="${x.id}" ${x.id === e.id ? 'selected' : ''}>${x.name} (${x.position} — ${x.level} · ${x.gym})</option>`).join('')}</select>`;
+
+  let fields = '';
+  if (type === 'CompensationChange') {
+    fields = `
+      <div><label class="form-label">Employee *</label>${empSelect(!!empId)}</div>
+      <div class="grid grid-cols-2 gap-3">
+        <div><label class="form-label">Current Salary</label><input class="form-input" value="EGP ${e.salary.toLocaleString()}" disabled></div>
+        <div><label class="form-label">Proposed Salary (EGP) *</label><input id="ar-salary" type="number" class="form-input" value="${e.salary}" min="0" required></div>
+      </div>
+      <div><label class="form-label">Effective Date *</label><input id="ar-effdate" type="date" class="form-input" value="2026-10-01" required></div>`;
+  } else if (type === 'RoleAssign') {
+    fields = `
+      <div><label class="form-label">Employee *</label>${empSelect(!!empId)}</div>
+      <div><label class="form-label">System Role *</label><select id="ar-role" class="form-select"><option value="">None (Employee)</option><option>Branch Manager</option><option>Team Leader</option></select></div>
+      <p class="text-[10px] text-charcoal-500">This grants or revokes system roles — a high-trust governance action executed by the HR Manager.</p>`;
+  } else if (type === 'Offboard') {
+    fields = `
+      <div><label class="form-label">Employee *</label>${empSelect(!!empId)}</div>
+      <div class="grid grid-cols-2 gap-3">
+        <div><label class="form-label">Last Working Day *</label><input id="ar-lastday" type="date" class="form-input" value="2026-09-30" required></div>
+        <div><label class="form-label">Separation Reason *</label><select id="ar-reason" class="form-select"><option>Resignation</option><option>End of Contract</option><option>Mutual Agreement</option><option>Performance Termination</option><option>Relocation / Personal</option></select></div>
+      </div>`;
+  }
+
+  openModal(`Request ${meta.label} — ${e.name}`, `<form onsubmit="event.preventDefault();submitActionRequest('${type}');" class="space-y-3">
+    <p class="text-[10px] text-charcoal-500">${meta.label} requires <code>${meta.perm}</code> (HR Manager). Submitting raises an action request — nothing changes on the employee record until they approve it.</p>
+    ${fields}
+    <div><label class="form-label">Justification *</label><textarea id="ar-just" class="form-input" rows="2" required placeholder="Why is this action needed?"></textarea></div>
+    <div class="flex justify-end gap-2 pt-2 border-t border-charcoal-100">
+      <button type="button" onclick="closeModal()" class="btn btn-sm btn-secondary">Cancel</button>
+      <button type="submit" class="btn btn-sm btn-primary">Submit Request →</button>
+    </div>
+  </form>`, { wide: true });
+}
+
+function submitActionRequest(type) {
+  if (!canRequestActions()) { showToast('Requires employees.request_action permission', 'error'); return; }
+  const meta = ACTION_TYPES[type];
+  if (!meta) return;
+  const just = document.getElementById('ar-just')?.value.trim();
+  const empSel = document.getElementById('ar-emp');
+  const e = empSel ? MOCK.employees.find(x => x.id === empSel.value) : null;
+  if (type !== 'BulkImport' && !e) { showToast('Please choose an employee', 'error'); return; }
+  if (!just) { showToast('Please provide a justification', 'error'); return; }
+
+  let proposedDetails = {}, summary = '';
+  if (type === 'CompensationChange') {
+    const newSalary = parseFloat(document.getElementById('ar-salary')?.value);
+    const eff = document.getElementById('ar-effdate')?.value || '2026-10-01';
+    if (!newSalary) { showToast('Please enter the proposed salary', 'error'); return; }
+    proposedDetails = { currentSalary: e.salary, newSalary, effectiveDate: eff };
+    summary = `Salary EGP ${e.salary.toLocaleString()} → EGP ${newSalary.toLocaleString()} (Effective ${eff})`;
+  } else if (type === 'RoleAssign') {
+    const role = document.getElementById('ar-role')?.value || 'None (Employee)';
+    proposedDetails = { systemRole: role };
+    summary = `System role → ${role}`;
+  } else if (type === 'Offboard') {
+    const lastDay = document.getElementById('ar-lastday')?.value || '2026-09-30';
+    const reason = document.getElementById('ar-reason')?.value || 'Resignation';
+    proposedDetails = { lastDay, reason };
+    summary = `Last day ${lastDay} · Reason: ${reason}`;
+  } else if (type === 'BulkImport') {
+    const source = document.getElementById('ar-source')?.value.trim();
+    if (!source) { showToast('Please describe the file / records', 'error'); return; }
+    proposedDetails = { source };
+    summary = source;
+  }
+
+  MOCK.actionRequests = MOCK.actionRequests || [];
+  MOCK.actionRequests.unshift({
+    id: 'ar-' + Date.now(),
+    employeeId: e ? e.id : null,
+    employee: e ? e.name : 'Bulk records',
+    position: e ? `${e.position} — ${e.level}` : '—',
+    actionType: type,
+    proposedDetails, justification: just,
+    requestedBy: MOCK.currentUser.fullName, status: 'Pending',
+    submittedDate: '2026-09-09'
+  });
+
+  MOCK.auditLog = MOCK.auditLog || [];
+  MOCK.auditLog.unshift({
+    id: 'al-' + Date.now(), action: `${meta.label} Requested`,
+    user: MOCK.currentUser.fullName, target: e ? e.name : 'Bulk import',
+    detail: `${summary}. Justification: ${just}`,
+    timestamp: '2026-09-09', gym: e ? e.gym : 'All'
+  });
+
+  closeModal();
+  showToast(`${meta.label} request raised — awaiting HR Manager approval`);
+  renderAll();
+}
+
+// Direct bulk import (employees.bulk_import — HR Manager)
+function openBulkImport() {
+  if (!(DEMO.showAll || hasPermission('employees.bulk_import'))) {
+    showToast('Bulk import requires employees.bulk_import (HR Manager)', 'error'); return;
+  }
+  openModal('Bulk Import Employees', `<form onsubmit="event.preventDefault();submitBulkImport();" class="space-y-3">
+    <p class="text-[10px] text-charcoal-500">Upload a CSV of employee records. Duplicate Employee IDs and malformed rows are skipped automatically.</p>
+    <div class="border-2 border-dashed border-charcoal-200 rounded-xl p-6 text-center">
+      <svg class="w-8 h-8 text-charcoal-300 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4 4m0 0L8 8m4 4V4"/></svg>
+      <p class="text-xs text-charcoal-500 mt-2">Drop <code>employees.csv</code> here or <span class="text-brand-600 font-semibold cursor-pointer">browse</span></p>
+      <p class="text-[10px] text-charcoal-400 mt-1">Columns: name, email, position, level, gym, salary</p>
+    </div>
+    <div class="flex justify-end gap-2 pt-2 border-t border-charcoal-100">
+      <button type="button" onclick="closeModal()" class="btn btn-sm btn-secondary">Cancel</button>
+      <button type="submit" class="btn btn-sm btn-primary">Import Records →</button>
+    </div>
+  </form>`, { wide: true });
+}
+
+function submitBulkImport() {
+  if (!(DEMO.showAll || hasPermission('employees.bulk_import'))) {
+    showToast('Bulk import requires employees.bulk_import (HR Manager)', 'error'); return;
+  }
+  MOCK.auditLog = MOCK.auditLog || [];
+  MOCK.auditLog.unshift({
+    id: 'al-' + Date.now(), action: 'Bulk Import', user: MOCK.currentUser.fullName,
+    target: 'employees.csv', detail: 'CSV import completed — records added',
+    timestamp: '2026-09-09', gym: 'All'
+  });
+  closeModal();
+  showToast('Bulk import completed — records added');
+  renderAll();
+}
+
 function openRequestTermination() {
   const empList = MOCK.employees.filter(e => e.status !== 'Suspended' && !MOCK.separations.some(s => s.employee === e.name && s.status !== 'Completed'));
   openModal('Request Termination — Branch Manager', `<form onsubmit="event.preventDefault();submitRequestTermination();" class="space-y-3">
@@ -788,6 +1022,9 @@ function renderEmployeeProfile(id) {
   const canContract = showAll || hasPermission('employees.contract.manage');
   const canDocsManage = showAll || hasPermission('employees.documents.manage');
   const canLeaveManage = showAll || hasPermission('employees.leave_balance.manage');
+  // HR (no direct lifecycle perms) holds employees.request_action — the same buttons
+  // render as "Request [Action]" and raise an EmployeeActionRequest for the HR Manager.
+  const canRequestAction = showAll || hasPermission('employees.request_action');
 
   const tabs = [
     {id:'personal',label:'Personal Info'}, {id:'documents',label:'Documents'},
@@ -798,11 +1035,15 @@ function renderEmployeeProfile(id) {
 
   let lifecycleActions = '';
   if (canTransfer) lifecycleActions += `<button onclick="showToast('Transfer Gym — simulated')" class="btn btn-sm btn-secondary"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>Transfer Gym</button>`;
+  else if (canRequestAction) lifecycleActions += `<button onclick="openRequestTransfer('${e.id}')" class="btn btn-sm btn-secondary" title="Transfers are executed by an HR Manager. Raise a request instead."><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>Request Transfer</button>`;
   if (canPosition) lifecycleActions += `<button onclick="showToast('Change Position/Level — simulated')" class="btn btn-sm btn-secondary">Change Position</button>`;
   if (canRole) lifecycleActions += `<button onclick="openChangeRole('${e.id}')" class="btn btn-sm btn-secondary">Change System Role</button>`;
+  else if (canRequestAction) lifecycleActions += `<button onclick="openActionRequest('RoleAssign','${e.id}')" class="btn btn-sm btn-secondary" title="Role assignment is executed by an HR Manager. Raise a request instead.">Request Role Assign</button>`;
   if (canCompensate) lifecycleActions += `<button onclick="showToast('Manage Compensation — simulated')" class="btn btn-sm btn-secondary">Manage Compensation</button>`;
+  else if (canRequestAction) lifecycleActions += `<button onclick="openActionRequest('CompensationChange','${e.id}')" class="btn btn-sm btn-secondary" title="Compensation changes are executed by an HR Manager. Raise a request instead.">Request Compensation</button>`;
   if (canContract) lifecycleActions += `<button onclick="showToast('Manage Contract — simulated')" class="btn btn-sm btn-secondary">Manage Contract</button>`;
   if (canOffboard) lifecycleActions += `<button onclick="openInitiateOffboarding('${e.id}')" class="btn btn-sm btn-danger-outline">Offboard</button>`;
+  else if (canRequestAction) lifecycleActions += `<button onclick="openActionRequest('Offboard','${e.id}')" class="btn btn-sm btn-danger-outline" title="Offboarding is executed by an HR Manager. Raise a request instead.">Request Offboard</button>`;
 
   const tabContent = {
     personal: `<div class="grid grid-cols-2 gap-2">
@@ -878,7 +1119,7 @@ function renderEmployeeProfile(id) {
           ${lifecycleActions?`<div class="flex flex-wrap gap-1.5">${lifecycleActions}</div>`:`<p class="text-[10px] text-charcoal-400">No lifecycle actions granted for your role.</p>`}
         </div>
       </div>
-      <div class="flex mt-3 border-b border-charcoal-100 overflow-x-auto">
+      <div class="inline-flex flex-wrap items-center gap-1 bg-charcoal-100 rounded-xl p-1 border border-charcoal-200 mt-3">
         ${tabs.map(t=>`<button onclick="state.empTab='${t.id}';renderAll()" class="tab-btn ${state.empTab===t.id?'active':''}">${t.label}</button>`).join('')}
       </div>
     </div>

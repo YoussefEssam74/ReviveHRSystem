@@ -1,71 +1,38 @@
 // ==================== EVALUATIONS ====================
 let _evalTab = 'forms';
-let _builderQuestions = [];
-let _builderFormId = null;
 let _evalRunEmp = null;
 let _evalRunFormId = null;
 let _evalScores = {};
+let _evalAnswers = {};   // typed answers per question: string (text/choose) or array (checkbox)
 
+// Normalizes questions to { type, text, options } objects. Legacy forms store plain
+// strings (or none at all) — those are treated as open (text) questions.
 function getFormQuestions(form) {
-  if (form && form.questionList && form.questionList.length) {
-    return form.questionList;
-  }
-  return [
+  const raw = (form && form.questionList && form.questionList.length) ? form.questionList : [
     'Punctuality, shift attendance & reliable scheduling',
     'Core job execution & task quality',
     'Customer service & member engagement standards',
     'Team collaboration, respect & gym rules adherence',
     'Hygiene, safety protocols & equipment care'
   ];
+  return raw.map(q => (typeof q === 'string'
+    ? { type: 'text', text: q, options: [] }
+    : { type: q.type || 'text', text: q.text || '', options: q.options || [] }));
 }
 
+// ==================== ONE PAGE: Evaluations + Form Builder merged ====================
+// In-page states: main (header + current running forms + old forms) → form detail →
+// editor → run view → history. The standalone "Form Builder" page was folded in here.
 function renderEvaluations() {
-  const showAll = DEMO.showAll;
-  const canEdit = showAll || hasPermission('evaluations.manage');
-  const forms = MOCK.evaluationForms;
-  const history = MOCK.evaluationHistory;
-
-  let body = '';
-  if (_evalTab === 'forms') {
-    body = `<div class="flex items-center justify-between mb-3 flex-wrap gap-2">
-      <div>
-        <p class="bento-label text-charcoal-500">FORM BUILDER & TEMPLATES</p>
-        <p class="text-xs text-charcoal-500 mt-0.5">${forms.length} evaluation forms available</p>
-      </div>
-      ${canEdit ? `<button onclick="openFormBuilder()" class="btn btn-sm btn-primary"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>New Evaluation Form</button>` : ''}
-    </div>
-    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-      ${forms.map(f => {
-        const qList = getFormQuestions(f);
-        const isActive = f.status === 'Active';
-        return `<div class="bg-white rounded-xl border border-charcoal-200 p-3.5 flex flex-col justify-between hover:border-brand-300 transition-colors">
-          <div>
-            <div class="flex items-center justify-between gap-2">
-              <p class="text-xs font-bold text-charcoal-900">${f.name}</p>
-              ${isActive ? `<span class="badge badge-success text-[9px]">Active</span>` : `<span class="badge badge-gray text-[9px]">Inactive</span>`}
-            </div>
-            <p class="text-[10px] text-charcoal-500 mt-1">${qList.length} criteria · Target: <span class="font-medium text-charcoal-700">${f.position || f.target || 'All'}</span></p>
-            <div class="mt-2.5 space-y-1 bg-charcoal-50 rounded-lg p-2 border border-charcoal-100">
-              <p class="text-[9px] uppercase tracking-wide text-charcoal-400 font-semibold mb-1">Criteria preview</p>
-              ${qList.slice(0, 3).map((q, qi) => `<p class="text-[10px] text-charcoal-600 truncate">• ${q}</p>`).join('')}
-              ${qList.length > 3 ? `<p class="text-[9px] text-charcoal-400">+${qList.length - 3} more criteria...</p>` : ''}
-            </div>
-          </div>
-          <div class="flex gap-1.5 mt-3 pt-2 border-t border-charcoal-100">
-            ${canEdit ? `<button class="btn btn-sm btn-secondary flex-1" onclick="openFormBuilder('${f.id}')">Edit Form</button>` : ''}
-            ${canEdit && isActive ? `<button class="btn btn-sm btn-primary flex-1" onclick="startEvaluationWithForm('${f.id}')">Run Now</button>` : ''}
-            <button class="btn btn-sm btn-ghost flex-1" onclick="_evalTab='history';renderAll()">View Results</button>
-          </div>
-        </div>`;
-      }).join('')}
-    </div>
-    ${!canEdit ? `<p class="text-[10px] text-charcoal-400 text-center mt-3">Form Builder is restricted — you do not have <code>evaluations.manage</code>. You can view forms and completed results only.</p>` : ''}`;
+  if (_fbEditing && _fbDraft) return fbEditorPage();
+  if (_evalTab === 'run') {
+    if (!canRunEvaluations()) _evalTab = 'forms';
+    else return evalRunPage();
   }
-  else if (_evalTab === 'run') {
-    if (!canEdit) { _evalTab = 'history'; return renderEvaluations(); }
-    body = renderEvaluationRunView();
-  }
-  else {
+  if (_evalTab === 'history') {
+    const canRun = canRunEvaluations();
+    const history = MOCK.evaluationHistory;
+    let body = '';
     const overallAvg = Math.round(history.reduce((s, h) => s + h.score, 0) / mathMax(history.length, 1));
     const done = history.filter(h => h.status === 'Completed').length;
     const inProgress = history.filter(h => h.status === 'In Progress').length;
@@ -111,7 +78,7 @@ function renderEvaluations() {
     </div>
 
     <div class="bg-white rounded-xl border border-charcoal-200 overflow-hidden">
-      <div class="px-4 py-2.5 border-b border-charcoal-100 flex items-center justify-between"><p class="bento-label text-charcoal-500">EVALUATION HISTORY</p>${canEdit ? `<button onclick="_evalTab='run';renderAll()" class="btn btn-sm btn-primary">Run New Evaluation</button>` : ''}</div>
+      <div class="px-4 py-2.5 border-b border-charcoal-100 flex items-center justify-between"><p class="bento-label text-charcoal-500">EVALUATION HISTORY</p>${canRun ? `<button onclick="_evalTab='run';renderAll()" class="btn btn-sm btn-primary">Run New Evaluation</button>` : ''}</div>
       <div class="divide-y divide-charcoal-50">${history.map(h => `<div class="p-3">
         <div class="flex items-center justify-between">
           <div class="flex items-center gap-2.5"><div class="w-8 h-8 rounded-full bg-brand-100 text-brand-700 flex items-center justify-center text-[10px] font-semibold">${h.employee.split(' ').map(w => w[0]).join('')}</div>
@@ -122,172 +89,148 @@ function renderEvaluations() {
         ${h.notes ? `<div class="mt-2 bg-charcoal-50 rounded-lg p-2 text-[10px] text-charcoal-600"><strong>Manager note:</strong> ${h.notes}</div>` : ''}
       </div>`).join('')}</div>
     </div>`;
+
+    return `<div class="space-y-2.5">
+      <div class="flex items-center justify-between gap-2 flex-wrap">
+        <div>
+          <h1 class="text-base font-bold text-charcoal-900">History &amp; Trends</h1>
+          <p class="text-xs text-charcoal-500 mt-0.5">Performance cycles, average scores by form &amp; completed evaluations</p>
+        </div>
+        <button onclick="_fbDetailId=null;_evalTab='forms';renderAll()" class="btn btn-sm btn-ghost">← All Forms</button>
+      </div>
+      ${body}
+    </div>`;
   }
+  if (_fbDetailId) {
+    const f = fbFind(_fbDetailId);
+    if (f) return fbDetailPage(f);
+    _fbDetailId = null; // form was deleted
+  }
+  return evalMainPage();
+}
 
-  const tabs = [{ id: 'forms', label: 'Evaluation Forms' }, { id: 'run', label: 'Run Evaluation' }, { id: 'history', label: 'History & Trends' }];
-
+function evalRunPage() {
   return `<div class="space-y-2.5">
-    <div><h1 class="text-base font-bold text-charcoal-900">Evaluations</h1><p class="text-xs text-charcoal-500 mt-0.5">Build custom review criteria, run evaluations with live scoring, track performance trends</p></div>
-    <div class="flex border-b border-charcoal-100">${tabs.map(t => `<button onclick="_evalTab='${t.id}';renderAll()" class="tab-btn ${_evalTab === t.id ? 'active' : ''}">${t.label}</button>`).join('')}</div>
-    ${body}
+    <div class="flex items-center justify-between gap-2 flex-wrap">
+      <div>
+        <h1 class="text-base font-bold text-charcoal-900">Run Evaluation</h1>
+        <p class="text-xs text-charcoal-500 mt-0.5">Pick an employee, score each criterion live and type answers — the submission lands in the form's responses</p>
+      </div>
+      <button onclick="_evalTab='forms';renderAll()" class="btn btn-sm btn-ghost">← All Forms</button>
+    </div>
+    ${renderEvaluationRunView()}
+  </div>`;
+}
+
+// ---- merged main page: header (Create New Form top-right) + running forms + old forms ----
+function evalMainPage() {
+  const canBuild = canBuildEvalForms();
+  const canRun = canRunEvaluations();
+  const running = MOCK.evaluationForms.filter(f => f.status === 'Active');
+  const runningIds = running.map(f => f.id);
+
+  const head = `<div class="flex items-start justify-between gap-3 flex-wrap">
+      <div>
+        <h1 class="text-base font-bold text-charcoal-900">Form Builder</h1>
+        <p class="text-xs text-charcoal-500 mt-0.5">Create evaluation &amp; hiring forms, run them, and review every response — all in one place</p>
+      </div>
+      ${canBuild ? `<button onclick="fbNew()" class="btn btn-primary"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>Create New Form</button>` : ''}
+    </div>
+    ${canBuild ? '' : `<p class="text-[10px] text-charcoal-400">View-only access — creating &amp; editing forms requires <code>evaluations.forms.manage</code> (HR Manager).</p>`}`;
+
+  const tabs = `<div class="inline-flex flex-wrap items-center gap-1 bg-charcoal-100 rounded-xl p-1 border border-charcoal-200">
+      <button onclick="_fbFilter='evaluation';renderAll()" class="tab-btn ${_fbFilter !== 'hiring' ? 'active' : ''}">Evaluation <span class="badge badge-brand text-[9px] ml-0.5">${MOCK.evaluationForms.length}</span></button>
+      <button onclick="_fbFilter='hiring';renderAll()" class="tab-btn ${_fbFilter === 'hiring' ? 'active' : ''}">Hiring <span class="badge badge-blue text-[9px] ml-0.5">${MOCK.hiringForms.length}</span></button>
+    </div>`;
+
+  const runningSection = `<div>
+      <div class="flex items-center justify-between flex-wrap gap-2 mb-2">
+        <div class="flex items-center gap-2">
+          <p class="bento-label text-charcoal-500">CURRENT RUNNING FORM${running.length === 1 ? '' : 'S'}</p>
+          ${running.length ? `<span class="badge badge-brand text-[9px]">${running.length}</span>` : ''}
+        </div>
+        ${canRun && running.length ? `<button onclick="_evalTab='run';renderAll()" class="btn btn-sm btn-primary">Run Evaluation</button>` : ''}
+      </div>
+      ${running.length
+        ? `<div class="grid grid-cols-1 lg:grid-cols-2 gap-3">${running.map(f => evalRunningCard(f, canBuild, canRun)).join('')}</div>`
+        : fbEmpty('No form is running right now', canBuild ? 'Click "Create New Form" to build one, then keep its status Active.' : 'No active evaluation forms are available.')}
+    </div>`;
+
+  const evalItems = MOCK.evaluationForms.filter(f => !runningIds.includes(f.id));
+
+  const oldSection = `<div>
+      <div class="flex items-center justify-between flex-wrap gap-2 mb-2">
+        <div class="flex items-center gap-2 flex-wrap">
+          <p class="bento-label text-charcoal-500">OLD FORMS</p>
+          <span class="text-[10px] text-charcoal-400">Click a form to see who completed it &amp; their answers</span>
+        </div>
+        <button onclick="_evalTab='history';renderAll()" class="btn btn-sm btn-ghost">History &amp; Trends →</button>
+      </div>
+      ${evalItems.length
+        ? `<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">${evalItems.map(f => fbCardHtml(f, 'evaluation')).join('')}</div>`
+        : fbEmpty('No forms here', canBuild ? 'Click "Create New Form" to create your first form.' : 'No forms have been created yet.')}
+    </div>`;
+
+  const hiringSection = `<div>
+      <div class="flex items-center justify-between flex-wrap gap-2 mb-2">
+        <div class="flex items-center gap-2 flex-wrap">
+          <p class="bento-label text-charcoal-500">HIRING FORMS</p>
+          ${MOCK.hiringForms.length ? `<span class="badge badge-blue text-[9px]">${MOCK.hiringForms.length}</span>` : ''}
+          <span class="text-[10px] text-charcoal-400">Click a form to see who applied &amp; their answers</span>
+        </div>
+      </div>
+      ${MOCK.hiringForms.length
+        ? `<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">${MOCK.hiringForms.map(f => fbCardHtml(f, 'hiring')).join('')}</div>`
+        : fbEmpty('No hiring forms yet', canBuild ? 'Click "Create New Form" to create your first one.' : 'No hiring forms have been created yet.')}
+    </div>`;
+
+  const body = _fbFilter === 'hiring' ? hiringSection : `${runningSection}${oldSection}`;
+  return `<div class="space-y-4">${head}${tabs}${body}</div>`;
+}
+
+function evalRunningCard(f, canBuild, canRun) {
+  const qs = getFormQuestions(f);
+  const subs = fbSubmissionsFor(f);
+  const inProg = subs.filter(s => s.status === 'In Progress').length;
+  return `<div class="bg-white rounded-xl border border-charcoal-200 border-l-4 border-l-brand-500 px-3 py-2.5">
+    <div class="flex items-center justify-between gap-2 flex-wrap">
+      <div class="flex items-center gap-1.5 flex-wrap">
+        <span class="badge badge-success text-[9px]">Active</span>
+        <span class="badge badge-brand text-[9px]">Evaluation</span>
+        ${inProg ? `<span class="badge badge-blue text-[9px]">${inProg} in progress</span>` : ''}
+      </div>
+      <div class="flex items-center gap-1.5">
+        ${canRun ? `<button onclick="startEvaluationWithForm('${f.id}')" class="btn btn-sm btn-primary">Run Now</button>` : ''}
+        ${canBuild ? `<button onclick="fbEdit('evaluation','${f.id}')" class="btn btn-sm btn-secondary">Edit</button>` : ''}
+      </div>
+    </div>
+    <p class="text-xs font-bold text-charcoal-900 mt-1.5">${fbEsc(f.name)}</p>
+    <p class="text-[10px] text-charcoal-500 mt-0.5">${qs.length} questions · Target: <span class="font-medium text-charcoal-700">${fbEsc(f.position || f.target || 'All Staff')}</span> · ${f.gym === 'All' ? 'All branches' : fbEsc(f.gym)}${f.createdDate ? ` · Created ${f.createdDate}` : ''}</p>
+    ${qs.length ? `<p class="text-[10px] text-charcoal-400 truncate mt-1" title="${fbEsc(qs[0].text)}">• ${fbEsc(qs[0].text)}${qs.length > 1 ? ` +${qs.length - 1} more…` : ''}</p>` : ''}
+    <div class="flex items-center justify-between mt-1.5 pt-1.5 border-t border-charcoal-100">
+      <p class="text-[10px] text-charcoal-500">${subs.length} submission${subs.length === 1 ? '' : 's'}${inProg ? ` · ${inProg} in progress` : ''}</p>
+      <button onclick="fbOpenDetail('${f.id}')" class="text-[10px] font-semibold text-brand-600 hover:underline">View Responses →</button>
+    </div>
   </div>`;
 }
 
 function evalStatusBadge(s) { return `<span class="badge ${s === 'Completed' ? 'badge-success' : s === 'In Progress' ? 'badge-blue' : 'badge-gray'} text-[9px]">${s}</span>`; }
 
 // ==================== FORM BUILDER ====================
-function openFormBuilder(id) {
-  _builderFormId = id || null;
-  const f = id ? MOCK.evaluationForms.find(x => x.id === id) : null;
-  _builderQuestions = f ? [...getFormQuestions(f)] : [
-    'Punctuality & adherence to shift schedule',
-    'Quality of assigned tasks & execution speed',
-    'Customer interaction & satisfaction',
-    'Teamwork and gym cleanliness protocols'
-  ];
-  renderFormBuilderModal();
-}
+function canBuildEvalForms() { return DEMO.showAll || hasPermission('evaluations.forms.manage'); }
+function canRunEvaluations() { return DEMO.showAll || hasPermission('evaluations.manage'); }
 
-function renderFormBuilderModal() {
-  const f = _builderFormId ? MOCK.evaluationForms.find(x => x.id === _builderFormId) : null;
-  const qList = _builderQuestions;
 
-  const qHtml = qList.map((q, i) => `<div class="bg-charcoal-50 rounded-xl p-3 border border-charcoal-200 flex items-start gap-2.5">
-    <span class="w-6 h-6 rounded-full bg-brand-500 text-white text-[11px] font-bold flex items-center justify-center flex-shrink-0 mt-1">${i + 1}</span>
-    <div class="flex-1">
-      <input type="text" class="form-input text-xs" value="${q.replace(/"/g, '&quot;')}" oninput="_builderQuestions[${i}]=this.value" placeholder="Enter review criterion or question...">
-    </div>
-    <div class="flex items-center gap-1">
-      ${i > 0 ? `<button type="button" onclick="moveBuilderQuestion(${i},-1)" class="btn btn-sm btn-ghost p-1.5" title="Move up">↑</button>` : ''}
-      ${i < qList.length - 1 ? `<button type="button" onclick="moveBuilderQuestion(${i},1)" class="btn btn-sm btn-ghost p-1.5" title="Move down">↓</button>` : ''}
-      <button type="button" onclick="removeBuilderQuestion(${i})" class="text-charcoal-300 hover:text-red-500 p-1.5" title="Remove"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg></button>
-    </div>
-  </div>`).join('');
+// Form building lives on this same page (js/pages-forms.js → fbNew / fbEdit).
 
-  openModal(`${f ? 'Edit' : 'Create'} Evaluation Form`, `<form onsubmit="event.preventDefault();saveFormBuilder();" class="space-y-3">
-    <div><label class="form-label">Form Title *</label><input id="builder-name" class="form-input" value="${f ? f.name : 'Staff Quarterly Evaluation'}" required></div>
-    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
-      <div>
-        <label class="form-label">Target Role</label>
-        <select id="builder-target" class="form-select">
-          <option ${f && (f.position==='Trainer'||f.target==='Trainer')?'selected':''}>Trainer</option>
-          <option ${f && (f.position==='Receptionist'||f.target==='Receptionist')?'selected':''}>Receptionist</option>
-          <option ${f && (f.position==='Cleaner'||f.target==='Cleaner')?'selected':''}>Cleaner</option>
-          <option ${f && (f.position==='Maintenance'||f.target==='Maintenance')?'selected':''}>Maintenance</option>
-          <option ${f && (f.position==='All'||f.target==='All Staff'||!f)?'selected':''}>All Staff</option>
-        </select>
-      </div>
-      <div>
-        <label class="form-label">Gym Scope</label>
-        <select id="builder-gym" class="form-select">
-          <option>All</option>
-          ${MOCK.gymList.map(g => `<option ${f && f.gym===g.branch?'selected':''}>${g.branch}</option>`).join('')}
-        </select>
-      </div>
-      <div>
-        <label class="form-label">Status</label>
-        <select id="builder-status" class="form-select">
-          <option ${!f || f.status==='Active'?'selected':''}>Active</option>
-          <option ${f && f.status==='Completed'?'selected':''}>Completed</option>
-          <option ${f && f.status==='Inactive'?'selected':''}>Inactive</option>
-        </select>
-      </div>
-    </div>
-    <div>
-      <div class="flex items-center justify-between mb-1.5">
-        <label class="form-label mb-0">Evaluation Criteria (${qList.length})</label>
-        <button type="button" onclick="addBuilderQuestion()" class="btn btn-sm btn-ghost text-brand-600 text-xs font-semibold">+ Add Question</button>
-      </div>
-      <div class="space-y-2 max-h-[38vh] overflow-y-auto pr-1">
-        ${qHtml}
-      </div>
-    </div>
-    <div class="flex justify-end gap-2 pt-2 border-t border-charcoal-100">
-      <button type="button" onclick="closeModal()" class="btn btn-sm btn-secondary">Cancel</button>
-      <button type="submit" class="btn btn-sm btn-primary">Save Form</button>
-    </div>
-  </form>`, { wide: true });
-}
-
-function addBuilderQuestion() {
-  _builderQuestions.push('New evaluation criterion');
-  renderFormBuilderModal();
-}
-
-function removeBuilderQuestion(idx) {
-  if (_builderQuestions.length <= 1) {
-    showToast('A form must have at least one question', 'error');
-    return;
-  }
-  _builderQuestions.splice(idx, 1);
-  renderFormBuilderModal();
-}
-
-function moveBuilderQuestion(idx, dir) {
-  const target = idx + dir;
-  if (target < 0 || target >= _builderQuestions.length) return;
-  const temp = _builderQuestions[idx];
-  _builderQuestions[idx] = _builderQuestions[target];
-  _builderQuestions[target] = temp;
-  renderFormBuilderModal();
-}
-
-function saveFormBuilder() {
-  const name = document.getElementById('builder-name')?.value.trim();
-  const target = document.getElementById('builder-target')?.value;
-  const gym = document.getElementById('builder-gym')?.value || 'All';
-  const status = document.getElementById('builder-status')?.value || 'Active';
-  if (!name) { showToast('Form title is required', 'error'); return; }
-
-  const cleanQuestions = _builderQuestions.map(q => q.trim()).filter(Boolean);
-  if (!cleanQuestions.length) { showToast('Add at least one criterion', 'error'); return; }
-
-  if (_builderFormId) {
-    const f = MOCK.evaluationForms.find(x => x.id === _builderFormId);
-    if (f) {
-      f.name = name;
-      f.target = target;
-      f.position = target;
-      f.gym = gym;
-      f.status = status;
-      f.questionList = cleanQuestions;
-      f.questions = cleanQuestions.length;
-      showToast(`Evaluation form "${name}" updated`);
-    }
-  } else {
-    const newForm = {
-      id: 'ef-' + Date.now(),
-      name,
-      target,
-      position: target,
-      gym,
-      status,
-      questionList: cleanQuestions,
-      questions: cleanQuestions.length,
-      createdDate: new Date().toISOString().slice(0, 10),
-      lastUsed: 'Never'
-    };
-    MOCK.evaluationForms.unshift(newForm);
-    MOCK.auditLog.unshift({
-      id: 'al-' + Date.now(),
-      action: 'Evaluation Form Created',
-      user: MOCK.currentUser.fullName,
-      target: name,
-      detail: `Created evaluation form with ${cleanQuestions.length} criteria for ${target}`,
-      timestamp: '2026-09-09',
-      gym: gym
-    });
-    showToast(`New form "${name}" created`);
-  }
-  closeModal();
-  renderAll();
-}
 
 // ==================== RUN EVALUATION ====================
 function startEvaluationWithForm(formId) {
   _evalTab = 'run';
+  _fbDetailId = null; // run view is entered from the merged page — Back returns to it
   _evalRunFormId = formId;
   _evalScores = {};
+  _evalAnswers = {};
   renderAll();
 }
 
@@ -320,9 +263,28 @@ function renderEvaluationRunView() {
 
   const questionRows = questions.map((q, qi) => {
     const currentScore = _evalScores[qi] || 4;
+
+    // Typed answer input: open question → textarea, choose → single-select buttons,
+    // checkbox → multi-select checkboxes. Scoring stays on the 1–5 rating row.
+    let inputHtml = '';
+    if (q.type === 'choose') {
+      inputHtml = `<div class="flex flex-wrap gap-1.5 mt-2">${q.options.map((o, oi) => {
+        const sel = _evalAnswers[qi] === o;
+        return `<button type="button" onclick="evalPickChoice(${qi},${oi})" class="px-2.5 py-1 text-xs rounded-lg border transition-all ${sel ? 'bg-brand-50 text-brand-700 border-brand-500 font-semibold' : 'bg-white text-charcoal-700 border-charcoal-200 hover:bg-charcoal-50'}">${fbEsc(o)}</button>`;
+      }).join('')}</div>`;
+    } else if (q.type === 'checkbox') {
+      const cur = Array.isArray(_evalAnswers[qi]) ? _evalAnswers[qi] : [];
+      inputHtml = `<div class="flex flex-wrap gap-x-4 gap-y-1.5 mt-2">${q.options.map((o, oi) => {
+        const on = cur.includes(o);
+        return `<label class="flex items-center gap-1.5 text-xs text-charcoal-700 cursor-pointer"><input type="checkbox" ${on ? 'checked' : ''} onchange="evalToggleCheck(${qi},${oi})"> ${fbEsc(o)}</label>`;
+      }).join('')}</div>`;
+    } else {
+      inputHtml = `<textarea rows="2" class="form-input text-xs mt-2" placeholder="Write your answer..." oninput="_evalAnswers[${qi}]=this.value">${fbEsc(_evalAnswers[qi] || '')}</textarea>`;
+    }
+
     return `<div class="bg-white rounded-xl border border-charcoal-200 p-3 mb-2.5">
       <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-        <p class="text-xs font-semibold text-charcoal-900 leading-snug"><span class="text-brand-600 font-bold mr-1.5">${qi + 1}.</span>${q}</p>
+        <p class="text-xs font-semibold text-charcoal-900 leading-snug min-w-0"><span class="text-brand-600 font-bold mr-1.5">${qi + 1}.</span>${fbEsc(q.text)} <span class="badge badge-brand text-[8px] align-middle">${fbTypeLabel(q.type)}</span></p>
         <div class="flex items-center gap-1 flex-shrink-0">
           ${[1, 2, 3, 4, 5].map(rating => {
             const isSel = currentScore === rating;
@@ -331,6 +293,7 @@ function renderEvaluationRunView() {
           }).join('')}
         </div>
       </div>
+      ${inputHtml}
     </div>`;
   }).join('');
 
@@ -342,7 +305,7 @@ function renderEvaluationRunView() {
         <div class="space-y-3">
           <div>
             <label class="form-label">Evaluation Form</label>
-            <select class="form-select" onchange="_evalRunFormId=this.value;_evalScores={};renderAll()">
+            <select class="form-select" onchange="_evalRunFormId=this.value;_evalScores={};_evalAnswers={};renderAll()">
               ${activeForms.map(f => `<option value="${f.id}" ${f.id===selectedForm?.id?'selected':''}>${f.name}</option>`).join('')}
             </select>
           </div>
@@ -413,6 +376,27 @@ function setEvalScore(questionIdx, score) {
   renderAll();
 }
 
+// Form currently loaded in the run view (used by the typed-answer handlers).
+function currentEvalForm() {
+  const activeForms = MOCK.evaluationForms.filter(f => f.status === 'Active');
+  return activeForms.find(f => f.id === _evalRunFormId) || activeForms[0] || MOCK.evaluationForms[0];
+}
+function evalPickChoice(qi, oi) {
+  const qs = getFormQuestions(currentEvalForm());
+  if (!qs[qi]) return;
+  _evalAnswers[qi] = qs[qi].options[oi] || '';
+  renderAll();
+}
+function evalToggleCheck(qi, oi) {
+  const qs = getFormQuestions(currentEvalForm());
+  const opts = qs[qi] ? qs[qi].options : [];
+  const val = opts[oi];
+  if (val === undefined) return;
+  const cur = Array.isArray(_evalAnswers[qi]) ? _evalAnswers[qi] : [];
+  _evalAnswers[qi] = cur.includes(val) ? cur.filter(v => v !== val) : cur.concat([val]);
+  renderAll();
+}
+
 function submitEvaluation(empName, formName) {
   if (!empName) { showToast('Please select an employee', 'error'); return; }
   const period = document.getElementById('eval-period')?.value || 'Q3 2026';
@@ -426,14 +410,25 @@ function submitEvaluation(empName, formName) {
 
   const emp = MOCK.employees.find(e => e.name === empName);
 
+  // Capture the typed answer for every question so the submission can be reviewed later.
+  const answers = questions.map((q, qi) => ({
+    question: q.text,
+    type: q.type,
+    answer: _evalAnswers[qi] !== undefined ? _evalAnswers[qi] : (q.type === 'checkbox' ? [] : '')
+  }));
+
   const newEntry = {
     id: 'eh-' + Date.now(),
     employee: empName,
     form: formName || 'Performance Review',
+    formId: form ? form.id : null,
     period: period,
     score: scorePercent,
     status: 'Completed',
     notes: notes,
+    reviewedBy: MOCK.currentUser.fullName,
+    reviewedDate: '2026-09-09',
+    answers: answers,
     gym: emp ? emp.gym : 'Nasr City'
   };
 
@@ -453,6 +448,9 @@ function submitEvaluation(empName, formName) {
   });
 
   showToast(`Evaluation submitted for ${empName} (${scorePercent}%)`);
+  _evalScores = {};
+  _evalAnswers = {};
+  _fbDetailId = null; // always land on History & Trends after submitting
   _evalTab = 'history';
   renderAll();
 }
@@ -463,6 +461,7 @@ function launchBatchCycle(formName) {
     id: 'eh-' + Date.now(),
     employee: 'Ahmed Zaki',
     form: formName,
+    formId: (MOCK.evaluationForms.find(f => f.name === formName) || {}).id || null,
     period: 'Q3 2026',
     score: 0,
     status: 'In Progress',
