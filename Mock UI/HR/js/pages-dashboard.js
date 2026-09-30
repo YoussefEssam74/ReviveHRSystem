@@ -529,6 +529,9 @@ function approveVacancyRequest(vrId) {
   const vr = MOCK.vacancyRequests.find(x => x.id === vrId);
   if (!vr) return;
   vr.status = 'Approved';
+  vr.decidedBy = MOCK.currentUser.fullName;
+  // Write the decision back to the Branch Manager portal (no-op for HR-native requests).
+  if (typeof VacancyBridge !== 'undefined') VacancyBridge.decide(vr.id, 'Approved', MOCK.currentUser.fullName, '');
   MOCK.vacancies.unshift({
     id: 'v-' + Date.now(),
     position: vr.position,
@@ -539,7 +542,8 @@ function approveVacancyRequest(vrId) {
     createdDate: '2026-09-09',
     applied: 0,
     status: 'Open',
-    postedDate: '2026-09-09'
+    postedDate: '2026-09-09',
+    branchRef: vr.source === 'branch' ? vr.id : null
   });
   renderAll();
   showToast(`Vacancy approved for ${vr.position} at ${vr.gym}!`, 'success');
@@ -549,6 +553,9 @@ function rejectVacancyRequest(vrId) {
   const vr = MOCK.vacancyRequests.find(x => x.id === vrId);
   if (!vr) return;
   vr.status = 'Rejected';
+  vr.decidedBy = MOCK.currentUser.fullName;
+  // Write the decision back to the Branch Manager portal (no-op for HR-native requests).
+  if (typeof VacancyBridge !== 'undefined') VacancyBridge.decide(vr.id, 'Rejected', MOCK.currentUser.fullName, '');
   renderAll();
   showToast(`Vacancy request for ${vr.position} declined`, 'info');
 }
@@ -764,10 +771,28 @@ function renderDashboard() {
     });
   }
 
+  // 7. Branch Manager submissions — deductions / warnings / bonuses sent
+  //    from the Branch portal, waiting on an HR decision (shared queue).
+  const pendingBranchItems = (typeof branchQueuePending === 'function') ? branchQueuePending() : [];
+  pendingBranchItems.forEach(b => {
+    actionItems.push({
+      id: b.id, type: 'branch',
+      badge: b.kind,
+      badgeClass: b.kind === 'Deduction' ? 'badge-yellow' : b.kind === 'Bonus' ? 'badge-green' : 'badge-red',
+      title: b.employee,
+      subtitle: `${b.kind} sent by ${b.issuedBy || 'Branch Manager'} · ${b.gym || 'Branch'}`,
+      detail: `${b.title || ''}${b.amount ? ' · EGP ' + b.amount : ''} · ${formatDate(b.date)}`,
+      onApprove: `approveBranchItem('${b.id}')`,
+      onReject: `declineBranchItem('${b.id}')`,
+      onReview: `navigateTo('branch-queue')`
+    });
+  });
+
   // Filter actions if user selected a category tab
   let filteredActions = actionItems;
   if (_dashSectionFilter === 'requests') filteredActions = actionItems.filter(a => a.type === 'request');
   else if (_dashSectionFilter === 'vacancies') filteredActions = actionItems.filter(a => a.type === 'vacancy');
+  else if (_dashSectionFilter === 'branch') filteredActions = actionItems.filter(a => a.type === 'branch');
   else if (_dashSectionFilter === 'contracts') filteredActions = actionItems.filter(a => a.type === 'contract');
 
   return `
@@ -854,6 +879,7 @@ function renderDashboard() {
             <button onclick="_dashSectionFilter='all';renderAll()" class="px-2 py-0.5 rounded-md font-medium transition-all ${_dashSectionFilter==='all'?'bg-white text-charcoal-900 shadow-2xs font-bold':'text-charcoal-600'}">All (${actionItems.length})</button>
             <button onclick="_dashSectionFilter='requests';renderAll()" class="px-2 py-0.5 rounded-md font-medium transition-all ${_dashSectionFilter==='requests'?'bg-white text-charcoal-900 shadow-2xs font-bold':'text-charcoal-600'}">Requests (${pendingReqs.length})</button>
             <button onclick="_dashSectionFilter='vacancies';renderAll()" class="px-2 py-0.5 rounded-md font-medium transition-all ${_dashSectionFilter==='vacancies'?'bg-white text-charcoal-900 shadow-2xs font-bold':'text-charcoal-600'}">Vacancies (${pendingVacancies.length})</button>
+            <button onclick="_dashSectionFilter='branch';renderAll()" class="px-2 py-0.5 rounded-md font-medium transition-all ${_dashSectionFilter==='branch'?'bg-white text-charcoal-900 shadow-2xs font-bold':'text-charcoal-600'}">Branch (${pendingBranchItems.length})</button>
           </div>
         </div>
 

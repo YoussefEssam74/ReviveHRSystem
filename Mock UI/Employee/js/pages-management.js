@@ -1363,7 +1363,9 @@ function saveNewRecruitment() {
   const department = document.getElementById('rec-dept').value;
   const reason = document.getElementById('rec-reason').value.trim();
   MOCK.recruitmentRequests.unshift({ id:'rr'+Date.now().toString(36), position, count, urgency, status:'Submitted', date:'Sep 6, 2026', requestedBy: MOCK.currentUser.fullName, department, reason, timeline:'Submitted today · In review', candidates:0 });
-  closeModal(); renderAll(); showToast(`${position} request submitted`);
+  // Send it to HR's pending vacancy queue (same transport as branch actions).
+  if (typeof vacancyQueueExport === 'function') vacancyQueueExport();
+  closeModal(); renderAll(); showToast(`${position} request submitted · awaiting HR`);
 }
 
 // ==================== EMPLOYEE LEAVING ====================
@@ -1714,54 +1716,10 @@ function renderAttendanceManagement() {
   </div>`;
 }
 
-// ==================== REQUESTS MANAGEMENT (Branch) ====================
-function renderRequestsManagement() {
-  const pending = MOCK.teamRequests.filter(r=>r.status==='Pending');
-  const all = MOCK.teamRequests;
-  return `<div class="space-y-3">
-    <div class="flex items-center justify-between">
-      <div><h1 class="text-xl font-bold text-charcoal-900">Requests Management</h1><p class="text-xs text-charcoal-500 mt-0.5">${pending.length} pending · ${all.length} total this month</p></div>
-      <div class="flex gap-1.5">
-        <button onclick="showToast('Filtering by status','info')" class="btn btn-sm btn-secondary">Status</button>
-        <button onclick="showToast('Filtering by type','info')" class="btn btn-sm btn-secondary">Type</button>
-      </div>
-    </div>
-
-    <!-- Pending Queue -->
-    <div class="bg-white rounded-xl border border-charcoal-200 overflow-hidden">
-      <div class="px-4 py-2.5 border-b border-charcoal-100 bg-yellow-50/50">
-        <p class="bento-label flex items-center gap-1.5 text-yellow-700"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>PENDING APPROVAL (${pending.length})</p>
-      </div>
-      <div class="divide-y divide-charcoal-50">${pending.map(r=>`<div class="p-3 hover:bg-charcoal-50/50 transition-colors">
-        <div class="flex items-center justify-between">
-          <div class="flex items-center gap-3">
-            <div class="w-9 h-9 rounded-full bg-brand-100 text-brand-700 flex items-center justify-center text-[10px] font-semibold flex-shrink-0">${r.employee.split(' ').map(w=>w[0]).join('')}</div>
-            <div><p class="text-xs font-semibold text-charcoal-900">${r.employee}</p><p class="text-[10px] text-charcoal-500">${r.type} · ${r.date} · Submitted ${r.submitted}</p></div>
-          </div>
-          <div class="flex items-center gap-1.5">
-            <button onclick="event.stopPropagation();approveRequest('${r.id}')" class="btn btn-sm btn-primary"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>Approve</button>
-            <button onclick="event.stopPropagation();rejectRequest('${r.id}')" class="btn btn-sm btn-danger-outline"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>Reject</button>
-            <button onclick="event.stopPropagation();openRequestComment('${r.id}')" class="btn btn-sm btn-secondary" title="Add comment"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/></svg></button>
-          </div>
-        </div>
-      </div>`).join('')}</div>
-    </div>
-
-    <!-- All Requests -->
-    <div class="bg-white rounded-xl border border-charcoal-200 overflow-hidden">
-      <div class="px-4 py-2.5 border-b border-charcoal-100 bg-charcoal-50/50">
-        <p class="bento-label">ALL REQUESTS</p>
-      </div>
-      <div class="divide-y divide-charcoal-50">${all.map(r=>`<div class="p-3 hover:bg-charcoal-50/50 transition-colors flex items-center justify-between">
-        <div class="flex items-center gap-3">
-          <div class="w-8 h-8 rounded-full bg-brand-100 text-brand-700 flex items-center justify-center text-[10px] font-semibold flex-shrink-0">${r.employee.split(' ').map(w=>w[0]).join('')}</div>
-          <div><p class="text-xs font-medium text-charcoal-900">${r.employee}</p><p class="text-[10px] text-charcoal-500">${r.type} · ${r.date}</p></div>
-        </div>
-        <div class="flex items-center gap-2">${statusBadge(r.status)}</div>
-      </div>`).join('')}</div>
-    </div>
-  </div>`;
-}
+// ==================== REQUESTS MANAGEMENT (merged into Team Requests) ====================
+// Kept as an alias so old links render the Team Requests design — the branch
+// request flow for the BM lives on the Team Requests page now.
+function renderRequestsManagement() { return renderTeamRequests(); }
 
 // ==================== REQUEST ACTIONS ====================
 // Team leader approves → request moves to "Pending HR" (still needs HR approval).
@@ -1982,4 +1940,186 @@ function saveEmployeeStatus(id) {
   if(!e) return;
   e.status = document.getElementById('emp-status-new').value;
   closeModal(); renderAll(); showToast(`${e.name} status changed to ${e.status}`);
+}
+
+// ==================== BRANCH ACTIONS (Branch Manager palette) ====================
+// Quick-action launcher in the sidebar under the "Branch" section.
+// Every action below is something a Branch Manager can do in their own gym —
+// items marked "→ HR" create something HR must review/approve afterwards
+// (two-stage approval, features.md §9/§10).
+const BRANCH_ACTIONS = [
+  { id:'deduction', label:'Issue Deduction', desc:'Deduct an amount (absence, late, damage) — sent to HR for approval', icon:'M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3-.895 3-2-1.343-2-3-2zM3 12c0 4.418 4.03 8 9 8s9-3.582 9-8-4.03-8-9-8-9 3.582-9 8z', perm:'attendance.edit', toHR:true, run:'openIssueDeduction()' },
+  { id:'warning', label:'Issue Warning Notice', desc:'Formal written warning — HR files it to the employee record', icon:'M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.668 1.732-3L13.732 4c-.77-1.332-2.694-1.332-3.464 0L3.34 16c-.77 1.332.192 3 1.732 3z', perm:'employees.edit', toHR:true, run:'openIssueWarning()' },
+  { id:'bonus', label:'Propose Bonus', desc:'Recommend a bonus/overtime payout — HR adds it to payroll', icon:'M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z', perm:'employees.edit', toHR:true, run:'openProposeBonus()' },
+  { id:'requests', label:'Review Team Requests', desc:'Stage-1 approve/reject — HR gives the final decision', icon:'M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z', perm:'requests.view', toHR:true, run:"navigateTo('team-requests')" },
+  { id:'attendance', label:'Correct Attendance', desc:'Fix missing check-ins/outs and flag absences', icon:'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4', perm:'attendance.edit', run:"navigateTo('attendance-management')" },
+  { id:'vacancy', label:'Request Vacancy', desc:'Ask HR to open a new position for the gym', icon:'M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z', perm:'recruitment.vacancy_request.create', toHR:true, run:"navigateTo('recruitment')" },
+  { id:'shifts', label:'Publish Shift Schedule', desc:'Assign shifts for the next cycle and publish', icon:'M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z', perm:'schedule.manage', run:"navigateTo('shift-management')" },
+  { id:'status', label:'Change Employment Status', desc:'Active / On Leave / Suspended / Terminated', icon:'M10 14l2-2m0 0l2-2m-2 2l2-2m-2 2l-2-2M21 12a9 9 0 11-18 0 9 9 0 0118 0z', perm:'employees.status.change', run:"navigateTo('employees')" },
+  { id:'offboard', label:'Offboard Employee', desc:'Start the leaving flow for a subordinate', icon:'M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1', perm:'employees.offboard', toHR:true, run:"navigateTo('leaving')" },
+  { id:'report', label:'Send Report to HR', desc:'Monthly branch summary: attendance, requests, incidents', icon:'M9 17v-6m4 6V7m4 10v-3M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z', perm:null, toHR:true, run:'openSendReportToHR()' },
+];
+
+function openBranchActions() {
+  const showAll = DEMO.showAll;
+  const can = p => showAll || !p || hasPermission(p);
+  const acts = BRANCH_ACTIONS.filter(a => can(a.perm));
+  const pend = branchHrQueue().filter(d=>d.status==='Pending HR');
+  const cards = acts.map(a => `
+    <button onclick="closeModal();${a.run}" class="text-left flex items-start gap-2.5 p-3 rounded-lg border border-charcoal-200 hover:border-brand-300 hover:bg-brand-50/60 transition-colors group">
+      <span class="w-8 h-8 flex-shrink-0 rounded-lg bg-brand-50 text-brand-600 group-hover:bg-brand-100 flex items-center justify-center">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="${a.icon}"/></svg>
+      </span>
+      <span class="min-w-0 flex-1">
+        <span class="flex items-center gap-1.5 flex-wrap">
+          <span class="text-xs font-semibold text-charcoal-900">${a.label}</span>
+          ${a.toHR?'<span class="text-[9px] font-bold uppercase tracking-wide bg-purple-50 text-purple-700 ring-1 ring-inset ring-purple-200 px-1.5 py-0.5 rounded">&rarr; HR</span>':''}
+        </span>
+        <span class="block text-[10px] text-charcoal-500 mt-0.5 leading-snug">${a.desc}</span>
+      </span>
+    </button>`).join('');
+  const pendHtml = pend.length ? `
+    <div class="mt-3 bg-charcoal-50 rounded-lg p-2.5">
+      <p class="bento-label mb-1.5">Awaiting HR (${pend.length})</p>
+      ${pend.map(d=>`<div class="flex items-center justify-between py-1 border-b border-charcoal-100 last:border-0">
+        <div class="min-w-0"><p class="text-[11px] font-medium text-charcoal-800 truncate">${d.employee} — ${d.detail}</p>
+        <p class="text-[10px] text-charcoal-500 truncate">${d.kind} · ${formatDate(d.date)}</p></div>
+        ${statusBadge(d.status)}
+      </div>`).join('')}
+    </div>` : '';
+  openModal('Branch Actions', `
+    <p class="text-[11px] text-charcoal-500 mb-2.5">Actions you can take as Branch Manager for <b>Revive Gym — Nasr City</b>. Items tagged <span class="text-[9px] font-bold uppercase bg-purple-50 text-purple-700 ring-1 ring-inset ring-purple-200 px-1 py-0.5 rounded">&rarr; HR</span> are sent to HR for final approval.</p>
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">${cards}</div>
+    ${pendHtml}`);
+}
+
+// --- Issue Deduction → HR -----------------------------------------------------
+function openIssueDeduction() {
+  const emps = MOCK.branchEmployees.filter(e=>e.status!=='Terminated');
+  openModal('Issue Deduction &rarr; Send to HR', `<form onsubmit="event.preventDefault();submitDeduction()" class="space-y-3">
+    <div class="bg-purple-50 border border-purple-100 rounded-lg p-2.5 text-[10px] text-purple-800 leading-relaxed">
+      The deduction is created as a <b>Deduction Candidate</b> with status <b>Pending HR</b>. HR reviews and approves it before it appears in payroll or on the employee's payslip (features.md §10).
+    </div>
+    <div><label class="form-label">Employee</label><select id="ded-employee" class="form-select" required><option value="">Select employee...</option>${emps.map(e=>`<option>${e.name}</option>`).join('')}</select></div>
+    <div class="grid grid-cols-2 gap-3">
+      <div><label class="form-label">Amount (EGP)</label><input id="ded-amount" type="number" min="1" step="1" class="form-input" placeholder="e.g. 150" required></div>
+      <div><label class="form-label">Date</label><input id="ded-date" type="date" class="form-input" value="2026-08-26" required></div>
+    </div>
+    <div><label class="form-label">Reason</label><select id="ded-reason" class="form-select" required>${['Unapproved absence','Late arrival (30+ min)','Early checkout without approval','Damaged equipment / property','Policy violation','Other (see note)'].map(r=>`<option>${r}</option>`).join('')}</select></div>
+    <div><label class="form-label">Note for HR (optional)</label><textarea id="ded-note" class="form-input" rows="2" placeholder="Context that helps HR review it faster..."></textarea></div>
+    <div class="flex justify-end gap-2 pt-1">
+      <button type="button" onclick="closeModal()" class="btn btn-sm btn-secondary">Cancel</button>
+      <button type="submit" class="btn btn-sm btn-primary">Send to HR</button>
+    </div>
+  </form>`);
+}
+function submitDeduction() {
+  const name = document.getElementById('ded-employee').value;
+  const amount = parseFloat(document.getElementById('ded-amount').value);
+  if(!name){ showToast('Select an employee','error'); return; }
+  if(!(amount>0)){ showToast('Enter a valid amount','error'); return; }
+  MOCK.deductionCandidates.unshift({
+    id:'dc'+Date.now(), employee:name, amount,
+    reason:document.getElementById('ded-reason').value,
+    date:document.getElementById('ded-date').value,
+    note:document.getElementById('ded-note').value.trim(),
+    issuedBy: MOCK.currentUser.fullName, status:'Pending HR'
+  });
+  if (typeof branchQueueExport === 'function') branchQueueExport(); // -> shared HR pending queue
+  closeModal(); renderAll();
+  showToast(`Deduction of EGP ${amount} for ${name} sent to HR for approval`);
+}
+
+// --- Issue Warning Notice → HR ------------------------------------------------
+function openIssueWarning() {
+  const emps = MOCK.branchEmployees.filter(e=>e.status!=='Terminated');
+  openModal('Issue Warning Notice &rarr; Send to HR', `<form onsubmit="event.preventDefault();submitWarning()" class="space-y-3">
+    <div class="bg-purple-50 border border-purple-100 rounded-lg p-2.5 text-[10px] text-purple-800 leading-relaxed">
+      The notice is saved with status <b>Pending HR</b>. HR reviews it and files it to the employee's record — disciplinary action is HR-owned, the Branch Manager only proposes it.
+    </div>
+    <div><label class="form-label">Employee</label><select id="warn-employee" class="form-select" required><option value="">Select employee...</option>${emps.map(e=>`<option>${e.name}</option>`).join('')}</select></div>
+    <div class="grid grid-cols-2 gap-3">
+      <div><label class="form-label">Category</label><select id="warn-type" class="form-select" required>${['Attendance','Conduct','Performance','Safety','Policy violation'].map(r=>`<option>${r}</option>`).join('')}</select></div>
+      <div><label class="form-label">Date</label><input id="warn-date" type="date" class="form-input" value="2026-08-26" required></div>
+    </div>
+    <div><label class="form-label">Reason</label><input id="warn-reason" class="form-input" placeholder="e.g. 3rd late arrival within one month" required></div>
+    <div><label class="form-label">What was said to the employee</label><textarea id="warn-note" class="form-input" rows="2" placeholder="e.g. Verbal warning issued on site; agreed on 08:00 start"></textarea></div>
+    <div class="bg-charcoal-50 rounded-lg p-2.5 text-[10px] text-charcoal-500">The employee does <b>not</b> see this until HR approves and files it.</div>
+    <div class="flex justify-end gap-2 pt-1">
+      <button type="button" onclick="closeModal()" class="btn btn-sm btn-secondary">Cancel</button>
+      <button type="submit" class="btn btn-sm btn-primary">Send to HR</button>
+    </div>
+  </form>`);
+}
+function submitWarning() {
+  const name = document.getElementById('warn-employee').value;
+  const reason = document.getElementById('warn-reason').value.trim();
+  if(!name){ showToast('Select an employee','error'); return; }
+  if(!reason){ showToast('Enter a reason for the warning','error'); return; }
+  MOCK.warningNotices.unshift({
+    id:'wn'+Date.now(), employee:name,
+    type:document.getElementById('warn-type').value,
+    date:document.getElementById('warn-date').value,
+    reason,
+    note:document.getElementById('warn-note').value.trim(),
+    issuedBy: MOCK.currentUser.fullName, status:'Pending HR'
+  });
+  if (typeof branchQueueExport === 'function') branchQueueExport(); // -> shared HR pending queue
+  closeModal(); renderAll();
+  showToast(`Warning notice for ${name} sent to HR for review`);
+}
+
+// --- Propose Bonus → HR -------------------------------------------------------
+function openProposeBonus() {
+  const emps = MOCK.branchEmployees.filter(e=>e.status==='Active');
+  openModal('Propose Bonus &rarr; Send to HR', `<form onsubmit="event.preventDefault();submitBonus()" class="space-y-3">
+    <div class="bg-purple-50 border border-purple-100 rounded-lg p-2.5 text-[10px] text-purple-800 leading-relaxed">
+      HR owns payroll edits (<code>payroll.edit</code>) — your proposal lands as <b>Pending HR</b> and is only added to the payroll run once HR approves it (features.md §10).
+    </div>
+    <div><label class="form-label">Employee</label><select id="bonus-employee" class="form-select" required><option value="">Select employee...</option>${emps.map(e=>`<option>${e.name}</option>`).join('')}</select></div>
+    <div class="grid grid-cols-2 gap-3">
+      <div><label class="form-label">Type</label><select id="bonus-type" class="form-select" required>${['Performance Bonus','Overtime Pay','Attendance Reward','Referral Bonus','Other'].map(r=>`<option>${r}</option>`).join('')}</select></div>
+      <div><label class="form-label">Amount (EGP)</label><input id="bonus-amount" type="number" min="1" step="1" class="form-input" placeholder="e.g. 500" required></div>
+    </div>
+    <div><label class="form-label">Date</label><input id="bonus-date" type="date" class="form-input" value="2026-08-26" required></div>
+    <div><label class="form-label">Justification</label><textarea id="bonus-reason" class="form-input" rows="2" placeholder="Why does this employee deserve it?" required></textarea></div>
+    <div><label class="form-label">Supporting note (optional)</label><textarea id="bonus-note" class="form-input" rows="2" placeholder="Numbers that back it up — revenue, coverage, KPIs..."></textarea></div>
+    <div class="flex justify-end gap-2 pt-1">
+      <button type="button" onclick="closeModal()" class="btn btn-sm btn-secondary">Cancel</button>
+      <button type="submit" class="btn btn-sm btn-primary">Send to HR</button>
+    </div>
+  </form>`);
+}
+function submitBonus() {
+  const name = document.getElementById('bonus-employee').value;
+  const amount = parseFloat(document.getElementById('bonus-amount').value);
+  const reason = document.getElementById('bonus-reason').value.trim();
+  if(!name){ showToast('Select an employee','error'); return; }
+  if(!(amount>0)){ showToast('Enter a valid amount','error'); return; }
+  if(!reason){ showToast('Add a justification for HR','error'); return; }
+  MOCK.bonusProposals.unshift({
+    id:'bp'+Date.now(), employee:name,
+    type:document.getElementById('bonus-type').value,
+    amount,
+    date:document.getElementById('bonus-date').value,
+    reason,
+    note:document.getElementById('bonus-note').value.trim(),
+    issuedBy: MOCK.currentUser.fullName, status:'Pending HR'
+  });
+  if (typeof branchQueueExport === 'function') branchQueueExport(); // -> shared HR pending queue
+  closeModal(); renderAll();
+  showToast(`Bonus proposal of EGP ${amount} for ${name} sent to HR`);
+}
+
+// --- Send report to HR --------------------------------------------------------
+function openSendReportToHR() {
+  openModal('Send Report to HR', `<form onsubmit="event.preventDefault();closeModal();showToast('Report sent to HR');" class="space-y-3">
+    <div><label class="form-label">Report period</label><select class="form-select"><option>August 2026</option><option>July 2026</option></select></div>
+    <div><label class="form-label">Report type</label><select class="form-select"><option>Monthly branch summary</option><option>Attendance exceptions</option><option>Incident report</option><option>Request escalations</option></select></div>
+    <div><label class="form-label">Message</label><textarea class="form-input" rows="4" placeholder="Anything HR should know..."></textarea></div>
+    <div class="flex justify-end gap-2 pt-1">
+      <button type="button" onclick="closeModal()" class="btn btn-sm btn-secondary">Cancel</button>
+      <button type="submit" class="btn btn-sm btn-primary">Send to HR</button>
+    </div>
+  </form>`);
 }

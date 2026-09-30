@@ -199,10 +199,13 @@
         <span id="mobile-gym-switcher-badge" class="hidden px-1 rounded-full text-[8px] font-bold"></span>
         <svg class="w-2.5 h-2.5 text-charcoal-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
       </button>
-      <button onclick="navigateTo('notifications')" class="relative p-1.5 rounded hover:bg-charcoal-100" aria-label="Notifications">
-        <svg class="w-4 h-4 text-charcoal-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/></svg>
-        <span class="absolute top-1 right-1 w-1.5 h-1.5 bg-brand-500 rounded-full"></span>
-      </button>
+      <div class="relative">
+        <button onclick="toggleNotifDd(event)" class="relative p-1.5 rounded hover:bg-charcoal-100" aria-label="Notifications">
+          <svg class="w-4 h-4 text-charcoal-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/></svg>
+          <span class="absolute top-1 right-1 w-1.5 h-1.5 bg-brand-500 rounded-full" id="mobile-header-notif-dot"></span>
+        </button>
+        <div id="mobile-header-notif-dd" class="hidden absolute right-0 top-full mt-1.5 w-80 max-w-[calc(100vw-1.5rem)] bg-white rounded-xl shadow-xl border border-charcoal-200 z-50 overflow-hidden"></div>
+      </div>
       <div class="w-7 h-7 rounded-full bg-brand-100 text-brand-700 flex items-center justify-center text-[10px] font-semibold cursor-pointer" onclick="navigateTo('my-access')">ME</div>
     </header>
     <main class="flex-1 min-h-0 overflow-y-auto pb-16 px-3 py-2.5" id="mobile-content"></main>
@@ -218,11 +221,6 @@
       <button onclick="navigateTo('requests')" class="mobile-nav-btn flex flex-col items-center gap-0.5 px-3 py-1" data-page="requests">
         <svg class="w-4.5 h-4.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
         <span class="text-[9px] font-medium">Requests</span>
-      </button>
-      <button onclick="navigateTo('notifications')" class="mobile-nav-btn flex flex-col items-center gap-0.5 px-3 py-1 relative" data-page="notifications">
-        <svg class="w-4.5 h-4.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/></svg>
-        <span class="absolute -top-0.5 right-1 w-3.5 h-3.5 bg-brand-500 text-white text-[8px] font-bold rounded-full flex items-center justify-center">3</span>
-        <span class="text-[9px] font-medium">Alerts</span>
       </button>
       <button onclick="toggleMobileMore()" class="mobile-nav-btn flex flex-col items-center gap-0.5 px-3 py-1" data-page="more">
         <svg class="w-4.5 h-4.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
@@ -261,11 +259,12 @@
   <div id="toast-container" class="fixed top-3 right-3 z-[100] space-y-1.5 pointer-events-none"></div>
 
   <!-- ==================== SCRIPTS ==================== -->
+  <script src="../shared/branch-bridge.js?v=2"></script>
   <script src="js/data.js?v=53"></script>
-  <script src="js/core.js?v=55"></script>
-  <script src="js/pages-dashboard.js?v=49"></script>
+  <script src="js/core.js?v=57"></script>
+  <script src="js/pages-dashboard.js?v=51"></script>
   <script src="js/pages-employees.js?v=49"></script>
-  <script src="js/pages-recruitment.js?v=48"></script>
+  <script src="js/pages-recruitment.js?v=49"></script>
   <script src="js/pages-attendance.js?v=59"></script>
   <script src="js/pages-requests.js?v=52"></script>
   <script src="js/pages-payroll.js?v=52"></script>
@@ -274,6 +273,7 @@
   <script src="js/pages-access.js?v=53"></script>
   <script src="js/pages-hr-team.js?v=48"></script>
   <script src="js/pages-events.js?v=53"></script>
-  <script src="js/app.js?v=52"></script>
+  <script src="js/pages-branch-queue.js?v=3"></script>
+  <script src="js/app.js?v=53"></script>
 </body>
 </html>

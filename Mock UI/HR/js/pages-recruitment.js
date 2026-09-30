@@ -561,9 +561,9 @@ function vacancyRequestsBody() {
       </div>
       <p class="text-[10px] text-charcoal-600 mt-1.5">${r.reason}</p>
       ${r.status==='Pending'?`<div class="flex gap-1.5 mt-2">
-        <button onclick="showToast('Vacancy created on approve')" class="btn btn-sm btn-primary">Approve → Create Vacancy</button>
-        <button onclick="showToast('Request rejected','error')" class="btn btn-sm btn-danger-outline">Reject</button>
-      </div>`:`<div class="flex gap-1.5 mt-2"><span class="badge badge-gray text-[9px]">Decided by ${MOCK.currentUser.fullName}</span></div>`}
+        <button onclick="approveVacancyRequest('${r.id}')" class="btn btn-sm btn-primary">Approve → Create Vacancy</button>
+        <button onclick="rejectVacancyRequest('${r.id}')" class="btn btn-sm btn-danger-outline">Reject</button>
+      </div>`:`<div class="flex gap-1.5 mt-2"><span class="badge badge-gray text-[9px]">Decided by ${r.decidedBy || MOCK.currentUser.fullName}</span></div>`}
     </div>`).join('')}
   </div>`;
 }

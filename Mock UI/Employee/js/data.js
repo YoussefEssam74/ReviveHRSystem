@@ -302,6 +302,22 @@ const MOCK = {
   employeeLeaving: [
     { id: 'el1', employee: 'Mona Said', position: 'Trainer', lastDay: 'Sep 30, 2026', status: 'Notice Period', reason: 'Personal reasons' },
   ],
+  // Manager-issued deduction candidates — the Branch Manager records them and
+  // they go to HR for approval before touching payroll (features.md §10).
+  deductionCandidates: [
+    { id: 'dc1', employee: 'Tarek Nabil', amount: 150, reason: 'Unapproved day off', date: '2026-08-19', note: 'Absent with no prior notice', issuedBy: 'Ahmed Mohamed', status: 'Pending HR' },
+    { id: 'dc2', employee: 'Yasmin Adel', amount: 120, reason: 'Late arrival (30+ min)', date: '2026-08-14', note: '3rd late this month', issuedBy: 'Ahmed Mohamed', status: 'Approved' },
+  ],
+  // Warning notices issued by the Branch Manager — HR files them to the
+  // employee record after review (disciplinary action stays HR-owned).
+  warningNotices: [
+    { id: 'wn1', employee: 'Omar Youssef', type: 'Attendance', date: '2026-08-22', reason: '3rd late arrival within one month', note: 'Verbal warning issued on site; agreed on 08:00 start', issuedBy: 'Ahmed Mohamed', status: 'Pending HR' },
+  ],
+  // Bonus / overtime proposals — the Branch Manager proposes, HR approves
+  // and includes it in the payroll run (§10: HR owns payroll edits).
+  bonusProposals: [
+    { id: 'bp1', employee: 'Karim Hassan', type: 'Performance Bonus', amount: 500, date: '2026-08-25', reason: 'Covered extra classes during event week', note: 'Branch revenue up 12% this month', issuedBy: 'Ahmed Mohamed', status: 'Pending HR' },
+  ],
   branchEmployees: [
     { id: 'RV-00124', name: 'Ahmed Mohamed', position: 'Trainer', shift: 'Morning', status: 'Active', initials: 'AM' },
     { id: 'RV-00125', name: 'Karim Hassan', position: 'Trainer', shift: 'Morning', status: 'Active', initials: 'KH' },
@@ -361,9 +377,11 @@ const DEMO_USERS = {
     gym: { id: 'gym-1', name: 'Revive Gym', branch: 'Nasr City' },
     hireDate: '2026-01-12', employmentType: 'Full-time', status: 'Active',
     role: 'Team Leader',
-    // Team-scoped only — scope is the assigned team, NOT the whole gym.
+    // Team-scoped — scope is the assigned team, NOT the whole gym. Shift
+    // Management is granted alongside team scheduling so the TL can manage
+    // shift assignments for their team.
     // Team leader can approve/reject team requests; HR still signs off final approval.
-    permissions: ['team.view','attendance.view.team','schedule.view.team','requests.view.team','requests.approve.team','evaluations.view.team','team.manage'],
+    permissions: ['team.view','attendance.view.team','schedule.view.team','requests.view.team','requests.approve.team','evaluations.view.team','team.manage','schedule.manage'],
     dateOfBirth: '1995-03-15', nationalId: '29503151234567', gender: 'Male',
     address: '15 El-Thawra St, Nasr City, Cairo',
     emergencyContact: { name: 'Mohamed Ahmed', relationship: 'Father', phone: '+20 100 987 6543' },
@@ -376,9 +394,11 @@ const DEMO_USERS = {
     gym: { id: 'gym-1', name: 'Revive Gym', branch: 'Nasr City' },
     hireDate: '2026-01-12', employmentType: 'Full-time', status: 'Active',
     role: 'Branch Manager',
-    // Branch-wide only — scope is the assigned gym. No team-scoped keys here so
-    // the demo clearly separates branch management from team leadership.
-    permissions: ['employees.view','employees.create','employees.edit','employees.status.change','attendance.view','attendance.edit','schedule.view','schedule.manage','requests.view','requests.approve','recruitment.vacancy_request.create','employees.offboard'],
+    // Branch-wide scope — the assigned gym. The team-scoped keys granted here
+    // are Team Requests (view + stage-1 approve/reject) and Team Schedule (view),
+    // so the BM can act on requests and see the team roster; the rest stay out
+    // so the demo still separates branch management from team leadership.
+    permissions: ['employees.view','employees.create','employees.edit','employees.status.change','attendance.view','attendance.edit','schedule.view','schedule.manage','schedule.view.team','requests.view','requests.approve','requests.view.team','requests.approve.team','recruitment.vacancy_request.create','employees.offboard'],
     dateOfBirth: '1995-03-15', nationalId: '29503151234567', gender: 'Male',
     address: '15 El-Thawra St, Nasr City, Cairo',
     emergencyContact: { name: 'Mohamed Ahmed', relationship: 'Father', phone: '+20 100 987 6543' },

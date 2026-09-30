@@ -89,8 +89,130 @@ function computePendingActions() {
       'action', 'pending');
   if (hasPermission('employees.offboard'))
     put('leaving', MOCK.employeeLeaving.length, 'action', 'notice period');
+  // Branch Actions launcher — BM-created items awaiting HR approval
+  if (DEMO.showAll || hasPermission('attendance.edit') || hasPermission('employees.edit'))
+    put('branch-actions', branchHrQueue().filter(x => x.status === 'Pending HR').length,
+      'action', 'awaiting HR');
   return r;
 }
+
+// All Branch-Manager-created records that are waiting on HR, merged into one
+// queue: deductions, warning notices and bonus proposals (features.md §9/§10).
+// `kind` is the display label; `detail` the second line shown in the palette.
+function branchHrQueue() {
+  const q = [];
+  (MOCK.deductionCandidates || []).forEach(d => q.push({ kind:'Deduction', employee:d.employee, detail:`EGP ${d.amount} · ${d.reason}`, date:d.date, status:d.status }));
+  (MOCK.warningNotices || []).forEach(w => q.push({ kind:'Warning', employee:w.employee, detail:`${w.type} · ${w.reason}`, date:w.date, status:w.status }));
+  (MOCK.bonusProposals || []).forEach(b => q.push({ kind:'Bonus', employee:b.employee, detail:`EGP ${b.amount} · ${b.type}`, date:b.date, status:b.status }));
+  return q.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+}
+
+// ---- Cross-portal sync (Branch Manager ⇄ HR) -------------------------------
+// Normalizes the MOCK queues into the shared localStorage bridge stores so the
+// HR portal can show them in its pending list, then pulls HR's decisions back
+// into MOCK so badges ("Awaiting HR", Recruitment) stay truthful.
+// Two streams: BranchBridge (deductions/warnings/bonuses) and VacancyBridge
+// (recruitment vacancy requests).
+const BRIDGE_KIND_GYM = (MOCK.currentUser && MOCK.currentUser.gym && MOCK.currentUser.gym.branch) || 'Nasr City';
+
+function branchQueueExport() {
+  if (typeof BranchBridge === 'undefined') return;
+  const out = [];
+  (MOCK.deductionCandidates || []).forEach(d => out.push({
+    id:d.id, kind:'Deduction', employee:d.employee, amount:Number(d.amount)||0,
+    title:d.reason || '', note:d.note||'', date:d.date, issuedBy:d.issuedBy||'',
+    gym:BRIDGE_KIND_GYM, status:d.status
+  }));
+  (MOCK.warningNotices || []).forEach(w => out.push({
+    id:w.id, kind:'Warning', employee:w.employee, amount:0,
+    title:`${w.type} · ${w.reason}`, note:w.note||'', date:w.date, issuedBy:w.issuedBy||'',
+    gym:BRIDGE_KIND_GYM, status:w.status
+  }));
+  (MOCK.bonusProposals || []).forEach(b => out.push({
+    id:b.id, kind:'Bonus', employee:b.employee, amount:Number(b.amount)||0,
+    title:`${b.type} · ${b.reason}`, note:b.note||'', date:b.date, issuedBy:b.issuedBy||'',
+    gym:BRIDGE_KIND_GYM, status:b.status
+  }));
+  BranchBridge.push(out);
+}
+
+// Returns the list of items whose status HR has just decided on.
+function branchQueueImport() {
+  if (typeof BranchBridge === 'undefined') return [];
+  const changed = [];
+  const apply = (arr, kindLabel) => (arr || []).forEach(item => {
+    const b = BranchBridge.byId(item.id);
+    if (b && b.status !== item.status) {
+      changed.push({ kind:kindLabel, employee:item.employee,
+        label:`${kindLabel.toLowerCase()} for ${item.employee}`,
+        status:b.status, decidedBy:b.decidedBy });
+      item.status = b.status;
+    }
+  });
+  apply(MOCK.deductionCandidates, 'Deduction');
+  apply(MOCK.warningNotices, 'Warning');
+  apply(MOCK.bonusProposals, 'Bonus');
+  return changed;
+}
+
+// ---- Recruitment (vacancy) requests ⇄ HR -----------------------------------
+// Export every recruitment request into the VacancyBridge queue with HR's
+// vocabulary (Pending / Approved / Rejected), and adopt HR's decisions back.
+function vacancyQueueExport() {
+  if (typeof VacancyBridge === 'undefined') return;
+  const out = (MOCK.recruitmentRequests || []).map(r => ({
+    id: r.id, kind: 'Vacancy',
+    position: r.position, count: Number(r.count) || 1,
+    urgency: r.urgency || 'Medium', department: r.department || '',
+    reason: r.reason || '', date: r.date, requestedBy: r.requestedBy || '',
+    gym: BRIDGE_KIND_GYM,
+    status: (r.status === 'Approved' || r.status === 'Rejected') ? r.status : 'Pending'
+  }));
+  VacancyBridge.push(out);
+}
+
+// Returns the list of requests whose status HR has just decided on.
+function vacancyQueueImport() {
+  if (typeof VacancyBridge === 'undefined') return [];
+  const changed = [];
+  (MOCK.recruitmentRequests || []).forEach(r => {
+    const b = VacancyBridge.byId(r.id);
+    if (!b) return;
+    const next = (b.status === 'Approved' || b.status === 'Rejected') ? b.status : null;
+    if (next && r.status !== next) {
+      changed.push({ label:`${r.position} vacancy request`, status:next, decidedBy:b.decidedBy });
+      r.status = next;
+      r.timeline = next === 'Approved' ? 'Approved by HR' : 'Declined by HR';
+    }
+  });
+  return changed;
+}
+
+// Export current records, then adopt any HR decisions (toasting them).
+function branchQueueSync(opts) {
+  branchQueueExport();
+  vacancyQueueExport();
+  const changed = branchQueueImport().concat(vacancyQueueImport());
+  if (changed.length) {
+    if (!(opts && opts.silent)) {
+      changed.forEach(c => showToast(
+        `HR ${c.status.toLowerCase()} the ${c.label}`,
+        c.status === 'Approved' ? 'success' : 'info'
+      ));
+    }
+    if (typeof renderAll === 'function') renderAll();
+  }
+  return changed;
+}
+
+// Live link: fires in this tab whenever the HR portal decides on an item.
+if (typeof BranchBridge !== 'undefined') {
+  BranchBridge.onChange(() => branchQueueSync());
+}
+if (typeof VacancyBridge !== 'undefined') {
+  VacancyBridge.onChange(() => branchQueueSync());
+}
+window.addEventListener('focus', () => branchQueueSync());
 
 // ---- Badge renderers --------------------------------------------------------
 // Each returns an HTML snippet or '' when count is 0.
@@ -151,6 +273,9 @@ function updateBadgeIndicators() {
       mbadge.style.display = 'none';
     }
   }
+  // If the bell dropdown is open, keep its list in sync with the counts
+  const dd = document.getElementById('notif-dropdown');
+  if (dd && !dd.classList.contains('hidden') && typeof renderNotifDropdown === 'function') renderNotifDropdown();
 }
 
 function formatDate(s) { if (!s) return '—'; return new Date(s).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }); }
@@ -255,6 +380,8 @@ const navItems = [
 const teamItems = [
   {id:'team',label:'My Team',icon:'M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z', permission:'team.view'},
   {id:'team-schedule',label:'Team Schedule',icon:'M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z', permission:'schedule.view.team'},
+  // Team Requests lives here under Team; navPools() re-places it under Branch
+  // when the current role is Branch Manager.
   {id:'team-requests',label:'Team Requests',icon:'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01', permission:'requests.view.team'},
   {id:'team-performance',label:'Team Performance',icon:'M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z', permission:'evaluations.view.team'},
   {id:'team-updates',label:'Team Updates',icon:'M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9', permission:'team.manage'},
@@ -265,7 +392,8 @@ const teamItems = [
 const branchItems = [
   {id:'employees',label:'Employees',icon:'M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z', permission:'employees.view'},
   {id:'attendance-management',label:'Attendance Management',icon:'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4', permission:'attendance.view'},
-  {id:'requests-management',label:'Requests Management',icon:'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01', permission:'requests.view'},
+  // (Requests Management was removed — its flow lives in Team Requests, which
+  // navPools() places here under Branch for the Branch Manager.)
   {id:'shift-management',label:'Shift Management',icon:'M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2zM12 14l-2 2m0 0l-2-2m2 2V8', permission:'schedule.manage'},
   {id:'recruitment',label:'Recruitment',icon:'M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z', permission:'recruitment.vacancy_request.create'},
   {id:'leaving',label:'Employee Leaving',icon:'M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1', permission:'employees.offboard'},
@@ -275,7 +403,7 @@ const extraPages = [
   {id:'profile',label:'My Profile',icon:'M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z'},
   {id:'history',label:'Employment History',icon:'M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z'},
   {id:'evaluations',label:'My Evaluations',icon:'M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z'},
-  {id:'notifications',label:'Notifications',icon:'M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9'},
+  // (Notifications removed from the sidebar — now reachable via the header bell dropdown)
   {id:'settings',label:'Settings',icon:'M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z M15 12a3 3 0 11-6 0 3 3 0 016 0z'},
 ];
 
@@ -299,19 +427,53 @@ function navItemHtml(i, counts, opts) {
   </a>`;
 }
 
+// "Actions" launcher shown under the Branch section title — opens the Branch
+// Manager quick-action palette (issue deduction → HR, approve requests, etc.).
+function branchActionsBtnHtml(counts, opts) {
+  opts = opts || {};
+  const badge = counts['branch-actions'] || null;
+  if (opts.grid) {
+    return `<button onclick="openBranchActions();closeMobileMore()" class="flex flex-col items-center gap-1 p-2 rounded-lg bg-brand-50 hover:bg-brand-100 relative">
+      <div class="w-8 h-8 rounded-lg bg-brand-100 text-brand-700 flex items-center justify-center relative">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>${badgeDot(badge)}
+      </div>
+      <span class="text-[9px] font-medium text-brand-700 text-center leading-tight">Actions</span>
+    </button>`;
+  }
+  return `<button onclick="openBranchActions()" class="w-full mt-1 mb-1.5 flex items-center gap-2 px-3 py-2 rounded-lg bg-brand-50 ring-1 ring-inset ring-brand-200 text-brand-700 hover:bg-brand-100 transition-colors">
+    <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+    <span class="text-xs font-semibold">Actions</span>${badgeHtml(badge)}
+  </button>`;
+}
+
+// Per-role nav pools — Team Requests sits under Team normally, but becomes the
+// branch request desk for the Branch Manager: shown under Branch and renamed
+// to "Requests Management" (same page, same id).
+function navPools() {
+  if (MOCK.currentUser.role !== 'Branch Manager') return { team: teamItems, branch: branchItems };
+  const tr = teamItems.find(i => i.id === 'team-requests');
+  const at = branchItems.findIndex(i => i.id === 'shift-management');
+  const pos = at >= 0 ? at : branchItems.length;
+  return {
+    team: teamItems.filter(i => i.id !== 'team-requests'),
+    branch: [...branchItems.slice(0, pos), { ...tr, label: 'Requests Management' }, ...branchItems.slice(pos)],
+  };
+}
+
 function renderNavItems(id) {
   const c = document.getElementById(id);
   if(!c) return;
   const showAll = DEMO.showAll;
   const counts = computePendingActions();
-  const visibleTeam = showAll ? teamItems : teamItems.filter(i => !i.permission || hasPermission(i.permission));
-  const visibleBranch = showAll ? branchItems : branchItems.filter(i => !i.permission || hasPermission(i.permission));
+  const pools = navPools();
+  const visibleTeam = showAll ? pools.team : pools.team.filter(i => !i.permission || hasPermission(i.permission));
+  const visibleBranch = showAll ? pools.branch : pools.branch.filter(i => !i.permission || hasPermission(i.permission));
   let h = navItems.map(i => navItemHtml(i, counts)).join('');
   if(showAll) {
     h += '<div class="nav-section-title mt-3">Self-Service</div>' + extraPages.map(i => navItemHtml(i, counts)).join('');
   }
   if(showAll || visibleTeam.length) { h += '<div class="nav-section-title mt-3">Team</div>' + visibleTeam.map(i => navItemHtml(i, counts)).join(''); }
-  if(showAll || visibleBranch.length) { h += '<div class="nav-section-title mt-3">Branch</div>' + visibleBranch.map(i => navItemHtml(i, counts)).join(''); }
+  if(showAll || visibleBranch.length) { h += '<div class="nav-section-title mt-3">Branch</div>' + branchActionsBtnHtml(counts) + visibleBranch.map(i => navItemHtml(i, counts)).join(''); }
   c.innerHTML = h;
   // Update header bell + mobile bottom-nav badges on every render
   updateBadgeIndicators();
@@ -322,10 +484,12 @@ function renderMobileMore() {
   if(!g) return;
   const showAll = DEMO.showAll;
   const counts = computePendingActions();
-  const visibleTeam = showAll ? teamItems : teamItems.filter(i => !i.permission || hasPermission(i.permission));
-  const visibleBranch = showAll ? branchItems : branchItems.filter(i => !i.permission || hasPermission(i.permission));
+  const pools = navPools();
+  const visibleTeam = showAll ? pools.team : pools.team.filter(i => !i.permission || hasPermission(i.permission));
+  const visibleBranch = showAll ? pools.branch : pools.branch.filter(i => !i.permission || hasPermission(i.permission));
   const items = [...navItems.filter(i=>!['dashboard','schedule','requests','notifications'].includes(i.id)),...(showAll?extraPages:[]),...visibleTeam,...visibleBranch];
-  g.innerHTML = items.map(i => navItemHtml(i, counts, { grid: true })).join('');
+  const head = (showAll || visibleBranch.length) ? branchActionsBtnHtml(counts, {grid:true}) : '';
+  g.innerHTML = head + items.map(i => navItemHtml(i, counts, { grid: true })).join('');
 }
 
 // ==================== NAVIGATION ====================
@@ -341,12 +505,59 @@ function toggleSidebar() {
   if(state.sidebarOpen){s.classList.remove('-translate-x-full');o.classList.remove('hidden');}else{s.classList.add('-translate-x-full');o.classList.add('hidden');}
 }
 function closeSidebar() { state.sidebarOpen=false; const s=document.getElementById('mobile-sidebar'),o=document.getElementById('mobile-sidebar-overlay'); if(s)s.classList.add('-translate-x-full'); if(o)o.classList.add('hidden'); }
-function toggleUserMenu() { state.userMenuOpen=!state.userMenuOpen; const d=document.getElementById('user-menu-dropdown'); if(state.userMenuOpen)d.classList.remove('hidden');else d.classList.add('hidden'); }
+function toggleUserMenu() { if(!state.userMenuOpen && typeof closeNotifDropdown==='function') closeNotifDropdown(); state.userMenuOpen=!state.userMenuOpen; const d=document.getElementById('user-menu-dropdown'); if(state.userMenuOpen)d.classList.remove('hidden');else d.classList.add('hidden'); }
 function closeUserMenu() { state.userMenuOpen=false; const d=document.getElementById('user-menu-dropdown'); if(d)d.classList.add('hidden'); }
+
+// ---- Header notification bell → dropdown list -------------------------------
+function notifItemHtml(n) {
+  return `<button onclick="openNotification('${n.id}')" class="w-full text-left px-3.5 py-2.5 flex gap-2.5 hover:bg-charcoal-50 transition-colors ${n.read ? '' : 'bg-brand-50/40'}">
+    <span class="mt-1.5 w-1.5 h-1.5 rounded-full flex-shrink-0 ${n.read ? 'bg-charcoal-300' : 'bg-brand-500'}"></span>
+    <span class="min-w-0 flex-1">
+      <span class="flex items-center justify-between gap-2">
+        <span class="text-[11px] font-semibold text-charcoal-900 truncate">${n.title}</span>
+        <span class="text-[9px] text-charcoal-400 flex-shrink-0">${formatDate(n.date)}</span>
+      </span>
+      <span class="block text-[10px] text-charcoal-500 leading-snug mt-0.5">${n.description}</span>
+      <span class="block text-[9px] font-medium text-brand-600 mt-1">${n.category}</span>
+    </span>
+  </button>`;
+}
+function renderNotifDropdown() {
+  const l = document.getElementById('notif-dropdown-list');
+  if (!l) return;
+  const list = MOCK.notifications || [];
+  l.innerHTML = list.length
+    ? list.map(notifItemHtml).join('')
+    : '<div class="px-3.5 py-6 text-center text-[11px] text-charcoal-400">No notifications yet</div>';
+}
+function toggleNotifDropdown() {
+  const d = document.getElementById('notif-dropdown');
+  if (!d) return;
+  const opening = d.classList.contains('hidden');
+  closeUserMenu();
+  if (opening) { renderNotifDropdown(); d.classList.remove('hidden'); }
+  else d.classList.add('hidden');
+}
+function closeNotifDropdown() { const d = document.getElementById('notif-dropdown'); if (d) d.classList.add('hidden'); }
+function openNotification(id) {
+  const n = (MOCK.notifications || []).find(x => x.id === id);
+  if (!n) return;
+  n.read = true;
+  closeNotifDropdown();
+  if (n.link) { navigateTo(n.link); }
+  else { updateBadgeIndicators(); if (typeof renderAll === 'function') renderAll(); showToast('Notification marked as read'); }
+}
+function markAllNotificationsRead() {
+  (MOCK.notifications || []).forEach(n => { n.read = true; });
+  renderNotifDropdown();
+  updateBadgeIndicators();
+  if (typeof renderAll === 'function') renderAll();
+  showToast('All notifications marked as read');
+}
 function toggleMobileMore() { state.mobileMoreOpen=!state.mobileMoreOpen; const m=document.getElementById('mobile-more-menu'); if(state.mobileMoreOpen){renderMobileMore();m.classList.remove('hidden');}else m.classList.add('hidden'); }
 function closeMobileMore() { state.mobileMoreOpen=false; const m=document.getElementById('mobile-more-menu'); if(m)m.classList.add('hidden'); }
 function handleLogout() { openModal('Confirm Logout','<p class="text-xs text-charcoal-600 mb-3">Are you sure you want to log out?</p>',{footer:'<button onclick="closeModal()" class="btn btn-sm btn-secondary">Cancel</button><button onclick="showToast(\'Logged out\');closeModal();" class="btn btn-sm btn-danger">Logout</button>'}); }
-document.addEventListener('click', e => { if(!e.target.closest('#user-menu-container')) closeUserMenu(); });
+document.addEventListener('click', e => { if(!e.target.closest('#user-menu-container')) closeUserMenu(); if(!e.target.closest('#notif-container')) closeNotifDropdown(); });
 
 // ==================== DEMO PREVIEW CONTROLS ====================
 // Prototype-only helpers: switch the active role and toggle "show all pages".

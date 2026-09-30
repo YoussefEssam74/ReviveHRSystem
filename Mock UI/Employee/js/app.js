@@ -92,6 +92,9 @@ function renderAll() {
 
 // ==================== INIT ====================
 document.addEventListener('DOMContentLoaded', () => {
+  // Push our records to the shared HR queue and pick up any decisions HR
+  // already made while this tab was closed (silent — no toast on load).
+  if (typeof branchQueueSync === 'function') branchQueueSync({ silent: true });
   updateUserUI();
   renderAll();
 });

@@ -135,11 +135,21 @@
 
         <!-- Header right -->
         <div class="flex items-center gap-3">
-          <!-- Notification bell -->
-          <button onclick="navigateTo('notifications')" class="relative p-2 rounded-lg hover:bg-charcoal-100 transition-colors" aria-label="Notifications">
-            <svg class="w-5 h-5 text-charcoal-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/></svg>
-            <span class="absolute top-1.5 right-1.5 w-2 h-2 bg-brand-500 rounded-full" id="header-notif-dot"></span>
-          </button>
+          <!-- Notification bell → dropdown -->
+          <div class="relative" id="notif-container">
+            <button onclick="toggleNotifDropdown()" class="relative p-2 rounded-lg hover:bg-charcoal-100 transition-colors" aria-label="Notifications">
+              <svg class="w-5 h-5 text-charcoal-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/></svg>
+              <span class="absolute top-1.5 right-1.5 w-2 h-2 bg-brand-500 rounded-full" id="header-notif-dot"></span>
+            </button>
+            <div id="notif-dropdown" class="hidden absolute right-0 mt-2 w-80 max-w-[calc(100vw-2rem)] bg-white rounded-xl shadow-lg border border-charcoal-100 z-50 overflow-hidden">
+              <div class="px-3.5 py-2.5 border-b border-charcoal-100 flex items-center justify-between gap-2">
+                <p class="text-xs font-bold text-charcoal-900">Notifications</p>
+                <button onclick="markAllNotificationsRead()" class="text-[10px] font-semibold text-brand-600 hover:text-brand-700 transition-colors">Mark all read</button>
+              </div>
+              <div id="notif-dropdown-list" class="max-h-80 overflow-y-auto py-1"></div>
+              <button onclick="navigateTo('notifications'); closeNotifDropdown()" class="w-full border-t border-charcoal-100 py-2 text-[11px] font-semibold text-brand-600 hover:bg-charcoal-50 transition-colors">View all notifications</button>
+            </div>
+          </div>
 
           <!-- User menu -->
           <div class="relative" id="user-menu-container">
@@ -291,11 +301,12 @@
   <div id="toast-container" class="fixed top-4 right-4 z-[100] space-y-2 pointer-events-none"></div>
 
   <!-- ==================== SCRIPTS ==================== -->
-  <script src="js/data.js?v=15"></script>
-  <script src="js/core.js?v=15"></script>
+  <script src="../shared/branch-bridge.js?v=2"></script>
+  <script src="js/data.js?v=21"></script>
+  <script src="js/core.js?v=24"></script>
   <script src="js/pages-employee.js?v=15"></script>
   <script src="js/pages-employee2.js?v=10"></script>
-  <script src="js/pages-management.js?v=28"></script>
-  <script src="js/app.js?v=10"></script>
+  <script src="js/pages-management.js?v=33"></script>
+  <script src="js/app.js?v=11"></script>
 </body>
 </html>

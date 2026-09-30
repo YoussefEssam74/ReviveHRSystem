@@ -348,6 +348,10 @@ function computePendingActions() {
   put('requests',
     MOCK.requests.filter(r => r.status === 'Pending HR Review').length,
     'action', 'awaiting review');
+  // Items sent over from the Branch Manager portal (deductions / warnings / bonuses)
+  put('branch-queue',
+    (typeof branchQueuePending === 'function') ? branchQueuePending().length : 0,
+    'action', 'from branch');
   put('recruitment',
     (MOCK.vacancyRequests || []).filter(v => v.status === 'Pending').length,
     'action', 'pending');
@@ -400,14 +404,15 @@ function updateBadgeIndicators() {
   const counts = computePendingActions();
   const nb = counts['notifications'];
   const n = nb ? nb.count : 0;
-  const dot = document.getElementById('header-notif-dot');
-  if (dot) {
+  ['header-notif-dot', 'mobile-header-notif-dot'].forEach(id => {
+    const dot = document.getElementById(id);
+    if (!dot) return;
     if (n > 0) {
-      dot.className = 'absolute -top-0.5 right-0.5 min-w-[16px] h-4 px-0.5 bg-brand-500 text-white text-[8px] font-bold rounded-full flex items-center justify-center';
+      dot.className = 'absolute -top-0.5 right-0.5 min-w-[16px] h-4 px-0.5 bg-brand-500 text-white text-[8px] font-bold rounded-full items-center justify-center';
       dot.textContent = n > 99 ? '99+' : String(n);
       dot.style.display = '';
     } else { dot.style.display = 'none'; }
-  }
+  });
 }
 
 // ---- Header notification dropdown -------------------------------------------
@@ -430,16 +435,17 @@ function notifDdOpenItem(id, ev) {
   if (n && n.link && pageRenderers[n.link]) navigateTo(n.link);
 }
 function renderNotifDd() {
-  const dd = document.getElementById('header-notif-dd');
-  if (!dd) return;
-  if (!_notifDdOpen) { dd.classList.add('hidden'); dd.innerHTML = ''; return; }
+  // The same dropdown content feeds both the desktop and the mobile header bells.
+  const dds = ['header-notif-dd', 'mobile-header-notif-dd'].map(id => document.getElementById(id)).filter(Boolean);
+  if (!dds.length) return;
+  if (!_notifDdOpen) { dds.forEach(x => { x.classList.add('hidden'); x.innerHTML = ''; }); return; }
   // unread ("new") first, stable sort keeps recency within each group
   const sorted = [...MOCK.notifications].sort((a, b) => (a.read === b.read ? 0 : a.read ? 1 : -1));
   const unread = sorted.filter(n => !n.read).length;
   const shown = _notifDdAll ? sorted : sorted.slice(0, 4);
   const hiddenCount = sorted.length - shown.length;
   const colorDot = { yellow: 'bg-yellow-500', green: 'bg-emerald-500', blue: 'bg-blue-500', red: 'bg-red-500', purple: 'bg-purple-500' };
-  dd.innerHTML = `
+  const html = `
     <div class="flex items-center justify-between px-3 py-2 border-b border-charcoal-100 bg-charcoal-50/60">
       <p class="text-xs font-bold text-charcoal-900">Notifications</p>
       ${unread ? `<span class="badge badge-red text-[9px]">${unread} new</span>` : '<span class="text-[9px] text-charcoal-400">All caught up</span>'}
@@ -457,11 +463,11 @@ function renderNotifDd() {
     ${hiddenCount > 0 || _notifDdAll ? `<div class="px-3 py-1.5 border-t border-charcoal-100 text-center bg-charcoal-50/40">
       <button onclick="notifDdMore(event)" class="text-[10px] font-semibold text-brand-700 bg-brand-50 hover:bg-brand-100 border border-brand-200 rounded-full px-3 py-1">${_notifDdAll ? 'Show less' : `More (${hiddenCount})`}</button>
     </div>` : ''}`;
-  dd.classList.remove('hidden');
+  dds.forEach(x => { x.innerHTML = html; x.classList.remove('hidden'); });
 }
 document.addEventListener('click', e => {
   if (!_notifDdOpen) return;
-  if (e.target.closest('#header-notif-dd') || e.target.closest('[aria-label="Notifications"]')) return;
+  if (e.target.closest('#header-notif-dd, #mobile-header-notif-dd') || e.target.closest('[aria-label="Notifications"]')) return;
   closeNotifDd();
 });
 document.addEventListener('keydown', e => { if (e.key === 'Escape') closeNotifDd(); });
@@ -474,6 +480,7 @@ const mainNav = [
   {id:'recruitment',label:'Recruitment & Hiring',icon:'M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z', permission:'recruitment.view'},
   {id:'attendance',label:'Attendance',icon:'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4', permission:'attendance.view'},
   {id:'requests',label:'Requests',icon:'M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z', permission:'requests.view'},
+  {id:'branch-queue',label:'Branch Queue',icon:'M13 10V3L4 14h7v7l9-11h-7', permission:'requests.view'},
   {id:'payroll',label:'Payroll',icon:'M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z', permission:'payroll.view'},
   {id:'evaluations',label:'Form Builder',icon:'M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z', permission:'evaluations.view'},
 ];
