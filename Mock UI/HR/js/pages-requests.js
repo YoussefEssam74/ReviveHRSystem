@@ -24,6 +24,29 @@ function reqPaymentLabel(r) {
   return p === 'paid' ? 'Paid' : 'Unpaid';
 }
 
+function branchReqCards(kind) {
+  if (typeof branchQueueItems !== 'function') return [];
+  let items = branchQueueItems();
+  if (kind) items = items.filter(i => i.kind === kind);
+  return items.map(i => {
+    const isPending = i.status === 'Pending HR';
+    return { date: i.date || '', html: `<div class="bg-white rounded-xl border border-charcoal-200 shadow-2xs px-4 py-2.5 flex items-center justify-between gap-3">
+          <div class="min-w-0">
+            <div class="flex items-center gap-2 flex-wrap">
+              ${branchQueueKindBadge(i.kind)}
+              <span class="text-[11px] font-bold text-charcoal-900">${i.employee}</span>
+              <span class="text-[10px] text-charcoal-600">${i.title || ''}${i.amount ? ' · ' + formatEGP(i.amount) : ''}</span>
+            </div>
+            <p class="text-[9px] text-charcoal-400 mt-0.5">Sent by ${i.issuedBy || 'Branch Manager'}${i.gym ? ' · ' + i.gym : ''} · ${formatDate(i.date)}</p>
+          </div>
+          ${isPending ? `<div class="flex gap-1.5 flex-shrink-0">
+            <button onclick="approveBranchItem('${i.id}')" class="btn btn-sm btn-success text-[11px] h-7 px-3">Approve</button>
+            <button onclick="declineBranchItem('${i.id}')" class="btn btn-sm btn-secondary text-[11px] h-7 px-3 text-charcoal-500 hover:text-red-600">Decline</button>
+          </div>` : statusBadge(i.status)}
+        </div>` };
+  });
+}
+
 function renderRequests() {
   const showAll = DEMO.showAll;
   const canDecide = showAll || hasPermission('requests.approve');
@@ -58,7 +81,18 @@ function renderRequests() {
     ${kpiTile('balance', balAlerts, balAlerts ? 'text-red-600' : 'text-charcoal-900', 'Balance Alerts', balAlerts ? 'border-l-4 border-l-red-500' : '')}
   </div>`;
 
-  let body = `<div class="flex items-center justify-between mb-2 flex-wrap gap-2 flex-shrink-0">
+  const isBranchType = ['Deduction','Warning','Bonus'].includes(_reqType);
+  const branchCount = k => (typeof branchQueueItems === 'function' ? branchQueueItems().filter(i=>i.kind===k).length : 0);
+  const typePills = [
+    { v:'all', l:'All', n: MOCK.requests.length + (typeof branchQueueItems === 'function' ? branchQueueItems().length : 0) },
+    ...Object.keys(REQ_ICONS).map(t => ({ v:t, l:t, n: MOCK.requests.filter(r=>r.type===t).length })),
+    ...['Deduction','Warning','Bonus'].map(k => ({ v:k, l:{Deduction:'Deductions',Warning:'Warnings',Bonus:'Bonuses'}[k] || k+'s', n: branchCount(k) })),
+  ].filter(p => p.v === 'all' || p.n > 0);
+  const typeRow = `<div class="flex items-center gap-1 bg-charcoal-100 rounded-lg p-0.5 flex-wrap flex-shrink-0">
+    ${typePills.map(p=>`<button onclick="_reqType='${p.v}';renderAll()" class="px-2.5 py-1.5 rounded-md text-[10px] font-medium transition-all ${_reqType===p.v?'bg-white shadow-sm text-charcoal-900 font-bold':'text-charcoal-500 hover:text-charcoal-700'}" title="Filter: ${p.l}">${p.l}${p.n?` <span class="badge ${_reqType===p.v?'badge-brand':'badge-gray'} text-[9px]">${p.n}</span>`:''}</button>`).join('')}
+  </div>`;
+
+  let body = isBranchType ? '' : `<div class="flex items-center justify-between mb-2 flex-wrap gap-2 flex-shrink-0">
     <div class="flex items-center gap-1 bg-charcoal-100 rounded-lg p-0.5">
       <button onclick="_reqQuick=null;_reqFilter='pending';renderAll()" class="px-3 py-1.5 rounded-md text-[10px] font-medium ${!_reqQuick && _reqFilter==='pending'?'bg-white shadow-sm text-charcoal-900':'text-charcoal-500'}">Pending HR${pendingHR.length?` <span class="badge badge-red text-[9px]">${pendingHR.length}</span>`:''}</button>
       <button onclick="_reqQuick=null;_reqFilter='decided';renderAll()" class="px-3 py-1.5 rounded-md text-[10px] font-medium ${!_reqQuick && _reqFilter==='decided'?'bg-white shadow-sm text-charcoal-900':'text-charcoal-500'}">Decided${decided.length?` <span class="badge badge-gray text-[9px]">${decided.length}</span>`:''}</button>
@@ -66,18 +100,21 @@ function renderRequests() {
     </div>
     <div class="flex items-center gap-1.5 flex-wrap">
       ${_reqQuick ? `<button onclick="toggleReqQuick('${_reqQuick}')" class="badge badge-blue text-[9px] cursor-pointer hover:opacity-75" title="Click to clear the filter">${QUICK_LABELS[_reqQuick]} ✕</button>` : ''}
-      <select onchange="_reqType=this.value;renderAll()" class="form-select w-auto" style="padding:0.375rem 2rem 0.375rem 0.625rem;font-size:0.75rem">
-        <option value="all">All Types</option>
-        ${Object.keys(REQ_ICONS).map(t=>`<option value="${t}" ${_reqType===t?'selected':''}>${t} (${all.filter(r=>r.type===t).length})</option>`).join('')}
-      </select>
       ${canDecide && pendingHR.length && _reqFilter==='pending' && !_reqQuick ? `<button onclick="bulkApproveRequests()" class="btn btn-sm btn-primary">Bulk Approve</button>` : ''}
     </div>
   </div>`;
 
-  if (!list.length) {
-    body += `<div class="bg-white rounded-xl border border-charcoal-200 p-4 text-center"><svg class="w-8 h-8 text-charcoal-300 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M5 13l4 4L19 7"/></svg><p class="text-xs text-charcoal-500">No requests here.</p></div>`;
+  if (isBranchType) {
+    const cards = branchReqCards(_reqType);
+    body += `<div class="space-y-1.5">${cards.length ? cards.map(c=>c.html).join('') : `<div class="bg-white rounded-xl border border-charcoal-200 p-4 text-center text-xs text-charcoal-500">No ${_reqType.toLowerCase()} submissions yet.</div>`}</div>`;
+  } else if (_reqType !== 'all') {
+    body += list.length ? `<div class="space-y-1.5">${list.map(renderRequestCard).join('')}</div>` : `<div class="bg-white rounded-xl border border-charcoal-200 p-4 text-center"><svg class="w-8 h-8 text-charcoal-300 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M5 13l4 4L19 7"/></svg><p class="text-xs text-charcoal-500">No requests here.</p></div>`;
   } else {
-    body += `<div class="space-y-1.5">${list.map(renderRequestCard).join('')}</div>`;
+    const merged = [
+      ...(typeof branchQueueItems === 'function' ? branchReqCards(null).map(c=>({ d:c.date, h:c.html })) : []),
+      ...list.map(r=>({ d:r.submittedDate||'', h:renderRequestCard(r) })),
+    ].sort((a,b)=>(b.d||'').localeCompare(a.d||''));
+    body += merged.length ? `<div class="space-y-1.5">${merged.map(m=>m.h).join('')}</div>` : `<div class="bg-white rounded-xl border border-charcoal-200 p-4 text-center"><p class="text-xs text-charcoal-500">No requests here.</p></div>`;
   }
 
   return `<div class="space-y-2.5">
@@ -86,6 +123,7 @@ function renderRequests() {
       <button onclick="openNewRequest()" class="btn btn-sm btn-secondary"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>New Request</button>
     </div>
     ${kpi}
+    ${typeRow}
     ${body}
     ${!canDecide ? `<p class="text-[10px] text-charcoal-400 text-center">Final approve/reject requires <code>requests.approve</code>. You can view requests and BM decisions only.</p>` : ''}
   </div>`;

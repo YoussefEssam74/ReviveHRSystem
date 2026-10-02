@@ -20,94 +20,221 @@ function setGymFilter(id) {
 }
 
 // ==================== FAST ACTION: CREATE NEW ACCOUNT MODAL ====================
+function nextEmpCode() {
+  let max = 123;
+  MOCK.employees.forEach(e => { const m = /RV-(\d+)/.exec(e.id || ''); if (m) max = Math.max(max, parseInt(m[1], 10)); });
+  return 'RV-' + String(max + 1).padStart(5, '0');
+}
+
 function openCreateAccountModal() {
-  const staff = MOCK.employees;
+  const branches = [...new Set((MOCK.gymList || MOCK.currentUser.gyms).map(g => g.branch))];
+  const today = new Date().toISOString().slice(0, 10);
+  // System roles: base roles + every role/template created in HR Team Management
+  const baseRoles = ['Emp', 'Team Leader', 'Branch Manager', 'HR'];
+  const roleOpts = [...new Set([...baseRoles, ...(MOCK.roleTemplates || []).map(t => t.name)])];
   openModal('Create New Employee Account', `
     <div class="space-y-4">
-      <div class="bg-charcoal-50 p-3 rounded-xl border border-charcoal-200">
-        <label class="block text-xs font-bold text-charcoal-700 mb-1">Select Employee</label>
-        <select id="acc-emp-select" onchange="autoFillAccountDetails(this.value)" class="form-select w-full text-xs">
-          <option value="">-- Choose Employee --</option>
-          ${staff.map(e => `<option value="${e.id}">${e.name} (${e.position} · ${e.gym})</option>`).join('')}
-        </select>
-      </div>
-
-      <div class="grid grid-cols-2 gap-3 text-xs">
-        <div>
-          <label class="block font-semibold text-charcoal-700 mb-1">Username / Work Email</label>
-          <input type="email" id="acc-email" class="form-input w-full text-xs" placeholder="name@revive.com" />
+      <div class="bg-charcoal-50 p-3 rounded-xl border border-charcoal-200 space-y-3">
+        <div class="flex items-center justify-between">
+          <p class="text-[11px] font-bold text-charcoal-700 uppercase tracking-wide">New Employee Profile</p>
+          <span class="text-[11px] font-mono text-charcoal-500">Code <input type="text" id="acc-code" readonly value="${nextEmpCode()}" class="inline w-[80px] bg-transparent border-0 p-0 font-mono font-bold text-charcoal-800 focus:ring-0" /></span>
         </div>
-        <div>
-          <label class="block font-semibold text-charcoal-700 mb-1">Initial Password</label>
-          <div class="flex gap-1.5">
-            <input type="text" id="acc-pass" class="form-input w-full text-xs font-mono" value="Revive@2026" />
-            <button type="button" onclick="document.getElementById('acc-pass').value='Revive#'+Math.floor(1000+Math.random()*9000)" class="btn btn-secondary text-xs px-2" title="Generate Random">↺</button>
+        <div class="grid grid-cols-2 gap-3 text-xs">
+          <div>
+            <label class="block font-semibold text-charcoal-700 mb-1">Full Name *</label>
+            <input type="text" id="acc-name" oninput="suggestAccEmail()" class="form-input w-full text-xs" placeholder="e.g. Mariam Adel" />
+          </div>
+          <div>
+            <label class="block font-semibold text-charcoal-700 mb-1">Position *</label>
+            <input type="text" id="acc-position" class="form-input w-full text-xs" placeholder="Type the position freely" value="Trainer" />
+          </div>
+        </div>
+        <div class="grid grid-cols-2 gap-3 text-xs">
+          <div>
+            <label class="block font-semibold text-charcoal-700 mb-1">Level</label>
+            <select id="acc-level" class="form-select w-full text-xs">
+              <option>Junior</option><option>Mid</option><option>Senior</option><option>Manager</option>
+            </select>
+          </div>
+          <div>
+            <label class="block font-semibold text-charcoal-700 mb-1">Phone</label>
+            <input type="tel" id="acc-phone" class="form-input w-full text-xs" placeholder="+20 1XX XXX XXXX" />
+          </div>
+        </div>
+        <div class="grid grid-cols-2 gap-3 text-xs">
+          <div>
+            <label class="block font-semibold text-charcoal-700 mb-1">Work Email *</label>
+            <input type="email" id="acc-email" class="form-input w-full text-xs" placeholder="name@revive.com" />
+          </div>
+          <div>
+            <label class="block font-semibold text-charcoal-700 mb-1">Hire Date</label>
+            <input type="date" id="acc-hire" value="${today}" class="form-input w-full text-xs" />
+          </div>
+        </div>
+        <div class="grid grid-cols-2 gap-3 text-xs">
+          <div>
+            <label class="block font-semibold text-charcoal-700 mb-1">Base Salary (EGP)</label>
+            <input type="number" id="acc-salary" class="form-input w-full text-xs" placeholder="e.g. 9000" min="0" />
+          </div>
+          <div>
+            <label class="block font-semibold text-charcoal-700 mb-1">System Role</label>
+            <select id="acc-role" class="form-select w-full text-xs">
+              ${roleOpts.map(r => `<option value="${r}" ${r === 'Emp' ? 'selected' : ''}>${r}</option>`).join('')}
+            </select>
           </div>
         </div>
       </div>
 
-      <div class="grid grid-cols-2 gap-3 text-xs">
-        <div>
-          <label class="block font-semibold text-charcoal-700 mb-1">System Role</label>
-          <select id="acc-role" class="form-select w-full text-xs">
-            <option value="Staff">Staff / Trainer</option>
-            <option value="Receptionist">Receptionist / Front Desk</option>
-            <option value="Branch Manager">Branch Manager</option>
-            <option value="HR Specialist">HR Specialist</option>
-            <option value="HR Manager">HR Manager</option>
-          </select>
-        </div>
-        <div>
-          <label class="block font-semibold text-charcoal-700 mb-1">Branch Scope</label>
-          <select id="acc-branch" class="form-select w-full text-xs">
-            <option value="all">All Branches</option>
-            <option value="Nasr City">Nasr City</option>
-            <option value="Heliopolis">Heliopolis</option>
-            <option value="6th October">6th October</option>
-          </select>
+      <div class="p-3 rounded-xl border border-charcoal-200 space-y-2">
+        <p class="text-[11px] font-bold text-charcoal-700 uppercase tracking-wide">Gym / Branch Assignment <span class="font-normal normal-case text-charcoal-400">(more than one allowed)</span></p>
+        <div class="grid grid-cols-2 gap-2 text-xs" id="acc-branches">
+          ${branches.map(b => `
+            <label class="flex items-center gap-2 p-2 bg-charcoal-50 rounded-lg cursor-pointer hover:bg-charcoal-100/60">
+              <input type="checkbox" class="acc-branch-cb form-checkbox text-brand-600 rounded" value="${b}" />
+              <span>${b}</span>
+            </label>`).join('')}
+          <label class="flex items-center gap-2 p-2 bg-brand-50 border border-brand-200 rounded-lg cursor-pointer hover:bg-brand-100/60 col-span-2">
+            <input type="checkbox" class="acc-branch-cb form-checkbox text-brand-600 rounded" value="all" onchange="if (this.checked) document.querySelectorAll('.acc-branch-cb').forEach(c => { if (c.value !== 'all') c.checked = false; });" />
+            <span class="font-semibold text-brand-800">All Branches</span>
+          </label>
         </div>
       </div>
 
-      <div class="bg-emerald-50 border border-emerald-200 p-2.5 rounded-lg text-[11px] text-emerald-800">
-        Account credentials will be logged and an activation SMS/Email sent to the employee.
+      <div class="p-3 rounded-xl border border-charcoal-200 space-y-2">
+        <div class="flex items-center justify-between">
+          <p class="text-[11px] font-bold text-charcoal-700 uppercase tracking-wide">Face-ID for Attendance</p>
+          <span id="acc-face-status" class="text-[10px] font-semibold text-charcoal-400">No photo yet</span>
+        </div>
+        <div class="relative bg-charcoal-900 rounded-lg overflow-hidden h-72 flex items-center justify-center">
+          <video id="acc-face-video" autoplay playsinline muted class="hidden w-full h-full object-cover"></video>
+          <img id="acc-face-photo" class="hidden h-72 w-72 object-cover rounded-lg" alt="captured face" />
+          <div id="acc-face-placeholder" class="text-white/50 text-[11px] flex flex-col items-center gap-1 px-6 text-center">
+            <span class="material-icons text-[28px]">face</span>
+            Take a clear front-facing photo — the employee checks in automatically at the Attendance Station
+          </div>
+        </div>
+        <div class="flex gap-2">
+          <button type="button" id="acc-face-start" onclick="startFaceCamera()" class="btn btn-secondary text-xs flex-1"><span class="material-icons text-[15px] align-middle">photo_camera</span> Start Camera</button>
+          <button type="button" id="acc-face-capture" onclick="captureFacePhoto()" class="btn btn-primary text-xs flex-1 hidden">Capture Photo</button>
+          <button type="button" id="acc-face-retake" onclick="retakeFacePhoto()" class="btn btn-secondary text-xs flex-1 hidden">Retake</button>
+        </div>
+        <input type="hidden" id="acc-face" value="" />
+      </div>
+
+      <div class="text-xs">
+        <label class="block font-semibold text-charcoal-700 mb-1">Initial Password</label>
+        <div class="flex gap-1.5">
+          <input type="text" id="acc-pass" class="form-input w-full text-xs font-mono" value="Revive@2026" />
+          <button type="button" onclick="document.getElementById('acc-pass').value='Revive#'+Math.floor(1000+Math.random()*9000)" class="btn btn-secondary text-xs px-2" title="Generate Random">↺</button>
+        </div>
       </div>
     </div>
   `, {
-    wide: false,
+    wide: true,
     footer: `
       <button onclick="closeModal()" class="btn btn-sm btn-secondary">Cancel</button>
-      <button onclick="submitNewAccount()" class="btn btn-sm btn-primary">Create Account</button>
+      <button onclick="submitNewAccount()" class="btn btn-sm btn-primary">Create Employee & Account</button>
     `
   });
 }
 
-function autoFillAccountDetails(empId) {
-  const emp = MOCK.employees.find(e => e.id === empId);
-  if (!emp) return;
-  const emailInput = document.getElementById('acc-email');
-  const roleSelect = document.getElementById('acc-role');
-  const branchSelect = document.getElementById('acc-branch');
+function suggestAccEmail() {
+  const name = (document.getElementById('acc-name')?.value || '').trim();
+  const email = document.getElementById('acc-email');
+  if (!email || !name) return;
+  email.value = name.toLowerCase().replace(/\s+/g, '.').replace(/[^a-z.]/g, '') + '@revive.com';
+}
 
-  if (emailInput) emailInput.value = emp.email || `${emp.name.toLowerCase().replace(/\s+/g, '.')}@revive.com`;
-  if (roleSelect) {
-    if (emp.position.includes('Manager')) roleSelect.value = 'Branch Manager';
-    else if (emp.position.includes('Reception')) roleSelect.value = 'Receptionist';
-    else roleSelect.value = 'Staff';
+let _accStream = null, _accCamWatch = null;
+
+async function startFaceCamera() {
+  try {
+    _accStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user', width: 640, height: 480 } });
+    const v = document.getElementById('acc-face-video');
+    if (!v) { stopFaceCamera(); return; }
+    v.srcObject = _accStream;
+    v.classList.remove('hidden');
+    document.getElementById('acc-face-placeholder').classList.add('hidden');
+    document.getElementById('acc-face-start').classList.add('hidden');
+    document.getElementById('acc-face-capture').classList.remove('hidden');
+    clearInterval(_accCamWatch);
+    _accCamWatch = setInterval(() => { if (!document.getElementById('acc-face-video')) stopFaceCamera(); }, 600);
+  } catch (err) {
+    showToast('Camera unavailable (' + (err && err.name ? err.name : 'error') + ') - you can still create the account without a photo', 'warning');
   }
-  if (branchSelect) branchSelect.value = emp.gym || 'all';
+}
+
+function stopFaceCamera() {
+  clearInterval(_accCamWatch); _accCamWatch = null;
+  if (_accStream) { _accStream.getTracks().forEach(t => t.stop()); _accStream = null; }
+}
+
+function captureFacePhoto() {
+  const v = document.getElementById('acc-face-video');
+  if (!v || !v.videoWidth) { showToast('Camera is not ready yet', 'warning'); return; }
+  const side = Math.min(v.videoWidth, v.videoHeight);
+  const c = document.createElement('canvas');
+  c.width = 320; c.height = 320;
+  c.getContext('2d').drawImage(v, (v.videoWidth - side) / 2, (v.videoHeight - side) / 2, side, side, 0, 0, 320, 320);
+  const dataUrl = c.toDataURL('image/jpeg', 0.85);
+  document.getElementById('acc-face').value = dataUrl;
+  const img = document.getElementById('acc-face-photo');
+  img.src = dataUrl; img.classList.remove('hidden');
+  v.classList.add('hidden');
+  document.getElementById('acc-face-capture').classList.add('hidden');
+  document.getElementById('acc-face-retake').classList.remove('hidden');
+  const st = document.getElementById('acc-face-status');
+  st.textContent = 'Photo captured ✓';
+  st.className = 'text-[10px] font-bold text-brand-600';
+  stopFaceCamera();
+}
+
+function retakeFacePhoto() {
+  document.getElementById('acc-face').value = '';
+  document.getElementById('acc-face-photo').classList.add('hidden');
+  document.getElementById('acc-face-retake').classList.add('hidden');
+  const st = document.getElementById('acc-face-status');
+  st.textContent = 'No photo yet';
+  st.className = 'text-[10px] font-semibold text-charcoal-400';
+  startFaceCamera();
 }
 
 function submitNewAccount() {
-  const empId = document.getElementById('acc-emp-select')?.value;
-  const email = document.getElementById('acc-email')?.value;
-  const role = document.getElementById('acc-role')?.value;
-  if (!empId) {
-    showToast('Please select an employee first', 'warning');
-    return;
-  }
-  const emp = MOCK.employees.find(e => e.id === empId);
+  const name = (document.getElementById('acc-name')?.value || '').trim();
+  const code = (document.getElementById('acc-code')?.value || '').trim();
+  const position = (document.getElementById('acc-position')?.value || '').trim();
+  const level = document.getElementById('acc-level')?.value || 'Junior';
+  const phone = (document.getElementById('acc-phone')?.value || '').trim();
+  const email = (document.getElementById('acc-email')?.value || '').trim();
+  const hireDate = document.getElementById('acc-hire')?.value || new Date().toISOString().slice(0, 10);
+  const salary = Number(document.getElementById('acc-salary')?.value || 0);
+  const role = document.getElementById('acc-role')?.value || 'Emp';
+  const pass = document.getElementById('acc-pass')?.value || '';
+  const facePhoto = document.getElementById('acc-face')?.value || '';
+  const branches = [...document.querySelectorAll('.acc-branch-cb:checked')].map(c => c.value);
+
+  if (!name) { showToast('Please enter the employee full name', 'warning'); return; }
+  if (!position) { showToast('Please enter the position', 'warning'); return; }
+  if (!email || !/.+@.+\..+/.test(email)) { showToast('Please enter a valid work email', 'warning'); return; }
+  if (!branches.length) { showToast('Select at least one gym / branch', 'warning'); return; }
+  if (!pass) { showToast('Set an initial password', 'warning'); return; }
+
+  const primaryGym = branches.includes('all') ? 'All' : branches[0];
+  const emp = {
+    id: code, name, position, level, gym: primaryGym, status: 'Active',
+    initials: name.split(/\s+/).map(w => w[0]).slice(0, 2).join('').toUpperCase(),
+    hireDate, salary, phone, email,
+    branches: branches.includes('all') ? ['all'] : branches,
+    role, facePhoto: facePhoto || null,
+  };
+  MOCK.employees.push(emp);
+  stopFaceCamera();
   closeModal();
-  showToast(`Account created for ${emp ? emp.name : 'Employee'} (${role})! Credentials dispatched.`, 'success');
+
+  const gymText = branches.includes('all') ? 'all branches' : branches.join(' + ');
+  const faceText = facePhoto ? 'Face-ID photo saved for attendance' : 'no Face-ID photo yet';
+  showToast(`New employee ${name} (${code}) created - ${gymText} - ${role} - ${faceText}.`, 'success');
+  if (typeof renderAll === 'function') renderAll();
 }
 
 // ==================== FAST ACTION: CHANGE PASSWORD & ACCESS MODAL ====================
@@ -539,6 +666,9 @@ function approveVacancyRequest(vrId) {
     headcount: vr.headcount || 1,
     candidates: 0,
     urgency: vr.urgency || 'Normal',
+    salary: vr.salary || null,
+    shift: vr.shift || 'Morning',
+    requestedBy: vr.submittedBy,
     createdDate: '2026-09-09',
     applied: 0,
     status: 'Open',
@@ -784,7 +914,7 @@ function renderDashboard() {
       detail: `${b.title || ''}${b.amount ? ' · EGP ' + b.amount : ''} · ${formatDate(b.date)}`,
       onApprove: `approveBranchItem('${b.id}')`,
       onReject: `declineBranchItem('${b.id}')`,
-      onReview: `navigateTo('branch-queue')`
+      onReview: `navigateTo('requests')`
     });
   });
 
@@ -963,11 +1093,11 @@ function renderDashboard() {
               <p class="text-[10px] font-semibold text-charcoal-800 group-hover:text-brand-800 leading-tight">See Requests</p>
             </button>
 
-            <button onclick="typeof openAddEmployee === 'function' ? openAddEmployee() : navigateTo('employees')" class="p-2.5 rounded-lg border border-brand-300 bg-brand-50/60 hover:bg-brand-100 transition-all text-center group flex flex-col items-center gap-1.5">
-              <div class="w-7 h-7 rounded-lg bg-brand-600 text-white flex items-center justify-center">
-                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+            <button onclick="typeof openComposeAnnouncement === 'function' ? openComposeAnnouncement() : navigateTo('notifications')" class="p-2.5 rounded-lg border border-charcoal-200 bg-charcoal-50/50 hover:bg-brand-50 hover:border-brand-300 transition-all text-center group flex flex-col items-center gap-1.5">
+              <div class="w-7 h-7 rounded-lg bg-white border border-charcoal-200 flex items-center justify-center text-charcoal-600 group-hover:text-brand-600 group-hover:border-brand-300 transition-colors">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z"/></svg>
               </div>
-              <p class="text-[10px] font-bold text-brand-800 leading-tight">Add Employee</p>
+              <p class="text-[10px] font-semibold text-charcoal-800 group-hover:text-brand-800 leading-tight">Announcement</p>
             </button>
 
           </div>

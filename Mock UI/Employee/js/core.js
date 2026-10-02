@@ -379,12 +379,14 @@ const navItems = [
 // team-scoped permissions). Scope is limited to the teams the user leads.
 const teamItems = [
   {id:'team',label:'My Team',icon:'M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z', permission:'team.view'},
+  // Team Schedule belongs to the Team Leader; navPools() re-places it under
+  // Branch — renamed "Branch Schedule" — when the role is Branch Manager.
   {id:'team-schedule',label:'Team Schedule',icon:'M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z', permission:'schedule.view.team'},
   // Team Requests lives here under Team; navPools() re-places it under Branch
   // when the current role is Branch Manager.
   {id:'team-requests',label:'Team Requests',icon:'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01', permission:'requests.view.team'},
   {id:'team-performance',label:'Team Performance',icon:'M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z', permission:'evaluations.view.team'},
-  {id:'team-updates',label:'Team Updates',icon:'M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9', permission:'team.manage'},
+  {id:'team-updates',label:'Team Actions',icon:'M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9', permission:'team.manage'},
 ];
 
 // Branch-wide management pages — visible to Branch Manager (and anyone granted
@@ -394,7 +396,9 @@ const branchItems = [
   {id:'attendance-management',label:'Attendance Management',icon:'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4', permission:'attendance.view'},
   // (Requests Management was removed — its flow lives in Team Requests, which
   // navPools() places here under Branch for the Branch Manager.)
-  {id:'shift-management',label:'Shift Management',icon:'M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2zM12 14l-2 2m0 0l-2-2m2 2V8', permission:'schedule.manage'},
+  // (Shift Management was removed as a sidebar button — the schedule page
+  // (Team/Branch Schedule) is the single entry point; its "Advanced Editor"
+  // button and the Actions palette still open the shift-management page.)
   {id:'recruitment',label:'Recruitment',icon:'M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z', permission:'recruitment.vacancy_request.create'},
   {id:'leaving',label:'Employee Leaving',icon:'M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1', permission:'employees.offboard'},
 ];
@@ -446,17 +450,29 @@ function branchActionsBtnHtml(counts, opts) {
   </button>`;
 }
 
-// Per-role nav pools — Team Requests sits under Team normally, but becomes the
-// branch request desk for the Branch Manager: shown under Branch and renamed
-// to "Requests Management" (same page, same id).
+// Per-role nav pools — one schedule button only (Team/Branch Schedule); the
+// shift-management page is reached through its "Advanced Editor" button.
+//   Branch Manager: two Team pages are re-homed under Branch (same page, same
+//   id, new label): Team Requests -> "Requests Management" (branch request desk)
+//   and Team Schedule -> "Branch Schedule".
+//   Team Leader: no Branch section at all — and the sidebar Actions launcher
+//   disappears with it (the Team Updates page exposes "Take Action" instead).
 function navPools() {
-  if (MOCK.currentUser.role !== 'Branch Manager') return { team: teamItems, branch: branchItems };
+  const role = MOCK.currentUser.role;
+  if (role === 'Team Leader') return { team: teamItems, branch: [] };
+  if (role !== 'Branch Manager') return { team: teamItems, branch: branchItems };
   const tr = teamItems.find(i => i.id === 'team-requests');
-  const at = branchItems.findIndex(i => i.id === 'shift-management');
+  const ts = teamItems.find(i => i.id === 'team-schedule');
+  // Anchor where Shift Management used to sit — before Recruitment.
+  const at = branchItems.findIndex(i => i.id === 'recruitment');
   const pos = at >= 0 ? at : branchItems.length;
+  const bmExtras = [
+    { ...ts, label: 'Branch Schedule' },
+    { ...tr, label: 'Requests Management' },
+  ];
   return {
-    team: teamItems.filter(i => i.id !== 'team-requests'),
-    branch: [...branchItems.slice(0, pos), { ...tr, label: 'Requests Management' }, ...branchItems.slice(pos)],
+    team: teamItems.filter(i => !['team-requests', 'team-schedule'].includes(i.id)),
+    branch: [...branchItems.slice(0, pos), ...bmExtras, ...branchItems.slice(pos)],
   };
 }
 
@@ -473,7 +489,9 @@ function renderNavItems(id) {
     h += '<div class="nav-section-title mt-3">Self-Service</div>' + extraPages.map(i => navItemHtml(i, counts)).join('');
   }
   if(showAll || visibleTeam.length) { h += '<div class="nav-section-title mt-3">Team</div>' + visibleTeam.map(i => navItemHtml(i, counts)).join(''); }
-  if(showAll || visibleBranch.length) { h += '<div class="nav-section-title mt-3">Branch</div>' + branchActionsBtnHtml(counts) + visibleBranch.map(i => navItemHtml(i, counts)).join(''); }
+  // Branch section (with its Actions launcher) is only rendered when the role's
+  // branch pool has items — it is empty for the Team Leader.
+  if(visibleBranch.length) { h += '<div class="nav-section-title mt-3">Branch</div>' + branchActionsBtnHtml(counts) + visibleBranch.map(i => navItemHtml(i, counts)).join(''); }
   c.innerHTML = h;
   // Update header bell + mobile bottom-nav badges on every render
   updateBadgeIndicators();
@@ -488,7 +506,7 @@ function renderMobileMore() {
   const visibleTeam = showAll ? pools.team : pools.team.filter(i => !i.permission || hasPermission(i.permission));
   const visibleBranch = showAll ? pools.branch : pools.branch.filter(i => !i.permission || hasPermission(i.permission));
   const items = [...navItems.filter(i=>!['dashboard','schedule','requests','notifications'].includes(i.id)),...(showAll?extraPages:[]),...visibleTeam,...visibleBranch];
-  const head = (showAll || visibleBranch.length) ? branchActionsBtnHtml(counts, {grid:true}) : '';
+  const head = visibleBranch.length ? branchActionsBtnHtml(counts, {grid:true}) : '';
   g.innerHTML = head + items.map(i => navItemHtml(i, counts, { grid: true })).join('');
 }
 

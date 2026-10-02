@@ -6,7 +6,7 @@ const pageRenderers = {
   'recruitment': renderRecruitment,
   'attendance': renderAttendance,
   'requests': renderRequests,
-  'branch-queue': renderBranchQueue,
+  'branch-queue': renderRequests,
   'payroll': renderPayroll,
   'evaluations': renderEvaluations,
   'form-builder': renderFormBuilder,

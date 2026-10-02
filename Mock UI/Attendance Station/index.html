@@ -1,0 +1,1430 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
+  <title>Revive HR — Attendance Station</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap">
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              50: '#f0fdf4', 100: '#dcfce7', 200: '#bbf7d0', 300: '#86efac', 400: '#4ade80',
+              500: '#22c55e', 600: '#16a34a', 700: '#15803d', 800: '#166534', 900: '#14532d',
+            },
+            charcoal: {
+              50: '#f8f9fa', 100: '#f1f3f5', 200: '#e9ecef', 300: '#dee2e6', 400: '#ced4da',
+              500: '#adb5bd', 600: '#6c757d', 700: '#495057', 800: '#343a40', 900: '#212529',
+            }
+          },
+          fontFamily: {
+            sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif'],
+            mono: ['JetBrains Mono', 'ui-monospace', 'monospace']
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    * { -webkit-tap-highlight-color: transparent; }
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-thumb { background: #dee2e6; border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: #ced4da; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    .material-icons { font-feature-settings: 'liga'; }
+    #camera-frame { transition: border-color 0.3s ease; }
+    .scanline { position: absolute; left: 0; right: 0; height: 2px; background: linear-gradient(90deg, transparent, #22c55e, transparent); animation: scanMove 1.4s linear infinite; pointer-events: none; }
+    @keyframes scanMove { 0% { top: 6%; } 100% { top: 94%; } }
+    .fade-in { animation: fadeIn .25s ease; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+    details summary::-webkit-details-marker { display: none; }
+  </style>
+</head>
+<body class="h-full flex flex-col bg-gray-50 font-sans text-charcoal-800 antialiased selection:bg-brand-500 selection:text-white">
+
+  <!-- ==================== TOP BAR ==================== -->
+  <header class="flex-shrink-0 h-16 bg-white border-b border-charcoal-200 shadow-sm flex items-center justify-between px-4 lg:px-6 z-20">
+    <div class="flex items-center gap-3 min-w-0">
+      <div class="w-10 h-10 rounded-xl bg-brand-600 text-white flex items-center justify-center shrink-0 shadow-sm">
+        <span class="material-icons text-[22px]">fingerprint</span>
+      </div>
+      <div class="min-w-0">
+        <div class="flex items-center gap-2">
+          <h1 class="text-base font-bold text-charcoal-900 leading-tight">Attendance Station</h1>
+          <span class="text-[10px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded bg-brand-100 text-brand-800 font-mono">Kiosk</span>
+        </div>
+        <p class="text-[11px] text-charcoal-500 truncate">Revive Solutions Fitness · Downtown Gym (ADR-004)</p>
+      </div>
+    </div>
+
+    <div class="flex items-center gap-2 lg:gap-3">
+      <!-- Biometric Connection Pill -->
+      <button id="bio-status-badge" onclick="checkBiometricConnection(true)" 
+        class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[11px] font-semibold transition-all bg-amber-50 border-amber-200 text-amber-800 hover:bg-amber-100"
+        title="Biometric Service status. Click to reconnect.">
+        <span id="bio-status-dot" class="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span>
+        <span id="bio-status-text">Face-ID · Connecting…</span>
+      </button>
+
+      <!-- Enroll Staff Face Modal Button -->
+      <button onclick="openEnrollModal()" 
+        class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-charcoal-100 hover:bg-brand-50 hover:text-brand-700 hover:border-brand-300 border border-charcoal-200 text-charcoal-700 text-xs font-bold transition-all shadow-sm">
+        <span class="material-icons text-[16px] text-brand-600">person_add_alt</span>
+        <span class="hidden sm:inline">Enroll Face</span>
+      </button>
+
+      <!-- Device identity (ADR-004) -->
+      <span class="hidden lg:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-charcoal-100 border border-charcoal-200 text-[11px] font-semibold text-charcoal-700 font-mono" title="DeviceToken used to authenticate with public attendance API">
+        <span class="material-icons text-[14px] text-charcoal-500">memory</span>
+        REV-PC-01
+      </span>
+
+      <!-- Live Clock -->
+      <div class="text-right pl-1 sm:pl-2">
+        <p id="live-clock" class="text-lg font-bold text-charcoal-900 leading-none tabular-nums font-mono">--:--:--</p>
+        <p id="live-date" class="text-[10px] text-charcoal-500 mt-0.5 tabular-nums">—</p>
+      </div>
+    </div>
+  </header>
+
+  <!-- ==================== MAIN ==================== -->
+  <main class="flex-1 min-h-0 p-3 lg:p-4 grid grid-cols-1 lg:grid-cols-[1fr_370px] gap-3 lg:gap-4 overflow-hidden">
+
+    <!-- LEFT: Biometric Capture Viewfinder -->
+    <section class="min-h-0 flex flex-col">
+
+      <div id="panel-biometric" class="flex-1 min-h-0 flex flex-col bg-white rounded-xl border border-charcoal-200 overflow-hidden shadow-sm">
+        <!-- Subheader with AI models info & toggles -->
+        <div class="px-4 py-2.5 border-b border-charcoal-100 flex items-center justify-between gap-3 flex-wrap bg-charcoal-50/70">
+          <div class="flex items-center gap-2">
+            <span class="material-icons text-[18px] text-brand-600">videocam</span>
+            <p class="text-xs font-bold text-charcoal-800">YuNet Face Detection · Silent-Face Anti-Spoofing · SFace 1-to-N</p>
+          </div>
+          
+          <div class="flex items-center gap-2">
+            <!-- Sound toggle -->
+            <button id="sound-btn" onclick="toggleSound()" class="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded border bg-white border-charcoal-200 text-charcoal-600 hover:text-charcoal-900 transition-colors" title="Toggle sound alerts">
+              <span id="sound-icon" class="material-icons text-[14px] text-brand-600">volume_up</span>
+              <span id="sound-label">Audio: ON</span>
+            </button>
+
+            <!-- Auto-scan toggle -->
+            <button id="autoscan-btn" onclick="toggleAutoScan()" class="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded border bg-brand-50 border-brand-200 text-brand-700 hover:bg-brand-100 transition-colors" title="Automatically record check-in/out on recognized face">
+              <span class="material-icons text-[14px]">bolt</span>
+              <span id="autoscan-label">Auto-Scan: ON</span>
+            </button>
+
+            <!-- Enrolled staff count pill -->
+            <button onclick="openEnrollModal()" class="inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded border bg-white border-charcoal-200 text-charcoal-600 hover:border-brand-400 transition-colors" title="Manage enrolled faces">
+              <span class="material-icons text-[14px] text-charcoal-500">groups</span>
+              <span id="enrolled-count-pill">0 Enrolled</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Viewfinder Frame -->
+        <div class="flex-1 min-h-[300px] relative bg-charcoal-950 m-3 lg:m-4 rounded-xl border-2 border-brand-500/40 overflow-hidden flex flex-col justify-between" id="camera-frame">
+          
+          <!-- Background Grid placeholder -->
+          <div class="absolute inset-0 opacity-[0.12]" style="background-image: radial-gradient(#22c55e 1px, transparent 1px); background-size: 24px 24px;"></div>
+
+          <!-- Real-Time Camera Stream -->
+          <img id="camera-stream" src="" class="absolute inset-0 w-full h-full object-cover hidden z-0" alt="Biometric Webcam Stream" crossorigin="anonymous">
+
+          <!-- Viewfinder Corner Reticle Brackets -->
+          <div class="absolute inset-4 sm:inset-8 border border-white/10 rounded-2xl pointer-events-none z-10 transition-all" id="reticle-box"></div>
+          <div id="ret-tl" class="absolute left-4 top-4 sm:left-8 sm:top-8 w-8 h-8 border-t-2 border-l-2 border-brand-400 rounded-tl-lg pointer-events-none z-10 transition-colors"></div>
+          <div id="ret-tr" class="absolute right-4 top-4 sm:right-8 sm:top-8 w-8 h-8 border-t-2 border-r-2 border-brand-400 rounded-tr-lg pointer-events-none z-10 transition-colors"></div>
+          <div id="ret-bl" class="absolute left-4 bottom-4 sm:left-8 sm:bottom-8 w-8 h-8 border-b-2 border-l-2 border-brand-400 rounded-bl-lg pointer-events-none z-10 transition-colors"></div>
+          <div id="ret-br" class="absolute right-4 bottom-4 sm:right-8 sm:bottom-8 w-8 h-8 border-b-2 border-r-2 border-brand-400 rounded-br-lg pointer-events-none z-10 transition-colors"></div>
+
+          <!-- Scanning laser line -->
+          <div id="scanline" class="scanline hidden z-10"></div>
+
+          <!-- Viewfinder Top Bar: Real-time telemetry -->
+          <div class="relative z-10 p-3 flex items-center justify-between pointer-events-none">
+            <div id="hud-top-left" class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-black/60 backdrop-blur-md border border-white/15 text-[11px] font-mono text-white/90">
+              <span class="w-2 h-2 rounded-full bg-brand-400 animate-pulse"></span>
+              <span id="hud-model-text">LIVE VISION ACTIVE</span>
+            </div>
+            <div id="hud-fps-pill" class="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-black/60 backdrop-blur-md border border-white/15 text-[11px] font-mono text-white/70">
+              <span class="material-icons text-[13px] text-brand-400">speed</span>
+              <span id="hud-fps-text">0.0 FPS</span>
+            </div>
+          </div>
+
+          <!-- Offline Warning Overlay -->
+          <div id="vf-offline" class="absolute inset-0 flex flex-col items-center justify-center text-center px-6 z-10 bg-charcoal-900/95 backdrop-blur-sm">
+            <div class="w-16 h-16 rounded-2xl bg-charcoal-800 border border-charcoal-700 flex items-center justify-center text-red-400 mb-3 shadow-lg">
+              <span class="material-icons text-[34px]">videocam_off</span>
+            </div>
+            <h3 class="text-white text-base font-bold">Biometric Camera Service Offline</h3>
+            <p class="text-charcoal-400 text-xs mt-1 max-w-sm">The Face-ID model service is not running on <code class="text-brand-400 font-mono">http://localhost:5050</code>.</p>
+            <div class="mt-4 flex flex-wrap items-center justify-center gap-2">
+              <button onclick="checkBiometricConnection(true)" class="px-4 py-2 rounded-lg bg-brand-600 hover:bg-brand-700 active:scale-95 text-white text-xs font-bold flex items-center gap-1.5 transition-all shadow">
+                <span class="material-icons text-[15px]">refresh</span>
+                Reconnect Service
+              </button>
+              <button onclick="toggleOfflineHelp()" class="px-3 py-2 rounded-lg bg-charcoal-800 hover:bg-charcoal-700 text-charcoal-200 text-xs font-semibold border border-charcoal-700 transition-all">
+                How to Start
+              </button>
+            </div>
+            <div id="offline-help" class="hidden mt-3 p-3 rounded-lg bg-charcoal-950/80 border border-charcoal-700 text-[11px] text-charcoal-300 font-mono text-left max-w-md">
+              <p class="text-brand-400 font-bold mb-1">▶ Quick Launch Command:</p>
+              <p>Run <code class="text-white">start_attendance_station.bat</code> in the project root</p>
+              <p class="text-charcoal-400 mt-1">Or run: <code class="text-white">conda run -n workout_ml python biometric_test/webcam_app.py</code></p>
+            </div>
+          </div>
+
+          <!-- Idle Viewfinder Overlay (When online but no face) -->
+          <div id="vf-idle" class="absolute inset-0 flex flex-col items-center justify-center text-center px-6 z-10 pointer-events-none">
+            <div class="w-20 h-20 rounded-full border-2 border-white/20 flex items-center justify-center text-white/70 animate-pulse bg-black/20 backdrop-blur-sm">
+              <span class="material-icons text-[48px]">face</span>
+            </div>
+            <p class="text-white text-sm font-bold mt-3 drop-shadow">Stand directly in front of the camera</p>
+            <p class="text-white/60 text-xs mt-1 max-w-xs drop-shadow">Anti-spoofing and face identification run continuously in real time</p>
+          </div>
+
+          <!-- Bottom Live Status HUD Bar -->
+          <div class="relative z-10 p-3 pointer-events-none">
+            <div id="live-hud-bar" class="w-full rounded-xl bg-black/75 backdrop-blur-md border border-white/15 px-4 py-2.5 flex items-center justify-between gap-3 text-white transition-all shadow-lg">
+              <div class="flex items-center gap-2.5 min-w-0">
+                <span id="live-hud-icon" class="material-icons text-[20px] text-brand-400 shrink-0">camera</span>
+                <div class="min-w-0">
+                  <p id="live-hud-title" class="text-xs font-bold leading-tight truncate">Ready for scan</p>
+                  <p id="live-hud-subtitle" class="text-[10px] text-white/70 leading-tight truncate">Anti-spoofing dual MiniFASNet protection active</p>
+                </div>
+              </div>
+              <div class="shrink-0 text-right">
+                <span id="live-hud-badge" class="px-2 py-0.5 rounded text-[10px] font-bold font-mono uppercase bg-white/10 text-white/90">IDLE</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Fullscreen Result Overlay -->
+          <div id="vf-result" class="absolute inset-0 hidden z-20"></div>
+        </div>
+
+        <!-- Controls & Simulation Fallback -->
+        <div class="px-4 pb-3 flex flex-col gap-2">
+          <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
+            <!-- Test Scenario Selector (for testing ADR-004 logic / offline simulation) -->
+            <label class="flex flex-col gap-1 flex-1 min-w-0">
+              <span class="text-[10px] font-bold text-charcoal-500 uppercase tracking-wide flex items-center justify-between">
+                <span>Simulation / Fallback Mode</span>
+                <span id="mode-tag" class="text-[9px] font-semibold text-brand-700 bg-brand-50 px-1.5 rounded">Live Camera Priority</span>
+              </span>
+              <select id="scenario" class="rounded-lg border border-charcoal-200 bg-white px-3 py-2 text-xs font-semibold text-charcoal-800 outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100 transition-all">
+                <option value="auto">Live Camera Match (Random employee if offline)</option>
+                <option value="accept">Force Accepted Check-In/Out</option>
+                <option value="noshift">Force Rejected — No shift scheduled today</option>
+                <option value="noaccess">Force Rejected — No gym access</option>
+                <option value="spoof">Force Rejected — Spoof attack (Photo/Screen)</option>
+              </select>
+            </label>
+
+            <!-- Manual Trigger Button -->
+            <div class="flex flex-col justify-end">
+              <span class="text-[10px] font-semibold text-transparent select-none hidden sm:block">Trigger</span>
+              <button id="scan-btn" onclick="handleScanButton()" 
+                class="h-[38px] px-6 rounded-lg bg-brand-600 hover:bg-brand-700 active:scale-[0.98] text-white text-xs font-bold flex items-center justify-center gap-2 transition-all shadow-sm">
+                <span class="material-icons text-[17px]">scan_face</span>
+                <span id="scan-btn-text">Scan Face Now</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+    </section>
+
+    <!-- RIGHT: stats + manual entry + today's attendance -->
+    <aside class="min-h-0 flex flex-col gap-2.5">
+
+      <!-- Today's Attendance Counters -->
+      <div class="bg-white rounded-xl border border-charcoal-200 px-3.5 py-2.5 flex items-center justify-between gap-3 shadow-sm">
+        <div class="flex items-baseline gap-1.5">
+          <p id="stat-present" class="text-2xl font-bold text-brand-600 tabular-nums leading-none">0</p>
+          <p class="text-sm font-bold text-charcoal-400 leading-none tabular-nums">/ <span id="stat-expected">0</span></p>
+        </div>
+        <p class="text-[10px] text-charcoal-500 font-medium text-right leading-tight">employees present now<br>of scheduled today</p>
+      </div>
+
+      <!-- Manual Entry Form (ADR-004 fallback: operator registers attendance with Method = Manual) -->
+      <div class="bg-white rounded-xl border border-charcoal-200 overflow-hidden flex-shrink-0 shadow-sm">
+        <div class="px-3.5 py-2.5 border-b border-charcoal-100 flex items-center justify-between gap-2 bg-charcoal-50/50">
+          <div class="flex items-center gap-1.5">
+            <span class="material-icons text-[16px] text-brand-600">edit_document</span>
+            <p class="text-[11px] font-bold text-charcoal-700 uppercase tracking-wide whitespace-nowrap">Manual Fallback</p>
+          </div>
+          <p class="text-[10px] text-charcoal-400 whitespace-nowrap font-mono">Method: Manual</p>
+        </div>
+
+        <form id="manual-form" onsubmit="submitManual(event)" class="p-3 flex flex-col gap-2.5">
+          <div class="flex items-center justify-between gap-2">
+            <span class="text-[10px] font-semibold text-charcoal-500">Employee ID <span class="text-red-500">*</span></span>
+            <span class="text-[10px] text-charcoal-400">time auto · <span id="m-now" class="font-mono font-semibold text-charcoal-600">--:--</span></span>
+          </div>
+          <input type="text" id="m-emp" list="emp-ids" required maxlength="12" autocomplete="off" spellcheck="false"
+            placeholder="e.g. EMP-1042"
+            class="rounded-lg border border-charcoal-200 bg-white px-3 h-9 text-xs font-semibold uppercase text-charcoal-800 placeholder:text-charcoal-400 placeholder:normal-case outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100 transition-all font-mono">
+          <datalist id="emp-ids"></datalist>
+
+          <div class="flex gap-1.5">
+            <label class="flex-1 cursor-pointer">
+              <input type="radio" name="m-type" value="IN" class="peer sr-only" checked>
+              <span class="flex items-center justify-center gap-1.5 h-9 rounded-lg border border-charcoal-200 text-xs font-bold text-charcoal-600 peer-checked:bg-brand-50 peer-checked:border-brand-500 peer-checked:text-brand-700 transition-all">
+                <span class="material-icons text-[15px]">login</span> Check-in
+              </span>
+            </label>
+            <label class="flex-1 cursor-pointer">
+              <input type="radio" name="m-type" value="OUT" class="peer sr-only">
+              <span class="flex items-center justify-center gap-1.5 h-9 rounded-lg border border-charcoal-200 text-xs font-bold text-charcoal-600 peer-checked:bg-brand-50 peer-checked:border-brand-500 peer-checked:text-brand-700 transition-all">
+                <span class="material-icons text-[15px]">logout</span> Check-out
+              </span>
+            </label>
+            <button type="submit" class="h-9 px-3.5 rounded-lg bg-brand-600 hover:bg-brand-700 active:scale-[0.98] text-white text-xs font-bold flex items-center gap-1.5 transition-all shadow-sm shrink-0">
+              <span class="material-icons text-[16px]">how_to_reg</span>
+              Record
+            </button>
+          </div>
+        </form>
+      </div>
+
+      <!-- Today's Attendance Feed -->
+      <div class="bg-white rounded-xl border border-charcoal-200 flex-1 min-h-[200px] flex flex-col overflow-hidden shadow-sm">
+        <div class="px-3.5 py-2.5 border-b border-charcoal-100 flex items-center justify-between gap-2 bg-charcoal-50/50">
+          <div class="flex items-baseline gap-2 min-w-0">
+            <p class="text-[11px] font-bold text-charcoal-700 uppercase tracking-wide whitespace-nowrap">Today's feed</p>
+            <p id="att-summary" class="text-[10px] text-charcoal-400 font-medium truncate"></p>
+          </div>
+          <button onclick="clearEvents()" title="Clear local feed" class="p-1 rounded hover:bg-charcoal-100 text-charcoal-400 hover:text-red-500 transition-colors shrink-0">
+            <span class="material-icons text-[15px]">delete_sweep</span>
+          </button>
+        </div>
+        <div id="events-list" class="flex-1 min-h-0 overflow-y-auto p-2 space-y-1.5"></div>
+      </div>
+
+    </aside>
+  </main>
+
+  <!-- ==================== ENROLL MODAL ==================== -->
+  <div id="modal-enroll" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm hidden fade-in">
+    <div class="bg-white rounded-2xl border border-charcoal-200 shadow-2xl max-w-lg w-full max-h-[90vh] flex flex-col overflow-hidden">
+      <!-- Modal Header -->
+      <div class="px-5 py-4 border-b border-charcoal-100 flex items-center justify-between bg-charcoal-50/70">
+        <div class="flex items-center gap-2.5">
+          <div class="w-8 h-8 rounded-lg bg-brand-100 text-brand-700 flex items-center justify-center">
+            <span class="material-icons text-[20px]">person_add_alt_1</span>
+          </div>
+          <div>
+            <h2 class="text-sm font-bold text-charcoal-900 leading-tight">Enroll Staff Face ID</h2>
+            <p class="text-[11px] text-charcoal-500">Extracts 128-d SFace feature embedding and validates liveness</p>
+          </div>
+        </div>
+        <button onclick="closeEnrollModal()" class="p-1.5 rounded-lg text-charcoal-400 hover:text-charcoal-700 hover:bg-charcoal-100 transition-colors">
+          <span class="material-icons text-[18px]">close</span>
+        </button>
+      </div>
+
+      <!-- Modal Body -->
+      <div class="p-5 flex-1 min-h-0 overflow-y-auto space-y-4">
+        <!-- Live Camera Status in Modal -->
+        <div class="p-3 rounded-xl border border-charcoal-200 bg-charcoal-50 flex items-center justify-between gap-3">
+          <div class="flex items-center gap-2">
+            <span id="enroll-cam-dot" class="w-2.5 h-2.5 rounded-full bg-gray-400"></span>
+            <div>
+              <p id="enroll-cam-status" class="text-xs font-bold text-charcoal-800">Checking Camera…</p>
+              <p id="enroll-cam-sub" class="text-[10px] text-charcoal-500">Look directly into the kiosk camera</p>
+            </div>
+          </div>
+          <span id="enroll-liveness-pill" class="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-charcoal-200 text-charcoal-700">WAITING</span>
+        </div>
+
+        <!-- Select or Input Employee -->
+        <div class="space-y-2">
+          <label class="block text-xs font-bold text-charcoal-700">
+            Select Employee to Enroll
+          </label>
+          <select id="enroll-select-emp" onchange="handleEnrollSelectChange()" class="w-full rounded-lg border border-charcoal-200 bg-white px-3 py-2 text-xs font-semibold text-charcoal-800 outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100 transition-all">
+            <option value="">-- Choose from gym roster --</option>
+          </select>
+        </div>
+
+        <div class="grid grid-cols-2 gap-2">
+          <div>
+            <label class="block text-[10px] font-bold text-charcoal-500 uppercase tracking-wide mb-1">Employee Code</label>
+            <input type="text" id="enroll-emp-id" placeholder="e.g. EMP-1042" class="w-full rounded-lg border border-charcoal-200 px-3 py-2 text-xs font-mono font-semibold uppercase outline-none focus:border-brand-400 transition-all">
+          </div>
+          <div>
+            <label class="block text-[10px] font-bold text-charcoal-500 uppercase tracking-wide mb-1">Full Name</label>
+            <input type="text" id="enroll-emp-name" placeholder="e.g. Karim Hassan" class="w-full rounded-lg border border-charcoal-200 px-3 py-2 text-xs font-semibold outline-none focus:border-brand-400 transition-all">
+          </div>
+        </div>
+
+        <!-- Enroll Button -->
+        <button id="btn-submit-enroll" onclick="submitFaceEnrollment()" class="w-full h-10 rounded-xl bg-brand-600 hover:bg-brand-700 active:scale-[0.98] text-white text-xs font-bold flex items-center justify-center gap-2 transition-all shadow-sm">
+          <span class="material-icons text-[18px]">camera</span>
+          <span>Capture &amp; Enroll Current Face</span>
+        </button>
+
+        <!-- Enrolled Staff Directory -->
+        <div class="pt-2 border-t border-charcoal-100">
+          <div class="flex items-center justify-between mb-2">
+            <p class="text-xs font-bold text-charcoal-800 uppercase tracking-wide">Enrolled Faces Directory</p>
+            <span id="enroll-list-count" class="text-[10px] font-mono text-charcoal-500">0 registered</span>
+          </div>
+          <div id="enrolled-faces-list" class="space-y-1.5 max-h-[160px] overflow-y-auto pr-1">
+            <p class="text-xs text-charcoal-400 italic">Loading enrolled staff…</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Modal Footer -->
+      <div class="px-5 py-3 border-t border-charcoal-100 bg-charcoal-50 flex justify-end">
+        <button onclick="closeEnrollModal()" class="px-4 py-2 rounded-lg bg-charcoal-200 hover:bg-charcoal-300 text-charcoal-800 text-xs font-bold transition-all">
+          Done
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- toasts -->
+  <div id="toast-host" class="fixed bottom-4 right-4 z-50 flex flex-col gap-2 items-end pointer-events-none"></div>
+
+<script>
+/* =====================================================================
+ * Revive HR — Attendance Station Kiosk
+ * Connected with OpenCV YuNet (Face Detection), Silent-Face MiniFASNet 
+ * (Anti-Spoofing Liveness), and SFace (1-to-N Feature Cosine Matching).
+ * Validates against ADR-004 Gym Access & Shift Rules.
+ * ===================================================================== */
+
+const Station = {
+  deviceId: 'REV-PC-01',
+  deviceToken: 'dv_downtown_rev_7f3a9c',
+  gymId: 2,
+  gymName: 'Downtown Gym',
+  apiPath: '/api/attendance/public/events',
+  biometricUrl: (window.location.protocol.startsWith('http')) ? window.location.origin : 'http://localhost:5050',
+};
+
+/* --- Employee directory (mock) — drives ADR-004 validation --- */
+const DB = {
+  employees: [
+    { id: 'EMP-1042', name: 'Karim Hassan', position: 'Trainer',      access: true,  shift: true,  shiftStart: '14:00', shiftEnd: '22:00' },
+    { id: 'EMP-1047', name: 'Sara Ali',     position: 'Receptionist', access: true,  shift: true,  shiftStart: '14:00', shiftEnd: '22:00' },
+    { id: 'EMP-1051', name: 'Omar Youssef', position: 'Trainer',      access: true,  shift: false, shiftStart: '06:00', shiftEnd: '14:00' }, // day off
+    { id: 'EMP-1055', name: 'Nour Ibrahim', position: 'Cleaner',      access: false, shift: false, shiftStart: '06:00', shiftEnd: '14:00' }, // not assigned to this gym
+    { id: 'EMP-1060', name: 'Yasmin Adel',  position: 'Trainer',      access: true,  shift: true,  shiftStart: '06:00', shiftEnd: '14:00' },
+    { id: 'EMP-1063', name: 'Tarek Nabil',  position: 'Receptionist', access: true,  shift: true,  shiftStart: '14:00', shiftEnd: '22:00' },
+    { id: 'EMP-1068', name: 'Mona Said',    position: 'Trainer',      access: true,  shift: true,  shiftStart: '14:00', shiftEnd: '22:00' },
+    { id: 'EMP-1072', name: 'Hassan Ali',   position: 'Maintenance',  access: false, shift: true,  shiftStart: '06:00', shiftEnd: '14:00' },
+  ],
+  byId(id) { 
+    if (!id) return null;
+    const clean = id.trim().toUpperCase();
+    return this.employees.find(e => e.id.toUpperCase() === clean) || null; 
+  },
+  byName(name) {
+    if (!name) return null;
+    const clean = name.trim().toLowerCase();
+    return this.employees.find(e => e.name.toLowerCase() === clean) || null;
+  }
+};
+
+/* --- Synthesized Web Audio API sound effects (zero external files) --- */
+const SoundEffects = {
+  ctx: null,
+  enabled: true,
+  init() {
+    if (!this.ctx && (window.AudioContext || window.webkitAudioContext)) {
+      const AudioCtx = window.AudioContext || window.webkitAudioContext;
+      this.ctx = new AudioCtx();
+    }
+  },
+  playSuccess() {
+    if (!this.enabled) return;
+    try {
+      this.init();
+      if (this.ctx.state === 'suspended') this.ctx.resume();
+      const now = this.ctx.currentTime;
+      const osc1 = this.ctx.createOscillator();
+      const osc2 = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+
+      osc1.type = 'sine'; osc1.frequency.setValueAtTime(523.25, now);       // C5
+      osc2.type = 'sine'; osc2.frequency.setValueAtTime(659.25, now + 0.12); // E5
+
+      gain.gain.setValueAtTime(0.15, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.55);
+
+      osc1.connect(gain); osc2.connect(gain);
+      gain.connect(this.ctx.destination);
+
+      osc1.start(now); osc1.stop(now + 0.12);
+      osc2.start(now + 0.12); osc2.stop(now + 0.55);
+    } catch (_) {}
+  },
+  playRejected() {
+    if (!this.enabled) return;
+    try {
+      this.init();
+      if (this.ctx.state === 'suspended') this.ctx.resume();
+      const now = this.ctx.currentTime;
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(220, now);
+      osc.frequency.setValueAtTime(180, now + 0.12);
+
+      gain.gain.setValueAtTime(0.2, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.4);
+
+      osc.connect(gain);
+      gain.connect(this.ctx.destination);
+
+      osc.start(now); osc.stop(now + 0.4);
+    } catch (_) {}
+  }
+};
+
+const state = {
+  busy: false,
+  events: [],
+  resultTimer: null,
+  bioConnected: false,
+  autoScan: true,
+  lastBioData: null,
+  cooldowns: {},   // empId -> timestamp of last fired event (scan or manual)
+  visitLatch: null,    // empId that just fired - must leave the camera before firing again
+  latchClearSince: 0,  // when the latched face first disappeared (sustained release)
+  dwellId: null,            // employee currently held in front of the camera for dwell confirmation
+  dwellSince: 0,            // when that person's dwell started
+  spoofCooldownUntil: 0,
+  unknownCooldownUntil: 0,
+  pendingSignOut: null,   // in-flight sign-out confirmation before shift end
+};
+
+/* Attendance constraints: one event per visit + minimum gap per employee */
+const SCAN_RULES = { minGapMs: 30000, leaveResetMs: 1200, dwellMs: 1500 };
+
+const STORE_KEY = 'revive_attendance_station_events_v1';
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const pad = n => String(n).padStart(2, '0');
+const nowTime = () => { const d = new Date(); return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`; };
+const todayKey = () => { const d = new Date(); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; };
+const toMin = t => { const [h, m] = String(t || '').split(':').map(Number); return (h || 0) * 60 + (m || 0); };
+
+/* Lateness calculation */
+function lateMins(ev) {
+  if (ev.status !== 'accepted' || ev.type !== 'IN') return null;
+  const emp = DB.byId(ev.empId);
+  if (!emp || !emp.shift || !emp.shiftStart) return null;
+  const diff = toMin(ev.entryTime || String(ev.time).slice(0, 5)) - toMin(emp.shiftStart);
+  return diff > 0 ? diff : 0;
+}
+const fmtLate = m => (m >= 60 ? `${Math.floor(m / 60)}h ${pad(m % 60)}m` : `${m}m`);
+const fmtRemain = m => (m >= 60 ? `${Math.floor(m / 60)}h ${pad(m % 60)}m` : `${m}m`);
+function shiftMinutesLeft(emp) {
+  if (!emp || !emp.shiftEnd) return -1;
+  return toMin(emp.shiftEnd) - toMin(nowTime().slice(0, 5));
+}
+
+/* =====================================================================
+ * ADR-004 PUBLIC ATTENDANCE API VALIDATION
+ * ===================================================================== */
+async function postPublicEvent(payload) {
+  await sleep(240 + Math.random() * 260); // simulated slight API transit
+
+  let status = 201, body;
+  const emp = DB.byId(payload.employeeId) || DB.byName(payload.employeeName);
+
+  if (payload.method === 'Biometric' && Number(payload.livenessScore) < 0.60) {
+    status = 422;
+    body = { error: 'LIVENESS_FAILED', message: `Liveness check failed — scored ${(Number(payload.livenessScore) * 100).toFixed(0)}% as live (60% needed). Face the camera directly in good light` };
+  } else if (!emp || !emp.access) {
+    status = 403;
+    body = { error: 'NO_GYM_ACCESS', message: `Employee has no access to ${Station.gymName}` };
+  } else if (!emp.shift) {
+    status = 404;
+    body = { error: 'NO_SHIFT_TODAY', message: 'No shift scheduled at this gym today' };
+  } else {
+    body = {
+      recordId: 'ATT-' + Date.now().toString(36).toUpperCase(),
+      employeeId: emp.id,
+      employeeName: emp.name,
+      gymId: Station.gymId,
+      type: payload.type,
+      method: payload.method,
+      deviceToken: Station.deviceToken,
+      timestamp: new Date().toISOString(),
+      shiftComparison: 'ON_SCHEDULE',
+    };
+  }
+
+  return { status, body };
+}
+
+function nextTypeFor(empId) {
+  const done = state.events.filter(e => e.empId === empId && e.status === 'accepted').length;
+  return done % 2 === 0 ? 'IN' : 'OUT';
+}
+
+/* =====================================================================
+ * BIOMETRIC MODEL CONNECTION & POLLING
+ * ===================================================================== */
+let pollingInterval = null;
+
+async function checkBiometricConnection(showToast = false) {
+  const badge = document.getElementById('bio-status-badge');
+  const dot = document.getElementById('bio-status-dot');
+  const text = document.getElementById('bio-status-text');
+
+  try {
+    const res = await fetch(`${Station.biometricUrl}/status`, { signal: AbortSignal.timeout(1800) });
+    if (!res.ok) throw new Error('Status HTTP ' + res.status);
+    const data = await res.json();
+    
+    state.bioConnected = true;
+    dot.className = 'w-2 h-2 rounded-full bg-brand-500';
+    text.textContent = `Face-ID · Online (${data.fps} FPS)`;
+    badge.className = 'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[11px] font-semibold transition-all bg-brand-50 border-brand-200 text-brand-800 hover:bg-brand-100';
+
+    document.getElementById('vf-offline').classList.add('hidden');
+    const camImg = document.getElementById('camera-stream');
+    if (!camImg.src || camImg.src.indexOf('/video_feed') === -1) {
+      camImg.src = `${Station.biometricUrl}/video_feed`;
+      camImg.classList.remove('hidden');
+    }
+
+    document.getElementById('enrolled-count-pill').textContent = `${data.total_enrolled} Enrolled`;
+    document.getElementById('mode-tag').textContent = 'Live Face-ID Active';
+    document.getElementById('mode-tag').className = 'text-[9px] font-semibold text-brand-700 bg-brand-50 px-1.5 rounded';
+
+    if (showToast) toast(`Connected to Face-ID Service (FPS: ${data.fps})`, 'ok');
+    handleBiometricFrameState(data);
+  } catch (err) {
+    state.bioConnected = false;
+    dot.className = 'w-2 h-2 rounded-full bg-red-500';
+    text.textContent = 'Face-ID · Offline';
+    badge.className = 'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[11px] font-semibold transition-all bg-red-50 border-red-200 text-red-800 hover:bg-red-100';
+
+    document.getElementById('vf-offline').classList.remove('hidden');
+    document.getElementById('camera-stream').classList.add('hidden');
+    document.getElementById('camera-stream').src = '';
+    document.getElementById('hud-fps-text').textContent = 'OFFLINE';
+    document.getElementById('mode-tag').textContent = 'Simulation Active';
+    document.getElementById('mode-tag').className = 'text-[9px] font-semibold text-amber-700 bg-amber-50 px-1.5 rounded';
+
+    if (showToast) toast('Face-ID Service offline. Please start webcam_app.py', 'err');
+  }
+}
+
+function handleBiometricFrameState(data) {
+  state.lastBioData = data;
+  document.getElementById('hud-fps-text').textContent = `${data.fps} FPS`;
+  // ONE SCAN PER VISIT: release the latch only after this face has left the camera
+  // continuously for leaveResetMs (flicker-proof), or a different person appears.
+  if (state.visitLatch) {
+    const curMatchId = (data.face_detected && data.is_match)
+      ? ((DB.byId(data.recognized_id) || DB.byName(data.recognized_name)) || {}).id || data.recognized_id || null
+      : null;
+    if (curMatchId === state.visitLatch) {
+      state.latchClearSince = 0;                                   // same person still standing there
+    } else if (curMatchId && curMatchId !== state.visitLatch) {
+      state.visitLatch = null; state.latchClearSince = 0;          // someone else appeared - latched one left
+    } else if (!state.latchClearSince) {
+      state.latchClearSince = Date.now();                          // face gone - start release timer
+    } else if (Date.now() - state.latchClearSince >= SCAN_RULES.leaveResetMs) {
+      state.visitLatch = null; state.latchClearSince = 0;          // sustained absence - re-armed
+    }
+  }
+
+  // DWELL: person must stay visible + verified ~1.5s before any check-in/out can fire
+  const stableMatchId = (data.face_detected && data.is_live && data.is_match)
+    ? ((DB.byId(data.recognized_id) || DB.byName(data.recognized_name)) || {}).id || data.recognized_id || null
+    : null;
+  if (stableMatchId !== state.dwellId) {
+    state.dwellId = stableMatchId;
+    state.dwellSince = stableMatchId ? Date.now() : 0;
+  }
+
+  const hudBar = document.getElementById('live-hud-bar');
+  const hudIcon = document.getElementById('live-hud-icon');
+  const hudTitle = document.getElementById('live-hud-title');
+  const hudSub = document.getElementById('live-hud-subtitle');
+  const hudBadge = document.getElementById('live-hud-badge');
+  const reticleBox = document.getElementById('reticle-box');
+  const camFrame = document.getElementById('camera-frame');
+
+  // Update modal preview if open
+  updateModalLiveStatus(data);
+
+  if (!data.face_detected) {
+    document.getElementById('vf-idle').classList.remove('hidden');
+    document.getElementById('scanline').classList.add('hidden');
+    hudIcon.textContent = 'face';
+    hudIcon.className = 'material-icons text-[20px] text-white/50 shrink-0';
+    hudTitle.textContent = 'Stand in front of camera';
+    hudSub.textContent = 'YuNet face detection + dual MiniFASNet anti-spoof active';
+    hudBadge.textContent = 'SEARCHING';
+    hudBadge.className = 'px-2 py-0.5 rounded text-[10px] font-bold font-mono uppercase bg-white/10 text-white/70';
+    setReticleColor('idle');
+    return;
+  }
+
+  // Face is detected!
+  document.getElementById('vf-idle').classList.add('hidden');
+  document.getElementById('scanline').classList.remove('hidden');
+
+  if (!data.is_live) {
+    // SPOOF DETECTED (Screen, Photo, Mask)
+    setReticleColor('spoof');
+    hudIcon.textContent = 'security';
+    hudIcon.className = 'material-icons text-[20px] text-red-400 shrink-0';
+    hudTitle.textContent = '⚠️ SPOOF DETECTED: Anti-spoofing Rejected Fake Face!';
+    hudSub.textContent = `Live-face score ${(data.liveness_score * 100).toFixed(0)}% — too low (needs 60%). Face the camera directly in good light.`;
+    hudBadge.textContent = 'SPOOF BLOCKED';
+    hudBadge.className = 'px-2 py-0.5 rounded text-[10px] font-bold font-mono uppercase bg-red-500/30 border border-red-500 text-red-300 animate-pulse';
+
+    // Spoof => on-screen error ONLY - never recorded in the attendance feed
+    const now = Date.now();
+    if (state.autoScan && !state.busy && now > state.spoofCooldownUntil) {
+      state.spoofCooldownUntil = now + 10000;
+      SoundEffects.playRejected();
+      toast(`Spoof blocked — live-face score ${(data.liveness_score * 100).toFixed(0)}% (needs 60%). Not recorded in attendance.`, 'err');
+    }
+  } else if (data.is_match) {
+    // RECOGNIZED EMPLOYEE
+    setReticleColor('match');
+    const matchedEmp = DB.byId(data.recognized_id) || DB.byName(data.recognized_name);
+    const empId = matchedEmp ? matchedEmp.id : (data.recognized_id || 'STAFF');
+    const empName = matchedEmp ? matchedEmp.name : data.recognized_name;
+
+    hudIcon.textContent = 'verified_user';
+    hudIcon.className = 'material-icons text-[20px] text-brand-400 shrink-0';
+    hudTitle.textContent = `Verified: ${empName} (${empId})`;
+    hudSub.textContent = `Live Person: ${(data.liveness_score * 100).toFixed(0)}% | SFace Cosine Match: ${data.similarity.toFixed(2)}`;
+    hudBadge.textContent = 'MATCHED';
+    hudBadge.className = 'px-2 py-0.5 rounded text-[10px] font-bold font-mono uppercase bg-brand-500/30 border border-brand-500 text-brand-300';
+
+    // Attendance constraints: one event per visit + minimum gap per employee
+    const now = Date.now();
+    const gapLeft = SCAN_RULES.minGapMs - (now - (state.cooldowns[empId] || 0));
+    if (state.visitLatch === empId || gapLeft > 0) {
+      const last = state.events.find(e => e.empId === empId && e.status === 'accepted');
+      const lastType = last ? last.type : 'IN';
+      hudSub.textContent = state.visitLatch === empId
+        ? `Checked ${lastType === 'IN' ? 'in' : 'out'} - step away from the camera, come back to ${lastType === 'IN' ? 'check out' : 'check in'}`
+        : `Already ${lastType === 'IN' ? 'checked in' : 'checked out'} - wait ${Math.ceil(gapLeft / 1000)}s or step aside`;
+      return;
+    }
+
+    // DWELL: look at the camera ~1.5s so the kiosk can confirm the person exists
+    const held = now - (state.dwellSince || 0);
+    if (held < SCAN_RULES.dwellMs) {
+      hudSub.textContent = `Hold still — confirming ${(Math.max(0, SCAN_RULES.dwellMs - held) / 1000).toFixed(1)}s…`;
+      hudBadge.textContent = 'VERIFYING';
+      hudBadge.className = 'px-2 py-0.5 rounded text-[10px] font-bold font-mono uppercase bg-amber-500/30 border border-amber-500 text-amber-300 animate-pulse';
+      return;
+    }
+
+    // Trigger auto-scan
+    if (state.autoScan && !state.busy) {
+      triggerLiveBiometricScan(empId, empName, data.liveness_score);
+    }
+  } else {
+    // LIVE HUMAN BUT UNKNOWN PERSON
+    setReticleColor('unknown');
+    hudIcon.textContent = 'person_search';
+    hudIcon.className = 'material-icons text-[20px] text-amber-400 shrink-0';
+    hudTitle.textContent = 'Real person detected, but not registered';
+    hudSub.textContent = data.total_enrolled > 0
+      ? `Live Human (${(data.liveness_score * 100).toFixed(0)}%) · Best match score ${data.similarity.toFixed(2)} (Below threshold)`
+      : 'Live Human · No employees enrolled yet. Click "Enroll Face" above!';
+    hudBadge.textContent = 'UNKNOWN';
+    hudBadge.className = 'px-2 py-0.5 rounded text-[10px] font-bold font-mono uppercase bg-amber-500/30 border border-amber-500 text-amber-300';
+    if (state.autoScan && Date.now() > state.unknownCooldownUntil) {
+      state.unknownCooldownUntil = Date.now() + 10000;
+      SoundEffects.playRejected();
+      toast('Face not recognized — not enrolled. Nothing recorded in attendance.', 'err');
+    }
+  }
+}
+
+function setReticleColor(mode) {
+  const corners = ['ret-tl', 'ret-tr', 'ret-bl', 'ret-br'];
+  const frame = document.getElementById('camera-frame');
+  const box = document.getElementById('reticle-box');
+
+  if (mode === 'match') {
+    corners.forEach(id => document.getElementById(id).className = document.getElementById(id).className.replace(/border-\w+-\d+/g, 'border-brand-400'));
+    frame.style.borderColor = 'rgba(34, 197, 94, 0.85)';
+    box.style.borderColor = 'rgba(34, 197, 94, 0.4)';
+  } else if (mode === 'spoof') {
+    corners.forEach(id => document.getElementById(id).className = document.getElementById(id).className.replace(/border-\w+-\d+/g, 'border-red-500'));
+    frame.style.borderColor = 'rgba(239, 68, 68, 0.9)';
+    box.style.borderColor = 'rgba(239, 68, 68, 0.5)';
+  } else if (mode === 'unknown') {
+    corners.forEach(id => document.getElementById(id).className = document.getElementById(id).className.replace(/border-\w+-\d+/g, 'border-amber-400'));
+    frame.style.borderColor = 'rgba(245, 158, 11, 0.7)';
+    box.style.borderColor = 'rgba(245, 158, 11, 0.3)';
+  } else {
+    corners.forEach(id => document.getElementById(id).className = document.getElementById(id).className.replace(/border-\w+-\d+/g, 'border-brand-400/50'));
+    frame.style.borderColor = 'rgba(34, 197, 94, 0.4)';
+    box.style.borderColor = 'rgba(255, 255, 255, 0.1)';
+  }
+}
+
+async function triggerLiveBiometricScan(empId, empName, livenessScore) {
+  if (state.busy) return;
+  const now = Date.now();
+  const gapLeft = SCAN_RULES.minGapMs - (now - (state.cooldowns[empId] || 0));
+  if (state.visitLatch === empId || gapLeft > 0) {
+    const last = state.events.find(e => e.empId === empId && e.status === 'accepted');
+    const dir = last && last.type === 'IN' ? 'checked in' : 'checked out';
+    toast(state.visitLatch === empId
+      ? `${empName} already ${dir} - step away from the camera first`
+      : `${empName} already ${dir} - wait ${Math.ceil(gapLeft / 1000)}s`, 'info');
+    return;
+  }
+  const type = nextTypeFor(empId);
+
+  // SIGN-OUT GUARD: if the shift still has time left, ask before ending it
+  const signoutEmp = DB.byId(empId) || { id: empId, name: empName, shift: true, access: true, shiftEnd: null };
+  const minutesLeft = type === 'OUT' ? shiftMinutesLeft(signoutEmp) : -1;
+  if (minutesLeft > 0) {
+    state.busy = true;
+    state.visitLatch = empId;
+    state.latchClearSince = 0;
+    promptSignOut(signoutEmp, empName, livenessScore, type, minutesLeft);
+    return;
+  }
+
+  state.busy = true;
+  state.cooldowns[empId] = now;
+  state.visitLatch = empId;
+  state.latchClearSince = 0;
+  return runAttendanceScan(empId, empName, livenessScore, type);
+}
+
+async function runAttendanceScan(empId, empName, livenessScore, type) {
+  const payload = {
+    deviceToken: Station.deviceToken,
+    deviceId: Station.deviceId,
+    employeeId: empId,
+    employeeName: empName,
+    type,
+    method: 'Biometric',
+    livenessScore: livenessScore || 0.95,
+    timestamp: new Date().toISOString(),
+  };
+
+  const { status, body } = await postPublicEvent(payload);
+  const emp = DB.byId(empId) || { id: empId, name: empName, shift: true, access: true };
+
+  showResult(status, body, emp, type);
+
+  if (status === 201) {
+    SoundEffects.playSuccess();
+    addEvent({
+      empId: emp.id,
+      name: emp.name,
+      type,
+      method: 'Biometric',
+      status: 'accepted',
+      detail: `${body.recordId} · live ${(livenessScore * 100).toFixed(0)}%`
+    });
+    toast(`${type === 'IN' ? 'Check-in' : 'Check-out'} recorded — ${emp.name}`, 'ok');
+  } else {
+    SoundEffects.playRejected();
+    if (body.error !== 'LIVENESS_FAILED') {   // spoof is never written to the attendance feed
+      addEvent({
+        empId: emp.id,
+        name: emp.name,
+        type,
+        method: 'Biometric',
+        status: 'rejected',
+        detail: `${body.error}: ${body.message}`
+      });
+    }
+    toast(`Rejected — ${emp.name}: ${body.message}`, 'err');
+  }
+
+  state.busy = false;
+}
+
+/* =====================================================================
+ * SCAN BUTTON TRIGGER (AUTO LIVE SCAN OR MOCK SCENARIO)
+ * ===================================================================== */
+async function handleScanButton() {
+  const scenario = document.getElementById('scenario').value;
+
+  // If connected and user selected "auto" with an active face, use live detection
+  if (state.bioConnected && scenario === 'auto' && state.lastBioData && state.lastBioData.face_detected) {
+    if (!state.lastBioData.is_live) {
+      SoundEffects.playRejected();
+      toast('Cannot scan: Liveness check failed (Spoof detected)', 'err');
+      return;
+    }
+    if (state.lastBioData.is_match) {
+      const empId = state.lastBioData.recognized_id || (DB.byName(state.lastBioData.recognized_name)?.id);
+      if (Date.now() - (state.dwellSince || 0) < SCAN_RULES.dwellMs) {
+        toast('Look at the camera for 1–2 seconds first — confirming your face…', 'err');
+        return;
+      }
+      triggerLiveBiometricScan(empId, state.lastBioData.recognized_name, state.lastBioData.liveness_score);
+      return;
+    } else {
+      toast('Face not registered! Click "Enroll Face" to register.', 'err');
+      return;
+    }
+  }
+
+  // Fallback to simulation
+  simulateScan();
+}
+
+function pickScenarioEmployee(scenario) {
+  const byFlag = (access, shift) => DB.employees.filter(e => e.access === access && e.shift === shift);
+  if (scenario === 'accept')  return byFlag(true, true)[Math.floor(Math.random() * 3)];
+  if (scenario === 'noshift') return byFlag(true, false)[0];
+  if (scenario === 'noaccess')return byFlag(false, true)[0] || byFlag(false, false)[0];
+  if (scenario === 'spoof')   return byFlag(true, true)[Math.floor(Math.random() * 3)];
+  return DB.employees[Math.floor(Math.random() * DB.employees.length)];
+}
+
+async function simulateScan() {
+  if (state.busy) return;
+  state.busy = true;
+  const btn = document.getElementById('scan-btn');
+  btn.disabled = true; btn.classList.add('opacity-60', 'cursor-wait');
+
+  document.getElementById('vf-idle').classList.add('hidden');
+  document.getElementById('vf-result').classList.add('hidden');
+  document.getElementById('scanline').classList.remove('hidden');
+
+  const scenario = document.getElementById('scenario').value;
+  const emp = pickScenarioEmployee(scenario);
+  const type = nextTypeFor(emp.id);
+  const liveness = scenario === 'spoof' ? +(0.18 + Math.random() * 0.3).toFixed(2) : +(0.85 + Math.random() * 0.12).toFixed(2);
+
+  await sleep(1000);
+
+  const payload = {
+    deviceToken: Station.deviceToken,
+    deviceId: Station.deviceId,
+    employeeId: emp.id,
+    type,
+    method: 'Biometric',
+    livenessScore: liveness,
+    timestamp: new Date().toISOString(),
+  };
+  const { status, body } = await postPublicEvent(payload);
+
+  document.getElementById('scanline').classList.add('hidden');
+  showResult(status, body, emp, type);
+
+  if (status === 201) {
+    SoundEffects.playSuccess();
+    addEvent({ empId: emp.id, name: emp.name, type, method: 'Biometric', status: 'accepted', detail: `${body.recordId} · liveness ${liveness}` });
+    toast(`${type === 'IN' ? 'Checked in' : 'Checked out'} — ${emp.name}`, 'ok');
+  } else {
+    SoundEffects.playRejected();
+    if (body.error !== 'LIVENESS_FAILED') addEvent({ empId: emp.id, name: emp.name, type, method: 'Biometric', status: 'rejected', detail: `${body.error}: ${body.message}` });
+    toast(`Rejected — ${emp.name}: ${body.message}`, 'err');
+  }
+
+  state.busy = false;
+  btn.disabled = false; btn.classList.remove('opacity-60', 'cursor-wait');
+}
+
+function showResult(status, body, emp, type) {
+  const el = document.getElementById('vf-result');
+  const ok = status === 201;
+  el.className = 'absolute inset-0 fade-in z-20 ' + (ok ? 'bg-brand-900/90' : 'bg-red-900/90');
+  el.innerHTML = `
+    <div class="absolute inset-0 flex flex-col items-center justify-center text-center px-6">
+      <span class="material-icons leading-none ${ok ? 'text-brand-400' : 'text-red-400'}" style="font-size:72px">${ok ? 'check_circle' : 'cancel'}</span>
+      <p class="text-white text-xl font-bold mt-3">${ok ? (type === 'IN' ? 'Checked In' : 'Checked Out') : 'Rejected'}</p>
+      <p class="text-white/90 text-sm font-semibold mt-1">${emp.name} · ${emp.id}</p>
+      <p class="${ok ? 'text-brand-200' : 'text-red-200'} text-xs mt-1.5 max-w-md">${ok ? `${Station.gymName} · ${type === 'IN' ? 'Check-in' : 'Check-out'} recorded via biometric` : body.message}</p>
+      <p class="text-white/50 text-[11px] mt-3 font-mono">${ok ? body.recordId : `HTTP ${status} · ${body.error}`}</p>
+    </div>`;
+  el.classList.remove('hidden');
+  clearTimeout(state.resultTimer);
+  state.resultTimer = setTimeout(() => {
+    el.classList.add('hidden');
+    if (!state.lastBioData || !state.lastBioData.face_detected) {
+      document.getElementById('vf-idle').classList.remove('hidden');
+    }
+  }, 4000);
+}
+
+/* =====================================================================
+ * SIGN-OUT CONFIRMATION (prevent accidental check-out before shift end)
+ * ===================================================================== */
+function promptSignOut(emp, empName, livenessScore, type, minutesLeft) {
+  const el = document.getElementById('vf-result');
+  const ends = emp.shiftEnd || 'end of day';
+  state.pendingSignOut = { empId: emp.id, empName, livenessScore, type, timer: null };
+  el.className = 'absolute inset-0 fade-in z-20 bg-charcoal-900/95';
+  el.innerHTML = `
+    <div class="absolute inset-0 flex flex-col items-center justify-center text-center px-6">
+      <span class="material-icons leading-none text-amber-400" style="font-size:64px">schedule</span>
+      <p class="text-white text-xl font-bold mt-3">Sign out now?</p>
+      <p class="text-white/90 text-sm font-semibold mt-1">${empName} (${emp.id})</p>
+      <p class="text-amber-200 text-xs mt-1.5 max-w-md">Your shift ends at ${ends} - ${fmtRemain(minutesLeft)} still to go. Signing out now records you as leaving before your shift ends.</p>
+      <div class="flex gap-3 mt-5">
+        <button onclick="resolveSignOutConfirm(true)" class="h-11 px-6 rounded-lg bg-brand-600 hover:bg-brand-700 text-white text-sm font-bold flex items-center gap-2 transition-all shadow">
+          <span class="material-icons text-[18px]">logout</span> Sign Out
+        </button>
+        <button onclick="resolveSignOutConfirm(false)" class="h-11 px-6 rounded-lg bg-charcoal-700 hover:bg-charcoal-600 text-white text-sm font-bold flex items-center gap-2 transition-all shadow">
+          <span class="material-icons text-[18px]">work</span> Not yet
+        </button>
+      </div>
+      <p class="text-white/40 text-[10px] mt-3 font-mono">No record is made until you choose - times out after 20s</p>
+    </div>`;
+  el.classList.remove('hidden');
+  document.getElementById('vf-idle').classList.add('hidden');
+  state.pendingSignOut.timer = setTimeout(() => resolveSignOutConfirm(false), 20000);
+}
+
+function resolveSignOutConfirm(approve) {
+  const pend = state.pendingSignOut;
+  if (!pend) return;
+  clearTimeout(pend.timer);
+  state.pendingSignOut = null;
+  const el = document.getElementById('vf-result');
+  el.classList.add('hidden');
+  if (!state.lastBioData || !state.lastBioData.face_detected) {
+    document.getElementById('vf-idle').classList.remove('hidden');
+  }
+  if (approve) {
+    state.cooldowns[pend.empId] = Date.now();
+    runAttendanceScan(pend.empId, pend.empName, pend.livenessScore, pend.type);
+  } else {
+    state.busy = false;
+    toast('Sign-out cancelled - shift still on. Step away, come back when you really mean to leave.', 'info');
+  }
+}
+
+/* =====================================================================
+ * FACE ENROLLMENT MODAL & API
+ * ===================================================================== */
+function openEnrollModal() {
+  document.getElementById('modal-enroll').classList.remove('hidden');
+  populateEnrollDropdown();
+  loadEnrolledEmployees();
+}
+
+function closeEnrollModal() {
+  document.getElementById('modal-enroll').classList.add('hidden');
+}
+
+function populateEnrollDropdown() {
+  const sel = document.getElementById('enroll-select-emp');
+  sel.innerHTML = '<option value="">-- Choose from gym roster --</option>';
+  DB.employees.forEach(emp => {
+    const opt = document.createElement('option');
+    opt.value = emp.id;
+    opt.textContent = `${emp.name} (${emp.id} — ${emp.position})`;
+    sel.appendChild(opt);
+  });
+}
+
+function handleEnrollSelectChange() {
+  const sel = document.getElementById('enroll-select-emp');
+  const emp = DB.byId(sel.value);
+  if (emp) {
+    document.getElementById('enroll-emp-id').value = emp.id;
+    document.getElementById('enroll-emp-name').value = emp.name;
+  }
+}
+
+function updateModalLiveStatus(data) {
+  const dot = document.getElementById('enroll-cam-dot');
+  const status = document.getElementById('enroll-cam-status');
+  const sub = document.getElementById('enroll-cam-sub');
+  const pill = document.getElementById('enroll-liveness-pill');
+  const btn = document.getElementById('btn-submit-enroll');
+
+  if (!state.bioConnected) {
+    dot.className = 'w-2.5 h-2.5 rounded-full bg-red-500';
+    status.textContent = 'Camera Service Offline';
+    sub.textContent = 'Start webcam_app.py on port 5050 to enroll faces';
+    pill.textContent = 'OFFLINE';
+    pill.className = 'text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-red-100 text-red-700';
+    if (btn) btn.disabled = true;
+    return;
+  }
+
+  if (!data.face_detected) {
+    dot.className = 'w-2.5 h-2.5 rounded-full bg-amber-500 animate-pulse';
+    status.textContent = 'Waiting for face in camera…';
+    sub.textContent = 'Position employee in front of the kiosk lens';
+    pill.textContent = 'NO FACE';
+    pill.className = 'text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-charcoal-200 text-charcoal-600';
+    if (btn) btn.disabled = true;
+  } else if (!data.is_live) {
+    dot.className = 'w-2.5 h-2.5 rounded-full bg-red-500 animate-ping';
+    status.textContent = 'Spoof Detected! (Fake Face)';
+    sub.textContent = 'Liveness failed. Real living human required to enroll.';
+    pill.textContent = 'SPOOF REJECT';
+    pill.className = 'text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-red-100 text-red-700 font-bold';
+    if (btn) btn.disabled = true;
+  } else {
+    dot.className = 'w-2.5 h-2.5 rounded-full bg-brand-500';
+    status.textContent = 'Live Face Ready to Enroll';
+    sub.textContent = `Real Human Verified (${(data.liveness_score * 100).toFixed(0)}%) · Clear YuNet Face Detection`;
+    pill.textContent = 'READY';
+    pill.className = 'text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-brand-100 text-brand-700 font-bold';
+    if (btn) btn.disabled = false;
+  }
+}
+
+async function submitFaceEnrollment() {
+  const empCode = document.getElementById('enroll-emp-id').value.trim().toUpperCase();
+  const empName = document.getElementById('enroll-emp-name').value.trim();
+
+  if (!empName) {
+    toast('Please enter or select an employee name', 'err');
+    return;
+  }
+
+  const btn = document.getElementById('btn-submit-enroll');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="material-icons text-[18px] animate-spin">refresh</span> Enrolling…';
+
+  try {
+    const url = `${Station.biometricUrl}/enroll?name=${encodeURIComponent(empName)}&employee_code=${encodeURIComponent(empCode)}`;
+    const res = await fetch(url, { method: 'POST' });
+    const data = await res.json();
+
+    if (data.success) {
+      SoundEffects.playSuccess();
+      toast(data.message, 'ok');
+      loadEnrolledEmployees();
+      document.getElementById('enroll-emp-id').value = '';
+      document.getElementById('enroll-emp-name').value = '';
+      document.getElementById('enroll-select-emp').value = '';
+    } else {
+      SoundEffects.playRejected();
+      toast(data.message || 'Enrollment rejected', 'err');
+    }
+  } catch (err) {
+    toast('Enrollment request failed: ' + err.message, 'err');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<span class="material-icons text-[18px]">camera</span> Capture &amp; Enroll Current Face';
+  }
+}
+
+async function loadEnrolledEmployees() {
+  const container = document.getElementById('enrolled-faces-list');
+  const countEl = document.getElementById('enroll-list-count');
+  try {
+    const res = await fetch(`${Station.biometricUrl}/employees`);
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const list = await res.json();
+    countEl.textContent = `${list.length} registered`;
+    document.getElementById('enrolled-count-pill').textContent = `${list.length} Enrolled`;
+
+    if (!list.length) {
+      container.innerHTML = '<p class="text-xs text-charcoal-400 italic py-2">No faces registered yet. Choose a staff member and click Capture above.</p>';
+      return;
+    }
+
+    container.innerHTML = list.map(emp => `
+      <div class="flex items-center justify-between p-2 rounded-lg border border-charcoal-200 bg-white hover:border-brand-300 transition-all">
+        <div class="flex items-center gap-2.5 min-w-0">
+          <img src="${emp.thumb || ''}" class="w-8 h-8 rounded-full object-cover border border-charcoal-200 bg-charcoal-100 shrink-0" alt="${emp.name}" onerror="this.src='https://ui-avatars.com/api/?name=${encodeURIComponent(emp.name)}&background=22c55e&color=fff'">
+          <div class="min-w-0">
+            <p class="text-xs font-bold text-charcoal-800 truncate leading-tight">${emp.name}</p>
+            <p class="text-[10px] text-charcoal-500 font-mono leading-tight">${emp.employee_code || emp.id} · ${emp.enrolled_at || 'Registered'}</p>
+          </div>
+        </div>
+        <button onclick="deleteEnrolledEmployee('${emp.id}')" title="Delete face enrollment" class="p-1 rounded text-charcoal-400 hover:text-red-500 hover:bg-red-50 transition-colors">
+          <span class="material-icons text-[16px]">delete</span>
+        </button>
+      </div>
+    `).join('');
+  } catch (err) {
+    container.innerHTML = '<p class="text-xs text-red-500 italic">Could not fetch enrolled faces from service.</p>';
+  }
+}
+
+async function deleteEnrolledEmployee(id) {
+  if (!confirm('Are you sure you want to remove this employee\'s face embedding?')) return;
+  try {
+    const res = await fetch(`${Station.biometricUrl}/employees/${encodeURIComponent(id)}`, { method: 'DELETE' });
+    const data = await res.json();
+    if (data.success) {
+      toast(data.message, 'ok');
+      loadEnrolledEmployees();
+    } else {
+      toast(data.message || 'Failed to delete', 'err');
+    }
+  } catch (err) {
+    toast('Delete failed: ' + err.message, 'err');
+  }
+}
+
+/* =====================================================================
+ * MANUAL ENTRY (ADR-004 fallback)
+ * ===================================================================== */
+async function submitManual(ev) {
+  ev.preventDefault();
+  if (state.busy) return;
+  const empId = document.getElementById('m-emp').value.trim().toUpperCase();
+  const emp = DB.byId(empId);
+  if (!emp) { toast(`Unknown employee ID — ${empId || '(empty)'}`, 'err'); return; }
+  const type = document.querySelector('input[name="m-type"]:checked').value;
+  const time = nowTime().slice(0, 5);
+
+  state.busy = true;
+  const payload = {
+    deviceToken: Station.deviceToken,
+    deviceId: Station.deviceId,
+    employeeId: emp.id,
+    employeeName: emp.name,
+    type,
+    method: 'Manual',
+    time,
+    timestamp: new Date().toISOString(),
+  };
+  const { status, body } = await postPublicEvent(payload);
+
+  if (status === 201) {
+    SoundEffects.playSuccess();
+    state.cooldowns[emp.id] = Date.now();
+    state.visitLatch = emp.id;
+    state.latchClearSince = 0;
+    addEvent({ empId: emp.id, name: emp.name, type, method: 'Manual', status: 'accepted', entryTime: time, detail: body.recordId });
+    toast(`Manual ${type === 'IN' ? 'check-in' : 'check-out'} recorded — ${emp.name}`, 'ok');
+    document.getElementById('m-emp').value = '';
+  } else {
+    SoundEffects.playRejected();
+    addEvent({ empId: emp.id, name: emp.name, type, method: 'Manual', status: 'rejected', detail: `${body.error}: ${body.message}` });
+    toast(`Rejected — ${body.message}`, 'err');
+  }
+  state.busy = false;
+}
+
+/* =====================================================================
+ * EVENT FEED + STATS (persisted across kiosk reloads)
+ * ===================================================================== */
+function loadEvents() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(STORE_KEY) || '[]');
+    state.events = raw.filter(e => e.day === todayKey() && e.name !== 'Spoof Attempt' && !String(e.detail || '').includes('LIVENESS_FAILED'));   // today's feed, minus spoof rows (never recorded)
+  } catch (_) { state.events = []; }
+}
+function persistEvents() {
+  try { localStorage.setItem(STORE_KEY, JSON.stringify(state.events.slice(0, 100))); } catch (_) {}
+}
+function addEvent(ev) {
+  const t = nowTime();
+  state.events.unshift({ ...ev, entryTime: ev.entryTime || t.slice(0, 5), time: t, day: todayKey() });
+  persistEvents();
+  renderEvents(); renderStats();
+}
+function clearEvents() {
+  state.events = [];
+  persistEvents();
+  renderEvents(); renderStats();
+  toast('Attendance feed cleared', 'info');
+}
+
+function renderEvents() {
+  const el = document.getElementById('events-list');
+  const byEmp = {};
+  state.events.forEach(e => { (byEmp[e.empId] = byEmp[e.empId] || []).push(e); });
+
+  const boxes = [];
+  const scheduled = new Set();
+  DB.employees.forEach(emp => {
+    if (emp.access && emp.shift) { scheduled.add(emp.id); boxes.push({ emp, evs: byEmp[emp.id] || [] }); }
+  });
+  Object.keys(byEmp).forEach(id => {
+    if (!scheduled.has(id)) {
+      const evs = byEmp[id];
+      const emp = DB.byId(id) || { id, name: evs[0].name || id, position: '', shiftStart: null, shiftEnd: null, access: false, shift: false };
+      boxes.push({ emp, evs });
+    }
+  });
+
+  // order: present now -> already left -> attempted but rejected -> not arrived yet
+  const rank = b => {
+    const acc = b.evs.filter(e => e.status === 'accepted');
+    if (acc.length) return acc[0].type === 'IN' ? 0 : 1;
+    return b.evs.length ? 2 : 3;
+  };
+  boxes.sort((a, b) => rank(a) - rank(b));
+
+  el.innerHTML = boxes.map(b => empBoxHtml(b.emp, b.evs)).join('');
+}
+
+function empBoxHtml(emp, evs) {
+  const acc = evs.filter(e => e.status === 'accepted');
+  const rej = evs.filter(e => e.status === 'rejected');
+  const latestIn = acc.find(e => e.type === 'IN') || null;
+  const latestOut = acc.find(e => e.type === 'OUT') || null;
+  const present = acc.length > 0 && acc[0].type === 'IN';
+  const done = acc.length > 0 && !present;
+  const inTime = latestIn ? (latestIn.entryTime || String(latestIn.time).slice(0, 5)) : null;
+  const outTime = latestOut ? String(latestOut.time).slice(0, 5) : null;
+  const late = latestIn ? lateMins(latestIn) : null;
+  const hasShift = !!(emp.shift && emp.shiftStart && emp.shiftEnd);   // day-off employees show "No shift today"
+  const left = hasShift ? toMin(emp.shiftEnd) - toMin(nowTime().slice(0, 5)) : -1;
+  const outMin = (done && outTime) ? toMin(outTime) : -1;
+  const early = (hasShift && outMin >= 0) ? toMin(emp.shiftEnd) - outMin : -1;
+
+  const statusBadge = present
+    ? '<span class="text-[9px] font-bold px-1.5 py-0.5 rounded bg-brand-100 text-brand-800">PRESENT</span>'
+    : done
+      ? '<span class="text-[9px] font-bold px-1.5 py-0.5 rounded bg-charcoal-200 text-charcoal-600">LEFT</span>'
+      : '<span class="text-[9px] font-bold px-1.5 py-0.5 rounded bg-charcoal-100 text-charcoal-500">NOT IN</span>';
+  const borderCls = present ? 'bg-brand-50/70 border-brand-200'
+    : (rej.length && !acc.length ? 'bg-red-50/50 border-red-200' : 'bg-white border-charcoal-200');
+  const icon = present ? 'login' : (done ? 'logout' : 'person');
+  const iconCls = present ? 'text-brand-600' : (done ? 'text-charcoal-500' : 'text-charcoal-400');
+  const lateChip = (late !== null && late > 0)
+    ? '<span class="text-[9px] font-bold px-1.5 py-0.5 rounded bg-red-100 text-red-700">Late ' + fmtLate(late) + '</span>'
+    : (late === 0 ? '<span class="text-[9px] font-bold px-1.5 py-0.5 rounded bg-brand-100 text-brand-700">On time</span>' : '');
+  const inMethod = (latestIn && latestIn.method === 'Manual')
+    ? '<span class="text-[9px] font-semibold text-amber-600">manual</span>' : '';
+  const outMethod = (latestOut && latestOut.method === 'Manual')
+    ? '<span class="text-[9px] font-semibold text-amber-600">manual</span>' : '';
+  const rejLine = rej.length
+    ? '<p class="text-[9px] text-red-500 mt-1 truncate">Rejected ' + String(rej[0].time).slice(0, 5) + ' - ' + String(rej[0].detail || '').split(':')[0] + '</p>'
+    : '';
+  const shiftRight = !hasShift ? ''
+    : (present
+        ? (left > 0
+            ? '<span class="text-brand-700 font-semibold">ends in ' + fmtRemain(left) + '</span>'
+            : '<span class="text-charcoal-400">shift over</span>')
+        : (early > 0
+            ? '<span class="text-red-600 font-semibold">left ' + fmtRemain(early) + ' early</span>'
+            : '<span class="text-charcoal-400">ended ' + emp.shiftEnd + '</span>'));
+
+  return `
+    <div class="p-2.5 rounded-lg border fade-in ${borderCls}">
+      <div class="flex items-center justify-between gap-2">
+        <div class="flex items-center gap-1.5 min-w-0">
+          <span class="material-icons leading-none ${iconCls}" style="font-size:15px">${icon}</span>
+          <p class="text-xs font-bold text-charcoal-900 truncate">${emp.name}</p>
+          <span class="text-[9px] font-mono text-charcoal-400 shrink-0">${emp.id}</span>
+        </div>
+        ${statusBadge}
+      </div>
+      <div class="mt-1.5 grid grid-cols-2 gap-y-1 text-[10px] text-charcoal-600">
+        ${hasShift
+          ? `<span><b class="text-charcoal-800">Shift</b> ${emp.shiftStart} - ${emp.shiftEnd}</span>`
+          : '<span class="text-charcoal-400">No shift today</span>'}
+        <span class="text-right">${shiftRight}</span>
+        <span class="flex items-center gap-1 flex-wrap"><b class="text-charcoal-800">IN</b> ${inTime || '-'} ${inMethod} ${lateChip}</span>
+        <span class="flex items-center justify-end gap-1 flex-wrap"><b class="text-charcoal-800">OUT</b> ${outTime || '-'} ${outMethod}</span>
+      </div>
+      ${rejLine}
+    </div>`;
+}
+
+function renderStats() {
+  const accepted = state.events.filter(e => e.status === 'accepted');
+  const present = new Set(accepted.filter(e => e.type === 'IN' && !state.events.some(o => o.empId === e.empId && o.type === 'OUT' && o.status === 'accepted' && o.time >= e.time)).map(e => e.empId));
+  const lateCount = state.events.filter(e => lateMins(e) > 0).length;
+  document.getElementById('stat-present').textContent = present.size;
+  document.getElementById('stat-expected').textContent = DB.employees.filter(e => e.access && e.shift).length;
+  const sum = document.getElementById('att-summary');
+  if (sum) sum.textContent = lateCount ? `${present.size} present · ${lateCount} late today` : `${present.size} present today`;
+}
+
+/* =====================================================================
+ * UI GLUE & TOGGLES
+ * ===================================================================== */
+function toggleSound() {
+  SoundEffects.enabled = !SoundEffects.enabled;
+  document.getElementById('sound-icon').textContent = SoundEffects.enabled ? 'volume_up' : 'volume_off';
+  document.getElementById('sound-label').textContent = SoundEffects.enabled ? 'Audio: ON' : 'Audio: OFF';
+  toast(`Audio alerts ${SoundEffects.enabled ? 'enabled' : 'muted'}`, 'info');
+}
+
+function toggleAutoScan() {
+  state.autoScan = !state.autoScan;
+  const btn = document.getElementById('autoscan-btn');
+  const lbl = document.getElementById('autoscan-label');
+  if (state.autoScan) {
+    btn.className = 'inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded border bg-brand-50 border-brand-200 text-brand-700 hover:bg-brand-100 transition-colors';
+    lbl.textContent = 'Auto-Scan: ON';
+    toast('Auto-Scan enabled: Employees will be checked in on sight', 'ok');
+  } else {
+    btn.className = 'inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded border bg-white border-charcoal-200 text-charcoal-600 hover:bg-charcoal-100 transition-colors';
+    lbl.textContent = 'Auto-Scan: OFF';
+    toast('Auto-Scan paused: Click "Scan Face Now" to check in', 'info');
+  }
+}
+
+function toggleOfflineHelp() {
+  const el = document.getElementById('offline-help');
+  el.classList.toggle('hidden');
+}
+
+function toast(msg, type) {
+  const host = document.getElementById('toast-host');
+  const colors = {
+    ok: 'bg-brand-600 text-white',
+    err: 'bg-red-600 text-white',
+    info: 'bg-charcoal-800 text-white',
+  };
+  const icons = { ok: 'check_circle', err: 'error', info: 'info' };
+  const el = document.createElement('div');
+  el.className = `pointer-events-auto fade-in flex items-center gap-2 px-4 py-2.5 rounded-lg shadow-lg text-xs font-semibold ${colors[type] || colors.info}`;
+  el.innerHTML = `<span class="material-icons text-[16px]">${icons[type] || 'info'}</span><span>${msg}</span>`;
+  host.appendChild(el);
+  setTimeout(() => { el.style.transition = 'opacity .3s'; el.style.opacity = '0'; setTimeout(() => el.remove(), 320); }, 3400);
+}
+
+function tickClock() {
+  const d = new Date();
+  document.getElementById('live-clock').textContent = `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+  document.getElementById('live-date').textContent = d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
+  const mn = document.getElementById('m-now');
+  if (mn) mn.textContent = `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+/* --- init --- */
+(function init() {
+  const list = document.getElementById('emp-ids');
+  DB.employees.forEach(e => {
+    const opt = document.createElement('option');
+    opt.value = e.id;
+    opt.label = `${e.name} — ${e.position}`;
+    list.appendChild(opt);
+  });
+  loadEvents();
+  renderEvents(); 
+  renderStats();
+  tickClock();
+  setInterval(tickClock, 1000);
+
+  // Poll Biometric Service every 350ms
+  checkBiometricConnection(false);
+  pollingInterval = setInterval(checkBiometricConnection, 350);
+})();
+</script>
+</body>
+</html>
+

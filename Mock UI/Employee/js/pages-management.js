@@ -530,6 +530,8 @@ function renderTeamSchedule() {
   const isEditMode = !!state.tsEditing && canEdit;
   const isDeleting = !!state.tsDeleting && isEditMode;
   const teamRows = MOCK.teamMembers.slice(0, 8);
+  // Same page, renamed for the Branch Manager preview (see navPools() in core.js).
+  const schedTitle = MOCK.currentUser.role === 'Branch Manager' ? 'Branch Schedule' : 'Team Schedule';
 
   // header meta
   const histDesc = lock === 'current'
@@ -548,7 +550,7 @@ function renderTeamSchedule() {
   `).join('') + `<span class="inline-flex items-center gap-1"><span class="w-2.5 h-2.5 rounded inline-block border border-charcoal-200 bg-charcoal-100"></span>Off</span>`;
   const monthLabel = schMonthLabel(+selMo.split('-')[0], +selMo.split('-')[1]);
 
-  return `<div class="space-y-4">
+  return `<div class="min-h-full flex flex-col gap-4">
     <!-- Header -->
     <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
       <div class="flex items-center gap-3">
@@ -556,7 +558,7 @@ function renderTeamSchedule() {
           <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
         </div>
         <div>
-          <h1 class="text-xl font-bold text-charcoal-900">Team Schedule</h1>
+          <h1 class="text-xl font-bold text-charcoal-900">${schedTitle}</h1>
           <p class="text-xs text-charcoal-500 mt-0.5">${histDesc}</p>
         </div>
       </div>
@@ -572,13 +574,17 @@ function renderTeamSchedule() {
         </button>
         <button onclick="confirmTsPublish(${(period?`'${period.id}'`: '""')})" class="btn btn-sm btn-primary" ${isEditMode?'':'disabled'}>
           <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 1212l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>Publish
+        </button>
+        <button onclick="deleteTsSchedule(${(period?`'${period.id}'`: '""')})" class="btn btn-sm btn-danger-outline">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+          Delete Schedule
         </button>` : ``}
         <button onclick="navigateTo('shift-management')" class="btn btn-sm btn-secondary"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>Advanced Editor</button>
       </div>
     </div>
 
     <!-- Combined: Month + Periods + Actions -->
-    <div class="bg-white rounded-xl border border-charcoal-200 overflow-hidden">
+    <div class="flex-1 min-h-0 flex flex-col bg-white rounded-xl border border-charcoal-200 overflow-hidden">
       <!-- Month dropdown + Live badge + Actions -->
       <div class="px-4 pt-3 pb-2 flex items-center gap-3 flex-wrap">
         <label class="text-[10px] font-semibold text-charcoal-400 uppercase tracking-wide shrink-0">Month</label>
@@ -595,9 +601,9 @@ function renderTeamSchedule() {
         </span>
         <div class="ml-auto flex gap-1.5 shrink-0">
           ${canEdit ? `
-          <button onclick="deleteTsSchedule('${period.id}')" class="btn btn-sm btn-danger-outline" ${isEditMode?'':'style=\"visibility:hidden\"'}>
-            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
-            Delete Schedule
+          <button onclick="fillTsAll('${period.id}')" class="btn btn-sm btn-secondary" ${isEditMode?'':'style=\"visibility:hidden\"'}>
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+            Fill All
           </button>
           <button onclick="resetTsPeriod('${period.id}')" class="btn btn-sm btn-secondary" ${isEditMode?'':'style=\"visibility:hidden\"'}>Reset</button>` : ''}
         </div>
@@ -620,8 +626,20 @@ function renderTeamSchedule() {
       ${period ? `
       <!-- Period hint -->
       <div class="px-4 py-2 border-t border-charcoal-100">
-        <p class="text-[10px] text-charcoal-400">${canEdit?(isEditMode?'Editing enabled — click a shift to rotate it.':'Preview — read only.'):''}</p>
+        <p class="text-[10px] text-charcoal-400">${canEdit?(isEditMode?'Editing enabled — pick a shift below, then click or drag across the grid to paint it. Row ➤ and day ⬇ buttons fill in one click.':'Preview — read only.'):''}</p>
       </div>
+      ${isEditMode ? `
+      <!-- Paint palette -->
+      <div class="px-4 py-2 border-t border-charcoal-100 bg-brand-50/40 flex items-center gap-1.5 flex-wrap">
+        <span class="text-[10px] font-semibold text-charcoal-600 mr-1 shrink-0">Paint shift:</span>
+        ${MOCK.shiftTemplates.map(tp => {
+          const sel = tsPaintSid() === tp.id;
+          return `<button onclick="setTsPaint('${tp.id}')" class="shrink-0 flex items-center gap-1.5 rounded-lg border bg-white px-2 py-1 text-[10px] font-semibold transition-all ${sel?'border-brand-500 ring-2 ring-brand-400 shadow-sm':'border-charcoal-200 hover:border-charcoal-300'}">
+            <span class="w-2.5 h-2.5 rounded border" style="background:${tp.bgColor};border-color:${tp.color}40"></span>${tp.name}${tp.isOff?'':`<span class="font-normal text-charcoal-400">${tp.start}–${tp.end}</span>`}
+          </button>`;
+        }).join('')}
+        <span class="text-[10px] text-charcoal-400 ml-auto hidden sm:inline">Click a cell or drag across the grid to paint it.</span>
+      </div>` : ''}
       <!-- stats + legend -->
       <div class="flex items-center gap-4 px-4 py-2 border-b border-charcoal-100 bg-charcoal-50/40 text-[10px] text-charcoal-500 flex-wrap">
         <span class="inline-flex items-center gap-1.5"><svg class="w-3.5 h-3.5 text-charcoal-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>${period.days.length} days</span>
@@ -631,16 +649,16 @@ function renderTeamSchedule() {
       </div>
 
       <!-- desktop table -->
-      <div class="table-responsive hidden lg:block">
-        <table class="data-table">
-          <thead><tr><th class="sticky left-0 bg-charcoal-50 z-10">Employee</th>${period.days.map(d=>`<th class="text-center">${d.num}<br/><span class="text-[9px] font-normal text-charcoal-400">${d.dow}</span></th>`).join('')}</tr></thead>
+      <div class="table-responsive hidden lg:flex flex-1 min-h-0 overflow-y-auto">
+        <table class="data-table" style="flex:1 1 auto">
+          <thead><tr><th class="sticky left-0 bg-charcoal-50 z-10">Employee</th>${period.days.map((d,di)=>`<th class="text-center">${d.num}<br/><span class="text-[9px] font-normal text-charcoal-400">${d.dow}</span>${isEditMode?`<button onclick="fillTsDay('${period.id}',${di})" title="Apply the selected shift to everyone on ${d.dow} ${d.num}" class="block mx-auto mt-0.5 p-0.5 rounded hover:bg-brand-100 text-charcoal-400 hover:text-brand-600"><svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 5v14M19 12l-7 7-7-7"/></svg></button>`:''}</th>`).join('')}</tr></thead>
           <tbody>${teamRows.map(m => {
             const roster = schRoster(m.id, period.id, period.days.length);
-            return `<tr><td class="sticky left-0 bg-white z-10"><div class="flex items-center gap-2"><div class="w-7 h-7 rounded-full bg-brand-100 text-brand-700 flex items-center justify-center text-[10px] font-semibold">${m.initials}</div><div><p class="text-xs font-medium text-charcoal-900">${m.name}</p><p class="text-[10px] text-charcoal-500">${m.position}</p></div></div></td>${
+            return `<tr><td class="sticky left-0 bg-white z-10"><div class="flex items-center gap-2"><div class="w-7 h-7 rounded-full bg-brand-100 text-brand-700 flex items-center justify-center text-[10px] font-semibold">${m.initials}</div><div><p class="text-xs font-medium text-charcoal-900">${m.name}</p><p class="text-[10px] text-charcoal-500">${m.position}</p></div>${isEditMode?`<button onclick="fillTsRow('${m.id}','${period.id}')" title="Fill all ${period.days.length} days for ${m.name} with the selected shift" class="ml-auto shrink-0 p-1 rounded hover:bg-brand-100 text-charcoal-400 hover:text-brand-600"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 12h16m0 0l-6-6m6 6l-6 6"/></svg></button>`:''}</div></td>${
               roster.map((sid,i)=>{
                 const t=getShiftTemplate(sid); const c=getShiftColor(t);
                 if(isEditMode){
-                  return `<td class="text-center"><button onclick="rotateTsShift(this,'${m.id}','${period.id}',${i})" class="schedule-shift-badge cursor-pointer hover:opacity-80 text-[10px] border" style="background:${c.bg};color:${c.text};border-color:${c.border}40" data-sid="${sid}">${t.isOff?'OFF':t.start+'–'+t.end}</button></td>`;
+                  return `<td class="text-center"><button onmousedown="tsPaintDown(event);paintTsCell(this,'${m.id}','${period.id}',${i})" onmouseenter="tsPaintOver(this,'${m.id}','${period.id}',${i})" class="schedule-shift-badge cursor-pointer hover:opacity-90 hover:ring-1 hover:ring-brand-400 text-[10px] border" style="background:${c.bg};color:${c.text};border-color:${c.border}40" data-sid="${sid}">${t.isOff?'OFF':t.start+'–'+t.end}</button></td>`;
                 }
                 return `<td class="text-center"><span class="schedule-shift-badge text-[10px] border" style="background:${c.bg};color:${c.text};border-color:${c.border}40">${t.isOff?'OFF':t.start}</span></td>`;
               }).join('')
@@ -761,26 +779,60 @@ function confirmCreateSchedule(){
   renderAll();
   showToast(`Custom schedule created: ${period.label}`);
 }
-function rotateTsShift(btn, empId, periodId, dayIdx){
-  const templates = MOCK.shiftTemplates;
-  const ids = templates.map(t => t.id);
-  const cur = btn.getAttribute('data-sid');
-  const ni = (ids.indexOf(cur)+1)%ids.length;
-  const nsid = ids[ni];
-  // Resolve the clicked period's day-count so the rotated roster aligns.
-  const [,moStr] = tsSelMonth().split('-');
-  const pers = schPeriodsFor(+schAnchorYear(), +moStr);
-  const pp = pers.find(p=>p.id===periodId);
-  const len = pp ? pp.days.length : 7;
-  const fresh = schRoster(empId, periodId, len);
-  fresh[dayIdx] = nsid;
-  schPersist(empId, periodId, fresh);
-  const t = getShiftTemplate(nsid); const c = getShiftColor(t);
-  btn.setAttribute('data-sid', nsid);
-  btn.style.background=c.bg; btn.style.color=c.text; btn.style.borderColor=c.border+'40';
-  btn.textContent = t.isOff?'OFF':t.start+'–'+t.end;
-  showToast(`${nsid.startsWith('st-off')?'Off day':t.name+' ('+(t.start??'')+'–'+(t.end??'')+')'} assigned to ${empId}`);
+// --- Fast painting (palette + drag + row/day fills) ---------------------------
+// Replaces the old one-click-per-day rotation: pick a shift once, then click
+// or drag across the grid to stamp it. Row/day/all fills cover bulk edits.
+let _tsPainting = false;
+function tsPaintSid() {
+  return state.tsPaint || (MOCK.shiftTemplates.find(t => !t.isOff) || MOCK.shiftTemplates[0]).id;
 }
+function setTsPaint(sid) { state.tsPaint = sid; renderAll(); }
+function tsPeriodLen(periodId) {
+  const [, moStr] = tsSelMonth().split('-');
+  const pers = schPeriodsFor(+schAnchorYear(), +moStr);
+  const pp = pers.find(p => p.id === periodId);
+  return pp ? pp.days.length : 7;
+}
+function styleTsCell(btn, sid) {
+  const t = getShiftTemplate(sid); const c = getShiftColor(t);
+  btn.setAttribute('data-sid', sid);
+  btn.style.background = c.bg; btn.style.color = c.text; btn.style.borderColor = c.border + '40';
+  btn.textContent = t.isOff ? 'OFF' : t.start + '–' + t.end;
+}
+function paintTsCell(btn, empId, periodId, dayIdx) {
+  const sid = tsPaintSid();
+  const len = tsPeriodLen(periodId);
+  const roster = schRoster(empId, periodId, len);
+  if (roster[dayIdx] === sid) return;
+  roster[dayIdx] = sid;
+  schPersist(empId, periodId, roster);
+  styleTsCell(btn, sid);
+}
+function tsPaintDown(ev) { if (ev) ev.preventDefault(); _tsPainting = true; }
+function tsPaintOver(btn, empId, periodId, dayIdx) { if (_tsPainting) paintTsCell(btn, empId, periodId, dayIdx); }
+document.addEventListener('mouseup', () => { _tsPainting = false; });
+function fillTsRow(empId, periodId) {
+  const len = tsPeriodLen(periodId); const sid = tsPaintSid();
+  schPersist(empId, periodId, Array(len).fill(sid));
+  renderAll();
+  showToast(`All ${len} days set to ${getShiftTemplate(sid).name}`);
+}
+function fillTsDay(periodId, dayIdx) {
+  const len = tsPeriodLen(periodId); const sid = tsPaintSid();
+  MOCK.teamMembers.slice(0, 8).forEach(m => {
+    const r = schRoster(m.id, periodId, len); r[dayIdx] = sid; schPersist(m.id, periodId, r);
+  });
+  renderAll();
+  showToast(`Day ${dayIdx + 1} set to ${getShiftTemplate(sid).name} for everyone`);
+}
+function fillTsAll(periodId) {
+  const len = tsPeriodLen(periodId); const sid = tsPaintSid();
+  if (!confirm(`Set every employee's whole period to ${getShiftTemplate(sid).name}?`)) return;
+  MOCK.teamMembers.forEach(m => schPersist(m.id, periodId, Array(len).fill(sid)));
+  renderAll();
+  showToast(`Entire period filled with ${getShiftTemplate(sid).name}`);
+}
+
 function deleteTsSchedule(periodId){
   if(!confirm('Delete all shifts in this period? This cannot be undone.')) return;
   const [,moStr] = tsSelMonth().split('-');
@@ -844,8 +896,12 @@ function renderShiftManagement() {
         <h1 class="text-xl font-bold text-charcoal-900">Shift Management</h1>
         <p class="text-xs text-charcoal-500 mt-0.5">Cycle: Aug 25 – Aug 31, 2026 &middot; ${filteredTeam.length} employees</p>
       </div>
-      <div class="flex gap-1.5">
-        <button onclick="showToast('Schedule published!')" class="btn btn-sm btn-primary">
+      <div class="flex gap-1.5 flex-wrap">
+        <button onclick="state.tsEditing=true;navigateTo('team-schedule')" class="btn btn-sm btn-secondary">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/></svg>
+          Assign Shifts
+        </button>
+        <button onclick="confirmTsPublish(tsSelPeriod())" class="btn btn-sm btn-primary">
           <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>Publish
         </button>
         <button onclick="showToast('Draft saved')" class="btn btn-sm btn-secondary">Save Draft</button>
@@ -1242,14 +1298,15 @@ function lightenHex(hex, amount) {
   return `#${r.toString(16).padStart(2,'0')}${g.toString(16).padStart(2,'0')}${b.toString(16).padStart(2,'0')}`;
 }
 
-// ==================== TEAM UPDATES ====================
+// ==================== TEAM ACTIONS ====================
 function renderTeamUpdates() {
   const sevColor = {high:'badge-red',medium:'badge-yellow',low:'badge-blue'};
   const sevBorder = {high:'border-l-red-400',medium:'border-l-yellow-400',low:'border-l-blue-400'};
   const sevBg = {high:'bg-red-50/50',medium:'bg-yellow-50/50',low:'bg-blue-50/50'};
   return `<div class="space-y-3">
     <div class="flex items-center justify-between">
-      <div><h1 class="text-xl font-bold text-charcoal-900">Team Updates</h1><p class="text-xs text-charcoal-500 mt-0.5">${MOCK.followUpItems.length} items requiring attention</p></div>
+      <div><h1 class="text-xl font-bold text-charcoal-900">Team Actions</h1><p class="text-xs text-charcoal-500 mt-0.5">${MOCK.followUpItems.length} items requiring attention</p></div>
+      <button onclick="openBranchActions()" class="btn btn-sm btn-primary flex-shrink-0"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>Take Action</button>
     </div>
     <div class="space-y-1.5">${MOCK.followUpItems.map(f=>`<div class="bg-white rounded-xl border border-charcoal-200 p-3 border-l-4 ${sevBorder[f.severity]} ${sevBg[f.severity]}">
       <div class="flex items-start justify-between">
@@ -1963,6 +2020,14 @@ const BRANCH_ACTIONS = [
 function openBranchActions() {
   const showAll = DEMO.showAll;
   const can = p => showAll || !p || hasPermission(p);
+  // The Team Leader opens this same palette from the Team Updates page
+  // ("Take Action") — brand it for their role instead of the branch.
+  const isTL = MOCK.currentUser.role === 'Team Leader';
+  const modalTitle = isTL ? 'Team Actions' : 'Branch Actions';
+  const hrTag = '<span class="text-[9px] font-bold uppercase bg-purple-50 text-purple-700 ring-1 ring-inset ring-purple-200 px-1 py-0.5 rounded">&rarr; HR</span>';
+  const intro = isTL
+    ? `Actions you can take as Team Leader for <b>your assigned team</b>. Items tagged ${hrTag} are sent to HR for final approval.`
+    : `Actions you can take as Branch Manager for <b>Revive Gym — Nasr City</b>. Items tagged ${hrTag} are sent to HR for final approval.`;
   const acts = BRANCH_ACTIONS.filter(a => can(a.perm));
   const pend = branchHrQueue().filter(d=>d.status==='Pending HR');
   const cards = acts.map(a => `
@@ -1987,8 +2052,8 @@ function openBranchActions() {
         ${statusBadge(d.status)}
       </div>`).join('')}
     </div>` : '';
-  openModal('Branch Actions', `
-    <p class="text-[11px] text-charcoal-500 mb-2.5">Actions you can take as Branch Manager for <b>Revive Gym — Nasr City</b>. Items tagged <span class="text-[9px] font-bold uppercase bg-purple-50 text-purple-700 ring-1 ring-inset ring-purple-200 px-1 py-0.5 rounded">&rarr; HR</span> are sent to HR for final approval.</p>
+  openModal(modalTitle, `
+    <p class="text-[11px] text-charcoal-500 mb-2.5">${intro}</p>
     <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">${cards}</div>
     ${pendHtml}`);
 }

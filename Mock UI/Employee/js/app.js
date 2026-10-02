@@ -46,7 +46,7 @@ const pageTitles = {
   'team-schedule': 'Team Schedule',
   'team-requests': 'Team Requests',
   'team-performance': 'Team Performance',
-  'team-updates': 'Team Updates',
+  'team-updates': 'Team Actions',
   'employees': 'Employees',
   'attendance-management': 'Attendance Management',
   'requests-management': 'Requests Management',
@@ -55,10 +55,17 @@ const pageTitles = {
   'leaving': 'Employee Leaving',
 };
 
+// The Team Schedule page is re-branded "Branch Schedule" while previewing as
+// the Branch Manager — mirrors the label swap done by navPools() in core.js.
+function pageTitleFor(id) {
+  if (id === 'team-schedule' && MOCK.currentUser.role === 'Branch Manager') return 'Branch Schedule';
+  return pageTitles[id] || 'Dashboard';
+}
+
 function renderAll() {
   const renderer = pageRenderers[state.currentPage];
   const html = renderer ? renderer() : '<div class="text-center py-20"><p class="text-charcoal-500">Page not found</p></div>';
-  const title = pageTitles[state.currentPage] || 'Dashboard';
+  const title = pageTitleFor(state.currentPage);
 
   // Desktop
   const mc = document.getElementById('main-content');

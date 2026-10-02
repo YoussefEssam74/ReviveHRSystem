@@ -335,10 +335,11 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .action-alert-item { display: flex; align-items: flex-start; gap: 0.75rem; padding: 0.375rem; border-radius: 0.5rem; background: rgba(255,255,255,0.5); }
 .action-alert-item + .action-alert-item { margin-top: 0.375rem; }
 
-/* Responsive table cards on mobile */
-@media (max-width: 1023px) {
-  .table-responsive { overflow-x: auto; -webkit-overflow-scrolling: touch; }
-}
+/* Responsive table cards — horizontally scrollable at ALL widths.
+   The Team Schedule table can hold 15+ day columns (custom periods), and its
+   card wrapper uses overflow-hidden, so without this the extra columns were
+   clipped on desktop with no way to scroll to them. */
+.table-responsive { overflow-x: auto; -webkit-overflow-scrolling: touch; }
 
 /* Request pills */
 .req-pill {

@@ -130,10 +130,10 @@ const MOCK = {
     { id: 'r15', employee: 'Hana Mostafa', gym: 'Heliopolis', type: 'Sick Leave', submittedDate: '2026-09-08', requestedDate: 'Sep 16, 2026', status: 'Pending HR Review', bmDecision: 'Approved', bmComment: 'Coverage by Tarek confirmed.', reason: 'Tonsillitis — medical report attached.', timeline: [{ step: 'Submitted', date: 'Sep 8, 06:40 PM', done: true },{ step: 'BM Approved', date: 'Sep 8, 07:20 PM', done: true },{ step: 'HR Review', date: 'Pending', done: false }] },
   ],
   vacancies: [
-    { id: 'v1', position: 'Senior Trainer', gym: 'Nasr City', headcount: 1, urgency: 'High', status: 'Open', createdDate: '2026-08-20', candidates: 5 },
-    { id: 'v2', position: 'Receptionist', gym: 'Heliopolis', headcount: 1, urgency: 'Medium', status: 'Open', createdDate: '2026-08-15', candidates: 3 },
-    { id: 'v3', position: 'Cleaner', gym: '6th October', headcount: 2, urgency: 'Low', status: 'Draft', createdDate: '2026-08-10', candidates: 0 },
-    { id: 'v4', position: 'Trainer', gym: 'Nasr City', headcount: 1, urgency: 'Medium', status: 'Closed', createdDate: '2026-07-01', candidates: 8 },
+    { id: 'v1', position: 'Senior Trainer', gym: 'Nasr City', headcount: 1, urgency: 'High', status: 'Open', createdDate: '2026-08-20', candidates: 5, requestedBy: 'Youssef Kamal', salary: 14000, shift: 'Morning' },
+    { id: 'v2', position: 'Receptionist', gym: 'Heliopolis', headcount: 1, urgency: 'Medium', status: 'Open', createdDate: '2026-08-15', candidates: 3, requestedBy: 'Hana Mostafa', salary: 7500, shift: 'Evening' },
+    { id: 'v3', position: 'Cleaner', gym: '6th October', headcount: 2, urgency: 'Low', status: 'Draft', createdDate: '2026-08-10', candidates: 0, requestedBy: 'Youssef Kamal', salary: 5000, shift: 'Morning' },
+    { id: 'v4', position: 'Trainer', gym: 'Nasr City', headcount: 1, urgency: 'Medium', status: 'Closed', createdDate: '2026-07-01', candidates: 8, requestedBy: 'Youssef Kamal', salary: 10000, shift: 'Morning' },
   ],
   candidates: [
     { id: 'c1', name: 'Mohamed Salah', position: 'Senior Trainer', stage: 'First Interview', appliedDate: '2026-08-22', phone: '+20 120 111 2222', rating: 4,
@@ -252,8 +252,8 @@ const MOCK = {
       ] },
   ],
   vacancyRequests: [
-    { id: 'vr1', position: 'Senior Trainer', gym: 'Nasr City', urgency: 'High', status: 'Pending', submittedBy: 'Youssef Kamal', submittedDate: '2026-08-10', reason: 'Replacing departing trainer.' },
-    { id: 'vr2', position: 'Receptionist', gym: 'Heliopolis', urgency: 'Medium', status: 'Pending', submittedBy: 'Hana Mostafa', submittedDate: '2026-08-15', reason: 'Evening shift coverage needed.' },
+    { id: 'vr1', position: 'Senior Trainer', gym: 'Nasr City', urgency: 'High', status: 'Pending', submittedBy: 'Youssef Kamal', submittedDate: '2026-08-10', reason: 'Replacing departing trainer.', salary: 14000, shift: 'Morning' },
+    { id: 'vr2', position: 'Receptionist', gym: 'Heliopolis', urgency: 'Medium', status: 'Pending', submittedBy: 'Hana Mostafa', submittedDate: '2026-08-15', reason: 'Evening shift coverage needed.', salary: 7500, shift: 'Evening' },
   ],
   payrollItems: [
     { employeeId: 'RV-00124', name: 'Ahmed Mohamed', initials: 'AM', gym: 'Nasr City', position: 'Trainer', employmentStatus: 'Active', days: 22, overtime: 8, baseSalary: 11000, bonus: 500, gross: 11500, deductions: 350, net: 11150, status: 'Draft', relatedRequestIds: ['r8'], deductionLines: [

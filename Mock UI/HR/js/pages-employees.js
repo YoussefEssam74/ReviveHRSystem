@@ -66,6 +66,8 @@ function renderEmployees(page='directory') {
   const leaveCount = MOCK.employees.filter(e=>e.status==='On Leave').length;
   const noticeCount = MOCK.employees.filter(e=>e.status==='Notice Period').length;
   const suspCount = MOCK.employees.filter(e=>e.status==='Suspended').length;
+  // Candidates blocked from hiring (block action lives in Candidates, managed here)
+  const blockedList = (typeof MOCK.candidates !== 'undefined') ? MOCK.candidates.filter(c=>c.blocked) : [];
 
   return `<div class="flex flex-col h-full min-h-0 gap-2">
     <!-- Row 1: Header + Views + Primary Actions -->
@@ -141,6 +143,30 @@ function renderEmployees(page='directory') {
         ${statusBadge(e.status)}
       </div>
     </div>`).join('')}</div>
+
+    <!-- Blocked from hiring (candidates blocked by HR) -->
+    <div class="bg-white rounded-lg border ${blockedList.length?'border-l-4 border-l-red-400':'border-charcoal-200'} overflow-hidden flex-shrink-0">
+      <div class="px-3 py-1.5 border-b border-charcoal-100 flex items-center justify-between gap-2 bg-charcoal-50/50">
+        <p class="bento-label text-charcoal-500">BLOCKED FROM HIRING${blockedList.length?` (${blockedList.length})`:''}</p>
+        <span class="text-[9px] text-charcoal-400">Blocked by HR · Restore re-opens hiring</span>
+      </div>
+      <div class="divide-y divide-charcoal-50 max-h-[150px] overflow-y-auto">
+        ${blockedList.length ? blockedList.map(c=>`
+        <div class="px-3 py-2 flex items-center justify-between gap-2.5">
+          <div class="flex items-center gap-2.5 min-w-0">
+            <div class="w-7 h-7 rounded-full bg-red-100 text-red-600 flex items-center justify-center text-[10px] font-semibold flex-shrink-0">${(c.name||'').split(' ').map(w=>w[0]).slice(0,2).join('').toUpperCase()}</div>
+            <div class="min-w-0">
+              <p class="text-xs font-medium text-charcoal-900">${c.name} <span class="text-[9px] text-charcoal-400 font-normal">· ${c.position}</span></p>
+              <p class="text-[9px] text-charcoal-400">${c.blockReason || 'Blocked manually by HR'}${c.stage?` · was ${c.stage}`:''}</p>
+            </div>
+          </div>
+          <div class="flex gap-1.5 flex-shrink-0">
+            <button onclick="openCandidateDetail('${c.id}')" class="btn btn-sm btn-ghost text-[10px]">Profile</button>
+            <button onclick="_setCandidateBlock('${c.id}', false)" class="btn btn-sm btn-success text-[10px]">Restore</button>
+          </div>
+        </div>`).join('') : `<div class="px-3 py-3 text-center text-[11px] text-charcoal-400">Nobody is blocked right now. Use <b>Block</b> on a candidate's row in Candidates to prevent re-applications.</div>`}
+      </div>
+    </div>
 
     <!-- Subtle Lifecycle Bar (clean, compact single line) -->
     <div class="flex items-center justify-between text-[10px] text-charcoal-400 px-1 py-0.5 flex-shrink-0">
