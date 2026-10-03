@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Hire Candidate Wizard - Revive HR</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+          darkMode: "class",
+          theme: {
+            extend: {
+              "colors": {
+                      "on-error-container": "#93000a",
+                      "on-secondary-fixed-variant": "#444749",
+                      "on-error": "#ffffff",
+                      "on-primary": "#ffffff",
+                      "primary-fixed": "#7ffc97",
+                      "on-tertiary-fixed": "#111c2d",
+                      "inverse-on-surface": "#eaf1ff",
+                      "on-secondary": "#ffffff",
+                      "tertiary-container": "#6a758a",
+                      "on-primary-fixed-variant": "#005320",
+                      "surface-container-high": "#dce9ff",
+                      "outline-variant": "#bdcaba",
+                      "background": "#f8f9ff",
+                      "inverse-primary": "#62df7d",
+                      "surface-container-low": "#eff4ff",
+                      "on-tertiary-fixed-variant": "#3c475a",
+                      "on-tertiary": "#ffffff",
+                      "surface-container-highest": "#d3e4fe",
+                      "tertiary-fixed": "#d8e3fb",
+                      "primary-container": "#00873a",
+                      "error-container": "#ffdad6",
+                      "tertiary": "#515c71",
+                      "on-surface-variant": "#3e4a3d",
+                      "on-primary-fixed": "#002109",
+                      "on-background": "#0b1c30",
+                      "secondary-container": "#dee0e2",
+                      "surface-variant": "#d3e4fe",
+                      "secondary": "#5c5f60",
+                      "on-surface": "#0b1c30",
+                      "surface": "#f8f9ff",
+                      "surface-container-lowest": "#ffffff",
+                      "primary": "#006b2c",
+                      "secondary-fixed-dim": "#c5c6c8",
+                      "on-secondary-fixed": "#191c1e",
+                      "tertiary-fixed-dim": "#bcc7de",
+                      "surface-tint": "#006e2d",
+                      "surface-container": "#e5eeff",
+                      "on-tertiary-container": "#fefcff",
+                      "outline": "#6e7b6c",
+                      "surface-dim": "#cbdbf5",
+                      "error": "#ba1a1a",
+                      "surface-bright": "#f8f9ff",
+                      "secondary-fixed": "#e1e2e4",
+                      "primary-fixed-dim": "#62df7d",
+                      "inverse-surface": "#213145",
+                      "on-primary-container": "#f7fff2",
+                      "on-secondary-container": "#606365"
+              },
+              "borderRadius": {
+                      "DEFAULT": "0.25rem",
+                      "lg": "0.5rem",
+                      "xl": "0.75rem",
+                      "full": "9999px"
+              },
+              "spacing": {
+                      "md": "16px",
+                      "xs": "4px",
+                      "gutter": "24px",
+                      "max-width": "1440px",
+                      "margin-desktop": "32px",
+                      "margin-mobile": "16px",
+                      "xl": "32px",
+                      "2xl": "48px",
+                      "sm": "8px",
+                      "lg": "24px",
+                      "base": "4px"
+              },
+              "fontFamily": {
+                      "headline-lg": ["Inter"],
+                      "label-md": ["Inter"],
+                      "label-sm": ["Inter"],
+                      "display-lg": ["Inter"],
+                      "headline-lg-mobile": ["Inter"],
+                      "body-lg": ["Inter"],
+                      "headline-md": ["Inter"],
+                      "title-lg": ["Inter"],
+                      "body-md": ["Inter"]
+              },
+              "fontSize": {
+                      "headline-lg": ["32px", {"lineHeight": "40px", "letterSpacing": "-0.01em", "fontWeight": "600"}],
+                      "label-md": ["12px", {"lineHeight": "16px", "letterSpacing": "0.01em", "fontWeight": "500"}],
+                      "label-sm": ["11px", {"lineHeight": "14px", "fontWeight": "600"}],
+                      "display-lg": ["48px", {"lineHeight": "56px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                      "headline-lg-mobile": ["24px", {"lineHeight": "32px", "fontWeight": "600"}],
+                      "body-lg": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+                      "headline-md": ["24px", {"lineHeight": "32px", "fontWeight": "600"}],
+                      "title-lg": ["20px", {"lineHeight": "28px", "fontWeight": "600"}],
+                      "body-md": ["14px", {"lineHeight": "20px", "fontWeight": "400"}]
+              }
+            }
+          }
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .material-symbols-outlined.fill {
+            font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        
+        /* Stepper Animation */
+        .step-transition {
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        /* Toggle Switch Styles */
+        .toggle-checkbox:checked {
+            right: 0;
+            border-color: #006b2c;
+        }
+        .toggle-checkbox:checked + .toggle-label {
+            background-color: #006b2c;
+        }
+    </style>
+</head>
+<body class="bg-background text-on-background font-body-md h-screen w-full flex overflow-hidden antialiased">
+<!-- Left Context Panel (30%) -->
+<aside class="hidden lg:flex w-[30%] bg-surface flex-col border-r border-surface-container-high h-full overflow-y-auto">
+<div class="p-lg flex flex-col gap-xl">
+<!-- Candidate Profile Snippet -->
+<div class="flex flex-col items-center text-center gap-sm mt-xl">
+<div class="w-24 h-24 rounded-full bg-surface-variant flex items-center justify-center text-primary text-[40px] shadow-sm">
+<span class="material-symbols-outlined fill text-[48px]">person</span>
+</div>
+<div>
+<h2 class="font-headline-md text-headline-md text-on-surface">Sarah Jenkins</h2>
+<p class="font-body-md text-body-md text-primary font-medium mt-1">Senior Developer</p>
+</div>
+</div>
+<!-- Resume Highlights -->
+<div class="flex flex-col gap-md">
+<h3 class="font-label-md text-label-md text-secondary uppercase tracking-widest border-b border-surface-container-high pb-xs">Resume Highlights</h3>
+<div class="flex flex-col gap-sm">
+<div class="flex items-start gap-sm">
+<span class="material-symbols-outlined text-primary text-[20px]">work</span>
+<div class="flex flex-col">
+<span class="font-body-md text-body-md text-on-surface font-semibold">5+ Years Experience</span>
+<span class="font-body-md text-body-md text-on-surface-variant text-sm">Full-stack development, React, Node.js</span>
+</div>
+</div>
+<div class="flex items-start gap-sm">
+<span class="material-symbols-outlined text-primary text-[20px]">school</span>
+<div class="flex flex-col">
+<span class="font-body-md text-body-md text-on-surface font-semibold">B.S. Computer Science</span>
+<span class="font-body-md text-body-md text-on-surface-variant text-sm">University of Technology</span>
+</div>
+</div>
+<div class="flex items-start gap-sm">
+<span class="material-symbols-outlined text-primary text-[20px]">code</span>
+<div class="flex flex-col">
+<span class="font-body-md text-body-md text-on-surface font-semibold">Key Skills</span>
+<div class="flex flex-wrap gap-xs mt-1">
+<span class="px-2 py-1 bg-surface-container rounded font-label-sm text-label-sm text-on-surface">JavaScript</span>
+<span class="px-2 py-1 bg-surface-container rounded font-label-sm text-label-sm text-on-surface">Python</span>
+<span class="px-2 py-1 bg-surface-container rounded font-label-sm text-label-sm text-on-surface">AWS</span>
+<span class="px-2 py-1 bg-surface-container rounded font-label-sm text-label-sm text-on-surface">Agile</span>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Hiring Details Summary -->
+<div class="flex flex-col gap-md mt-md">
+<h3 class="font-label-md text-label-md text-secondary uppercase tracking-widest border-b border-surface-container-high pb-xs">Hiring Details</h3>
+<ul class="flex flex-col gap-2">
+<li class="flex justify-between items-center">
+<span class="font-body-md text-body-md text-on-surface-variant">Location</span>
+<span class="font-body-md text-body-md text-on-surface font-medium">New York Office</span>
+</li>
+<li class="flex justify-between items-center">
+<span class="font-body-md text-body-md text-on-surface-variant">Department</span>
+<span class="font-body-md text-body-md text-on-surface font-medium">Engineering</span>
+</li>
+<li class="flex justify-between items-center">
+<span class="font-body-md text-body-md text-on-surface-variant">Start Date</span>
+<span class="font-body-md text-body-md text-on-surface font-medium">Oct 15, 2024</span>
+</li>
+</ul>
+</div>
+</div>
+</aside>
+<!-- Right Interactive Flow (70%) -->
+<main class="w-full lg:w-[70%] flex flex-col h-full relative">
+<!-- Header -->
+<header class="w-full bg-surface/80 backdrop-blur-md border-b border-surface-container-high h-16 flex justify-between items-center px-margin-mobile md:px-margin-desktop z-50 shrink-0">
+<div class="flex items-center gap-sm">
+<button class="w-10 h-10 rounded-full flex items-center justify-center hover:bg-surface-container-low transition-colors text-on-surface-variant">
+<span class="material-symbols-outlined">close</span>
+</button>
+<span class="font-title-lg text-title-lg text-on-surface font-semibold">Hire Candidate</span>
+</div>
+<div class="flex items-center gap-sm">
+<span class="font-label-md text-label-md text-secondary bg-surface-container px-3 py-1 rounded-full">Draft Saved</span>
+</div>
+</header>
+<!-- Scrollable Content -->
+<div class="flex-grow overflow-y-auto w-full pt-lg pb-2xl px-margin-mobile md:px-margin-desktop">
+<div class="max-w-[800px] mx-auto flex flex-col gap-xl">
+<!-- Sleek Top Stepper -->
+<div class="w-full relative">
+<div class="absolute top-3 left-0 w-full h-[2px] bg-surface-container-high -z-10 rounded-full"></div>
+<div class="absolute top-3 left-0 w-[80%] h-[2px] bg-primary -z-10 rounded-full step-transition"></div>
+<ol class="flex justify-between w-full">
+<li class="flex flex-col items-center gap-xs relative z-10 w-12">
+<div class="w-6 h-6 rounded-full bg-primary text-on-primary flex items-center justify-center shadow-sm step-transition">
+<span class="material-symbols-outlined text-[14px]">check</span>
+</div>
+<span class="font-label-sm text-[10px] text-primary uppercase tracking-wider hidden md:block text-center">Review</span>
+</li>
+<li class="flex flex-col items-center gap-xs relative z-10 w-12">
+<div class="w-6 h-6 rounded-full bg-primary text-on-primary flex items-center justify-center shadow-sm step-transition">
+<span class="material-symbols-outlined text-[14px]">check</span>
+</div>
+<span class="font-label-sm text-[10px] text-primary uppercase tracking-wider hidden md:block text-center">Location</span>
+</li>
+<li class="flex flex-col items-center gap-xs relative z-10 w-12">
+<div class="w-6 h-6 rounded-full bg-primary text-on-primary flex items-center justify-center shadow-sm step-transition">
+<span class="material-symbols-outlined text-[14px]">check</span>
+</div>
+<span class="font-label-sm text-[10px] text-primary uppercase tracking-wider hidden md:block text-center">Role</span>
+</li>
+<li class="flex flex-col items-center gap-xs relative z-10 w-12">
+<div class="w-6 h-6 rounded-full bg-primary text-on-primary flex items-center justify-center shadow-sm step-transition">
+<span class="material-symbols-outlined text-[14px]">check</span>
+</div>
+<span class="font-label-sm text-[10px] text-primary uppercase tracking-wider hidden md:block text-center">Details</span>
+</li>
+<li class="flex flex-col items-center gap-xs relative z-10 w-12">
+<div class="w-6 h-6 rounded-full bg-surface-container-lowest border-[2px] border-primary text-primary flex items-center justify-center shadow-[0_0_0_3px_rgba(0,107,44,0.1)] step-transition">
+<span class="font-label-sm text-[12px] font-bold">5</span>
+</div>
+<span class="font-label-sm text-[10px] text-primary uppercase tracking-wider hidden md:block font-bold text-center">Account</span>
+</li>
+<li class="flex flex-col items-center gap-xs relative z-10 w-12">
+<div class="w-6 h-6 rounded-full bg-surface-container-high text-secondary flex items-center justify-center step-transition border border-surface-container-highest">
+<span class="font-label-sm text-[12px]">6</span>
+</div>
+<span class="font-label-sm text-[10px] text-secondary uppercase tracking-wider hidden md:block text-center">Finish</span>
+</li>
+</ol>
+</div>
+<!-- Wizard Canvas -->
+<div class="flex flex-col gap-lg">
+<div class="flex flex-col gap-xs border-b border-surface-container-high pb-md">
+<h1 class="font-display-lg text-headline-md md:text-headline-lg text-on-surface">Generate Employee Account</h1>
+<p class="font-body-lg text-body-md text-on-surface-variant">Configure system access and credentials for the new hire.</p>
+</div>
+<!-- Main Form Area -->
+<div class="grid grid-cols-1 gap-lg">
+<!-- Credentials Section -->
+<div class="flex flex-col gap-md">
+<h2 class="font-title-lg text-title-lg text-on-surface flex items-center gap-sm">
+<span class="material-symbols-outlined text-primary">badge</span>
+                                Credentials
+                            </h2>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-md">
+<!-- Username Input -->
+<div class="flex flex-col gap-xs">
+<label class="font-label-md text-label-md text-on-surface-variant">Username</label>
+<div class="relative">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-secondary text-[20px]">person</span>
+<input class="w-full pl-10 pr-3 py-2 bg-surface-container-lowest border border-outline-variant rounded-lg font-body-md text-body-md text-on-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-colors" readonly="" type="text" value="sarah.jenkins"/>
+</div>
+<span class="font-label-sm text-label-sm text-secondary">Auto-generated based on naming convention.</span>
+</div>
+<!-- Corporate Email -->
+<div class="flex flex-col gap-xs">
+<label class="font-label-md text-label-md text-on-surface-variant">Corporate Email</label>
+<div class="relative">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-secondary text-[20px]">mail</span>
+<input class="w-full pl-10 pr-3 py-2 bg-surface-container-lowest border border-outline-variant rounded-lg font-body-md text-body-md text-on-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-colors" type="email" value="sarah.jenkins@revivehr.com"/>
+</div>
+</div>
+</div>
+<!-- Password Generation -->
+<div class="flex flex-col gap-xs mt-sm">
+<label class="font-label-md text-label-md text-on-surface-variant">Temporary Password</label>
+<div class="flex gap-sm">
+<div class="relative flex-grow max-w-md">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-secondary text-[20px]">key</span>
+<input class="w-full pl-10 pr-10 py-2 bg-surface-container-lowest border border-outline-variant rounded-lg font-body-md text-body-md text-on-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-colors" id="temp-password" type="text" value="TempPass!2024"/>
+<button class="absolute right-3 top-1/2 -translate-y-1/2 text-secondary hover:text-primary transition-colors">
+<span class="material-symbols-outlined text-[20px]">content_copy</span>
+</button>
+</div>
+<button class="px-md py-2 bg-surface-container-low text-on-surface hover:bg-surface-container transition-colors rounded-lg font-label-md text-label-md flex items-center gap-xs border border-surface-container-high">
+<span class="material-symbols-outlined text-[18px]">autorenew</span>
+                                        Regenerate
+                                    </button>
+</div>
+<div class="flex flex-col gap-2 mt-3">
+<label class="flex items-center gap-2 cursor-pointer group">
+<input checked="" class="rounded text-primary border-outline-variant focus:ring-primary w-4 h-4" id="send-email" type="checkbox"/>
+<span class="font-body-md text-body-md text-on-surface group-hover:text-primary transition-colors">Email credentials to personal address (sarah.j@email.com)</span>
+</label>
+<label class="flex items-center gap-2 cursor-pointer group">
+<input checked="" class="rounded text-primary border-outline-variant focus:ring-primary w-4 h-4" id="force-reset" type="checkbox"/>
+<span class="font-body-md text-body-md text-on-surface group-hover:text-primary transition-colors">Require password change on first login</span>
+</label>
+</div>
+</div>
+</div>
+<!-- Technical Divider -->
+<div class="w-full h-[1px] bg-surface-container-high"></div>
+<!-- Permissions Toggleable List -->
+<div class="flex flex-col gap-md">
+<div class="flex justify-between items-end">
+<h2 class="font-title-lg text-title-lg text-on-surface flex items-center gap-sm">
+<span class="material-symbols-outlined text-primary">admin_panel_settings</span>
+                                    Access &amp; Permissions
+                                </h2>
+<span class="font-label-sm text-label-sm text-secondary bg-surface-container-low px-2 py-1 rounded">Role Default: Senior Developer</span>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-sm">
+<!-- Permission Item 1 -->
+<div class="flex items-center justify-between p-sm border border-surface-container-high rounded-lg bg-surface-container-lowest">
+<div class="flex items-center gap-sm">
+<span class="material-symbols-outlined text-on-surface-variant text-[20px]">login</span>
+<span class="font-body-md text-body-md text-on-surface font-medium">System Login (SSO)</span>
+</div>
+<div class="relative inline-block w-10 mr-2 align-middle select-none transition duration-200 ease-in">
+<input checked="" class="toggle-checkbox absolute block w-5 h-5 rounded-full bg-white border-4 appearance-none cursor-pointer z-10 top-0 left-0 checked:left-auto checked:right-0 checked:border-primary transition-all duration-300" id="toggle1" name="toggle" type="checkbox"/>
+<label class="toggle-label block overflow-hidden h-5 rounded-full bg-surface-container-highest cursor-pointer transition-colors duration-300" for="toggle1"></label>
+</div>
+</div>
+<!-- Permission Item 2 -->
+<div class="flex items-center justify-between p-sm border border-surface-container-high rounded-lg bg-surface-container-lowest">
+<div class="flex items-center gap-sm">
+<span class="material-symbols-outlined text-on-surface-variant text-[20px]">person_check</span>
+<span class="font-body-md text-body-md text-on-surface font-medium">Employee Self-Service</span>
+</div>
+<div class="relative inline-block w-10 mr-2 align-middle select-none transition duration-200 ease-in">
+<input checked="" class="toggle-checkbox absolute block w-5 h-5 rounded-full bg-white border-4 appearance-none cursor-pointer z-10 top-0 left-0 checked:left-auto checked:right-0 checked:border-primary transition-all duration-300" id="toggle2" name="toggle" type="checkbox"/>
+<label class="toggle-label block overflow-hidden h-5 rounded-full bg-surface-container-highest cursor-pointer transition-colors duration-300" for="toggle2"></label>
+</div>
+</div>
+<!-- Permission Item 3 -->
+<div class="flex items-center justify-between p-sm border border-surface-container-high rounded-lg bg-surface-container-lowest">
+<div class="flex items-center gap-sm">
+<span class="material-symbols-outlined text-on-surface-variant text-[20px]">schedule</span>
+<span class="font-body-md text-body-md text-on-surface font-medium">Time &amp; Attendance</span>
+</div>
+<div class="relative inline-block w-10 mr-2 align-middle select-none transition duration-200 ease-in">
+<input checked="" class="toggle-checkbox absolute block w-5 h-5 rounded-full bg-white border-4 appearance-none cursor-pointer z-10 top-0 left-0 checked:left-auto checked:right-0 checked:border-primary transition-all duration-300" id="toggle3" name="toggle" type="checkbox"/>
+<label class="toggle-label block overflow-hidden h-5 rounded-full bg-surface-container-highest cursor-pointer transition-colors duration-300" for="toggle3"></label>
+</div>
+</div>
+<!-- Permission Item 4 -->
+<div class="flex items-center justify-between p-sm border border-surface-container-high rounded-lg bg-surface/50 opacity-70">
+<div class="flex items-center gap-sm">
+<span class="material-symbols-outlined text-secondary text-[20px]">dashboard</span>
+<span class="font-body-md text-body-md text-secondary font-medium">Managerial Dashboard</span>
+</div>
+<div class="relative inline-block w-10 mr-2 align-middle select-none transition duration-200 ease-in">
+<input class="toggle-checkbox absolute block w-5 h-5 rounded-full bg-white border-4 border-surface-container-highest appearance-none cursor-pointer z-10 top-0 left-0 transition-all duration-300" id="toggle4" name="toggle" type="checkbox"/>
+<label class="toggle-label block overflow-hidden h-5 rounded-full bg-surface-container cursor-pointer transition-colors duration-300" for="toggle4"></label>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Bottom Action Bar (Fixed at bottom of right panel) -->
+<div class="w-full bg-surface border-t border-surface-container-high p-md px-margin-mobile md:px-margin-desktop shrink-0 z-10">
+<div class="max-w-[800px] mx-auto flex justify-between items-center">
+<button class="px-md py-2 rounded-lg font-label-md text-label-md text-on-surface-variant hover:bg-surface-container-low transition-colors flex items-center gap-xs">
+<span class="material-symbols-outlined text-[18px]">arrow_back</span>
+                    Back
+                </button>
+<div class="flex gap-sm">
+<button class="px-md py-2 rounded-lg font-label-md text-label-md text-on-surface bg-surface-container-low hover:bg-surface-container transition-colors border border-surface-container-high hidden sm:block">
+                        Save Draft
+                    </button>
+<button class="px-lg py-2 rounded-lg font-label-md text-label-md text-on-primary bg-primary hover:bg-surface-tint transition-colors shadow-sm flex items-center gap-xs">
+                        Complete Hiring
+                        <span class="material-symbols-outlined text-[18px]">check_circle</span>
+</button>
+</div>
+</div>
+</div>
+</main>
+</body></html>

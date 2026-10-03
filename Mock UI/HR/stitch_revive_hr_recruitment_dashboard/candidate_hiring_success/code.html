@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Revive HR - Hiring Confirmation</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+          darkMode: "class",
+          theme: {
+            extend: {
+              "colors": {
+                      "on-background": "#0b1c30",
+                      "surface-tint": "#006e2d",
+                      "error": "#ba1a1a",
+                      "inverse-primary": "#62df7d",
+                      "secondary-fixed": "#e1e2e4",
+                      "inverse-surface": "#213145",
+                      "error-container": "#ffdad6",
+                      "on-primary": "#ffffff",
+                      "on-error-container": "#93000a",
+                      "on-tertiary": "#ffffff",
+                      "surface-container-high": "#dce9ff",
+                      "tertiary": "#515c71",
+                      "on-error": "#ffffff",
+                      "on-primary-fixed-variant": "#005320",
+                      "on-tertiary-fixed": "#111c2d",
+                      "primary-fixed-dim": "#62df7d",
+                      "on-primary-fixed": "#002109",
+                      "on-secondary-fixed-variant": "#444749",
+                      "secondary-container": "#dee0e2",
+                      "secondary": "#5c5f60",
+                      "on-tertiary-fixed-variant": "#3c475a",
+                      "surface-container-lowest": "#ffffff",
+                      "surface-container-low": "#eff4ff",
+                      "outline": "#6e7b6c",
+                      "primary-container": "#00873a",
+                      "on-primary-container": "#f7fff2",
+                      "primary": "#006b2c",
+                      "inverse-on-surface": "#eaf1ff",
+                      "on-secondary-container": "#606365",
+                      "on-secondary": "#ffffff",
+                      "tertiary-fixed": "#d8e3fb",
+                      "on-secondary-fixed": "#191c1e",
+                      "background": "#f8f9ff",
+                      "on-surface": "#0b1c30",
+                      "surface-container": "#e5eeff",
+                      "surface-bright": "#f8f9ff",
+                      "on-surface-variant": "#3e4a3d",
+                      "surface-variant": "#d3e4fe",
+                      "tertiary-container": "#6a758a",
+                      "surface": "#f8f9ff",
+                      "primary-fixed": "#7ffc97",
+                      "on-tertiary-container": "#fefcff",
+                      "surface-dim": "#cbdbf5",
+                      "secondary-fixed-dim": "#c5c6c8",
+                      "tertiary-fixed-dim": "#bcc7de",
+                      "surface-container-highest": "#d3e4fe",
+                      "outline-variant": "#bdcaba"
+              },
+              "borderRadius": {
+                      "DEFAULT": "0.25rem",
+                      "lg": "0.5rem",
+                      "xl": "0.75rem",
+                      "full": "9999px"
+              },
+              "spacing": {
+                      "margin-mobile": "16px",
+                      "margin-desktop": "32px",
+                      "md": "16px",
+                      "max-width": "1440px",
+                      "xl": "32px",
+                      "lg": "24px",
+                      "2xl": "48px",
+                      "base": "4px",
+                      "xs": "4px",
+                      "sm": "8px",
+                      "gutter": "24px"
+              },
+              "fontFamily": {
+                      "headline-lg-mobile": ["Inter"],
+                      "display-lg": ["Inter"],
+                      "headline-md": ["Inter"],
+                      "label-md": ["Inter"],
+                      "body-md": ["Inter"],
+                      "title-lg": ["Inter"],
+                      "label-sm": ["Inter"],
+                      "body-lg": ["Inter"],
+                      "headline-lg": ["Inter"]
+              },
+              "fontSize": {
+                      "headline-lg-mobile": ["24px", {"lineHeight": "32px", "fontWeight": "600"}],
+                      "display-lg": ["48px", {"lineHeight": "56px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                      "headline-md": ["24px", {"lineHeight": "32px", "fontWeight": "600"}],
+                      "label-md": ["12px", {"lineHeight": "16px", "letterSpacing": "0.01em", "fontWeight": "500"}],
+                      "body-md": ["14px", {"lineHeight": "20px", "fontWeight": "400"}],
+                      "title-lg": ["20px", {"lineHeight": "28px", "fontWeight": "600"}],
+                      "label-sm": ["11px", {"lineHeight": "14px", "fontWeight": "600"}],
+                      "body-lg": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+                      "headline-lg": ["32px", {"lineHeight": "40px", "letterSpacing": "-0.01em", "fontWeight": "600"}]
+              }
+            }
+          }
+        }
+    </script>
+<style>
+        .confetti {
+            position: absolute;
+            width: 8px;
+            height: 8px;
+            background-color: #00873a;
+            opacity: 0;
+        }
+        @keyframes fall {
+            0% { transform: translateY(-100px) rotate(0deg); opacity: 1; }
+            100% { transform: translateY(200px) rotate(360deg); opacity: 0; }
+        }
+    </style>
+</head>
+<body class="bg-surface min-h-screen flex items-center justify-center p-margin-mobile md:p-margin-desktop relative overflow-hidden text-on-surface">
+<!-- Decorative Background Elements -->
+<div class="absolute top-0 left-0 w-full h-1/2 bg-gradient-to-b from-surface-container-low to-transparent -z-10"></div>
+<!-- JS Confetti Container -->
+<div class="absolute inset-0 pointer-events-none z-0 overflow-hidden" id="confetti-container"></div>
+<!-- Main Confirmation Card -->
+<main class="w-full max-w-3xl bg-surface-container-lowest rounded-xl shadow-[0px_10px_15px_-3px_rgba(0,0,0,0.1)] border border-outline-variant/30 p-lg md:p-2xl flex flex-col items-center relative z-10">
+<!-- Celebration Icon -->
+<div class="w-24 h-24 rounded-full bg-primary-container/20 border-4 border-surface-container-lowest shadow-[0_0_0_2px_rgba(0,107,44,0.1)] flex items-center justify-center mb-lg relative">
+<div class="w-16 h-16 rounded-full bg-primary-container flex items-center justify-center">
+<span class="material-symbols-outlined text-on-primary-container" data-icon="task_alt" style="font-variation-settings: 'FILL' 1; font-size: 32px;">task_alt</span>
+</div>
+</div>
+<!-- Headers -->
+<h1 class="font-headline-lg md:font-display-lg text-headline-lg md:text-display-lg text-on-surface text-center mb-sm">
+            Candidate Successfully Hired
+        </h1>
+<p class="font-body-lg text-body-lg text-on-surface-variant text-center max-w-lg mb-xl">
+            Eleanor Richards has been successfully converted to an Employee record and added to the roster.
+        </p>
+<!-- Details Bento Grid -->
+<div class="w-full grid grid-cols-1 md:grid-cols-2 gap-md mb-2xl">
+<!-- Personal Info Card -->
+<div class="bg-surface-bright rounded-lg border border-outline-variant/50 p-md flex flex-col">
+<h3 class="font-label-sm text-label-sm text-outline uppercase tracking-wider mb-sm">Candidate Profile</h3>
+<div class="flex items-center gap-md mt-sm">
+<img class="w-12 h-12 rounded-full object-cover border border-outline-variant/30" data-alt="A professional headshot of a smiling young woman with dark curly hair wearing a smart casual light blue blouse against a neutral soft grey background, bright natural lighting." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCz81s4-GdD5h92UJOZyMyO1Wq5KkoWhupxdFbekz4bQCD9i5SnHg6AQ9feARlUOnzZhwlYF2fztGA1_LQa5LbocywBmMs75-3vLey1fidud3WU2OO30u2thVpHfVbjqVsaSBiZo4rN5qAEaBABQ1Pf7WjUU45TZwtJ6-YGA2ZJOmZgqzy6RkStY-jMhP3ToI6GgMtfPGL7trbW7BupUF2eEUcvirHm8MmwTZp5mmMIZEnoHJzZ1__9"/>
+<div>
+<div class="font-title-lg text-title-lg text-on-surface">Eleanor Richards</div>
+<div class="font-label-md text-label-md text-on-surface-variant mt-xs">ID: REV-24-8901</div>
+</div>
+</div>
+</div>
+<!-- Position Info Card -->
+<div class="bg-surface-bright rounded-lg border border-outline-variant/50 p-md flex flex-col justify-center">
+<h3 class="font-label-sm text-label-sm text-outline uppercase tracking-wider mb-sm">Applied Position</h3>
+<div class="flex items-start gap-sm">
+<span class="material-symbols-outlined text-primary mt-xs" data-icon="fitness_center">fitness_center</span>
+<div>
+<div class="font-title-lg text-title-lg text-on-surface">Senior Trainer</div>
+<div class="font-label-md text-label-md text-on-surface-variant mt-xs">Downtown Fitness Hub</div>
+</div>
+</div>
+</div>
+<!-- Timeline/History Card (Full Span) -->
+<div class="bg-surface-bright rounded-lg border border-outline-variant/50 p-md md:col-span-2 flex flex-col">
+<h3 class="font-label-sm text-label-sm text-outline uppercase tracking-wider mb-md">Application Journey</h3>
+<div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-md">
+<div class="flex items-center gap-sm">
+<div class="w-8 h-8 rounded-full bg-surface-container-high flex items-center justify-center">
+<span class="material-symbols-outlined text-secondary" data-icon="edit_document" style="font-size: 16px;">edit_document</span>
+</div>
+<div>
+<div class="font-label-md text-label-md text-on-surface">Applied</div>
+<div class="font-body-md text-body-md text-on-surface-variant">Oct 12, 2023</div>
+</div>
+</div>
+<div class="hidden sm:block h-[1px] flex-grow bg-outline-variant/40 mx-sm"></div>
+<div class="flex items-center gap-sm">
+<div class="w-8 h-8 rounded-full bg-surface-container-high flex items-center justify-center">
+<span class="material-symbols-outlined text-secondary" data-icon="forum" style="font-size: 16px;">forum</span>
+</div>
+<div>
+<div class="font-label-md text-label-md text-on-surface">Interviews</div>
+<div class="font-body-md text-body-md text-on-surface-variant">3 Rounds Passed</div>
+</div>
+</div>
+<div class="hidden sm:block h-[1px] flex-grow bg-outline-variant/40 mx-sm"></div>
+<div class="flex items-center gap-sm">
+<div class="w-8 h-8 rounded-full bg-primary-container flex items-center justify-center shadow-[0_0_10px_rgba(0,135,58,0.3)]">
+<span class="material-symbols-outlined text-on-primary-container" data-icon="check" style="font-variation-settings: 'FILL' 1; font-size: 16px;">check</span>
+</div>
+<div>
+<div class="font-label-md text-label-md text-primary font-bold">Status: Hired</div>
+<div class="font-body-md text-body-md text-on-surface-variant">Oct 28, 2023</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Primary Actions -->
+<div class="flex flex-col sm:flex-row gap-md w-full justify-center mt-auto">
+<button class="bg-primary hover:bg-primary-container hover:text-on-primary-container text-on-primary px-lg py-md rounded-lg font-label-md text-label-md transition-colors flex items-center justify-center gap-sm shadow-sm">
+<span class="material-symbols-outlined" data-icon="person" style="font-size: 18px;">person</span>
+                Go to Employee Profile
+            </button>
+<button class="bg-surface-container-high hover:bg-surface-container-highest text-on-surface px-lg py-md rounded-lg font-label-md text-label-md transition-colors flex items-center justify-center gap-sm">
+<span class="material-symbols-outlined" data-icon="checklist" style="font-size: 18px;">checklist</span>
+                Setup Onboarding Tasks
+            </button>
+<button class="bg-transparent border border-outline hover:bg-surface-container-low text-on-surface-variant px-lg py-md rounded-lg font-label-md text-label-md transition-colors flex items-center justify-center">
+                View Employee List
+            </button>
+</div>
+</main>
+<script>
+        // Simple confetti effect for confirmation screen
+        document.addEventListener('DOMContentLoaded', () => {
+            const container = document.getElementById('confetti-container');
+            const colors = ['#00873a', '#7ffc97', '#dce9ff', '#62df7d'];
+            
+            for (let i = 0; i < 40; i++) {
+                const confetti = document.createElement('div');
+                confetti.classList.add('confetti');
+                
+                // Randomize properties
+                const left = Math.random() * 100;
+                const animDuration = Math.random() * 2 + 1;
+                const delay = Math.random() * 0.5;
+                const color = colors[Math.floor(Math.random() * colors.length)];
+                
+                confetti.style.left = `${left}%`;
+                confetti.style.backgroundColor = color;
+                confetti.style.animation = `fall ${animDuration}s ease-out ${delay}s forwards`;
+                
+                container.appendChild(confetti);
+            }
+        });
+    </script>
+</body></html>

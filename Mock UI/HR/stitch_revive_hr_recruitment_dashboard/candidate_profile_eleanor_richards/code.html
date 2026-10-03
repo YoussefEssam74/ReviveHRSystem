@@ -1,0 +1,797 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Revive HR - Candidate Profile</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+          darkMode: "class",
+          theme: {
+            extend: {
+              "colors": {
+                      "outline": "#6e7b6c",
+                      "surface-bright": "#ffffff",
+                      "on-error-container": "#93000a",
+                      "surface-tint": "#16a34a",
+                      "surface-variant": "#e2e8e0",
+                      "on-secondary-container": "#43474a",
+                      "surface-container-highest": "#d3dcd2",
+                      "primary-fixed": "#86efac",
+                      "on-surface": "#13221a",
+                      "on-background": "#13221a",
+                      "surface": "#fbfcfa",
+                      "on-primary-fixed-variant": "#166534",
+                      "outline-variant": "#c6cdc5",
+                      "on-secondary-fixed-variant": "#444749",
+                      "primary-fixed-dim": "#4ade80",
+                      "on-tertiary-fixed-variant": "#3c475a",
+                      "secondary": "#5c5f60",
+                      "on-tertiary-fixed": "#111c18",
+                      "inverse-surface": "#213145",
+                      "surface-container": "#e9eee8",
+                      "on-secondary-fixed": "#191c1e",
+                      "surface-dim": "#d2dbd1",
+                      "on-error": "#ffffff",
+                      "secondary-container": "#e8e8e8",
+                      "surface-container-lowest": "#ffffff",
+                      "on-tertiary-container": "#1c2a23",
+                      "surface-container-high": "#dee5dd",
+                      "secondary-fixed": "#e1e2e4",
+                      "tertiary-fixed": "#d8e3dd",
+                      "error": "#ba1a1a",
+                      "background": "#f7f9f7",
+                      "inverse-primary": "#4ade80",
+                      "on-primary-fixed": "#052e16",
+                      "primary-container": "#bbf7d0",
+                      "on-secondary": "#ffffff",
+                      "on-primary-container": "#14532d",
+                      "error-container": "#ffdad6",
+                      "tertiary-fixed-dim": "#bcc7c0",
+                      "secondary-fixed-dim": "#c5c6c8",
+                      "inverse-on-surface": "#eaf1ff",
+                      "tertiary": "#51605a",
+                      "on-primary": "#ffffff",
+                      "tertiary-container": "#b3c7bc",
+                      "surface-container-low": "#f3f6f2",
+                      "primary": "#16a34a",
+                      "on-surface-variant": "#3f4a41",
+                      "on-tertiary": "#ffffff"
+              },
+              "borderRadius": {
+                      "DEFAULT": "0.25rem",
+                      "lg": "0.5rem",
+                      "xl": "0.75rem",
+                      "full": "9999px"
+              },
+              "spacing": {
+                      "margin-desktop": "32px",
+                      "lg": "24px",
+                      "margin-mobile": "16px",
+                      "2xl": "48px",
+                      "base": "4px",
+                      "gutter": "24px",
+                      "md": "16px",
+                      "max-width": "1440px",
+                      "xl": "32px",
+                      "xs": "4px",
+                      "sm": "8px"
+              },
+              "fontFamily": {
+                      "display-lg": ["Inter"],
+                      "title-lg": ["Inter"],
+                      "label-sm": ["Inter"],
+                      "body-md": ["Inter"],
+                      "headline-lg-mobile": ["Inter"],
+                      "body-lg": ["Inter"],
+                      "headline-lg": ["Inter"],
+                      "headline-md": ["Inter"],
+                      "label-md": ["Inter"]
+              },
+              "fontSize": {
+                      "display-lg": ["48px", {"lineHeight": "56px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                      "title-lg": ["20px", {"lineHeight": "28px", "fontWeight": "600"}],
+                      "label-sm": ["11px", {"lineHeight": "14px", "fontWeight": "600"}],
+                      "body-md": ["14px", {"lineHeight": "20px", "fontWeight": "400"}],
+                      "headline-lg-mobile": ["24px", {"lineHeight": "32px", "fontWeight": "600"}],
+                      "body-lg": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+                      "headline-lg": ["32px", {"lineHeight": "40px", "letterSpacing": "-0.01em", "fontWeight": "600"}],
+                      "headline-md": ["24px", {"lineHeight": "32px", "fontWeight": "600"}],
+                      "label-md": ["12px", {"lineHeight": "16px", "letterSpacing": "0.01em", "fontWeight": "500"}]
+              }
+            }
+          }
+        }
+    </script>
+</head>
+<body class="bg-background text-on-background font-body-md min-h-screen flex">
+<!-- SideNavBar Component -->
+<nav class="bg-surface dark:bg-surface-container-low fixed left-0 top-0 h-full w-[280px] border-r border-outline-variant dark:border-outline flex flex-col py-xl px-md gap-sm z-50 hidden md:flex">
+<div class="flex items-center gap-sm mb-lg px-sm">
+<div class="w-10 h-10 rounded-full bg-primary-container text-on-primary-container flex items-center justify-center">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">spa</span>
+</div>
+<div>
+<h1 class="font-title-lg text-title-lg font-bold text-primary dark:text-primary-fixed">Revive HR</h1>
+<p class="font-label-sm text-label-sm text-secondary">Enterprise Suite</p>
+</div>
+</div>
+<button class="w-full bg-primary text-on-primary py-sm px-md rounded-full font-label-md text-label-md font-bold mb-md hover:bg-on-primary-fixed-variant transition-colors flex justify-center items-center gap-xs shadow-sm" onclick="window.location.href='../hire_candidate_wizard_sidebar_navigation/code.html'">
+<span class="material-symbols-outlined text-[18px]">add</span> Hire Candidate
+        </button>
+<div class="flex flex-col gap-xs flex-grow">
+<a class="flex items-center gap-md py-sm px-md rounded-full text-secondary dark:text-secondary-fixed-dim hover:text-on-surface dark:hover:text-on-surface hover:bg-surface-container-high dark:hover:bg-surface-container-highest transition-colors" href="../recruitment_dashboard_complete/code.html">
+<span class="material-symbols-outlined">dashboard</span>
+<span class="font-label-md text-label-md">Dashboard</span>
+</a>
+<a class="flex items-center gap-md py-sm px-md rounded-full text-secondary dark:text-secondary-fixed-dim hover:text-on-surface dark:hover:text-on-surface hover:bg-surface-container-high dark:hover:bg-surface-container-highest transition-colors" href="../vacancy_list/code.html">
+<span class="material-symbols-outlined">work</span>
+<span class="font-label-md text-label-md">Vacancies</span>
+</a>
+<a class="flex items-center gap-md py-sm px-md rounded-full text-primary dark:text-primary-fixed font-bold border-r-4 border-primary dark:border-primary-fixed bg-surface-container-high opacity-90 transition-opacity duration-150" href="../candidate_list/code.html">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">group_add</span>
+<span class="font-label-md text-label-md">Candidates</span>
+</a>
+<a class="flex items-center gap-md py-sm px-md rounded-full text-secondary dark:text-secondary-fixed-dim hover:text-on-surface dark:hover:text-on-surface hover:bg-surface-container-high dark:hover:bg-surface-container-highest transition-colors" href="../recruitment_pipeline_interactive_kanban/code.html">
+<span class="material-symbols-outlined">view_kanban</span>
+<span class="font-label-md text-label-md">Pipeline</span>
+</a>
+<a class="flex items-center gap-md py-sm px-md rounded-full text-secondary dark:text-secondary-fixed-dim hover:text-on-surface dark:hover:text-on-surface hover:bg-surface-container-high dark:hover:bg-surface-container-highest transition-colors" href="../waiting_list_management/code.html">
+<span class="material-symbols-outlined">hourglass_empty</span>
+<span class="font-label-md text-label-md">Waiting List</span>
+</a>
+<a class="flex items-center gap-md py-sm px-md rounded-full text-secondary dark:text-secondary-fixed-dim hover:text-on-surface dark:hover:text-on-surface hover:bg-surface-container-high dark:hover:bg-surface-container-highest transition-colors" href="../recruitment_reports/code.html">
+<span class="material-symbols-outlined">monitoring</span>
+<span class="font-label-md text-label-md">Reports</span>
+</a>
+</div>
+<div class="mt-auto border-t border-outline-variant pt-md flex flex-col gap-xs">
+<a class="flex items-center gap-md py-sm px-md rounded-full text-secondary dark:text-secondary-fixed-dim hover:text-on-surface dark:hover:text-on-surface hover:bg-surface-container-high dark:hover:bg-surface-container-highest transition-colors" href="#">
+<span class="material-symbols-outlined">settings</span>
+<span class="font-label-md text-label-md">Settings</span>
+</a>
+<a class="flex items-center gap-md py-sm px-md rounded-full text-secondary dark:text-secondary-fixed-dim hover:text-on-surface dark:hover:text-on-surface hover:bg-surface-container-high dark:hover:bg-surface-container-highest transition-colors" href="#">
+<span class="material-symbols-outlined">help_outline</span>
+<span class="font-label-md text-label-md">Support</span>
+</a>
+</div>
+</nav>
+<!-- TopAppBar Component -->
+<header class="bg-surface-container-lowest dark:bg-surface-container fixed top-0 right-0 w-full md:w-[calc(100%-280px)] h-16 shadow-sm dark:shadow-none flex justify-between items-center px-margin-mobile md:px-margin-desktop z-40">
+<div class="flex items-center gap-sm md:hidden">
+<button class="text-on-surface-variant hover:bg-secondary-container p-sm rounded-full transition-colors">
+<span class="material-symbols-outlined">menu</span>
+</button>
+<span class="font-title-lg text-title-lg font-bold text-primary">Revive HR</span>
+</div>
+<div class="hidden md:flex items-center bg-surface border border-outline-variant rounded-full px-md py-xs focus-within:border-primary focus-within:ring-1 focus-within:ring-primary transition-all w-64">
+<span class="material-symbols-outlined text-secondary mr-sm text-[20px]">search</span>
+<input class="bg-transparent border-none outline-none text-body-md font-body-md w-full text-on-surface placeholder-secondary focus:ring-0 p-0" placeholder="Search..." type="text"/>
+</div>
+<div class="flex items-center gap-sm">
+<button class="text-on-surface-variant hover:bg-secondary-container dark:hover:bg-secondary-fixed-dim rounded-full p-sm transition-transform active:scale-95">
+<span class="material-symbols-outlined">notifications</span>
+</button>
+<button class="text-on-surface-variant hover:bg-secondary-container dark:hover:bg-secondary-fixed-dim rounded-full p-sm transition-transform active:scale-95">
+<span class="material-symbols-outlined">account_circle</span>
+</button>
+</div>
+</header>
+<!-- Main Content Canvas -->
+<main class="mt-16 w-full md:ml-[280px] p-margin-mobile md:p-margin-desktop max-w-max-width mx-auto flex flex-col gap-lg">
+<!-- Breadcrumbs & Header -->
+<div class="flex flex-col gap-md">
+<nav aria-label="Breadcrumb" class="flex text-secondary font-label-md text-label-md">
+<ol class="inline-flex items-center space-x-1 md:space-x-3">
+<li class="inline-flex items-center">
+<a class="inline-flex items-center hover:text-primary transition-colors" href="../vacancy_list/code.html">
+                            Vacancies
+                        </a>
+</li>
+<li>
+<div class="flex items-center">
+<span class="material-symbols-outlined text-[16px] mx-1">chevron_right</span>
+<a class="hover:text-primary transition-colors" href="../candidate_list/code.html">Candidates</a>
+</div>
+</li>
+<li aria-current="page">
+<div class="flex items-center">
+<span class="material-symbols-outlined text-[16px] mx-1">chevron_right</span>
+<span class="text-on-surface font-semibold">Eleanor Richards</span>
+</div>
+</li>
+</ol>
+</nav>
+<div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-md bg-surface-container-lowest p-lg rounded-xl shadow-[0px_1px_3px_rgba(0,0,0,0.05)] border border-outline-variant/30">
+<div class="flex items-center gap-md">
+<div class="relative">
+<img class="w-16 h-16 rounded-full object-cover border-2 border-surface-container-lowest" data-alt="A professional headshot of a young woman with warm lighting, modern corporate office background, shallow depth of field, high quality, optimistic mood, wearing business casual attire." src="https://lh3.googleusercontent.com/aida-public/AB6AXuD5ySrpXRcRUVTvasn8oyxo5QoSbhlsvaZYaHuGSFtbfpiJLD93iHlqPpJLlRXjhdjDouEwIaDO5H7kVbCnyYMBvvmDPiZ9Xh25PD0a1zpRej_mXUD8KNYrWOms-o1vetljN07nberxy5U6edvx_aNBpeyXeEdWIo2HfICq8TU8ntxeMP5ojIJ1s-OAu1h2V5mFJI1shTqg7SBH8uBooJN_3wSIfdElRq78OuOMUKR3CyO3hFp5uqPG"/>
+<div class="absolute bottom-0 right-0 w-4 h-4 bg-primary-container rounded-full border-2 border-surface-container-lowest flex items-center justify-center">
+<span class="material-symbols-outlined text-[10px] text-on-primary-container" style="font-variation-settings: 'FILL' 1;">check_circle</span>
+</div>
+</div>
+<div>
+<h2 class="font-headline-md text-headline-md text-on-surface">Eleanor Richards</h2>
+<div class="flex items-center gap-sm mt-xs">
+<span class="font-body-md text-body-md text-secondary">Senior Product Designer</span>
+<span class="inline-flex items-center px-2 py-0.5 rounded-full font-label-sm text-label-sm bg-primary/10 text-primary">
+                                Interviewing
+                            </span>
+</div>
+</div>
+</div>
+<div class="flex flex-wrap gap-sm w-full md:w-auto">
+<button class="flex-1 md:flex-none bg-surface-container text-on-surface py-sm px-md rounded-lg font-label-md text-label-md font-bold hover:bg-surface-container-high transition-colors flex items-center justify-center gap-xs border border-outline-variant" onclick="document.getElementById('move-stage-modal').classList.remove('hidden')">
+<span class="material-symbols-outlined text-[18px]">swap_vert</span> Move Stage
+                    </button>
+<button class="flex-1 md:flex-none bg-primary text-on-primary py-sm px-md rounded-lg font-label-md text-label-md font-bold hover:bg-on-primary-fixed-variant transition-colors shadow-sm flex items-center justify-center gap-xs" onclick="document.getElementById('schedule-interview-modal').classList.remove('hidden')">
+<span class="material-symbols-outlined text-[18px]">event</span> Schedule Interview
+                    </button>
+<button class="flex-1 md:flex-none bg-surface-container text-error py-sm px-md rounded-lg font-label-md text-label-md font-bold hover:bg-error-container/50 transition-colors flex items-center justify-center gap-xs border border-error/20" onclick="document.getElementById('reject-modal').classList.remove('hidden')">
+<span class="material-symbols-outlined text-[18px]">close</span> Reject
+                    </button>
+<a class="flex-1 md:flex-none bg-primary text-on-primary py-sm px-md rounded-lg font-label-md text-label-md font-bold hover:bg-on-primary-fixed-variant transition-colors shadow-sm flex items-center justify-center gap-xs" href="../hire_candidate_wizard_sidebar_navigation/code.html">
+<span class="material-symbols-outlined text-[18px]">how_to_reg</span> Hire Candidate
+                    </a>
+</div>
+</div>
+</div>
+<!-- Two Column Layout -->
+<div class="flex flex-col lg:flex-row gap-lg">
+<!-- Left Sidebar -->
+<aside class="w-full lg:w-[320px] flex flex-col gap-lg flex-shrink-0">
+<!-- Contact Details -->
+<div class="bg-surface-container-lowest p-lg rounded-xl shadow-[0px_1px_3px_rgba(0,0,0,0.05)] border border-outline-variant/30 flex flex-col gap-md">
+<h3 class="font-title-lg text-title-lg text-on-surface pb-sm border-b border-surface-container">Personal Information</h3>
+<div class="flex items-start gap-sm">
+<span class="material-symbols-outlined text-secondary text-[20px]">mail</span>
+<div>
+<p class="font-label-sm text-label-sm text-secondary uppercase tracking-wider">Email</p>
+<a class="font-body-md text-body-md text-primary hover:underline" href="mailto:eleanor.r@example.com">eleanor.r@example.com</a>
+</div>
+</div>
+<div class="flex items-start gap-sm">
+<span class="material-symbols-outlined text-secondary text-[20px]">phone</span>
+<div>
+<p class="font-label-sm text-label-sm text-secondary uppercase tracking-wider">Phone</p>
+<p class="font-body-md text-body-md text-on-surface">+1 (555) 123-4567</p>
+</div>
+</div>
+<div class="flex items-start gap-sm">
+<span class="material-symbols-outlined text-secondary text-[20px]">location_on</span>
+<div>
+<p class="font-label-sm text-label-sm text-secondary uppercase tracking-wider">Location</p>
+<p class="font-body-md text-body-md text-on-surface">San Francisco, CA (Open to Remote)</p>
+</div>
+</div>
+<div class="flex items-start gap-sm">
+<span class="material-symbols-outlined text-secondary text-[20px]">calendar_today</span>
+<div>
+<p class="font-label-sm text-label-sm text-secondary uppercase tracking-wider">Date of Birth</p>
+<p class="font-body-md text-body-md text-on-surface">Jun 14, 1992</p>
+</div>
+</div>
+<div class="flex items-start gap-sm">
+<span class="material-symbols-outlined text-secondary text-[20px]">translate</span>
+<div>
+<p class="font-label-sm text-label-sm text-secondary uppercase tracking-wider">Languages</p>
+<p class="font-body-md text-body-md text-on-surface">English, Spanish</p>
+</div>
+</div>
+</div>
+<!-- Skills -->
+<div class="bg-surface-container-lowest p-lg rounded-xl shadow-[0px_1px_3px_rgba(0,0,0,0.05)] border border-outline-variant/30 flex flex-col gap-md">
+<h3 class="font-title-lg text-title-lg text-on-surface pb-sm border-b border-surface-container">Skills</h3>
+<div class="flex flex-wrap gap-xs">
+<span class="bg-surface-container px-2 py-1 rounded-md font-label-md text-label-md text-on-surface-variant border border-outline-variant/50">UI/UX Design</span>
+<span class="bg-surface-container px-2 py-1 rounded-md font-label-md text-label-md text-on-surface-variant border border-outline-variant/50">Figma</span>
+<span class="bg-surface-container px-2 py-1 rounded-md font-label-md text-label-md text-on-surface-variant border border-outline-variant/50">User Research</span>
+<span class="bg-surface-container px-2 py-1 rounded-md font-label-md text-label-md text-on-surface-variant border border-outline-variant/50">Prototyping</span>
+<span class="bg-surface-container px-2 py-1 rounded-md font-label-md text-label-md text-on-surface-variant border border-outline-variant/50">Design Systems</span>
+</div>
+</div>
+<!-- Social Links -->
+<div class="bg-surface-container-lowest p-lg rounded-xl shadow-[0px_1px_3px_rgba(0,0,0,0.05)] border border-outline-variant/30 flex flex-col gap-md">
+<h3 class="font-title-lg text-title-lg text-on-surface pb-sm border-b border-surface-container">Profiles</h3>
+<div class="flex flex-col gap-sm">
+<a class="flex items-center gap-sm font-body-md text-body-md text-on-surface hover:text-primary transition-colors" href="#">
+<span class="material-symbols-outlined text-secondary">link</span>
+                            LinkedIn
+                        </a>
+<a class="flex items-center gap-sm font-body-md text-body-md text-on-surface hover:text-primary transition-colors" href="#">
+<span class="material-symbols-outlined text-secondary">link</span>
+                            Personal Portfolio
+                        </a>
+</div>
+</div>
+<!-- Certificates -->
+<div class="bg-surface-container-lowest p-lg rounded-xl shadow-[0px_1px_3px_rgba(0,0,0,0.05)] border border-outline-variant/30 flex flex-col gap-md">
+<h3 class="font-title-lg text-title-lg text-on-surface pb-sm border-b border-surface-container">Certificates</h3>
+<div class="flex flex-col gap-sm">
+<div class="flex items-center gap-sm">
+<div class="w-8 h-8 bg-surface-variant text-primary rounded flex items-center justify-center">
+<span class="material-symbols-outlined text-[18px]">workspace_premium</span>
+</div>
+<div>
+<p class="font-body-md text-body-md text-on-surface font-medium">Google UX Design Certificate</p>
+<p class="font-label-sm text-label-sm text-secondary">Google • 2022</p>
+</div>
+</div>
+<div class="flex items-center gap-sm">
+<div class="w-8 h-8 bg-surface-variant text-primary rounded flex items-center justify-center">
+<span class="material-symbols-outlined text-[18px]">workspace_premium</span>
+</div>
+<div>
+<p class="font-body-md text-body-md text-on-surface font-medium">Certified User Experience Professional</p>
+<p class="font-label-sm text-label-sm text-secondary">NN/g • 2021</p>
+</div>
+</div>
+</div>
+</div>
+</aside>
+<!-- Main Content Area -->
+<div class="flex-1 flex flex-col gap-lg">
+<!-- Tabs -->
+<div class="bg-surface-container-lowest rounded-xl shadow-[0px_1px_3px_rgba(0,0,0,0.05)] border border-outline-variant/30 overflow-hidden">
+<div class="flex overflow-x-auto hide-scrollbar border-b border-surface-container">
+<button class="px-lg py-md font-label-md text-label-md font-bold text-primary border-b-2 border-primary whitespace-nowrap bg-surface-container-low/50">
+                            Overview
+                        </button>
+<button class="px-lg py-md font-label-md text-label-md text-secondary hover:text-on-surface hover:bg-surface-container-lowest transition-colors whitespace-nowrap">
+                            Timeline
+                        </button>
+<button class="px-lg py-md font-label-md text-label-md text-secondary hover:text-on-surface hover:bg-surface-container-lowest transition-colors whitespace-nowrap">
+                            Documents
+                        </button>
+<button class="px-lg py-md font-label-md text-label-md text-secondary hover:text-on-surface hover:bg-surface-container-lowest transition-colors whitespace-nowrap">
+                            Scorecard
+                        </button>
+</div>
+<!-- Tab Content: Overview -->
+<div class="p-lg flex flex-col gap-xl">
+<!-- Summary -->
+<section>
+<h4 class="font-title-lg text-title-lg text-on-surface mb-sm flex items-center gap-xs">
+<span class="material-symbols-outlined text-primary text-[20px]">description</span> Summary
+                            </h4>
+<p class="font-body-md text-body-md text-on-surface-variant leading-relaxed">
+                                Eleanor is a highly skilled Product Designer with over 6 years of experience specializing in B2B enterprise software. She recently led the redesign of a major fintech dashboard, resulting in a 40% increase in user engagement. She demonstrates strong systems thinking and communicates design decisions clearly.
+                            </p>
+</section>
+<!-- Applied Vacancies -->
+<section>
+<h4 class="font-title-lg text-title-lg text-on-surface mb-sm flex items-center gap-xs">
+<span class="material-symbols-outlined text-primary text-[20px]">work</span> Applied Vacancies
+                            </h4>
+<div class="flex flex-col gap-sm">
+<div class="bg-surface border border-outline-variant rounded-lg p-md flex flex-col sm:flex-row justify-between items-start sm:items-center gap-md">
+<div>
+<h5 class="font-title-lg text-title-lg text-on-surface">Senior Product Designer</h5>
+<p class="font-label-sm text-label-sm text-secondary mt-xs">Design Team • Applied 14 days ago</p>
+</div>
+<div class="flex items-center gap-md w-full sm:w-auto">
+<span class="inline-flex items-center px-2 py-0.5 rounded-full font-label-sm text-label-sm bg-primary/10 text-primary">
+                                            Interviewing
+                                        </span>
+<a class="text-primary hover:bg-primary/10 p-sm rounded-full transition-colors ml-auto sm:ml-0" href="../vacancy_details/code.html">
+<span class="material-symbols-outlined">chevron_right</span>
+</a>
+</div>
+</div>
+</div>
+</section>
+<!-- Resume Preview -->
+<section>
+<h4 class="font-title-lg text-title-lg text-on-surface mb-sm flex items-center gap-xs">
+<span class="material-symbols-outlined text-primary text-[20px]">picture_as_pdf</span> Resume Preview
+                            </h4>
+<div class="bg-surface-container-low rounded-xl border border-outline-variant p-lg">
+<div class="flex items-center justify-between mb-md">
+<div>
+<p class="font-body-lg text-body-lg font-semibold text-on-surface">Eleanor Richards</p>
+<p class="font-label-sm text-label-sm text-secondary">Senior Product Designer</p>
+</div>
+<a class="text-primary font-label-md text-label-md flex items-center gap-xs hover:underline" href="#">
+<span class="material-symbols-outlined text-[18px]">visibility</span>
+                                View Full Resume
+                            </a>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-3 gap-md">
+<div>
+<p class="font-label-sm text-label-sm text-secondary uppercase tracking-wider mb-xs">Contact</p>
+<p class="font-body-md text-body-md text-on-surface">eleanor.r@example.com</p>
+<p class="font-body-md text-body-md text-secondary">+1 (555) 123-4567</p>
+<p class="font-body-md text-body-md text-secondary">San Francisco, CA</p>
+</div>
+<div>
+<p class="font-label-sm text-label-sm text-secondary uppercase tracking-wider mb-xs">Summary</p>
+<p class="font-body-md text-body-md text-on-surface-variant">Product designer with 6+ years in B2B enterprise software. Led a fintech dashboard redesign boosting engagement 40%.</p>
+</div>
+<div>
+<p class="font-label-sm text-label-sm text-secondary uppercase tracking-wider mb-xs">Highlights</p>
+<p class="font-body-md text-body-md text-on-surface-variant">B.S. Computer Science • 6+ yrs experience • UX Certification • Design Systems lead</p>
+</div>
+</div>
+</div>
+</section>
+<!-- Experience -->
+<section>
+<h4 class="font-title-lg text-title-lg text-on-surface mb-sm flex items-center gap-xs">
+<span class="material-symbols-outlined text-primary text-[20px]">work_history</span> Experience
+                            </h4>
+<div class="flex flex-col gap-sm">
+<div class="bg-surface-container-low rounded-lg border border-outline-variant p-md">
+<div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-xs mb-xs">
+<h5 class="font-body-lg text-body-lg font-semibold text-on-surface">Senior Product Designer</h5>
+<span class="font-label-sm text-label-sm text-secondary">2021 — Present</span>
+</div>
+<p class="font-label-sm text-label-sm text-secondary mb-sm">FinEdge Technologies • San Francisco, CA</p>
+<p class="font-body-md text-body-md text-on-surface-variant">Led the redesign of the core analytics dashboard used by 200k monthly users, improving engagement by 40%.</p>
+</div>
+<div class="bg-surface-container-low rounded-lg border border-outline-variant p-md">
+<div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-xs mb-xs">
+<h5 class="font-body-lg text-body-lg font-semibold text-on-surface">Product Designer</h5>
+<span class="font-label-sm text-label-sm text-secondary">2018 — 2021</span>
+</div>
+<p class="font-label-sm text-label-sm text-secondary mb-sm">Northwind Studio • Seattle, WA</p>
+<p class="font-body-md text-body-md text-on-surface-variant">Designed end-to-end flows for B2B SaaS products and established the design system used across 4 product teams.</p>
+</div>
+</div>
+</section>
+<!-- Education -->
+<section>
+<h4 class="font-title-lg text-title-lg text-on-surface mb-sm flex items-center gap-xs">
+<span class="material-symbols-outlined text-primary text-[20px]">school</span> Education
+                            </h4>
+<div class="bg-surface-container-low rounded-lg border border-outline-variant p-md">
+<div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-xs mb-xs">
+<h5 class="font-body-lg text-body-lg font-semibold text-on-surface">B.S. in Computer Science</h5>
+<span class="font-label-sm text-label-sm text-secondary">2014 — 2018</span>
+</div>
+<p class="font-body-md text-body-md text-on-surface-variant">University of California, Berkeley • GPA 3.8</p>
+</div>
+</section>
+<!-- Interview History -->
+<section>
+<h4 class="font-title-lg text-title-lg text-on-surface mb-sm flex items-center gap-xs">
+<span class="material-symbols-outlined text-primary text-[20px]">event_note</span> Interview History
+                            </h4>
+<div class="bg-surface-container-low rounded-lg border border-outline-variant overflow-x-auto">
+<table class="w-full text-left">
+<thead>
+<tr class="bg-surface-container-lowest border-b border-outline-variant">
+<th class="py-sm px-md font-label-sm text-label-sm text-secondary uppercase tracking-wider">Interview</th>
+<th class="py-sm px-md font-label-sm text-label-sm text-secondary uppercase tracking-wider">Date</th>
+<th class="py-sm px-md font-label-sm text-label-sm text-secondary uppercase tracking-wider">Interviewer</th>
+<th class="py-sm px-md font-label-sm text-label-sm text-secondary uppercase tracking-wider">Result</th>
+<th class="py-sm px-md font-label-sm text-label-sm text-secondary uppercase tracking-wider">Rating</th>
+</tr>
+</thead>
+<tbody class="font-body-md text-body-md divide-y divide-outline-variant/30">
+<tr>
+<td class="py-sm px-md text-on-surface font-medium">Screening Call</td>
+<td class="py-sm px-md text-secondary">Oct 20, 2023</td>
+<td class="py-sm px-md text-secondary">Amanda Lee</td>
+<td class="py-sm px-md"><span class="inline-flex items-center px-2 py-0.5 rounded-full font-label-sm text-label-sm bg-primary/10 text-primary">Passed</span></td>
+<td class="py-sm px-md text-on-surface">★ 4.0</td>
+</tr>
+<tr>
+<td class="py-sm px-md text-on-surface font-medium">Technical Interview</td>
+<td class="py-sm px-md text-secondary">Oct 24, 2023</td>
+<td class="py-sm px-md text-secondary">Sarah Jenkins</td>
+<td class="py-sm px-md"><span class="inline-flex items-center px-2 py-0.5 rounded-full font-label-sm text-label-sm bg-primary/10 text-primary">Passed</span></td>
+<td class="py-sm px-md text-on-surface">★ 4.5</td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+</div>
+</div>
+<!-- Timeline Preview (Normally hidden in Overview tab, showing as Bento grid element for visual interest) -->
+<div class="grid grid-cols-1 md:grid-cols-2 gap-lg">
+<!-- Recent Activity Card -->
+<div class="bg-surface-container-lowest p-lg rounded-xl shadow-[0px_1px_3px_rgba(0,0,0,0.05)] border border-outline-variant/30 flex flex-col">
+<div class="flex justify-between items-center mb-md pb-sm border-b border-surface-container">
+<h3 class="font-title-lg text-title-lg text-on-surface">Recent Activity</h3>
+<button class="text-primary font-label-md text-label-md hover:underline">View All</button>
+</div>
+<div class="relative pl-6 border-l-2 border-surface-container flex flex-col gap-md flex-grow">
+<div class="relative">
+<div class="absolute -left-[31px] top-1 w-3 h-3 bg-primary rounded-full border-2 border-surface-container-lowest"></div>
+<p class="font-label-sm text-label-sm text-secondary mb-xs">Oct 24, 10:00 AM</p>
+<p class="font-body-md text-body-md text-on-surface font-medium">Technical Interview Completed</p>
+<p class="font-body-md text-body-md text-secondary mt-xs text-sm">Feedback submitted by Sarah Jenkins.</p>
+</div>
+<div class="relative">
+<div class="absolute -left-[31px] top-1 w-3 h-3 bg-surface-container-highest rounded-full border-2 border-surface-container-lowest"></div>
+<p class="font-label-sm text-label-sm text-secondary mb-xs">Oct 20, 2:30 PM</p>
+<p class="font-body-md text-body-md text-on-surface font-medium">Moved to Interviewing</p>
+</div>
+</div>
+</div>
+<!-- Attachments Card -->
+<div class="bg-surface-container-lowest p-lg rounded-xl shadow-[0px_1px_3px_rgba(0,0,0,0.05)] border border-outline-variant/30 flex flex-col">
+<div class="flex justify-between items-center mb-md pb-sm border-b border-surface-container">
+<h3 class="font-title-lg text-title-lg text-on-surface">Attachments</h3>
+<a class="flex items-center gap-xs text-primary font-label-md text-label-md hover:underline" href="#" onclick="document.getElementById('upload-modal').classList.remove('hidden'); return false;">
+<span class="material-symbols-outlined text-[18px]">upload_file</span> Upload
+                            </a>
+</div>
+<div class="flex flex-col gap-sm">
+<a class="flex items-center justify-between p-sm border border-outline-variant rounded-md hover:bg-surface-container transition-colors group" href="#">
+<div class="flex items-center gap-sm">
+<div class="w-8 h-8 bg-error/10 text-error rounded flex items-center justify-center">
+<span class="material-symbols-outlined text-[18px]">picture_as_pdf</span>
+</div>
+<div>
+<p class="font-body-md text-body-md text-on-surface font-medium group-hover:text-primary transition-colors">E_Richards_Resume.pdf</p>
+<p class="font-label-sm text-label-sm text-secondary">2.4 MB • Oct 10</p>
+</div>
+</div>
+<span class="material-symbols-outlined text-secondary opacity-0 group-hover:opacity-100 transition-opacity">download</span>
+</a>
+<a class="flex items-center justify-between p-sm border border-outline-variant rounded-md hover:bg-surface-container transition-colors group" href="#">
+<div class="flex items-center gap-sm">
+<div class="w-8 h-8 bg-surface-variant text-primary rounded flex items-center justify-center">
+<span class="material-symbols-outlined text-[18px]">link</span>
+</div>
+<div>
+<p class="font-body-md text-body-md text-on-surface font-medium group-hover:text-primary transition-colors">Portfolio Website</p>
+<p class="font-label-sm text-label-sm text-secondary">External Link</p>
+</div>
+</div>
+<span class="material-symbols-outlined text-secondary opacity-0 group-hover:opacity-100 transition-opacity">open_in_new</span>
+</a>
+</div>
+</div>
+</div>
+<!-- Recruitment Notes + Internal Comments -->
+<div class="grid grid-cols-1 md:grid-cols-2 gap-lg">
+<!-- Recruitment Notes -->
+<div class="bg-surface-container-lowest p-lg rounded-xl shadow-[0px_1px_3px_rgba(0,0,0,0.05)] border border-outline-variant/30 flex flex-col">
+<div class="flex justify-between items-center mb-md pb-sm border-b border-surface-container">
+<h3 class="font-title-lg text-title-lg text-on-surface">Recruitment Notes</h3>
+<a class="flex items-center gap-xs text-primary font-label-md text-label-md hover:underline" href="#" onclick="document.getElementById('add-note-modal').classList.remove('hidden'); return false;">
+<span class="material-symbols-outlined text-[18px]">add</span> Add Note
+                            </a>
+</div>
+<div class="flex flex-col gap-md">
+<div class="bg-surface-container-low rounded-lg p-md">
+<p class="font-body-md text-body-md text-on-surface mb-xs">Strong technical and communication skills. Highly engaged during interviews — recommend advancing to final round.</p>
+<p class="font-label-sm text-label-sm text-secondary flex items-center gap-xs">
+<span class="material-symbols-outlined text-[16px]">person</span> Sarah Jenkins • Oct 24, 2023
+                            </p>
+</div>
+<div class="bg-surface-container-low rounded-lg p-md">
+<p class="font-body-md text-body-md text-on-surface mb-xs">Available to start in 4 weeks. Prefers hybrid schedule (2 days on-site).</p>
+<p class="font-label-sm text-label-sm text-secondary flex items-center gap-xs">
+<span class="material-symbols-outlined text-[16px]">person</span> Amanda Lee • Oct 20, 2023
+                            </p>
+</div>
+</div>
+</div>
+<!-- Internal Comments -->
+<div class="bg-surface-container-lowest p-lg rounded-xl shadow-[0px_1px_3px_rgba(0,0,0,0.05)] border border-outline-variant/30 flex flex-col">
+<div class="flex justify-between items-center mb-md pb-sm border-b border-surface-container">
+<h3 class="font-title-lg text-title-lg text-on-surface">Internal Comments</h3>
+</div>
+<div class="flex flex-col gap-md flex-grow">
+<div class="flex gap-sm">
+<div class="w-8 h-8 rounded-full bg-primary-container text-on-primary-container flex items-center justify-center text-xs font-bold flex-shrink-0">SJ</div>
+<div class="flex-1 bg-surface-container-low rounded-lg p-md">
+<p class="font-body-md text-body-md text-on-surface">Candidate requested a portfolio walkthrough before the final round. Share the room link ahead of time.</p>
+<p class="font-label-sm text-label-sm text-secondary mt-xs">Sarah Jenkins • Oct 24, 2023</p>
+</div>
+</div>
+<div class="flex gap-sm">
+<div class="w-8 h-8 rounded-full bg-surface-variant text-on-surface-variant flex items-center justify-center text-xs font-bold flex-shrink-0">AL</div>
+<div class="flex-1 bg-surface-container-low rounded-lg p-md">
+<p class="font-body-md text-body-md text-on-surface">Reference check scheduled for next week.</p>
+<p class="font-label-sm text-label-sm text-secondary mt-xs">Amanda Lee • Oct 22, 2023</p>
+</div>
+</div>
+</div>
+<div class="flex items-center gap-sm mt-md">
+<input class="flex-1 rounded-lg border border-outline-variant bg-surface-container-lowest px-md py-sm font-body-md text-body-md text-on-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary" placeholder="Write a comment..." type="text"/>
+<button class="px-md py-sm rounded-lg bg-primary text-on-primary font-label-md text-label-md hover:opacity-90 transition-opacity" onclick="document.getElementById('success-dialog').classList.remove('hidden')">Post</button>
+</div>
+</div>
+</div>
+</div>
+</div>
+</main>
+<style>
+        /* Utility for hiding scrollbar in tabs */
+        .hide-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .hide-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+    </style>
+<!-- Move Stage Modal -->
+<div class="hidden fixed inset-0 z-50 flex items-center justify-center p-md" id="move-stage-modal">
+<div class="absolute inset-0 bg-black/40" onclick="document.getElementById('move-stage-modal').classList.add('hidden')"></div>
+<div class="relative bg-surface-container-lowest rounded-xl shadow-xl max-w-md w-full p-lg">
+<div class="flex items-center gap-sm mb-md">
+<div class="w-10 h-10 rounded-full bg-primary-container/60 flex items-center justify-center text-primary">
+<span class="material-symbols-outlined">swap_vert</span>
+</div>
+<div>
+<h3 class="font-headline-md text-headline-md text-on-surface">Move Candidate</h3>
+<p class="font-body-md text-body-md text-secondary">Eleanor Richards • Interview 2</p>
+</div>
+</div>
+<div class="flex flex-col gap-sm mb-md">
+<label class="font-label-md text-label-md text-on-surface-variant">Move to Stage</label>
+<div class="relative">
+<select class="w-full bg-surface-container-lowest border border-outline-variant rounded-lg py-sm px-md appearance-none font-body-md text-body-md text-on-surface focus:border-primary focus:ring-1 focus:ring-primary outline-none">
+<option>Applied</option>
+<option>Screening</option>
+<option>Interview 1</option>
+<option selected="">Interview 2</option>
+<option>Waiting List</option>
+<option>Hired</option>
+</select>
+<span class="material-symbols-outlined absolute right-sm top-1/2 -translate-y-1/2 pointer-events-none text-secondary text-[18px]">expand_more</span>
+</div>
+</div>
+<div class="flex flex-col gap-xs mb-lg">
+<label class="font-label-md text-label-md text-on-surface-variant">Reason</label>
+<textarea class="w-full rounded-lg border border-outline-variant bg-surface-container-lowest px-md py-sm font-body-md text-body-md text-on-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary resize-y" placeholder="Add a note (optional)..." rows="3"></textarea>
+</div>
+<div class="flex justify-end gap-sm">
+<button class="px-md py-sm rounded-lg border border-outline-variant text-on-surface font-label-md text-label-md hover:bg-surface-container transition-colors" onclick="document.getElementById('move-stage-modal').classList.add('hidden')">Cancel</button>
+<button class="px-md py-sm rounded-lg bg-primary text-on-primary font-label-md text-label-md hover:opacity-90 transition-opacity" onclick="document.getElementById('move-stage-modal').classList.add('hidden'); document.getElementById('success-dialog').classList.remove('hidden')">Save</button>
+</div>
+</div>
+</div>
+<!-- Schedule Interview Modal -->
+<div class="hidden fixed inset-0 z-50 flex items-center justify-center p-md" id="schedule-interview-modal">
+<div class="absolute inset-0 bg-black/40" onclick="document.getElementById('schedule-interview-modal').classList.add('hidden')"></div>
+<div class="relative bg-surface-container-lowest rounded-xl shadow-xl max-w-md w-full p-lg">
+<div class="flex items-center gap-sm mb-md">
+<div class="w-10 h-10 rounded-full bg-primary-container/60 flex items-center justify-center text-primary">
+<span class="material-symbols-outlined">event</span>
+</div>
+<div>
+<h3 class="font-headline-md text-headline-md text-on-surface">Schedule Interview</h3>
+<p class="font-body-md text-body-md text-secondary">Eleanor Richards</p>
+</div>
+</div>
+<div class="grid grid-cols-2 gap-md mb-md">
+<div class="flex flex-col gap-xs">
+<label class="font-label-md text-label-md text-on-surface-variant">Date</label>
+<input class="rounded-lg border border-outline-variant bg-surface-container-lowest px-md py-sm font-body-md text-body-md text-on-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary" type="date"/>
+</div>
+<div class="flex flex-col gap-xs">
+<label class="font-label-md text-label-md text-on-surface-variant">Time</label>
+<input class="rounded-lg border border-outline-variant bg-surface-container-lowest px-md py-sm font-body-md text-body-md text-on-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary" type="time"/>
+</div>
+</div>
+<div class="flex flex-col gap-xs mb-md">
+<label class="font-label-md text-label-md text-on-surface-variant">Interviewer</label>
+<div class="relative">
+<select class="w-full bg-surface-container-lowest border border-outline-variant rounded-lg py-sm px-md appearance-none font-body-md text-body-md text-on-surface focus:border-primary focus:ring-1 focus:ring-primary outline-none">
+<option>Sarah Jenkins (Lead)</option>
+<option>Amanda Lee</option>
+<option>Michael Chang</option>
+</select>
+<span class="material-symbols-outlined absolute right-sm top-1/2 -translate-y-1/2 pointer-events-none text-secondary text-[18px]">expand_more</span>
+</div>
+</div>
+<div class="flex flex-col gap-xs mb-lg">
+<label class="font-label-md text-label-md text-on-surface-variant">Interview Type</label>
+<div class="relative">
+<select class="w-full bg-surface-container-lowest border border-outline-variant rounded-lg py-sm px-md appearance-none font-body-md text-body-md text-on-surface focus:border-primary focus:ring-1 focus:ring-primary outline-none">
+<option>Technical</option>
+<option>HR / Culture</option>
+<option>Portfolio Review</option>
+<option>Final Round</option>
+</select>
+<span class="material-symbols-outlined absolute right-sm top-1/2 -translate-y-1/2 pointer-events-none text-secondary text-[18px]">expand_more</span>
+</div>
+</div>
+<div class="flex justify-end gap-sm">
+<button class="px-md py-sm rounded-lg border border-outline-variant text-on-surface font-label-md text-label-md hover:bg-surface-container transition-colors" onclick="document.getElementById('schedule-interview-modal').classList.add('hidden')">Cancel</button>
+<button class="px-md py-sm rounded-lg bg-primary text-on-primary font-label-md text-label-md hover:opacity-90 transition-opacity" onclick="document.getElementById('schedule-interview-modal').classList.add('hidden'); document.getElementById('success-dialog').classList.remove('hidden')">Schedule</button>
+</div>
+</div>
+</div>
+<!-- Reject Candidate Modal -->
+<div class="hidden fixed inset-0 z-50 flex items-center justify-center p-md" id="reject-modal">
+<div class="absolute inset-0 bg-black/40" onclick="document.getElementById('reject-modal').classList.add('hidden')"></div>
+<div class="relative bg-surface-container-lowest rounded-xl shadow-xl max-w-md w-full p-lg">
+<div class="w-12 h-12 rounded-full bg-error-container/60 flex items-center justify-center text-error mb-md">
+<span class="material-symbols-outlined text-[28px]">close</span>
+</div>
+<h3 class="font-headline-md text-headline-md text-on-surface mb-xs">Reject Candidate?</h3>
+<p class="font-body-md text-body-md text-secondary mb-md">Eleanor Richards will be removed from the active pipeline.</p>
+<div class="flex flex-col gap-xs mb-lg">
+<label class="font-label-md text-label-md text-on-surface-variant">Reason for rejection</label>
+<textarea class="w-full rounded-lg border border-outline-variant bg-surface-container-lowest px-md py-sm font-body-md text-body-md text-on-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary resize-y" placeholder="Add a reason (optional)..." rows="3"></textarea>
+</div>
+<div class="flex justify-end gap-sm">
+<button class="px-md py-sm rounded-lg border border-outline-variant text-on-surface font-label-md text-label-md hover:bg-surface-container transition-colors" onclick="document.getElementById('reject-modal').classList.add('hidden')">Cancel</button>
+<button class="px-md py-sm rounded-lg bg-error text-on-error font-label-md text-label-md hover:opacity-90 transition-opacity" onclick="document.getElementById('reject-modal').classList.add('hidden'); document.getElementById('error-dialog').classList.remove('hidden')">Reject Candidate</button>
+</div>
+</div>
+</div>
+<!-- Add Note Modal -->
+<div class="hidden fixed inset-0 z-50 flex items-center justify-center p-md" id="add-note-modal">
+<div class="absolute inset-0 bg-black/40" onclick="document.getElementById('add-note-modal').classList.add('hidden')"></div>
+<div class="relative bg-surface-container-lowest rounded-xl shadow-xl max-w-md w-full p-lg">
+<div class="flex items-center gap-sm mb-md">
+<div class="w-10 h-10 rounded-full bg-primary-container/60 flex items-center justify-center text-primary">
+<span class="material-symbols-outlined">edit_note</span>
+</div>
+<div>
+<h3 class="font-headline-md text-headline-md text-on-surface">Add Note</h3>
+<p class="font-body-md text-body-md text-secondary">Recruitment note for Eleanor Richards</p>
+</div>
+</div>
+<div class="flex flex-col gap-xs mb-lg">
+<label class="font-label-md text-label-md text-on-surface-variant">Note</label>
+<textarea class="w-full rounded-lg border border-outline-variant bg-surface-container-lowest px-md py-sm font-body-md text-body-md text-on-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary resize-y" placeholder="Write a note..." rows="4"></textarea>
+</div>
+<div class="flex justify-end gap-sm">
+<button class="px-md py-sm rounded-lg border border-outline-variant text-on-surface font-label-md text-label-md hover:bg-surface-container transition-colors" onclick="document.getElementById('add-note-modal').classList.add('hidden')">Cancel</button>
+<button class="px-md py-sm rounded-lg bg-primary text-on-primary font-label-md text-label-md hover:opacity-90 transition-opacity" onclick="document.getElementById('add-note-modal').classList.add('hidden'); document.getElementById('success-dialog').classList.remove('hidden')">Save Note</button>
+</div>
+</div>
+</div>
+<!-- Upload Resume Modal -->
+<div class="hidden fixed inset-0 z-50 flex items-center justify-center p-md" id="upload-modal">
+<div class="absolute inset-0 bg-black/40" onclick="document.getElementById('upload-modal').classList.add('hidden')"></div>
+<div class="relative bg-surface-container-lowest rounded-xl shadow-xl max-w-md w-full p-lg">
+<div class="flex items-center gap-sm mb-md">
+<div class="w-10 h-10 rounded-full bg-primary-container/60 flex items-center justify-center text-primary">
+<span class="material-symbols-outlined">upload_file</span>
+</div>
+<div>
+<h3 class="font-headline-md text-headline-md text-on-surface">Upload File</h3>
+<p class="font-body-md text-body-md text-secondary">Attach a document to this candidate</p>
+</div>
+</div>
+<div class="border-2 border-dashed border-outline-variant rounded-xl p-lg text-center mb-lg">
+<span class="material-symbols-outlined text-[40px] text-secondary">cloud_upload</span>
+<p class="font-body-md text-body-md text-on-surface mt-sm">Drag &amp; drop a file here, or click to browse</p>
+<p class="font-label-sm text-label-sm text-secondary mt-xs">PDF, DOCX, PNG up to 10MB</p>
+</div>
+<div class="flex justify-end gap-sm">
+<button class="px-md py-sm rounded-lg border border-outline-variant text-on-surface font-label-md text-label-md hover:bg-surface-container transition-colors" onclick="document.getElementById('upload-modal').classList.add('hidden')">Cancel</button>
+<button class="px-md py-sm rounded-lg bg-primary text-on-primary font-label-md text-label-md hover:opacity-90 transition-opacity" onclick="document.getElementById('upload-modal').classList.add('hidden'); document.getElementById('success-dialog').classList.remove('hidden')">Upload</button>
+</div>
+</div>
+</div>
+<!-- Success Dialog -->
+<div class="hidden fixed inset-0 z-50 flex items-center justify-center p-md" id="success-dialog">
+<div class="absolute inset-0 bg-black/40" onclick="document.getElementById('success-dialog').classList.add('hidden')"></div>
+<div class="relative bg-surface-container-lowest rounded-xl shadow-xl max-w-sm w-full p-lg text-center">
+<div class="w-14 h-14 rounded-full bg-primary-container/60 flex items-center justify-center text-primary mx-auto mb-md">
+<span class="material-symbols-outlined text-[32px]">task_alt</span>
+</div>
+<h3 class="font-headline-md text-headline-md text-on-surface mb-xs">Success</h3>
+<p class="font-body-md text-body-md text-secondary mb-lg">Your changes were saved successfully.</p>
+<button class="px-md py-sm rounded-lg bg-primary text-on-primary font-label-md text-label-md hover:opacity-90 transition-opacity" onclick="document.getElementById('success-dialog').classList.add('hidden')">Done</button>
+</div>
+</div>
+<!-- Error Dialog -->
+<div class="hidden fixed inset-0 z-50 flex items-center justify-center p-md" id="error-dialog">
+<div class="absolute inset-0 bg-black/40" onclick="document.getElementById('error-dialog').classList.add('hidden')"></div>
+<div class="relative bg-surface-container-lowest rounded-xl shadow-xl max-w-sm w-full p-lg text-center">
+<div class="w-14 h-14 rounded-full bg-error-container/60 flex items-center justify-center text-error mx-auto mb-md">
+<span class="material-symbols-outlined text-[32px]">error</span>
+</div>
+<h3 class="font-headline-md text-headline-md text-on-surface mb-xs">Something went wrong</h3>
+<p class="font-body-md text-body-md text-secondary mb-lg">The candidate could not be rejected. Please try again.</p>
+<button class="px-md py-sm rounded-lg bg-error text-on-error font-label-md text-label-md hover:opacity-90 transition-opacity" onclick="document.getElementById('error-dialog').classList.add('hidden')">OK</button>
+</div>
+</div>
+</body></html>

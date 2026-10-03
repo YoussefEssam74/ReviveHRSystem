@@ -1,0 +1,224 @@
+<!DOCTYPE html><html class="h-full" lang="en"><head>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0" name="viewport">
+<title>Revive HR - Evaluation Builder</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&amp;display=swap" rel="stylesheet">
+<script>
+tailwind.config={darkMode:"class",theme:{extend:{colors:{"primary":"#16a34a","primary-container":"#bbf7d0","on-primary":"#ffffff","on-primary-container":"#14532d","surface":"#fbfcfa","surface-container":"#e9eee8","surface-container-low":"#f3f6f2","surface-container-high":"#dee5dd","surface-container-highest":"#d3dcd2","surface-container-lowest":"#ffffff","on-surface":"#13221a","on-surface-variant":"#3f4a41","on-background":"#13221a","background":"#f7f9f7","secondary":"#5c5f60","outline":"#6e7b6c","outline-variant":"#c6cdc5","error":"#ba1a1a","error-container":"#ffdad6","on-error-container":"#93000a","tertiary":"#51605a","tertiary-container":"#b3c7bc","surface-tint":"#16a34a"},fontFamily:{sans:["Inter","system-ui","sans-serif"]}}}}
+</script>
+<style>.material-symbols-outlined{font-variation-settings:'FILL' 0,'wght' 400,'GRAD' 0,'opsz' 24;}.material-symbols-outlined[data-weight="fill"]{font-variation-settings:'FILL' 1;}.elevation-1{box-shadow:0px 1px 3px rgba(0,0,0,0.05);}.style-row.selected{outline:2px solid #16a34a;outline-offset:-2px;}</style>
+</head>
+<body class="bg-background text-on-background font-sans min-h-screen flex h-full overflow-hidden">
+
+<!-- Sidebar -->
+<nav class="fixed left-0 top-0 h-full w-[280px] bg-surface-container-low flex flex-col py-6 px-4 z-30 hidden md:flex border-r border-outline-variant">
+  <div class="flex items-center gap-3 mb-8 px-2">
+    <div class="w-10 h-10 rounded-lg bg-primary-container text-on-primary-container flex items-center justify-center">
+      <span class="material-symbols-outlined" data-weight="fill">hub</span>
+    </div>
+    <div>
+      <h1 class="text-[20px] font-bold text-on-surface">Revive HR</h1>
+      <p class="text-[12px] text-on-surface-variant">HR Operations</p>
+    </div>
+  </div>
+  <ul class="flex flex-col gap-1 flex-1">
+    <li><a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant hover:bg-surface-container-high transition-all" href="../hr_control_center_dashboard/code.html"><span class="material-symbols-outlined">dashboard</span><span class="text-[14px] font-medium">Control Center</span></a></li>
+    <li><a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant hover:bg-surface-container-high transition-all" href="../payroll_management/code.html"><span class="material-symbols-outlined">payments</span><span class="text-[14px] font-medium">Payroll</span></a></li>
+    <li><a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant hover:bg-surface-container-high transition-all" href="../new_comers/code.html"><span class="material-symbols-outlined">person_add</span><span class="text-[14px] font-medium">New Comers</span></a></li>
+    <li><a class="flex items-center gap-3 px-4 py-3 rounded-lg text-primary font-bold bg-primary-container/10 transition-colors" href="#"><span class="material-symbols-outlined" data-weight="fill">fact_check</span><span class="text-[14px] font-medium">Evaluations</span></a></li>
+    <li><a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant hover:bg-surface-container-high transition-all" href="../termination_workflow/code.html"><span class="material-symbols-outlined">person_off</span><span class="text-[14px] font-medium">Termination</span></a></li>
+    <li><a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant hover:bg-surface-container-high transition-all" href="../permissions_matrix/code.html"><span class="material-symbols-outlined">admin_panel_settings</span><span class="text-[14px] font-medium">Permissions</span></a></li>
+    <li><a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant hover:bg-surface-container-high transition-all" href="../recruitment_dashboard/code.html"><span class="material-symbols-outlined">person_search</span><span class="text-[14px] font-medium">Recruitment</span></a></li>
+  </ul>
+  <ul class="flex flex-col gap-1 mt-auto pt-4 border-t border-outline-variant">
+    <li><a class="flex items-center gap-3 px-4 py-3 rounded-lg text-error hover:bg-error-container/20 transition-all" href="#"><span class="material-symbols-outlined">logout</span><span class="text-[14px] font-medium">Logout</span></a></li>
+  </ul>
+</nav>
+
+<!-- Main Content -->
+<main class="flex-1 ml-0 md:ml-[280px] h-full flex flex-col relative overflow-hidden">
+  <!-- Top Bar -->
+  <header class="w-full h-16 bg-surface flex justify-between items-center px-4 md:px-8 z-10 sticky top-0 shrink-0 border-b border-outline-variant">
+    <div class="flex items-center gap-4 flex-1">
+      <h1 class="text-[18px] font-bold text-on-surface hidden lg:block">Evaluation Builder</h1>
+    </div>
+    <div class="flex items-center gap-4">
+      <button onclick="preview()" class="hidden sm:flex items-center gap-2 px-4 py-2 rounded-lg text-[13px] font-medium text-on-surface-variant hover:bg-surface-container-high transition-colors">
+        <span class="material-symbols-outlined text-[18px]">visibility</span> Preview
+      </button>
+      <button onclick="saveEval()" class="flex items-center gap-2 px-4 py-2 bg-primary text-on-primary rounded-lg text-[13px] font-semibold hover:opacity-90 transition-opacity">
+        <span class="material-symbols-outlined text-[18px]">save</span> Save
+      </button>
+      <div class="ml-2 pl-4 border-l border-outline-variant flex items-center gap-3">
+        <div class="w-9 h-9 rounded-full bg-primary-container text-on-primary-container flex items-center justify-center text-[13px] font-bold">HO</div>
+        <div class="hidden sm:block">
+          <p class="text-[13px] font-semibold text-on-surface leading-tight">Hana Osman</p>
+          <p class="text-[11px] text-on-surface-variant leading-tight">HR Operations</p>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Canvas -->
+  <div class="flex-1 overflow-y-auto p-4 md:p-8 bg-background">
+    <div class="max-w-[1100px] mx-auto space-y-4">
+
+      <!-- Form Header Card -->
+      <div class="bg-surface rounded-t-xl rounded-b-lg p-6 elevation-1 bg-gradient-to-br from-primary-container to-emerald-200">
+        <div class="bg-white/70 backdrop-blur rounded-lg p-5">
+          <input id="eval-title" type="text" value="Annual Performance Review — Q3 2026" class="w-full bg-transparent text-[24px] font-bold text-on-surface outline-none mb-2">
+          <textarea id="eval-desc" rows="1" class="w-full bg-transparent text-[14px] text-on-surface-variant outline-none resize-none">Please complete this review honestly. Responses are confidential and used to support career development.</textarea>
+        </div>
+      </div>
+
+      <!-- Questions -->
+      <div id="questions" class="space-y-4"></div>
+
+      <!-- Add Question -->
+      <div class="flex items-center gap-2 justify-center">
+        <button onclick="addQuestion('multiple')" class="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-surface text-on-surface text-[13px] font-medium hover:bg-surface-container-high transition-colors border border-outline-variant elevation-1">
+          <span class="material-symbols-outlined text-[18px] text-primary">add_circle</span> Multiple Choice
+        </button>
+        <button onclick="addQuestion('rating')" class="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-surface text-on-surface text-[13px] font-medium hover:bg-surface-container-high transition-colors border border-outline-variant elevation-1">
+          <span class="material-symbols-outlined text-[18px] text-primary">star</span> Rating
+        </button>
+        <button onclick="addQuestion('text')" class="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-surface text-on-surface text-[13px] font-medium hover:bg-surface-container-high transition-colors border border-outline-variant elevation-1">
+          <span class="material-symbols-outlined text-[18px] text-primary">notes</span> Long Text
+        </button>
+      </div>
+
+    </div>
+  </div>
+</main>
+
+<!-- Toast -->
+<div id="toast" class="fixed bottom-6 right-6 hidden items-center gap-2 px-4 py-3 rounded-lg bg-on-surface text-surface shadow-lg z-50">
+  <span class="material-symbols-outlined text-[18px] text-green-400">check_circle</span>
+  <span id="toast-msg" class="text-[13px] font-medium"></span>
+</div>
+
+<script>
+let questions=[
+  {id:1,type:'multiple',title:'How would you rate the employee\'s overall performance?',options:['Excellent','Good','Needs Improvement','Unsatisfactory'],required:true},
+  {id:2,type:'rating',title:'Attendance and punctuality',scale:5,required:true},
+  {id:3,type:'text',title:'What are the employee\'s key strengths?',placeholder:'Enter your response...',required:false},
+];
+let nextId=4;
+let editingId=null;
+
+function blockIcon(type){
+  const m={multiple:'checklist',rating:'star',text:'notes'};
+  return m[type]||'help';
+}
+
+function renderQuestions(){
+  const box=document.getElementById('questions');
+  box.innerHTML=questions.map((q,i)=>`
+    <div class="bg-surface rounded-xl p-5 elevation-1 border border-outline-variant/40 ${editingId===q.id?'ring-2 ring-primary/40':''}">
+      ${q.type==='rating'
+        ? renderRating(q)
+        : q.type==='text'
+          ? renderText(q)
+          : renderMultiple(q)}
+    </div>
+  `).join('');
+}
+
+function renderMultiple(q){
+  return `
+    <div class="flex items-start gap-3">
+      <span class="material-symbols-outlined text-[20px] text-primary mt-0.5">${blockIcon(q.type)}</span>
+      <div class="flex-1">
+        <div class="flex items-center gap-2">
+          <input type="text" value="${q.title}" class="flex-1 font-semibold text-[15px] text-on-surface bg-transparent outline-none border-b border-dashed border-transparent focus:border-outline-variant" onchange="updateTitle(${q.id},this.value)">
+          ${q.required?'<span class="text-[12px] text-error">*</span>':''}
+        </div>
+        <div class="mt-3 space-y-2">
+          ${q.options.map((o,oi)=>`
+            <div class="flex items-center gap-2">
+              <span class="material-symbols-outlined text-[18px] text-on-surface-variant">radio_button_unchecked</span>
+              <input type="text" value="${o}" class="flex-1 text-[13px] text-on-surface bg-transparent outline-none border-b border-dashed border-transparent focus:border-outline-variant" onchange="updateOption(${q.id},${oi},this.value)">
+              ${oi>1?`<button onclick="removeOption(${q.id},${oi})" class="text-secondary hover:text-error" title="Remove"><span class="material-symbols-outlined text-[18px]">close</span></button>`:''}
+            </div>
+          `).join('')}
+          <button onclick="addOption(${q.id})" class="flex items-center gap-1 text-[13px] text-primary mt-2"><span class="material-symbols-outlined text-[16px]">add</span> Add option</button>
+        </div>
+      </div>
+      <button onclick="setEditing(${q.id})" class="text-secondary hover:text-primary" title="Edit"><span class="material-symbols-outlined text-[20px]">edit</span></button>
+    </div>`;
+}
+
+function renderRating(q){
+  return `
+    <div class="flex items-start gap-3">
+      <span class="material-symbols-outlined text-[20px] text-primary mt-0.5">${blockIcon(q.type)}</span>
+      <div class="flex-1">
+        <div class="flex items-center gap-2">
+          <input type="text" value="${q.title}" class="flex-1 font-semibold text-[15px] text-on-surface bg-transparent outline-none border-b border-dashed border-transparent focus:border-outline-variant" onchange="updateTitle(${q.id},this.value)">
+          ${q.required?'<span class="text-[12px] text-error">*</span>':''}
+        </div>
+        <div class="mt-3 flex items-center gap-2">
+          <span class="text-[12px] text-on-surface-variant">1</span>
+          <div class="flex gap-1.5">
+            ${Array.from({length:q.scale},(_,i)=>`<span class="material-symbols-outlined text-on-surface-variant">star</span>`).join('')}
+          </div>
+          <span class="text-[12px] text-on-surface-variant">${q.scale} (Worst to Best)</span>
+        </div>
+      </div>
+      <button onclick="setEditing(${q.id})" class="text-secondary hover:text-primary" title="Edit"><span class="material-symbols-outlined text-[20px]">edit</span></button>
+    </div>`;
+}
+
+function renderText(q){
+  return `
+    <div class="flex items-start gap-3">
+      <span class="material-symbols-outlined text-[20px] text-primary mt-0.5">${blockIcon(q.type)}</span>
+      <div class="flex-1">
+        <div class="flex items-center gap-2">
+          <input type="text" value="${q.title}" class="flex-1 font-semibold text-[15px] text-on-surface bg-transparent outline-none border-b border-dashed border-transparent focus:border-outline-variant" onchange="updateTitle(${q.id},this.value)">
+          ${q.required?'<span class="text-[12px] text-error">*</span>':''}
+        </div>
+        <div class="mt-3 p-3 rounded-lg bg-surface-container-low text-[13px] text-on-surface-variant">${q.placeholder||'Long answer text'}</div>
+      </div>
+      <button onclick="setEditing(${q.id})" class="text-secondary hover:text-primary" title="Edit"><span class="material-symbols-outlined text-[20px]">edit</span></button>
+    </div>`;
+}
+
+function addQuestion(type){
+  const base={
+    multiple:{id:nextId,type:'multiple',title:'New multiple choice question',options:['Option 1','Option 2'],required:false},
+    rating:{id:nextId,type:'rating',title:'New rating question',scale:5,required:false},
+    text:{id:nextId,type:'text',title:'New long text question',placeholder:'Enter your response...',required:false},
+  }[type];
+  questions.push(base);
+  editingId=base.id;
+  nextId++;
+  renderQuestions();
+}
+
+function updateTitle(id,val){const q=questions.find(x=>x.id===id);if(q)q.title=val;}
+function updateOption(id,oi,val){const q=questions.find(x=>x.id===id);if(q&&q.options)q.options[oi]=val;}
+function addOption(id){const q=questions.find(x=>x.id===id);if(q&&q.options)q.options.push('Option '+(q.options.length+1));renderQuestions();}
+function removeOption(id,oi){const q=questions.find(x=>x.id===id);if(q&&q.options&&q.options.length>2)q.options.splice(oi,1);renderQuestions();}
+function setEditing(id){editingId=id;renderQuestions();}
+
+function preview(){
+  toast('Preview mode: evaluation form opened');
+}
+function saveEval(){
+  const title=document.getElementById('eval-title').value;
+  toast('Evaluation "'+title+'" saved (draft)');
+}
+
+function toast(msg){
+  const t=document.getElementById('toast');
+  document.getElementById('toast-msg').textContent=msg;
+  t.classList.remove('hidden');t.classList.add('flex');
+  setTimeout(()=>{t.classList.add('hidden');t.classList.remove('flex');},2500);
+}
+
+renderQuestions();
+</script>
+</body></html>

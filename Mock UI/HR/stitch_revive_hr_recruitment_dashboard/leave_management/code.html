@@ -1,0 +1,476 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Leave Management - Revive HR</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                            "on-secondary": "#ffffff",
+                            "surface-container-lowest": "#ffffff",
+                            "surface-container-low": "#eff4ff",
+                            "secondary": "#5c5f60",
+                            "on-primary": "#ffffff",
+                            "on-primary-fixed-variant": "#005320",
+                            "on-primary-container": "#f7fff2",
+                            "tertiary-fixed-dim": "#bcc7de",
+                            "outline": "#6e7b6c",
+                            "on-background": "#0b1c30",
+                            "primary": "#006b2c",
+                            "on-secondary-container": "#606365",
+                            "inverse-on-surface": "#eaf1ff",
+                            "surface-container": "#e5eeff",
+                            "background": "#f8f9ff",
+                            "on-tertiary-fixed-variant": "#3c475a",
+                            "inverse-surface": "#213145",
+                            "error-container": "#ffdad6",
+                            "surface-bright": "#f8f9ff",
+                            "on-error": "#ffffff",
+                            "on-tertiary-fixed": "#111c2d",
+                            "surface-variant": "#d3e4fe",
+                            "tertiary-container": "#6a758a",
+                            "on-tertiary": "#ffffff",
+                            "surface-container-highest": "#d3e4fe",
+                            "surface-container-high": "#dce9ff",
+                            "tertiary": "#515c71",
+                            "primary-fixed-dim": "#62df7d",
+                            "secondary-fixed-dim": "#c5c6c8",
+                            "on-tertiary-container": "#fefcff",
+                            "secondary-fixed": "#e1e2e4",
+                            "on-surface": "#0b1c30",
+                            "tertiary-fixed": "#d8e3fb",
+                            "primary-fixed": "#7ffc97",
+                            "on-secondary-fixed-variant": "#444749",
+                            "outline-variant": "#bdcaba",
+                            "on-error-container": "#93000a",
+                            "surface-tint": "#006e2d",
+                            "surface-dim": "#cbdbf5",
+                            "on-secondary-fixed": "#191c1e",
+                            "on-surface-variant": "#3e4a3d",
+                            "surface": "#f8f9ff",
+                            "secondary-container": "#dee0e2",
+                            "error": "#ba1a1a",
+                            "primary-container": "#00873a",
+                            "on-primary-fixed": "#002109",
+                            "inverse-primary": "#62df7d"
+                    },
+                    "borderRadius": {
+                            "DEFAULT": "0.25rem",
+                            "lg": "0.5rem",
+                            "xl": "0.75rem",
+                            "full": "9999px"
+                    },
+                    "spacing": {
+                            "sm": "8px",
+                            "gutter": "24px",
+                            "base": "4px",
+                            "max-width": "1440px",
+                            "md": "16px",
+                            "margin-mobile": "16px",
+                            "margin-desktop": "32px",
+                            "xl": "32px",
+                            "lg": "24px",
+                            "2xl": "48px",
+                            "xs": "4px"
+                    },
+                    "fontFamily": {
+                            "headline-lg-mobile": ["Inter"],
+                            "headline-lg": ["Inter"],
+                            "label-md": ["Inter"],
+                            "display-lg": ["Inter"],
+                            "body-lg": ["Inter"],
+                            "label-sm": ["Inter"],
+                            "body-md": ["Inter"],
+                            "title-lg": ["Inter"],
+                            "headline-md": ["Inter"]
+                    },
+                    "fontSize": {
+                            "headline-lg-mobile": ["24px", {"lineHeight": "32px", "fontWeight": "600"}],
+                            "headline-lg": ["32px", {"lineHeight": "40px", "letterSpacing": "-0.01em", "fontWeight": "600"}],
+                            "label-md": ["12px", {"lineHeight": "16px", "letterSpacing": "0.01em", "fontWeight": "500"}],
+                            "display-lg": ["48px", {"lineHeight": "56px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                            "body-lg": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+                            "label-sm": ["11px", {"lineHeight": "14px", "fontWeight": "600"}],
+                            "body-md": ["14px", {"lineHeight": "20px", "fontWeight": "400"}],
+                            "title-lg": ["20px", {"lineHeight": "28px", "fontWeight": "600"}],
+                            "headline-md": ["24px", {"lineHeight": "32px", "fontWeight": "600"}]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        body { font-family: 'Inter', sans-serif; background-color: theme('colors.background'); color: theme('colors.on-background'); }
+        .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
+        .material-symbols-outlined.fill { font-variation-settings: 'FILL' 1; }
+        
+        /* Soft Stack Elevation */
+        .card-shadow { box-shadow: 0px 1px 3px rgba(0,0,0,0.05); }
+        .dropdown-shadow { box-shadow: 0px 10px 15px -3px rgba(0,0,0,0.1); }
+        
+        /* Button Styles */
+        .btn-primary { background-color: #16A34A; color: #ffffff; transition: background-color 0.2s; }
+        .btn-primary:hover { background-color: #15803d; }
+        .btn-secondary { background-color: #F3F4F6; color: #1E293B; transition: background-color 0.2s; }
+        .btn-secondary:hover { background-color: #E5E7EB; }
+        .btn-ghost { background-color: transparent; color: #16A34A; transition: background-color 0.2s; }
+        .btn-ghost:hover { background-color: rgba(22, 163, 74, 0.1); }
+        
+        /* Input Styles */
+        .input-standard { background-color: #ffffff; border: 1px solid #D1D5DB; border-radius: 0.375rem; padding: 0.5rem 0.75rem; outline: none; transition: border-color 0.2s, box-shadow 0.2s; }
+        .input-standard:focus { border-color: #16A34A; box-shadow: 0 0 0 3px rgba(22, 163, 74, 0.2); }
+        
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+    </style>
+</head>
+<body class="antialiased min-h-screen flex">
+<!-- SideNavBar -->
+<nav class="w-[280px] h-full fixed left-0 top-0 bg-surface-container-lowest dark:bg-inverse-surface border-r border-outline-variant dark:border-outline flex flex-col h-full py-xl z-20 hidden md:flex">
+<div class="px-lg mb-2xl">
+<div class="flex items-center gap-sm">
+<div class="w-10 h-10 rounded bg-primary flex items-center justify-center text-on-primary">
+<span class="material-symbols-outlined fill">corporate_fare</span>
+</div>
+<div>
+<h1 class="text-title-lg font-title-lg font-bold text-primary dark:text-primary-fixed-dim">Revive HR</h1>
+<p class="text-label-md font-label-md text-secondary">Enterprise Suite</p>
+</div>
+</div>
+<button class="mt-lg w-full btn-primary py-2 rounded-lg text-body-md font-body-md font-medium flex items-center justify-center gap-sm">
+<span class="material-symbols-outlined">add</span>
+                Add Employee
+            </button>
+</div>
+<div class="flex-1 overflow-y-auto px-sm">
+<ul class="space-y-1">
+<li><a class="flex items-center gap-md px-md py-sm rounded-lg text-on-secondary-fixed-variant dark:text-secondary-fixed-dim hover:bg-surface-container-low dark:hover:bg-surface-container hover:text-primary dark:hover:text-primary-fixed-dim transition-colors duration-200 ease-in-out" href="#">
+<span class="material-symbols-outlined">person_search</span>
+<span class="text-label-md font-label-md">Recruitment</span>
+</a></li>
+<li><a class="flex items-center gap-md px-md py-sm rounded-lg text-on-secondary-fixed-variant dark:text-secondary-fixed-dim hover:bg-surface-container-low dark:hover:bg-surface-container hover:text-primary dark:hover:text-primary-fixed-dim transition-colors duration-200 ease-in-out" href="#">
+<span class="material-symbols-outlined">groups</span>
+<span class="text-label-md font-label-md">Employees</span>
+</a></li>
+<li><a class="flex items-center gap-md px-md py-sm rounded-lg text-on-secondary-fixed-variant dark:text-secondary-fixed-dim hover:bg-surface-container-low dark:hover:bg-surface-container hover:text-primary dark:hover:text-primary-fixed-dim transition-colors duration-200 ease-in-out" href="#">
+<span class="material-symbols-outlined">event_available</span>
+<span class="text-label-md font-label-md">Attendance</span>
+</a></li>
+<li><a class="flex items-center gap-md px-md py-sm rounded-lg text-on-secondary-fixed-variant dark:text-secondary-fixed-dim hover:bg-surface-container-low dark:hover:bg-surface-container hover:text-primary dark:hover:text-primary-fixed-dim transition-colors duration-200 ease-in-out" href="#">
+<span class="material-symbols-outlined">calendar_month</span>
+<span class="text-label-md font-label-md">Schedules</span>
+</a></li>
+<li><a class="flex items-center gap-md px-md py-sm rounded-lg text-primary dark:text-primary-fixed-dim font-bold border-l-4 border-primary dark:border-primary-fixed-dim bg-surface-container-low transition-colors duration-200 ease-in-out" href="#">
+<span class="material-symbols-outlined fill">event_busy</span>
+<span class="text-label-md font-label-md">Leave</span>
+</a></li>
+<li><a class="flex items-center gap-md px-md py-sm rounded-lg text-on-secondary-fixed-variant dark:text-secondary-fixed-dim hover:bg-surface-container-low dark:hover:bg-surface-container hover:text-primary dark:hover:text-primary-fixed-dim transition-colors duration-200 ease-in-out" href="#">
+<span class="material-symbols-outlined">assignment_late</span>
+<span class="text-label-md font-label-md">Requests</span>
+</a></li>
+<li><a class="flex items-center gap-md px-md py-sm rounded-lg text-on-secondary-fixed-variant dark:text-secondary-fixed-dim hover:bg-surface-container-low dark:hover:bg-surface-container hover:text-primary dark:hover:text-primary-fixed-dim transition-colors duration-200 ease-in-out" href="#">
+<span class="material-symbols-outlined">trending_up</span>
+<span class="text-label-md font-label-md">Performance</span>
+</a></li>
+<li><a class="flex items-center gap-md px-md py-sm rounded-lg text-on-secondary-fixed-variant dark:text-secondary-fixed-dim hover:bg-surface-container-low dark:hover:bg-surface-container hover:text-primary dark:hover:text-primary-fixed-dim transition-colors duration-200 ease-in-out" href="#">
+<span class="material-symbols-outlined">payments</span>
+<span class="text-label-md font-label-md">Payroll</span>
+</a></li>
+<li><a class="flex items-center gap-md px-md py-sm rounded-lg text-on-secondary-fixed-variant dark:text-secondary-fixed-dim hover:bg-surface-container-low dark:hover:bg-surface-container hover:text-primary dark:hover:text-primary-fixed-dim transition-colors duration-200 ease-in-out" href="#">
+<span class="material-symbols-outlined">person_off</span>
+<span class="text-label-md font-label-md">Offboarding</span>
+</a></li>
+<li><a class="flex items-center gap-md px-md py-sm rounded-lg text-on-secondary-fixed-variant dark:text-secondary-fixed-dim hover:bg-surface-container-low dark:hover:bg-surface-container hover:text-primary dark:hover:text-primary-fixed-dim transition-colors duration-200 ease-in-out" href="#">
+<span class="material-symbols-outlined">bar_chart</span>
+<span class="text-label-md font-label-md">Analytics</span>
+</a></li>
+<li><a class="flex items-center gap-md px-md py-sm rounded-lg text-on-secondary-fixed-variant dark:text-secondary-fixed-dim hover:bg-surface-container-low dark:hover:bg-surface-container hover:text-primary dark:hover:text-primary-fixed-dim transition-colors duration-200 ease-in-out" href="#">
+<span class="material-symbols-outlined">settings</span>
+<span class="text-label-md font-label-md">Settings</span>
+</a></li>
+</ul>
+</div>
+<div class="px-sm mt-auto pt-lg border-t border-outline-variant/30">
+<ul class="space-y-1">
+<li><a class="flex items-center gap-md px-md py-sm rounded-lg text-on-secondary-fixed-variant dark:text-secondary-fixed-dim hover:bg-surface-container-low dark:hover:bg-surface-container hover:text-primary dark:hover:text-primary-fixed-dim transition-colors duration-200 ease-in-out" href="#">
+<span class="material-symbols-outlined">help</span>
+<span class="text-label-md font-label-md">Help Center</span>
+</a></li>
+<li><a class="flex items-center gap-md px-md py-sm rounded-lg text-on-secondary-fixed-variant dark:text-secondary-fixed-dim hover:bg-surface-container-low dark:hover:bg-surface-container hover:text-primary dark:hover:text-primary-fixed-dim transition-colors duration-200 ease-in-out" href="#">
+<span class="material-symbols-outlined">logout</span>
+<span class="text-label-md font-label-md">Logout</span>
+</a></li>
+</ul>
+</div>
+</nav>
+<!-- TopAppBar -->
+<header class="fixed top-0 right-0 w-full md:w-[calc(100%-280px)] h-16 bg-surface/80 dark:bg-on-background/80 backdrop-blur-md z-10 flex items-center justify-between px-margin-mobile md:px-margin-desktop ml-0 md:ml-[280px] border-b border-transparent shadow-sm">
+<div class="flex items-center gap-sm md:hidden">
+<button class="p-2 -ml-2 text-on-surface-variant hover:bg-surface-container-high rounded-full transition-colors">
+<span class="material-symbols-outlined">menu</span>
+</button>
+<span class="text-title-lg font-title-lg font-bold text-primary">Revive HR</span>
+</div>
+<div class="hidden md:flex items-center relative w-96">
+<span class="material-symbols-outlined absolute left-3 text-on-surface-variant">search</span>
+<input class="w-full bg-surface-container-lowest border border-outline-variant rounded-full py-2 pl-10 pr-4 text-body-md focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-shadow" placeholder="Search employees, requests..." type="text"/>
+</div>
+<div class="flex items-center gap-sm">
+<button class="p-2 text-on-surface-variant hover:bg-surface-container-high dark:hover:bg-surface-container-highest rounded-full transition-transform scale-95 active:scale-90 relative">
+<span class="material-symbols-outlined">notifications</span>
+<span class="absolute top-1 right-1 w-2 h-2 bg-error rounded-full"></span>
+</button>
+<button class="p-2 text-on-surface-variant hover:bg-surface-container-high dark:hover:bg-surface-container-highest rounded-full transition-transform scale-95 active:scale-90 hidden sm:block">
+<span class="material-symbols-outlined">chat_bubble</span>
+</button>
+<button class="p-2 text-on-surface-variant hover:bg-surface-container-high dark:hover:bg-surface-container-highest rounded-full transition-transform scale-95 active:scale-90 hidden sm:block">
+<span class="material-symbols-outlined">help_outline</span>
+</button>
+<div class="w-8 h-8 rounded-full ml-sm overflow-hidden border-2 border-surface-container-lowest cursor-pointer">
+<img alt="Administrator Profile" class="w-full h-full object-cover" data-alt="A professional headshot of a diverse corporate administrator in a modern, well-lit office setting. The lighting is bright and soft, creating a clean, high-key light-mode aesthetic. The color palette emphasizes crisp whites, subtle grays, and natural skin tones, aligning with a corporate UI environment." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAvtWX4c8EReYIJCqbUCJrguayQLw6426IhGIGIrTOL9I6CR0jCIhWs0WABe1I8fvLCIzUdGevRWyHlps4UgIUZIvGOcA4TGZPLwlfTPYFqr6GNlpjH2lZZJS5RGCqvOo-MBcSSxyGAyK0dk87bUGswaY2Ou9F7gZ9LlSgWui7GZwk97y7vLA0Dnad-IAGPQ89xyJ9wmVvz85XlqAikLBCFEY0Dm2l3sPxd0gjX1fnktIERxG6GZ_fW"/>
+</div>
+</div>
+</header>
+<!-- Main Content -->
+<main class="flex-1 w-full ml-0 md:ml-[280px] mt-16 p-margin-mobile md:p-margin-desktop max-w-max-width mx-auto">
+<!-- Header & Actions -->
+<div class="flex flex-col sm:flex-row sm:items-center justify-between gap-md mb-xl">
+<div>
+<h2 class="text-headline-lg-mobile md:text-headline-lg font-headline-lg-mobile md:font-headline-lg text-on-background">Leave Management</h2>
+<p class="text-body-md font-body-md text-secondary mt-1">Overview of employee absences, requests, and policies.</p>
+</div>
+<div class="flex flex-wrap gap-sm">
+<button class="btn-ghost px-4 py-2 rounded-lg text-label-md font-label-md flex items-center gap-xs">
+<span class="material-symbols-outlined text-[18px]">account_balance_wallet</span>
+                    Balance Audit
+                </button>
+<button class="btn-secondary px-4 py-2 rounded-lg text-label-md font-label-md flex items-center gap-xs">
+<span class="material-symbols-outlined text-[18px]">download</span>
+                    Export Report
+                </button>
+<button class="btn-primary px-4 py-2 rounded-lg text-label-md font-label-md flex items-center gap-xs">
+<span class="material-symbols-outlined text-[18px]">add</span>
+                    Apply Leave
+                </button>
+</div>
+</div>
+<!-- Metrics Bento Grid -->
+<div class="grid grid-cols-1 md:grid-cols-3 gap-lg mb-xl">
+<div class="bg-surface-container-lowest rounded-[16px] p-lg card-shadow flex items-start gap-md">
+<div class="w-12 h-12 rounded-full bg-surface-container-high flex items-center justify-center text-primary flex-shrink-0">
+<span class="material-symbols-outlined fill">pending_actions</span>
+</div>
+<div>
+<p class="text-label-md font-label-md text-secondary mb-1">Pending Requests</p>
+<p class="text-headline-md font-headline-md text-on-background">14</p>
+<p class="text-label-sm font-label-sm text-error mt-1 flex items-center gap-1">
+<span class="material-symbols-outlined text-[14px]">trending_up</span> +3 since yesterday
+                    </p>
+</div>
+</div>
+<div class="bg-surface-container-lowest rounded-[16px] p-lg card-shadow flex items-start gap-md">
+<div class="w-12 h-12 rounded-full bg-surface-container-high flex items-center justify-center text-primary flex-shrink-0">
+<span class="material-symbols-outlined fill">group_off</span>
+</div>
+<div>
+<p class="text-label-md font-label-md text-secondary mb-1">Employees on Leave (Today)</p>
+<p class="text-headline-md font-headline-md text-on-background">48</p>
+<p class="text-label-sm font-label-sm text-secondary mt-1">12% of total workforce</p>
+</div>
+</div>
+<div class="bg-surface-container-lowest rounded-[16px] p-lg card-shadow flex items-start gap-md">
+<div class="w-12 h-12 rounded-full bg-surface-container-high flex items-center justify-center text-primary flex-shrink-0">
+<span class="material-symbols-outlined fill">upcoming</span>
+</div>
+<div>
+<p class="text-label-md font-label-md text-secondary mb-1">Upcoming Leaves (7 days)</p>
+<p class="text-headline-md font-headline-md text-on-background">22</p>
+<p class="text-label-sm font-label-sm text-primary mt-1">Schedules adjusted</p>
+</div>
+</div>
+</div>
+<!-- Main Content Grid -->
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-lg">
+<!-- Pending Requests Table (Span 2) -->
+<div class="lg:col-span-2 bg-surface-container-lowest rounded-[16px] card-shadow overflow-hidden flex flex-col">
+<div class="p-lg border-b border-outline-variant/30 flex justify-between items-center bg-surface-container-lowest">
+<h3 class="text-title-lg font-title-lg text-on-background">Pending Requests</h3>
+<button class="text-primary text-label-sm font-label-sm font-medium hover:underline">View All</button>
+</div>
+<div class="overflow-x-auto">
+<table class="w-full text-left border-collapse min-w-[600px]">
+<thead>
+<tr class="bg-surface-bright text-secondary text-label-sm font-label-sm border-b border-outline-variant/30">
+<th class="p-md font-medium">Employee</th>
+<th class="p-md font-medium">Leave Type</th>
+<th class="p-md font-medium">Dates</th>
+<th class="p-md font-medium">Reason</th>
+<th class="p-md font-medium text-right">Action</th>
+</tr>
+</thead>
+<tbody class="text-body-md font-body-md">
+<tr class="border-b border-outline-variant/30 hover:bg-surface-container/30 transition-colors">
+<td class="p-md flex items-center gap-sm">
+<div class="w-8 h-8 rounded-full bg-surface-variant overflow-hidden flex-shrink-0">
+<img class="w-full h-full object-cover" data-alt="A small circular portrait of a young professional woman smiling. Soft, bright studio lighting against a clean white background. High-key light-mode aesthetic with natural colors." src="https://lh3.googleusercontent.com/aida-public/AB6AXuA6td_4IXqx1cVsuwxe-Yce7ZPrjMAZRJ0NYCKq-iwPNRpaxtachLrBOduEtyEX3KxSupeeNUgkRsasrJ3fxW_LPi6iu5z8DEmNYhI-5kq93FeQA3g0qP6PvU0CyPcpWNq8wd-9pWKO3rl6DOja45AfVM7lY7rYf1dKOyav7BhP8iH8PdoDqr325dX1IwoxuSK-iXHyXupwxDpnZyqk5mkpjWJFl7R6PxPuBbUVO4oplzAm3rucVaUl"/>
+</div>
+<span class="font-medium text-on-background">Sarah Jenkins</span>
+</td>
+<td class="p-md">
+<span class="px-2 py-1 bg-surface-container-high text-primary rounded text-[11px] font-medium tracking-wide">Vacation</span>
+</td>
+<td class="p-md text-secondary">Oct 12 - Oct 16 (5d)</td>
+<td class="p-md text-secondary truncate max-w-[150px]">Annual family trip</td>
+<td class="p-md text-right flex justify-end gap-2">
+<button class="w-8 h-8 rounded-full bg-surface-container hover:bg-[#d1fae5] text-primary flex items-center justify-center transition-colors" title="Approve">
+<span class="material-symbols-outlined text-[18px]">check</span>
+</button>
+<button class="w-8 h-8 rounded-full bg-surface-container hover:bg-error-container text-error flex items-center justify-center transition-colors" title="Reject">
+<span class="material-symbols-outlined text-[18px]">close</span>
+</button>
+</td>
+</tr>
+<tr class="border-b border-outline-variant/30 hover:bg-surface-container/30 transition-colors">
+<td class="p-md flex items-center gap-sm">
+<div class="w-8 h-8 rounded-full bg-surface-variant overflow-hidden flex-shrink-0">
+<img class="w-full h-full object-cover" data-alt="A small circular portrait of a middle-aged professional man with glasses. Soft, bright studio lighting against a clean white background. High-key light-mode aesthetic with natural colors." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCFeY9SuMIWYLu9zrZnuXhphLoLk0ROfg209VMgeM0yBc4EErvuDPKial4aP36yqVLV89wRF7Hl151wyRBuBbZ9AIq4X0c2ZJNJqeATvCkgPSbMrEMytjlsWRNfqt8aGH-oxxZaTjI5dznhwmKxt-rXzEyZY6_DhCSFJRx_6Xg32XDMK54CCIJSgjxH9yVc6AnyagotcXUWJwvatkTbuOsiNed2GuZIPl-JKcDdW3XGw2xrsShJb5jT"/>
+</div>
+<span class="font-medium text-on-background">Michael Chang</span>
+</td>
+<td class="p-md">
+<span class="px-2 py-1 bg-[#fee2e2] text-[#b91c1c] rounded text-[11px] font-medium tracking-wide">Sick Leave</span>
+</td>
+<td class="p-md text-secondary">Oct 10 (1d)</td>
+<td class="p-md text-secondary truncate max-w-[150px]">Doctor appointment</td>
+<td class="p-md text-right flex justify-end gap-2">
+<button class="w-8 h-8 rounded-full bg-surface-container hover:bg-[#d1fae5] text-primary flex items-center justify-center transition-colors" title="Approve">
+<span class="material-symbols-outlined text-[18px]">check</span>
+</button>
+<button class="w-8 h-8 rounded-full bg-surface-container hover:bg-error-container text-error flex items-center justify-center transition-colors" title="Reject">
+<span class="material-symbols-outlined text-[18px]">close</span>
+</button>
+</td>
+</tr>
+<tr class="border-b border-outline-variant/30 hover:bg-surface-container/30 transition-colors">
+<td class="p-md flex items-center gap-sm">
+<div class="w-8 h-8 rounded-full bg-surface-variant flex items-center justify-center text-primary font-medium flex-shrink-0">
+                                        EL
+                                    </div>
+<span class="font-medium text-on-background">Emma Larson</span>
+</td>
+<td class="p-md">
+<span class="px-2 py-1 bg-[#f3e8ff] text-[#7e22ce] rounded text-[11px] font-medium tracking-wide">Personal</span>
+</td>
+<td class="p-md text-secondary">Oct 14 - Oct 15 (2d)</td>
+<td class="p-md text-secondary truncate max-w-[150px]">Moving house</td>
+<td class="p-md text-right flex justify-end gap-2">
+<button class="w-8 h-8 rounded-full bg-surface-container hover:bg-[#d1fae5] text-primary flex items-center justify-center transition-colors" title="Approve">
+<span class="material-symbols-outlined text-[18px]">check</span>
+</button>
+<button class="w-8 h-8 rounded-full bg-surface-container hover:bg-error-container text-error flex items-center justify-center transition-colors" title="Reject">
+<span class="material-symbols-outlined text-[18px]">close</span>
+</button>
+</td>
+</tr>
+<tr class="hover:bg-surface-container/30 transition-colors">
+<td class="p-md flex items-center gap-sm">
+<div class="w-8 h-8 rounded-full bg-surface-variant overflow-hidden flex-shrink-0">
+<img class="w-full h-full object-cover" data-alt="A small circular portrait of a young professional man. Soft, bright studio lighting against a clean white background. High-key light-mode aesthetic with natural colors." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDgly9ZLwFDwqp9xsgfzE65YV0dLQHL2OlRW5YXUWX8isUjQhR1WsfyXSE5pC0oxqTvqR9IJNQoy6CT95lnUB-eNgKZGTV64N9kf5d_UlbOnrG0rgujFB1XwIFGORuVWzVnLb6RhYamMn8I_hjpxho8tchRpKmVc5YulxQpuxC8mtL1qW2dNrVm87ZjRPmfsDbNl26_k-Qgz4P1fWBuJcQw9mPgbqp1NoVz-EqMFYupy33uK_kEHQpP"/>
+</div>
+<span class="font-medium text-on-background">David Kim</span>
+</td>
+<td class="p-md">
+<span class="px-2 py-1 bg-surface-container-high text-primary rounded text-[11px] font-medium tracking-wide">Vacation</span>
+</td>
+<td class="p-md text-secondary">Nov 01 - Nov 05 (5d)</td>
+<td class="p-md text-secondary truncate max-w-[150px]">Pre-planned</td>
+<td class="p-md text-right flex justify-end gap-2">
+<button class="w-8 h-8 rounded-full bg-surface-container hover:bg-[#d1fae5] text-primary flex items-center justify-center transition-colors" title="Approve">
+<span class="material-symbols-outlined text-[18px]">check</span>
+</button>
+<button class="w-8 h-8 rounded-full bg-surface-container hover:bg-error-container text-error flex items-center justify-center transition-colors" title="Reject">
+<span class="material-symbols-outlined text-[18px]">close</span>
+</button>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<!-- Right Column -->
+<div class="flex flex-col gap-lg">
+<!-- Leave Calendar Snapshot -->
+<div class="bg-surface-container-lowest rounded-[16px] card-shadow p-lg">
+<div class="flex justify-between items-center mb-md">
+<h3 class="text-title-lg font-title-lg text-on-background">Leave Calendar</h3>
+<div class="flex gap-2">
+<button class="p-1 rounded hover:bg-surface-container text-secondary"><span class="material-symbols-outlined text-[20px]">chevron_left</span></button>
+<span class="text-body-md font-medium self-center">October 2023</span>
+<button class="p-1 rounded hover:bg-surface-container text-secondary"><span class="material-symbols-outlined text-[20px]">chevron_right</span></button>
+</div>
+</div>
+<!-- Simplified Visual Calendar -->
+<div class="mb-4">
+<div class="grid grid-cols-7 gap-1 text-center text-[10px] font-medium text-secondary mb-2">
+<div>S</div><div>M</div><div>T</div><div>W</div><div>T</div><div>F</div><div>S</div>
+</div>
+<div class="grid grid-cols-7 gap-1 text-center text-body-md text-on-background">
+<!-- Week 1 -->
+<div class="py-1 text-secondary/50">1</div><div class="py-1">2</div><div class="py-1">3</div><div class="py-1">4</div><div class="py-1">5</div><div class="py-1">6</div><div class="py-1 text-secondary/50">7</div>
+<!-- Week 2 -->
+<div class="py-1 text-secondary/50">8</div><div class="py-1 bg-surface-container-high rounded text-primary font-bold">9</div><div class="py-1 bg-[#fee2e2] rounded text-[#b91c1c] font-bold">10</div><div class="py-1">11</div><div class="py-1 bg-surface-container-high text-primary rounded-l">12</div><div class="py-1 bg-surface-container-high text-primary">13</div><div class="py-1 bg-surface-container-high text-primary text-secondary/50">14</div>
+<!-- Week 3 -->
+<div class="py-1 bg-surface-container-high text-primary text-secondary/50">15</div><div class="py-1 bg-surface-container-high text-primary rounded-r">16</div><div class="py-1">17</div><div class="py-1">18</div><div class="py-1">19</div><div class="py-1">20</div><div class="py-1 text-secondary/50">21</div>
+</div>
+</div>
+<div class="flex flex-wrap gap-sm mt-4 text-label-sm">
+<div class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-primary"></span> Vacation</div>
+<div class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-[#ef4444]"></span> Sick</div>
+<div class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-[#a855f7]"></span> Personal</div>
+</div>
+</div>
+<!-- Policy Settings Summary -->
+<div class="bg-surface-container-lowest rounded-[16px] card-shadow p-lg flex-1">
+<h3 class="text-title-lg font-title-lg text-on-background mb-md">Policy Summary</h3>
+<div class="space-y-4">
+<div class="flex justify-between items-start pb-sm border-b border-outline-variant/30">
+<div>
+<p class="text-body-md font-medium text-on-background">Annual Vacation</p>
+<p class="text-label-md text-secondary">Accrual rate: 1.25 days/mo</p>
+</div>
+<span class="text-body-md font-bold text-on-background">20 Days</span>
+</div>
+<div class="flex justify-between items-start pb-sm border-b border-outline-variant/30">
+<div>
+<p class="text-body-md font-medium text-on-background">Sick Leave</p>
+<p class="text-label-md text-secondary">Granted start of year</p>
+</div>
+<span class="text-body-md font-bold text-on-background">10 Days</span>
+</div>
+<div class="flex justify-between items-start pb-sm border-b border-outline-variant/30">
+<div>
+<p class="text-body-md font-medium text-on-background">Rollover Limit</p>
+<p class="text-label-md text-secondary">Max carryover to next year</p>
+</div>
+<span class="text-body-md font-bold text-on-background">5 Days</span>
+</div>
+</div>
+<button class="mt-md w-full btn-ghost py-2 rounded-lg text-label-md font-label-md text-center">
+                        View Full Policies
+                    </button>
+</div>
+</div>
+</div>
+</main>
+</body></html>

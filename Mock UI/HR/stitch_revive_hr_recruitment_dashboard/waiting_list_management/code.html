@@ -1,0 +1,511 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Waiting List - Revive HR</title>
+<!-- Fonts -->
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<!-- Material Symbols -->
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<style>
+        .material-symbols-outlined {
+            font-family: 'Material Symbols Outlined';
+            font-weight: normal;
+            font-style: normal;
+            font-size: 24px;
+            line-height: 1;
+            letter-spacing: normal;
+            text-transform: none;
+            display: inline-block;
+            white-space: nowrap;
+            word-wrap: normal;
+            direction: ltr;
+            font-feature-settings: 'liga';
+            -webkit-font-smoothing: antialiased;
+        }
+    </style>
+<!-- Tailwind CSS -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<!-- Tailwind Configuration -->
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "outline": "#6e7b6c",
+                        "inverse-on-surface": "#eaf1ff",
+                        "on-primary-fixed": "#052e16",
+                        "secondary-fixed-dim": "#c5c6c8",
+                        "on-error": "#ffffff",
+                        "on-secondary": "#ffffff",
+                        "on-primary-fixed-variant": "#166534",
+                        "surface-dim": "#d2dbd1",
+                        "on-surface-variant": "#3f4a41",
+                        "tertiary-container": "#b3c7bc",
+                        "on-tertiary-fixed": "#111c18",
+                        "on-secondary-fixed": "#191c1e",
+                        "tertiary-fixed": "#d8e3dd",
+                        "secondary": "#5c5f60",
+                        "outline-variant": "#c6cdc5",
+                        "primary": "#16a34a",
+                        "surface-variant": "#e2e8e0",
+                        "tertiary": "#51605a",
+                        "inverse-surface": "#213145",
+                        "on-primary": "#ffffff",
+                        "on-tertiary": "#ffffff",
+                        "error-container": "#ffdad6",
+                        "on-surface": "#13221a",
+                        "surface-container-low": "#f3f6f2",
+                        "surface": "#fbfcfa",
+                        "secondary-container": "#e8e8e8",
+                        "secondary-fixed": "#e1e2e4",
+                        "primary-container": "#bbf7d0",
+                        "on-error-container": "#93000a",
+                        "surface-container-highest": "#d3dcd2",
+                        "surface-bright": "#ffffff",
+                        "surface-tint": "#16a34a",
+                        "on-primary-container": "#14532d",
+                        "primary-fixed": "#86efac",
+                        "tertiary-fixed-dim": "#bcc7c0",
+                        "on-background": "#13221a",
+                        "surface-container-high": "#dee5dd",
+                        "primary-fixed-dim": "#4ade80",
+                        "on-tertiary-fixed-variant": "#3c475a",
+                        "surface-container": "#e9eee8",
+                        "background": "#f7f9f7",
+                        "on-tertiary-container": "#1c2a23",
+                        "inverse-primary": "#4ade80",
+                        "on-secondary-container": "#43474a",
+                        "surface-container-lowest": "#ffffff",
+                        "on-secondary-fixed-variant": "#444749",
+                        "error": "#ba1a1a"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "gutter": "24px",
+                        "base": "4px",
+                        "md": "16px",
+                        "2xl": "48px",
+                        "lg": "24px",
+                        "margin-desktop": "32px",
+                        "xs": "4px",
+                        "margin-mobile": "16px",
+                        "max-width": "1440px",
+                        "sm": "8px",
+                        "xl": "32px"
+                    },
+                    "fontFamily": {
+                        "headline-md": ["Inter"],
+                        "headline-lg": ["Inter"],
+                        "label-sm": ["Inter"],
+                        "body-md": ["Inter"],
+                        "display-lg": ["Inter"],
+                        "headline-lg-mobile": ["Inter"],
+                        "body-lg": ["Inter"],
+                        "label-md": ["Inter"],
+                        "title-lg": ["Inter"]
+                    },
+                    "fontSize": {
+                        "headline-md": ["24px", { "lineHeight": "32px", "fontWeight": "600" }],
+                        "headline-lg": ["32px", { "lineHeight": "40px", "letterSpacing": "-0.01em", "fontWeight": "600" }],
+                        "label-sm": ["11px", { "lineHeight": "14px", "fontWeight": "600" }],
+                        "body-md": ["14px", { "lineHeight": "20px", "fontWeight": "400" }],
+                        "display-lg": ["48px", { "lineHeight": "56px", "letterSpacing": "-0.02em", "fontWeight": "700" }],
+                        "headline-lg-mobile": ["24px", { "lineHeight": "32px", "fontWeight": "600" }],
+                        "body-lg": ["16px", { "lineHeight": "24px", "fontWeight": "400" }],
+                        "label-md": ["12px", { "lineHeight": "16px", "letterSpacing": "0.01em", "fontWeight": "500" }],
+                        "title-lg": ["20px", { "lineHeight": "28px", "fontWeight": "600" }]
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-background text-on-background font-body-md text-body-md antialiased overflow-hidden flex h-screen">
+<!-- SideNavBar (from Shared Components) -->
+<aside class="hidden md:flex flex-col h-full py-xl px-md w-[280px] h-screen fixed left-0 top-0 bg-surface-container-lowest border-r border-outline-variant z-20">
+<!-- Brand / Header -->
+<div class="flex items-center gap-sm mb-xl px-sm">
+<div class="w-8 h-8 rounded-full bg-primary-container flex items-center justify-center">
+<span class="material-symbols-outlined text-primary text-[20px]" style="font-variation-settings: 'FILL' 1;">spa</span>
+</div>
+<div>
+<h1 class="font-headline-md text-headline-md text-primary tracking-tight">Revive HR</h1>
+<p class="font-label-sm text-label-sm text-on-surface-variant">Enterprise HR</p>
+</div>
+</div>
+<!-- Primary Navigation -->
+<nav class="flex-1 space-y-sm">
+<a class="flex items-center gap-md px-md py-sm text-on-surface-variant hover:bg-surface-container-high transition-all cursor-pointer active:scale-95 rounded-lg" href="../recruitment_dashboard_complete/code.html">
+<span class="material-symbols-outlined">dashboard</span>
+<span class="font-label-md text-label-md">Dashboard</span>
+</a>
+<a class="flex items-center gap-md px-md py-sm text-on-surface-variant hover:bg-surface-container-high transition-all cursor-pointer active:scale-95 rounded-lg" href="../vacancy_list/code.html">
+<span class="material-symbols-outlined">work</span>
+<span class="font-label-md text-label-md">Vacancies</span>
+</a>
+<a class="flex items-center gap-md px-md py-sm text-on-surface-variant hover:bg-surface-container-high transition-all cursor-pointer active:scale-95 rounded-lg" href="../candidate_list/code.html">
+<span class="material-symbols-outlined">group</span>
+<span class="font-label-md text-label-md">Candidates</span>
+</a>
+<a class="flex items-center gap-md px-md py-sm text-on-surface-variant hover:bg-surface-container-high transition-all cursor-pointer active:scale-95 rounded-lg" href="../recruitment_pipeline_interactive_kanban/code.html">
+<span class="material-symbols-outlined">view_kanban</span>
+<span class="font-label-md text-label-md">Pipeline</span>
+</a>
+<!-- Active Tab: Waiting List -->
+<a class="flex items-center gap-md px-md py-sm bg-primary-container text-on-primary-container rounded-lg font-bold transition-all cursor-pointer active:scale-95" href="../waiting_list_management/code.html">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">hourglass_empty</span>
+<span class="font-label-md text-label-md">Waiting List</span>
+</a>
+<a class="flex items-center gap-md px-md py-sm text-on-surface-variant hover:bg-surface-container-high transition-all cursor-pointer active:scale-95 rounded-lg" href="../recruitment_reports/code.html">
+<span class="material-symbols-outlined">monitoring</span>
+<span class="font-label-md text-label-md">Reports</span>
+</a>
+<a class="flex items-center gap-md px-md py-sm text-on-surface-variant hover:bg-surface-container-high transition-all cursor-pointer active:scale-95 rounded-lg" href="../employee_dashboard_full_navigation/code.html">
+<span class="material-symbols-outlined">badge</span>
+<span class="font-label-md text-label-md">Employees</span>
+</a>
+</nav>
+<!-- CTA Button -->
+<div class="mt-auto mb-lg">
+<button class="w-full bg-primary text-on-primary font-label-md text-label-md py-md rounded-lg hover:bg-primary-container hover:text-on-primary-container transition-colors shadow-sm flex justify-center items-center gap-sm" onclick="window.location.href='../hire_candidate_wizard_sidebar_navigation/code.html'">
+<span class="material-symbols-outlined text-[18px]">add</span>
+                Add New Employee
+            </button>
+</div>
+<!-- Footer Navigation -->
+<div class="pt-lg border-t border-outline-variant space-y-sm">
+<a class="flex items-center gap-md px-md py-sm text-on-surface-variant hover:bg-surface-container-high transition-all cursor-pointer active:scale-95 rounded-lg" href="#">
+<span class="material-symbols-outlined">contact_support</span>
+<span class="font-label-md text-label-md">Support</span>
+</a>
+<a class="flex items-center gap-md px-md py-sm text-on-surface-variant hover:bg-surface-container-high transition-all cursor-pointer active:scale-95 rounded-lg" href="#">
+<span class="material-symbols-outlined">settings</span>
+<span class="font-label-md text-label-md">Settings</span>
+</a>
+</div>
+</aside>
+<!-- Main Content Area -->
+<main class="flex-1 ml-0 md:ml-[280px] flex flex-col h-screen">
+<!-- TopNavBar (from Shared Components) -->
+<header class="flex items-center justify-between px-margin-desktop w-full border-b border-outline-variant bg-surface w-full h-16 shadow-sm z-10 shrink-0">
+<!-- Search Bar (on_left) -->
+<div class="flex-1 max-w-md">
+<div class="relative flex items-center">
+<span class="material-symbols-outlined absolute left-3 text-secondary text-[20px]">search</span>
+<input class="w-full pl-10 pr-4 py-2 bg-surface-container-low border-none rounded-full font-body-md text-body-md text-on-surface focus:ring-2 focus:ring-primary focus:outline-none transition-all placeholder:text-secondary" placeholder="Search across Revive HR..." type="text"/>
+</div>
+</div>
+<!-- Trailing Icons & Profile -->
+<div class="flex items-center gap-md">
+<button class="w-10 h-10 rounded-full flex items-center justify-center text-on-surface-variant hover:bg-secondary-container transition-colors cursor-pointer active:opacity-80">
+<span class="material-symbols-outlined">notifications</span>
+</button>
+<button class="w-10 h-10 rounded-full flex items-center justify-center text-on-surface-variant hover:bg-secondary-container transition-colors cursor-pointer active:opacity-80">
+<span class="material-symbols-outlined">help</span>
+</button>
+<button class="w-10 h-10 rounded-full flex items-center justify-center text-on-surface-variant hover:bg-secondary-container transition-colors cursor-pointer active:opacity-80">
+<span class="material-symbols-outlined">settings</span>
+</button>
+<div class="h-8 w-px bg-outline-variant mx-sm"></div>
+<button class="w-8 h-8 rounded-full overflow-hidden border-2 border-surface hover:border-primary transition-colors cursor-pointer">
+<img alt="User profile avatar" class="w-full h-full object-cover" data-alt="A professional headshot of an HR manager, smiling softly, bathed in natural, bright office lighting. The background is a slightly blurred, modern glass-walled office environment, maintaining a clean, high-key corporate aesthetic." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDfS3gnYwTGcyJIia-P6AdkHjtCOhZupNBNFtiA7ZyxMtaOvuyBqbIsNtFBkDJ8xtt5iI2QTYG5CVoFVXnKt5ElFap1cM9f_waXvoBVlHYcx6cpzVufZCTq2JQf2CTvPCoG8_gFSz0_ybk2Inzyt3LJ84_R1gIx5eKOYN2GNo0oHoUXrOhakA9AcZvIivFG5y9mGKELVjyCM4V6MPqs6NA5-AizCTfDDrHjbbp7BcPVEeBDpf3kQ91x"/>
+</button>
+</div>
+</header>
+<!-- Page Canvas -->
+<div class="flex-1 overflow-y-auto p-margin-mobile md:p-margin-desktop bg-background">
+<div class="max-w-[1440px] mx-auto space-y-lg">
+<!-- Page Header & Actions -->
+<div class="flex flex-col md:flex-row md:items-end justify-between gap-md">
+<div>
+<h2 class="font-headline-lg text-headline-lg text-on-surface">Waiting List</h2>
+<p class="font-body-md text-body-md text-secondary mt-xs">Manage pre-approved candidates awaiting placement.</p>
+</div>
+<div class="flex flex-wrap items-center gap-sm">
+<button class="flex items-center gap-sm px-md py-2 bg-surface-container-lowest border border-outline-variant rounded-lg font-label-md text-label-md text-on-surface hover:bg-surface-container-low transition-colors shadow-sm" onclick="toggleFilters()">
+<span class="material-symbols-outlined text-[18px]">filter_list</span>
+                            Filter
+                        </button>
+<button class="flex items-center gap-sm px-md py-2 bg-surface-container-lowest border border-outline-variant rounded-lg font-label-md text-label-md text-on-surface hover:bg-surface-container-low transition-colors shadow-sm" onclick="sortRows()">
+<span class="material-symbols-outlined text-[18px]">sort</span>
+                            Sort By: Date
+                        </button>
+</div>
+</div>
+<!-- Filter Row -->
+<div class="hidden grid grid-cols-1 md:grid-cols-4 gap-md" id="filter-row">
+<select class="bg-surface-container-lowest border border-outline-variant rounded-lg px-md py-2 font-body-md text-body-md text-on-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary cursor-pointer">
+<option>All Gyms</option>
+<option>Downtown Studio</option>
+<option>Uptown Arena</option>
+<option>Westside Branch</option>
+</select>
+<select class="bg-surface-container-lowest border border-outline-variant rounded-lg px-md py-2 font-body-md text-body-md text-on-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary cursor-pointer">
+<option>All Priorities</option>
+<option>High</option>
+<option>Medium</option>
+<option>Low</option>
+</select>
+<select class="bg-surface-container-lowest border border-outline-variant rounded-lg px-md py-2 font-body-md text-body-md text-on-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary cursor-pointer">
+<option>All Positions</option>
+<option>Yoga Instructor</option>
+<option>Front Desk Lead</option>
+<option>Personal Trainer</option>
+</select>
+<div class="flex justify-end">
+<button class="px-md py-2 text-primary font-label-md text-label-md font-bold hover:bg-surface-container rounded-lg transition-colors" onclick="clearFilters()">Clear</button>
+</div>
+</div>
+<!-- Table Container (Level 1 Elevation) -->
+<div class="bg-surface-container-lowest rounded-xl shadow-sm border border-outline-variant overflow-hidden">
+<div class="overflow-x-auto">
+<table class="w-full text-left border-collapse min-w-[1000px]">
+<thead>
+<tr class="border-b border-outline-variant bg-surface-container-low/50">
+<th class="font-label-sm text-label-sm text-tertiary uppercase tracking-wider py-sm px-md font-semibold">Candidate</th>
+<th class="font-label-sm text-label-sm text-tertiary uppercase tracking-wider py-sm px-md font-semibold">Position</th>
+<th class="font-label-sm text-label-sm text-tertiary uppercase tracking-wider py-sm px-md font-semibold">Gym / Location</th>
+<th class="font-label-sm text-label-sm text-tertiary uppercase tracking-wider py-sm px-md font-semibold">Waiting Since</th>
+<th class="font-label-sm text-label-sm text-tertiary uppercase tracking-wider py-sm px-md font-semibold">Priority</th>
+<th class="font-label-sm text-label-sm text-tertiary uppercase tracking-wider py-sm px-md font-semibold w-[200px]">Notes</th>
+<th class="font-label-sm text-label-sm text-tertiary uppercase tracking-wider py-sm px-md font-semibold text-right">Actions</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-outline-variant/50">
+<!-- Row 1 -->
+<tr class="hover:bg-surface-container-low/30 transition-colors group">
+<td class="py-md px-md">
+<div class="flex items-center gap-sm">
+<div class="w-10 h-10 rounded-full overflow-hidden bg-surface-variant flex-shrink-0">
+<img class="w-full h-full object-cover" data-alt="Close up portrait of a young professional fitness instructor in athletic wear, smiling warmly. Lighting is bright, soft, and modern, reflecting a clean, corporate wellness aesthetic." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDrXaVuf_wFQ8qLW0E5rPLftaIrY_rrY9cQEP3bXY580Uq5jrIJixuVnnN3ifI_fmF_YPxHTRaJl44V4_4bDzm1a_djh1IKZfYZZODOifgCSAIrJa3aqL1qEb0FGZTdaCD-DkQXNfiGaRegorZl7BkoC8lEGEgrOuD4hTgVCs-K-9D0z53Q2YyJAvQar4a1NOY_5upSw8DGg3y8tfRkNewHtI0OPt8Kb0xk_IYhApjsF-2Y7KEcTzbL"/>
+</div>
+<div>
+<div class="font-label-md text-label-md text-on-surface font-semibold">Sarah Jenkins</div>
+<div class="font-body-md text-body-md text-secondary text-[12px]">s.jenkins@example.com</div>
+</div>
+</div>
+</td>
+<td class="py-md px-md font-body-md text-body-md text-on-surface-variant">Yoga Instructor</td>
+<td class="py-md px-md font-body-md text-body-md text-on-surface-variant flex items-center gap-xs">
+<span class="material-symbols-outlined text-secondary text-[16px]">location_on</span>
+                                        Downtown Studio
+                                    </td>
+<td class="py-md px-md font-body-md text-body-md text-on-surface-variant">Oct 12, 2023</td>
+<td class="py-md px-md">
+<span class="inline-flex items-center px-2 py-0.5 rounded-full font-label-sm text-label-sm bg-error-container text-on-error-container">
+                                            High
+                                        </span>
+</td>
+<td class="py-md px-md font-body-md text-body-md text-secondary truncate max-w-[200px]" title="Requested specific morning hours. Highly rated during practical assessment.">
+                                        Requested specific morning...
+                                    </td>
+<td class="py-md px-md text-right">
+<div class="flex items-center justify-end gap-sm opacity-0 group-hover:opacity-100 transition-opacity">
+<button class="p-2 text-secondary hover:bg-surface-container hover:text-on-surface rounded-lg transition-colors" title="View Details" onclick="window.location.href='../candidate_profile_eleanor_richards/code.html'">
+<span class="material-symbols-outlined text-[20px]">visibility</span>
+</button>
+<button class="p-2 text-secondary hover:bg-surface-container hover:text-error rounded-lg transition-colors" title="Remove from list" onclick="openRemoveModal(this)">
+<span class="material-symbols-outlined text-[20px]">delete</span>
+</button>
+<button class="px-3 py-1.5 border border-outline-variant text-secondary font-label-md text-label-md rounded-lg hover:bg-surface-container-low transition-colors" title="Move back to Pipeline" onclick="moveToPipeline(this)">
+                                                Pipeline
+                                            </button>
+<button class="px-4 py-1.5 bg-primary text-on-primary font-label-md text-label-md rounded-lg hover:bg-primary-container hover:text-on-primary-container shadow-sm transition-colors" onclick="window.location.href='../hire_candidate_wizard_sidebar_navigation/code.html'">
+                                                Hire
+                                            </button>
+</div>
+</td>
+</tr>
+<!-- Row 2 -->
+<tr class="hover:bg-surface-container-low/30 transition-colors group">
+<td class="py-md px-md">
+<div class="flex items-center gap-sm">
+<div class="w-10 h-10 rounded-full overflow-hidden bg-surface-variant flex-shrink-0 flex items-center justify-center text-primary font-bold">
+                                                MC
+                                            </div>
+<div>
+<div class="font-label-md text-label-md text-on-surface font-semibold">Michael Chen</div>
+<div class="font-body-md text-body-md text-secondary text-[12px]">mchen22@example.com</div>
+</div>
+</div>
+</td>
+<td class="py-md px-md font-body-md text-body-md text-on-surface-variant">Front Desk Lead</td>
+<td class="py-md px-md font-body-md text-body-md text-on-surface-variant flex items-center gap-xs">
+<span class="material-symbols-outlined text-secondary text-[16px]">location_on</span>
+                                        Uptown Arena
+                                    </td>
+<td class="py-md px-md font-body-md text-body-md text-on-surface-variant">Oct 18, 2023</td>
+<td class="py-md px-md">
+<span class="inline-flex items-center px-2 py-0.5 rounded-full font-label-sm text-label-sm bg-tertiary-container text-on-tertiary-container">
+                                            Medium
+                                        </span>
+</td>
+<td class="py-md px-md font-body-md text-body-md text-secondary truncate max-w-[200px]" title="Pending final background check clearance.">
+                                        Pending final background...
+                                    </td>
+<td class="py-md px-md text-right">
+<div class="flex items-center justify-end gap-sm opacity-0 group-hover:opacity-100 transition-opacity">
+<button class="p-2 text-secondary hover:bg-surface-container hover:text-on-surface rounded-lg transition-colors" title="View Details" onclick="window.location.href='../candidate_profile_eleanor_richards/code.html'">
+<span class="material-symbols-outlined text-[20px]">visibility</span>
+</button>
+<button class="p-2 text-secondary hover:bg-surface-container hover:text-error rounded-lg transition-colors" title="Remove from list" onclick="openRemoveModal(this)">
+<span class="material-symbols-outlined text-[20px]">delete</span>
+</button>
+<button class="px-3 py-1.5 border border-outline-variant text-secondary font-label-md text-label-md rounded-lg hover:bg-surface-container-low transition-colors" title="Move back to Pipeline" onclick="moveToPipeline(this)">
+                                                Pipeline
+                                            </button>
+<button class="px-4 py-1.5 bg-primary text-on-primary font-label-md text-label-md rounded-lg hover:bg-primary-container hover:text-on-primary-container shadow-sm transition-colors" onclick="window.location.href='../hire_candidate_wizard_sidebar_navigation/code.html'">
+                                                Hire
+                                            </button>
+</div>
+</td>
+</tr>
+<!-- Row 3 -->
+<tr class="hover:bg-surface-container-low/30 transition-colors group">
+<td class="py-md px-md">
+<div class="flex items-center gap-sm">
+<div class="w-10 h-10 rounded-full overflow-hidden bg-surface-variant flex-shrink-0">
+<img class="w-full h-full object-cover" data-alt="Professional headshot of a confident personal trainer in a subtle dark grey polo shirt. Lighting is crisp, highlighting fitness and professionalism in a clean, high-key corporate setting." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBeCdxXK7FHLZyQ78NgIA448DGY6j8yACvF2LWGet2SDSG5-aIYAObNJga7YJqXWBOeOxFYL8GWmkM5nIK8MSrWkqwwuzeFtAD4ifR7H3Sbt0vvdI6l-UIGUWm0b0P68Nh4iJ0ba_wQC2aTXhCkrwq03JhVq5Mm_AmWtqS24YU6k71MnF7JZfTCkSMT0zRP8i4kjpIdL4RloQeJCULKmOu_PjliR-jla98cFE_HcluvXvsA71hFDHTi"/>
+</div>
+<div>
+<div class="font-label-md text-label-md text-on-surface font-semibold">David Alaba</div>
+<div class="font-body-md text-body-md text-secondary text-[12px]">d.alaba@example.com</div>
+</div>
+</div>
+</td>
+<td class="py-md px-md font-body-md text-body-md text-on-surface-variant">Personal Trainer</td>
+<td class="py-md px-md font-body-md text-body-md text-on-surface-variant flex items-center gap-xs">
+<span class="material-symbols-outlined text-secondary text-[16px]">location_on</span>
+                                        Westside Branch
+                                    </td>
+<td class="py-md px-md font-body-md text-body-md text-on-surface-variant">Nov 02, 2023</td>
+<td class="py-md px-md">
+<span class="inline-flex items-center px-2 py-0.5 rounded-full font-label-sm text-label-sm bg-surface-variant text-on-surface-variant">
+                                            Low
+                                        </span>
+</td>
+<td class="py-md px-md font-body-md text-body-md text-secondary truncate max-w-[200px]" title="Available to start next month. No rush on placement.">
+                                        Available to start next...
+                                    </td>
+<td class="py-md px-md text-right">
+<div class="flex items-center justify-end gap-sm opacity-0 group-hover:opacity-100 transition-opacity">
+<button class="p-2 text-secondary hover:bg-surface-container hover:text-on-surface rounded-lg transition-colors" title="View Details" onclick="window.location.href='../candidate_profile_eleanor_richards/code.html'">
+<span class="material-symbols-outlined text-[20px]">visibility</span>
+</button>
+<button class="p-2 text-secondary hover:bg-surface-container hover:text-error rounded-lg transition-colors" title="Remove from list" onclick="openRemoveModal(this)">
+<span class="material-symbols-outlined text-[20px]">delete</span>
+</button>
+<button class="px-3 py-1.5 border border-outline-variant text-secondary font-label-md text-label-md rounded-lg hover:bg-surface-container-low transition-colors" title="Move back to Pipeline" onclick="moveToPipeline(this)">
+                                                Pipeline
+                                            </button>
+<button class="px-4 py-1.5 bg-primary text-on-primary font-label-md text-label-md rounded-lg hover:bg-primary-container hover:text-on-primary-container shadow-sm transition-colors" onclick="window.location.href='../hire_candidate_wizard_sidebar_navigation/code.html'">
+                                                Hire
+                                            </button>
+</div>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+<!-- Pagination / Footer of Table -->
+<div class="px-md py-sm border-t border-outline-variant bg-surface-container-lowest flex items-center justify-between">
+<span class="font-body-md text-body-md text-secondary">Showing 1 to 3 of 12 entries</span>
+<div class="flex items-center gap-sm">
+<button class="w-8 h-8 flex items-center justify-center rounded border border-outline-variant text-secondary hover:bg-surface-container-low disabled:opacity-50" disabled="">
+<span class="material-symbols-outlined text-[18px]">chevron_left</span>
+</button>
+<button class="w-8 h-8 flex items-center justify-center rounded border border-outline-variant text-secondary hover:bg-surface-container-low">
+<span class="material-symbols-outlined text-[18px]">chevron_right</span>
+</button>
+</div>
+</div>
+</div>
+</div>
+</div>
+</main>
+<!-- Remove Confirmation Modal -->
+<div class="fixed inset-0 bg-on-surface/50 z-[100] flex items-center justify-center p-4 hidden" id="remove-modal">
+<div class="bg-surface-container-lowest rounded-xl shadow-lg w-full max-w-md flex flex-col overflow-hidden">
+<div class="p-lg flex justify-between items-center border-b border-outline-variant">
+<h3 class="font-title-lg text-title-lg text-on-surface">Remove from Waiting List</h3>
+<button class="text-secondary hover:text-on-surface transition-colors" onclick="closeRemoveModal()">
+<span class="material-symbols-outlined">close</span>
+</button>
+</div>
+<div class="p-lg">
+<p class="font-body-md text-body-md text-on-surface mb-md">Remove <strong id="remove-candidate-name">Candidate</strong> from the waiting list? This will mark the candidate as not placed.</p>
+<div class="flex flex-col gap-sm">
+<label class="font-label-md text-label-md text-on-surface font-medium" for="remove-reason">Reason</label>
+<textarea class="w-full border border-outline-variant rounded-lg p-3 font-body-md text-body-md focus:border-primary focus:ring-1 focus:ring-primary outline-none resize-none bg-surface" id="remove-reason" placeholder="Optional note..." rows="3"></textarea>
+</div>
+</div>
+<div class="p-lg border-t border-outline-variant bg-surface flex justify-end gap-md">
+<button class="px-md py-sm font-label-md text-label-md font-bold text-primary hover:bg-surface-container transition-colors rounded-lg" onclick="closeRemoveModal()">Cancel</button>
+<button class="px-md py-sm font-label-md text-label-md font-bold text-on-primary bg-error hover:bg-on-error-container transition-colors rounded-lg shadow-sm" onclick="confirmRemove()">Remove</button>
+</div>
+</div>
+</div>
+<script>
+(function () {
+    let removeRow = null;
+
+    window.openRemoveModal = function (btn) {
+        removeRow = btn.closest('tr');
+        const name = removeRow.querySelector('.font-semibold').textContent.trim();
+        document.getElementById('remove-candidate-name').textContent = name;
+        document.getElementById('remove-reason').value = '';
+        document.getElementById('remove-modal').classList.remove('hidden');
+    };
+
+    window.closeRemoveModal = function () {
+        document.getElementById('remove-modal').classList.add('hidden');
+        removeRow = null;
+    };
+
+    window.confirmRemove = function () {
+        if (removeRow) removeRow.remove();
+        closeRemoveModal();
+    };
+
+    window.moveToPipeline = function (btn) {
+        const row = btn.closest('tr');
+        row.style.opacity = '0.4';
+        setTimeout(function () {
+            row.style.opacity = '1';
+            row.querySelector('.font-semibold').style.color = '';
+        }, 400);
+    };
+
+    window.toggleFilters = function () {
+        document.getElementById('filter-row').classList.toggle('hidden');
+    };
+
+    window.clearFilters = function () {
+        document.querySelectorAll('#filter-row select').forEach(function (s) { s.value = s.options[0].value; });
+    };
+
+    window.sortRows = function () {
+        const tbody = document.querySelector('tbody');
+        const rows = Array.from(tbody.querySelectorAll('tr'));
+        rows.sort(function (a, b) {
+            const aDate = new Date(a.querySelectorAll('td')[3].textContent.trim());
+            const bDate = new Date(b.querySelectorAll('td')[3].textContent.trim());
+            return aDate - bDate;
+        });
+        rows.forEach(function (r) { tbody.appendChild(r); });
+    };
+})();
+</script>
+
+</body></html>

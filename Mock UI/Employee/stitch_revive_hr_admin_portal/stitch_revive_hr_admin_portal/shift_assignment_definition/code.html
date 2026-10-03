@@ -1,0 +1,601 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Shift Assignment & Definition - Revive HR</title>
+<!-- Material Symbols -->
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap" rel="stylesheet"/>
+<!-- Tailwind CSS with specific configuration -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "status-warning": "#f59e0b",
+                    "outline-variant": "#bbcabf",
+                    "surface": "#f7f9fb",
+                    "error": "#ba1a1a",
+                    "on-primary-fixed-variant": "#005236",
+                    "surface-container-lowest": "#ffffff",
+                    "status-info": "#00a4a6",
+                    "on-tertiary": "#ffffff",
+                    "secondary": "#555f6f",
+                    "secondary-container": "#d6e0f3",
+                    "surface-container-high": "#e6e8ea",
+                    "primary-fixed": "#6ffbbe",
+                    "tertiary-fixed": "#9df4c8",
+                    "secondary-fixed-dim": "#bdc7d9",
+                    "inverse-primary": "#4edea3",
+                    "outline": "#6c7a71",
+                    "on-primary-fixed": "#002113",
+                    "primary-fixed-dim": "#4edea3",
+                    "on-tertiary-fixed-variant": "#005236",
+                    "on-secondary-fixed": "#121c2a",
+                    "background": "#f7f9fb",
+                    "surface-container-highest": "#e0e3e5",
+                    "surface-tint": "#006c49",
+                    "on-tertiary-fixed": "#002113",
+                    "surface-container": "#eceef0",
+                    "status-error": "#ef4444",
+                    "on-surface-variant": "#3c4a42",
+                    "tertiary-fixed-dim": "#81d8ad",
+                    "primary-container": "#10b981",
+                    "tertiary-container": "#5db38a",
+                    "on-tertiary-container": "#00422b",
+                    "on-background": "#191c1e",
+                    "surface-dim": "#d8dadc",
+                    "surface-bright": "#f7f9fb",
+                    "inverse-on-surface": "#eff1f3",
+                    "on-primary-container": "#00422b",
+                    "on-secondary": "#ffffff",
+                    "surface-container-low": "#f2f4f6",
+                    "on-error-container": "#93000a",
+                    "on-secondary-container": "#596373",
+                    "secondary-fixed": "#d9e3f6",
+                    "inverse-surface": "#2d3133",
+                    "primary": "#006c49",
+                    "on-error": "#ffffff",
+                    "border-light": "#e5e7eb",
+                    "on-primary": "#ffffff",
+                    "tertiary": "#006c49",
+                    "surface-variant": "#e0e3e5",
+                    "error-container": "#ffdad6",
+                    "surface-white": "#ffffff",
+                    "on-secondary-fixed-variant": "#3d4756",
+                    "on-surface": "#191c1e"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.25rem",
+                    "lg": "0.5rem",
+                    "xl": "0.75rem",
+                    "full": "9999px"
+            },
+            "spacing": {
+                    "margin-mobile": "1rem",
+                    "stack-sm": "0.5rem",
+                    "margin-desktop": "2rem",
+                    "gutter": "1rem",
+                    "stack-lg": "1.5rem",
+                    "stack-md": "1rem"
+            },
+            "fontFamily": {
+                    "tabular-nums": ["Inter"],
+                    "display-lg": ["Inter"],
+                    "headline-md": ["Inter"],
+                    "headline-lg": ["Inter"],
+                    "body-md": ["Inter"],
+                    "label-bold": ["Inter"],
+                    "body-lg": ["Inter"],
+                    "body-sm": ["Inter"],
+                    "headline-lg-mobile": ["Inter"]
+            },
+            "fontSize": {
+                    "tabular-nums": ["14px", {"lineHeight": "20px", "fontWeight": "400"}],
+                    "display-lg": ["36px", {"lineHeight": "44px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                    "headline-md": ["20px", {"lineHeight": "28px", "fontWeight": "600"}],
+                    "headline-lg": ["24px", {"lineHeight": "32px", "fontWeight": "600"}],
+                    "body-md": ["14px", {"lineHeight": "20px", "fontWeight": "400"}],
+                    "label-bold": ["12px", {"lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "600"}],
+                    "body-lg": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+                    "body-sm": ["13px", {"lineHeight": "18px", "fontWeight": "400"}],
+                    "headline-lg-mobile": ["20px", {"lineHeight": "28px", "fontWeight": "600"}]
+            }
+          },
+        },
+      }
+    </script>
+<style>
+        /* Custom scrollbar for grid */
+        .grid-scroll::-webkit-scrollbar {
+            height: 8px;
+            width: 8px;
+        }
+        .grid-scroll::-webkit-scrollbar-track {
+            background: theme('colors.surface-container-low');
+            border-radius: 4px;
+        }
+        .grid-scroll::-webkit-scrollbar-thumb {
+            background: theme('colors.surface-variant');
+            border-radius: 4px;
+        }
+        .grid-scroll::-webkit-scrollbar-thumb:hover {
+            background: theme('colors.secondary-fixed-dim');
+        }
+        
+        /* Striped background for leave */
+        .bg-stripes {
+            background-image: repeating-linear-gradient(
+                45deg,
+                transparent,
+                transparent 10px,
+                rgba(0,0,0,0.03) 10px,
+                rgba(0,0,0,0.03) 20px
+            );
+        }
+    </style>
+</head>
+<body class="bg-background text-on-background font-body-md text-body-md antialiased overflow-x-hidden">
+<!-- TopAppBar -->
+<header class="bg-surface-white dark:bg-surface-container-lowest border-b border-light dark:border-outline-variant flex justify-between items-center w-full px-margin-desktop h-16 fixed top-0 z-40 transition-colors">
+<div class="flex items-center gap-gutter">
+<span class="text-headline-md font-headline-md font-bold text-primary dark:text-primary-fixed md:hidden">Revive HR</span>
+<!-- Spacer for desktop sidebar -->
+<div class="hidden md:block w-[280px]"></div>
+<div class="hidden md:flex items-center bg-surface-container-low rounded-full px-4 py-2">
+<span class="material-symbols-outlined text-secondary mr-2">search</span>
+<input class="bg-transparent border-none outline-none focus:ring-0 text-body-md w-64 placeholder:text-secondary" placeholder="Search employees, templates..." type="text"/>
+</div>
+</div>
+<div class="flex items-center gap-stack-md">
+<button class="p-2 text-secondary hover:text-primary hover:bg-surface-container-low dark:hover:bg-surface-container-high transition-colors rounded-full flex items-center justify-center">
+<span class="material-symbols-outlined">notifications</span>
+</button>
+<button class="p-2 text-secondary hover:text-primary hover:bg-surface-container-low dark:hover:bg-surface-container-high transition-colors rounded-full flex items-center justify-center">
+<span class="material-symbols-outlined">settings</span>
+</button>
+<div class="h-8 w-8 rounded-full bg-secondary-container overflow-hidden border border-outline-variant cursor-pointer">
+<img alt="Employee Avatar" class="w-full h-full object-cover" data-alt="A professional headshot of a corporate manager in a bright, modern office setting. The lighting is soft and neutral, enhancing a clean, high-end enterprise aesthetic. The manager is wearing a crisp white shirt, radiating efficiency and trust." src="https://lh3.googleusercontent.com/aida-public/AB6AXuASL35k0zsE0h9N6VR9FMNOqRbL5YbENGqjncPudtDs3Gusm3EmTgrzcW9eEGFTzU5Q-c846dBR8Q-G0b8qCzxpyHCQSi05z354IVG2KeyfybBydHbU8RXSDIxDsQNX2SDoA7bm1TpxPPYnIinIDGnR4LX04i0xr-J1KDk0Jr8joeqVwEEYt6khYGgsOB0sevoctqRSqewFY0WMul2bT4wMkkD-Zns1oAf-vx2eSZ1Y6CiYiNHwMh1iig"/>
+</div>
+</div>
+</header>
+<!-- SideNavBar (Desktop) -->
+<nav class="hidden md:flex flex-col gap-stack-sm p-gutter bg-secondary dark:bg-inverse-surface fixed h-full w-[280px] left-0 top-0 z-50">
+<div class="mb-stack-lg px-2 pt-2">
+<h1 class="text-headline-md font-headline-md font-black text-surface-white">Revive HR</h1>
+<p class="text-label-bold font-label-bold text-on-secondary opacity-70">Nasr City Branch</p>
+</div>
+<div class="flex-1 overflow-y-auto flex flex-col gap-1">
+<!-- Inactive -->
+<a class="flex items-center gap-3 px-3 py-2 text-on-secondary hover:bg-on-secondary-fixed-variant rounded-lg transition-all duration-200" href="#">
+<span class="material-symbols-outlined">dashboard</span>
+<span class="text-label-bold font-label-bold">Dashboard</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 text-on-secondary hover:bg-on-secondary-fixed-variant rounded-lg transition-all duration-200" href="#">
+<span class="material-symbols-outlined">person</span>
+<span class="text-label-bold font-label-bold">My Profile</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 text-on-secondary hover:bg-on-secondary-fixed-variant rounded-lg transition-all duration-200" href="#">
+<span class="material-symbols-outlined">description</span>
+<span class="text-label-bold font-label-bold">My Documents</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 text-on-secondary hover:bg-on-secondary-fixed-variant rounded-lg transition-all duration-200" href="#">
+<span class="material-symbols-outlined">history</span>
+<span class="text-label-bold font-label-bold">Employment History</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 text-on-secondary hover:bg-on-secondary-fixed-variant rounded-lg transition-all duration-200" href="#">
+<span class="material-symbols-outlined">timer</span>
+<span class="text-label-bold font-label-bold">My Attendance</span>
+</a>
+<!-- Active State Logic Applied Here (My Schedule fits Shift Assignment context best) -->
+<a class="flex items-center gap-3 px-3 py-2 bg-primary-container text-on-primary-container rounded-lg font-bold transition-all duration-200 scale-[0.98]" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">calendar_today</span>
+<span class="text-label-bold font-label-bold">My Schedule</span>
+</a>
+<!-- Inactive -->
+<a class="flex items-center gap-3 px-3 py-2 text-on-secondary hover:bg-on-secondary-fixed-variant rounded-lg transition-all duration-200" href="#">
+<span class="material-symbols-outlined">payments</span>
+<span class="text-label-bold font-label-bold">My Payroll</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 text-on-secondary hover:bg-on-secondary-fixed-variant rounded-lg transition-all duration-200" href="#">
+<span class="material-symbols-outlined">analytics</span>
+<span class="text-label-bold font-label-bold">My Evaluations</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 text-on-secondary hover:bg-on-secondary-fixed-variant rounded-lg transition-all duration-200" href="#">
+<span class="material-symbols-outlined">pending_actions</span>
+<span class="text-label-bold font-label-bold">My Requests</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 text-on-secondary hover:bg-on-secondary-fixed-variant rounded-lg transition-all duration-200" href="#">
+<span class="material-symbols-outlined">notifications</span>
+<span class="text-label-bold font-label-bold">Notifications</span>
+</a>
+</div>
+<div class="mt-auto border-t border-on-secondary/20 pt-4 flex flex-col gap-1">
+<a class="flex items-center gap-3 px-3 py-2 text-on-secondary hover:bg-on-secondary-fixed-variant rounded-lg transition-all duration-200" href="#">
+<span class="material-symbols-outlined">group</span>
+<span class="text-label-bold font-label-bold">My Team</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 text-on-secondary hover:bg-on-secondary-fixed-variant rounded-lg transition-all duration-200" href="#">
+<span class="material-symbols-outlined">rule</span>
+<span class="text-label-bold font-label-bold">Team Requests</span>
+</a>
+<button class="mt-4 w-full py-3 bg-primary-container text-on-primary-container rounded-lg font-bold flex justify-center items-center gap-2 hover:opacity-90 transition-opacity">
+<span class="material-symbols-outlined">timer</span>
+                Clock In
+            </button>
+</div>
+</nav>
+<!-- BottomNavBar (Mobile) -->
+<nav class="md:hidden fixed bottom-0 left-0 w-full z-50 flex justify-around items-center px-4 pb-4 pt-2 border-t border-light dark:border-outline-variant bg-surface-white dark:bg-surface-container-lowest rounded-t-xl shadow-lg">
+<a class="flex flex-col items-center justify-center text-secondary dark:text-on-surface-variant active:bg-surface-container-high transition-transform duration-150 py-1" href="#">
+<span class="material-symbols-outlined mb-1 text-[24px]">home</span>
+<span class="text-body-sm font-body-sm">Home</span>
+</a>
+<!-- Active State Logic Applied Here -->
+<a class="flex flex-col items-center justify-center bg-secondary-container dark:bg-secondary text-primary dark:text-primary-fixed-dim rounded-2xl px-4 py-1 scale-90 transition-transform duration-150" href="#">
+<span class="material-symbols-outlined mb-1 text-[24px]" style="font-variation-settings: 'FILL' 1;">calendar_month</span>
+<span class="text-body-sm font-body-sm font-bold">Schedule</span>
+</a>
+<a class="flex flex-col items-center justify-center text-secondary dark:text-on-surface-variant active:bg-surface-container-high transition-transform duration-150 py-1" href="#">
+<span class="material-symbols-outlined mb-1 text-[24px]">add_circle</span>
+<span class="text-body-sm font-body-sm">Requests</span>
+</a>
+<a class="flex flex-col items-center justify-center text-secondary dark:text-on-surface-variant active:bg-surface-container-high transition-transform duration-150 py-1" href="#">
+<span class="material-symbols-outlined mb-1 text-[24px]">notifications</span>
+<span class="text-body-sm font-body-sm">Alerts</span>
+</a>
+<a class="flex flex-col items-center justify-center text-secondary dark:text-on-surface-variant active:bg-surface-container-high transition-transform duration-150 py-1" href="#">
+<span class="material-symbols-outlined mb-1 text-[24px]">menu</span>
+<span class="text-body-sm font-body-sm">Menu</span>
+</a>
+</nav>
+<!-- Main Content Canvas -->
+<main class="pt-20 pb-24 md:pb-8 md:ml-[280px] px-margin-mobile md:px-margin-desktop max-w-[1440px] mx-auto min-h-screen">
+<!-- Page Header -->
+<div class="flex flex-col md:flex-row md:items-end justify-between mb-stack-lg gap-4">
+<div>
+<p class="text-label-bold font-label-bold text-secondary tracking-wider mb-1 uppercase">Operations > Nasr City Branch</p>
+<h2 class="text-headline-lg-mobile md:text-headline-lg font-headline-lg-mobile md:font-headline-lg text-on-background">Shift Assignment & Definition</h2>
+</div>
+<div class="flex items-center gap-3">
+<button class="px-4 py-2 bg-surface-white border border-light rounded-lg text-secondary font-label-bold text-label-bold hover:bg-surface-container-low transition-colors flex items-center gap-2">
+<span class="material-symbols-outlined text-[18px]">save</span>
+                    Save Draft
+                </button>
+<button class="px-4 py-2 bg-primary-container text-on-primary-container rounded-lg font-label-bold text-label-bold hover:opacity-90 transition-opacity shadow-sm flex items-center gap-2">
+<span class="material-symbols-outlined text-[18px]">publish</span>
+                    Publish Schedule
+                </button>
+</div>
+</div>
+<!-- Bento Grid Layout -->
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-stack-lg mb-stack-lg">
+<!-- Shift Templates (The 'Paint' Palette) -->
+<section class="lg:col-span-2 bg-surface-white rounded-xl border border-light p-5 shadow-sm flex flex-col justify-between">
+<div>
+<div class="flex justify-between items-center mb-4">
+<h3 class="text-label-bold font-label-bold text-on-surface-variant">SHIFT TEMPLATES (PALETTE)</h3>
+<button class="text-primary text-body-sm font-body-sm font-medium hover:underline flex items-center">
+<span class="material-symbols-outlined text-[16px] mr-1">add</span> New Template
+                        </button>
+</div>
+<p class="text-body-sm font-body-sm text-secondary mb-4">Select a template below to quickly assign shifts to the grid.</p>
+<div class="flex flex-wrap gap-3" id="shift-palette">
+<!-- Template 1 -->
+<button class="palette-btn active ring-2 ring-primary border-transparent flex flex-col items-start p-3 rounded-lg bg-[#e0f2fe] border hover:border-primary transition-all text-left w-32" data-shift-type="morning">
+<span class="text-label-bold font-label-bold text-[#0369a1] mb-1">Morning</span>
+<span class="text-tabular-nums font-tabular-nums text-[#0c4a6e] text-xs">08:00 - 16:00</span>
+</button>
+<!-- Template 2 -->
+<button class="palette-btn border-light flex flex-col items-start p-3 rounded-lg bg-[#fff7ed] border hover:border-primary transition-all text-left w-32" data-shift-type="evening">
+<span class="text-label-bold font-label-bold text-[#c2410c] mb-1">Evening</span>
+<span class="text-tabular-nums font-tabular-nums text-[#7c2d12] text-xs">16:00 - 00:00</span>
+</button>
+<!-- Template 3 -->
+<button class="palette-btn border-light flex flex-col items-start p-3 rounded-lg bg-[#f3e8ff] border hover:border-primary transition-all text-left w-32" data-shift-type="night">
+<span class="text-label-bold font-label-bold text-[#7e22ce] mb-1">Night</span>
+<span class="text-tabular-nums font-tabular-nums text-[#581c87] text-xs">00:00 - 08:00</span>
+</button>
+<!-- Eraser -->
+<button class="palette-btn border-light flex flex-col items-center justify-center p-3 rounded-lg bg-surface-container-low border hover:border-error transition-all text-center w-24" data-shift-type="clear">
+<span class="material-symbols-outlined text-secondary mb-1">ink_eraser</span>
+<span class="text-label-bold font-label-bold text-secondary text-xs">Clear Slot</span>
+</button>
+</div>
+</div>
+</section>
+<!-- Cycle Stats Summary -->
+<section class="lg:col-span-1 bg-surface-white rounded-xl border border-light p-5 shadow-sm">
+<h3 class="text-label-bold font-label-bold text-on-surface-variant mb-4">10-DAY CYCLE SUMMARY</h3>
+<div class="flex items-center justify-between mb-4 pb-4 border-b border-light">
+<div>
+<p class="text-body-sm font-body-sm text-secondary">Period</p>
+<p class="text-body-md font-body-md font-medium text-on-background">Oct 12 - Oct 21</p>
+</div>
+<span class="px-2 py-1 bg-surface-container-highest text-on-surface-variant text-xs font-bold rounded">Draft</span>
+</div>
+<div class="grid grid-cols-2 gap-4">
+<div>
+<p class="text-body-sm font-body-sm text-secondary mb-1">Total Hours Sched.</p>
+<p class="text-headline-md font-headline-md text-primary">840<span class="text-body-sm text-secondary font-normal">h</span></p>
+</div>
+<div>
+<p class="text-body-sm font-body-sm text-secondary mb-1">Est. Overtime</p>
+<p class="text-headline-md font-headline-md text-status-warning">24<span class="text-body-sm text-secondary font-normal">h</span></p>
+</div>
+<div class="col-span-2 bg-error-container/30 border border-error-container p-3 rounded-lg flex items-start gap-2 mt-2">
+<span class="material-symbols-outlined text-status-error text-[20px]">warning</span>
+<div>
+<p class="text-label-bold font-label-bold text-on-error-container">2 Scheduling Conflicts</p>
+<p class="text-body-sm font-body-sm text-on-surface-variant text-xs mt-1">Check grid for double-shifts or overlapping PTO.</p>
+</div>
+</div>
+</div>
+</section>
+</div>
+<!-- The Scheduling Grid (Complex Table) -->
+<section class="bg-surface-white rounded-xl border border-light shadow-sm overflow-hidden flex flex-col">
+<div class="p-4 border-b border-light flex justify-between items-center bg-surface-bright">
+<h3 class="text-label-bold font-label-bold text-on-surface-variant">STAFF ASSIGNMENTS</h3>
+<div class="flex items-center gap-2">
+<span class="text-body-sm font-body-sm text-secondary">Filter:</span>
+<select class="text-body-sm font-body-sm bg-surface-white border border-outline-variant rounded px-2 py-1 outline-none focus:border-primary">
+<option>All Roles</option>
+<option>Cashier</option>
+<option>Stock</option>
+</select>
+</div>
+</div>
+<div class="overflow-x-auto grid-scroll">
+<table class="w-full text-left border-collapse min-w-[1000px]">
+<thead>
+<tr class="bg-surface-container-low border-b border-light">
+<th class="p-4 font-label-bold text-label-bold text-secondary w-64 sticky left-0 z-20 bg-surface-container-low">Employee / Role</th>
+<th class="p-4 font-label-bold text-label-bold text-secondary text-center w-24">Stats</th>
+<!-- 10 Day Columns -->
+<th class="p-2 border-l border-light text-center min-w-[80px]">
+<div class="text-xs text-secondary">Mon</div>
+<div class="font-bold text-on-background">12</div>
+</th>
+<th class="p-2 border-l border-light text-center min-w-[80px]">
+<div class="text-xs text-secondary">Tue</div>
+<div class="font-bold text-on-background">13</div>
+</th>
+<th class="p-2 border-l border-light text-center min-w-[80px]">
+<div class="text-xs text-secondary">Wed</div>
+<div class="font-bold text-on-background">14</div>
+</th>
+<th class="p-2 border-l border-light text-center min-w-[80px]">
+<div class="text-xs text-secondary">Thu</div>
+<div class="font-bold text-on-background">15</div>
+</th>
+<th class="p-2 border-l border-light text-center min-w-[80px]">
+<div class="text-xs text-secondary">Fri</div>
+<div class="font-bold text-on-background">16</div>
+</th>
+<th class="p-2 border-l border-light text-center min-w-[80px] bg-surface-variant/30">
+<div class="text-xs text-secondary">Sat</div>
+<div class="font-bold text-on-background">17</div>
+</th>
+<th class="p-2 border-l border-light text-center min-w-[80px] bg-surface-variant/30">
+<div class="text-xs text-secondary">Sun</div>
+<div class="font-bold text-on-background">18</div>
+</th>
+<th class="p-2 border-l border-light text-center min-w-[80px]">
+<div class="text-xs text-secondary">Mon</div>
+<div class="font-bold text-on-background">19</div>
+</th>
+<th class="p-2 border-l border-light text-center min-w-[80px]">
+<div class="text-xs text-secondary">Tue</div>
+<div class="font-bold text-on-background">20</div>
+</th>
+<th class="p-2 border-l border-light text-center min-w-[80px]">
+<div class="text-xs text-secondary">Wed</div>
+<div class="font-bold text-on-background">21</div>
+</th>
+</tr>
+</thead>
+<tbody class="text-body-sm font-body-sm divide-y divide-light">
+<!-- Employee Row 1 -->
+<tr class="hover:bg-surface-container-lowest/50 transition-colors group">
+<td class="p-3 sticky left-0 z-10 bg-surface-white group-hover:bg-surface-container-low transition-colors border-r border-light">
+<div class="flex items-center gap-3">
+<div class="h-8 w-8 rounded-full overflow-hidden bg-surface-container-highest">
+<img class="w-full h-full object-cover" data-alt="A portrait of a young retail employee in a clean green and white uniform. They are smiling subtly in a brightly lit modern store environment. The lighting is crisp and the background is slightly out of focus to emphasize the subject." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAFrKfXejFqX9E98djOpYmptto0_JqRjqpL-y3A2cDhdLRhZ7pUf1gWWp8rcQd9eVMfLGDOM7wsp9lnl0RvRRdb7WrkUUr4m7Mbjm7izDErOJWEHglmWqJ664EpVzvRvHFm3p4nUJmdnkOuc3fQGkQa7lc6PqvRR9PVt04vOSA46FibftEDoDlqmLreiy8dblLcj6AFEg9-tPjP3epPjxXX8JhfbGJvnhdXAAm8l4qanp9-K4LjufLgKg"/>
+</div>
+<div>
+<p class="font-bold text-on-background">Sarah Jenkins</p>
+<p class="text-xs text-secondary">Senior Cashier</p>
+</div>
+</div>
+</td>
+<td class="p-3 text-center border-r border-light">
+<div class="text-xs">
+<span class="font-bold text-on-background">40</span><span class="text-secondary">/40h</span>
+</div>
+<div class="w-full bg-surface-container-highest h-1.5 rounded-full mt-1 overflow-hidden">
+<div class="bg-primary h-full w-[100%]"></div>
+</div>
+</td>
+<!-- Grid Cells (Interactive) -->
+<!-- Morning -->
+<td class="p-1 border-l border-light cursor-pointer hover:bg-surface-container-low transition-colors text-center relative group/cell">
+<div class="h-10 w-full bg-[#e0f2fe] text-[#0369a1] rounded flex items-center justify-center text-xs font-bold border border-transparent">M</div>
+</td>
+<td class="p-1 border-l border-light cursor-pointer hover:bg-surface-container-low transition-colors text-center">
+<div class="h-10 w-full bg-[#e0f2fe] text-[#0369a1] rounded flex items-center justify-center text-xs font-bold border border-transparent">M</div>
+</td>
+<!-- Empty -->
+<td class="p-1 border-l border-light cursor-pointer hover:bg-surface-container-low transition-colors text-center">
+<div class="h-10 w-full rounded border border-dashed border-outline-variant flex items-center justify-center text-outline-variant text-xs opacity-50 hover:opacity-100">+</div>
+</td>
+<td class="p-1 border-l border-light cursor-pointer hover:bg-surface-container-low transition-colors text-center">
+<div class="h-10 w-full rounded border border-dashed border-outline-variant flex items-center justify-center text-outline-variant text-xs opacity-50 hover:opacity-100">+</div>
+</td>
+<!-- Evening -->
+<td class="p-1 border-l border-light cursor-pointer hover:bg-surface-container-low transition-colors text-center">
+<div class="h-10 w-full bg-[#fff7ed] text-[#c2410c] rounded flex items-center justify-center text-xs font-bold border border-transparent">E</div>
+</td>
+<!-- Weekend -->
+<td class="p-1 border-l border-light cursor-pointer hover:bg-surface-container-low transition-colors text-center bg-surface-variant/20">
+<div class="h-10 w-full bg-[#fff7ed] text-[#c2410c] rounded flex items-center justify-center text-xs font-bold border border-transparent">E</div>
+</td>
+<td class="p-1 border-l border-light cursor-pointer hover:bg-surface-container-low transition-colors text-center bg-surface-variant/20">
+<div class="h-10 w-full rounded border border-dashed border-outline-variant flex items-center justify-center text-outline-variant text-xs opacity-50 hover:opacity-100">+</div>
+</td>
+<!-- Leave (Approved) -->
+<td class="p-1 border-l border-light text-center relative" colspan="2">
+<div class="h-10 w-full bg-surface-container bg-stripes rounded flex items-center justify-center text-secondary text-xs font-bold border border-outline-variant/30 relative overflow-hidden">
+<span class="z-10 bg-surface-container px-2 rounded">PTO Approved</span>
+</div>
+</td>
+<!-- Empty due to colspan, technically next td is for Wed 21 -->
+<td class="p-1 border-l border-light cursor-pointer hover:bg-surface-container-low transition-colors text-center">
+<div class="h-10 w-full rounded border border-dashed border-outline-variant flex items-center justify-center text-outline-variant text-xs opacity-50 hover:opacity-100">+</div>
+</td>
+</tr>
+<!-- Employee Row 2 (With Conflict) -->
+<tr class="hover:bg-surface-container-lowest/50 transition-colors group">
+<td class="p-3 sticky left-0 z-10 bg-surface-white group-hover:bg-surface-container-low transition-colors border-r border-light">
+<div class="flex items-center gap-3">
+<div class="h-8 w-8 rounded-full overflow-hidden bg-surface-container-highest">
+<img class="w-full h-full object-cover" data-alt="A portrait of a male warehouse worker in a high-visibility vest over a neutral shirt. The background suggests an organized, modern stockroom with soft, industrial lighting. The aesthetic is clean and professional." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAvcWp0PPNHZI9XQRdjp8YEtiyKa1nHdf1oHcyIj_PtgEDliF_oBXZ0Ujpsl_FWzNFkXyuY5M2a7APbw0kW7L-ttEQQ1Ld5nvbaPpFaL6rcy_SQ39HQSv6rUI-awjpUmryof48aeXjN0kwTzQTtjmdO9XDKS5pU0ztaZUqmV8UvgK0k0aYlDKG3jFXfd7ByuqmzDbC5abCyR_ukLn_n3aFm9FK7YZHL_kC1sbWcqAkBEKz4M4_g6GMVtQ"/>
+</div>
+<div>
+<p class="font-bold text-on-background">Marcus Thorne</p>
+<p class="text-xs text-secondary">Stock Manager</p>
+</div>
+</div>
+</td>
+<td class="p-3 text-center border-r border-light bg-error-container/10">
+<div class="text-xs">
+<span class="font-bold text-status-error">48</span><span class="text-secondary">/40h</span>
+</div>
+<div class="w-full bg-surface-container-highest h-1.5 rounded-full mt-1 overflow-hidden flex">
+<div class="bg-primary h-full w-[80%]"></div>
+<div class="bg-status-error h-full w-[20%]"></div>
+</div>
+</td>
+<!-- Grid Cells -->
+<!-- Night shifts -->
+<td class="p-1 border-l border-light cursor-pointer hover:bg-surface-container-low transition-colors text-center">
+<div class="h-10 w-full bg-[#f3e8ff] text-[#7e22ce] rounded flex items-center justify-center text-xs font-bold border border-transparent">N</div>
+</td>
+<td class="p-1 border-l border-light cursor-pointer hover:bg-surface-container-low transition-colors text-center">
+<div class="h-10 w-full bg-[#f3e8ff] text-[#7e22ce] rounded flex items-center justify-center text-xs font-bold border border-transparent">N</div>
+</td>
+<td class="p-1 border-l border-light cursor-pointer hover:bg-surface-container-low transition-colors text-center">
+<div class="h-10 w-full bg-[#f3e8ff] text-[#7e22ce] rounded flex items-center justify-center text-xs font-bold border border-transparent">N</div>
+</td>
+<!-- CONFLICT CELL (Double Shift mapped over Leave or overlapping) -->
+<td class="p-1 border-l border-light cursor-pointer bg-error-container/20 text-center relative">
+<div class="absolute -top-1 -right-1 z-10">
+<span class="material-symbols-outlined text-status-error text-[16px] bg-surface-white rounded-full">error</span>
+</div>
+<div class="h-10 w-full bg-[#e0f2fe] text-[#0369a1] rounded flex items-center justify-center text-xs font-bold border-2 border-status-error animate-pulse">M / N</div>
+</td>
+<td class="p-1 border-l border-light cursor-pointer hover:bg-surface-container-low transition-colors text-center">
+<div class="h-10 w-full rounded border border-dashed border-outline-variant flex items-center justify-center text-outline-variant text-xs opacity-50 hover:opacity-100">+</div>
+</td>
+<td class="p-1 border-l border-light cursor-pointer hover:bg-surface-container-low transition-colors text-center bg-surface-variant/20">
+<div class="h-10 w-full rounded border border-dashed border-outline-variant flex items-center justify-center text-outline-variant text-xs opacity-50 hover:opacity-100">+</div>
+</td>
+<td class="p-1 border-l border-light cursor-pointer hover:bg-surface-container-low transition-colors text-center bg-surface-variant/20">
+<div class="h-10 w-full bg-[#e0f2fe] text-[#0369a1] rounded flex items-center justify-center text-xs font-bold border border-transparent">M</div>
+</td>
+<td class="p-1 border-l border-light cursor-pointer hover:bg-surface-container-low transition-colors text-center">
+<div class="h-10 w-full bg-[#e0f2fe] text-[#0369a1] rounded flex items-center justify-center text-xs font-bold border border-transparent">M</div>
+</td>
+<td class="p-1 border-l border-light cursor-pointer hover:bg-surface-container-low transition-colors text-center">
+<div class="h-10 w-full bg-[#e0f2fe] text-[#0369a1] rounded flex items-center justify-center text-xs font-bold border border-transparent">M</div>
+</td>
+<td class="p-1 border-l border-light cursor-pointer hover:bg-surface-container-low transition-colors text-center">
+<div class="h-10 w-full bg-[#e0f2fe] text-[#0369a1] rounded flex items-center justify-center text-xs font-bold border border-transparent">M</div>
+</td>
+</tr>
+<!-- Employee Row 3 -->
+<tr class="hover:bg-surface-container-lowest/50 transition-colors group">
+<td class="p-3 sticky left-0 z-10 bg-surface-white group-hover:bg-surface-container-low transition-colors border-r border-light">
+<div class="flex items-center gap-3">
+<div class="h-8 w-8 rounded-full overflow-hidden bg-surface-container-highest">
+<img class="w-full h-full object-cover" data-alt="A portrait of a confident female operations associate in a corporate setting. She wears a simple dark blazer over a light shirt. The office environment is softly blurred in the background, maintaining a premium, clean aesthetic." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCKu2XKMxk4frGfnujwOuBYPqrhC5hUnAF2s6Hqd8GnM_hYeMnMJ6uT_B_iVmG11b8lYI_RFJzATf8xe59VIGiQkjFgmM9PeArFn6jWnZWXRWyOkFiCbH18uahNCXmC7DaDgrIT9jkbBxMjts2rKqUH9hIsckpXY9jTEwE8HQ6WFauT0cNGYF31QyQ1baLpKHvfddV1JOwKpOeBa0j6h1ULfL6-K0uyh8ucl0LpqCCfmWjo17jah1FmPg"/>
+</div>
+<div>
+<p class="font-bold text-on-background">Elena Rostova</p>
+<p class="text-xs text-secondary">Floor Staff</p>
+</div>
+</div>
+</td>
+<td class="p-3 text-center border-r border-light">
+<div class="text-xs">
+<span class="font-bold text-on-background">24</span><span class="text-secondary">/30h</span>
+</div>
+<div class="w-full bg-surface-container-highest h-1.5 rounded-full mt-1 overflow-hidden">
+<div class="bg-primary-container h-full w-[80%]"></div>
+</div>
+</td>
+<!-- Grid Cells -->
+<td class="p-1 border-l border-light cursor-pointer hover:bg-surface-container-low transition-colors text-center">
+<div class="h-10 w-full rounded border border-dashed border-outline-variant flex items-center justify-center text-outline-variant text-xs opacity-50 hover:opacity-100">+</div>
+</td>
+<td class="p-1 border-l border-light cursor-pointer hover:bg-surface-container-low transition-colors text-center">
+<div class="h-10 w-full bg-[#fff7ed] text-[#c2410c] rounded flex items-center justify-center text-xs font-bold border border-transparent">E</div>
+</td>
+<td class="p-1 border-l border-light cursor-pointer hover:bg-surface-container-low transition-colors text-center">
+<div class="h-10 w-full bg-[#fff7ed] text-[#c2410c] rounded flex items-center justify-center text-xs font-bold border border-transparent">E</div>
+</td>
+<td class="p-1 border-l border-light cursor-pointer hover:bg-surface-container-low transition-colors text-center">
+<div class="h-10 w-full bg-[#fff7ed] text-[#c2410c] rounded flex items-center justify-center text-xs font-bold border border-transparent">E</div>
+</td>
+<td class="p-1 border-l border-light cursor-pointer hover:bg-surface-container-low transition-colors text-center">
+<div class="h-10 w-full rounded border border-dashed border-outline-variant flex items-center justify-center text-outline-variant text-xs opacity-50 hover:opacity-100">+</div>
+</td>
+<td class="p-1 border-l border-light cursor-pointer hover:bg-surface-container-low transition-colors text-center bg-surface-variant/20">
+<div class="h-10 w-full bg-[#f3e8ff] text-[#7e22ce] rounded flex items-center justify-center text-xs font-bold border border-transparent">N</div>
+</td>
+<td class="p-1 border-l border-light cursor-pointer hover:bg-surface-container-low transition-colors text-center bg-surface-variant/20">
+<div class="h-10 w-full bg-[#f3e8ff] text-[#7e22ce] rounded flex items-center justify-center text-xs font-bold border border-transparent">N</div>
+</td>
+<td class="p-1 border-l border-light cursor-pointer hover:bg-surface-container-low transition-colors text-center">
+<div class="h-10 w-full bg-[#f3e8ff] text-[#7e22ce] rounded flex items-center justify-center text-xs font-bold border border-transparent">N</div>
+</td>
+<td class="p-1 border-l border-light cursor-pointer hover:bg-surface-container-low transition-colors text-center">
+<div class="h-10 w-full rounded border border-dashed border-outline-variant flex items-center justify-center text-outline-variant text-xs opacity-50 hover:opacity-100">+</div>
+</td>
+<td class="p-1 border-l border-light cursor-pointer hover:bg-surface-container-low transition-colors text-center">
+<div class="h-10 w-full rounded border border-dashed border-outline-variant flex items-center justify-center text-outline-variant text-xs opacity-50 hover:opacity-100">+</div>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="p-4 border-t border-light bg-surface-container-lowest text-center">
+<button class="text-primary text-body-sm font-body-sm font-bold hover:underline">View Next 10 Employees</button>
+</div>
+</section>
+</main>
+<!-- Micro-interaction Script for Palette Selection -->
+<script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const paletteBtns = document.querySelectorAll('.palette-btn');
+            
+            paletteBtns.forEach(btn => {
+                btn.addEventListener('click', () => {
+                    // Remove active state from all
+                    paletteBtns.forEach(b => {
+                        b.classList.remove('ring-2', 'ring-primary', 'border-transparent');
+                        b.classList.add('border-light');
+                    });
+                    
+                    // Add active state to clicked
+                    btn.classList.remove('border-light');
+                    btn.classList.add('ring-2', 'ring-primary', 'border-transparent');
+                });
+            });
+        });
+    </script>
+</body></html>

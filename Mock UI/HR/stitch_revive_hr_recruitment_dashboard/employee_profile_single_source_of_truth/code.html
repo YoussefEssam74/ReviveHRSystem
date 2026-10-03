@@ -1,0 +1,647 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Revive HR - Employee Profile</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+          darkMode: "class",
+          theme: {
+            extend: {
+              "colors": {
+                      "tertiary-fixed": "#d8e3dd",
+                      "surface-container-highest": "#d3dcd2",
+                      "on-secondary-fixed": "#191c1e",
+                      "tertiary-fixed-dim": "#bcc7c0",
+                      "secondary-fixed-dim": "#c5c6c8",
+                      "on-primary-fixed-variant": "#166534",
+                      "on-primary-container": "#14532d",
+                      "on-background": "#13221a",
+                      "on-tertiary": "#ffffff",
+                      "on-secondary-container": "#43474a",
+                      "surface-variant": "#e2e8e0",
+                      "on-secondary": "#ffffff",
+                      "on-tertiary-fixed-variant": "#3c475a",
+                      "outline": "#6e7b6c",
+                      "secondary-container": "#e8e8e8",
+                      "surface-container": "#e9eee8",
+                      "surface-container-low": "#f3f6f2",
+                      "inverse-surface": "#213145",
+                      "on-primary": "#ffffff",
+                      "primary": "#16a34a",
+                      "error": "#ba1a1a",
+                      "on-primary-fixed": "#052e16",
+                      "secondary-fixed": "#e1e2e4",
+                      "primary-fixed-dim": "#4ade80",
+                      "background": "#f7f9f7",
+                      "surface": "#fbfcfa",
+                      "surface-tint": "#16a34a",
+                      "tertiary-container": "#b3c7bc",
+                      "outline-variant": "#c6cdc5",
+                      "tertiary": "#51605a",
+                      "on-tertiary-fixed": "#111c18",
+                      "surface-dim": "#d2dbd1",
+                      "surface-container-lowest": "#ffffff",
+                      "on-error-container": "#93000a",
+                      "on-secondary-fixed-variant": "#444749",
+                      "surface-bright": "#ffffff",
+                      "primary-fixed": "#86efac",
+                      "inverse-on-surface": "#eaf1ff",
+                      "on-surface": "#13221a",
+                      "error-container": "#ffdad6",
+                      "on-surface-variant": "#3f4a41",
+                      "on-tertiary-container": "#1c2a23",
+                      "secondary": "#5c5f60",
+                      "inverse-primary": "#4ade80",
+                      "on-error": "#ffffff",
+                      "primary-container": "#bbf7d0",
+                      "surface-container-high": "#dee5dd"
+              },
+              "borderRadius": {
+                      "DEFAULT": "0.25rem",
+                      "lg": "0.5rem",
+                      "xl": "0.75rem",
+                      "full": "9999px"
+              },
+              "spacing": {
+                      "max-width": "1440px",
+                      "md": "16px",
+                      "xs": "4px",
+                      "margin-mobile": "16px",
+                      "gutter": "24px",
+                      "margin-desktop": "32px",
+                      "2xl": "48px",
+                      "xl": "32px",
+                      "lg": "24px",
+                      "sm": "8px",
+                      "base": "4px"
+              },
+              "fontFamily": {
+                      "title-lg": ["Inter"],
+                      "body-lg": ["Inter"],
+                      "headline-md": ["Inter"],
+                      "display-lg": ["Inter"],
+                      "headline-lg-mobile": ["Inter"],
+                      "body-md": ["Inter"],
+                      "headline-lg": ["Inter"],
+                      "label-sm": ["Inter"],
+                      "label-md": ["Inter"]
+              },
+              "fontSize": {
+                      "title-lg": ["20px", {"lineHeight": "28px", "fontWeight": "600"}],
+                      "body-lg": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+                      "headline-md": ["24px", {"lineHeight": "32px", "fontWeight": "600"}],
+                      "display-lg": ["48px", {"lineHeight": "56px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                      "headline-lg-mobile": ["24px", {"lineHeight": "32px", "fontWeight": "600"}],
+                      "body-md": ["14px", {"lineHeight": "20px", "fontWeight": "400"}],
+                      "headline-lg": ["32px", {"lineHeight": "40px", "letterSpacing": "-0.01em", "fontWeight": "600"}],
+                      "label-sm": ["11px", {"lineHeight": "14px", "fontWeight": "600"}],
+                      "label-md": ["12px", {"lineHeight": "16px", "letterSpacing": "0.01em", "fontWeight": "500"}]
+              }
+            }
+          }
+        }
+    </script>
+<style>
+        .soft-shadow { box-shadow: 0px 1px 3px rgba(0,0,0,0.05); }
+        .hover-shadow:hover { box-shadow: 0px 10px 15px -3px rgba(0,0,0,0.1); transition: all 0.2s ease; }
+        .tabs-scroll::-webkit-scrollbar { height: 4px; }
+        .tabs-scroll::-webkit-scrollbar-thumb { background-color: #c6cdc5; border-radius: 20px; }
+        .tab-panel { display: none; }
+        .tab-panel.active { display: block; }
+        .tab-btn { border-bottom: 2px solid transparent; color: #3f4a41; }
+        .tab-btn.active { border-bottom-color: #16a34a; color: #14532d; font-weight: 600; }
+    </style>
+</head>
+<body class="bg-background text-on-background font-body-md min-h-screen flex">
+<!-- SideNavBar -->
+<nav class="fixed h-screen w-[280px] left-0 top-0 bg-surface-container-lowest dark:bg-inverse-surface border-r border-outline-variant shadow-sm flex flex-col p-md z-50 hidden md:flex">
+<div class="mb-xl flex items-center gap-sm">
+<div class="w-10 h-10 rounded-full bg-primary flex items-center justify-center text-on-primary font-bold">R</div>
+<div>
+<h1 class="font-headline-md text-headline-md font-bold text-primary dark:text-primary-fixed">Revive HR</h1>
+<p class="font-label-sm text-label-sm text-secondary">HR Management</p>
+</div>
+</div>
+<button class="w-full bg-primary text-on-primary py-sm px-md rounded-lg font-label-md text-label-md hover:bg-on-primary-fixed-variant transition-colors mb-lg flex items-center justify-center gap-sm shadow-sm cursor-pointer active:scale-95 duration-200" onclick="window.location.href='../create_vacancy/code.html'">
+<span class="material-symbols-outlined" style="font-size: 18px;">add</span>
+            Create Vacancy
+        </button>
+<div class="flex-1 flex flex-col gap-1 overflow-y-auto">
+<a class="flex items-center gap-md px-md py-sm rounded-lg text-secondary hover:text-on-surface hover:bg-surface-container-high transition-colors" href="../recruitment_dashboard_complete/code.html">
+<span class="material-symbols-outlined">dashboard</span><span class="font-body-md text-body-md">Dashboard</span>
+</a>
+<a class="flex items-center gap-md px-md py-sm rounded-lg text-secondary hover:text-on-surface hover:bg-surface-container-high transition-colors" href="../vacancy_list/code.html">
+<span class="material-symbols-outlined">work</span><span class="font-body-md text-body-md">Vacancies</span>
+</a>
+<a class="flex items-center gap-md px-md py-sm rounded-lg text-secondary hover:text-on-surface hover:bg-surface-container-high transition-colors" href="../candidate_list/code.html">
+<span class="material-symbols-outlined">candidates</span><span class="font-body-md text-body-md">Candidates</span>
+</a>
+<a class="flex items-center gap-md px-md py-sm rounded-lg text-secondary hover:text-on-surface hover:bg-surface-container-high transition-colors" href="../employee_dashboard_full_navigation/code.html">
+<span class="material-symbols-outlined">badge</span><span class="font-body-md text-body-md">Employees</span>
+</a>
+<a class="flex items-center gap-md px-md py-sm rounded-lg bg-surface-container-high text-primary font-bold border-r-4 border-primary opacity-90 transition-opacity" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">person_pin</span><span class="font-body-md text-body-md">Employee Profile</span>
+</a>
+<a class="flex items-center gap-md px-md py-sm rounded-lg text-secondary hover:text-on-surface hover:bg-surface-container-high transition-colors" href="../shift_schedule_management/code.html">
+<span class="material-symbols-outlined">calendar_month</span><span class="font-body-md text-body-md">Shift &amp; Schedule</span>
+</a>
+<a class="flex items-center gap-md px-md py-sm rounded-lg text-secondary hover:text-on-surface hover:bg-surface-container-high transition-colors" href="../attendance_management_dashboard/code.html">
+<span class="material-symbols-outlined">event_available</span><span class="font-body-md text-body-md">Attendance</span>
+</a>
+<a class="flex items-center gap-md px-md py-sm rounded-lg text-secondary hover:text-on-surface hover:bg-surface-container-high transition-colors" href="../leave_management/code.html">
+<span class="material-symbols-outlined">flight_takeoff</span><span class="font-body-md text-body-md">Leave Management</span>
+</a>
+<a class="flex items-center gap-md px-md py-sm rounded-lg text-secondary hover:text-on-surface hover:bg-surface-container-high transition-colors" href="../payroll_support_dashboard/code.html">
+<span class="material-symbols-outlined">payments</span><span class="font-body-md text-body-md">Payroll</span>
+</a>
+<a class="flex items-center gap-md px-md py-sm rounded-lg text-secondary hover:text-on-surface hover:bg-surface-container-high transition-colors" href="../employee_separation_offboarding_dashboard/code.html">
+<span class="material-symbols-outlined">person_remove</span><span class="font-body-md text-body-md">Separation</span>
+</a>
+<a class="flex items-center gap-md px-md py-sm rounded-lg text-secondary hover:text-on-surface hover:bg-surface-container-high transition-colors" href="../permissions_role_management/code.html">
+<span class="material-symbols-outlined">manage_accounts</span><span class="font-body-md text-body-md">Permissions</span>
+</a>
+</div>
+<div class="border-t border-outline-variant pt-md flex flex-col gap-sm shrink-0">
+<a class="flex items-center gap-md px-md py-sm rounded-lg text-secondary hover:text-on-surface hover:bg-surface-container-high transition-colors" href="#">
+<span class="material-symbols-outlined">settings</span><span class="font-body-md text-body-md">Settings</span>
+</a>
+</div>
+</nav>
+<!-- Main Content Area -->
+<div class="flex-1 md:ml-[280px] min-h-screen flex flex-col w-full">
+<!-- TopAppBar -->
+<header class="flex justify-between items-center px-margin-desktop bg-surface-container-lowest dark:bg-surface-container fixed top-0 right-0 w-full md:w-[calc(100%-280px)] h-16 shadow-sm dark:shadow-none z-40">
+<div class="flex items-center gap-sm bg-surface-container-low px-md py-xs rounded-full border border-outline-variant w-64 md:w-96 focus-within:border-primary focus-within:ring-1 focus-within:ring-primary transition-all">
+<span class="material-symbols-outlined text-secondary text-[20px]">search</span>
+<input class="bg-transparent border-none focus:ring-0 w-full font-body-md text-body-md text-on-surface placeholder:text-secondary p-0 h-8" placeholder="Search employees..." type="text"/>
+</div>
+<div class="flex items-center gap-sm">
+<button class="p-sm text-on-surface-variant hover:bg-secondary-container rounded-full transition-transform active:scale-95" onclick="window.location.href='../notifications_follow_up_hub/code.html'">
+<span class="material-symbols-outlined">notifications</span>
+</button>
+<button class="p-sm text-on-surface-variant hover:bg-secondary-container rounded-full transition-transform active:scale-95" onclick="window.location.href='../hr_control_center_dashboard/code.html'">
+<span class="material-symbols-outlined">account_circle</span>
+</button>
+</div>
+</header>
+<!-- Main Canvas -->
+<main class="flex-1 mt-16 p-margin-mobile md:p-margin-desktop max-w-max-width mx-auto w-full flex flex-col gap-lg">
+<!-- Breadcrumb -->
+<nav class="flex items-center gap-xs text-label-sm text-secondary" aria-label="Breadcrumb">
+<a class="hover:text-primary transition-colors" href="../employee_dashboard_full_navigation/code.html">Employees</a>
+<span class="material-symbols-outlined text-[16px]">chevron_right</span>
+<span class="text-on-surface font-medium">Employee Profile</span>
+</nav>
+<!-- Profile header -->
+<div class="bg-surface-container-lowest rounded-xl p-lg soft-shadow border border-outline-variant md:p-xl flex flex-col md:flex-row gap-lg items-start md:items-center justify-between">
+<div class="flex flex-col sm:flex-row gap-md items-start sm:items-center">
+<img class="w-20 h-20 rounded-full border-2 border-primary object-cover" alt="Employee avatar" data-alt="Professional corporate headshot portrait of a male gym shift lead named Omar Farouk, short dark hair, wearing a clean green athletic polo shirt, bright modern gym background, high-key lighting, corporate aesthetic." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAIfHF5FHauJwwnRX9njSF_V3gqV0IlE87RzFEOVy9KfIISULvtXCv6Luel0REeVwwcve5iKCzNQfqq0u84jszB-W0SKcFncKtmwg2aRhQzQvgNz3ZJ69ExxzjfJDmv6w9I7qlOpcbNYfgKUjXHKv9DaChXre5p4PEQWizHqQtKDvWGFERjsjYsUVstaps-OUsc1f8ivFHxP3YojrvMeRKYJS-iM46pSEU0BxyIaF4T3Hv2o-DdOgoh"/>
+<div>
+<h2 class="font-headline-md text-headline-md text-on-surface">Omar Farouk</h2>
+<p class="font-body-md text-body-md text-secondary mt-xs">Senior Trainer - Downtown Gym</p>
+<div class="flex items-center gap-sm mt-sm">
+<span class="inline-flex items-center gap-xs bg-primary-container/40 text-on-primary-container px-md py-xs rounded-full font-label-md text-label-md">
+<span class="material-symbols-outlined text-[16px]">verified</span>Active Employee
+</span>
+<span class="inline-flex items-center gap-xs bg-surface-container-high text-on-surface-variant px-md py-xs rounded-full font-label-md text-label-md">
+<span class="material-symbols-outlined text-[16px]">qr_code_2</span><span id="emp-id-display">REV-EMP-000124</span>
+</span>
+</div>
+</div>
+</div>
+<div class="flex flex-wrap gap-sm">
+<button class="bg-primary text-on-primary py-sm px-md rounded-lg font-label-md text-label-md flex items-center gap-xs hover:bg-on-primary-fixed-variant transition-colors shadow-sm cursor-pointer active:scale-95 duration-200" onclick="openTransferModal()">
+<span class="material-symbols-outlined text-[18px]">swap_horiz</span>Transfer
+</button>
+<button class="bg-surface border border-outline-variant text-on-surface py-sm px-md rounded-lg font-label-md text-label-md flex items-center gap-xs hover:bg-surface-container-high transition-colors soft-shadow" onclick="openPayrollSheet()">
+<span class="material-symbols-outlined text-[18px]">receipt_long</span>Payroll Sheet
+</button>
+<button class="bg-surface border border-outline-variant text-on-surface py-sm px-md rounded-lg font-label-md text-label-md flex items-center gap-xs hover:bg-surface-container-high transition-colors soft-shadow" onclick="openSeparationModal()">
+<span class="material-symbols-outlined text-[18px]">person_off</span>Separate
+</button>
+</div>
+</div>
+<!-- Detail chips -->
+<div class="grid grid-cols-2 lg:grid-cols-4 gap-md">
+<div class="bg-surface-container-lowest rounded-xl p-lg soft-shadow border border-outline-variant">
+<p class="font-label-sm text-label-sm text-secondary uppercase tracking-wider">Position</p>
+<p class="font-body-lg text-body-lg font-semibold text-on-surface mt-xs">Senior Trainer</p>
+<p class="font-label-md text-label-md text-secondary mt-xs">Department: Training</p>
+</div>
+<div class="bg-surface-container-lowest rounded-xl p-lg soft-shadow border border-outline-variant">
+<p class="font-label-sm text-label-sm text-secondary uppercase tracking-wider">Gym / Branch</p>
+<p class="font-body-lg text-body-lg font-semibold text-on-surface mt-xs">Downtown Gym</p>
+<p class="font-label-md text-label-md text-secondary mt-xs">+20 100 555 0190</p>
+</div>
+<div class="bg-surface-container-lowest rounded-xl p-lg soft-shadow border border-outline-variant">
+<p class="font-label-sm text-label-sm text-secondary uppercase tracking-wider">Manager</p>
+<p class="font-body-lg text-body-lg font-semibold text-on-surface mt-xs">Sara Khalil</p>
+<p class="font-label-md text-label-md text-secondary mt-xs">Branch Manager</p>
+</div>
+<div class="bg-surface-container-lowest rounded-xl p-lg soft-shadow border border-outline-variant">
+<p class="font-label-sm text-label-sm text-secondary uppercase tracking-wider">Joining Date</p>
+<p class="font-body-lg text-body-lg font-semibold text-on-surface mt-xs">14 Mar 2021</p>
+<p class="font-label-md text-label-md text-secondary mt-xs">Employment Status: Active</p>
+</div>
+</div>
+<!-- Tabs -->
+<div class="bg-surface-container-lowest rounded-xl soft-shadow border border-outline-variant overflow-hidden">
+<div class="flex items-center gap-md px-lg pt-lg pb-0 tabs-scroll overflow-x-auto">
+<button class="tab-btn active px-md pb-md font-label-md text-label-md whitespace-nowrap" data-tab="tab-personal">Personal Information</button>
+<button class="tab-btn px-md pb-md font-label-md text-label-md whitespace-nowrap" data-tab="tab-employment">Employment</button>
+<button class="tab-btn px-md pb-md font-label-md text-label-md whitespace-nowrap" data-tab="tab-documents">Documents</button>
+<button class="tab-btn px-md pb-md font-label-md text-label-md whitespace-nowrap" data-tab="tab-compensation">Compensation</button>
+<button class="tab-btn px-md pb-md font-label-md text-label-md whitespace-nowrap" data-tab="tab-attendance">Attendance</button>
+<button class="tab-btn px-md pb-md font-label-md text-label-md whitespace-nowrap" data-tab="tab-history">Employee History</button>
+</div>
+<div class="p-lg">
+<!-- TAB: Personal -->
+<div class="tab-panel active" id="tab-personal">
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-lg">
+<div class="bg-surface-container-low rounded-xl p-lg border border-outline-variant">
+<h4 class="font-title-lg text-title-lg text-on-surface mb-md">Personal Information</h4>
+<div class="grid grid-cols-1 sm:grid-cols-2 gap-md">
+<div><p class="font-label-sm text-label-sm text-secondary">Full Name</p><p class="font-body-lg text-body-lg text-on-surface font-medium">Omar Ahmed Farouk</p></div>
+<div><p class="font-label-sm text-label-sm text-secondary">National ID</p><p class="font-body-lg text-body-lg text-on-surface font-medium">294-1017-5483-119</p></div>
+<div><p class="font-label-sm text-label-sm text-secondary">Date of Birth</p><p class="font-body-lg text-body-lg text-on-surface font-medium">12 Jun 1995</p></div>
+<div><p class="font-label-sm text-label-sm text-secondary">Gender</p><p class="font-body-lg text-body-lg text-on-surface font-medium">Male</p></div>
+<div><p class="font-label-sm text-label-sm text-secondary">Email</p><p class="font-body-lg text-body-lg text-on-surface font-medium">omar.farouk@revive.fit</p></div>
+<div><p class="font-label-sm text-label-sm text-secondary">Phone</p><p class="font-body-lg text-body-lg text-on-surface font-medium">+20 100 555 0190</p></div>
+<div><p class="font-label-sm text-label-sm text-secondary">Emergency Contact</p><p class="font-body-lg text-body-lg text-on-surface font-medium">Mona Farouk - +20 109 222 4411</p></div>
+<div><p class="font-label-sm text-label-sm text-secondary">Marital Status</p><p class="font-body-lg text-body-lg text-on-surface font-medium">Married</p></div>
+</div>
+</div>
+<div class="flex flex-col gap-md">
+<div class="bg-surface-container-low rounded-xl p-lg border border-outline-variant">
+<div class="flex items-center justify-between">
+<h4 class="font-title-lg text-title-lg text-on-surface">Employment Status</h4>
+<span class="inline-flex items-center gap-xs bg-primary-container/40 text-on-primary-container px-md py-xs rounded-full font-label-md text-label-md">Active</span>
+</div>
+<p class="font-body-md text-body-md text-secondary mt-sm">Profile is the single source of truth. Employee ID is permanent and never changes.</p>
+</div>
+<div class="bg-primary-container/30 border border-primary-container rounded-xl p-lg">
+<div class="flex items-center gap-md">
+<span class="material-symbols-outlined text-primary text-[24px]">info</span>
+<p class="font-body-md text-body-md text-on-primary-container">When an employee is reactivated, the system reuses this existing profile via National ID instead of creating a duplicate record.</p>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- TAB: Employment -->
+<div class="tab-panel" id="tab-employment">
+<div class="bg-surface-container-low rounded-xl p-lg border border-outline-variant">
+<h4 class="font-title-lg text-title-lg text-on-surface mb-md">Employment Information</h4>
+<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-md">
+<div><p class="font-label-sm text-label-sm text-secondary">Employee ID</p><p class="font-body-lg text-body-lg text-on-surface font-medium">REV-EMP-000124</p></div>
+<div><p class="font-label-sm text-label-sm text-secondary">Position</p><p class="font-body-lg text-body-lg text-on-surface font-medium">Senior Trainer</p></div>
+<div><p class="font-label-sm text-label-sm text-secondary">Department</p><p class="font-body-lg text-body-lg text-on-surface font-medium">Training / Floor</p></div>
+<div><p class="font-label-sm text-label-sm text-secondary">Gym / Branch</p><p class="font-body-lg text-body-lg text-on-surface font-medium">Downtown Gym</p></div>
+<div><p class="font-label-sm text-label-sm text-secondary">Manager</p><p class="font-body-lg text-body-lg text-on-surface font-medium">Sara Khalil (Branch Manager)</p></div>
+<div><p class="font-label-sm text-label-sm text-secondary">Joining Date</p><p class="font-body-lg text-body-lg text-on-surface font-medium">14 Mar 2021</p></div>
+<div><p class="font-label-sm text-label-sm text-secondary">Contract Type</p><p class="font-body-lg text-body-lg text-on-surface font-medium">Full-time - Permanent</p></div>
+<div><p class="font-label-sm text-label-sm text-secondary">Current Shift</p><p class="font-body-lg text-body-lg text-on-surface font-medium">Morning (10:00 - 18:00)</p></div>
+<div><p class="font-label-sm text-label-sm text-secondary">Cost Center</p><p class="font-body-lg text-body-lg text-on-surface font-medium">DT-GYM-01</p></div>
+</div>
+</div>
+</div>
+<!-- TAB: Documents -->
+<div class="tab-panel" id="tab-documents">
+<div class="grid grid-cols-1 sm:grid-cols-2 gap-md">
+<div class="bg-surface-container-low rounded-xl p-lg border border-outline-variant flex items-start justify-between gap-md">
+<div class="flex items-center gap-md">
+<span class="material-symbols-outlined text-primary text-[32px]">badge</span>
+<div>
+<p class="font-body-lg text-body-lg text-on-surface font-semibold">National ID Scan</p>
+<p class="font-label-md text-label-md text-secondary mt-xs">national_id_omar_farouk.pdf - 1.2 MB</p>
+</div>
+</div>
+<button class="p-sm rounded-lg bg-surface border border-outline-variant hover:bg-surface-container-high transition-colors">
+<span class="material-symbols-outlined text-[18px] text-on-surface-variant">download</span>
+</button>
+</div>
+<div class="bg-surface-container-low rounded-xl p-lg border border-outline-variant flex items-start justify-between gap-md">
+<div class="flex items-center gap-md">
+<span class="material-symbols-outlined text-primary text-[32px]">description</span>
+<div>
+<p class="font-body-lg text-body-lg text-on-surface font-semibold">Employment Contract Scan</p>
+<p class="font-label-md text-label-md text-secondary mt-xs">contract_omar_farouk_2021.pdf - 840 KB</p>
+</div>
+</div>
+<button class="p-sm rounded-lg bg-surface border border-outline-variant hover:bg-surface-container-high transition-colors">
+<span class="material-symbols-outlined text-[18px] text-on-surface-variant">download</span>
+</button>
+</div>
+<div class="bg-surface-container-low rounded-xl p-lg border border-outline-variant flex items-start justify-between gap-md">
+<div class="flex items-center gap-md">
+<span class="material-symbols-outlined text-primary text-[32px]">add_circle</span>
+<div>
+<p class="font-body-lg text-body-lg text-on-surface font-semibold">Updated Contract (2024)</p>
+<p class="font-label-md text-label-md text-secondary mt-xs">contract_renewal_2024.pdf - 876 KB</p>
+</div>
+</div>
+<button class="p-sm rounded-lg bg-surface border border-outline-variant hover:bg-surface-container-high transition-colors">
+<span class="material-symbols-outlined text-[18px] text-on-surface-variant">download</span>
+</button>
+</div>
+<div class="bg-surface-container-low rounded-xl p-lg border border-outline-variant flex items-start justify-between gap-md">
+<div class="flex items-center gap-md">
+<span class="material-symbols-outlined text-primary text-[32px]">upload_file</span>
+<div>
+<p class="font-body-lg text-body-lg text-on-surface font-semibold">Upload New Document</p>
+<p class="font-label-md text-label-md text-secondary mt-xs">PNG, PDF or JPEG - max 5 MB</p>
+</div>
+</div>
+<button class="p-sm rounded-lg bg-surface border border-outline-variant hover:bg-surface-container-high transition-colors">
+<span class="material-symbols-outlined text-[18px] text-on-surface-variant">upload</span>
+</button>
+</div>
+</div>
+</div>
+<!-- TAB: Compensation -->
+<div class="tab-panel" id="tab-compensation">
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-md">
+<div class="bg-surface-container-low rounded-xl p-lg border border-outline-variant">
+<h4 class="font-title-lg text-title-lg text-on-surface mb-md">Current Compensation</h4>
+<div class="flex items-end justify-between">
+<div>
+<p class="font-label-sm text-label-sm text-secondary">Current Salary</p>
+<p class="font-display-lg text-display-lg text-primary">EGP 12,500</p>
+</div>
+<div class="flex flex-col gap-sm">
+<span class="inline-flex items-center gap-xs bg-primary-container/40 text-on-primary-container px-md py-xs rounded-full font-label-md text-label-md">Annual Increase: +8%</span>
+<span class="inline-flex items-center gap-xs bg-surface-container-high text-on-surface-variant px-md py-xs rounded-full font-label-md text-label-md">Bonuses FY2025: EGP 4,200</span>
+</div>
+</div>
+</div>
+<div class="bg-surface-container-low rounded-xl p-lg border border-outline-variant">
+<h4 class="font-title-lg text-title-lg text-on-surface mb-md">Salary History</h4>
+<div class="space-y-md">
+<div class="flex items-center justify-between py-sm border-b border-outline-variant">
+<div><p class="font-body-md text-body-md font-medium text-on-surface">Senior Trainer - Current</p><p class="font-label-md text-label-md text-secondary">Jan 2025 onward</p></div>
+<p class="font-body-lg text-body-lg font-semibold text-on-surface">EGP 12,500</p>
+</div>
+<div class="flex items-center justify-between py-sm border-b border-outline-variant">
+<div><p class="font-body-md text-body-md font-medium text-on-surface">Trainer</p><p class="font-label-md text-label-md text-secondary">Mar 2023 - Dec 2024</p></div>
+<p class="font-body-lg text-body-lg font-semibold text-on-surface">EGP 9,000</p>
+</div>
+<div class="flex items-center justify-between py-sm border-b border-outline-variant">
+<div><p class="font-body-md text-body-md font-medium text-on-surface">Junior Trainer</p><p class="font-label-md text-label-md text-secondary">Mar 2021 - Feb 2023</p></div>
+<p class="font-body-lg text-body-lg font-semibold text-on-surface">EGP 8,000</p>
+</div>
+<div class="flex items-center justify-between py-sm">
+<div><p class="font-body-md text-body-md font-medium text-on-surface">Prior - Adjusted</p><p class="font-label-md text-label-md text-secondary">Recorded 8,000 - 9,000 on promotion</p></div>
+<p class="font-body-lg text-body-lg font-semibold text-on-surface">EGP 8,000</p>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- TAB: Attendance -->
+<div class="tab-panel" id="tab-attendance">
+<div class="bg-surface-container-low rounded-xl p-lg border border-outline-variant">
+<div class="flex items-center justify-between mb-md">
+<h4 class="font-title-lg text-title-lg text-on-surface">Attendance Record - October 2026</h4>
+<div class="flex gap-sm">
+<span class="inline-flex items-center gap-xs bg-primary-container/40 text-on-primary-container px-md py-xs rounded-full font-label-md text-label-md">On Time: 15</span>
+<span class="inline-flex items-center gap-xs bg-error-container text-on-error-container px-md py-xs rounded-full font-label-md text-label-md">Late: 2</span>
+</div>
+</div>
+<div class="overflow-x-auto">
+<table class="w-full text-left border-collapse min-w-[640px]">
+<thead>
+<tr class="border-b border-outline-variant">
+<th class="py-sm px-md font-label-sm text-label-sm text-secondary uppercase tracking-wider">Date</th>
+<th class="py-sm px-md font-label-sm text-label-sm text-secondary uppercase tracking-wider">Shift</th>
+<th class="py-sm px-md font-label-sm text-label-sm text-secondary uppercase tracking-wider">Check-in</th>
+<th class="py-sm px-md font-label-sm text-label-sm text-secondary uppercase tracking-wider">Check-out</th>
+<th class="py-sm px-md font-label-sm text-label-sm text-secondary uppercase tracking-wider">Result</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-outline-variant/60">
+<tr>
+<td class="py-sm px-md font-body-md text-on-surface">Sat 17 Oct</td>
+<td class="py-sm px-md font-body-md text-on-surface">10:00 - 18:00</td>
+<td class="py-sm px-md font-body-md text-on-surface">09:58</td>
+<td class="py-sm px-md font-body-md text-on-surface">18:02</td>
+<td class="py-sm px-md"><span class="inline-flex bg-primary-container/40 text-on-primary-container px-md py-xs rounded-full font-label-md text-label-md">On Time</span></td>
+</tr>
+<tr>
+<td class="py-sm px-md font-body-md text-on-surface">Sun 18 Oct</td>
+<td class="py-sm px-md font-body-md text-on-surface">10:00 - 18:00</td>
+<td class="py-sm px-md font-body-md text-on-surface">10:17</td>
+<td class="py-sm px-md font-body-md text-on-surface">18:00</td>
+<td class="py-sm px-md"><span class="inline-flex bg-error-container text-on-error-container px-md py-xs rounded-full font-label-md text-label-md">Late</span></td>
+</tr>
+<tr>
+<td class="py-sm px-md font-body-md text-on-surface">Mon 19 Oct</td>
+<td class="py-sm px-md font-body-md text-on-surface">14:00 - 22:00</td>
+<td class="py-sm px-md font-body-md text-on-surface">13:58</td>
+<td class="py-sm px-md font-body-md text-on-surface">22:05</td>
+<td class="py-sm px-md"><span class="inline-flex bg-primary-container/40 text-on-primary-container px-md py-xs rounded-full font-label-md text-label-md">On Time</span></td>
+</tr>
+<tr>
+<td class="py-sm px-md font-body-md text-on-surface">Tue 20 Oct</td>
+<td class="py-sm px-md font-body-md text-on-surface">14:00 - 22:00</td>
+<td class="py-sm px-md font-body-md text-on-surface">14:12</td>
+<td class="py-sm px-md font-body-md text-on-surface">21:47</td>
+<td class="py-sm px-md"><span class="inline-flex bg-error-container text-on-error-container px-md py-xs rounded-full font-label-md text-label-md">Late</span></td>
+</tr>
+<tr>
+<td class="py-sm px-md font-body-md text-on-surface">Wed 21 Oct</td>
+<td class="py-sm px-md font-body-md text-on-surface">14:00 - 22:00</td>
+<td class="py-sm px-md font-body-md text-on-surface">14:00</td>
+<td class="py-sm px-md font-body-md text-on-surface">17:30</td>
+<td class="py-sm px-md"><span class="inline-flex bg-surface-container-high text-on-surface-variant px-md py-xs rounded-full font-label-md text-label-md">Early Check-out</span></td>
+</tr>
+<tr>
+<td class="py-sm px-md font-body-md text-on-surface">Thu 22 Oct</td>
+<td class="py-sm px-md font-body-md text-on-surface">14:00 - 22:00</td>
+<td class="py-sm px-md font-body-md text-on-surface">13:55</td>
+<td class="py-sm px-md font-body-md text-on-surface">18:25</td>
+<td class="py-sm px-md"><span class="inline-flex bg-primary-fixed-dim/30 text-on-primary-fixed px-md py-xs rounded-full font-label-md text-label-md">Overtime</span></td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+</div>
+<!-- TAB: History -->
+<div class="tab-panel" id="tab-history">
+<div class="bg-surface-container-low rounded-xl p-lg border border-outline-variant">
+<div class="flex items-center justify-between mb-md">
+<h4 class="font-title-lg text-title-lg text-on-surface">Employee History</h4>
+<span class="inline-flex items-center gap-xs bg-surface-container-high text-on-surface-variant px-md py-xs rounded-full font-label-md text-label-md">Every change is logged</span>
+</div>
+<div class="relative pl-lg border-l-2 border-outline-variant space-y-md">
+<div class="relative">
+<span class="absolute -left-[26px] w-4 h-4 rounded-full bg-primary border-2 border-surface-container-lowest"></span>
+<div class="bg-surface-container-lowest rounded-lg border border-outline-variant p-md">
+<div class="flex items-center justify-between">
+<p class="font-body-md text-body-md font-semibold text-on-surface">Promotion: Trainer → Senior Trainer</p>
+<span class="font-label-md text-label-md text-secondary">Mar 2023</span>
+</div>
+<p class="font-body-md text-body-md text-secondary mt-xs">Salary updated by HR: EGP 8,000 → EGP 9,000</p>
+</div>
+</div>
+<div class="relative">
+<span class="absolute -left-[26px] w-4 h-4 rounded-full bg-primary border-2 border-surface-container-lowest"></span>
+<div class="bg-surface-container-lowest rounded-lg border border-outline-variant p-md">
+<div class="flex items-center justify-between">
+<p class="font-body-md text-body-md font-semibold text-on-surface">Promotion: Junior Trainer → Trainer</p>
+<span class="font-label-md text-label-md text-secondary">Feb 2023</span>
+</div>
+<p class="font-body-md text-body-md text-secondary mt-xs">Position updated within Downtown Gym.</p>
+</div>
+</div>
+<div class="relative">
+<span class="absolute -left-[26px] w-4 h-4 rounded-full bg-primary border-2 border-surface-container-lowest"></span>
+<div class="bg-surface-container-lowest rounded-lg border border-outline-variant p-md">
+<div class="flex items-center justify-between">
+<p class="font-body-md text-body-md font-semibold text-on-surface">Hired via Recruitment Pipeline</p>
+<span class="font-label-md text-label-md text-secondary">14 Mar 2021</span>
+</div>
+<p class="font-body-md text-body-md text-secondary mt-xs">Candidate accepted and converted to employee. Profile REV-EMP-000124 created.</p>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</main>
+</div>
+<!-- Transfer Modal -->
+<div class="fixed inset-0 z-50 hidden items-center justify-center p-md" id="transfer-modal">
+<div class="absolute inset-0 bg-black/40" onclick="closeTransferModal()"></div>
+<div class="relative bg-surface-container-lowest rounded-xl shadow-xl w-full max-w-lg p-lg flex flex-col gap-md max-h-[90vh] overflow-y-auto">
+<div class="flex items-center justify-between">
+<h3 class="font-title-lg text-title-lg text-on-surface">Transfer Employee</h3>
+<button class="p-sm text-on-surface-variant hover:bg-surface-container-high rounded-full" onclick="closeTransferModal()"><span class="material-symbols-outlined">close</span></button>
+</div>
+<p class="font-body-md text-body-md text-secondary">Employee ID <span class="font-semibold text-on-surface">REV-EMP-000124</span> keeps its history. Previous gym, position, and salary changes remain logged.</p>
+<div class="flex flex-col gap-md">
+<label class="flex flex-col gap-xs">
+<span class="font-label-md text-label-md text-on-surface-variant">New Gym / Branch</span>
+<select class="bg-surface border border-outline-variant rounded-lg px-md py-sm font-body-md">
+<option>Uptown Gym</option>
+<option>Westside Gym</option>
+<option>Downtown Gym (current)</option>
+</select>
+</label>
+<label class="flex flex-col gap-xs">
+<span class="font-label-md text-label-md text-on-surface-variant">New Position</span>
+<select class="bg-surface border border-outline-variant rounded-lg px-md py-sm font-body-md">
+<option>Senior Trainer (current)</option>
+<option>Head Trainer</option>
+<option>Gym Floor Supervisor</option>
+</select>
+</label>
+<label class="flex flex-col gap-xs">
+<span class="font-label-md text-label-md text-on-surface-variant">New Manager</span>
+<select class="bg-surface border border-outline-variant rounded-lg px-md py-sm font-body-md">
+<option>Auto-assigned by gym</option>
+<option>Sara Khalil (current)</option>
+<option>Dalia Mansour</option>
+</select>
+</label>
+<label class="flex flex-col gap-xs">
+<span class="font-label-md text-label-md text-on-surface-variant">Effective Date</span>
+<input class="bg-surface border border-outline-variant rounded-lg px-md py-sm font-body-md" type="date" value="2026-11-01"/>
+</label>
+</div>
+<div class="flex items-center gap-sm justify-between mt-xs">
+<button class="bg-surface border border-outline-variant text-on-surface py-sm px-md rounded-lg font-label-md text-label-md hover:bg-surface-container-high" onclick="closeTransferModal()">Cancel</button>
+<button class="bg-primary text-on-primary py-sm px-md rounded-lg font-label-md text-label-md hover:bg-on-primary-fixed-variant flex items-center gap-xs" onclick="confirmTransfer()">
+<span class="material-symbols-outlined text-[18px]">how_to_reg</span>Confirm Transfer
+</button>
+</div>
+</div>
+</div>
+<!-- Separation Modal -->
+<div class="fixed inset-0 z-50 hidden items-center justify-center p-md" id="separation-modal">
+<div class="absolute inset-0 bg-black/40" onclick="closeSeparationModal()"></div>
+<div class="relative bg-surface-container-lowest rounded-xl shadow-xl w-full max-w-md p-lg flex flex-col gap-md">
+<div class="flex items-center justify-between">
+<h3 class="font-title-lg text-title-lg text-on-surface">End Employment</h3>
+<button class="p-sm text-on-surface-variant hover:bg-surface-container-high rounded-full" onclick="closeSeparationModal()"><span class="material-symbols-outlined">close</span></button>
+</div>
+<p class="font-body-md text-body-md text-secondary">This marks Omar Farouk as <span class="font-semibold text-on-surface">Former Employee</span>. The profile is never deleted and can be reactivated later using the same National ID.</p>
+<label class="flex flex-col gap-xs">
+<span class="font-label-md text-label-md text-on-surface-variant">Reason</span>
+<select class="bg-surface border border-outline-variant rounded-lg px-md py-sm font-body-md">
+<option>Resignation</option>
+<option>Contract End</option>
+<option>Termination</option>
+<option>Mutual Agreement</option>
+</select>
+</label>
+<div class="flex items-center gap-sm justify-between mt-xs">
+<button class="bg-surface border border-outline-variant text-on-surface py-sm px-md rounded-lg font-label-md text-label-md hover:bg-surface-container-high" onclick="closeSeparationModal()">Cancel</button>
+<button class="bg-error text-on-error py-sm px-md rounded-lg font-label-md text-label-md hover:opacity-90" onclick="confirmSeparation()">Confirm Separation</button>
+</div>
+</div>
+</div>
+<!-- Rehire Toast -->
+<div class="fixed bottom-md right-md z-50 hidden items-center gap-sm bg-on-surface text-surface px-md py-sm rounded-lg shadow-lg" id="rehire-toast">
+<span class="material-symbols-outlined text-[20px]">person_add</span>
+<span class="font-body-md text-body-md">Profile REV-EMP-000124 reused - National ID matched (no duplicate created).</span>
+</div>
+<script>
+        (function () {
+            'use strict';
+
+            document.querySelectorAll('.tab-btn').forEach(function (btn) {
+                btn.addEventListener('click', function () {
+                    document.querySelectorAll('.tab-btn').forEach(function (b) { b.classList.remove('active'); });
+                    btn.classList.add('active');
+                    document.querySelectorAll('.tab-panel').forEach(function (p) { p.classList.remove('active'); });
+                    document.getElementById(btn.getAttribute('data-tab')).classList.add('active');
+                });
+            });
+
+            window.openTransferModal = function () {
+                document.getElementById('transfer-modal').classList.replace('hidden', 'flex');
+            };
+            window.closeTransferModal = function () {
+                document.getElementById('transfer-modal').classList.replace('flex', 'hidden');
+            };
+            window.confirmTransfer = function () {
+                closeTransferModal();
+                var toast = document.getElementById('rehire-toast');
+                toast.querySelector('span:last-of-type').textContent = 'Transfer recorded - Employee ID REV-EMP-000124 kept, full history preserved.';
+                toast.classList.replace('hidden', 'flex');
+                setTimeout(function () { toast.classList.replace('flex', 'hidden'); }, 3500);
+            };
+
+            window.openSeparationModal = function () {
+                document.getElementById('separation-modal').classList.replace('hidden', 'flex');
+            };
+            window.closeSeparationModal = function () {
+                document.getElementById('separation-modal').classList.replace('flex', 'hidden');
+            };
+            window.confirmSeparation = function () {
+                closeSeparationModal();
+                var chip = document.querySelector('#emp-id-display').parentElement.previousElementSibling;
+                var statusChip = document.querySelector('#emp-id-display').closest('.flex').children[0];
+                statusChip.classList.remove('bg-primary-container\/40', 'text-on-primary-container');
+                statusChip.classList.add('bg-surface-container-high', 'text-on-surface-variant');
+                statusChip.querySelector('span:last-of-type').textContent = 'Former Employee';
+                var toast = document.getElementById('rehire-toast');
+                toast.querySelector('span:last-of-type').textContent = 'Omar Farouk marked as Former Employee. Profile kept for future reactivation.';
+                toast.classList.replace('hidden', 'flex');
+                setTimeout(function () { toast.classList.replace('flex', 'hidden'); }, 3500);
+            };
+
+            window.openPayrollSheet = function () {
+                window.location.href = '../employee_payroll_sheet/code.html';
+            };
+        })();
+    </script>
+</body>
+</html>

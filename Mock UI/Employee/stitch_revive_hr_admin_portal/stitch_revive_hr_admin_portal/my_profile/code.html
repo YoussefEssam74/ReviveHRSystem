@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Revive HR - My Profile</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+          darkMode: "class",
+          theme: {
+            extend: {
+              "colors": {
+                      "on-background": "#191c1e",
+                      "on-error": "#ffffff",
+                      "outline": "#6c7a71",
+                      "status-error": "#ef4444",
+                      "primary-fixed": "#6ffbbe",
+                      "surface": "#f7f9fb",
+                      "on-primary": "#ffffff",
+                      "surface-container-lowest": "#ffffff",
+                      "secondary": "#555f6f",
+                      "error-container": "#ffdad6",
+                      "surface-container-high": "#e6e8ea",
+                      "inverse-primary": "#4edea3",
+                      "tertiary-fixed-dim": "#81d8ad",
+                      "outline-variant": "#bbcabf",
+                      "secondary-container": "#d6e0f3",
+                      "primary-container": "#10b981",
+                      "status-warning": "#f59e0b",
+                      "surface-tint": "#006c49",
+                      "secondary-fixed": "#d9e3f6",
+                      "on-surface": "#191c1e",
+                      "on-secondary": "#ffffff",
+                      "on-secondary-container": "#596373",
+                      "status-info": "#00a4a6",
+                      "on-secondary-fixed": "#121c2a",
+                      "inverse-on-surface": "#eff1f3",
+                      "surface-bright": "#f7f9fb",
+                      "surface-container-low": "#f2f4f6",
+                      "background": "#f7f9fb",
+                      "on-tertiary-container": "#00422b",
+                      "on-error-container": "#93000a",
+                      "on-secondary-fixed-variant": "#3d4756",
+                      "surface-variant": "#e0e3e5",
+                      "error": "#ba1a1a",
+                      "tertiary-container": "#5db38a",
+                      "surface-dim": "#d8dadc",
+                      "surface-container-highest": "#e0e3e5",
+                      "primary-fixed-dim": "#4edea3",
+                      "on-primary-fixed-variant": "#005236",
+                      "on-tertiary-fixed": "#002113",
+                      "tertiary": "#006c49",
+                      "on-tertiary-fixed-variant": "#005236",
+                      "inverse-surface": "#2d3133",
+                      "on-primary-fixed": "#002113",
+                      "secondary-fixed-dim": "#bdc7d9",
+                      "on-surface-variant": "#3c4a42",
+                      "surface-container": "#eceef0",
+                      "surface-white": "#ffffff",
+                      "on-primary-container": "#00422b",
+                      "border-light": "#e5e7eb",
+                      "tertiary-fixed": "#9df4c8",
+                      "on-tertiary": "#ffffff",
+                      "primary": "#006c49"
+              },
+              "borderRadius": {
+                      "DEFAULT": "0.25rem",
+                      "lg": "0.5rem",
+                      "xl": "0.75rem",
+                      "full": "9999px"
+              },
+              "spacing": {
+                      "stack-md": "1rem",
+                      "stack-sm": "0.5rem",
+                      "gutter": "1rem",
+                      "margin-mobile": "1rem",
+                      "stack-lg": "1.5rem",
+                      "margin-desktop": "2rem"
+              },
+              "fontFamily": {
+                      "headline-md": [
+                              "Inter"
+                      ],
+                      "display-lg": [
+                              "Inter"
+                      ],
+                      "headline-lg": [
+                              "Inter"
+                      ],
+                      "tabular-nums": [
+                              "Inter"
+                      ],
+                      "body-md": [
+                              "Inter"
+                      ],
+                      "label-bold": [
+                              "Inter"
+                      ],
+                      "body-lg": [
+                              "Inter"
+                      ],
+                      "headline-lg-mobile": [
+                              "Inter"
+                      ],
+                      "body-sm": [
+                              "Inter"
+                      ]
+              },
+              "fontSize": {
+                      "headline-md": [
+                              "20px",
+                              {
+                                      "lineHeight": "28px",
+                                      "fontWeight": "600"
+                              }
+                      ],
+                      "display-lg": [
+                              "36px",
+                              {
+                                      "lineHeight": "44px",
+                                      "letterSpacing": "-0.02em",
+                                      "fontWeight": "700"
+                              }
+                      ],
+                      "headline-lg": [
+                              "24px",
+                              {
+                                      "lineHeight": "32px",
+                                      "fontWeight": "600"
+                              }
+                      ],
+                      "tabular-nums": [
+                              "14px",
+                              {
+                                      "lineHeight": "20px",
+                                      "fontWeight": "400"
+                              }
+                      ],
+                      "body-md": [
+                              "14px",
+                              {
+                                      "lineHeight": "20px",
+                                      "fontWeight": "400"
+                              }
+                      ],
+                      "label-bold": [
+                              "12px",
+                              {
+                                      "lineHeight": "16px",
+                                      "letterSpacing": "0.05em",
+                                      "fontWeight": "600"
+                              }
+                      ],
+                      "body-lg": [
+                              "16px",
+                              {
+                                      "lineHeight": "24px",
+                                      "fontWeight": "400"
+                              }
+                      ],
+                      "headline-lg-mobile": [
+                              "20px",
+                              {
+                                      "lineHeight": "28px",
+                                      "fontWeight": "600"
+                              }
+                      ],
+                      "body-sm": [
+                              "13px",
+                              {
+                                      "lineHeight": "18px",
+                                      "fontWeight": "400"
+                              }
+                      ]
+              }
+      },
+          },
+        }
+    </script>
+</head>
+<body class="bg-background text-on-background font-body-md min-h-screen flex flex-col md:flex-row">
+<!-- Desktop Side Navigation -->
+<nav class="hidden md:flex flex-col gap-stack-sm p-gutter bg-secondary dark:bg-inverse-surface fixed h-full w-[280px] left-0 top-0">
+<div class="mb-8 px-4">
+<h1 class="text-headline-md font-headline-md font-black text-surface-white">Revive HR</h1>
+<p class="text-on-secondary opacity-80 text-body-sm mt-1">Nasr City Branch</p>
+</div>
+<div class="flex-1 overflow-y-auto space-y-1">
+<a class="flex items-center gap-3 px-4 py-3 text-on-secondary hover:bg-on-secondary-fixed-variant rounded-lg transition-all duration-200" href="#">
+<span class="material-symbols-outlined" data-icon="dashboard">dashboard</span>
+<span class="text-label-bold font-label-bold">Dashboard</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 bg-primary-container text-on-primary-container rounded-lg font-bold transition-all duration-200 scale-[0.98]" href="#">
+<span class="material-symbols-outlined" data-icon="person">person</span>
+<span class="text-label-bold font-label-bold">My Profile</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 text-on-secondary hover:bg-on-secondary-fixed-variant rounded-lg transition-all duration-200" href="#">
+<span class="material-symbols-outlined" data-icon="description">description</span>
+<span class="text-label-bold font-label-bold">My Documents</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 text-on-secondary hover:bg-on-secondary-fixed-variant rounded-lg transition-all duration-200" href="#">
+<span class="material-symbols-outlined" data-icon="history">history</span>
+<span class="text-label-bold font-label-bold">Employment History</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 text-on-secondary hover:bg-on-secondary-fixed-variant rounded-lg transition-all duration-200" href="#">
+<span class="material-symbols-outlined" data-icon="timer">timer</span>
+<span class="text-label-bold font-label-bold">My Attendance</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 text-on-secondary hover:bg-on-secondary-fixed-variant rounded-lg transition-all duration-200" href="#">
+<span class="material-symbols-outlined" data-icon="calendar_today">calendar_today</span>
+<span class="text-label-bold font-label-bold">My Schedule</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 text-on-secondary hover:bg-on-secondary-fixed-variant rounded-lg transition-all duration-200" href="#">
+<span class="material-symbols-outlined" data-icon="payments">payments</span>
+<span class="text-label-bold font-label-bold">My Payroll</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 text-on-secondary hover:bg-on-secondary-fixed-variant rounded-lg transition-all duration-200" href="#">
+<span class="material-symbols-outlined" data-icon="analytics">analytics</span>
+<span class="text-label-bold font-label-bold">My Evaluations</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 text-on-secondary hover:bg-on-secondary-fixed-variant rounded-lg transition-all duration-200" href="#">
+<span class="material-symbols-outlined" data-icon="pending_actions">pending_actions</span>
+<span class="text-label-bold font-label-bold">My Requests</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 text-on-secondary hover:bg-on-secondary-fixed-variant rounded-lg transition-all duration-200" href="#">
+<span class="material-symbols-outlined" data-icon="notifications">notifications</span>
+<span class="text-label-bold font-label-bold">Notifications</span>
+</a>
+</div>
+<div class="mt-auto space-y-1 pt-4 border-t border-on-secondary-fixed-variant">
+<a class="flex items-center gap-3 px-4 py-3 text-on-secondary hover:bg-on-secondary-fixed-variant rounded-lg transition-all duration-200" href="#">
+<span class="material-symbols-outlined" data-icon="group">group</span>
+<span class="text-label-bold font-label-bold">My Team</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 text-on-secondary hover:bg-on-secondary-fixed-variant rounded-lg transition-all duration-200" href="#">
+<span class="material-symbols-outlined" data-icon="rule">rule</span>
+<span class="text-label-bold font-label-bold">Team Requests</span>
+</a>
+<button class="w-full mt-4 bg-primary-container text-on-primary-container font-label-bold py-3 rounded-lg hover:bg-primary-fixed transition-colors">Clock In</button>
+</div>
+</nav>
+<!-- Mobile Top App Bar -->
+<header class="md:hidden flex justify-between items-center w-full px-margin-mobile h-16 bg-surface-white dark:bg-surface-container-lowest border-b border-light dark:border-outline-variant docked full-width top z-40">
+<div class="flex items-center gap-3">
+<button class="text-secondary hover:text-primary">
+<span class="material-symbols-outlined" data-icon="menu">menu</span>
+</button>
+<span class="text-headline-md font-headline-md font-bold text-primary dark:text-primary-fixed">Revive HR</span>
+</div>
+<div class="flex items-center gap-4">
+<button class="text-secondary hover:text-primary transition-colors hover:bg-surface-container-low p-2 rounded-full">
+<span class="material-symbols-outlined" data-icon="notifications">notifications</span>
+</button>
+<button class="text-secondary hover:text-primary transition-colors hover:bg-surface-container-low p-2 rounded-full">
+<span class="material-symbols-outlined" data-icon="settings">settings</span>
+</button>
+</div>
+</header>
+<!-- Main Content Area -->
+<main class="flex-1 md:ml-[280px] w-full max-w-[1440px] mx-auto p-margin-mobile md:p-margin-desktop mb-24 md:mb-8">
+<!-- Profile Header Card -->
+<div class="bg-surface-white border border-light rounded-xl p-stack-lg mb-stack-lg flex flex-col md:flex-row items-center md:items-start gap-stack-lg">
+<div class="relative w-32 h-32 md:w-40 md:h-40 shrink-0">
+<img class="w-full h-full object-cover rounded-full border-4 border-surface shadow-sm" data-alt="A professional headshot of a fit, friendly male fitness trainer in a clean, brightly lit modern gym environment. He is wearing a dark, branded polo shirt. The lighting is soft and flattering, highlighting a modern corporate aesthetic with subtle green accents in the background." src="https://lh3.googleusercontent.com/aida-public/AB6AXuB2ZVwoZqOWbkp20QcMYB2LwbxTLNWBC-y0bcM3OiZ3WA8HP1-36wP1Nhip_TPLpdCQcKSmsFyHLUmz_r6P6YIXmgFXhc96F2NfBSOmPD72H6ung4EBlgE3PW1SGw9i_wgd2BV2Z-4n6oSwmwVu6xoHiV6XHXqvu21BOAp5bpsMK5pKZzqfWe6-lfCw9ACdZDj-xzDZyvIAD-enV0sJL-9_4Q4Ae-wjIkRHHQhfhObgOK8FVluTXwi0RA"/>
+<button class="absolute bottom-2 right-2 bg-surface-white border border-light p-2 rounded-full shadow-sm text-secondary hover:text-primary hover:border-primary transition-colors">
+<span class="material-symbols-outlined text-[20px]" data-icon="edit">edit</span>
+</button>
+</div>
+<div class="flex-1 text-center md:text-left flex flex-col justify-center h-full pt-2">
+<div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+<div>
+<h2 class="text-display-lg font-display-lg text-on-background">Ahmed Mohamed</h2>
+<p class="text-body-lg font-body-lg text-secondary mt-1">Trainer • Revive Gym Nasr City</p>
+</div>
+<div class="flex items-center justify-center md:justify-end gap-3">
+<span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-primary-container/10 text-primary-container font-label-bold text-label-bold">
+<span class="w-2 h-2 rounded-full bg-primary-container"></span>
+                            Active
+                        </span>
+<span class="text-body-md font-body-md text-secondary border border-light px-3 py-1 rounded-full">ID: RV-00124</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Tabbed Content Area -->
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-stack-lg">
+<!-- Left Column: Editable Info -->
+<div class="lg:col-span-2 space-y-stack-lg">
+<!-- Personal Info Card -->
+<div class="bg-surface-white border border-light rounded-xl overflow-hidden">
+<div class="px-stack-lg py-stack-md border-b border-light flex justify-between items-center bg-surface-bright">
+<div>
+<span class="text-label-bold font-label-bold text-secondary tracking-wider uppercase mb-1 block">Profile Details</span>
+<h3 class="text-headline-lg font-headline-lg text-on-background">Personal Info</h3>
+</div>
+<button class="text-primary hover:text-surface-tint font-label-bold text-label-bold flex items-center gap-1">
+<span class="material-symbols-outlined text-[18px]" data-icon="edit">edit</span>
+                            Edit
+                        </button>
+</div>
+<div class="p-stack-lg grid grid-cols-1 md:grid-cols-2 gap-stack-lg">
+<div class="space-y-2">
+<label class="text-label-bold font-label-bold text-secondary">Full Name</label>
+<input class="w-full bg-surface border-light rounded-lg px-4 py-2.5 text-body-md font-body-md text-on-background focus:ring-1 focus:ring-primary focus:border-primary transition-colors" readonly="" type="text" value="Ahmed Mohamed"/>
+</div>
+<div class="space-y-2">
+<label class="text-label-bold font-label-bold text-secondary">Date of Birth</label>
+<input class="w-full bg-surface border-light rounded-lg px-4 py-2.5 text-body-md font-body-md text-on-background focus:ring-1 focus:ring-primary focus:border-primary transition-colors" readonly="" type="text" value="15 Aug 1992"/>
+</div>
+<div class="space-y-2">
+<label class="text-label-bold font-label-bold text-secondary">National ID</label>
+<input class="w-full bg-surface border-light rounded-lg px-4 py-2.5 text-body-md font-body-md text-on-background focus:ring-1 focus:ring-primary focus:border-primary transition-colors" readonly="" type="text" value="29208150102345"/>
+</div>
+<div class="space-y-2">
+<label class="text-label-bold font-label-bold text-secondary">Gender</label>
+<input class="w-full bg-surface border-light rounded-lg px-4 py-2.5 text-body-md font-body-md text-on-background focus:ring-1 focus:ring-primary focus:border-primary transition-colors" readonly="" type="text" value="Male"/>
+</div>
+</div>
+</div>
+<!-- Contact Info Card -->
+<div class="bg-surface-white border border-light rounded-xl overflow-hidden">
+<div class="px-stack-lg py-stack-md border-b border-light flex justify-between items-center bg-surface-bright">
+<div>
+<span class="text-label-bold font-label-bold text-secondary tracking-wider uppercase mb-1 block">Communication</span>
+<h3 class="text-headline-lg font-headline-lg text-on-background">Contact Info</h3>
+</div>
+<button class="text-primary hover:text-surface-tint font-label-bold text-label-bold flex items-center gap-1">
+<span class="material-symbols-outlined text-[18px]" data-icon="edit">edit</span>
+                            Edit
+                        </button>
+</div>
+<div class="p-stack-lg grid grid-cols-1 md:grid-cols-2 gap-stack-lg">
+<div class="space-y-2">
+<label class="text-label-bold font-label-bold text-secondary">Mobile Number</label>
+<input class="w-full bg-surface border-light rounded-lg px-4 py-2.5 text-body-md font-body-md text-on-background focus:ring-1 focus:ring-primary focus:border-primary transition-colors" readonly="" type="text" value="+20 100 123 4567"/>
+</div>
+<div class="space-y-2">
+<label class="text-label-bold font-label-bold text-secondary">Personal Email</label>
+<input class="w-full bg-surface border-light rounded-lg px-4 py-2.5 text-body-md font-body-md text-on-background focus:ring-1 focus:ring-primary focus:border-primary transition-colors" readonly="" type="email" value="ahmed.m@example.com"/>
+</div>
+<div class="space-y-2 md:col-span-2">
+<label class="text-label-bold font-label-bold text-secondary">Residential Address</label>
+<input class="w-full bg-surface border-light rounded-lg px-4 py-2.5 text-body-md font-body-md text-on-background focus:ring-1 focus:ring-primary focus:border-primary transition-colors" readonly="" type="text" value="45 Makram Ebeid St, Nasr City, Cairo, Egypt"/>
+</div>
+</div>
+</div>
+<!-- Emergency Contact Card -->
+<div class="bg-surface-white border border-light rounded-xl overflow-hidden">
+<div class="px-stack-lg py-stack-md border-b border-light flex justify-between items-center bg-surface-bright">
+<div>
+<span class="text-label-bold font-label-bold text-secondary tracking-wider uppercase mb-1 block">In Case of Emergency</span>
+<h3 class="text-headline-lg font-headline-lg text-on-background">Emergency Contact</h3>
+</div>
+<button class="text-primary hover:text-surface-tint font-label-bold text-label-bold flex items-center gap-1">
+<span class="material-symbols-outlined text-[18px]" data-icon="edit">edit</span>
+                            Edit
+                        </button>
+</div>
+<div class="p-stack-lg grid grid-cols-1 md:grid-cols-3 gap-stack-lg">
+<div class="space-y-2">
+<label class="text-label-bold font-label-bold text-secondary">Contact Name</label>
+<input class="w-full bg-surface border-light rounded-lg px-4 py-2.5 text-body-md font-body-md text-on-background focus:ring-1 focus:ring-primary focus:border-primary transition-colors" readonly="" type="text" value="Fatima Ali"/>
+</div>
+<div class="space-y-2">
+<label class="text-label-bold font-label-bold text-secondary">Relationship</label>
+<input class="w-full bg-surface border-light rounded-lg px-4 py-2.5 text-body-md font-body-md text-on-background focus:ring-1 focus:ring-primary focus:border-primary transition-colors" readonly="" type="text" value="Spouse"/>
+</div>
+<div class="space-y-2">
+<label class="text-label-bold font-label-bold text-secondary">Phone Number</label>
+<input class="w-full bg-surface border-light rounded-lg px-4 py-2.5 text-body-md font-body-md text-on-background focus:ring-1 focus:ring-primary focus:border-primary transition-colors" readonly="" type="text" value="+20 111 987 6543"/>
+</div>
+</div>
+</div>
+</div>
+<!-- Right Column: HR Controlled Info (Read-Only) -->
+<div class="space-y-stack-lg">
+<div class="bg-surface-container-low border border-light rounded-xl overflow-hidden relative">
+<!-- Read-only indicator overlay pattern -->
+<div class="absolute inset-0 opacity-5 bg-[repeating-linear-gradient(45deg,transparent,transparent_10px,#000_10px,#000_20px)] pointer-events-none"></div>
+<div class="px-stack-lg py-stack-md border-b border-outline-variant flex justify-between items-center bg-surface-container-high relative z-10">
+<div>
+<span class="text-label-bold font-label-bold text-on-secondary-container tracking-wider uppercase mb-1 block flex items-center gap-1">
+<span class="material-symbols-outlined text-[14px]" data-icon="lock">lock</span>
+                                HR Controlled
+                             </span>
+<h3 class="text-headline-lg font-headline-lg text-on-background">Employment Info</h3>
+</div>
+</div>
+<div class="p-stack-lg space-y-stack-md relative z-10">
+<div class="flex justify-between items-end border-b border-light pb-3">
+<div class="space-y-1">
+<span class="text-label-bold font-label-bold text-secondary block">Employee ID</span>
+<span class="text-body-lg font-body-lg text-on-background block">RV-00124</span>
+</div>
+</div>
+<div class="flex justify-between items-end border-b border-light pb-3">
+<div class="space-y-1">
+<span class="text-label-bold font-label-bold text-secondary block">Primary Location</span>
+<span class="text-body-lg font-body-lg text-on-background block">Revive Gym Nasr City</span>
+</div>
+<span class="material-symbols-outlined text-secondary" data-icon="location_on">location_on</span>
+</div>
+<div class="flex justify-between items-end border-b border-light pb-3">
+<div class="space-y-1">
+<span class="text-label-bold font-label-bold text-secondary block">Job Title / Position</span>
+<span class="text-body-lg font-body-lg text-on-background block">Senior Fitness Trainer</span>
+</div>
+<span class="material-symbols-outlined text-secondary" data-icon="work">work</span>
+</div>
+<div class="flex justify-between items-end border-b border-light pb-3">
+<div class="space-y-1">
+<span class="text-label-bold font-label-bold text-secondary block">Employment Level</span>
+<span class="text-body-lg font-body-lg text-on-background block">L3 - Senior</span>
+</div>
+<span class="material-symbols-outlined text-secondary" data-icon="stairs">stairs</span>
+</div>
+<div class="flex justify-between items-end border-b border-light pb-3">
+<div class="space-y-1">
+<span class="text-label-bold font-label-bold text-secondary block">Hire Date</span>
+<span class="text-body-lg font-body-lg text-on-background block">01 Feb 2021 (3y 2m)</span>
+</div>
+<span class="material-symbols-outlined text-secondary" data-icon="event">event</span>
+</div>
+<div class="flex justify-between items-end pt-1">
+<div class="space-y-1">
+<span class="text-label-bold font-label-bold text-secondary block">Current Status</span>
+<span class="text-body-lg font-body-lg text-on-background block flex items-center gap-2">
+<span class="w-2.5 h-2.5 rounded-full bg-primary-container"></span>
+                                    Active Full-Time
+                                </span>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</main>
+<!-- Mobile Bottom Navigation -->
+<nav class="md:hidden fixed bottom-0 w-full z-50 rounded-t-xl border-t border-light dark:border-outline-variant bg-surface-white dark:bg-surface-container-lowest shadow-lg flex justify-around items-center px-4 pb-4 pt-2">
+<a class="flex flex-col items-center justify-center text-secondary dark:text-on-surface-variant hover:text-primary active:bg-surface-container-high tap:scale-90 transition-transform duration-150 p-2 rounded-xl" href="#">
+<span class="material-symbols-outlined" data-icon="home">home</span>
+<span class="text-body-sm font-body-sm mt-1">Home</span>
+</a>
+<a class="flex flex-col items-center justify-center text-secondary dark:text-on-surface-variant hover:text-primary active:bg-surface-container-high tap:scale-90 transition-transform duration-150 p-2 rounded-xl" href="#">
+<span class="material-symbols-outlined" data-icon="calendar_month">calendar_month</span>
+<span class="text-body-sm font-body-sm mt-1">Schedule</span>
+</a>
+<a class="flex flex-col items-center justify-center text-secondary dark:text-on-surface-variant hover:text-primary active:bg-surface-container-high tap:scale-90 transition-transform duration-150 p-2 rounded-xl" href="#">
+<span class="material-symbols-outlined" data-icon="add_circle">add_circle</span>
+<span class="text-body-sm font-body-sm mt-1">Requests</span>
+</a>
+<a class="flex flex-col items-center justify-center text-secondary dark:text-on-surface-variant hover:text-primary active:bg-surface-container-high tap:scale-90 transition-transform duration-150 p-2 rounded-xl" href="#">
+<span class="material-symbols-outlined" data-icon="notifications">notifications</span>
+<span class="text-body-sm font-body-sm mt-1">Alerts</span>
+</a>
+<!-- Active Tab indicated by semantic context: Profile is accessed via Menu typically on mobile in this pattern if not a primary tab, or we highlight Menu if Profile is a sub-page of Menu -->
+<a class="flex flex-col items-center justify-center bg-secondary-container dark:bg-secondary text-primary dark:text-primary-fixed-dim rounded-2xl px-4 py-1 tap:scale-90 transition-transform duration-150" href="#">
+<span class="material-symbols-outlined" data-icon="menu">menu</span>
+<span class="text-body-sm font-body-sm mt-1">Menu</span>
+</a>
+</nav>
+</body></html>

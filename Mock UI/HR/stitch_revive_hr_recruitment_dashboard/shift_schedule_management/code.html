@@ -1,0 +1,603 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Schedules - Revive HR</title>
+<!-- Material Symbols -->
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap" rel="stylesheet"/>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .material-symbols-outlined.filled {
+            font-variation-settings: 'FILL' 1;
+        }
+    </style>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "on-secondary": "#ffffff",
+                        "surface-container-lowest": "#ffffff",
+                        "surface-container-low": "#eff4ff",
+                        "secondary": "#5c5f60",
+                        "on-primary": "#ffffff",
+                        "on-primary-fixed-variant": "#005320",
+                        "on-primary-container": "#f7fff2",
+                        "tertiary-fixed-dim": "#bcc7de",
+                        "outline": "#6e7b6c",
+                        "on-background": "#0b1c30",
+                        "primary": "#006b2c",
+                        "on-secondary-container": "#606365",
+                        "inverse-on-surface": "#eaf1ff",
+                        "surface-container": "#e5eeff",
+                        "background": "#f8f9ff",
+                        "on-tertiary-fixed-variant": "#3c475a",
+                        "inverse-surface": "#213145",
+                        "error-container": "#ffdad6",
+                        "surface-bright": "#f8f9ff",
+                        "on-error": "#ffffff",
+                        "on-tertiary-fixed": "#111c2d",
+                        "surface-variant": "#d3e4fe",
+                        "tertiary-container": "#6a758a",
+                        "on-tertiary": "#ffffff",
+                        "surface-container-highest": "#d3e4fe",
+                        "surface-container-high": "#dce9ff",
+                        "tertiary": "#515c71",
+                        "primary-fixed-dim": "#62df7d",
+                        "secondary-fixed-dim": "#c5c6c8",
+                        "on-tertiary-container": "#fefcff",
+                        "secondary-fixed": "#e1e2e4",
+                        "on-surface": "#0b1c30",
+                        "tertiary-fixed": "#d8e3fb",
+                        "primary-fixed": "#7ffc97",
+                        "on-secondary-fixed-variant": "#444749",
+                        "outline-variant": "#bdcaba",
+                        "on-error-container": "#93000a",
+                        "surface-tint": "#006e2d",
+                        "surface-dim": "#cbdbf5",
+                        "on-secondary-fixed": "#191c1e",
+                        "on-surface-variant": "#3e4a3d",
+                        "surface": "#f8f9ff",
+                        "secondary-container": "#dee0e2",
+                        "error": "#ba1a1a",
+                        "primary-container": "#00873a",
+                        "on-primary-fixed": "#002109",
+                        "inverse-primary": "#62df7d"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "sm": "8px",
+                        "gutter": "24px",
+                        "base": "4px",
+                        "max-width": "1440px",
+                        "md": "16px",
+                        "margin-mobile": "16px",
+                        "margin-desktop": "32px",
+                        "xl": "32px",
+                        "lg": "24px",
+                        "2xl": "48px",
+                        "xs": "4px"
+                    },
+                    "fontFamily": {
+                        "headline-lg-mobile": ["Inter"],
+                        "headline-lg": ["Inter"],
+                        "label-md": ["Inter"],
+                        "display-lg": ["Inter"],
+                        "body-lg": ["Inter"],
+                        "label-sm": ["Inter"],
+                        "body-md": ["Inter"],
+                        "title-lg": ["Inter"],
+                        "headline-md": ["Inter"]
+                    },
+                    "fontSize": {
+                        "headline-lg-mobile": ["24px", { "lineHeight": "32px", "fontWeight": "600" }],
+                        "headline-lg": ["32px", { "lineHeight": "40px", "letterSpacing": "-0.01em", "fontWeight": "600" }],
+                        "label-md": ["12px", { "lineHeight": "16px", "letterSpacing": "0.01em", "fontWeight": "500" }],
+                        "display-lg": ["48px", { "lineHeight": "56px", "letterSpacing": "-0.02em", "fontWeight": "700" }],
+                        "body-lg": ["16px", { "lineHeight": "24px", "fontWeight": "400" }],
+                        "label-sm": ["11px", { "lineHeight": "14px", "fontWeight": "600" }],
+                        "body-md": ["14px", { "lineHeight": "20px", "fontWeight": "400" }],
+                        "title-lg": ["20px", { "lineHeight": "28px", "fontWeight": "600" }],
+                        "headline-md": ["24px", { "lineHeight": "32px", "fontWeight": "600" }]
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-background text-on-surface font-body-md min-h-screen flex antialiased">
+<!-- Shared Component: SideNavBar -->
+<aside class="w-[280px] h-full fixed left-0 top-0 border-r border-outline-variant dark:border-outline flex flex-col py-xl bg-surface-container-lowest dark:bg-inverse-surface z-30 transition-colors duration-200 ease-in-out">
+<!-- Header / Brand -->
+<div class="px-lg mb-xl flex items-center gap-md">
+<div class="w-10 h-10 rounded-lg bg-primary-container flex items-center justify-center text-primary">
+<span class="material-symbols-outlined filled">work</span>
+</div>
+<div>
+<h1 class="text-title-lg font-title-lg font-bold text-primary dark:text-primary-fixed-dim">Revive HR</h1>
+<p class="text-label-sm font-label-sm text-on-surface-variant">Enterprise Suite</p>
+</div>
+</div>
+<!-- CTA -->
+<div class="px-lg mb-lg">
+<button class="w-full bg-primary hover:bg-surface-tint text-on-primary rounded-lg py-sm px-md flex items-center justify-center gap-sm transition-colors shadow-sm">
+<span class="material-symbols-outlined text-[18px]">add</span>
+<span class="text-label-md font-label-md">Add Employee</span>
+</button>
+</div>
+<!-- Navigation Tabs -->
+<nav class="flex-1 overflow-y-auto px-sm flex flex-col gap-xs">
+<a class="flex items-center gap-md px-md py-sm rounded-lg text-on-secondary-fixed-variant dark:text-secondary-fixed-dim hover:bg-surface-container-low dark:hover:bg-surface-container hover:text-primary dark:hover:text-primary-fixed-dim transition-colors duration-200 ease-in-out" href="#">
+<span class="material-symbols-outlined">person_search</span>
+<span class="text-label-md font-label-md">Recruitment</span>
+</a>
+<a class="flex items-center gap-md px-md py-sm rounded-lg text-on-secondary-fixed-variant dark:text-secondary-fixed-dim hover:bg-surface-container-low dark:hover:bg-surface-container hover:text-primary dark:hover:text-primary-fixed-dim transition-colors duration-200 ease-in-out" href="#">
+<span class="material-symbols-outlined">groups</span>
+<span class="text-label-md font-label-md">Employees</span>
+</a>
+<a class="flex items-center gap-md px-md py-sm rounded-lg text-on-secondary-fixed-variant dark:text-secondary-fixed-dim hover:bg-surface-container-low dark:hover:bg-surface-container hover:text-primary dark:hover:text-primary-fixed-dim transition-colors duration-200 ease-in-out" href="#">
+<span class="material-symbols-outlined">event_available</span>
+<span class="text-label-md font-label-md">Attendance</span>
+</a>
+<!-- Active Tab: Schedules -->
+<a class="flex items-center gap-md px-md py-sm rounded-lg text-primary dark:text-primary-fixed-dim font-bold border-r-4 border-primary dark:border-primary-fixed-dim bg-surface-container-low dark:bg-surface-container" href="#">
+<span class="material-symbols-outlined filled">calendar_month</span>
+<span class="text-label-md font-label-md">Schedules</span>
+</a>
+<a class="flex items-center gap-md px-md py-sm rounded-lg text-on-secondary-fixed-variant dark:text-secondary-fixed-dim hover:bg-surface-container-low dark:hover:bg-surface-container hover:text-primary dark:hover:text-primary-fixed-dim transition-colors duration-200 ease-in-out" href="#">
+<span class="material-symbols-outlined">event_busy</span>
+<span class="text-label-md font-label-md">Leave</span>
+</a>
+<a class="flex items-center gap-md px-md py-sm rounded-lg text-on-secondary-fixed-variant dark:text-secondary-fixed-dim hover:bg-surface-container-low dark:hover:bg-surface-container hover:text-primary dark:hover:text-primary-fixed-dim transition-colors duration-200 ease-in-out" href="#">
+<span class="material-symbols-outlined">assignment_late</span>
+<span class="text-label-md font-label-md">Requests</span>
+</a>
+<a class="flex items-center gap-md px-md py-sm rounded-lg text-on-secondary-fixed-variant dark:text-secondary-fixed-dim hover:bg-surface-container-low dark:hover:bg-surface-container hover:text-primary dark:hover:text-primary-fixed-dim transition-colors duration-200 ease-in-out" href="#">
+<span class="material-symbols-outlined">trending_up</span>
+<span class="text-label-md font-label-md">Performance</span>
+</a>
+<a class="flex items-center gap-md px-md py-sm rounded-lg text-on-secondary-fixed-variant dark:text-secondary-fixed-dim hover:bg-surface-container-low dark:hover:bg-surface-container hover:text-primary dark:hover:text-primary-fixed-dim transition-colors duration-200 ease-in-out" href="#">
+<span class="material-symbols-outlined">payments</span>
+<span class="text-label-md font-label-md">Payroll</span>
+</a>
+<a class="flex items-center gap-md px-md py-sm rounded-lg text-on-secondary-fixed-variant dark:text-secondary-fixed-dim hover:bg-surface-container-low dark:hover:bg-surface-container hover:text-primary dark:hover:text-primary-fixed-dim transition-colors duration-200 ease-in-out" href="#">
+<span class="material-symbols-outlined">person_off</span>
+<span class="text-label-md font-label-md">Offboarding</span>
+</a>
+<a class="flex items-center gap-md px-md py-sm rounded-lg text-on-secondary-fixed-variant dark:text-secondary-fixed-dim hover:bg-surface-container-low dark:hover:bg-surface-container hover:text-primary dark:hover:text-primary-fixed-dim transition-colors duration-200 ease-in-out" href="#">
+<span class="material-symbols-outlined">bar_chart</span>
+<span class="text-label-md font-label-md">Analytics</span>
+</a>
+<a class="flex items-center gap-md px-md py-sm rounded-lg text-on-secondary-fixed-variant dark:text-secondary-fixed-dim hover:bg-surface-container-low dark:hover:bg-surface-container hover:text-primary dark:hover:text-primary-fixed-dim transition-colors duration-200 ease-in-out" href="#">
+<span class="material-symbols-outlined">settings</span>
+<span class="text-label-md font-label-md">Settings</span>
+</a>
+</nav>
+<!-- Footer Tabs -->
+<div class="px-sm pt-md border-t border-outline-variant dark:border-outline mt-auto">
+<a class="flex items-center gap-md px-md py-sm rounded-lg text-on-secondary-fixed-variant dark:text-secondary-fixed-dim hover:bg-surface-container-low dark:hover:bg-surface-container hover:text-primary dark:hover:text-primary-fixed-dim transition-colors duration-200 ease-in-out" href="#">
+<span class="material-symbols-outlined">help</span>
+<span class="text-label-md font-label-md">Help Center</span>
+</a>
+<a class="flex items-center gap-md px-md py-sm rounded-lg text-on-secondary-fixed-variant dark:text-secondary-fixed-dim hover:bg-surface-container-low dark:hover:bg-surface-container hover:text-primary dark:hover:text-primary-fixed-dim transition-colors duration-200 ease-in-out" href="#">
+<span class="material-symbols-outlined">logout</span>
+<span class="text-label-md font-label-md">Logout</span>
+</a>
+</div>
+</aside>
+<!-- Shared Component: TopAppBar -->
+<header class="fixed top-0 right-0 w-[calc(100%-280px)] h-16 flex items-center justify-between px-margin-desktop bg-surface/80 dark:bg-on-background/80 backdrop-blur-md border-b border-outline-variant dark:border-outline shadow-sm z-20 transition-transform scale-95 active:scale-90">
+<!-- Search Bar (on_left as per JSON) -->
+<div class="flex-1 max-w-md">
+<div class="relative flex items-center">
+<span class="material-symbols-outlined absolute left-sm text-outline">search</span>
+<input class="w-full pl-xl pr-md py-sm rounded-full bg-surface-container-low border-none focus:ring-2 focus:ring-primary text-body-md font-body-md text-on-surface placeholder-secondary focus:outline-none transition-all" placeholder="Search employees, shifts..." type="text"/>
+</div>
+</div>
+<!-- Trailing Actions & Profile -->
+<div class="flex items-center gap-sm">
+<button class="w-10 h-10 flex items-center justify-center rounded-full text-on-surface-variant hover:bg-surface-container-high dark:hover:bg-surface-container-highest transition-colors">
+<span class="material-symbols-outlined">notifications</span>
+</button>
+<button class="w-10 h-10 flex items-center justify-center rounded-full text-on-surface-variant hover:bg-surface-container-high dark:hover:bg-surface-container-highest transition-colors">
+<span class="material-symbols-outlined">chat_bubble</span>
+</button>
+<button class="w-10 h-10 flex items-center justify-center rounded-full text-on-surface-variant hover:bg-surface-container-high dark:hover:bg-surface-container-highest transition-colors">
+<span class="material-symbols-outlined">help_outline</span>
+</button>
+<div class="ml-md h-8 w-px bg-outline-variant"></div>
+<button class="ml-md flex items-center gap-sm">
+<img alt="Administrator Profile" class="w-8 h-8 rounded-full object-cover border-2 border-surface-container-lowest shadow-sm" data-alt="Professional headshot of a corporate HR administrator, wearing a dark blazer over a light shirt, smiling gently against a bright, modern office background with soft lighting." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCIfjZklzJU4eURt75rWF42pl9JjqannZ_VHGSLaGk5gSFgXX-LY_Hea0xVHzL4RN7sroEoYTXoAU0M5K1ZMhTrxvG-AaXBfjdZkQVMVEfx5dEdz5vS5W5LNdLtS7SieBY0aqiMvLinZMaTq7Vc1riL52dccaiP-k-L2s4Wo5SpFtqof_FHV7omaFm6p8bFXDQFJEsBK8aWJes8bR54mMk29hhvaEQAJclRXthboqaKs1oLq5wq5O-c"/>
+</button>
+</div>
+</header>
+<!-- Main Content Area -->
+<main class="ml-[280px] mt-16 p-margin-desktop w-[calc(100%-280px)] min-h-[calc(100vh-64px)]">
+<!-- Page Header & Actions -->
+<div class="flex items-center justify-between mb-xl">
+<div>
+<h2 class="text-headline-lg font-headline-lg text-on-surface">Shift & Schedule Management</h2>
+<p class="text-body-md font-body-md text-secondary mt-xs">Manage weekly schedules, resolve conflicts, and optimize labor across locations.</p>
+</div>
+<div class="flex items-center gap-sm">
+<button class="px-md py-sm rounded-lg border border-outline-variant text-on-surface hover:bg-surface-container transition-colors flex items-center gap-xs">
+<span class="material-symbols-outlined text-[18px]">picture_as_pdf</span>
+<span class="text-label-md font-label-md">Export PDF</span>
+</button>
+<button class="px-md py-sm rounded-lg bg-surface-container-low text-primary hover:bg-surface-container transition-colors flex items-center gap-xs font-medium">
+<span class="material-symbols-outlined text-[18px]">smart_toy</span>
+<span class="text-label-md font-label-md">Auto-Schedule (AI)</span>
+</button>
+<button class="px-md py-sm rounded-lg bg-outline text-surface-container-lowest hover:bg-on-surface-variant transition-colors flex items-center gap-xs">
+<span class="material-symbols-outlined text-[18px]">publish</span>
+<span class="text-label-md font-label-md">Publish</span>
+</button>
+<button class="px-md py-sm rounded-lg bg-primary text-on-primary hover:bg-surface-tint shadow-sm transition-colors flex items-center gap-xs ml-sm">
+<span class="material-symbols-outlined text-[18px]">add</span>
+<span class="text-label-md font-label-md">New Shift</span>
+</button>
+</div>
+</div>
+<!-- Metrics Row -->
+<div class="grid grid-cols-1 md:grid-cols-3 gap-gutter mb-xl">
+<!-- Metric 1 -->
+<div class="bg-surface-container-lowest rounded-xl p-lg shadow-sm border border-outline-variant flex items-start justify-between">
+<div>
+<p class="text-label-sm font-label-sm text-secondary uppercase tracking-wider mb-xs">Total Scheduled Hours</p>
+<p class="text-display-lg font-display-lg text-on-surface">2,450</p>
+<p class="text-label-md font-label-md text-primary flex items-center mt-xs">
+<span class="material-symbols-outlined text-[14px] mr-xs">trending_up</span> +5% from last week
+                    </p>
+</div>
+<div class="w-12 h-12 rounded-full bg-surface-container-high flex items-center justify-center text-primary">
+<span class="material-symbols-outlined">schedule</span>
+</div>
+</div>
+<!-- Metric 2 -->
+<div class="bg-surface-container-lowest rounded-xl p-lg shadow-sm border border-outline-variant flex items-start justify-between">
+<div>
+<p class="text-label-sm font-label-sm text-secondary uppercase tracking-wider mb-xs">Open Shifts</p>
+<p class="text-display-lg font-display-lg text-on-surface">14</p>
+<p class="text-label-md font-label-md text-error flex items-center mt-xs">
+<span class="material-symbols-outlined text-[14px] mr-xs">warning</span> Action required
+                    </p>
+</div>
+<div class="w-12 h-12 rounded-full bg-error-container flex items-center justify-center text-error">
+<span class="material-symbols-outlined">event_busy</span>
+</div>
+</div>
+<!-- Metric 3 -->
+<div class="bg-surface-container-lowest rounded-xl p-lg shadow-sm border border-outline-variant flex items-start justify-between">
+<div>
+<p class="text-label-sm font-label-sm text-secondary uppercase tracking-wider mb-xs">Labor Cost Est.</p>
+<p class="text-display-lg font-display-lg text-on-surface">$42k</p>
+<p class="text-label-md font-label-md text-secondary flex items-center mt-xs">
+                        Within budget threshold
+                    </p>
+</div>
+<div class="w-12 h-12 rounded-full bg-surface-variant flex items-center justify-center text-on-surface-variant">
+<span class="material-symbols-outlined">payments</span>
+</div>
+</div>
+</div>
+<!-- Main Workspace (Sidebar + Calendar) -->
+<div class="grid grid-cols-12 gap-gutter h-[600px]">
+<!-- Left Panel: Context & Tools -->
+<div class="col-span-3 flex flex-col gap-lg h-full overflow-hidden">
+<!-- Filters Card -->
+<div class="bg-surface-container-lowest rounded-xl shadow-sm border border-outline-variant p-md">
+<h3 class="text-title-lg font-title-lg text-on-surface mb-sm flex items-center gap-xs">
+<span class="material-symbols-outlined">filter_list</span> Filters
+                    </h3>
+<div class="space-y-sm">
+<div>
+<label class="text-label-sm font-label-sm text-secondary block mb-xs">Location</label>
+<select class="w-full bg-surface rounded-lg border border-outline-variant text-body-md font-body-md p-sm focus:ring-primary focus:border-primary">
+<option>All Gyms</option>
+<option>Downtown Hub</option>
+<option>Westside Branch</option>
+</select>
+</div>
+<div>
+<label class="text-label-sm font-label-sm text-secondary block mb-xs">Department</label>
+<select class="w-full bg-surface rounded-lg border border-outline-variant text-body-md font-body-md p-sm focus:ring-primary focus:border-primary">
+<option>All Departments</option>
+<option>Trainers</option>
+<option>Front Desk</option>
+<option>Maintenance</option>
+</select>
+</div>
+</div>
+</div>
+<!-- Unassigned Shifts List -->
+<div class="bg-surface-container-lowest rounded-xl shadow-sm border border-outline-variant flex flex-col flex-1 overflow-hidden">
+<div class="p-md border-b border-outline-variant flex items-center justify-between bg-surface-bright">
+<h3 class="text-title-lg font-title-lg text-on-surface flex items-center gap-xs">
+<span class="material-symbols-outlined text-error">assignment_late</span> Unassigned
+                        </h3>
+<span class="bg-error-container text-error text-label-sm font-label-sm px-2 py-1 rounded-full">14</span>
+</div>
+<div class="p-sm overflow-y-auto flex-1 space-y-sm bg-background/50">
+<!-- Draggable Shift Item -->
+<div class="bg-surface-container-lowest border border-outline-variant p-sm rounded-lg cursor-grab hover:shadow-md transition-shadow">
+<div class="flex justify-between items-start mb-xs">
+<span class="text-label-sm font-label-sm font-bold text-on-surface">Front Desk - Morning</span>
+<span class="material-symbols-outlined text-secondary text-[16px]">drag_indicator</span>
+</div>
+<p class="text-label-md font-label-md text-secondary">Mon, Oct 12 • 06:00 - 14:00</p>
+<div class="mt-xs flex items-center gap-xs">
+<span class="w-2 h-2 rounded-full bg-tertiary"></span>
+<span class="text-label-sm font-label-sm text-tertiary">Downtown Hub</span>
+</div>
+</div>
+<!-- Draggable Shift Item -->
+<div class="bg-surface-container-lowest border border-outline-variant p-sm rounded-lg cursor-grab hover:shadow-md transition-shadow">
+<div class="flex justify-between items-start mb-xs">
+<span class="text-label-sm font-label-sm font-bold text-on-surface">Personal Trainer</span>
+<span class="material-symbols-outlined text-secondary text-[16px]">drag_indicator</span>
+</div>
+<p class="text-label-md font-label-md text-secondary">Tue, Oct 13 • 10:00 - 18:00</p>
+<div class="mt-xs flex items-center gap-xs">
+<span class="w-2 h-2 rounded-full bg-primary"></span>
+<span class="text-label-sm font-label-sm text-primary">Westside Branch</span>
+</div>
+</div>
+<!-- Draggable Shift Item -->
+<div class="bg-surface-container-lowest border border-outline-variant p-sm rounded-lg cursor-grab hover:shadow-md transition-shadow">
+<div class="flex justify-between items-start mb-xs">
+<span class="text-label-sm font-label-sm font-bold text-on-surface">Maintenance Lead</span>
+<span class="material-symbols-outlined text-secondary text-[16px]">drag_indicator</span>
+</div>
+<p class="text-label-md font-label-md text-secondary">Wed, Oct 14 • 22:00 - 06:00</p>
+<div class="mt-xs flex items-center gap-xs">
+<span class="w-2 h-2 rounded-full bg-secondary"></span>
+<span class="text-label-sm font-label-sm text-secondary">All Locations</span>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Right Panel: Calendar Grid -->
+<div class="col-span-9 bg-surface-container-lowest rounded-xl shadow-sm border border-outline-variant flex flex-col overflow-hidden">
+<!-- Calendar Header (Controls & Days) -->
+<div class="border-b border-outline-variant">
+<!-- Controls -->
+<div class="p-md flex items-center justify-between bg-surface-bright">
+<div class="flex items-center gap-sm">
+<button class="w-8 h-8 rounded-lg hover:bg-surface-container flex items-center justify-center text-on-surface">
+<span class="material-symbols-outlined">chevron_left</span>
+</button>
+<h3 class="text-title-lg font-title-lg text-on-surface font-semibold">Oct 12 - Oct 18, 2023</h3>
+<button class="w-8 h-8 rounded-lg hover:bg-surface-container flex items-center justify-center text-on-surface">
+<span class="material-symbols-outlined">chevron_right</span>
+</button>
+</div>
+<div class="flex bg-surface-container-low rounded-lg p-xs">
+<button class="px-sm py-xs rounded bg-surface-container-lowest shadow-sm text-label-md font-label-md text-on-surface font-medium">Week</button>
+<button class="px-sm py-xs rounded text-label-md font-label-md text-secondary hover:text-on-surface">Day</button>
+</div>
+</div>
+<!-- Days Grid Header -->
+<div class="grid grid-cols-8 divide-x divide-outline-variant bg-surface-container">
+<div class="col-span-1 p-sm text-center">
+<span class="text-label-sm font-label-sm text-secondary uppercase">Employee</span>
+</div>
+<!-- Days -->
+<div class="col-span-1 p-sm text-center">
+<span class="text-label-sm font-label-sm text-secondary uppercase block">Mon</span>
+<span class="text-title-lg font-title-lg text-on-surface">12</span>
+</div>
+<div class="col-span-1 p-sm text-center bg-surface-bright border-b-2 border-primary">
+<span class="text-label-sm font-label-sm text-primary uppercase block font-bold">Tue</span>
+<span class="text-title-lg font-title-lg text-primary font-bold">13</span>
+</div>
+<div class="col-span-1 p-sm text-center">
+<span class="text-label-sm font-label-sm text-secondary uppercase block">Wed</span>
+<span class="text-title-lg font-title-lg text-on-surface">14</span>
+</div>
+<div class="col-span-1 p-sm text-center">
+<span class="text-label-sm font-label-sm text-secondary uppercase block">Thu</span>
+<span class="text-title-lg font-title-lg text-on-surface">15</span>
+</div>
+<div class="col-span-1 p-sm text-center">
+<span class="text-label-sm font-label-sm text-secondary uppercase block">Fri</span>
+<span class="text-title-lg font-title-lg text-on-surface">16</span>
+</div>
+<div class="col-span-1 p-sm text-center bg-surface-variant/30">
+<span class="text-label-sm font-label-sm text-secondary uppercase block">Sat</span>
+<span class="text-title-lg font-title-lg text-on-surface">17</span>
+</div>
+<div class="col-span-1 p-sm text-center bg-surface-variant/30">
+<span class="text-label-sm font-label-sm text-secondary uppercase block">Sun</span>
+<span class="text-title-lg font-title-lg text-on-surface">18</span>
+</div>
+</div>
+</div>
+<!-- Calendar Body (Rows) -->
+<div class="flex-1 overflow-y-auto bg-surface-container-lowest">
+<!-- Row 1: Sarah Jenkins -->
+<div class="grid grid-cols-8 divide-x divide-outline-variant border-b border-outline-variant hover:bg-surface-bright/50 transition-colors group">
+<!-- Employee Info -->
+<div class="col-span-1 p-sm flex flex-col justify-center border-r border-outline-variant bg-surface-bright group-hover:bg-surface-container-low transition-colors">
+<div class="flex items-center gap-xs">
+<img class="w-8 h-8 rounded-full bg-tertiary-container object-cover" data-alt="A small circular portrait of a young female fitness trainer looking energetic and professional against a neutral background." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBB2YL8j1l246P9rEVZrSC4gJhxedXnbwYrt_I4YpcGlspgsHNmXg5uktvpf9GfB1Js898I6ZnHsybeba_PTtSzyUz7A1o_Mw7b960ehOXiZL6KevhFUjthOGArQfQh4S04L1Tl51cgHcG5XBHlk33NCj94TnE8mk2p_caw2-TC4Bm_f0JSkRJaN9j7jbI0Kc69ZzoS4n41rLyMQ-jAFPyFeX8vYNfryAG4TjoLt4LnKh2a0liR1vX2"/>
+<div>
+<p class="text-label-sm font-label-sm font-bold text-on-surface truncate">S. Jenkins</p>
+<p class="text-[10px] text-secondary">38 Hrs</p>
+</div>
+</div>
+</div>
+<!-- Mon -->
+<div class="col-span-1 p-xs relative min-h-[80px]">
+<div class="absolute inset-xs bg-primary-container/20 border border-primary-container rounded-md p-xs flex flex-col justify-between hover:shadow-sm cursor-pointer">
+<p class="text-[10px] font-bold text-on-primary-fixed-variant">06:00 - 14:00</p>
+<p class="text-[10px] text-primary truncate">Front Desk</p>
+</div>
+</div>
+<!-- Tue -->
+<div class="col-span-1 p-xs relative min-h-[80px]">
+<div class="absolute inset-xs bg-primary-container/20 border border-primary-container rounded-md p-xs flex flex-col justify-between hover:shadow-sm cursor-pointer">
+<p class="text-[10px] font-bold text-on-primary-fixed-variant">06:00 - 14:00</p>
+<p class="text-[10px] text-primary truncate">Front Desk</p>
+</div>
+</div>
+<!-- Wed -->
+<div class="col-span-1 p-xs relative min-h-[80px]">
+<!-- Empty -->
+</div>
+<!-- Thu -->
+<div class="col-span-1 p-xs relative min-h-[80px]">
+<div class="absolute inset-xs bg-tertiary-container/20 border border-tertiary-container rounded-md p-xs flex flex-col justify-between hover:shadow-sm cursor-pointer">
+<p class="text-[10px] font-bold text-on-tertiary-fixed-variant">10:00 - 18:00</p>
+<p class="text-[10px] text-tertiary truncate">Manager</p>
+</div>
+</div>
+<!-- Fri -->
+<div class="col-span-1 p-xs relative min-h-[80px]">
+<div class="absolute inset-xs bg-primary-container/20 border border-primary-container rounded-md p-xs flex flex-col justify-between hover:shadow-sm cursor-pointer">
+<p class="text-[10px] font-bold text-on-primary-fixed-variant">06:00 - 14:00</p>
+<p class="text-[10px] text-primary truncate">Front Desk</p>
+</div>
+</div>
+<!-- Sat -->
+<div class="col-span-1 p-xs relative min-h-[80px] bg-surface-variant/10">
+<!-- Empty -->
+</div>
+<!-- Sun -->
+<div class="col-span-1 p-xs relative min-h-[80px] bg-surface-variant/10">
+<div class="absolute inset-xs top-1/2 bg-surface-container-high border border-outline border-dashed rounded-md p-xs flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer">
+<span class="material-symbols-outlined text-secondary text-[16px]">add</span>
+</div>
+</div>
+</div>
+<!-- Row 2: Marcus Wright -->
+<div class="grid grid-cols-8 divide-x divide-outline-variant border-b border-outline-variant hover:bg-surface-bright/50 transition-colors group">
+<!-- Employee Info -->
+<div class="col-span-1 p-sm flex flex-col justify-center border-r border-outline-variant bg-surface-bright group-hover:bg-surface-container-low transition-colors">
+<div class="flex items-center gap-xs">
+<img class="w-8 h-8 rounded-full bg-secondary-container object-cover" data-alt="A small circular portrait of a male gym manager, wearing a polo shirt, arms crossed, looking confident in a well-lit gym setting." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBgSkrEDQVuDvx3CcNM8_kFqqJtcGSwsEQgydLjcfAi2xnwelvp-sqVwqiUnfODBFC2Y-Cy8E7OKf2fVjTyp9f9y8e6T6mo2J-ItfEsKkm5Sq15penm5Gi18n_Z_g7Ki-5kdxSyWsWLtrgh6alYsJdBgO6P0YRZ_CscA7xv90Ni-EtuBAjNo-ojeYNb8EABwdCVY_kQrplKkJjLJ9bm9ukHCKzb5hV82x_wK91DMvjg7pxYsIbXArWL"/>
+<div>
+<p class="text-label-sm font-label-sm font-bold text-on-surface truncate">M. Wright</p>
+<p class="text-[10px] text-secondary">40 Hrs</p>
+</div>
+</div>
+</div>
+<!-- Mon -->
+<div class="col-span-1 p-xs relative min-h-[80px]">
+<!-- Empty -->
+</div>
+<!-- Tue -->
+<div class="col-span-1 p-xs relative min-h-[80px]">
+<!-- Empty -->
+</div>
+<!-- Wed -->
+<div class="col-span-1 p-xs relative min-h-[80px]">
+<div class="absolute inset-xs bg-tertiary-container/20 border border-tertiary-container rounded-md p-xs flex flex-col justify-between hover:shadow-sm cursor-pointer">
+<p class="text-[10px] font-bold text-on-tertiary-fixed-variant">14:00 - 22:00</p>
+<p class="text-[10px] text-tertiary truncate">Trainer</p>
+</div>
+</div>
+<!-- Thu -->
+<div class="col-span-1 p-xs relative min-h-[80px]">
+<div class="absolute inset-xs bg-tertiary-container/20 border border-tertiary-container rounded-md p-xs flex flex-col justify-between hover:shadow-sm cursor-pointer">
+<p class="text-[10px] font-bold text-on-tertiary-fixed-variant">14:00 - 22:00</p>
+<p class="text-[10px] text-tertiary truncate">Trainer</p>
+</div>
+</div>
+<!-- Fri -->
+<div class="col-span-1 p-xs relative min-h-[80px]">
+<div class="absolute inset-xs bg-tertiary-container/20 border border-tertiary-container rounded-md p-xs flex flex-col justify-between hover:shadow-sm cursor-pointer">
+<p class="text-[10px] font-bold text-on-tertiary-fixed-variant">14:00 - 22:00</p>
+<p class="text-[10px] text-tertiary truncate">Trainer</p>
+</div>
+</div>
+<!-- Sat -->
+<div class="col-span-1 p-xs relative min-h-[80px] bg-surface-variant/10">
+<div class="absolute inset-xs bg-tertiary-container/20 border border-tertiary-container rounded-md p-xs flex flex-col justify-between hover:shadow-sm cursor-pointer">
+<p class="text-[10px] font-bold text-on-tertiary-fixed-variant">08:00 - 16:00</p>
+<p class="text-[10px] text-tertiary truncate">Trainer</p>
+</div>
+</div>
+<!-- Sun -->
+<div class="col-span-1 p-xs relative min-h-[80px] bg-surface-variant/10">
+<div class="absolute inset-xs bg-tertiary-container/20 border border-tertiary-container rounded-md p-xs flex flex-col justify-between hover:shadow-sm cursor-pointer">
+<p class="text-[10px] font-bold text-on-tertiary-fixed-variant">08:00 - 16:00</p>
+<p class="text-[10px] text-tertiary truncate">Trainer</p>
+</div>
+</div>
+</div>
+<!-- Row 3: Time Off Example -->
+<div class="grid grid-cols-8 divide-x divide-outline-variant border-b border-outline-variant hover:bg-surface-bright/50 transition-colors group">
+<!-- Employee Info -->
+<div class="col-span-1 p-sm flex flex-col justify-center border-r border-outline-variant bg-surface-bright group-hover:bg-surface-container-low transition-colors">
+<div class="flex items-center gap-xs">
+<div class="w-8 h-8 rounded-full bg-secondary text-on-secondary flex items-center justify-center text-label-sm font-bold">AL</div>
+<div>
+<p class="text-label-sm font-label-sm font-bold text-on-surface truncate">A. Lee</p>
+<p class="text-[10px] text-secondary">24 Hrs</p>
+</div>
+</div>
+</div>
+<!-- Mon -->
+<div class="col-span-1 p-xs relative min-h-[80px]">
+<div class="absolute inset-xs bg-surface-variant border border-outline-variant rounded-md p-xs flex items-center justify-center">
+<span class="text-[10px] font-bold text-secondary uppercase tracking-widest">Time Off</span>
+</div>
+</div>
+<!-- Tue -->
+<div class="col-span-1 p-xs relative min-h-[80px]">
+<div class="absolute inset-xs bg-surface-variant border border-outline-variant rounded-md p-xs flex items-center justify-center">
+<span class="text-[10px] font-bold text-secondary uppercase tracking-widest">Time Off</span>
+</div>
+</div>
+<!-- Wed -->
+<div class="col-span-1 p-xs relative min-h-[80px]">
+<div class="absolute inset-xs bg-primary-container/20 border border-primary-container rounded-md p-xs flex flex-col justify-between hover:shadow-sm cursor-pointer">
+<p class="text-[10px] font-bold text-on-primary-fixed-variant">10:00 - 18:00</p>
+<p class="text-[10px] text-primary truncate">Maintenance</p>
+</div>
+</div>
+<!-- Thu -->
+<div class="col-span-1 p-xs relative min-h-[80px]">
+<div class="absolute inset-xs bg-primary-container/20 border border-primary-container rounded-md p-xs flex flex-col justify-between hover:shadow-sm cursor-pointer">
+<p class="text-[10px] font-bold text-on-primary-fixed-variant">10:00 - 18:00</p>
+<p class="text-[10px] text-primary truncate">Maintenance</p>
+</div>
+</div>
+<!-- Fri -->
+<div class="col-span-1 p-xs relative min-h-[80px]">
+<div class="absolute inset-xs bg-primary-container/20 border border-primary-container rounded-md p-xs flex flex-col justify-between hover:shadow-sm cursor-pointer">
+<p class="text-[10px] font-bold text-on-primary-fixed-variant">10:00 - 18:00</p>
+<p class="text-[10px] text-primary truncate">Maintenance</p>
+</div>
+</div>
+<!-- Sat -->
+<div class="col-span-1 p-xs relative min-h-[80px] bg-surface-variant/10">
+</div>
+<!-- Sun -->
+<div class="col-span-1 p-xs relative min-h-[80px] bg-surface-variant/10">
+</div>
+</div>
+<!-- Add more empty rows for visual padding if needed -->
+<div class="h-24 bg-surface-container-lowest/50 flex items-center justify-center">
+<button class="text-primary hover:text-surface-tint text-label-md font-label-md flex items-center gap-xs">
+<span class="material-symbols-outlined text-[16px]">add_circle</span> Add Employee to Schedule
+                        </button>
+</div>
+</div>
+</div>
+</div>
+</main>
+</body></html>

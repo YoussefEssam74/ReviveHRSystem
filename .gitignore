@@ -47,3 +47,7 @@ Thumbs.db
 *.pfx
 *.p12
 appsettings.Development.json
+
+## AI & Local Tooling
+.opencode/
+
