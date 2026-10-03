@@ -1,0 +1,446 @@
+// ==================== MOCK DATA ====================
+const MOCK = {
+  currentUser: {
+    id: 'RV-00124', firstName: 'Ahmed', lastName: 'Mohamed', fullName: 'Ahmed Mohamed',
+    email: 'ahmed.mohamed@revive.com', phone: '+20 101 234 5678', initials: 'AM',
+    position: 'Trainer', level: 'Senior',
+    gym: { id: 'gym-1', name: 'Revive Gym', branch: 'Nasr City' },
+    hireDate: '2026-01-12', employmentType: 'Full-time', status: 'Active',
+    role: 'Branch Manager',
+    permissions: ['team.view','requests.approve.team','attendance.view.team','schedule.view.team','team.manage','recruitment.vacancy_request.create','employees.offboard'],
+    dateOfBirth: '1995-03-15', nationalId: '29503151234567', gender: 'Male',
+    address: '15 El-Thawra St, Nasr City, Cairo',
+    emergencyContact: { name: 'Mohamed Ahmed', relationship: 'Father', phone: '+20 100 987 6543' },
+    baseSalary: 12000,
+  },
+  todayShift: { shiftName: 'Morning', startTime: '08:00', endTime: '16:00', gym: 'Revive Gym', status: 'Published' },
+  todayAttendance: { scheduledStart: '08:00', checkIn: '08:02', checkOut: null, status: 'On Time', checkedIn: true, source: 'Biometric Device' },
+  attendanceSummary: { rate: 96.4, present: 22, late: 2, absent: 1, earlyCheckout: 1, missingCheckout: 0 },
+  attendanceRecords: [
+    { date: '2026-08-26', shift: '08:00–16:00', shiftName: 'Morning', checkIn: '08:02', checkOut: null, status: 'On Time', source: 'Biometric Device', notes: '' },
+    { date: '2026-08-25', shift: '16:00–00:00', shiftName: 'Evening', checkIn: '16:08', checkOut: '00:01', status: 'Late', source: 'Biometric Device', notes: 'Traffic delay' },
+    { date: '2026-08-24', shift: 'OFF', shiftName: 'Off', checkIn: null, checkOut: null, status: 'Off', source: '', notes: '' },
+    { date: '2026-08-23', shift: '08:00–16:00', shiftName: 'Morning', checkIn: '07:58', checkOut: '16:03', status: 'On Time', source: 'Biometric Device', notes: '' },
+    { date: '2026-08-22', shift: '08:00–16:00', shiftName: 'Morning', checkIn: '08:00', checkOut: '15:30', status: 'Early Checkout', source: 'Biometric Device', notes: 'Approved early leave' },
+    { date: '2026-08-21', shift: '16:00–00:00', shiftName: 'Evening', checkIn: '16:02', checkOut: '00:05', status: 'On Time', source: 'Biometric Device', notes: '' },
+    { date: '2026-08-20', shift: 'OFF', shiftName: 'Off', checkIn: null, checkOut: null, status: 'Off', source: '', notes: '' },
+    { date: '2026-08-19', shift: '08:00–16:00', shiftName: 'Morning', checkIn: '08:30', checkOut: '16:00', status: 'Late', source: 'Manual', notes: 'Medical appointment' },
+    { date: '2026-08-18', shift: '16:00–00:00', shiftName: 'Evening', checkIn: '15:58', checkOut: '00:02', status: 'On Time', source: 'Biometric Device', notes: '' },
+    { date: '2026-08-17', shift: '08:00–16:00', shiftName: 'Morning', checkIn: null, checkOut: null, status: 'Absent', source: '', notes: 'No show' },
+  ],
+  scheduleCycles: [
+    { id: 'c1', label: 'Aug 4 – Aug 13', status: 'Published' },
+    { id: 'c2', label: 'Aug 14 – Aug 23', status: 'Published' },
+    { id: 'c3', label: 'Aug 24 – Sep 2', status: 'Published' },
+  ],
+  shiftTemplates: [
+    { id: 'st-morning', name: 'Morning', start: '08:00', end: '16:00', color: '#2563eb', bgColor: '#dbeafe', textColor: '#1e40af', isOff: false },
+    { id: 'st-evening', name: 'Evening', start: '16:00', end: '00:00', color: '#16a34a', bgColor: '#dcfce7', textColor: '#166534', isOff: false },
+    { id: 'st-night', name: 'Night', start: '00:00', end: '08:00', color: '#7c3aed', bgColor: '#ede9fe', textColor: '#5b21b6', isOff: false },
+    { id: 'st-off', name: 'Off Day', start: null, end: null, color: '#6b7280', bgColor: '#f3f4f6', textColor: '#6b7280', isOff: true },
+  ],
+  scheduleData: {
+    'c3': [
+      { date: '2026-08-24', day: 'SUN', dayNum: 24, shiftName: 'Morning', start: '08:00', end: '16:00', isOff: false },
+      { date: '2026-08-25', day: 'MON', dayNum: 25, shiftName: 'Evening', start: '16:00', end: '00:00', isOff: false },
+      { date: '2026-08-26', day: 'TUE', dayNum: 26, shiftName: 'Morning', start: '08:00', end: '16:00', isOff: false, isToday: true },
+      { date: '2026-08-27', day: 'WED', dayNum: 27, shiftName: 'Off', start: null, end: null, isOff: true },
+      { date: '2026-08-28', day: 'THU', dayNum: 28, shiftName: 'Morning', start: '08:00', end: '16:00', isOff: false },
+      { date: '2026-08-29', day: 'FRI', dayNum: 29, shiftName: 'Evening', start: '16:00', end: '00:00', isOff: false },
+      { date: '2026-08-30', day: 'SAT', dayNum: 30, shiftName: 'Morning', start: '08:00', end: '16:00', isOff: false },
+      { date: '2026-08-31', day: 'SUN', dayNum: 31, shiftName: 'Off', start: null, end: null, isOff: true },
+      { date: '2026-09-01', day: 'MON', dayNum: 1, shiftName: 'Evening', start: '16:00', end: '00:00', isOff: false },
+      { date: '2026-09-02', day: 'TUE', dayNum: 2, shiftName: 'Morning', start: '08:00', end: '16:00', isOff: false },
+    ]
+  },
+  teamSchedule: {
+    't1': ['st-morning','st-evening','st-off','st-morning','st-evening','st-morning','st-off'],
+    't2': ['st-morning','st-morning','st-evening','st-off','st-morning','st-morning','st-off'],
+    't3': ['st-evening','st-off','st-morning','st-morning','st-evening','st-off','st-morning'],
+    't4': ['st-morning','st-morning','st-morning','st-morning','st-morning','st-off','st-off'],
+    't5': ['st-off','st-morning','st-evening','st-evening','st-off','st-morning','st-morning'],
+    't6': ['st-evening','st-evening','st-off','st-morning','st-evening','st-evening','st-off'],
+    't7': ['st-morning','st-off','st-morning','st-evening','st-morning','st-off','st-evening'],
+    't8': ['st-morning','st-morning','st-off','st-morning','st-off','st-morning','st-morning'],
+    't9': ['st-evening','st-morning','st-off','st-evening','st-evening','st-morning','st-off'],
+    't10': ['st-morning','st-evening','st-morning','st-off','st-morning','st-evening','st-morning'],
+  },
+  currentCycleIndex: 2,
+  todayIndex: 1, // Tue 26 in the Shift Management week (Mon 25 – Sun 31) — index into teamSchedule arrays
+  now: '14:30',  // mock current time — drives the auto shift status on the Employees page
+  payroll: [
+    { id: 'p1', period: 'August 2026', status: 'Processing', paidDate: null, netSalary: null, visible: false,
+      items: [], grossEarnings: 0, totalDeductions: 0 },
+    { id: 'p2', period: 'July 2026', status: 'Paid', paidDate: '2026-08-05', netSalary: 12400, visible: true,
+      baseSalary: 12000, annualIncrease: 1200, workingDays: 26, workedDays: 25,
+      scheduledWeeklyDays: 6, weeklyPattern: 'Sun – Fri',
+      overtimeHours: 6, usedAnnualLeave: 1, paidLeaveDays: 0, remainingAnnualLeave: 8,
+      items: [
+        { label: 'Basic Salary', amount: 12000, type: 'earning', icon: 'payments', color: 'brand' },
+        { label: 'Annual Increase (10%)', amount: 1200, type: 'earning', icon: 'trending_up', color: 'green' },
+        { label: 'Performance Bonus', amount: 500, type: 'earning', icon: 'star', color: 'yellow' },
+        { label: 'Overtime Pay (6 hrs)', amount: 200, type: 'earning', icon: 'schedule', color: 'blue' },
+        { label: 'Social Insurance (7%)', amount: -840, type: 'deduction', icon: 'health_and_safety', color: 'red' },
+        { label: 'Tax', amount: -480, type: 'deduction', icon: 'receipt_long', color: 'red' },
+        { label: 'Tardiness Time Deductions', amount: -120, type: 'deduction', icon: 'alarm_off', color: 'orange', isGroup: true,
+          subItems: [
+            { label: 'Late Arrival — Jul 5', amount: -60, date: '2026-07-05', detail: '15 min late (08:15 check-in)', icon: 'alarm_off' },
+            { label: 'Late Arrival — Jul 12', amount: -60, date: '2026-07-12', detail: '22 min late (08:22 check-in)', icon: 'alarm_off' },
+          ]
+        },
+        { label: 'Deductions from the Supervisor', amount: -60, type: 'deduction', icon: 'supervisor_account', color: 'red', isGroup: true,
+          subItems: [
+            { label: 'Unapproved Day Off — Jul 18', amount: -60, date: '2026-07-18', detail: 'Absent without approval. Deduction approved by Branch Manager.', icon: 'event_busy' },
+          ]
+        },
+      ], grossEarnings: 13900, totalDeductions: 1500 },
+    { id: 'p3', period: 'June 2026', status: 'Paid', paidDate: '2026-07-05', netSalary: 12700, visible: true,
+      baseSalary: 12000, annualIncrease: 1200, workingDays: 26, workedDays: 25,
+      scheduledWeeklyDays: 6, weeklyPattern: 'Sun – Fri',
+      overtimeHours: 0, usedAnnualLeave: 1, paidLeaveDays: 0, remainingAnnualLeave: 9,
+      items: [
+        { label: 'Basic Salary', amount: 12000, type: 'earning', icon: 'payments', color: 'brand' },
+        { label: 'Annual Increase (10%)', amount: 1200, type: 'earning', icon: 'trending_up', color: 'green' },
+        { label: 'Performance Bonus', amount: 800, type: 'earning', icon: 'star', color: 'yellow' },
+        { label: 'Social Insurance (7%)', amount: -840, type: 'deduction', icon: 'health_and_safety', color: 'red' },
+        { label: 'Tax', amount: -460, type: 'deduction', icon: 'receipt_long', color: 'red' },
+      ], grossEarnings: 14000, totalDeductions: 1300 },
+    { id: 'p4', period: 'May 2026', status: 'Paid', paidDate: '2026-06-05', netSalary: 12200, visible: true,
+      baseSalary: 12000, annualIncrease: 1200, workingDays: 27, workedDays: 25,
+      scheduledWeeklyDays: 6, weeklyPattern: 'Sun – Fri',
+      overtimeHours: 0, usedAnnualLeave: 1, paidLeaveDays: 1, remainingAnnualLeave: 10,
+      items: [
+        { label: 'Basic Salary', amount: 12000, type: 'earning', icon: 'payments', color: 'brand' },
+        { label: 'Annual Increase (10%)', amount: 1200, type: 'earning', icon: 'trending_up', color: 'green' },
+        { label: 'Social Insurance (7%)', amount: -840, type: 'deduction', icon: 'health_and_safety', color: 'red' },
+        { label: 'Tax', amount: -160, type: 'deduction', icon: 'receipt_long', color: 'red' },
+      ], grossEarnings: 13200, totalDeductions: 1000 },
+  ],
+  documents: [
+    { id: 'd1', name: 'Employment Contract', category: 'Employment', uploadDate: '2026-01-12', expiryDate: null, status: 'Valid', canDownload: true },
+    { id: 'd2', name: 'National ID (Front & Back)', category: 'Identification', uploadDate: '2026-01-12', expiryDate: '2031-03-15', status: 'Valid', canDownload: true },
+    { id: 'd3', name: 'Personal Photo', category: 'Identification', uploadDate: '2026-01-12', expiryDate: null, status: 'Valid', canDownload: true },
+    { id: 'd4', name: 'First Aid Certification', category: 'Certification', uploadDate: '2026-02-20', expiryDate: '2026-09-10', status: 'Expiring Soon', canDownload: true },
+    { id: 'd5', name: 'Personal Training Certificate', category: 'Certification', uploadDate: '2026-02-20', expiryDate: '2028-02-20', status: 'Valid', canDownload: true },
+    { id: 'd6', name: 'Medical Fitness Certificate', category: 'Medical', uploadDate: '2026-01-10', expiryDate: '2027-01-10', status: 'Valid', canDownload: true },
+    { id: 'd7', name: 'Bank Account Details', category: 'Financial', uploadDate: '2026-01-15', expiryDate: null, status: 'Valid', canDownload: false },
+    { id: 'd8', name: 'Degree Certificate', category: 'Education', uploadDate: '2026-01-12', expiryDate: null, status: 'Valid', canDownload: true },
+  ],
+  // Required documents the employee must provide (docId links to documents[] when uploaded).
+  requiredDocs: [
+    { key: 'national-id', label: 'National ID', docId: 'd2' },
+    { key: 'contract', label: 'Employment Contract', docId: 'd1' },
+    { key: 'certificates', label: 'Certificates (First Aid)', docId: 'd4' },
+    { key: 'bank', label: 'Bank Account Details', docId: 'd7' },
+    { key: 'graduation', label: 'Graduation Certificate', docId: 'd8' },
+    { key: 'military', label: 'Military Certificate', docId: null },
+  ],
+  // Official company documents uploaded by HR — employees can view/download only.
+  hrDocuments: [
+    { id: 'hd1', name: 'Employment Contract (Signed Copy)', category: 'HR · Official', addedDate: '2026-01-12', size: 'PDF · 2.1 MB' },
+    { id: 'hd2', name: 'Medical Insurance Card', category: 'HR · Benefits', addedDate: '2026-01-10', size: 'PDF · 480 KB' },
+    { id: 'hd3', name: 'Company Handbook 2026', category: 'HR · Policy', addedDate: '2026-01-12', size: 'PDF · 3.4 MB' },
+    { id: 'hd4', name: 'Code of Conduct', category: 'HR · Policy', addedDate: '2026-01-12', size: 'PDF · 1.1 MB' },
+  ],
+  // HR-side published events: compliance deadlines, training and company events.
+  events: [
+    { id: 'e1', type: 'Document Expiry', category: 'Compliance', title: 'First Aid Certification Expires', date: '2026-09-02', detail: 'Your First Aid Certification expires Sep 10 — renewal window opens Sep 2.', action: 'Renew in Documents', link: 'documents', urgent: true },
+    { id: 'e2', type: 'Contract', category: 'Compliance', title: 'Employment Contract Renewal', date: '2026-12-31', detail: 'Your annual contract renews at year end. HR will share the renewal package.', action: null, link: null, urgent: false },
+    { id: 'e3', type: 'Benefits', category: 'Benefits', title: 'Medical Insurance Renewal', date: '2026-09-01', detail: 'Insurance renewal window opens Sep 1 — confirm your dependents with HR.', action: null, link: null, urgent: false },
+    { id: 'e4', type: 'Onboarding', category: 'Onboarding', title: 'Probation Period Ends', date: '2026-09-05', detail: 'Probation ends Sep 5 — a performance review with your Branch Manager is scheduled.', action: 'View Evaluation', link: 'evaluations', urgent: true },
+    { id: 'e5', type: 'Training', category: 'Training', title: 'Safety & Emergency Training', date: '2026-08-30', detail: 'Mandatory session — Gym Hall A, 09:00. Attendance is recorded.', action: 'Add to calendar', link: null, urgent: false },
+    { id: 'e6', type: 'Company Event', category: 'Company Event', title: 'Summer Fitness Day 2026', date: '2026-09-14', detail: 'Annual staff gathering at Revive Nasr City — games, snacks and prizes.', action: 'RSVP', link: null, urgent: false },
+  ],
+  employmentHistory: [
+    { month: 'AUGUST 2026', events: [
+      { type: 'Position Changed', icon: 'briefcase', from: 'Junior Trainer', to: 'Trainer', effective: '01 Aug 2026', detail: 'Promoted based on Q2 2026 evaluation performance.' }
+    ]},
+    { month: 'MAY 2026', events: [
+      { type: 'Gym Transfer', icon: 'building', from: 'Revive Gym — Heliopolis', to: 'Revive Gym — Nasr City', effective: '01 May 2026', detail: 'Requested transfer approved by HR.' }
+    ]},
+    { month: 'FEBRUARY 2026', events: [
+      { type: 'Role Added', icon: 'shield', from: 'Employee', to: 'Employee + Branch Manager', effective: '15 Feb 2026', detail: 'Assigned Branch Manager responsibilities for Nasr City.' }
+    ]},
+    { month: 'JANUARY 2026', events: [
+      { type: 'Joined Revive', icon: 'star', from: null, to: null, effective: '12 Jan 2026', detail: 'Initial hire as Junior Trainer at Revive Gym — Heliopolis.',
+        extra: [{ label: 'Gym', value: 'Revive Gym — Heliopolis' },{ label: 'Position', value: 'Junior Trainer' },{ label: 'Type', value: 'Full-time' },{ label: 'Contract', value: '1 Year Fixed Term' }]
+      }
+    ]},
+  ],
+  evaluations: [
+    { id: 'e1', period: 'Q3 2026', score: 4.2, maxScore: 5, status: 'Completed', date: '2026-08-01', reviewer: 'Sarah Hassan',
+      criteria: [
+        { name: 'Customer Service', score: 4.5, comment: 'Excellent member engagement and feedback scores.' },
+        { name: 'Team Collaboration', score: 4.0, comment: 'Works well with colleagues, actively helps new team members.' },
+        { name: 'Punctuality & Attendance', score: 3.8, comment: 'Generally on time; one late arrival noted.' },
+        { name: 'Technical Skills', score: 4.3, comment: 'Strong training knowledge, updated certifications.' },
+        { name: 'Initiative', score: 4.2, comment: 'Proposed new class format that was well received.' },
+      ],
+      overallComment: 'Ahmed has shown consistent improvement this quarter. His initiative in developing new training programs has been commendable.'
+    },
+    { id: 'e2', period: 'Q2 2026', score: 3.8, maxScore: 5, status: 'Completed', date: '2026-05-01', reviewer: 'Sarah Hassan',
+      criteria: [
+        { name: 'Customer Service', score: 4.0, comment: 'Good member satisfaction scores.' },
+        { name: 'Team Collaboration', score: 3.5, comment: 'Works adequately in team settings.' },
+        { name: 'Punctuality & Attendance', score: 3.5, comment: 'Two late arrivals this quarter.' },
+        { name: 'Technical Skills', score: 4.0, comment: 'Solid training fundamentals.' },
+        { name: 'Initiative', score: 4.0, comment: 'Showed improvement in taking ownership.' },
+      ],
+      overallComment: 'Good performance overall. Areas for improvement in punctuality and deeper team engagement.'
+    },
+    { id: 'e3', period: 'Q1 2026', score: 3.5, maxScore: 5, status: 'Completed', date: '2026-02-01', reviewer: 'Sarah Hassan',
+      criteria: [
+        { name: 'Customer Service', score: 3.5, comment: 'Adequate service, room for improvement.' },
+        { name: 'Team Collaboration', score: 3.0, comment: 'New to team, still building relationships.' },
+        { name: 'Punctuality & Attendance', score: 4.0, comment: 'Good attendance record as a new hire.' },
+        { name: 'Technical Skills', score: 3.5, comment: 'Solid foundation, needs experience.' },
+        { name: 'Initiative', score: 3.5, comment: 'Shows willingness to learn.' },
+      ],
+      overallComment: 'First quarter as a new hire. Ahmed is settling in well and showing promise.'
+    },
+  ],
+  leaveBalance: {
+    annualTotal: 12,   // total annual leave days per year
+    annualUsed: 4,     // days already taken
+    sickTotal: 7,
+    sickUsed: 1,
+    personalTotal: 3,
+    personalUsed: 0,
+    pendingRequests: 1, // currently pending day-off requests
+  },
+  requests: [
+    { id: 'r1', type: 'Day Off', submittedDate: '2026-08-26', requestedDate: 'Aug 29, 2026', status: 'Pending',
+      reason: "Family event — cousin's wedding", reviewer: 'Pending Review', reviewerComment: '',
+      timeline: [{ step: 'Submitted', date: 'Aug 26, 09:42 AM', done: true },{ step: 'Under Review', date: 'Pending', done: false },{ step: 'Approved', date: '', done: false }],
+      scheduleContext: 'Scheduled: Morning Shift (08:00–16:00)' },
+    { id: 'r2', type: 'Leave Early', submittedDate: '2026-08-20', requestedDate: 'Aug 22, 2026', status: 'Approved',
+      reason: 'Medical appointment at 3:00 PM', reviewer: 'Sarah Hassan (Branch Manager)',
+      reviewerComment: 'Approved. Please ensure handover to Karim before leaving.',
+      timeline: [{ step: 'Submitted', date: 'Aug 20, 11:15 AM', done: true },{ step: 'Under Review', date: 'Aug 20, 02:30 PM', done: true },{ step: 'Approved', date: 'Aug 20, 03:00 PM', done: true }],
+      scheduleContext: 'Scheduled: Morning Shift (08:00–16:00)' },
+    { id: 'r3', type: 'Day Off', submittedDate: '2026-08-10', requestedDate: 'Aug 15, 2026', status: 'Rejected',
+      reason: 'Personal day', reviewer: 'Sarah Hassan (Branch Manager)',
+      reviewerComment: 'Rejected — high staff shortage on Aug 15. Please reschedule.',
+      timeline: [{ step: 'Submitted', date: 'Aug 10, 08:20 AM', done: true },{ step: 'Under Review', date: 'Aug 10, 10:00 AM', done: true },{ step: 'Rejected', date: 'Aug 10, 01:15 PM', done: true }],
+      scheduleContext: 'Scheduled: Morning Shift (08:00–16:00)' },
+    { id: 'r4', type: 'Shift Swap', submittedDate: '2026-08-05', requestedDate: 'Aug 10, 2026', status: 'Approved',
+      reason: "Need to swap Aug 10 morning shift with Karim's evening shift", reviewer: 'Sarah Hassan (Branch Manager)',
+      reviewerComment: 'Approved. Karim has agreed to the swap.',
+      timeline: [{ step: 'Submitted', date: 'Aug 05, 04:10 PM', done: true },{ step: 'Under Review', date: 'Aug 06, 09:00 AM', done: true },{ step: 'Approved', date: 'Aug 06, 11:30 AM', done: true }],
+      scheduleContext: null },
+    { id: 'r5', type: 'Document Request', submittedDate: '2026-07-28', requestedDate: 'Jul 28, 2026', status: 'Approved',
+      reason: 'Requesting copy of employment contract for personal records', reviewer: 'HR Department',
+      reviewerComment: 'Document uploaded to your Documents section.',
+      timeline: [{ step: 'Submitted', date: 'Jul 28, 10:00 AM', done: true },{ step: 'Under Review', date: 'Jul 28, 02:00 PM', done: true },{ step: 'Approved', date: 'Jul 29, 09:00 AM', done: true }],
+      scheduleContext: null },
+  ],
+  requestTypes: [
+    { id: 'day-off', label: 'Day Off', fields: ['date','reason'] },
+    { id: 'leave-early', label: 'Leave Early', fields: ['date','time','reason'] },
+    { id: 'late-arrival', label: 'Late Arrival', fields: ['date','time','reason'] },
+    { id: 'shift-swap', label: 'Shift Swap', fields: ['date-from','date-to','colleague','reason'] },
+    { id: 'overtime', label: 'Overtime Request', fields: ['date','time-from','time-to','reason'] },
+    { id: 'document-request', label: 'Document Request', fields: ['document-type','reason'] },
+    { id: 'correction', label: 'Attendance Correction', fields: ['date','correction-type','reason'] },
+  ],
+  notifications: [
+    { id: 'n1', category: 'Requests', title: 'Request Approved', description: 'Your Leave Early request for Aug 22 has been approved.', date: '2026-08-20 15:00', read: true, color: 'green', link: 'requests' },
+    { id: 'n2', category: 'Schedule', title: 'Schedule Updated', description: 'Your schedule for Aug 24 – Sep 2 has been published.', date: '2026-08-22 10:00', read: false, color: 'blue', link: 'schedule' },
+    { id: 'n3', category: 'Payroll', title: 'Payslip Available', description: 'Your July 2026 payslip is now available for download.', date: '2026-08-05 09:00', read: false, color: 'green', link: 'payroll' },
+    { id: 'n4', category: 'Evaluations', title: 'Q3 2026 Evaluation Complete', description: 'Your performance evaluation for Q3 2026 is now available.', date: '2026-08-01 14:00', read: true, color: 'purple', link: 'evaluations' },
+    { id: 'n5', category: 'HR Announcements', title: 'Updated Gym Policy', description: 'Please review the updated attendance policy effective Sep 1.', date: '2026-08-25 11:00', read: false, color: 'blue', link: null },
+    { id: 'n6', category: 'Requests', title: 'Request Rejected', description: 'Your Day Off request for Aug 15 was rejected.', date: '2026-08-10 13:15', read: true, color: 'red', link: 'requests' },
+    { id: 'n7', category: 'System', title: 'Password Expiry Warning', description: 'Your password will expire in 15 days.', date: '2026-08-26 08:00', read: false, color: 'yellow', link: 'settings' },
+  ],
+  teamMembers: [
+    { id: 't1', name: 'Karim Hassan', position: 'Trainer', status: 'Present', checkIn: '07:58', initials: 'KH' },
+    { id: 't2', name: 'Sara Ali', position: 'Receptionist', status: 'Present', checkIn: '07:55', initials: 'SA' },
+    { id: 't3', name: 'Omar Youssef', position: 'Trainer', status: 'Late', checkIn: '08:15', initials: 'OY' },
+    { id: 't4', name: 'Nour Ibrahim', position: 'Cleaner', status: 'Present', checkIn: '06:00', initials: 'NI' },
+    { id: 't5', name: 'Yasmin Adel', position: 'Trainer', status: 'Absent', checkIn: null, initials: 'YA' },
+    { id: 't6', name: 'Tarek Nabil', position: 'Receptionist', status: 'Present', checkIn: '15:52', initials: 'TN' },
+    { id: 't7', name: 'Mona Said', position: 'Trainer', status: 'Present', checkIn: '07:50', initials: 'MS' },
+    { id: 't8', name: 'Hassan Ali', position: 'Maintenance', status: 'Present', checkIn: '08:00', initials: 'HA' },
+    { id: 't9', name: 'Fatma Hassan', position: 'Trainer', status: 'Late', checkIn: '08:20', initials: 'FH' },
+    { id: 't10', name: 'Ahmed Zaki', position: 'Trainer', status: 'Present', checkIn: '07:45', initials: 'AZ' },
+  ],
+  // Rich profile data for each team member — keyed by teamMembers[].id
+  teamProfiles: {
+    't1': { email:'karim.hassan@revive.com', phone:'+20 111 234 5678', dateOfBirth:'1993-07-22', gender:'Male', nationalId:'29307221234567', address:'5 El-Nasr St, Nasr City, Cairo', hireDate:'2024-02-01', employmentType:'Full-time', level:'Senior', gym:'Revive Gym — Nasr City', emergencyContact:{ name:'Hassan Karim', relationship:'Father', phone:'+20 111 876 5432' }, baseSalary:14000 },
+    't2': { email:'sara.ali@revive.com', phone:'+20 112 345 6789', dateOfBirth:'1996-11-05', gender:'Female', nationalId:'29611051234567', address:'12 El-Thawra St, Nasr City, Cairo', hireDate:'2024-06-15', employmentType:'Full-time', level:'Junior', gym:'Revive Gym — Nasr City', emergencyContact:{ name:'Ali Hassan', relationship:'Father', phone:'+20 112 876 5432' }, baseSalary:9000 },
+    't3': { email:'omar.youssef@revive.com', phone:'+20 113 456 7890', dateOfBirth:'1991-03-18', gender:'Male', nationalId:'29103181234567', address:'3 Makram Ebeid St, Nasr City, Cairo', hireDate:'2023-09-01', employmentType:'Full-time', level:'Senior', gym:'Revive Gym — Nasr City', emergencyContact:{ name:'Youssef Omar', relationship:'Father', phone:'+20 113 876 5432' }, baseSalary:15000 },
+    't4': { email:'nour.ibrahim@revive.com', phone:'+20 114 567 8901', dateOfBirth:'1988-01-30', gender:'Female', nationalId:'28801301234567', address:'20 El-Ahram St, Giza', hireDate:'2024-01-10', employmentType:'Full-time', level:'Junior', gym:'Revive Gym — Nasr City', emergencyContact:{ name:'Ibrahim Nour', relationship:'Father', phone:'+20 114 876 5432' }, baseSalary:6000 },
+    't5': { email:'yasmin.adel@revive.com', phone:'+20 115 678 9012', dateOfBirth:'1994-09-12', gender:'Female', nationalId:'29409121234567', address:'8 Abbas El-Akkad St, Nasr City, Cairo', hireDate:'2024-04-01', employmentType:'Part-time', level:'Mid', gym:'Revive Gym — Nasr City', emergencyContact:{ name:'Adel Youssef', relationship:'Father', phone:'+20 115 876 5432' }, baseSalary:8000 },
+    't6': { email:'tarek.nabil@revive.com', phone:'+20 116 789 0123', dateOfBirth:'1997-05-25', gender:'Male', nationalId:'29705251234567', address:'15 El-Hegaz St, Heliopolis, Cairo', hireDate:'2025-01-15', employmentType:'Full-time', level:'Junior', gym:'Revive Gym — Nasr City', emergencyContact:{ name:'Nabil Tarek', relationship:'Father', phone:'+20 116 876 5432' }, baseSalary:8500 },
+    't7': { email:'mona.said@revive.com', phone:'+20 117 890 1234', dateOfBirth:'1992-12-08', gender:'Female', nationalId:'29212081234567', address:'25 El-Merghany St, Heliopolis, Cairo', hireDate:'2023-03-01', employmentType:'Full-time', level:'Senior', gym:'Revive Gym — Nasr City', emergencyContact:{ name:'Said Hassan', relationship:'Father', phone:'+20 117 876 5432' }, baseSalary:16000 },
+    't8': { email:'hassan.ali@revive.com', phone:'+20 118 901 2345', dateOfBirth:'1985-06-14', gender:'Male', nationalId:'28506141234567', address:'30 El-Sudan St, Mohandessin, Giza', hireDate:'2023-01-01', employmentType:'Full-time', level:'Mid', gym:'Revive Gym — Nasr City', emergencyContact:{ name:'Ali Hassan', relationship:'Father', phone:'+20 118 876 5432' }, baseSalary:7000 },
+    't9': { email:'fatma.hassan@revive.com', phone:'+20 119 012 3456', dateOfBirth:'1995-02-20', gender:'Female', nationalId:'29502201234567', address:'10 El-Nasr St, Nasr City, Cairo', hireDate:'2024-08-01', employmentType:'Full-time', level:'Mid', gym:'Revive Gym — Nasr City', emergencyContact:{ name:'Hassan Farouk', relationship:'Father', phone:'+20 119 876 5432' }, baseSalary:10000 },
+    't10': { email:'ahmed.zaki@revive.com', phone:'+20 120 123 4567', dateOfBirth:'1990-10-01', gender:'Male', nationalId:'29010011234567', address:'7 El-Khalifa El-Maamoun St, Heliopolis, Cairo', hireDate:'2023-06-01', employmentType:'Full-time', level:'Senior', gym:'Revive Gym — Nasr City', emergencyContact:{ name:'Zaki Ahmed', relationship:'Father', phone:'+20 120 876 5432' }, baseSalary:14500 },
+  },
+  teamStats: { total: 42, present: 38, late: 3, absent: 1, pendingRequests: 7, upcomingIssues: 4 },
+  teamRequests: [
+    { id: 'tr1', employee: 'Karim Hassan', type: 'Day Off', date: 'Aug 30, 2026', submitted: 'Aug 25', status: 'Pending', reason: 'Family event — need the day off' },
+    { id: 'tr2', employee: 'Sara Ali', type: 'Late Arrival', date: 'Aug 27, 2026', submitted: 'Aug 26', status: 'Pending', reason: 'Traffic accident on the way to work' },
+    { id: 'tr3', employee: 'Nour Ibrahim', type: 'Day Off', date: 'Sep 1, 2026', submitted: 'Aug 24', status: 'Pending', reason: 'Medical appointment' },
+    { id: 'tr4', employee: 'Omar Youssef', type: 'Leave Early', date: 'Aug 28, 2026', submitted: 'Aug 23', status: 'Approved', reason: 'Family event', teamApprovedBy: 'Ahmed Mohamed', teamApprovedDate: 'Aug 24', hrApprovedBy: 'HR Manager', hrApprovedDate: 'Aug 25' },
+    { id: 'tr5', employee: 'Yasmin Adel', type: 'Shift Swap', date: 'Aug 29-30', submitted: 'Aug 22', status: 'Pending', reason: 'Swap with Omar for the evening shift' },
+    { id: 'tr6', employee: 'Mona Said', type: 'Day Off', date: 'Sep 5, 2026', submitted: 'Aug 21', status: 'Rejected', reason: 'Wants a long weekend', teamRejectedBy: 'Ahmed Mohamed', teamRejectedDate: 'Aug 22', hrRejectedBy: 'HR Manager', hrRejectedDate: 'Aug 23', rejectionReason: 'Insufficient trainer coverage that day' },
+    { id: 'tr7', employee: 'Fatma Hassan', type: 'Overtime', date: 'Aug 26, 2026', submitted: 'Aug 20', status: 'Pending', reason: 'Extra hours for the event setup' },
+    { id: 'tr8', employee: 'Tarek Nabil', type: 'Day Off', date: 'Sep 8, 2026', submitted: 'Aug 18', status: 'Rejected', reason: 'Personal day', rejectionType: 'expired', rejectionReason: 'No response within 48 hours' },
+  ],
+  followUpItems: [
+    { id: 'f1', employee: 'Yasmin Adel', type: 'Absent', description: 'Absent today without prior notice', severity: 'high' },
+    { id: 'f2', employee: 'Omar Youssef', type: 'Late Pattern', description: '3rd late arrival this month', severity: 'medium' },
+    { id: 'f3', employee: 'Fatma Hassan', type: 'Document Expiring', description: 'PT Certificate expires in 15 days', severity: 'low' },
+    { id: 'f4', employee: 'Tarek Nabil', type: 'Performance', description: 'Q2 evaluation below expectations', severity: 'medium' },
+  ],
+  recruitmentRequests: [
+    { id: 'rr1', position: 'Senior Trainer', count: 1, urgency: 'High', status: 'Approved', date: 'Aug 20, 2026', requestedBy: 'Omar Youssef', department: 'Training', reason: 'Replacing a departing trainer; Q4 class load is increasing.', timeline: 'Submitted Aug 10 · Approved Aug 20', candidates: 3 },
+    { id: 'rr2', position: 'Receptionist', count: 1, urgency: 'Medium', status: 'Pending', date: 'Aug 15, 2026', requestedBy: 'Sara Ali', department: 'Front Desk', reason: 'Covering evening shift demand at the front desk.', timeline: 'Submitted Aug 15 · Awaiting approval', candidates: 0 },
+    { id: 'rr3', position: 'Cleaner', count: 2, urgency: 'Low', status: 'Submitted', date: 'Aug 10, 2026', requestedBy: 'Hassan Ali', department: 'Facilities', reason: 'New branch floor area added; current team cannot cover it.', timeline: 'Submitted Aug 10 · In review', candidates: 0 },
+  ],
+  employeeLeaving: [
+    { id: 'el1', employee: 'Mona Said', position: 'Trainer', lastDay: 'Sep 30, 2026', status: 'Notice Period', reason: 'Personal reasons' },
+  ],
+  // Manager-issued deduction candidates — the Branch Manager records them and
+  // they go to HR for approval before touching payroll (features.md §10).
+  deductionCandidates: [
+    { id: 'dc1', employee: 'Tarek Nabil', amount: 150, reason: 'Unapproved day off', date: '2026-08-19', note: 'Absent with no prior notice', issuedBy: 'Ahmed Mohamed', status: 'Pending HR' },
+    { id: 'dc2', employee: 'Yasmin Adel', amount: 120, reason: 'Late arrival (30+ min)', date: '2026-08-14', note: '3rd late this month', issuedBy: 'Ahmed Mohamed', status: 'Approved' },
+  ],
+  // Warning notices issued by the Branch Manager — HR files them to the
+  // employee record after review (disciplinary action stays HR-owned).
+  warningNotices: [
+    { id: 'wn1', employee: 'Omar Youssef', type: 'Attendance', date: '2026-08-22', reason: '3rd late arrival within one month', note: 'Verbal warning issued on site; agreed on 08:00 start', issuedBy: 'Ahmed Mohamed', status: 'Pending HR' },
+  ],
+  // Bonus / overtime proposals — the Branch Manager proposes, HR approves
+  // and includes it in the payroll run (§10: HR owns payroll edits).
+  bonusProposals: [
+    { id: 'bp1', employee: 'Karim Hassan', type: 'Performance Bonus', amount: 500, date: '2026-08-25', reason: 'Covered extra classes during event week', note: 'Branch revenue up 12% this month', issuedBy: 'Ahmed Mohamed', status: 'Pending HR' },
+  ],
+  branchEmployees: [
+    { id: 'RV-00124', name: 'Ahmed Mohamed', position: 'Trainer', shift: 'Morning', status: 'Active', initials: 'AM' },
+    { id: 'RV-00125', name: 'Karim Hassan', position: 'Trainer', shift: 'Morning', status: 'Active', initials: 'KH' },
+    { id: 'RV-00126', name: 'Sara Ali', position: 'Receptionist', shift: 'Morning', status: 'Active', initials: 'SA' },
+    { id: 'RV-00127', name: 'Omar Youssef', position: 'Trainer', shift: 'Evening', status: 'Active', initials: 'OY' },
+    { id: 'RV-00128', name: 'Nour Ibrahim', position: 'Cleaner', shift: 'Morning', status: 'Active', initials: 'NI' },
+    { id: 'RV-00129', name: 'Yasmin Adel', position: 'Trainer', shift: 'Evening', status: 'On Leave', initials: 'YA' },
+    { id: 'RV-00130', name: 'Tarek Nabil', position: 'Receptionist', shift: 'Evening', status: 'Active', initials: 'TN' },
+    { id: 'RV-00131', name: 'Mona Said', position: 'Trainer', shift: 'Morning', status: 'Active', initials: 'MS' },
+    { id: 'RV-00132', name: 'Hassan Ali', position: 'Maintenance', shift: 'Morning', status: 'Active', initials: 'HA' },
+    { id: 'RV-00133', name: 'Fatma Hassan', position: 'Trainer', shift: 'Evening', status: 'Active', initials: 'FH' },
+    { id: 'RV-00134', name: 'Ahmed Zaki', position: 'Trainer', shift: 'Morning', status: 'Active', initials: 'AZ' },
+    { id: 'RV-00135', name: 'Laila Mostafa', position: 'Receptionist', shift: 'Evening', status: 'Suspended', initials: 'LM' },
+  ],
+  teamEvaluations: [
+    { id: 'te1', employee: 'Karim Hassan', position: 'Trainer', period: 'Q2 2026', score: 4.2, result: 'Exceeds', status: 'Completed' },
+    { id: 'te2', employee: 'Sara Ali', position: 'Receptionist', period: 'Q2 2026', score: 3.8, result: 'Meets', status: 'Completed' },
+    { id: 'te3', employee: 'Omar Youssef', position: 'Trainer', period: 'Q2 2026', score: 3.1, result: 'Meets', status: 'Completed' },
+    { id: 'te4', employee: 'Nour Ibrahim', position: 'Cleaner', period: 'Q2 2026', score: 4.0, result: 'Meets', status: 'Completed' },
+    { id: 'te5', employee: 'Yasmin Adel', position: 'Trainer', period: 'Q2 2026', score: 2.6, result: 'Below', status: 'Completed' },
+    { id: 'te6', employee: 'Tarek Nabil', position: 'Receptionist', period: 'Q2 2026', score: 3.5, result: 'Meets', status: 'Completed' },
+    { id: 'te7', employee: 'Mona Said', position: 'Trainer', period: 'Q2 2026', score: 4.6, result: 'Exceeds', status: 'Completed' },
+    { id: 'te8', employee: 'Hassan Ali', position: 'Maintenance', period: 'Q2 2026', score: 3.9, result: 'Meets', status: 'Completed' },
+  ],
+  settings: {
+    emailNotifications: true,
+    pushNotifications: true,
+    scheduleNotifications: true,
+    attendanceNotifications: true,
+    payrollNotifications: true,
+    requestNotifications: false,
+  },
+};
+
+// ==================== DEMO USERS (Prototype Preview) ====================
+// Switch roles in the demo toolbar to preview how permissions change the
+// navigation and which pages are visible. Keys follow the permission catalog
+// in docs/product/features.md (dotted format, e.g. `team.view`).
+const DEMO_USERS = {
+  employee: {
+    id: 'RV-00124', firstName: 'Ahmed', lastName: 'Mohamed', fullName: 'Ahmed Mohamed',
+    email: 'ahmed.mohamed@revive.com', phone: '+20 101 234 5678', initials: 'AM',
+    position: 'Trainer', level: 'Senior',
+    gym: { id: 'gym-1', name: 'Revive Gym', branch: 'Nasr City' },
+    hireDate: '2026-01-12', employmentType: 'Full-time', status: 'Active',
+    role: 'Employee',
+    permissions: [],
+    dateOfBirth: '1995-03-15', nationalId: '29503151234567', gender: 'Male',
+    address: '15 El-Thawra St, Nasr City, Cairo',
+    emergencyContact: { name: 'Mohamed Ahmed', relationship: 'Father', phone: '+20 100 987 6543' },
+    baseSalary: 12000,
+  },
+  teamLeader: {
+    id: 'RV-00124', firstName: 'Ahmed', lastName: 'Mohamed', fullName: 'Ahmed Mohamed',
+    email: 'ahmed.mohamed@revive.com', phone: '+20 101 234 5678', initials: 'AM',
+    position: 'Trainer', level: 'Senior',
+    gym: { id: 'gym-1', name: 'Revive Gym', branch: 'Nasr City' },
+    hireDate: '2026-01-12', employmentType: 'Full-time', status: 'Active',
+    role: 'Team Leader',
+    // Team-scoped — scope is the assigned team, NOT the whole gym. Shift
+    // Management is granted alongside team scheduling so the TL can manage
+    // shift assignments for their team.
+    // Team leader can approve/reject team requests; HR still signs off final approval.
+    permissions: ['team.view','attendance.view.team','schedule.view.team','requests.view.team','requests.approve.team','evaluations.view.team','team.manage','schedule.manage'],
+    dateOfBirth: '1995-03-15', nationalId: '29503151234567', gender: 'Male',
+    address: '15 El-Thawra St, Nasr City, Cairo',
+    emergencyContact: { name: 'Mohamed Ahmed', relationship: 'Father', phone: '+20 100 987 6543' },
+    baseSalary: 12000,
+  },
+  branchManager: {
+    id: 'RV-00124', firstName: 'Ahmed', lastName: 'Mohamed', fullName: 'Ahmed Mohamed',
+    email: 'ahmed.mohamed@revive.com', phone: '+20 101 234 5678', initials: 'AM',
+    position: 'Trainer', level: 'Senior',
+    gym: { id: 'gym-1', name: 'Revive Gym', branch: 'Nasr City' },
+    hireDate: '2026-01-12', employmentType: 'Full-time', status: 'Active',
+    role: 'Branch Manager',
+    // Branch-wide scope — the assigned gym. The team-scoped keys granted here
+    // are Team Requests (view + stage-1 approve/reject) and Team Schedule (view),
+    // so the BM can act on requests and see the team roster; the rest stay out
+    // so the demo still separates branch management from team leadership.
+    permissions: ['employees.view','employees.create','employees.edit','employees.status.change','attendance.view','attendance.edit','schedule.view','schedule.manage','schedule.view.team','requests.view','requests.approve','requests.view.team','requests.approve.team','recruitment.vacancy_request.create','employees.offboard'],
+    dateOfBirth: '1995-03-15', nationalId: '29503151234567', gender: 'Male',
+    address: '15 El-Thawra St, Nasr City, Cairo',
+    emergencyContact: { name: 'Mohamed Ahmed', relationship: 'Father', phone: '+20 100 987 6543' },
+    baseSalary: 12000,
+  },
+  hr: {
+    id: 'RV-00201', firstName: 'Sarah', lastName: 'Hassan', fullName: 'Sarah Hassan',
+    email: 'sarah.hassan@revive.com', phone: '+20 102 345 6789', initials: 'SH',
+    position: 'HR Specialist', level: 'Senior',
+    gym: { id: 'gym-1', name: 'Revive Gym', branch: 'Nasr City' },
+    hireDate: '2025-06-01', employmentType: 'Full-time', status: 'Active',
+    role: 'HR',
+    permissions: ['employees.view','employees.create','employees.edit','employees.documents.view','attendance.view','attendance.edit','attendance.view.team','schedule.view','schedule.manage','schedule.view.team','requests.view','requests.approve','requests.view.team','requests.approve.team','payroll.view','recruitment.view','recruitment.vacancies.manage','recruitment.candidates.manage','recruitment.vacancy_request.create','recruitment.vacancy_request.approve','evaluations.view','evaluations.view.team','team.view','team.manage','employees.offboard'],
+    dateOfBirth: '1992-11-20', nationalId: '29211201234567', gender: 'Female',
+    address: '8 Makram Ebeid St, Nasr City, Cairo',
+    emergencyContact: { name: 'Hassan Ali', relationship: 'Father', phone: '+20 100 111 2222' },
+    baseSalary: 15000,
+  },
+  hrManager: {
+    id: 'RV-00102', firstName: 'Mona', lastName: 'El-Sayed', fullName: 'Mona El-Sayed',
+    email: 'mona.elsayed@revive.com', phone: '+20 103 456 7890', initials: 'ME',
+    position: 'HR Manager', level: 'Manager',
+    gym: { id: 'gym-1', name: 'Revive Gym', branch: 'Nasr City' },
+    hireDate: '2024-03-15', employmentType: 'Full-time', status: 'Active',
+    role: 'HR Manager',
+    permissions: ['employees.view','employees.create','employees.edit','employees.transfer','employees.position.change','employees.role.assign','employees.status.change','employees.compensation.manage','employees.contract.manage','employees.offboard','employees.documents.view','employees.documents.manage','employees.bulk_import','employees.leave_balance.manage','positions.view','positions.manage','attendance.view','attendance.edit','attendance.manual_entry','attendance.view.team','schedule.view','schedule.manage','schedule.view.team','requests.view','requests.approve','requests.view.team','requests.approve.team','payroll.view','payroll.edit','payroll.approve','evaluations.view','evaluations.manage','evaluations.view.team','reports.view','announcements.view','announcements.manage','audit.view','team.view','team.manage','recruitment.view','recruitment.vacancies.manage','recruitment.candidates.manage','recruitment.hire.approve','recruitment.vacancy_request.create','recruitment.vacancy_request.approve'],
+    dateOfBirth: '1988-07-08', nationalId: '28807081234567', gender: 'Female',
+    address: '22 Abbas El-Akkad St, Nasr City, Cairo',
+    emergencyContact: { name: 'El-Sayed Mahmoud', relationship: 'Father', phone: '+20 100 333 4444' },
+    baseSalary: 22000,
+  },
+  superAdmin: {
+    id: 'RV-00001', firstName: 'Omar', lastName: 'Farouk', fullName: 'Omar Farouk',
+    email: 'omar.farouk@revive.com', phone: '+20 100 000 0001', initials: 'OF',
+    position: 'System Administrator', level: 'Executive',
+    gym: { id: 'gym-1', name: 'Revive Gym', branch: 'Nasr City' },
+    hireDate: '2024-01-01', employmentType: 'Full-time', status: 'Active',
+    role: 'Super Admin',
+    permissions: ['*'],
+    dateOfBirth: '1985-01-01', nationalId: '28501011234567', gender: 'Male',
+    address: '1 Central Plaza, New Cairo, Cairo',
+    emergencyContact: { name: 'Farouk Omar', relationship: 'Father', phone: '+20 100 555 6666' },
+    baseSalary: 30000,
+  },
+};
