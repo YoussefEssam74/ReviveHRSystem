@@ -78,7 +78,7 @@
       <!-- Cloud API Config Button -->
       <button onclick="openApiConfigModal()" 
         class="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-charcoal-100 hover:bg-brand-50 hover:text-brand-700 hover:border-brand-300 border border-charcoal-200 text-charcoal-700 text-xs font-semibold transition-all shadow-sm"
-        title="Configure Biometric AI Backend URL (Hugging Face / Local)">
+        title="Configure Biometric AI Backend URL (Render Cloud / Local)">
         <span class="material-icons text-[16px] text-brand-600">cloud_queue</span>
         <span class="hidden sm:inline">AI Backend</span>
       </button>
@@ -146,10 +146,10 @@
           <div class="absolute inset-0 opacity-[0.12]" style="background-image: radial-gradient(#22c55e 1px, transparent 1px); background-size: 24px 24px;"></div>
 
           <!-- Real-Time Camera Stream (Local MJPEG Stream) -->
-          <img id="camera-stream" src="" class="absolute inset-0 w-full h-full object-cover hidden z-0" alt="Biometric Webcam Stream" crossorigin="anonymous">
+          <img id="camera-stream" src="" class="absolute inset-0 w-full h-full object-contain hidden z-0" alt="Biometric Webcam Stream" crossorigin="anonymous">
 
           <!-- Client Browser Webcam Video (WebRTC / getUserMedia) -->
-          <video id="client-webcam" autoplay playsinline muted class="absolute inset-0 w-full h-full object-cover hidden z-0"></video>
+          <video id="client-webcam" autoplay playsinline muted class="absolute inset-0 w-full h-full object-contain hidden z-0"></video>
 
           <!-- Real-Time Face Detection Bounding Box Canvas Overlay -->
           <canvas id="face-box-canvas" class="absolute inset-0 w-full h-full pointer-events-none z-10"></canvas>
@@ -182,7 +182,7 @@
               <span class="material-icons text-[34px]">cloud_off</span>
             </div>
             <h3 class="text-white text-base font-bold">Biometric AI Service Offline</h3>
-            <p id="vf-offline-msg" class="text-charcoal-400 text-xs mt-1 max-w-sm">Connect to your Hugging Face Space cloud URL or start the local Python backend.</p>
+            <p id="vf-offline-msg" class="text-charcoal-400 text-xs mt-1 max-w-sm">Connect to your Render cloud API or start the local Python backend.</p>
             <div class="mt-4 flex flex-wrap items-center justify-center gap-2">
               <button onclick="openApiConfigModal()" class="px-3.5 py-2 rounded-lg bg-brand-600 hover:bg-brand-700 active:scale-95 text-white text-xs font-bold flex items-center gap-1.5 transition-all shadow">
                 <span class="material-icons text-[15px]">cloud_sync</span>
@@ -233,36 +233,6 @@
 
           <!-- Fullscreen Result Overlay -->
           <div id="vf-result" class="absolute inset-0 hidden z-20"></div>
-        </div>
-
-        <!-- Controls & Simulation Fallback -->
-        <div class="px-4 pb-3 flex flex-col gap-2">
-          <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
-            <!-- Test Scenario Selector (for testing ADR-004 logic / offline simulation) -->
-            <label class="flex flex-col gap-1 flex-1 min-w-0">
-              <span class="text-[10px] font-bold text-charcoal-500 uppercase tracking-wide flex items-center justify-between">
-                <span>Simulation / Fallback Mode</span>
-                <span id="mode-tag" class="text-[9px] font-semibold text-brand-700 bg-brand-50 px-1.5 rounded">Live Camera Priority</span>
-              </span>
-              <select id="scenario" class="rounded-lg border border-charcoal-200 bg-white px-3 py-2 text-xs font-semibold text-charcoal-800 outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100 transition-all">
-                <option value="auto">Live Camera Match (Random employee if offline)</option>
-                <option value="accept">Force Accepted Check-In/Out</option>
-                <option value="noshift">Force Rejected — No shift scheduled today</option>
-                <option value="noaccess">Force Rejected — No gym access</option>
-                <option value="spoof">Force Rejected — Spoof attack (Photo/Screen)</option>
-              </select>
-            </label>
-
-            <!-- Manual Trigger Button -->
-            <div class="flex flex-col justify-end">
-              <span class="text-[10px] font-semibold text-transparent select-none hidden sm:block">Trigger</span>
-              <button id="scan-btn" onclick="handleScanButton()" 
-                class="h-[38px] px-6 rounded-lg bg-brand-600 hover:bg-brand-700 active:scale-[0.98] text-white text-xs font-bold flex items-center justify-center gap-2 transition-all shadow-sm">
-                <span class="material-icons text-[17px]">scan_face</span>
-                <span id="scan-btn-text">Scan Face Now</span>
-              </button>
-            </div>
-          </div>
         </div>
 
       </div>
@@ -431,7 +401,7 @@
           </div>
           <div>
             <h2 class="text-sm font-bold text-charcoal-900 leading-tight">Biometric AI Backend Endpoint</h2>
-            <p class="text-[11px] text-charcoal-500">Connect to Hugging Face Space cloud or local Python server</p>
+            <p class="text-[11px] text-charcoal-500">Connect to Render cloud API or local Python server</p>
           </div>
         </div>
         <button onclick="closeApiConfigModal()" class="p-1.5 rounded-lg text-charcoal-400 hover:text-charcoal-700 hover:bg-charcoal-100 transition-colors">
@@ -446,7 +416,7 @@
             Service URL (HTTPS / HTTP)
           </label>
           <div class="flex gap-2">
-            <input type="url" id="cfg-api-url" placeholder="https://<username>-revive-biometrics.hf.space" 
+            <input type="url" id="cfg-api-url" placeholder="https://revive-hr-biometrics.onrender.com" 
               class="flex-1 rounded-lg border border-charcoal-200 px-3 py-2 text-xs font-mono font-semibold outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100 transition-all">
             <button onclick="testAndSaveApiUrl()" id="btn-test-api"
               class="px-4 py-2 rounded-lg bg-brand-600 hover:bg-brand-700 active:scale-95 text-white text-xs font-bold transition-all shadow-sm flex items-center gap-1.5 shrink-0">
@@ -454,7 +424,7 @@
               <span>Connect</span>
             </button>
           </div>
-          <p class="text-[10px] text-charcoal-400 mt-1">Example: <code class="text-brand-600 font-mono">https://youssefessam74-revive-biometrics.hf.space</code> or <code class="text-charcoal-600 font-mono">http://localhost:5050</code></p>
+          <p class="text-[10px] text-charcoal-400 mt-1">Example: <code class="text-brand-600 font-mono">https://revive-hr-biometrics.onrender.com</code> or <code class="text-charcoal-600 font-mono">http://localhost:5050</code></p>
         </div>
 
         <!-- Presets -->
@@ -468,10 +438,6 @@
             <button onclick="applyPresetUrl('http://localhost:5050')" 
               class="px-2.5 py-1 rounded-lg border border-charcoal-200 bg-white text-xs font-semibold hover:border-brand-400 text-charcoal-700 hover:text-brand-700 transition-all flex items-center gap-1">
               <span>💻 Local Machine (5050)</span>
-            </button>
-            <button onclick="applyPresetUrl('https://youssefeemad-revive-biometrics.hf.space')" 
-              class="px-2.5 py-1 rounded-lg border border-charcoal-200 bg-white text-xs font-semibold hover:border-brand-400 text-charcoal-700 hover:text-brand-700 transition-all flex items-center gap-1">
-              <span>🤗 Hugging Face</span>
             </button>
           </div>
         </div>
@@ -509,11 +475,11 @@
  * Validates against ADR-004 Gym Access & Shift Rules.
  * ===================================================================== */
 
-const defaultBiometricUrl = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
-  ? 'http://localhost:5050'
-  : (localStorage.getItem('revive_biometric_url') || '');
+const defaultBiometricUrl = 'https://revive-hr-biometrics.onrender.com';
 
-const savedBiometricUrl = localStorage.getItem('revive_biometric_url') || defaultBiometricUrl;
+const savedBiometricUrl = (localStorage.getItem('revive_biometric_url') && !localStorage.getItem('revive_biometric_url').includes('hf.space'))
+  ? localStorage.getItem('revive_biometric_url')
+  : defaultBiometricUrl;
 
 const Station = {
   deviceId: 'REV-PC-01',
@@ -714,8 +680,8 @@ async function startBrowserWebcam() {
   try {
     const stream = await navigator.mediaDevices.getUserMedia({
       video: {
-        width: { ideal: 640 },
-        height: { ideal: 480 },
+        width: { ideal: 1280 },
+        height: { ideal: 720 },
         facingMode: 'user'
       },
       audio: false
@@ -751,74 +717,11 @@ function captureClientFrameBase64(maxW = 480, maxH = 360) {
 }
 
 function drawBoundingBox(bbox, is_live, name, score) {
+  // Face box overlay and name tag removed as requested for a clean viewfinder
   const canvas = document.getElementById('face-box-canvas');
   if (!canvas) return;
   const ctx = canvas.getContext('2d');
-
-  const rect = canvas.getBoundingClientRect();
-  if (canvas.width !== Math.round(rect.width) || canvas.height !== Math.round(rect.height)) {
-    canvas.width = Math.round(rect.width);
-    canvas.height = Math.round(rect.height);
-  }
-
   ctx.clearRect(0, 0, canvas.width, canvas.height);
-  if (!bbox || bbox.length < 4) return;
-
-  const capW = captureCanvas.width || 480;
-  const capH = captureCanvas.height || 360;
-  const sx = canvas.width / capW;
-  const sy = canvas.height / capH;
-
-  const [bx, by, bw, bh] = bbox;
-  const x = bx * sx;
-  const y = by * sy;
-  const w = bw * sx;
-  const h = bh * sy;
-
-  ctx.save();
-  if (!is_live) {
-    ctx.strokeStyle = '#ef4444';
-    ctx.fillStyle = '#ef4444';
-    ctx.shadowColor = 'rgba(239, 68, 68, 0.7)';
-  } else if (name) {
-    ctx.strokeStyle = '#22c55e';
-    ctx.fillStyle = '#22c55e';
-    ctx.shadowColor = 'rgba(34, 197, 94, 0.7)';
-  } else {
-    ctx.strokeStyle = '#06b6d4';
-    ctx.fillStyle = '#06b6d4';
-    ctx.shadowColor = 'rgba(6, 182, 212, 0.7)';
-  }
-
-  ctx.lineWidth = 3;
-  ctx.shadowBlur = 10;
-
-  const corner = Math.min(26, w / 4, h / 4);
-  ctx.beginPath();
-  ctx.moveTo(x, y + corner); ctx.lineTo(x, y); ctx.lineTo(x + corner, y);
-  ctx.moveTo(x + w - corner, y); ctx.lineTo(x + w, y); ctx.lineTo(x + w, y + corner);
-  ctx.moveTo(x + w, y + h - corner); ctx.lineTo(x + w, y + h); ctx.lineTo(x + w - corner, y + h);
-  ctx.moveTo(x + corner, y + h); ctx.lineTo(x, y + h); ctx.lineTo(x, y + h - corner);
-  ctx.stroke();
-
-  const label = !is_live
-    ? '⚠️ SPOOF (FAKE)'
-    : (name ? `✓ ${name} (${Math.round((score || 0) * 100)}%)` : 'HUMAN (UNKNOWN)');
-
-  ctx.font = 'bold 12px Inter, sans-serif';
-  const tw = ctx.measureText(label).width;
-  const tagW = tw + 16;
-  const tagH = 22;
-  const tagY = Math.max(8, y - tagH - 6);
-
-  ctx.shadowBlur = 0;
-  ctx.beginPath();
-  ctx.roundRect(x, tagY, tagW, tagH, 6);
-  ctx.fill();
-
-  ctx.fillStyle = '#ffffff';
-  ctx.fillText(label, x + 8, tagY + 15);
-  ctx.restore();
 }
 
 async function sendClientFrame() {
@@ -865,8 +768,11 @@ async function checkBiometricConnection(showToast = false) {
     text.textContent = 'Face-ID · Standby';
     badge.className = 'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[11px] font-semibold transition-all bg-amber-50 border-amber-200 text-amber-800 hover:bg-amber-100';
     document.getElementById('hud-fps-text').textContent = 'STANDBY';
-    document.getElementById('mode-tag').textContent = 'Simulation Active';
-    document.getElementById('mode-tag').className = 'text-[9px] font-semibold text-amber-700 bg-amber-50 px-1.5 rounded';
+    const modeTag = document.getElementById('mode-tag');
+    if (modeTag) {
+      modeTag.textContent = 'Simulation Active';
+      modeTag.className = 'text-[9px] font-semibold text-amber-700 bg-amber-50 px-1.5 rounded';
+    }
     startBrowserWebcam();
     return;
   }
@@ -883,8 +789,11 @@ async function checkBiometricConnection(showToast = false) {
 
     document.getElementById('vf-offline').classList.add('hidden');
     document.getElementById('enrolled-count-pill').textContent = `${data.total_enrolled} Enrolled`;
-    document.getElementById('mode-tag').textContent = 'Live Face-ID Active';
-    document.getElementById('mode-tag').className = 'text-[9px] font-semibold text-brand-700 bg-brand-50 px-1.5 rounded';
+    const modeTag = document.getElementById('mode-tag');
+    if (modeTag) {
+      modeTag.textContent = 'Live Face-ID Active';
+      modeTag.className = 'text-[9px] font-semibold text-brand-700 bg-brand-50 px-1.5 rounded';
+    }
 
     const camStarted = await startBrowserWebcam();
     if (camStarted) {
@@ -906,8 +815,11 @@ async function checkBiometricConnection(showToast = false) {
 
     document.getElementById('vf-offline').classList.remove('hidden');
     document.getElementById('hud-fps-text').textContent = 'OFFLINE';
-    document.getElementById('mode-tag').textContent = 'Simulation Active';
-    document.getElementById('mode-tag').className = 'text-[9px] font-semibold text-amber-700 bg-amber-50 px-1.5 rounded';
+    const modeTag = document.getElementById('mode-tag');
+    if (modeTag) {
+      modeTag.textContent = 'Simulation Active';
+      modeTag.className = 'text-[9px] font-semibold text-amber-700 bg-amber-50 px-1.5 rounded';
+    }
 
     if (showToast) toast('Face-ID Service offline. Configure Cloud API or start local service.', 'err');
   }
@@ -930,10 +842,7 @@ function applyPresetUrl(url) {
 }
 
 function resetDefaultApiUrl() {
-  const url = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
-    ? 'http://localhost:5050'
-    : 'https://youssefessam74-revive-biometrics.hf.space';
-  document.getElementById('cfg-api-url').value = url;
+  document.getElementById('cfg-api-url').value = defaultBiometricUrl;
 }
 
 async function testAndSaveApiUrl() {
@@ -976,7 +885,7 @@ async function testAndSaveApiUrl() {
   } catch (err) {
     dot.className = 'w-2 h-2 rounded-full bg-red-500';
     text.textContent = 'Connection failed';
-    detail.textContent = `Error: ${err.message}. Ensure Space is public and running.`;
+    detail.textContent = `Error: ${err.message}. Ensure backend service is running.`;
     toast('Could not reach service at this URL', 'err');
   } finally {
     btn.disabled = false;
@@ -1229,7 +1138,7 @@ async function runAttendanceScan(empId, empName, livenessScore, type) {
  * SCAN BUTTON TRIGGER (AUTO LIVE SCAN OR MOCK SCENARIO)
  * ===================================================================== */
 async function handleScanButton() {
-  const scenario = document.getElementById('scenario').value;
+  const scenario = document.getElementById('scenario')?.value || 'auto';
 
   // If connected and user selected "auto" with an active face, use live detection
   if (state.bioConnected && scenario === 'auto' && state.lastBioData && state.lastBioData.face_detected) {
@@ -1269,13 +1178,13 @@ async function simulateScan() {
   if (state.busy) return;
   state.busy = true;
   const btn = document.getElementById('scan-btn');
-  btn.disabled = true; btn.classList.add('opacity-60', 'cursor-wait');
+  if (btn) { btn.disabled = true; btn.classList.add('opacity-60', 'cursor-wait'); }
 
   document.getElementById('vf-idle').classList.add('hidden');
   document.getElementById('vf-result').classList.add('hidden');
   document.getElementById('scanline').classList.remove('hidden');
 
-  const scenario = document.getElementById('scenario').value;
+  const scenario = document.getElementById('scenario')?.value || 'auto';
   const emp = pickScenarioEmployee(scenario);
   const type = nextTypeFor(emp.id);
   const liveness = scenario === 'spoof' ? +(0.18 + Math.random() * 0.3).toFixed(2) : +(0.85 + Math.random() * 0.12).toFixed(2);
@@ -1307,7 +1216,7 @@ async function simulateScan() {
   }
 
   state.busy = false;
-  btn.disabled = false; btn.classList.remove('opacity-60', 'cursor-wait');
+  if (btn) { btn.disabled = false; btn.classList.remove('opacity-60', 'cursor-wait'); }
 }
 
 function showResult(status, body, emp, type) {
