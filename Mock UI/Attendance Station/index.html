@@ -511,7 +511,7 @@
 
 const defaultBiometricUrl = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
   ? 'http://localhost:5050'
-  : 'https://youssefessam74-revive-biometrics.hf.space';
+  : (localStorage.getItem('revive_biometric_url') || '');
 
 const savedBiometricUrl = localStorage.getItem('revive_biometric_url') || defaultBiometricUrl;
 
@@ -858,6 +858,18 @@ async function checkBiometricConnection(showToast = false) {
   const badge = document.getElementById('bio-status-badge');
   const dot = document.getElementById('bio-status-dot');
   const text = document.getElementById('bio-status-text');
+
+  if (!Station.biometricUrl) {
+    state.bioConnected = false;
+    dot.className = 'w-2 h-2 rounded-full bg-amber-500';
+    text.textContent = 'Face-ID · Standby';
+    badge.className = 'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[11px] font-semibold transition-all bg-amber-50 border-amber-200 text-amber-800 hover:bg-amber-100';
+    document.getElementById('hud-fps-text').textContent = 'STANDBY';
+    document.getElementById('mode-tag').textContent = 'Simulation Active';
+    document.getElementById('mode-tag').className = 'text-[9px] font-semibold text-amber-700 bg-amber-50 px-1.5 rounded';
+    startBrowserWebcam();
+    return;
+  }
 
   try {
     const res = await fetch(`${Station.biometricUrl}/status`, { signal: AbortSignal.timeout(3000) });
