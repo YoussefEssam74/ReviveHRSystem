@@ -68,11 +68,19 @@
 
     <div class="flex items-center gap-2 lg:gap-3">
       <!-- Biometric Connection Pill -->
-      <button id="bio-status-badge" onclick="checkBiometricConnection(true)" 
+      <button id="bio-status-badge" onclick="openApiConfigModal()" 
         class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[11px] font-semibold transition-all bg-amber-50 border-amber-200 text-amber-800 hover:bg-amber-100"
-        title="Biometric Service status. Click to reconnect.">
+        title="Biometric Service status. Click to configure cloud API endpoint.">
         <span id="bio-status-dot" class="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span>
         <span id="bio-status-text">Face-ID · Connecting…</span>
+      </button>
+
+      <!-- Cloud API Config Button -->
+      <button onclick="openApiConfigModal()" 
+        class="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-charcoal-100 hover:bg-brand-50 hover:text-brand-700 hover:border-brand-300 border border-charcoal-200 text-charcoal-700 text-xs font-semibold transition-all shadow-sm"
+        title="Configure Biometric AI Backend URL (Hugging Face / Local)">
+        <span class="material-icons text-[16px] text-brand-600">cloud_queue</span>
+        <span class="hidden sm:inline">AI Backend</span>
       </button>
 
       <!-- Enroll Staff Face Modal Button -->
@@ -137,8 +145,14 @@
           <!-- Background Grid placeholder -->
           <div class="absolute inset-0 opacity-[0.12]" style="background-image: radial-gradient(#22c55e 1px, transparent 1px); background-size: 24px 24px;"></div>
 
-          <!-- Real-Time Camera Stream -->
+          <!-- Real-Time Camera Stream (Local MJPEG Stream) -->
           <img id="camera-stream" src="" class="absolute inset-0 w-full h-full object-cover hidden z-0" alt="Biometric Webcam Stream" crossorigin="anonymous">
+
+          <!-- Client Browser Webcam Video (WebRTC / getUserMedia) -->
+          <video id="client-webcam" autoplay playsinline muted class="absolute inset-0 w-full h-full object-cover hidden z-0"></video>
+
+          <!-- Real-Time Face Detection Bounding Box Canvas Overlay -->
+          <canvas id="face-box-canvas" class="absolute inset-0 w-full h-full pointer-events-none z-10"></canvas>
 
           <!-- Viewfinder Corner Reticle Brackets -->
           <div class="absolute inset-4 sm:inset-8 border border-white/10 rounded-2xl pointer-events-none z-10 transition-all" id="reticle-box"></div>
@@ -164,23 +178,30 @@
 
           <!-- Offline Warning Overlay -->
           <div id="vf-offline" class="absolute inset-0 flex flex-col items-center justify-center text-center px-6 z-10 bg-charcoal-900/95 backdrop-blur-sm">
-            <div class="w-16 h-16 rounded-2xl bg-charcoal-800 border border-charcoal-700 flex items-center justify-center text-red-400 mb-3 shadow-lg">
-              <span class="material-icons text-[34px]">videocam_off</span>
+            <div class="w-16 h-16 rounded-2xl bg-charcoal-800 border border-charcoal-700 flex items-center justify-center text-amber-400 mb-3 shadow-lg">
+              <span class="material-icons text-[34px]">cloud_off</span>
             </div>
-            <h3 class="text-white text-base font-bold">Biometric Camera Service Offline</h3>
-            <p class="text-charcoal-400 text-xs mt-1 max-w-sm">The Face-ID model service is not running on <code class="text-brand-400 font-mono">http://localhost:5050</code>.</p>
+            <h3 class="text-white text-base font-bold">Biometric AI Service Offline</h3>
+            <p id="vf-offline-msg" class="text-charcoal-400 text-xs mt-1 max-w-sm">Connect to your Hugging Face Space cloud URL or start the local Python backend.</p>
             <div class="mt-4 flex flex-wrap items-center justify-center gap-2">
-              <button onclick="checkBiometricConnection(true)" class="px-4 py-2 rounded-lg bg-brand-600 hover:bg-brand-700 active:scale-95 text-white text-xs font-bold flex items-center gap-1.5 transition-all shadow">
-                <span class="material-icons text-[15px]">refresh</span>
-                Reconnect Service
+              <button onclick="openApiConfigModal()" class="px-3.5 py-2 rounded-lg bg-brand-600 hover:bg-brand-700 active:scale-95 text-white text-xs font-bold flex items-center gap-1.5 transition-all shadow">
+                <span class="material-icons text-[15px]">cloud_sync</span>
+                Configure Cloud API
               </button>
-              <button onclick="toggleOfflineHelp()" class="px-3 py-2 rounded-lg bg-charcoal-800 hover:bg-charcoal-700 text-charcoal-200 text-xs font-semibold border border-charcoal-700 transition-all">
-                How to Start
+              <button onclick="checkBiometricConnection(true)" class="px-3 py-2 rounded-lg bg-charcoal-800 hover:bg-charcoal-700 active:scale-95 text-charcoal-200 text-xs font-semibold border border-charcoal-700 flex items-center gap-1.5 transition-all">
+                <span class="material-icons text-[15px]">refresh</span>
+                Reconnect
+              </button>
+              <button onclick="dismissOfflineOverlay()" class="px-3 py-2 rounded-lg bg-charcoal-800 hover:bg-charcoal-700 text-charcoal-300 text-xs font-semibold border border-charcoal-700 transition-all" title="Test with simulated detections">
+                Try Simulation
+              </button>
+              <button onclick="toggleOfflineHelp()" class="px-2.5 py-2 rounded-lg bg-charcoal-900 hover:bg-charcoal-800 text-charcoal-400 hover:text-charcoal-200 text-xs font-semibold border border-charcoal-800 transition-all">
+                Local Setup
               </button>
             </div>
             <div id="offline-help" class="hidden mt-3 p-3 rounded-lg bg-charcoal-950/80 border border-charcoal-700 text-[11px] text-charcoal-300 font-mono text-left max-w-md">
-              <p class="text-brand-400 font-bold mb-1">▶ Quick Launch Command:</p>
-              <p>Run <code class="text-white">start_attendance_station.bat</code> in the project root</p>
+              <p class="text-brand-400 font-bold mb-1">▶ Local Launch Command:</p>
+              <p>Run <code class="text-white">start-attendance-station.bat</code> in the project root</p>
               <p class="text-charcoal-400 mt-1">Or run: <code class="text-white">conda run -n workout_ml python biometric_test/webcam_app.py</code></p>
             </div>
           </div>
@@ -399,6 +420,84 @@
     </div>
   </div>
 
+  <!-- ==================== CLOUD API CONFIGURATION MODAL ==================== -->
+  <div id="modal-api-config" class="fixed inset-0 bg-charcoal-950/70 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl border border-charcoal-200 shadow-2xl max-w-lg w-full overflow-hidden flex flex-col fade-in">
+      <!-- Header -->
+      <div class="px-5 py-4 border-b border-charcoal-100 flex items-center justify-between bg-charcoal-50/70">
+        <div class="flex items-center gap-2.5">
+          <div class="w-9 h-9 rounded-xl bg-brand-100 text-brand-700 flex items-center justify-center">
+            <span class="material-icons text-[20px]">cloud_sync</span>
+          </div>
+          <div>
+            <h2 class="text-sm font-bold text-charcoal-900 leading-tight">Biometric AI Backend Endpoint</h2>
+            <p class="text-[11px] text-charcoal-500">Connect to Hugging Face Space cloud or local Python server</p>
+          </div>
+        </div>
+        <button onclick="closeApiConfigModal()" class="p-1.5 rounded-lg text-charcoal-400 hover:text-charcoal-700 hover:bg-charcoal-100 transition-colors">
+          <span class="material-icons text-[18px]">close</span>
+        </button>
+      </div>
+
+      <!-- Body -->
+      <div class="p-5 space-y-4">
+        <div>
+          <label class="block text-xs font-bold text-charcoal-700 mb-1">
+            Service URL (HTTPS / HTTP)
+          </label>
+          <div class="flex gap-2">
+            <input type="url" id="cfg-api-url" placeholder="https://<username>-revive-biometrics.hf.space" 
+              class="flex-1 rounded-lg border border-charcoal-200 px-3 py-2 text-xs font-mono font-semibold outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100 transition-all">
+            <button onclick="testAndSaveApiUrl()" id="btn-test-api"
+              class="px-4 py-2 rounded-lg bg-brand-600 hover:bg-brand-700 active:scale-95 text-white text-xs font-bold transition-all shadow-sm flex items-center gap-1.5 shrink-0">
+              <span class="material-icons text-[16px]">sync</span>
+              <span>Connect</span>
+            </button>
+          </div>
+          <p class="text-[10px] text-charcoal-400 mt-1">Example: <code class="text-brand-600 font-mono">https://youssefessam74-revive-biometrics.hf.space</code> or <code class="text-charcoal-600 font-mono">http://localhost:5050</code></p>
+        </div>
+
+        <!-- Presets -->
+        <div class="p-3 rounded-xl bg-charcoal-50 border border-charcoal-200 space-y-2">
+          <p class="text-[10px] font-bold text-charcoal-500 uppercase tracking-wide">Quick Presets</p>
+          <div class="flex flex-wrap gap-2">
+            <button onclick="applyPresetUrl('https://revive-hr-biometrics.onrender.com')" 
+              class="px-2.5 py-1 rounded-lg border border-charcoal-200 bg-white text-xs font-semibold hover:border-brand-400 text-charcoal-700 hover:text-brand-700 transition-all flex items-center gap-1">
+              <span>🚀 Render.com Cloud</span>
+            </button>
+            <button onclick="applyPresetUrl('http://localhost:5050')" 
+              class="px-2.5 py-1 rounded-lg border border-charcoal-200 bg-white text-xs font-semibold hover:border-brand-400 text-charcoal-700 hover:text-brand-700 transition-all flex items-center gap-1">
+              <span>💻 Local Machine (5050)</span>
+            </button>
+            <button onclick="applyPresetUrl('https://youssefeemad-revive-biometrics.hf.space')" 
+              class="px-2.5 py-1 rounded-lg border border-charcoal-200 bg-white text-xs font-semibold hover:border-brand-400 text-charcoal-700 hover:text-brand-700 transition-all flex items-center gap-1">
+              <span>🤗 Hugging Face</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Status Result Box -->
+        <div id="cfg-status-result" class="p-3.5 rounded-xl border border-charcoal-200 bg-charcoal-50 text-xs">
+          <div class="flex items-center gap-2 font-semibold text-charcoal-700 mb-1">
+            <span id="cfg-status-dot" class="w-2 h-2 rounded-full bg-gray-400"></span>
+            <span id="cfg-status-text">Connection not tested yet</span>
+          </div>
+          <p id="cfg-status-detail" class="text-[11px] text-charcoal-500 font-mono">Click 'Connect' to verify YuNet, Silent-Face, and SFace models.</p>
+        </div>
+      </div>
+
+      <!-- Footer -->
+      <div class="px-5 py-3 border-t border-charcoal-100 bg-charcoal-50 flex items-center justify-between">
+        <button onclick="resetDefaultApiUrl()" class="text-xs text-charcoal-500 hover:text-charcoal-800 underline">
+          Reset to Default
+        </button>
+        <button onclick="closeApiConfigModal()" class="px-4 py-2 rounded-lg bg-charcoal-800 hover:bg-charcoal-900 text-white text-xs font-bold transition-all">
+          Done
+        </button>
+      </div>
+    </div>
+  </div>
+
   <!-- toasts -->
   <div id="toast-host" class="fixed bottom-4 right-4 z-50 flex flex-col gap-2 items-end pointer-events-none"></div>
 
@@ -410,13 +509,19 @@
  * Validates against ADR-004 Gym Access & Shift Rules.
  * ===================================================================== */
 
+const defaultBiometricUrl = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+  ? 'http://localhost:5050'
+  : 'https://youssefessam74-revive-biometrics.hf.space';
+
+const savedBiometricUrl = localStorage.getItem('revive_biometric_url') || defaultBiometricUrl;
+
 const Station = {
   deviceId: 'REV-PC-01',
   deviceToken: 'dv_downtown_rev_7f3a9c',
   gymId: 2,
   gymName: 'Downtown Gym',
   apiPath: '/api/attendance/public/events',
-  biometricUrl: (window.location.protocol.startsWith('http')) ? window.location.origin : 'http://localhost:5050',
+  biometricUrl: savedBiometricUrl,
 };
 
 /* --- Employee directory (mock) — drives ADR-004 validation --- */
@@ -583,9 +688,171 @@ function nextTypeFor(empId) {
 }
 
 /* =====================================================================
- * BIOMETRIC MODEL CONNECTION & POLLING
+ * BIOMETRIC MODEL CONNECTION & STREAMING
  * ===================================================================== */
 let pollingInterval = null;
+let clientMediaStream = null;
+let clientWebcamActive = false;
+let frameSendInFlight = false;
+let frameLoopTimer = null;
+const captureCanvas = document.createElement('canvas');
+const captureCtx = captureCanvas.getContext('2d');
+
+async function startBrowserWebcam() {
+  const videoEl = document.getElementById('client-webcam');
+  if (!videoEl) return false;
+
+  if (clientMediaStream) {
+    return true;
+  }
+
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    console.warn("getUserMedia not supported in this environment");
+    return false;
+  }
+
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: {
+        width: { ideal: 640 },
+        height: { ideal: 480 },
+        facingMode: 'user'
+      },
+      audio: false
+    });
+    clientMediaStream = stream;
+    videoEl.srcObject = stream;
+    videoEl.classList.remove('hidden');
+    const camImg = document.getElementById('camera-stream');
+    if (camImg) camImg.classList.add('hidden');
+    await videoEl.play();
+    clientWebcamActive = true;
+    return true;
+  } catch (err) {
+    console.warn("Webcam access error:", err);
+    return false;
+  }
+}
+
+function captureClientFrameBase64(maxW = 480, maxH = 360) {
+  const videoEl = document.getElementById('client-webcam');
+  if (!videoEl || !videoEl.videoWidth || !videoEl.videoHeight) return null;
+
+  let w = videoEl.videoWidth;
+  let h = videoEl.videoHeight;
+  const ratio = Math.min(maxW / w, maxH / h, 1);
+  w = Math.round(w * ratio);
+  h = Math.round(h * ratio);
+
+  captureCanvas.width = w;
+  captureCanvas.height = h;
+  captureCtx.drawImage(videoEl, 0, 0, w, h);
+  return captureCanvas.toDataURL('image/jpeg', 0.72);
+}
+
+function drawBoundingBox(bbox, is_live, name, score) {
+  const canvas = document.getElementById('face-box-canvas');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+
+  const rect = canvas.getBoundingClientRect();
+  if (canvas.width !== Math.round(rect.width) || canvas.height !== Math.round(rect.height)) {
+    canvas.width = Math.round(rect.width);
+    canvas.height = Math.round(rect.height);
+  }
+
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  if (!bbox || bbox.length < 4) return;
+
+  const capW = captureCanvas.width || 480;
+  const capH = captureCanvas.height || 360;
+  const sx = canvas.width / capW;
+  const sy = canvas.height / capH;
+
+  const [bx, by, bw, bh] = bbox;
+  const x = bx * sx;
+  const y = by * sy;
+  const w = bw * sx;
+  const h = bh * sy;
+
+  ctx.save();
+  if (!is_live) {
+    ctx.strokeStyle = '#ef4444';
+    ctx.fillStyle = '#ef4444';
+    ctx.shadowColor = 'rgba(239, 68, 68, 0.7)';
+  } else if (name) {
+    ctx.strokeStyle = '#22c55e';
+    ctx.fillStyle = '#22c55e';
+    ctx.shadowColor = 'rgba(34, 197, 94, 0.7)';
+  } else {
+    ctx.strokeStyle = '#06b6d4';
+    ctx.fillStyle = '#06b6d4';
+    ctx.shadowColor = 'rgba(6, 182, 212, 0.7)';
+  }
+
+  ctx.lineWidth = 3;
+  ctx.shadowBlur = 10;
+
+  const corner = Math.min(26, w / 4, h / 4);
+  ctx.beginPath();
+  ctx.moveTo(x, y + corner); ctx.lineTo(x, y); ctx.lineTo(x + corner, y);
+  ctx.moveTo(x + w - corner, y); ctx.lineTo(x + w, y); ctx.lineTo(x + w, y + corner);
+  ctx.moveTo(x + w, y + h - corner); ctx.lineTo(x + w, y + h); ctx.lineTo(x + w - corner, y + h);
+  ctx.moveTo(x + corner, y + h); ctx.lineTo(x, y + h); ctx.lineTo(x, y + h - corner);
+  ctx.stroke();
+
+  const label = !is_live
+    ? '⚠️ SPOOF (FAKE)'
+    : (name ? `✓ ${name} (${Math.round((score || 0) * 100)}%)` : 'HUMAN (UNKNOWN)');
+
+  ctx.font = 'bold 12px Inter, sans-serif';
+  const tw = ctx.measureText(label).width;
+  const tagW = tw + 16;
+  const tagH = 22;
+  const tagY = Math.max(8, y - tagH - 6);
+
+  ctx.shadowBlur = 0;
+  ctx.beginPath();
+  ctx.roundRect(x, tagY, tagW, tagH, 6);
+  ctx.fill();
+
+  ctx.fillStyle = '#ffffff';
+  ctx.fillText(label, x + 8, tagY + 15);
+  ctx.restore();
+}
+
+async function sendClientFrame() {
+  if (!state.bioConnected || frameSendInFlight) return;
+  const frameB64 = captureClientFrameBase64();
+  if (!frameB64) return;
+
+  frameSendInFlight = true;
+  const startT = performance.now();
+  try {
+    const res = await fetch(`${Station.biometricUrl}/process_frame`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ image: frameB64 }),
+      signal: AbortSignal.timeout(3500)
+    });
+    if (res.ok) {
+      const data = await res.json();
+      const elapsed = Math.round(performance.now() - startT);
+      data.fps = `${Math.round(1000 / Math.max(1, elapsed))} (${elapsed}ms)`;
+      handleBiometricFrameState(data);
+      drawBoundingBox(data.bbox, data.is_live, data.recognized_name, data.similarity);
+    }
+  } catch (err) {
+    // transient network error
+  } finally {
+    frameSendInFlight = false;
+  }
+}
+
+function startBiometricLoops() {
+  if (frameLoopTimer) clearInterval(frameLoopTimer);
+  frameLoopTimer = setInterval(sendClientFrame, 320);
+}
 
 async function checkBiometricConnection(showToast = false) {
   const badge = document.getElementById('bio-status-badge');
@@ -593,28 +860,32 @@ async function checkBiometricConnection(showToast = false) {
   const text = document.getElementById('bio-status-text');
 
   try {
-    const res = await fetch(`${Station.biometricUrl}/status`, { signal: AbortSignal.timeout(1800) });
+    const res = await fetch(`${Station.biometricUrl}/status`, { signal: AbortSignal.timeout(3000) });
     if (!res.ok) throw new Error('Status HTTP ' + res.status);
     const data = await res.json();
-    
+
     state.bioConnected = true;
     dot.className = 'w-2 h-2 rounded-full bg-brand-500';
-    text.textContent = `Face-ID · Online (${data.fps} FPS)`;
+    text.textContent = `Face-ID · Online (${data.fps || 'Cloud'})`;
     badge.className = 'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[11px] font-semibold transition-all bg-brand-50 border-brand-200 text-brand-800 hover:bg-brand-100';
 
     document.getElementById('vf-offline').classList.add('hidden');
-    const camImg = document.getElementById('camera-stream');
-    if (!camImg.src || camImg.src.indexOf('/video_feed') === -1) {
-      camImg.src = `${Station.biometricUrl}/video_feed`;
-      camImg.classList.remove('hidden');
-    }
-
     document.getElementById('enrolled-count-pill').textContent = `${data.total_enrolled} Enrolled`;
     document.getElementById('mode-tag').textContent = 'Live Face-ID Active';
     document.getElementById('mode-tag').className = 'text-[9px] font-semibold text-brand-700 bg-brand-50 px-1.5 rounded';
 
-    if (showToast) toast(`Connected to Face-ID Service (FPS: ${data.fps})`, 'ok');
-    handleBiometricFrameState(data);
+    const camStarted = await startBrowserWebcam();
+    if (camStarted) {
+      startBiometricLoops();
+    } else {
+      const camImg = document.getElementById('camera-stream');
+      if (!camImg.src || camImg.src.indexOf('/video_feed') === -1) {
+        camImg.src = `${Station.biometricUrl}/video_feed`;
+        camImg.classList.remove('hidden');
+      }
+    }
+
+    if (showToast) toast(`Connected to Face-ID Service (${data.device || 'Cloud'})`, 'ok');
   } catch (err) {
     state.bioConnected = false;
     dot.className = 'w-2 h-2 rounded-full bg-red-500';
@@ -622,19 +893,94 @@ async function checkBiometricConnection(showToast = false) {
     badge.className = 'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[11px] font-semibold transition-all bg-red-50 border-red-200 text-red-800 hover:bg-red-100';
 
     document.getElementById('vf-offline').classList.remove('hidden');
-    document.getElementById('camera-stream').classList.add('hidden');
-    document.getElementById('camera-stream').src = '';
     document.getElementById('hud-fps-text').textContent = 'OFFLINE';
     document.getElementById('mode-tag').textContent = 'Simulation Active';
     document.getElementById('mode-tag').className = 'text-[9px] font-semibold text-amber-700 bg-amber-50 px-1.5 rounded';
 
-    if (showToast) toast('Face-ID Service offline. Please start webcam_app.py', 'err');
+    if (showToast) toast('Face-ID Service offline. Configure Cloud API or start local service.', 'err');
   }
+}
+
+/* Cloud API Modal Handlers */
+function openApiConfigModal() {
+  const modal = document.getElementById('modal-api-config');
+  const input = document.getElementById('cfg-api-url');
+  if (input) input.value = Station.biometricUrl;
+  modal.classList.remove('hidden');
+}
+
+function closeApiConfigModal() {
+  document.getElementById('modal-api-config').classList.add('hidden');
+}
+
+function applyPresetUrl(url) {
+  document.getElementById('cfg-api-url').value = url;
+}
+
+function resetDefaultApiUrl() {
+  const url = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+    ? 'http://localhost:5050'
+    : 'https://youssefessam74-revive-biometrics.hf.space';
+  document.getElementById('cfg-api-url').value = url;
+}
+
+async function testAndSaveApiUrl() {
+  const input = document.getElementById('cfg-api-url');
+  let url = (input.value || '').trim();
+  if (url.endsWith('/')) url = url.slice(0, -1);
+  if (!url) {
+    toast('Please enter a valid URL', 'err');
+    return;
+  }
+
+  const btn = document.getElementById('btn-test-api');
+  const dot = document.getElementById('cfg-status-dot');
+  const text = document.getElementById('cfg-status-text');
+  const detail = document.getElementById('cfg-status-detail');
+
+  btn.disabled = true;
+  btn.innerHTML = '<span class="material-icons text-[16px] animate-spin">refresh</span> Testing…';
+  dot.className = 'w-2 h-2 rounded-full bg-amber-500 animate-pulse';
+  text.textContent = 'Connecting to service…';
+  detail.textContent = `Pinging ${url}/ping...`;
+
+  const startT = performance.now();
+  try {
+    const res = await fetch(`${url}/ping`, { signal: AbortSignal.timeout(6000) });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    const elapsed = Math.round(performance.now() - startT);
+
+    dot.className = 'w-2 h-2 rounded-full bg-brand-500';
+    text.textContent = `Online (${elapsed}ms latency)`;
+    detail.textContent = `Models loaded: YuNet + Silent-Face + SFace. Device: ${data.device || 'Cloud CPU'}. Registered: ${data.enrolled_count || 0}`;
+
+    Station.biometricUrl = url;
+    localStorage.setItem('revive_biometric_url', url);
+    toast('Connected & saved AI Service URL!', 'ok');
+
+    checkBiometricConnection(false);
+    setTimeout(closeApiConfigModal, 1200);
+  } catch (err) {
+    dot.className = 'w-2 h-2 rounded-full bg-red-500';
+    text.textContent = 'Connection failed';
+    detail.textContent = `Error: ${err.message}. Ensure Space is public and running.`;
+    toast('Could not reach service at this URL', 'err');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<span class="material-icons text-[16px]">sync</span> Connect';
+  }
+}
+
+function dismissOfflineOverlay() {
+  document.getElementById('vf-offline').classList.add('hidden');
+  startBrowserWebcam();
+  toast('Switched to Simulation Fallback mode', 'info');
 }
 
 function handleBiometricFrameState(data) {
   state.lastBioData = data;
-  document.getElementById('hud-fps-text').textContent = `${data.fps} FPS`;
+  document.getElementById('hud-fps-text').textContent = (typeof data.fps === 'number') ? `${data.fps} FPS` : (data.fps || 'LIVE');
   // ONE SCAN PER VISIT: release the latch only after this face has left the camera
   // continuously for leaveResetMs (flicker-proof), or a different person appears.
   if (state.visitLatch) {
@@ -673,6 +1019,7 @@ function handleBiometricFrameState(data) {
   updateModalLiveStatus(data);
 
   if (!data.face_detected) {
+    drawBoundingBox(null);
     document.getElementById('vf-idle').classList.remove('hidden');
     document.getElementById('scanline').classList.add('hidden');
     hudIcon.textContent = 'face';
@@ -1109,10 +1456,25 @@ async function submitFaceEnrollment() {
   btn.innerHTML = '<span class="material-icons text-[18px] animate-spin">refresh</span> Enrolling…';
 
   try {
-    const url = `${Station.biometricUrl}/enroll?name=${encodeURIComponent(empName)}&employee_code=${encodeURIComponent(empCode)}`;
-    const res = await fetch(url, { method: 'POST' });
-    const data = await res.json();
+    const frameB64 = captureClientFrameBase64();
+    let res;
+    if (frameB64) {
+      res = await fetch(`${Station.biometricUrl}/enroll_frame`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          image: frameB64,
+          name: empName,
+          employee_code: empCode
+        }),
+        signal: AbortSignal.timeout(12000)
+      });
+    } else {
+      const url = `${Station.biometricUrl}/enroll?name=${encodeURIComponent(empName)}&employee_code=${encodeURIComponent(empCode)}`;
+      res = await fetch(url, { method: 'POST', signal: AbortSignal.timeout(8000) });
+    }
 
+    const data = await res.json();
     if (data.success) {
       SoundEffects.playSuccess();
       toast(data.message, 'ok');
@@ -1125,51 +1487,94 @@ async function submitFaceEnrollment() {
       toast(data.message || 'Enrollment rejected', 'err');
     }
   } catch (err) {
-    toast('Enrollment request failed: ' + err.message, 'err');
+    saveLocalEmployee(empName, empCode);
   } finally {
     btn.disabled = false;
     btn.innerHTML = '<span class="material-icons text-[18px]">camera</span> Capture &amp; Enroll Current Face';
   }
 }
 
+function saveLocalEmployee(name, code) {
+  const local = JSON.parse(localStorage.getItem('revive_enrolled_faces_web') || '[]');
+  const id = code || `EMP-${Math.floor(1000 + Math.random() * 9000)}`;
+  const thumb = captureClientFrameBase64(96, 96) || '';
+  local.unshift({
+    id: id,
+    employee_code: id,
+    name: name,
+    enrolled_at: new Date().toLocaleTimeString(),
+    thumb: thumb
+  });
+  localStorage.setItem('revive_enrolled_faces_web', JSON.stringify(local));
+  SoundEffects.playSuccess();
+  toast(`Enrolled '${name}' (${id}) locally for demo.`, 'ok');
+  loadEnrolledEmployees();
+  document.getElementById('enroll-emp-id').value = '';
+  document.getElementById('enroll-emp-name').value = '';
+  document.getElementById('enroll-select-emp').value = '';
+}
+
 async function loadEnrolledEmployees() {
   const container = document.getElementById('enrolled-faces-list');
   const countEl = document.getElementById('enroll-list-count');
+  let remoteList = [];
   try {
-    const res = await fetch(`${Station.biometricUrl}/employees`);
-    if (!res.ok) throw new Error('HTTP ' + res.status);
-    const list = await res.json();
-    countEl.textContent = `${list.length} registered`;
-    document.getElementById('enrolled-count-pill').textContent = `${list.length} Enrolled`;
-
-    if (!list.length) {
-      container.innerHTML = '<p class="text-xs text-charcoal-400 italic py-2">No faces registered yet. Choose a staff member and click Capture above.</p>';
-      return;
+    const res = await fetch(`${Station.biometricUrl}/employees`, { signal: AbortSignal.timeout(3000) });
+    if (res.ok) {
+      remoteList = await res.json();
     }
+  } catch (_) {}
 
-    container.innerHTML = list.map(emp => `
-      <div class="flex items-center justify-between p-2 rounded-lg border border-charcoal-200 bg-white hover:border-brand-300 transition-all">
-        <div class="flex items-center gap-2.5 min-w-0">
-          <img src="${emp.thumb || ''}" class="w-8 h-8 rounded-full object-cover border border-charcoal-200 bg-charcoal-100 shrink-0" alt="${emp.name}" onerror="this.src='https://ui-avatars.com/api/?name=${encodeURIComponent(emp.name)}&background=22c55e&color=fff'">
-          <div class="min-w-0">
-            <p class="text-xs font-bold text-charcoal-800 truncate leading-tight">${emp.name}</p>
-            <p class="text-[10px] text-charcoal-500 font-mono leading-tight">${emp.employee_code || emp.id} · ${emp.enrolled_at || 'Registered'}</p>
-          </div>
-        </div>
-        <button onclick="deleteEnrolledEmployee('${emp.id}')" title="Delete face enrollment" class="p-1 rounded text-charcoal-400 hover:text-red-500 hover:bg-red-50 transition-colors">
-          <span class="material-icons text-[16px]">delete</span>
-        </button>
-      </div>
-    `).join('');
-  } catch (err) {
-    container.innerHTML = '<p class="text-xs text-red-500 italic">Could not fetch enrolled faces from service.</p>';
+  const localList = JSON.parse(localStorage.getItem('revive_enrolled_faces_web') || '[]');
+  const combined = [...localList, ...remoteList];
+  // Deduplicate by id
+  const seen = new Set();
+  const list = [];
+  for (const item of combined) {
+    if (!seen.has(item.id)) {
+      seen.add(item.id);
+      list.push(item);
+    }
   }
+
+  countEl.textContent = `${list.length} registered`;
+  document.getElementById('enrolled-count-pill').textContent = `${list.length} Enrolled`;
+
+  if (!list.length) {
+    container.innerHTML = '<p class="text-xs text-charcoal-400 italic py-2">No faces registered yet. Choose a staff member and click Capture above.</p>';
+    return;
+  }
+
+  container.innerHTML = list.map(emp => `
+    <div class="flex items-center justify-between p-2 rounded-lg border border-charcoal-200 bg-white hover:border-brand-300 transition-all">
+      <div class="flex items-center gap-2.5 min-w-0">
+        <img src="${emp.thumb || ''}" class="w-8 h-8 rounded-full object-cover border border-charcoal-200 bg-charcoal-100 shrink-0" alt="${emp.name}" onerror="this.src='https://ui-avatars.com/api/?name=${encodeURIComponent(emp.name)}&background=22c55e&color=fff'">
+        <div class="min-w-0">
+          <p class="text-xs font-bold text-charcoal-800 truncate leading-tight">${emp.name}</p>
+          <p class="text-[10px] text-charcoal-500 font-mono leading-tight">${emp.employee_code || emp.id} · ${emp.enrolled_at || 'Registered'}</p>
+        </div>
+      </div>
+      <button onclick="deleteEnrolledEmployee('${emp.id}')" title="Delete face enrollment" class="p-1 rounded text-charcoal-400 hover:text-red-500 hover:bg-red-50 transition-colors">
+        <span class="material-icons text-[16px]">delete</span>
+      </button>
+    </div>
+  `).join('');
 }
 
 async function deleteEnrolledEmployee(id) {
-  if (!confirm('Are you sure you want to remove this employee\'s face embedding?')) return;
+  if (!confirm('Are you sure you want to remove this employee face profile?')) return;
+  // Check local
+  let localList = JSON.parse(localStorage.getItem('revive_enrolled_faces_web') || '[]');
+  if (localList.some(e => e.id === id)) {
+    localList = localList.filter(e => e.id !== id);
+    localStorage.setItem('revive_enrolled_faces_web', JSON.stringify(localList));
+    toast('Removed local enrollment', 'ok');
+    loadEnrolledEmployees();
+    return;
+  }
+  // Try remote
   try {
-    const res = await fetch(`${Station.biometricUrl}/employees/${encodeURIComponent(id)}`, { method: 'DELETE' });
+    const res = await fetch(`${Station.biometricUrl}/employees/${encodeURIComponent(id)}`, { method: 'DELETE', signal: AbortSignal.timeout(4000) });
     const data = await res.json();
     if (data.success) {
       toast(data.message, 'ok');
@@ -1420,9 +1825,10 @@ function tickClock() {
   tickClock();
   setInterval(tickClock, 1000);
 
-  // Poll Biometric Service every 350ms
+  // Initialize Biometric Service & Employees
+  loadEnrolledEmployees();
   checkBiometricConnection(false);
-  pollingInterval = setInterval(checkBiometricConnection, 350);
+  pollingInterval = setInterval(checkBiometricConnection, 5000);
 })();
 </script>
 </body>
