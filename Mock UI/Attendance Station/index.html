@@ -140,16 +140,13 @@
         </div>
 
         <!-- Viewfinder Frame -->
-        <div class="flex-1 min-h-[300px] relative bg-charcoal-950 m-3 lg:m-4 rounded-xl border-2 border-brand-500/40 overflow-hidden flex flex-col justify-between" id="camera-frame">
-          
-          <!-- Background Grid placeholder -->
-          <div class="absolute inset-0 opacity-[0.12]" style="background-image: radial-gradient(#22c55e 1px, transparent 1px); background-size: 24px 24px;"></div>
+        <div class="flex-1 min-h-[380px] relative bg-black border-2 border-brand-500/30 overflow-hidden flex flex-col justify-between transition-colors" id="camera-frame">
 
           <!-- Real-Time Camera Stream (Local MJPEG Stream) -->
-          <img id="camera-stream" src="" class="absolute inset-0 w-full h-full object-contain hidden z-0" alt="Biometric Webcam Stream" crossorigin="anonymous">
+          <img id="camera-stream" src="" class="absolute inset-0 w-full h-full object-cover hidden z-0" alt="Biometric Webcam Stream" crossorigin="anonymous">
 
           <!-- Client Browser Webcam Video (WebRTC / getUserMedia) -->
-          <video id="client-webcam" autoplay playsinline muted class="absolute inset-0 w-full h-full object-contain hidden z-0"></video>
+          <video id="client-webcam" autoplay playsinline muted class="absolute inset-0 w-full h-full object-cover hidden z-0"></video>
 
           <!-- Real-Time Face Detection Bounding Box Canvas Overlay -->
           <canvas id="face-box-canvas" class="absolute inset-0 w-full h-full pointer-events-none z-10"></canvas>
@@ -682,6 +679,7 @@ async function startBrowserWebcam() {
       video: {
         width: { ideal: 1280 },
         height: { ideal: 720 },
+        aspectRatio: { ideal: 1.7777777778 },
         facingMode: 'user'
       },
       audio: false
