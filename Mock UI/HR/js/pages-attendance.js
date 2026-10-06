@@ -853,6 +853,10 @@ function renderAttendance() {
           <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 15V3"/></svg>
           Export
         </button>
+        <button onclick="openPairStationModal()" class="btn btn-sm btn-secondary flex items-center gap-1" style="height:24px;font-size:10px" title="Generate 6-digit code to pair attendance kiosk">
+          <svg class="w-3 h-3 text-brand-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z"/></svg>
+          Pair Kiosk
+        </button>
         ${canManual ? `<button onclick="openManualEntry('${_attDay}')" class="btn btn-sm btn-primary" style="height:24px;font-size:10px">
           <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>Manual Entry
         </button>` : ''}
@@ -1209,4 +1213,165 @@ function saveManualEntry(form) {
   closeModal();
   attPick(iso);
   showToast('Manual entry recorded for ' + entry.name);
+}
+
+// ==================== 6-DIGIT STATION PAIRING (HR PORTAL) ====================
+function openPairStationModal() {
+  const pendingRaw = localStorage.getItem('revive_pending_pairing');
+  let pending = null;
+  try {
+    if (pendingRaw) pending = JSON.parse(pendingRaw);
+  } catch (_) {}
+
+  // Check if existing pending code is still valid (within 10 minutes)
+  const isStillValid = pending && pending.expiresAt && pending.expiresAt > Date.now();
+  const activeGym = typeof _attGym !== 'undefined' && _attGym !== 'all' ? _attGym : 'Downtown Gym';
+
+  const modalHtml = `
+    <div class="space-y-4">
+      <div class="p-3 bg-brand-50 border border-brand-200 rounded-xl text-xs text-charcoal-700 flex items-start gap-2.5">
+        <div class="w-7 h-7 rounded-lg bg-brand-600 text-white flex items-center justify-center flex-shrink-0 mt-0.5">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z"/></svg>
+        </div>
+        <div>
+          <p class="font-bold text-charcoal-900">Authorize Attendance Kiosk Terminal</p>
+          <p class="text-[11px] text-charcoal-600 mt-0.5 leading-relaxed">
+            Generate a secure 6-digit code for a gym branch. The terminal computer at the gym will enter this code on the Attendance Station page to bind itself strictly to that gym branch.
+          </p>
+        </div>
+      </div>
+
+      <!-- Gym Selection Form -->
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div>
+          <label class="form-label font-bold text-xs" for="pair-gym-select">Target Gym Branch <span class="text-red-500">*</span></label>
+          <select id="pair-gym-select" class="form-select w-full text-xs font-semibold" onchange="updatePairingGymPreview(this.value)">
+            <option value="2" data-name="Downtown Gym" data-code="DTN" ${activeGym.includes('Downtown') ? 'selected' : ''}>Downtown Gym (Branch ID: 2)</option>
+            <option value="3" data-name="Zamalek Gym" data-code="ZMK" ${activeGym.includes('Zamalek') ? 'selected' : ''}>Zamalek Gym (Branch ID: 3)</option>
+            <option value="4" data-name="New Cairo Gym" data-code="NCG" ${activeGym.includes('Cairo') ? 'selected' : ''}>New Cairo Gym (Branch ID: 4)</option>
+          </select>
+        </div>
+        <div>
+          <label class="form-label font-bold text-xs" for="pair-terminal-name">Terminal Label</label>
+          <input type="text" id="pair-terminal-name" class="form-input text-xs font-mono" value="Front Entrance Kiosk #1" placeholder="e.g. Front Turnstile PC">
+        </div>
+      </div>
+
+      <!-- Action: Generate Code Button -->
+      <div>
+        <button type="button" onclick="generateStationPairingCode()" class="btn btn-primary w-full py-2 flex items-center justify-center gap-1.5 text-xs font-bold shadow-sm">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+          <span>Generate 6-Digit Pairing Code</span>
+        </button>
+      </div>
+
+      <!-- Active Code Display Card -->
+      <div id="pair-code-display-card" class="${isStillValid ? '' : 'hidden'} p-4 rounded-2xl bg-charcoal-900 text-white text-center relative overflow-hidden border border-charcoal-700 shadow-xl">
+        <div class="flex items-center justify-between text-[11px] text-charcoal-400 mb-2">
+          <span class="flex items-center gap-1 font-semibold text-brand-400">
+            <span class="w-2 h-2 rounded-full bg-brand-400 animate-pulse"></span>
+            <span id="pair-card-branch-label">${isStillValid ? attEsc(pending.gymName) : 'Downtown Gym'}</span>
+          </span>
+          <span id="pair-timer-badge" class="font-mono text-charcoal-400">Valid for 10 min</span>
+        </div>
+
+        <div class="my-3 flex items-center justify-center gap-2">
+          <span id="pair-code-text" class="text-3xl sm:text-4xl font-mono font-extrabold tracking-widest text-white px-4 py-2 rounded-xl bg-charcoal-800 border border-charcoal-600 shadow-inner">
+            ${isStillValid ? pending.code.slice(0, 3) + ' ' + pending.code.slice(3) : '--- ---'}
+          </span>
+        </div>
+
+        <p class="text-[11px] text-charcoal-300 max-w-sm mx-auto leading-relaxed">
+          Open the Attendance Station on the branch computer and enter this code to bind it specifically to <strong id="pair-card-branch-sub" class="text-white">${isStillValid ? attEsc(pending.gymName) : 'Downtown Gym'}</strong>.
+        </p>
+
+        <div class="mt-4 pt-3 border-t border-charcoal-800 flex items-center justify-center gap-2 flex-wrap">
+          <button type="button" onclick="copyStationPairingCode()" class="btn btn-sm btn-secondary text-xs flex items-center gap-1">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
+            <span>Copy Code</span>
+          </button>
+          <a href="../Attendance%20Station/" target="_blank" class="btn btn-sm btn-primary text-xs flex items-center gap-1">
+            <span>Open Attendance Station</span>
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
+          </a>
+        </div>
+      </div>
+
+      <!-- Security details -->
+      <div class="p-3 bg-charcoal-50 border border-charcoal-200 rounded-xl text-[11px] text-charcoal-600 space-y-1">
+        <p class="font-bold text-charcoal-800">Branch Geofence Security Rules:</p>
+        <ul class="list-disc list-inside space-y-0.5 text-charcoal-600">
+          <li>Once connected, the station will strictly display only employees assigned to this gym.</li>
+          <li>Staff from other branches attempting to check in will be blocked with HTTP 403.</li>
+          <li>If the computer breaks down, simply generate a new code here and pair the replacement PC.</li>
+        </ul>
+      </div>
+    </div>
+  `;
+
+  openModal('Pair Attendance Station (6-Digit Code)', modalHtml, { width: 'max-w-lg' });
+}
+
+function updatePairingGymPreview(gymId) {
+  const sel = document.getElementById('pair-gym-select');
+  if (!sel) return;
+  const opt = sel.options[sel.selectedIndex];
+  const name = opt ? opt.getAttribute('data-name') : 'Selected Gym';
+  const sub = document.getElementById('pair-card-branch-sub');
+  const lbl = document.getElementById('pair-card-branch-label');
+  if (sub) sub.textContent = name;
+  if (lbl) lbl.textContent = name;
+}
+
+function generateStationPairingCode() {
+  const sel = document.getElementById('pair-gym-select');
+  const opt = sel ? sel.options[sel.selectedIndex] : null;
+  const gymId = Number(sel ? sel.value : 2);
+  const gymName = opt ? opt.getAttribute('data-name') : 'Downtown Gym';
+  const gymCode = opt ? opt.getAttribute('data-code') : 'DTN';
+  const labelInput = document.getElementById('pair-terminal-name');
+  const label = labelInput ? labelInput.value.trim() : 'Front Kiosk';
+
+  // Generate 6 random digits
+  const code = String(Math.floor(100000 + Math.random() * 900000));
+  const expiresAt = Date.now() + 10 * 60 * 1000; // 10 minutes
+
+  const pairingData = {
+    code,
+    gymId,
+    gymName,
+    gymCode,
+    stationLabel: label,
+    generatedAt: Date.now(),
+    expiresAt
+  };
+
+  localStorage.setItem('revive_pending_pairing', JSON.stringify(pairingData));
+
+  // Update UI card
+  const card = document.getElementById('pair-code-display-card');
+  if (card) card.classList.remove('hidden');
+  const textEl = document.getElementById('pair-code-text');
+  if (textEl) textEl.textContent = `${code.slice(0, 3)} ${code.slice(3)}`;
+  const sub = document.getElementById('pair-card-branch-sub');
+  if (sub) sub.textContent = gymName;
+  const lbl = document.getElementById('pair-card-branch-label');
+  if (lbl) lbl.textContent = gymName;
+  const timerBadge = document.getElementById('pair-timer-badge');
+  if (timerBadge) timerBadge.textContent = 'Expires in 10:00';
+
+  showToast(`6-Digit Pairing Code ${code.slice(0, 3)}-${code.slice(3)} generated for ${gymName}!`);
+}
+
+function copyStationPairingCode() {
+  const raw = localStorage.getItem('revive_pending_pairing');
+  if (!raw) return;
+  try {
+    const data = JSON.parse(raw);
+    navigator.clipboard.writeText(data.code).then(() => {
+      showToast(`Copied code ${data.code} to clipboard`);
+    }).catch(() => {
+      showToast(`Code: ${data.code}`);
+    });
+  } catch (_) {}
 }

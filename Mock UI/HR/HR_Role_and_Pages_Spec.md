@@ -208,7 +208,7 @@ raises an **Event** (Section 4.14) so it isn't missed.
 
 ### 4.8 Evaluations
 
-**Purpose:** build custom evaluation forms and run evaluation cycles — not a fixed criteria/score template.
+**Purpose:** build custom evaluation forms, dispatch them to evaluators, and review responses — not a fixed criteria/score template.
 **Gated by:** `evaluations.view`, `evaluations.manage`
 
 **Sections:**
@@ -217,8 +217,11 @@ raises an **Event** (Section 4.14) so it isn't missed.
   - **Rating (1–5)**
   - **Multiple Choice** (single answer from defined options)
   - **Checkbox** (multiple answers from defined options)
-- Gym + evaluation period selector, employee list to run against
-- **Run Evaluation** — **HR and HR Manager** (`evaluations.manage` = running evaluations). Select employee, pick the form matching their gym/position, fill it out → saved as an `EvaluationResponse`. HR runs evaluations against employees in their assigned gyms only. HR Manager can run against any employee in their gyms.
+- **Dispatch (evaluator routing)** — HR clicks **Dispatch** on a form; it is routed **only to evaluators** — users holding an evaluation permission (`evaluations.manage`, `evaluations.manage.team`, `evaluations.view.team`, or `team.manage`), which can be a Branch Manager, Team Leader, **or a normal employee** with that permission. Routing is **permission-based, never role-string based** (ADR-003). Each evaluator receives the form with an auto-derived **subject list**: Active employees in the evaluator's branch scope that match the form's Gym/Position, excluding the evaluator themself. Evaluated employees are **subjects only — the form is never sent to each employee**. Dispatch is idempotent (already-routed evaluators are skipped), logs an `Evaluation Dispatched` audit entry, and the form card shows a live "Routed to N evaluators · M evaluations assigned" status.
+- **My Evaluations inbox** — for the signed-in user's own assignments (matched by email). Shows each assigned form with render-time progress (subjects completed / total, derived from evaluation history) and a **Start** action.
+- **Run Evaluation** — two modes:
+  - **Assigned mode** (from the inbox): the run view is pinned to the assignment's subjects — form picker and Quick Batch Launch are hidden, back/Cancel return to **My Evaluations**, and submitting a subject returns to the inbox with progress advanced to the next unfinished subject.
+  - **Free mode** (`evaluations.manage`): HR/HR Manager selects an employee, picks the form matching their gym/position, fills it out → saved to evaluation history. Scope limited to the user's assigned gyms.
 - Per-employee evaluation history/trend (past responses, viewable read-only)
 - ⚠️ Open item: whether older fixed-format evaluation history (if any exists) needs to display alongside new custom-form responses, or this is a clean cutover, is still pending confirmation.
 
