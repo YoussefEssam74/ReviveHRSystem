@@ -35,7 +35,7 @@ CanPerform(user, action, gymId) =
 ### Third Dimension: Team Scope (Team Leader)
 
 Team Leader introduces a permission scope narrower than gym: a subset of
-employees within one gym (`TeamMembers`, see database.md). Rather than add
+employees within one gym (`Employees.TeamId`, see database.md). Rather than add
 conditional logic to existing gym-scoped permissions, **team-scoped
 permissions are distinct permission keys** (e.g. `attendance.view.team`
 alongside the existing gym-wide `attendance.view`). This keeps the
@@ -49,13 +49,12 @@ CanPerform(user, action, gymId, targetEmployeeId?) =
     AND gymId IN UserGymAccess(user)
     AND (
           action is NOT a team-scoped permission
-          OR targetEmployeeId IN TeamMembers(AllTeamsLedBy(user))
+          OR targetEmployeeId IN Employees(TeamId = user's assigned team)
         )
 ```
 
-`AllTeamsLedBy(user)` is the union of every `Team` where the user appears
-in `TeamLeaders` — a leader may lead multiple teams, and their effective
-team scope is the union of all their teams' members.
+The leader's scope is the single `Team` assigned to their employee record.
+`TeamLeaders` marks which employees are leaders of their assigned team.
 
 **Team-scoped permissions are granted individually, same as every other
 permission** — being a Team Leader does not automatically grant them.

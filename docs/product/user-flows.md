@@ -378,16 +378,16 @@ Selects gym (team belongs to exactly one gym)
 Names the team (e.g. "Morning Floor Team")
     ↓
 Adds members from that gym's employee list
-    (an employee may already belong to another team — allowed)
+    (each employee can be assigned to one team)
     ↓
 Assigns one or more Team Leaders from the team's members
-    (an employee may already lead another team — allowed)
+    (a leader is assigned to one team only)
     ↓
 System:
     1. Team row created (Teams)
-    2. TeamMembers rows created for each selected employee
+    2. Employees.TeamId set for each selected employee
     3. TeamLeaders rows created for each selected leader
-    4. Team Leader's effective scope = union of all teams they lead
+    4. Team Leader's effective scope = employees assigned to that team
     ↓
 Assigned Team Leader(s) now see "My Team" in their sidebar
     ↓

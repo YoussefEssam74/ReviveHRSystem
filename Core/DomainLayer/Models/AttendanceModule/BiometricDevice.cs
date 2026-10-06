@@ -1,4 +1,4 @@
-using DomainLayer.Models.AttendanceModule.Enums;
+﻿using DomainLayer.Models.AttendanceModule.Enums;
 using DomainLayer.Models.OrganizationModule;
 
 namespace DomainLayer.Models.AttendanceModule
@@ -7,7 +7,7 @@ namespace DomainLayer.Models.AttendanceModule
     /// Represents an on-premise Face-ID biometric kiosk terminal installed at a specific gym.
     /// Stores the unique DeviceToken used by the kiosk client to authenticate events and determine the GymId scope.
     /// </summary>
-    public class BiometricDevice : BaseEntity
+    public class BiometricDevice : BaseEntity<int>
     {
         public int GymId { get; set; }
         public virtual Gym Gym { get; set; } = null!;
@@ -17,3 +17,4 @@ namespace DomainLayer.Models.AttendanceModule
         public BiometricDeviceStatus Status { get; set; } = BiometricDeviceStatus.Active;
     }
 }
+

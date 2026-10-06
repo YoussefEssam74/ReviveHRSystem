@@ -149,4 +149,17 @@ namespace Presistence.Data.Configurations
                    .OnDelete(DeleteBehavior.Cascade);
         }
     }
+
+    public class UserNotificationPreferenceConfiguration : IEntityTypeConfiguration<UserNotificationPreference>
+    {
+        public void Configure(EntityTypeBuilder<UserNotificationPreference> builder)
+        {
+            builder.ToTable("UserNotificationPreferences");
+            builder.HasKey(p => p.Id);
+            builder.HasOne(p => p.User).WithOne(u => u.NotificationPreference)
+                   .HasForeignKey<UserNotificationPreference>(p => p.UserId)
+                   .OnDelete(DeleteBehavior.Cascade);
+            builder.HasIndex(p => p.UserId).IsUnique();
+        }
+    }
 }

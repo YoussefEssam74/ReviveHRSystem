@@ -1,4 +1,4 @@
-using DomainLayer.Models.OrganizationModule;
+﻿using DomainLayer.Models.OrganizationModule;
 using DomainLayer.Models.RecruitmentModule.Enums;
 using DomainLayer.Models.UserModule;
 
@@ -8,7 +8,7 @@ namespace DomainLayer.Models.RecruitmentModule
     /// Represents an internal requisition opened by a Branch Manager requesting headcount for a position at their gym.
     /// Reviewed by HR; once approved, HR creates a real public Vacancy linked to this request.
     /// </summary>
-    public class VacancyRequest : BaseEntity
+    public class VacancyRequest : BaseEntity<int>
     {
         public int GymId { get; set; }
         public virtual Gym Gym { get; set; } = null!;
@@ -32,3 +32,4 @@ namespace DomainLayer.Models.RecruitmentModule
         public virtual Vacancy? ResultingVacancy { get; set; }
     }
 }
+

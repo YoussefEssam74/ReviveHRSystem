@@ -543,9 +543,9 @@ and never span gyms.
 
 ### Team Composition
 - `team.manage` (typically held by HR or Branch Manager) creates teams within a gym, assigns members, and assigns one or more Team Leaders per team
-- An employee can be a Team Leader for more than one team
-- An employee can be a member of more than one team
-- A team's effective roster for authorization purposes is the union of all its `TeamMembers`; a Team Leader's effective scope is the union of every team they lead
+- Each employee is assigned to one team at most
+- Each Team Leader leads one team
+- A team's effective roster is the employees whose `TeamId` points to it; each Team Leader leads one team, and each employee belongs to one team only
 
 ### Team Leader Capabilities (all individually permission-gated)
 | Feature | Permission | Scope |
@@ -560,7 +560,7 @@ and never span gyms.
 
 ### Team Leader Dashboard (additive to base Employee Dashboard)
 On top of the standard Regular Employee dashboard (My Attendance, My Schedule, My Requests, My Payroll, My Notifications, My Performance), a Team Leader sees a **My Team** widget block:
-- Number of team members (across all teams they lead)
+- Number of members in the leader's assigned team
 - Team attendance status (present/absent/late today)
 - Pending team actions (requests awaiting review, if `requests.approve.team` granted)
 - Required follow-ups

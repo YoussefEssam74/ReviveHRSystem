@@ -54,6 +54,11 @@ namespace Presistence.Data.Configurations
                    .OnDelete(DeleteBehavior.Restrict);
 
             builder.HasIndex(p => p.GymId);
+
+            builder.HasOne(p => p.Department)
+                   .WithMany()
+                   .HasForeignKey(p => p.DepartmentId)
+                   .OnDelete(DeleteBehavior.SetNull);
         }
     }
 
@@ -72,6 +77,12 @@ namespace Presistence.Data.Configurations
                    .OnDelete(DeleteBehavior.Restrict);
 
             builder.HasIndex(t => t.GymId);
+
+            builder.HasMany(t => t.Members)
+                   .WithOne(e => e.Team)
+                   .HasForeignKey(e => new { e.TeamId, e.GymId })
+                   .HasPrincipalKey(t => new { t.Id, t.GymId })
+                   .OnDelete(DeleteBehavior.Restrict);
         }
     }
 
@@ -89,33 +100,13 @@ namespace Presistence.Data.Configurations
 
             builder.HasOne(tl => tl.Employee)
                    .WithMany(e => e.TeamLeaders)
-                   .HasForeignKey(tl => tl.EmployeeId)
-                   .OnDelete(DeleteBehavior.Restrict);
+                   .HasForeignKey(tl => new { tl.EmployeeId, tl.TeamId })
+                   .HasPrincipalKey(e => new { e.Id, e.TeamId })
+                   .OnDelete(DeleteBehavior.Cascade);
 
-            builder.HasIndex(tl => tl.EmployeeId);
+            builder.HasIndex(tl => tl.EmployeeId).IsUnique().HasFilter("\"IsDeleted\" = FALSE");
             builder.HasIndex(tl => tl.TeamId);
         }
     }
 
-    public class TeamMemberConfiguration : IEntityTypeConfiguration<TeamMember>
-    {
-        public void Configure(EntityTypeBuilder<TeamMember> builder)
-        {
-            builder.ToTable("TeamMembers");
-            builder.HasKey(tm => tm.Id);
-
-            builder.HasOne(tm => tm.Team)
-                   .WithMany(t => t.TeamMembers)
-                   .HasForeignKey(tm => tm.TeamId)
-                   .OnDelete(DeleteBehavior.Cascade);
-
-            builder.HasOne(tm => tm.Employee)
-                   .WithMany(e => e.TeamMembers)
-                   .HasForeignKey(tm => tm.EmployeeId)
-                   .OnDelete(DeleteBehavior.Restrict);
-
-            builder.HasIndex(tm => tm.EmployeeId);
-            builder.HasIndex(tm => tm.TeamId);
-        }
-    }
 }

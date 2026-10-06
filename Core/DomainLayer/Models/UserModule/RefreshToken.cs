@@ -1,10 +1,10 @@
-namespace DomainLayer.Models.UserModule
+﻿namespace DomainLayer.Models.UserModule
 {
     /// <summary>
     /// Stores long-lived refresh tokens for JWT session rotation, renewal, and revocation.
     /// Supports detecting compromised tokens and forcing logout.
     /// </summary>
-    public class RefreshToken : BaseEntity
+    public class RefreshToken : BaseEntity<int>
     {
         public int UserId { get; set; }
         public virtual User User { get; set; } = null!;
@@ -20,3 +20,4 @@ namespace DomainLayer.Models.UserModule
         public bool IsActive => !IsRevoked && !IsExpired;
     }
 }
+

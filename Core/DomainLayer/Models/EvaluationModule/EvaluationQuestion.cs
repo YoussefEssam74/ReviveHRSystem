@@ -1,4 +1,4 @@
-using DomainLayer.Models.EvaluationModule.Enums;
+﻿using DomainLayer.Models.EvaluationModule.Enums;
 
 namespace DomainLayer.Models.EvaluationModule
 {
@@ -6,7 +6,7 @@ namespace DomainLayer.Models.EvaluationModule
     /// Represents an individual question on an evaluation form.
     /// Supports Rating5, MultipleChoice, or Checkbox formats, storing selectable choices as JSONB in OptionsJson.
     /// </summary>
-    public class EvaluationQuestion : BaseEntity
+    public class EvaluationQuestion : BaseEntity<int>
     {
         public int EvaluationFormId { get; set; }
         public virtual EvaluationForm EvaluationForm { get; set; } = null!;
@@ -20,3 +20,4 @@ namespace DomainLayer.Models.EvaluationModule
         public int SortOrder { get; set; }
     }
 }
+

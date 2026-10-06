@@ -172,6 +172,30 @@ namespace Presistence.Data.Configurations
         }
     }
 
+    public class EvaluationAssignmentConfiguration : IEntityTypeConfiguration<EvaluationAssignment>
+    {
+        public void Configure(EntityTypeBuilder<EvaluationAssignment> builder)
+        {
+            builder.ToTable("EvaluationAssignments");
+            builder.HasKey(a => a.Id);
+            builder.Property(a => a.Status).IsRequired().HasMaxLength(30);
+            builder.HasOne(a => a.EvaluationForm).WithMany(f => f.Assignments).HasForeignKey(a => a.EvaluationFormId)
+                   .OnDelete(DeleteBehavior.Restrict);
+            builder.HasOne(a => a.Employee).WithMany().HasForeignKey(a => a.EmployeeId)
+                   .OnDelete(DeleteBehavior.Restrict);
+            builder.HasOne(a => a.Evaluator).WithMany().HasForeignKey(a => a.EvaluatorUserId)
+                   .OnDelete(DeleteBehavior.Restrict);
+            builder.HasOne(a => a.AssignedByUser).WithMany().HasForeignKey(a => a.AssignedBy)
+                   .OnDelete(DeleteBehavior.Restrict);
+            builder.HasOne(a => a.EvaluationResponse).WithOne()
+                   .HasForeignKey<EvaluationAssignment>(a => a.EvaluationResponseId)
+                   .OnDelete(DeleteBehavior.SetNull);
+            builder.HasIndex(a => new { a.EvaluationFormId, a.EmployeeId, a.EvaluatorUserId })
+                   .IsUnique().HasFilter("\"IsDeleted\" = FALSE");
+            builder.HasIndex(a => new { a.EvaluatorUserId, a.Status });
+        }
+    }
+
     public class EvaluationAnswerConfiguration : IEntityTypeConfiguration<EvaluationAnswer>
     {
         public void Configure(EntityTypeBuilder<EvaluationAnswer> builder)

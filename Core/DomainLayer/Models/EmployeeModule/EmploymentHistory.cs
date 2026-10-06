@@ -1,4 +1,4 @@
-using DomainLayer.Models.EmployeeModule.Enums;
+﻿using DomainLayer.Models.EmployeeModule.Enums;
 using DomainLayer.Models.UserModule;
 
 namespace DomainLayer.Models.EmployeeModule
@@ -7,7 +7,7 @@ namespace DomainLayer.Models.EmployeeModule
     /// Audit timeline tracking lifecycle changes to an employee's career.
     /// Captures transfers between gyms, position updates, raises, contract renewals, status changes, and offboarding with who/when/why.
     /// </summary>
-    public class EmploymentHistory : BaseEntity
+    public class EmploymentHistory : BaseEntity<int>
     {
         public int EmployeeId { get; set; }
         public virtual Employee Employee { get; set; } = null!;
@@ -23,3 +23,4 @@ namespace DomainLayer.Models.EmployeeModule
         public string? Reason { get; set; }
     }
 }
+

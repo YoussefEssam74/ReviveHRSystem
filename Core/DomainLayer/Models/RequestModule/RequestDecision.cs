@@ -1,4 +1,4 @@
-using DomainLayer.Models.RequestModule.Enums;
+﻿using DomainLayer.Models.RequestModule.Enums;
 using DomainLayer.Models.UserModule;
 
 namespace DomainLayer.Models.RequestModule
@@ -7,7 +7,7 @@ namespace DomainLayer.Models.RequestModule
     /// Records an approval action taken on an EmployeeRequest at either the BranchManager or HR stage.
     /// Preserves decision outcome, comments, deciding user, and timestamp.
     /// </summary>
-    public class RequestDecision : BaseEntity
+    public class RequestDecision : BaseEntity<int>
     {
         public int RequestId { get; set; }
         public virtual EmployeeRequest Request { get; set; } = null!;
@@ -22,3 +22,4 @@ namespace DomainLayer.Models.RequestModule
         public DateTime DecidedAt { get; set; } = DateTime.UtcNow;
     }
 }
+

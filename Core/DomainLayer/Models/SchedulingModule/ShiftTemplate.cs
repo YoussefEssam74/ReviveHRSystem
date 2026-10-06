@@ -1,4 +1,4 @@
-using DomainLayer.Models.OrganizationModule;
+﻿using DomainLayer.Models.OrganizationModule;
 
 namespace DomainLayer.Models.SchedulingModule
 {
@@ -6,7 +6,7 @@ namespace DomainLayer.Models.SchedulingModule
     /// Represents a reusable shift time definition created per gym (e.g., Morning Shift: 08:00 - 16:00, Night Shift: 16:00 - 00:00).
     /// Used by schedule planners to assign work hours.
     /// </summary>
-    public class ShiftTemplate : BaseEntity
+    public class ShiftTemplate : BaseEntity<int>
     {
         public int GymId { get; set; }
         public virtual Gym Gym { get; set; } = null!;
@@ -17,3 +17,4 @@ namespace DomainLayer.Models.SchedulingModule
         public bool IsActive { get; set; } = true;
     }
 }
+

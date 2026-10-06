@@ -1,4 +1,4 @@
-using DomainLayer.Models.NotificationModule.Enums;
+﻿using DomainLayer.Models.NotificationModule.Enums;
 using DomainLayer.Models.OrganizationModule;
 using DomainLayer.Models.UserModule;
 
@@ -8,7 +8,7 @@ namespace DomainLayer.Models.NotificationModule
     /// Represents an actionable item in the HR management queue requiring explicit review or resolution.
     /// Alerts HR about expiring contracts, expiring employee documents, pending vacancy requests, or resignation follow-ups.
     /// </summary>
-    public class Event : BaseEntity
+    public class Event : BaseEntity<int>
     {
         public int GymId { get; set; }
         public virtual Gym Gym { get; set; } = null!;
@@ -26,3 +26,4 @@ namespace DomainLayer.Models.NotificationModule
         public DateTime? ResolvedAt { get; set; }
     }
 }
+

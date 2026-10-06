@@ -1,4 +1,4 @@
-using DomainLayer.Models.OrganizationModule;
+﻿using DomainLayer.Models.OrganizationModule;
 using DomainLayer.Models.RecruitmentModule.Enums;
 
 namespace DomainLayer.Models.RecruitmentModule
@@ -7,7 +7,7 @@ namespace DomainLayer.Models.RecruitmentModule
     /// Represents an open job opening published with a unique public link token for applicants.
     /// Tracks target headcount needed (e.g. 20 trainers) and links to candidate applications.
     /// </summary>
-    public class Vacancy : BaseEntity
+    public class Vacancy : BaseEntity<int>
     {
         public int GymId { get; set; }
         public virtual Gym Gym { get; set; } = null!;
@@ -25,3 +25,4 @@ namespace DomainLayer.Models.RecruitmentModule
         public virtual ICollection<Application> Applications { get; set; } = new List<Application>();
     }
 }
+

@@ -1,4 +1,4 @@
-using DomainLayer.Models.OrganizationModule.Enums;
+﻿using DomainLayer.Models.OrganizationModule.Enums;
 using DomainLayer.Models.UserModule;
 
 namespace DomainLayer.Models.OrganizationModule
@@ -7,7 +7,7 @@ namespace DomainLayer.Models.OrganizationModule
     /// Represents an individual fitness branch / gym location in the multi-gym platform.
     /// Manages shift cycle duration (default 10 days), annual raise percentage, and branch status.
     /// </summary>
-    public class Gym : BaseEntity
+    public class Gym : BaseEntity<int>
     {
         public string Name { get; set; } = string.Empty;
         public string Location { get; set; } = string.Empty;
@@ -25,3 +25,4 @@ namespace DomainLayer.Models.OrganizationModule
         public virtual ICollection<Team> Teams { get; set; } = new List<Team>();
     }
 }
+

@@ -1,4 +1,4 @@
-using DomainLayer.Models.AttendanceModule.Enums;
+﻿using DomainLayer.Models.AttendanceModule.Enums;
 using DomainLayer.Models.EmployeeModule;
 using DomainLayer.Models.OrganizationModule;
 using DomainLayer.Models.SchedulingModule;
@@ -10,7 +10,7 @@ namespace DomainLayer.Models.AttendanceModule
     /// Captures check-in/out timestamps, check-in method (Biometric/Manual), evaluated status (OnTime, Late, Absent, etc.),
     /// and the scheduled shift template worked at this specific gym.
     /// </summary>
-    public class AttendanceRecord : BaseEntity
+    public class AttendanceRecord : BaseEntity<int>
     {
         public int EmployeeId { get; set; }
         public virtual Employee Employee { get; set; } = null!;
@@ -32,3 +32,4 @@ namespace DomainLayer.Models.AttendanceModule
         public virtual ICollection<AttendanceCorrection> Corrections { get; set; } = new List<AttendanceCorrection>();
     }
 }
+

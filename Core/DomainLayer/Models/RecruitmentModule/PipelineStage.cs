@@ -1,4 +1,4 @@
-using DomainLayer.Models.RecruitmentModule.Enums;
+﻿using DomainLayer.Models.RecruitmentModule.Enums;
 
 namespace DomainLayer.Models.RecruitmentModule
 {
@@ -6,7 +6,7 @@ namespace DomainLayer.Models.RecruitmentModule
     /// Tracks each stage progression an applicant moves through in the recruitment pipeline.
     /// Records date entered, required next actions with due dates, and completion outcomes for follow-up enforcement.
     /// </summary>
-    public class PipelineStage : BaseEntity
+    public class PipelineStage : BaseEntity<int>
     {
         public int ApplicationId { get; set; }
         public virtual Application Application { get; set; } = null!;
@@ -20,3 +20,4 @@ namespace DomainLayer.Models.RecruitmentModule
         public string? Notes { get; set; }
     }
 }
+

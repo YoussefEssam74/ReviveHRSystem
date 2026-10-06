@@ -1,4 +1,4 @@
-using DomainLayer.Models.AttendanceModule;
+﻿using DomainLayer.Models.AttendanceModule;
 using DomainLayer.Models.EmployeeModule;
 using DomainLayer.Models.PayrollModule.Enums;
 using DomainLayer.Models.UserModule;
@@ -9,7 +9,7 @@ namespace DomainLayer.Models.PayrollModule
     /// Represents an attendance-triggered deduction (e.g. repeated lateness or unexcused absence) flagged for review.
     /// Before affecting payroll, an authorized HR manager reviews and either approves or waives the deduction.
     /// </summary>
-    public class DeductionCandidate : BaseEntity
+    public class DeductionCandidate : BaseEntity<int>
     {
         public int EmployeeId { get; set; }
         public virtual Employee Employee { get; set; } = null!;
@@ -27,3 +27,4 @@ namespace DomainLayer.Models.PayrollModule
         public DateTime? ReviewedAt { get; set; }
     }
 }
+

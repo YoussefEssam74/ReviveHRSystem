@@ -1,4 +1,4 @@
-using DomainLayer.Models.AttendanceModule.Enums;
+﻿using DomainLayer.Models.AttendanceModule.Enums;
 using DomainLayer.Models.UserModule;
 
 namespace DomainLayer.Models.AttendanceModule
@@ -7,7 +7,7 @@ namespace DomainLayer.Models.AttendanceModule
     /// Audit log recording adjustments made to an attendance record.
     /// Preserves original vs. corrected times and statuses, along with mandatory justification reason, editor user, and timestamp.
     /// </summary>
-    public class AttendanceCorrection : BaseEntity
+    public class AttendanceCorrection : BaseEntity<int>
     {
         public int AttendanceRecordId { get; set; }
         public virtual AttendanceRecord AttendanceRecord { get; set; } = null!;
@@ -28,3 +28,4 @@ namespace DomainLayer.Models.AttendanceModule
         public DateTime CorrectedAt { get; set; } = DateTime.UtcNow;
     }
 }
+

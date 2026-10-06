@@ -1,11 +1,11 @@
-namespace DomainLayer.Models.RecruitmentModule
+﻿namespace DomainLayer.Models.RecruitmentModule
 {
     /// <summary>
     /// Represents an applicant who applied for a job.
     /// Stores contact info, national ID, CV file path, flexible JSONB education/experience/skills, and optional face biometric encoding.
     /// A candidate is distinct from an Employee until they are officially Hired.
     /// </summary>
-    public class Candidate : BaseEntity
+    public class Candidate : BaseEntity<int>
     {
         public string FullName { get; set; } = string.Empty;
         public string Email { get; set; } = string.Empty;
@@ -25,3 +25,4 @@ namespace DomainLayer.Models.RecruitmentModule
         public virtual ICollection<Application> Applications { get; set; } = new List<Application>();
     }
 }
+

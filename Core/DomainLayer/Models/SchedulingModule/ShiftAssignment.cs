@@ -1,4 +1,4 @@
-using DomainLayer.Models.EmployeeModule;
+﻿using DomainLayer.Models.EmployeeModule;
 
 namespace DomainLayer.Models.SchedulingModule
 {
@@ -7,7 +7,7 @@ namespace DomainLayer.Models.SchedulingModule
     /// ShiftTemplateId is nullable to represent designated rest / Off days.
     /// Strictly enforced: unique per employee per date.
     /// </summary>
-    public class ShiftAssignment : BaseEntity
+    public class ShiftAssignment : BaseEntity<int>
     {
         public int ShiftCycleId { get; set; }
         public virtual ShiftCycle ShiftCycle { get; set; } = null!;
@@ -21,3 +21,4 @@ namespace DomainLayer.Models.SchedulingModule
         public virtual ShiftTemplate? ShiftTemplate { get; set; }
     }
 }
+

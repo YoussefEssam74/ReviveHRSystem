@@ -1,4 +1,4 @@
-using DomainLayer.Models.EmployeeModule;
+﻿using DomainLayer.Models.EmployeeModule;
 
 namespace DomainLayer.Models.PayrollModule
 {
@@ -6,7 +6,7 @@ namespace DomainLayer.Models.PayrollModule
     /// Represents the calculated individual payslip for an employee within a specific PayrollPeriod.
     /// Captures base salary, calculated total deductions, approved bonuses/overtime, and resulting net pay.
     /// </summary>
-    public class PayrollEntry : BaseEntity
+    public class PayrollEntry : BaseEntity<int>
     {
         public int PayrollPeriodId { get; set; }
         public virtual PayrollPeriod PayrollPeriod { get; set; } = null!;
@@ -18,5 +18,8 @@ namespace DomainLayer.Models.PayrollModule
         public decimal TotalDeductions { get; set; }
         public decimal TotalBonuses { get; set; }
         public decimal NetPay { get; set; }
+
+        public virtual ICollection<PayrollEntryLineItem> LineItems { get; set; } = new List<PayrollEntryLineItem>();
     }
 }
+

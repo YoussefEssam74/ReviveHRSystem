@@ -1,12 +1,11 @@
-using DomainLayer.Models.EmployeeModule;
+﻿using DomainLayer.Models.EmployeeModule;
 
 namespace DomainLayer.Models.OrganizationModule
 {
     /// <summary>
-    /// Many-to-many junction mapping an Employee as a Team Leader of a Team.
-    /// An employee can lead multiple teams; their managerial scope is the union of all their teams' members.
+    /// Marks an Employee assigned to a single Team as one of that team's leaders.
     /// </summary>
-    public class TeamLeader : BaseEntity
+    public class TeamLeader : BaseEntity<int>
     {
         public int TeamId { get; set; }
         public virtual Team Team { get; set; } = null!;
@@ -15,3 +14,4 @@ namespace DomainLayer.Models.OrganizationModule
         public virtual Employee Employee { get; set; } = null!;
     }
 }
+

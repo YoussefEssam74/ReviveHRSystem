@@ -59,7 +59,7 @@ Can:
 - Follow up on team requests, and approve/reject them only if explicitly granted `requests.approve.team` (in practice this is more often reserved for Branch Manager or HR)
 - View/manage team evaluations (if permitted)
 - **Cannot** act on employees outside the team(s) they lead
-- May lead more than one team, and an employee may belong to more than one team
+- Leads one team, and each employee is assigned to one team at most
 
 ### Employee
 
@@ -223,7 +223,7 @@ BM → History. If no BM is assigned, the request skips straight to HR.
 - Team Leader role preset (Employee + Role, same pattern as Branch Manager)
 - Team-scoped permission variants (`attendance.view.team`, `schedule.view.team`, `requests.view.team`, `requests.approve.team`, `evaluations.view.team`, `evaluations.manage.team`) — individually granted, not implied by the role
 - "My Team" dashboard widget + sidebar entry for Team Leaders
-- A leader can lead multiple teams; an employee can belong to multiple teams; effective team scope is the union across all teams led
+- A Team Leader leads one team; each employee is assigned to one team at most
 
 ### 17. Announcements — HR Broadcasts (Medium)
 - HR authors broadcast messages to a defined audience (gym, department, role, or individual)

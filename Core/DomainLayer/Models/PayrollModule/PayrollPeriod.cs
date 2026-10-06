@@ -1,4 +1,4 @@
-using DomainLayer.Models.OrganizationModule;
+﻿using DomainLayer.Models.OrganizationModule;
 using DomainLayer.Models.PayrollModule.Enums;
 using DomainLayer.Models.UserModule;
 
@@ -8,7 +8,7 @@ namespace DomainLayer.Models.PayrollModule
     /// Represents a formal salary processing period (e.g., Monthly) scoped to a Gym.
     /// Tracks period date boundaries, approval lifecycle (Open, Approved, Locked), and approving manager.
     /// </summary>
-    public class PayrollPeriod : BaseEntity
+    public class PayrollPeriod : BaseEntity<int>
     {
         public int GymId { get; set; }
         public virtual Gym Gym { get; set; } = null!;
@@ -25,3 +25,4 @@ namespace DomainLayer.Models.PayrollModule
         public virtual ICollection<PayrollEntry> Entries { get; set; } = new List<PayrollEntry>();
     }
 }
+

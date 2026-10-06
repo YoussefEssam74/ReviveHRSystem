@@ -1,4 +1,4 @@
-using DomainLayer.Models.NotificationModule.Enums;
+﻿using DomainLayer.Models.NotificationModule.Enums;
 using DomainLayer.Models.UserModule;
 
 namespace DomainLayer.Models.NotificationModule
@@ -7,7 +7,7 @@ namespace DomainLayer.Models.NotificationModule
     /// Represents an informational, inbound notification delivered to a user's notification bell/inbox.
     /// Deep-links to relevant pages (e.g. approved request, schedule changes, upcoming interviews).
     /// </summary>
-    public class Notification : BaseEntity
+    public class Notification : BaseEntity<int>
     {
         public int UserId { get; set; }
         public virtual User User { get; set; } = null!;
@@ -20,3 +20,4 @@ namespace DomainLayer.Models.NotificationModule
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     }
 }
+

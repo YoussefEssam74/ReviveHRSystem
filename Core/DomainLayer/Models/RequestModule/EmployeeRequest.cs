@@ -1,4 +1,4 @@
-using DomainLayer.Models.EmployeeModule;
+﻿using DomainLayer.Models.EmployeeModule;
 using DomainLayer.Models.RequestModule.Enums;
 
 namespace DomainLayer.Models.RequestModule
@@ -8,7 +8,7 @@ namespace DomainLayer.Models.RequestModule
     /// Type is a flexible string to allow configurable business request types without schema migrations.
     /// Follows a two-stage approval workflow (Branch Manager -> HR final decision).
     /// </summary>
-    public class EmployeeRequest : BaseEntity
+    public class EmployeeRequest : BaseEntity<int>
     {
         public int EmployeeId { get; set; }
         public virtual Employee Employee { get; set; } = null!;
@@ -33,3 +33,4 @@ namespace DomainLayer.Models.RequestModule
         public virtual ICollection<RequestDecision> Decisions { get; set; } = new List<RequestDecision>();
     }
 }
+

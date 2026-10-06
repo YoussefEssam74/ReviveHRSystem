@@ -1,11 +1,11 @@
-namespace DomainLayer.Models.AuditModule
+﻿namespace DomainLayer.Models.AuditModule
 {
     /// <summary>
     /// System-wide security and compliance audit log.
     /// Captures who (UserId), what action (Created, Updated, Deleted), target entity type and ID,
     /// before/after JSONB snapshots (OldValues / NewValues), timestamp, and IP address.
     /// </summary>
-    public class AuditLog : BaseEntity
+    public class AuditLog : BaseEntity<int>
     {
         public int? UserId { get; set; }
         public string Action { get; set; } = string.Empty;
@@ -17,3 +17,4 @@ namespace DomainLayer.Models.AuditModule
         public string? IpAddress { get; set; }
     }
 }
+

@@ -1,10 +1,10 @@
-namespace DomainLayer.Models.EvaluationModule
+﻿namespace DomainLayer.Models.EvaluationModule
 {
     /// <summary>
     /// Stores the response to a specific EvaluationQuestion within an EvaluationResponse.
     /// Stores the answer value (numeric rating or chosen options) in a flexible JSONB column.
     /// </summary>
-    public class EvaluationAnswer : BaseEntity
+    public class EvaluationAnswer : BaseEntity<int>
     {
         public int EvaluationResponseId { get; set; }
         public virtual EvaluationResponse EvaluationResponse { get; set; } = null!;
@@ -16,3 +16,4 @@ namespace DomainLayer.Models.EvaluationModule
         public string AnswerValueJson { get; set; } = string.Empty;
     }
 }
+

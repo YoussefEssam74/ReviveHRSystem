@@ -13,10 +13,19 @@ namespace Presistence.Data.Configurations
 
             builder.Property(e => e.EmployeeNumber).IsRequired().HasMaxLength(50);
             builder.Property(e => e.ContractType).IsRequired().HasMaxLength(100);
+            builder.Property(e => e.FullName).IsRequired().HasMaxLength(200);
+            builder.Property(e => e.Phone).HasMaxLength(50);
+            builder.Property(e => e.Gender).HasMaxLength(50);
+            builder.Property(e => e.NationalId).HasMaxLength(50);
+            builder.Property(e => e.Address).HasMaxLength(500);
+            builder.Property(e => e.EmergencyContactName).HasMaxLength(200);
+            builder.Property(e => e.EmergencyContactRelationship).HasMaxLength(100);
+            builder.Property(e => e.EmergencyContactPhone).HasMaxLength(50);
 
             builder.HasIndex(e => e.EmployeeNumber).IsUnique();
             builder.HasIndex(e => e.GymId);
             builder.HasIndex(e => e.UserId).IsUnique();
+            builder.HasAlternateKey(e => new { e.Id, e.TeamId });
 
             builder.HasOne(e => e.Gym)
                    .WithMany()
@@ -31,6 +40,11 @@ namespace Presistence.Data.Configurations
             builder.HasOne(e => e.Candidate)
                    .WithMany()
                    .HasForeignKey(e => e.CandidateId)
+                   .OnDelete(DeleteBehavior.SetNull);
+
+            builder.HasOne(e => e.OnboardingCompletedByUser)
+                   .WithMany()
+                   .HasForeignKey(e => e.OnboardingCompletedBy)
                    .OnDelete(DeleteBehavior.SetNull);
         }
     }
@@ -126,6 +140,54 @@ namespace Presistence.Data.Configurations
                    .OnDelete(DeleteBehavior.Restrict);
 
             builder.HasIndex(lb => new { lb.EmployeeId, lb.LeaveType, lb.Year }).IsUnique();
+        }
+    }
+
+    public class OnboardingChecklistItemConfiguration : IEntityTypeConfiguration<OnboardingChecklistItem>
+    {
+        public void Configure(EntityTypeBuilder<OnboardingChecklistItem> builder)
+        {
+            builder.ToTable("OnboardingChecklistItems");
+            builder.HasKey(i => i.Id);
+            builder.Property(i => i.Title).IsRequired().HasMaxLength(200);
+            builder.Property(i => i.Notes).HasMaxLength(1000);
+            builder.HasOne(i => i.Employee).WithMany(e => e.OnboardingChecklistItems)
+                   .HasForeignKey(i => i.EmployeeId).OnDelete(DeleteBehavior.Cascade);
+            builder.HasOne(i => i.CompletedByUser).WithMany().HasForeignKey(i => i.CompletedBy)
+                   .OnDelete(DeleteBehavior.SetNull);
+            builder.HasIndex(i => new { i.EmployeeId, i.SortOrder }).IsUnique();
+        }
+    }
+
+    public class OffboardingCaseConfiguration : IEntityTypeConfiguration<OffboardingCase>
+    {
+        public void Configure(EntityTypeBuilder<OffboardingCase> builder)
+        {
+            builder.ToTable("OffboardingCases");
+            builder.HasKey(c => c.Id);
+            builder.Property(c => c.Reason).IsRequired().HasMaxLength(1000);
+            builder.Property(c => c.Status).IsRequired().HasMaxLength(50);
+            builder.HasOne(c => c.Employee).WithMany(e => e.OffboardingCases)
+                   .HasForeignKey(c => c.EmployeeId).OnDelete(DeleteBehavior.Restrict);
+            builder.HasOne(c => c.InitiatedByUser).WithMany().HasForeignKey(c => c.InitiatedBy)
+                   .OnDelete(DeleteBehavior.Restrict);
+            builder.HasIndex(c => new { c.EmployeeId, c.Status });
+        }
+    }
+
+    public class OffboardingChecklistItemConfiguration : IEntityTypeConfiguration<OffboardingChecklistItem>
+    {
+        public void Configure(EntityTypeBuilder<OffboardingChecklistItem> builder)
+        {
+            builder.ToTable("OffboardingChecklistItems");
+            builder.HasKey(i => i.Id);
+            builder.Property(i => i.Title).IsRequired().HasMaxLength(200);
+            builder.Property(i => i.Notes).HasMaxLength(1000);
+            builder.HasOne(i => i.OffboardingCase).WithMany(c => c.ChecklistItems)
+                   .HasForeignKey(i => i.OffboardingCaseId).OnDelete(DeleteBehavior.Cascade);
+            builder.HasOne(i => i.CompletedByUser).WithMany().HasForeignKey(i => i.CompletedBy)
+                   .OnDelete(DeleteBehavior.SetNull);
+            builder.HasIndex(i => new { i.OffboardingCaseId, i.SortOrder }).IsUnique();
         }
     }
 }

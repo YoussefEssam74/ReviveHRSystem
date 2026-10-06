@@ -1,4 +1,4 @@
-using DomainLayer.Models.EmployeeModule;
+﻿using DomainLayer.Models.EmployeeModule;
 using DomainLayer.Models.UserModule;
 
 namespace DomainLayer.Models.EvaluationModule
@@ -7,7 +7,7 @@ namespace DomainLayer.Models.EvaluationModule
     /// Represents an evaluation instance / review submitted for an Employee.
     /// Captures the evaluating user (manager/team leader), submission timestamp, and links to question answers.
     /// </summary>
-    public class EvaluationResponse : BaseEntity
+    public class EvaluationResponse : BaseEntity<int>
     {
         public int EvaluationFormId { get; set; }
         public virtual EvaluationForm EvaluationForm { get; set; } = null!;
@@ -23,3 +23,4 @@ namespace DomainLayer.Models.EvaluationModule
         public virtual ICollection<EvaluationAnswer> Answers { get; set; } = new List<EvaluationAnswer>();
     }
 }
+

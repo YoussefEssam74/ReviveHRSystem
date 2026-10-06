@@ -1,4 +1,4 @@
-using DomainLayer.Models.NotificationModule.Enums;
+﻿using DomainLayer.Models.NotificationModule.Enums;
 using DomainLayer.Models.UserModule;
 
 namespace DomainLayer.Models.NotificationModule
@@ -7,7 +7,7 @@ namespace DomainLayer.Models.NotificationModule
     /// Represents an HR-authored outbound broadcast communication.
     /// Can be published immediately or scheduled for automated delivery. On send, fans out individual Notifications to targeted audience.
     /// </summary>
-    public class Announcement : BaseEntity
+    public class Announcement : BaseEntity<int>
     {
         public int AuthorId { get; set; }
         public virtual User Author { get; set; } = null!;
@@ -21,3 +21,4 @@ namespace DomainLayer.Models.NotificationModule
         public virtual ICollection<AnnouncementTarget> Targets { get; set; } = new List<AnnouncementTarget>();
     }
 }
+

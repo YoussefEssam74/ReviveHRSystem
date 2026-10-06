@@ -17,6 +17,7 @@ namespace ReviveHRSystem.Web
             builder.Services.AddControllers();
 
             // Configure DbContext with PostgreSQL
+            // cspell:disable-next-line
             builder.Services.AddDbContext<ReviveHrDbContext>(options =>
                 options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
 

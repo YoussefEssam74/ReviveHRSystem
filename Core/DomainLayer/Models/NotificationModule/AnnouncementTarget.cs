@@ -1,4 +1,4 @@
-using DomainLayer.Models.NotificationModule.Enums;
+﻿using DomainLayer.Models.NotificationModule.Enums;
 using DomainLayer.Models.OrganizationModule;
 using DomainLayer.Models.UserModule;
 
@@ -8,7 +8,7 @@ namespace DomainLayer.Models.NotificationModule
     /// Defines audience filtering criteria for an Announcement.
     /// Supports targeting by entire Gym, specific Department, specific Role, or Individual User.
     /// </summary>
-    public class AnnouncementTarget : BaseEntity
+    public class AnnouncementTarget : BaseEntity<int>
     {
         public int AnnouncementId { get; set; }
         public virtual Announcement Announcement { get; set; } = null!;
@@ -28,3 +28,4 @@ namespace DomainLayer.Models.NotificationModule
         public virtual User? User { get; set; }
     }
 }
+

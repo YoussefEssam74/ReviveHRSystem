@@ -1,9 +1,9 @@
-namespace DomainLayer.Models.OrganizationModule
+﻿namespace DomainLayer.Models.OrganizationModule
 {
     /// <summary>
     /// Represents an organizational department scoped to a specific gym (e.g., Fitness, Front Desk, Maintenance).
     /// </summary>
-    public class Department : BaseEntity
+    public class Department : BaseEntity<int>
     {
         public int GymId { get; set; }
         public virtual Gym Gym { get; set; } = null!;
@@ -11,3 +11,4 @@ namespace DomainLayer.Models.OrganizationModule
         public string Name { get; set; } = string.Empty;
     }
 }
+

@@ -1,4 +1,4 @@
-using DomainLayer.Models.UserModule;
+﻿using DomainLayer.Models.UserModule;
 
 namespace DomainLayer.Models.EmployeeModule
 {
@@ -6,7 +6,7 @@ namespace DomainLayer.Models.EmployeeModule
     /// Represents salary and compensation records for an employee.
     /// Supports historical tracking of compensation adjustments (off-cycle raises, annual automated raises) with effective dates and reasons.
     /// </summary>
-    public class Compensation : BaseEntity
+    public class Compensation : BaseEntity<int>
     {
         public int EmployeeId { get; set; }
         public virtual Employee Employee { get; set; } = null!;
@@ -21,3 +21,4 @@ namespace DomainLayer.Models.EmployeeModule
         public string? Reason { get; set; }
     }
 }
+

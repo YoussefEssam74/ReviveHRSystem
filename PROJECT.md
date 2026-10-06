@@ -16,7 +16,7 @@ Revive Solutions Fitness manages a growing network of gyms (targeting 20–50+).
 | **HR Manager** | Assigned gyms | HR management with configurable permissions |
 | **HR** | Assigned gyms | HR operations with configurable permissions |
 | **Branch Manager** | Own gym (Employee + role) | Team management through granted permissions only |
-| **Team Leader** | Own team(s), within own gym (Employee + role) | Sub-gym team oversight through granted permissions only; may lead multiple teams |
+| **Team Leader** | One team, within own gym (Employee + role) | Sub-gym team oversight through granted permissions only |
 | **Employee** | Own data / own gym (or a chosen one of two assigned gyms at login) | Self-service portal for personal HR information |
 
 ## MVP Goal

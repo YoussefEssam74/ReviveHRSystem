@@ -1,4 +1,4 @@
-using DomainLayer.Models.EmployeeModule.Enums;
+﻿using DomainLayer.Models.EmployeeModule.Enums;
 using DomainLayer.Models.UserModule;
 
 namespace DomainLayer.Models.EmployeeModule
@@ -7,7 +7,7 @@ namespace DomainLayer.Models.EmployeeModule
     /// Tracks annual leave entitlements and balances per employee per leave category (Annual, Sick, Emergency, Unpaid).
     /// Tracks total days granted, days consumed by approved requests, and days locked by in-flight pending requests.
     /// </summary>
-    public class LeaveBalance : BaseEntity
+    public class LeaveBalance : BaseEntity<int>
     {
         public int EmployeeId { get; set; }
         public virtual Employee Employee { get; set; } = null!;
@@ -24,3 +24,4 @@ namespace DomainLayer.Models.EmployeeModule
         public virtual User? UpdatedByUser { get; set; }
     }
 }
+

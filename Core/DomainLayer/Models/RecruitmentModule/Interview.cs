@@ -1,4 +1,4 @@
-using DomainLayer.Models.RecruitmentModule.Enums;
+﻿using DomainLayer.Models.RecruitmentModule.Enums;
 using DomainLayer.Models.UserModule;
 
 namespace DomainLayer.Models.RecruitmentModule
@@ -7,7 +7,7 @@ namespace DomainLayer.Models.RecruitmentModule
     /// Records an interview scheduled or conducted with an applicant.
     /// Tracks interview stage, date, outcome (Passed, Failed, Pending), interviewer notes, and interviewer user.
     /// </summary>
-    public class Interview : BaseEntity
+    public class Interview : BaseEntity<int>
     {
         public int ApplicationId { get; set; }
         public virtual Application Application { get; set; } = null!;
@@ -21,3 +21,4 @@ namespace DomainLayer.Models.RecruitmentModule
         public virtual User? Interviewer { get; set; }
     }
 }
+

@@ -102,6 +102,30 @@ namespace Presistence.Data.Configurations
         }
     }
 
+    public class PayrollEntryLineItemConfiguration : IEntityTypeConfiguration<PayrollEntryLineItem>
+    {
+        public void Configure(EntityTypeBuilder<PayrollEntryLineItem> builder)
+        {
+            builder.ToTable("PayrollEntryLineItems");
+            builder.HasKey(i => i.Id);
+            builder.Property(i => i.Type).IsRequired().HasMaxLength(30);
+            builder.Property(i => i.Label).IsRequired().HasMaxLength(200);
+            builder.Property(i => i.Reason).HasMaxLength(1000);
+            builder.Property(i => i.Source).IsRequired().HasMaxLength(50);
+            builder.Property(i => i.Status).IsRequired().HasMaxLength(50);
+            builder.Property(i => i.Amount).HasPrecision(18, 2);
+            builder.HasOne(i => i.PayrollEntry).WithMany(e => e.LineItems).HasForeignKey(i => i.PayrollEntryId)
+                   .OnDelete(DeleteBehavior.Cascade);
+            builder.HasOne(i => i.AttendanceRecord).WithMany().HasForeignKey(i => i.AttendanceRecordId)
+                   .OnDelete(DeleteBehavior.SetNull);
+            builder.HasOne(i => i.EmployeeRequest).WithMany().HasForeignKey(i => i.EmployeeRequestId)
+                   .OnDelete(DeleteBehavior.SetNull);
+            builder.HasOne(i => i.Reviewer).WithMany().HasForeignKey(i => i.ReviewedBy)
+                   .OnDelete(DeleteBehavior.SetNull);
+            builder.HasIndex(i => new { i.PayrollEntryId, i.Type });
+        }
+    }
+
     public class DeductionCandidateConfiguration : IEntityTypeConfiguration<DeductionCandidate>
     {
         public void Configure(EntityTypeBuilder<DeductionCandidate> builder)

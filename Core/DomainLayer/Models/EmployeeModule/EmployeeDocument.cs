@@ -1,4 +1,4 @@
-using DomainLayer.Models.EmployeeModule.Enums;
+﻿using DomainLayer.Models.EmployeeModule.Enums;
 
 namespace DomainLayer.Models.EmployeeModule
 {
@@ -6,7 +6,7 @@ namespace DomainLayer.Models.EmployeeModule
     /// Stores uploaded documents belonging to an employee (e.g. Contract, National ID copy, Certifications).
     /// Tracks document expiry dates for alert triggers and whether the employee is allowed to self-upload/edit this document type.
     /// </summary>
-    public class EmployeeDocument : BaseEntity
+    public class EmployeeDocument : BaseEntity<int>
     {
         public int EmployeeId { get; set; }
         public virtual Employee Employee { get; set; } = null!;
@@ -18,3 +18,4 @@ namespace DomainLayer.Models.EmployeeModule
         public bool EmployeeEditable { get; set; } = false;
     }
 }
+
