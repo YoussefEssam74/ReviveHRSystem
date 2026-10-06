@@ -1,4 +1,9 @@
 
+using DomainLayer.Contracts;
+using Microsoft.EntityFrameworkCore;
+using Presistence.Data;
+using Presistence.Repository;
+
 namespace ReviveHRSystem.Web
 {
     public class Program
@@ -10,6 +15,14 @@ namespace ReviveHRSystem.Web
             // Add services to the container.
 
             builder.Services.AddControllers();
+
+            // Configure DbContext with PostgreSQL
+            builder.Services.AddDbContext<ReviveHrDbContext>(options =>
+                options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
+
+            // Register UnitOfWork and Generic Repository
+            builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
+
             // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
             builder.Services.AddEndpointsApiExplorer();
             builder.Services.AddSwaggerGen();

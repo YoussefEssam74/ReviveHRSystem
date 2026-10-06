@@ -341,6 +341,21 @@ const MOCK = {
     { id: 'ef2', name: 'Receptionist Evaluation Q2 2026', gym: 'All', position: 'Receptionist', questions: 6, status: 'Completed', createdDate: '2026-05-01' },
     { id: 'ef3', name: 'Staff Onboarding Checklist', gym: 'All', position: 'All', questions: 12, status: 'Active', createdDate: '2026-01-01' },
   ],
+  // Dispatched evaluation assignments — HR creates the form, then routes it to EVALUATORS
+  // (users holding an evaluation-execution permission), never to each evaluated employee.
+  // Employees are subjects of the evaluation; they never receive the form themselves.
+  // Progress is PER-ASSIGNMENT via completedSubjects (the submitting evaluator's own
+  // done list) — a shared/global history match would credit every evaluator with every
+  // other evaluator's submissions of the same subject.
+  // Matching evaluator → assignment is done by EMAIL (MOCK.currentUser is a fresh object
+  // literal, so object identity against DEMO_USERS would fail for the initial user).
+  evaluationAssignments: [
+    { id: 'as1', formId: 'ef1', formName: 'Trainer Evaluation Q3 2026',
+      evaluatorEmail: 'mohamed.alsayed@revive.com', evaluatorName: 'Mohamed Al-Sayed',
+      subjects: ['Ahmed Mohamed', 'Karim Hassan', 'Omar Youssef', 'Ahmed Zaki'],
+      completedSubjects: ['Ahmed Mohamed', 'Karim Hassan'], // seed: eh1 + eh2 already Completed → 2/4
+      status: 'Assigned', dispatchedDate: '2026-09-07', dispatchedBy: 'Mona El-Sayed' },
+  ],
   evaluations: [
     { id: 'e1', employee: 'Ahmed Mohamed', position: 'Trainer', period: 'Q2 2026', score: 4.2, result: 'Exceeds', status: 'Completed', gym: 'Nasr City' },
     { id: 'e2', employee: 'Karim Hassan', position: 'Trainer', period: 'Q2 2026', score: 3.8, result: 'Meets', status: 'Completed', gym: 'Nasr City' },
@@ -538,5 +553,51 @@ const DEMO_USERS = {
     // (scoped to own gyms) and evaluations.manage (run cycles with forms HR Manager built —
     // but NOT evaluations.forms.manage, so no form builder). No reports.view / audit.view.
     permissions: ['employees.view','employees.create','employees.edit','employees.request_action','employees.position.change','employees.status.change','employees.contract.manage','employees.documents.view','employees.documents.manage','positions.view','attendance.view','attendance.edit','attendance.manual_entry','schedule.view','schedule.manage','requests.view','requests.approve','payroll.view','payroll.edit','payroll.approve','recruitment.view','recruitment.candidates.manage','evaluations.view','evaluations.manage','announcements.view','events.view'],
+  },
+  // ==================== EVALUATOR PRESETS (Mock UI) ====================
+  // Routing is permission-based (ADR-003): the evaluation form goes to whoever HOLDS an
+  // evaluation-execution permission — never "if role == Branch Manager". These presets exist
+  // so the demo can switch into those holders and show the "My Evaluations" inbox.
+  branchManager: {
+    id: 'RV-00041', firstName: 'Youssef', lastName: 'Kamal', fullName: 'Youssef Kamal',
+    email: 'youssef.kamal@revive.com', phone: '+20 104 567 8901', initials: 'YK',
+    position: 'Branch Manager', level: 'Manager',
+    gyms: [
+      { id: 'gym-1', name: 'Revive Gym', branch: 'Nasr City' },
+    ],
+    selectedGym: null,
+    hireDate: '2023-02-01', employmentType: 'Full-time', status: 'Active',
+    role: 'Branch Manager',
+    // Branch-wide evaluator: full evaluation execution + team scope (still no forms.manage —
+    // HR owns the builder).
+    permissions: ['dashboard.view','employees.view','evaluations.view','evaluations.manage','evaluations.view.team','evaluations.manage.team','team.view','team.manage','attendance.view','requests.view'],
+  },
+  teamLeader: {
+    id: 'RV-00077', firstName: 'Mohamed', lastName: 'Al-Sayed', fullName: 'Mohamed Al-Sayed',
+    email: 'mohamed.alsayed@revive.com', phone: '+20 105 678 9012', initials: 'MA',
+    position: 'Team Leader', level: 'Senior',
+    gyms: [
+      { id: 'gym-1', name: 'Revive Gym', branch: 'Nasr City' },
+    ],
+    selectedGym: null,
+    hireDate: '2024-05-15', employmentType: 'Full-time', status: 'Active',
+    role: 'Team Leader',
+    // Team-scoped evaluator: manage.team = run evaluations for subjects in own scope only.
+    permissions: ['dashboard.view','employees.view','evaluations.view','evaluations.view.team','evaluations.manage.team','team.view','attendance.view','requests.view'],
+  },
+  employee: {
+    id: 'RV-00108', firstName: 'Ahmed', lastName: 'Mohamed', fullName: 'Ahmed Mohamed',
+    email: 'ahmed.mohamed@revive.com', phone: '+20 108 765 4321', initials: 'AM',
+    position: 'Trainer', level: 'Senior',
+    gyms: [
+      { id: 'gym-1', name: 'Revive Gym', branch: 'Nasr City' },
+    ],
+    selectedGym: null,
+    hireDate: '2024-09-01', employmentType: 'Full-time', status: 'Active',
+    role: 'Employee',
+    // Proof that a NORMAL EMPLOYEE can be an evaluator: permissions carry
+    // evaluations.view.team (peer/team-scoped evaluation access), not the role name.
+    // Routing code checks permissions only — never role strings.
+    permissions: ['dashboard.view','evaluations.view','evaluations.view.team','attendance.view'],
   },
 };

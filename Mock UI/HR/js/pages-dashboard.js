@@ -399,12 +399,17 @@ function openCreateEvaluationFormModal() {
           </select>
         </div>
         <div>
-          <label class="block font-semibold text-charcoal-700 mb-1">Evaluating Manager</label>
+          <label class="block font-semibold text-charcoal-700 mb-1">Routed To (Evaluators)</label>
           <select id="ef-evaluator" class="form-select w-full text-xs">
-            <option value="Branch Manager + HR">Branch Manager + HR Manager</option>
-            <option value="HR Only">HR Department Only</option>
-            <option value="Self + Manager">Self-Assessment + Manager</option>
+            ${(() => {
+              // Permission-derived preview: whoever holds an eval-execution permission
+              // receives the form — evaluated employees are subjects, never recipients.
+              const evals = typeof evaluatorCandidates === 'function' ? evaluatorCandidates() : [];
+              if (!evals.length) return '<option value="">No users hold an evaluation permission</option>';
+              return evals.map(u => `<option value="${u.email}">${u.fullName} — ${u.position}</option>`).join('');
+            })()}
           </select>
+          <p class="text-[10px] text-charcoal-500 mt-1">Routes only to users with an evaluation permission — employees are evaluated as subjects, not recipients.</p>
         </div>
       </div>
 

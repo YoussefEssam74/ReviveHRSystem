@@ -97,9 +97,15 @@
         <span id="demo-role-label">HR Manager</span>
         <svg class="w-2.5 h-2.5 opacity-70" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
       </button>
-      <div id="demo-role-menu" class="hidden absolute right-0 mt-1 w-40 bg-white text-charcoal-800 rounded-lg shadow-xl border border-charcoal-100 py-1 z-[70]">
+      <div id="demo-role-menu" class="hidden absolute right-0 mt-1 w-48 bg-white text-charcoal-800 rounded-lg shadow-xl border border-charcoal-100 py-1 z-[70]">
+        <div class="px-3 pt-1 pb-0.5 text-[9px] font-bold uppercase tracking-wider text-charcoal-400">HR</div>
         <button onclick="switchRole('hrManager')" class="w-full text-left px-3 py-1.5 text-xs hover:bg-charcoal-50">HR Manager</button>
         <button onclick="switchRole('hr')" class="w-full text-left px-3 py-1.5 text-xs hover:bg-charcoal-50">HR</button>
+        <div class="my-1 border-t border-charcoal-100"></div>
+        <div class="px-3 pt-1 pb-0.5 text-[9px] font-bold uppercase tracking-wider text-charcoal-400">Evaluators</div>
+        <button onclick="switchRole('branchManager')" class="w-full text-left px-3 py-1.5 text-xs hover:bg-charcoal-50">Branch Manager</button>
+        <button onclick="switchRole('teamLeader')" class="w-full text-left px-3 py-1.5 text-xs hover:bg-charcoal-50">Team Leader</button>
+        <button onclick="switchRole('employee')" class="w-full text-left px-3 py-1.5 text-xs hover:bg-charcoal-50">Employee</button>
       </div>
     </div>
     <!-- "Show All Pages" removed — the role filter always shows only the selected preset's pages & functions -->
