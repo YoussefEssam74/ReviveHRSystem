@@ -46,7 +46,9 @@ Thumbs.db
 ## User-specific files
 *.pfx
 *.p12
+appsettings.json
 appsettings.Development.json
+appsettings.*.json
 
 ## AI & Local Tooling
 .opencode/
