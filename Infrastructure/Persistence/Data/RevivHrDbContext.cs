@@ -32,7 +32,6 @@ namespace Presistence.Data
         public DbSet<RolePermission> RolePermissions => Set<RolePermission>();
         public DbSet<UserPermission> UserPermissions => Set<UserPermission>();
         public DbSet<UserGymAccess> UserGymAccesses => Set<UserGymAccess>();
-        public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
         public DbSet<UserNotificationPreference> UserNotificationPreferences => Set<UserNotificationPreference>();
 
         // Organization
