@@ -110,9 +110,9 @@ Audit
 ## Authentication & Authorization
 
 ### JWT Strategy
-- Access tokens: short-lived (15–30 minutes)
-- Refresh tokens: longer-lived, rotated on each use
-- Token storage strategy: TBD (see ADR-002)
+- Access tokens: short-lived (30 minutes, configurable via `Jwt:AccessTokenMinutes`)
+- Refresh tokens: **removed by decision** — access-token-only sessions (see ADR-002 and the RefreshTokens table removal)
+- Token storage strategy: frontend keeps the access token in memory (not localStorage)
 
 ### Authorization Pipeline
 ```
@@ -123,7 +123,7 @@ Request arrives
         1. Does user have the required permission? (e.g., employees.create)
         2. Does the target data belong to a gym in the user's access scope?
         3. If both pass → execute operation
-        4. If either fails → return 403
+        4. If either fails → return 401 (UnAuthorizedException via the exception middleware)
 ```
 
 ### Gym-Scope Enforcement
@@ -138,15 +138,16 @@ See [api.md](api.md) for full API contract details.
 
 ## Error Handling
 
-- Centralized exception handling middleware
+- Centralized exception handling middleware (CustomExceptionMiddleWare)
 - Standardized error envelope:
 ```json
 {
-  "statusCode": 403,
-  "message": "You do not have permission to perform this action.",
+  "statusCode": 401,
+  "errorMessage": "You do not have access to this gym.",
   "errors": []
 }
 ```
+- Mappings: NotFoundException → 404, UnAuthorizedException → 401, BadRequestException → 400, anything else → 500.
 
 ## Localization
 

@@ -1,23 +1,21 @@
 # ADR-004: Biometric Attendance Integration
 
 ## Status
-**Proposed** — vendor not yet confirmed
+**Amended 2026-10-07** — the per-device `DeviceToken`/`deviceId` model was replaced by a
+**6-digit station code** (see "Station Credential"): a broken device must never be able
+to break the integration, so no device-bound secret exists anywhere in the flow.
 
 ## Context
 Attendance check-in/check-out should use Face ID biometric devices installed at each gym. When Face ID fails, manual entry is required by whoever is at the computer.
 
 ## Decision
-**Integration Boundary Pattern + Per-Gym Device Identity**
+**Integration Boundary Pattern + Per-Gym 6-Digit Station Code**
 
-### Architecture
+### Station Credential (replaces the former DeviceToken design)
 ```
-Biometric Device (Face ID) — registered to exactly ONE gym, identified
-by a unique DeviceToken (conceptually a "public link" the device
-authenticates with — see Gym-Anchored Device Identity below)
-    ↓ (push event or poll), event includes DeviceToken + recognized EmployeeId
-Integration Adapter (vendor-specific)
-    ↓
-Resolve GymId from DeviceToken (BiometricDevices table)
+Attendance Station (any PC at the gym)
+    ↓ (station login + every attendance request — body carries ONLY the 6-digit code)
+Resolve GymId from the code (StationCodes table, one active code per gym)
     ↓
 Attendance Domain Event (vendor-agnostic): { EmployeeId, GymId, Timestamp }
     ↓
@@ -31,7 +29,15 @@ Cross-Gym Validation (see below) → Schedule Comparison → Status Determinatio
 2. **Adapter Pattern**: A thin adapter translates vendor-specific events into domain events
 3. **Manual Fallback**: When Face ID fails, the system provides a manual check-in/check-out form, scoped to whichever gym the operator's terminal belongs to
 4. **Method Tracking**: Each attendance record stores the method (Biometric vs Manual)
-5. **Gym-Anchored Device Identity**: Every physical Face ID device is registered to exactly one gym via a unique `DeviceToken` (`BiometricDevices` table, database.md). The device never needs to know which employee it's scanning belongs to which gym — it always reports the same gym (itself), and the system resolves everything else from there.
+5. **Gym-Anchored Station Code**: every gym holds exactly one active 6-digit
+   `StationCode` (`StationCodes` table). Stations log in with the code
+   (`POST /api/kiosk/login`) and repeat it on every attendance request; the system
+   resolves the gym from the code. There is deliberately **no deviceId and no device
+   token** — replacing broken hardware only requires re-entering the same code, so a
+   hardware failure can never invalidate the integration. HR rotates the code from the
+   gym's station-code endpoint; rotation immediately invalidates the old code.
+   (`BiometricDevices.DeviceToken` remains in the schema but is no longer used to
+   authenticate any endpoint in this flow.)
 
 ### Cross-Gym Check-In Validation (critical)
 
@@ -43,13 +49,14 @@ manual — is validated as follows, against the gym the EVENT came from
 (not any other gym the employee happens to also have access to):
 
 ```
-Event arrives → GymId resolved (DeviceToken lookup, or manual terminal's own gym)
+Event arrives → GymId resolved from the 6-digit station code
     ↓
 1. Does the employee have UserGymAccess to this GymId?
-    → No  → REJECT. No AttendanceRecord created.
+    → No  → REJECT (403 CROSS_GYM_ACCESS_DENIED). No AttendanceRecord created.
     ↓ Yes
-2. Does the employee have a ShiftAssignment at THIS GymId for today's date?
-    → No (including a scheduled day off — no shift anywhere today) → REJECT. No AttendanceRecord created.
+2. Does the employee have a ShiftAssignment (real shift, not a day off) at THIS GymId for today's date?
+    → No shift anywhere today     → REJECT (404 SCHEDULED_DAY_OFF)
+    → Shift at a different branch → REJECT (403 WRONG_BRANCH_SCHEDULE)
     ↓ Yes
 → ACCEPT. Record AttendanceRecord against this GymId, evaluate vs. this shift.
 ```

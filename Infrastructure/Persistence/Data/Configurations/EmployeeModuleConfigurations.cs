@@ -25,7 +25,10 @@ namespace Presistence.Data.Configurations
             builder.HasIndex(e => e.EmployeeNumber).IsUnique();
             builder.HasIndex(e => e.GymId);
             builder.HasIndex(e => e.UserId).IsUnique();
-            builder.HasAlternateKey(e => new { e.Id, e.TeamId });
+            // NOTE: the former (Id, TeamId) alternate key was removed — EF Core cannot
+            // SaveChanges an employee whose TeamId is null while it exists, which broke
+            // every team-less employee insert. TeamLeaders now references EmployeeId only;
+            // "leader must belong to the team" is enforced at application level.
 
             builder.HasOne(e => e.Gym)
                    .WithMany()

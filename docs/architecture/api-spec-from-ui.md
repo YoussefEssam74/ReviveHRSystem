@@ -1,5 +1,7 @@
 # API Specification Derived from Mock UI
 
+> **Implementation status:** this document is a UI-driven roadmap, not a list of live endpoints. Only routes listed in [api.md](./api.md) currently exist in backend controllers; “EXISTING” in this roadmap means requested by the UI/documentation, not implemented.
+
 > Generated 2026-10-07 by full reads of every Mock UI portal (Attendance Station, Employee, HR, Super Admin).
 > Every endpoint the UI needs, with its request and response contract, using the exact field names rendered by the UI.
 >
@@ -22,11 +24,10 @@ These must be reachable **without a user JWT** (explicit requirement: attendance
 
 | Endpoint | Auth credential | Purpose |
 |---|---|---|
-| `POST /api/kiosk/pair` | Public (6-digit code + deviceId) | Attendance kiosk redeems a pairing code for a DeviceToken |
-| `POST /api/attendance/events` | Device-token header | Kiosk biometric check-in/out |
-| `POST /api/attendance/manual` | Device-token header | Kiosk manual check-in/out |
-| `GET /api/attendance/roster` | Device-token header | Kiosk branch roster + today shift |
-| `GET /api/attendance?date=` | Device-token header | Kiosk today feed + counters |
+| `POST /api/kiosk/login` | Public (6-digit code) | Station login: resolves the gym from the code — no deviceId/token |
+| `POST /api/attendance/events` | 6-digit code in body | Station biometric check-in/out (gym resolved from the code) |
+| `POST /api/attendance/manual` | 6-digit code in body | Station manual check-in/out |
+| `GET /api/attendance?date=` | (not yet implemented) | Station today feed + counters — planned |
 | `GET /api/hiring-forms` | Public | List open hiring forms |
 | `GET /api/hiring-forms/{id}` | Public | Hiring form definition (questions) for anonymous applicants |
 | `POST /api/applications` | Public (rate-limited) | Anonymous application submission |
@@ -43,14 +44,24 @@ All other endpoints require the standard Authorization header carrying a user JW
 
 ### ⚠️ Auth model (critical)
 
-The Attendance Station is a **public, unattended kiosk**. No endpoint used by this UI may require a **user JWT**. The UI itself states: *"Every request to the attendance API requires the secret `DeviceToken` in the HTTP headers… personal mobile phones receive 401 Unauthorized."* Auth model per endpoint type:
+The Attendance Station is a **public, unattended kiosk**. No endpoint used by this UI may require a **user JWT**.
+
+> **Auth model superseded 2026-10-07:** the mock UI's `DeviceToken` / `deviceId`
+> pairing model was replaced by a **6-digit station code** (user decision: a broken
+> device must not break the integration). The station logs in with
+> `POST /api/kiosk/login { code }` and repeats `code` in the body of **every**
+> attendance request; the gym is resolved server-side from the code. `POST /api/kiosk/pair`,
+> `deviceId`, `deviceToken` and the pairing-code exchange **do not exist** in the API.
+
+Auth model per endpoint type (current):
 
 | Endpoint group | Auth |
 |---|---|
-| Pairing (6-digit code exchange) | **Public** — 6-digit code + `deviceId`, no JWT |
-| Attendance events / manual / roster / today feed | **Device-token** (header or body `deviceToken`; kiosk stores it in `localStorage.revive_station_token`) |
+| Station login (`POST /api/kiosk/login`) | **Public** — 6-digit code only, rate-limited |
+| Attendance events / manual | **Public** — 6-digit `code` in the request body, rate-limited |
+| Roster / today feed (planned) | **Public** — 6-digit `code` in the request body (not yet implemented) |
 | Biometric AI service (`Station.biometricUrl`) | **None sent by UI** (separate dedicated service; network-restricted) |
-| HR Portal code generation / manager authorization | **User-JWT** (out of kiosk scope — HR/manager side) |
+| HR side: station-code rotation / read | **User-JWT**, gym-scoped (`/api/gyms/{gymId}/station-codes`) |
 
 ---
 
@@ -79,7 +90,7 @@ The Attendance Station is a **public, unattended kiosk**. No endpoint used by th
 - **Called by:** `connectStationWithCode()` — "Connect & Lock to Gym" button (`btn-connect-kiosk`), and `autoFillDetectedHrCode()` (banner "Use Code" button reading `localStorage.revive_pending_pairing` written by the HR portal).
 - **Request JSON body (exact UI fields):**
   ```json
-  { "code": "739418", "deviceId": "REV-PC-01" }
+  { "code": "123456", "deviceId": "REV-PC-01" }
   ```
   - `code` — from input `#kiosk-code-input` (6 digits, `/\D/g` stripped)
   - `deviceId` — `Station.deviceId` / `localStorage.revive_station_device_id` (hardware identity, ADR-004)
@@ -116,7 +127,7 @@ The Manager Pairing Modal form fields are `#mgr-select-gym` (`gymId`: 2|3|4), `#
   }
   ```
   - `type`: `"IN" | "OUT"` (docs use `direction: "CheckIn"|"CheckOut"` — **reconcile naming**)
-  - `livenessScore`: 0–1; server must reject `< 0.60` (UI message: *"60% needed"*)
+- `livenessScore`: 0–1; server rejects `< 0.70` (UI message: *"70% needed"*); the score must come from a trusted biometric verifier
   - `method` is always `"Biometric"` on this path
 - **Response 201 (fields UI renders):**
   ```json
@@ -142,7 +153,7 @@ The Manager Pairing Modal form fields are `#mgr-select-gym` (`gymId`: 2|3|4), `#
   | 422 | `LIVENESS_FAILED` | `message` | toast only — **never written to feed** |
 
   Generic shape: `{ "error": "<CODE>", "message": "<human text>" }` (+ per-code extras above). UI also reads `body.error` to compose feed rejections (`detail = "${error}: ${message}"`). ⚠️ This differs from the standard `{statusCode,message,errors[]}` envelope — either embed these fields alongside it or agree on the union shape.
-- **Branch isolation:** server resolves gym from `deviceToken`, then cross-checks employee's `UserGymAccess` + today's `ShiftAssignment` **at this gym** (api.md) → drives 403/404 responses above. `livenessScore ≥ 0.60` gate → 422.
+- **Branch isolation:** server resolves gym from the station code, then cross-checks employee's `UserGymAccess` + scheduled shift **at this gym** (api.md) → drives 403/404 responses above. `livenessScore ≥ 0.70` gate → 422.
 
 #### 2.2 Sign-out confirmation — **client-only, no API**
 `promptSignOut()` / `resolveSignOutConfirm(approve)` gates an early `OUT` (shift not over); on approve it issues the same 2.1 call; on decline/cancel (20 s timeout) no request is made.
@@ -1603,4 +1614,3 @@ All **NEW** (doc has no report endpoints):
 **NEW (~40):** permission catalog; positions/shift-template PUT; departments CRUD; per-user activity; audit-logs (+export); org-hierarchy (+node detail, +export); system health (+maintenance mode); global device list + ping/sync/sync-all/diagnose/reboot; gateways list/update/templates; ERP config; webhooks CRUD+test; billing (subscription, payment-method, invoices+pdf, statement, upgrade); 5 report endpoints + export; recruitment overview; contract templates; settings GET/PUT + backup trigger; global search.
 
 **UI-only (no API):** banner Dismiss, tab/navigation switches, Preview Terms links, breadcrumb navigation.
-

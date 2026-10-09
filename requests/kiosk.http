@@ -1,0 +1,45 @@
+### ============================================================
+### Station (kiosk) login — {{gym1StationCode}} / {{gym2StationCode}}
+### are filled from the live API: run attendance.http > syncGym1StationCode
+### (or open the Station Code page in the app) before this folder.
+### ============================================================
+
+### Station (kiosk) login with the 6-digit code — no deviceId, no token.
+### Response: { gymId, gymName, token } — the token binds the station to its gym.
+# @name stationLogin
+POST {{baseUrl}}/api/kiosk/login
+Content-Type: application/json
+
+{
+  "code": "{{gym1StationCode}}"
+}
+
+###
+### Wrong code → 401 INVALID_STATION_CODE
+# @name stationLoginWrongCode
+POST {{baseUrl}}/api/kiosk/login
+Content-Type: application/json
+
+{
+  "code": "000000"
+}
+
+###
+### Short code → 400 VALIDATION_FAILED
+# @name stationLoginShortCode
+POST {{baseUrl}}/api/kiosk/login
+Content-Type: application/json
+
+{
+  "code": "12345"
+}
+
+###
+### Second gym's station
+# @name stationLoginGym2
+POST {{baseUrl}}/api/kiosk/login
+Content-Type: application/json
+
+{
+  "code": "{{gym2StationCode}}"
+}

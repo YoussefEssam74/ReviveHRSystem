@@ -1,276 +1,76 @@
-# API Contract & Conventions
+# Implemented API Contract
 
-## Source of Truth
+This document describes the endpoints currently implemented by the backend. The UI endpoint inventory in [api-spec-from-ui.md](./api-spec-from-ui.md) is a product roadmap; entries there are not live unless they also appear below and in generated OpenAPI.
 
-The generated OpenAPI specification is authoritative for all API types and contracts.
+## Conventions
 
-### Rules
-- Never duplicate DTOs manually — generate from OpenAPI spec
-- Never invent endpoints that don't exist in the backend
-- Never invent request/response fields
-- If functionality requires an API that doesn't exist, identify the backend change required first
-
-## Base URL
-
-```
-Development: https://localhost:5001/api
-Production:  https://{server-ip}/api
-```
+- Base path: /api; requests and responses use JSON.
+- Successful responses return the endpoint DTO directly (there is no data wrapper).
+- Errors returned by the exception middleware use { statusCode, errorMessage, errors }. errorMessage is the human-readable message; errors is an array of strings carrying extra per-field detail when a BadRequestException supplies it (empty otherwise).
+- Invalid request bodies return 400 with { statusCode: 400, errorMessage, validationErrors } where validationErrors is an array of { field, errors[] }; rate limits return 429 with RATE_LIMITED. Unexpected errors return a generic 500 body.
+- Cross-origin browser calls are off by default: an empty Cors:AllowedOrigins yields no CORS headers (same-origin deployments and the Vite dev proxy are unaffected). Populating the list enables the SPA to call the API from another origin.
+- Requests are cancellation-aware through controller, service, repository, and save operations.
 
 ## Authentication
 
-### Login
-```
-POST /api/auth/login
-Body: { email, password }
-Response: { accessToken, refreshToken, user: { id, email, userType, permissions[], gymAccess[] } }
-```
+### POST /api/auth/login
 
-### Refresh Token
-```
-POST /api/auth/refresh
-Body: { refreshToken }
-Response: { accessToken, refreshToken }
-```
+Request: { email, password }.
 
-### Logout
-```
-POST /api/auth/logout
-Headers: Authorization: Bearer {accessToken}
-```
+A completed session returns 200 with accessToken, expiresInSeconds, requiresGymSelection=false, and user. A multi-gym employee instead receives requiresGymSelection=true, gyms, and tempSessionToken; fields for the completed session are omitted. Invalid, unknown, and disabled accounts all return 401 with errorMessage "Invalid email or password.".
 
-## Request/Response Conventions
+### POST /api/auth/login/select-gym
 
-### Headers
-```
-Authorization: Bearer {accessToken}
-Content-Type: application/json
-Accept-Language: en | ar
-```
+Request: { gymId, tempSessionToken }. Returns the completed session shape above; the token must be valid and the user must have access to the selected gym. Possible errors: 400, 401, or 429.
 
-### Pagination (all list endpoints)
-```
-Query Parameters:
-  page=1           (1-indexed)
-  pageSize=20      (default 20, max 100)
-  searchTerm=      (optional, server-side search)
-  sortBy=          (column name)
-  sortOrder=asc    (asc | desc)
+## Attendance station
 
-Response envelope:
-{
-  "items": [...],
-  "page": 1,
-  "pageSize": 20,
-  "totalCount": 150,
-  "totalPages": 8
-}
-```
+All station endpoints are rate-limited. Each attendance request must include the current six-digit station code — codes are generated server-side (never hardcoded; fetch via GET /api/gyms/{gymId}/station-codes) — plus the gym-bound station token returned by the kiosk login. The code resolves the gym server-side; no user JWT or device token is used.
 
-### Success Responses
-```json
-// Single item
-{ "data": { ... } }
+### POST /api/kiosk/login
 
-// List
-{ "items": [...], "page": 1, "pageSize": 20, "totalCount": 150 }
+Request: { code: "<six-digit station code>" }. Returns 200 { gymId, gymName, token }, where token is a gym-bound station JWT that must be sent as `Authorization: Bearer <token>` on subsequent attendance requests. Invalid code: 401 with errorMessage "Invalid or expired station code."; malformed code: 400.
 
-// Action result
-{ "message": "Employee transferred successfully." }
-```
+### POST /api/attendance/events
 
-### Error Responses
-```json
-{
-  "statusCode": 400,
-  "message": "Validation failed.",
-  "errors": [
-    { "field": "email", "message": "Email is required." }
-  ]
-}
-```
+Request fields: code, employeeId, type (IN or OUT; legacy check-in/out aliases are accepted), livenessScore (0–1, at least 0.70), and optional ISO 8601 timestamp. If omitted, server time is used. Timestamps without an offset are interpreted as UTC. Shift comparisons use the explicitly configured Attendance:TimeZoneId (Africa/Cairo in appsettings), not the host machine timezone. The liveness score must be produced by a trusted biometric verifier; a caller-provided score alone is not biometric proof.
 
-### HTTP Status Codes
-| Code | Usage |
-|------|-------|
-| 200 | Success (GET, PUT) |
-| 201 | Created (POST) |
-| 204 | No content (DELETE) |
-| 400 | Validation error |
-| 401 | Not authenticated |
-| 403 | Not authorized (missing permission or gym access) |
-| 404 | Resource not found |
-| 409 | Conflict (duplicate, concurrent edit) |
-| 500 | Server error |
+Returns 201 with { recordId, employeeId, employeeName, gymId, gymName, type, method, timestamp, attendanceStatus, shiftComparison }; timestamp is UTC. attendanceStatus reports the persisted status (ONTIME, LATE, or EARLYCHECKOUT). Common errors: 400 validation, type, liveness, future timestamp, or duplicate/invalid attendance transition; 401 invalid station code, missing/mismatched station token, or gym/schedule mismatch; 404 employee or shift not found; and 429 rate limited.
 
-## Core API Endpoints
+### POST /api/attendance/manual
 
-### Gyms
-```
-GET    /api/gyms                    → List gyms (filtered by user's access)
-GET    /api/gyms/{id}               → Get gym details
-POST   /api/gyms                    → Create gym
-PUT    /api/gyms/{id}               → Update gym
-DELETE /api/gyms/{id}               → Archive gym
-GET    /api/gyms/{id}/positions     → List positions for a gym
-POST   /api/gyms/{id}/positions     → Create position for a gym
-GET    /api/gyms/{id}/shift-templates → List shift templates for a gym
-POST   /api/gyms/{id}/shift-templates → Create shift template for a gym
-```
+Same event fields except no liveness score; reason is required (3–500 characters) and audited with the attendance change in one database transaction. Returns the same 201 response with method=Manual. If recording the attendance or its audit entry fails, both changes roll back.
 
-### Users
-```
-GET    /api/users                   → List users
-GET    /api/users/{id}              → Get user details + effective permissions
-POST   /api/users                   → Create user
-PUT    /api/users/{id}              → Update user
-PUT    /api/users/{id}/roles        → Assign roles
-PUT    /api/users/{id}/permissions  → Set individual permissions
-PUT    /api/users/{id}/gym-access   → Assign gym access
-POST   /api/users/{id}/reset-password → Reset password
-```
+## Station-code management
 
-### Roles
-```
-GET    /api/roles                   → List roles
-POST   /api/roles                   → Create role
-PUT    /api/roles/{id}              → Update role
-PUT    /api/roles/{id}/permissions  → Set role permissions
-POST   /api/roles/{id}/clone       → Clone role
-DELETE /api/roles/{id}              → Archive role
-```
+Routes require a Bearer access token. TopManagement can manage codes for any gym. HR can manage codes only for gyms assigned to them. Employees and other users are denied even if they have gym access.
 
-### Recruitment
-```
-GET    /api/vacancy-requests             → List vacancy requests (gym-filtered; HR review queue)
-POST   /api/vacancy-requests             → Create vacancy request (Branch Manager, own gym only)
-PUT    /api/vacancy-requests/{id}/decide → HR Approve/Reject; Approve requires positionId + vacancy details to create the resulting Vacancy
-GET    /api/vacancies               → List vacancies (gym-filtered)
-POST   /api/vacancies               → Create vacancy
-PUT    /api/vacancies/{id}          → Update vacancy
-GET    /api/candidates              → List candidates
-GET    /api/candidates/{id}         → Candidate detail
-POST   /api/applications            → Submit application (public endpoint, no auth)
-GET    /api/applications            → List applications (gym-filtered)
-PUT    /api/applications/{id}/stage → Move to next pipeline stage
-POST   /api/applications/{id}/hire  → Hire candidate → create employee
-GET    /api/recruitment/follow-ups  → Candidates needing action
-GET    /api/employees/new-comers    → Employees hired but not yet past their onboarding checklist
-PUT    /api/employees/{id}/onboarding-checklist → Update checklist item(s) for a New Comer
-```
-> `POST /api/vacancies` and `PUT /api/vacancies/{id}` now accept `headcountNeeded` (int) in the payload.
+### GET /api/gyms/{gymId}/station-codes
 
-### Teams
-```
-GET    /api/teams                   → List teams (gym-filtered)
-POST   /api/teams                   → Create team (requires `team.manage`)
-PUT    /api/teams/{id}/members      → Set team members
-PUT    /api/teams/{id}/leaders      → Set team leader(s)
-GET    /api/teams/my-teams          → Teams the current user leads (for Team Leader "My Team")
-```
+Returns 200 { gymId, gymName, code, generatedAt, generatedBy }. Inactive gyms return 400; if no code is active, returns 404.
 
-### Employees
-```
-GET    /api/employees               → List employees (gym-filtered)
-GET    /api/employees/{id}          → Employee profile
-POST   /api/employees               → Create employee (manual)
-PUT    /api/employees/{id}          → Update employee info
-POST   /api/employees/bulk-import   → CSV bulk import
-POST   /api/employees/{id}/transfer → Transfer gym
-POST   /api/employees/{id}/position-change → Change position/level
-POST   /api/employees/{id}/role-change → Assign/change role
-POST   /api/employees/{id}/status-change → Change status
-POST   /api/employees/{id}/compensation → Update compensation
-POST   /api/employees/{id}/contract → Update contract
-POST   /api/employees/{id}/offboard → Start offboarding
-GET    /api/employees/{id}/history  → Employment history timeline
-GET    /api/employees/{id}/documents → List documents
-POST   /api/employees/{id}/documents → Upload document
-```
+### POST /api/gyms/{gymId}/station-codes
 
-### Scheduling
-```
-GET    /api/gyms/{gymId}/shift-cycles           → List cycles for a gym
-GET    /api/shift-cycles/{id}                    → Cycle detail with assignments
-POST   /api/gyms/{gymId}/shift-cycles           → Create new cycle
-PUT    /api/shift-cycles/{id}                    → Update cycle (draft only)
-POST   /api/shift-cycles/{id}/copy-previous     → Copy from previous cycle
-PUT    /api/shift-cycles/{id}/assignments        → Bulk update assignments
-POST   /api/shift-cycles/{id}/publish           → Publish cycle
-GET    /api/shift-cycles/{id}/conflicts          → Check for conflicts
-```
+Rotates the code and immediately invalidates the old code. Returns 200 with the same DTO. Possible errors: 400 (inactive gym, validation, or unique-code failure), 401, or 404 (gym not found).
 
-### Attendance
-```
-GET    /api/attendance                           → List attendance (gym + date filters)
-POST   /api/attendance/events                    → Biometric device event. Body: { deviceToken, employeeId, timestamp, direction: "CheckIn"|"CheckOut" }
-                                                    Server resolves GymId from deviceToken, then runs the
-                                                    Cross-Gym Validation (UserGymAccess + today's ShiftAssignment
-                                                    at THIS gym) before creating any AttendanceRecord.
-                                                    Returns 201 on success, 422 with a reason if rejected
-                                                    (NoGymAccess | NoShiftToday) — no record is created on reject.
-POST   /api/attendance/manual                    → Manual entry at a gym terminal. Body: { employeeId, gymId, timestamp, direction, reason }
-                                                    Same Cross-Gym Validation applies — gymId here is the terminal's own gym.
-PUT    /api/attendance/{id}/correct              → Manual correction (HR, after the fact)
-GET    /api/employees/{id}/attendance            → Employee's attendance history
-```
+## Face biometrics
 
-### Biometric Devices
-```
-GET    /api/gyms/{gymId}/biometric-devices       → List devices registered to a gym
-POST   /api/gyms/{gymId}/biometric-devices       → Register a new device, generates its DeviceToken
-PUT    /api/biometric-devices/{id}/status        → Activate/deactivate a device
-```
+Recognition runs in-process inside the API (YuNet detection → Silent-Face anti-spoofing → SFace embedding, all ONNX); there is no external biometric service.
 
-### Requests
-```
-GET    /api/requests                             → List requests (HR inbox, gym-filtered)
-POST   /api/requests                             → Submit request (employee)
-GET    /api/requests/{id}                        → Request detail (includes BranchManager-stage decision, if any)
-POST   /api/requests/{id}/decide                → Record a decision. Body: { stage: "BranchManager" | "HR", decision, comment }
-                                                    BranchManager stage → Status becomes PendingHRReview
-                                                    HR stage → Status becomes Approved/Rejected (final)
-GET    /api/employees/{id}/requests             → Employee's request history
-GET    /api/requests/branch-manager-queue        → Requests awaiting the current user's stage-1 decision (`requests.approve.branch`)
-```
+### POST /api/attendance/face-scan
 
-### Payroll
-```
-GET    /api/payroll-periods                      → List periods (gym-filtered)
-GET    /api/payroll-periods/{id}                 → Period detail with entries
-POST   /api/payroll-periods/{id}/approve         → Approve/lock period
-GET    /api/deduction-candidates                 → Pending deductions for review
-POST   /api/deduction-candidates/{id}/review     → Approve/reject deduction
-GET    /api/employees/{id}/payroll               → Employee's payroll history
-```
+Station-authenticated (Bearer station token, same gym binding as `/events`). Request: { code, type (IN/OUT), image (base64 or data URL), optional timestamp }. The frame is detected, liveness-checked and matched against employees with access to the station's gym only; a recognized face is then recorded through the exact `/events` pipeline, so every ADR-004 check applies. Returns 201 with the attendance response plus { similarity, livenessScore }. Errors: 400 (undecodable image, no face, failed liveness, unrecognized face), 401 (station token/gym mismatch), 429.
 
-### Notifications
-```
-GET    /api/notifications                        → My notifications
-PUT    /api/notifications/{id}/read             → Mark as read
-PUT    /api/notifications/read-all              → Mark all as read
-GET    /api/notifications/unread-count           → Badge count
-```
+The liveness score reported here is measured server-side by the anti-spoofing ensemble — unlike `/events`, where a caller-supplied score is trusted only as far as the 0.70 minimum (see the note on that endpoint).
 
-### Events (HR Action Queue)
-```
-GET    /api/events                               → List Open events (gym-filtered, permission-filtered by underlying entity)
-PUT    /api/events/{id}/resolve                 → Mark event resolved
-```
+### POST /api/employees/face/enroll
 
-### Evaluations
-```
-GET    /api/evaluation-forms                     → List forms (gym/position filtered)
-POST   /api/evaluation-forms                     → Create form (requires `evaluations.manage`)
-PUT    /api/evaluation-forms/{id}                → Update form + questions
-GET    /api/evaluation-forms/{id}                → Form detail with questions
-POST   /api/evaluation-forms/{id}/responses      → Submit a completed evaluation for an employee
-GET    /api/employees/{id}/evaluations           → Employee's evaluation response history
-```
+HR-side administration. Requires a Bearer access token; TopManagement may enroll any employee, HR only employees at gyms they are assigned to. Station tokens and employee sessions are rejected with 401. Request: { employeeNumber, image }. One embedding is stored per employee — re-enrolling replaces it. Enrollment liveness must be at least `Biometrics:LivenessThreshold` (0.60 by default). Returns 201 with { employeeId, employeeNumber, fullName, enrolledAt }; 400 (bad image, no face, failed liveness), 401 (role/gym denied), 404 (unknown employee).
 
-### Dashboard
-```
-GET    /api/dashboard/super-admin                → Organization-wide KPIs
-GET    /api/dashboard/hr                         → HR dashboard data (gym-scoped)
-GET    /api/dashboard/employee                   → Employee dashboard data
-```
+### DELETE /api/employees/face/{employeeReference}
+
+Removes the employee's stored embedding. Same authorization as enrollment. Returns 204, or 404 when no embedding exists.
+
+## OpenAPI
+
+The generated OpenAPI document is available at /swagger/v1/swagger.json in Development. Controller response metadata lists success and expected error statuses; DTO source files define request validation and response fields.

@@ -170,9 +170,14 @@ Teams  ← sub-gym grouping of employees under a Team Leader (MVP scope)
 
 Employees.TeamId (nullable FK → Teams) assigns each employee to at most one team.
 The composite relationship includes GymId, so an employee can only join a team
-in their own gym. TeamLeaders (TeamId, EmployeeId) marks a team member as a
-leader; unique EmployeeId and the matching team assignment ensure a leader
-leads only their assigned team. A team may have multiple leaders.
+in their own gym. TeamLeaders references Employees by EmployeeId only (FK
+FK_TeamLeaders_Employees_EmployeeId, unique filtered index on EmployeeId so an
+employee leads at most one team). ⚠️ Model change 2026-10-07: the former
+(Id, TeamId) alternate key + composite TeamLeaders FK were removed because EF
+Core could not insert an employee with a null TeamId while it existed — which
+broke every team-less employee. The "leader must belong to the team they lead"
+guarantee previously enforced by that composite FK is now an application-level
+check (pending in the teams phase). A team may have multiple leaders.
 ```
 
 ### Recruitment
@@ -393,12 +398,26 @@ BiometricDevices  ← one row per physical Face ID device, anchored to exactly o
 ├── Status (enum: Active, Inactive)
 └── Common columns
 
-Index: IX_BiometricDevices_DeviceToken (unique — used to resolve GymId on every incoming event)
+Index: IX_BiometricDevices_DeviceToken (unique — kept for schema compatibility, but no
+endpoint authenticates with it anymore; see StationCodes)
+
+StationCodes  ← the ONLY station credential: one active 6-digit code per gym
+├── Id (PK)
+├── GymId (FK → Gyms)                 ← the code identifies its gym on every station request
+├── Code (character varying(6), unique) ← 6 digits; sent as "code" by kiosk login + every attendance request
+├── IsActive                          ← exactly one active row per gym; rotation deactivates the old row
+├── GeneratedAt
+├── GeneratedBy (FK → Users, nullable) ← who rotated it (audit)
+└── Common columns
+
+Indexes: IX_StationCodes_Code (unique), IX_StationCodes_GymId_IsActive
+Note: no deviceId / DeviceToken exists anywhere in the flow — a broken station only
+needs the same code re-entered (ADR-004 amendment, 2026-10-07).
 
 AttendanceRecords
 ├── Id (PK)
 ├── EmployeeId (FK → Employees)
-├── GymId (FK → Gyms)                 ← resolved from BiometricDevices.DeviceToken (biometric) or the terminal's gym (manual)
+├── GymId (FK → Gyms)                 ← resolved from StationCodes (the 6-digit code on every request)
 ├── Date (DateOnly)
 ├── CheckInTime (timestamptz, nullable)
 ├── CheckOutTime (timestamptz, nullable)
@@ -414,9 +433,8 @@ Note — Cross-Gym Check-In Validation (critical, applies to EVERY
 check-in/check-out event, biometric or manual — see ADR-004 for the full
 rationale): an employee may be assigned to up to two gyms
 (UserGymAccess), but a valid attendance event requires BOTH of the
-following, evaluated against the GYM THE EVENT CAME FROM (resolved via
-BiometricDevices.DeviceToken, or the terminal's own gym for manual
-entry) — NOT the employee's other assigned gym:
+following, evaluated against the gym the EVENT came from (resolved via the request's StationCodes 6-digit code)
+— NOT the employee's other assigned gym:
 
     1. Employee has UserGymAccess to this specific gym
     2. Employee has a ShiftAssignment at THIS specific gym for today's date

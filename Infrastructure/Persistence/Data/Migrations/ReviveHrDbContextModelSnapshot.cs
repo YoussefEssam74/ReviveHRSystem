@@ -208,6 +208,109 @@ namespace Persistence.Data.Migrations
                     b.ToTable("BiometricDevices", (string)null);
                 });
 
+            modelBuilder.Entity("DomainLayer.Models.AttendanceModule.FaceEmbedding", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.Property<int?>("CreatedBy")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("EmployeeId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("EnrolledAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<float[]>("Feature")
+                        .IsRequired()
+                        .HasColumnType("real[]");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int?>("UpdatedBy")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EmployeeId")
+                        .IsUnique();
+
+                    b.ToTable("FaceEmbeddings", (string)null);
+                });
+
+            modelBuilder.Entity("DomainLayer.Models.AttendanceModule.StationCode", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(6)
+                        .HasColumnType("character varying(6)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.Property<int?>("CreatedBy")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("GeneratedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int?>("GeneratedBy")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("GymId")
+                        .HasColumnType("integer");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int?>("UpdatedBy")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Code")
+                        .IsUnique();
+
+                    b.HasIndex("GeneratedBy");
+
+                    b.HasIndex("GymId")
+                        .IsUnique()
+                        .HasFilter("\"IsActive\" = TRUE");
+
+                    b.ToTable("StationCodes", (string)null);
+                });
+
             modelBuilder.Entity("DomainLayer.Models.AuditModule.AuditLog", b =>
                 {
                     b.Property<int>("Id")
@@ -413,7 +516,6 @@ namespace Persistence.Data.Migrations
                         .HasColumnType("integer");
 
                     b.Property<int?>("TeamId")
-                        .IsRequired()
                         .HasColumnType("integer");
 
                     b.Property<DateTime?>("UpdatedAt")
@@ -1553,8 +1655,6 @@ namespace Persistence.Data.Migrations
                         .HasFilter("\"IsDeleted\" = FALSE");
 
                     b.HasIndex("TeamId");
-
-                    b.HasIndex("EmployeeId", "TeamId");
 
                     b.ToTable("TeamLeaders", (string)null);
                 });
@@ -2826,6 +2926,35 @@ namespace Persistence.Data.Migrations
                     b.Navigation("Gym");
                 });
 
+            modelBuilder.Entity("DomainLayer.Models.AttendanceModule.FaceEmbedding", b =>
+                {
+                    b.HasOne("DomainLayer.Models.EmployeeModule.Employee", "Employee")
+                        .WithMany()
+                        .HasForeignKey("EmployeeId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Employee");
+                });
+
+            modelBuilder.Entity("DomainLayer.Models.AttendanceModule.StationCode", b =>
+                {
+                    b.HasOne("DomainLayer.Models.UserModule.User", "Generator")
+                        .WithMany()
+                        .HasForeignKey("GeneratedBy")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("DomainLayer.Models.OrganizationModule.Gym", "Gym")
+                        .WithMany()
+                        .HasForeignKey("GymId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Generator");
+
+                    b.Navigation("Gym");
+                });
+
             modelBuilder.Entity("DomainLayer.Models.EmployeeModule.Compensation", b =>
                 {
                     b.HasOne("DomainLayer.Models.UserModule.User", "ChangedByUser")
@@ -2879,8 +3008,7 @@ namespace Persistence.Data.Migrations
                         .WithMany("Members")
                         .HasForeignKey("TeamId", "GymId")
                         .HasPrincipalKey("Id", "GymId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.Navigation("Candidate");
 
@@ -3235,16 +3363,15 @@ namespace Persistence.Data.Migrations
 
             modelBuilder.Entity("DomainLayer.Models.OrganizationModule.TeamLeader", b =>
                 {
-                    b.HasOne("DomainLayer.Models.OrganizationModule.Team", "Team")
+                    b.HasOne("DomainLayer.Models.EmployeeModule.Employee", "Employee")
                         .WithMany("TeamLeaders")
-                        .HasForeignKey("TeamId")
+                        .HasForeignKey("EmployeeId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.HasOne("DomainLayer.Models.EmployeeModule.Employee", "Employee")
+                    b.HasOne("DomainLayer.Models.OrganizationModule.Team", "Team")
                         .WithMany("TeamLeaders")
-                        .HasForeignKey("EmployeeId", "TeamId")
-                        .HasPrincipalKey("Id", "TeamId")
+                        .HasForeignKey("TeamId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 

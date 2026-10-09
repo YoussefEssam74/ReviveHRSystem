@@ -68,6 +68,8 @@ namespace Presistence.Data
         public DbSet<BiometricDevice> BiometricDevices => Set<BiometricDevice>();
         public DbSet<AttendanceRecord> AttendanceRecords => Set<AttendanceRecord>();
         public DbSet<AttendanceCorrection> AttendanceCorrections => Set<AttendanceCorrection>();
+        public DbSet<FaceEmbedding> FaceEmbeddings => Set<FaceEmbedding>();
+        public DbSet<StationCode> StationCodes => Set<StationCode>();
 
         // Requests
         public DbSet<EmployeeRequest> EmployeeRequests => Set<EmployeeRequest>();

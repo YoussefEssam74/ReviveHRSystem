@@ -141,4 +141,33 @@ namespace Presistence.Data.Configurations
             builder.HasIndex(ac => ac.AttendanceRecordId);
         }
     }
+
+    public class StationCodeConfiguration : IEntityTypeConfiguration<StationCode>
+    {
+        public void Configure(EntityTypeBuilder<StationCode> builder)
+        {
+            builder.ToTable("StationCodes");
+            builder.HasKey(sc => sc.Id);
+
+            builder.Property(sc => sc.Code).IsRequired().HasMaxLength(6);
+            builder.Property(sc => sc.GeneratedAt).IsRequired();
+
+            // The 6-digit station credential replaces BiometricDevices.DeviceToken:
+            // it identifies the gym on every station request and is never device-bound.
+            builder.HasIndex(sc => sc.Code).IsUnique();
+            builder.HasIndex(sc => sc.GymId)
+                   .IsUnique()
+                   .HasFilter("\"IsActive\" = TRUE");
+
+            builder.HasOne(sc => sc.Gym)
+                   .WithMany()
+                   .HasForeignKey(sc => sc.GymId)
+                   .OnDelete(DeleteBehavior.Restrict);
+
+            builder.HasOne(sc => sc.Generator)
+                   .WithMany()
+                   .HasForeignKey(sc => sc.GeneratedBy)
+                   .OnDelete(DeleteBehavior.SetNull);
+        }
+    }
 }

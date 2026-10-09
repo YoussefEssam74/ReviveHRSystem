@@ -1,10 +1,18 @@
 # Development Progress
 
-> Last updated: 2026-08-26
+> Last updated: 2026-10-07
 
-## Current State: **Project Setup**
+## Current State: **Login + Attendance APIs implemented**
 
-The solution structure is scaffolded with Clean Architecture layers. No domain entities, migrations, or features have been implemented yet.
+Web login (email/password → access token), station login (6-digit code → gym), and
+attendance events/manual (6-digit code auth, ADR-004 validation) are implemented,
+secured (rate limits, gym-scoped station codes, security headers), documented, and
+covered by 44 integration tests. See handoff notes in the 2026-10-07 session summary.
+
+**Key decisions applied 2026-10-07:**
+- Attendance/station auth depends ONLY on the 6-digit station code — no deviceId, no device token (ADR-004 amended)
+- Access-token-only login (no refresh tokens — RefreshTokens table was removed)
+- Model fix: (Id, TeamId) alternate key + composite TeamLeaders FK dropped (blocked all employee inserts)
 
 ---
 
@@ -19,8 +27,8 @@ The solution structure is scaffolded with Clean Architecture layers. No domain e
 - [x] Presentation project created
 - [x] Shared project created
 - [x] Web entry point (Program.cs) with Swagger
-- [ ] Project references configured correctly
-- [ ] NuGet packages installed (Npgsql, EF Core, JWT, etc.)
+- [x] Project references configured correctly
+- [x] NuGet packages installed (Npgsql, EF Core, JWT, etc.)
 
 ### Project Documentation
 - [x] PROJECT.md (agent entry point)
@@ -41,21 +49,21 @@ The solution structure is scaffolded with Clean Architecture layers. No domain e
 
 ---
 
-## Phase 2: Domain & Database Design
-- [ ] Domain entities defined (DomainLayer)
-- [ ] EF Core entity configurations (Persistence)
-- [ ] PostgreSQL DbContext configured
-- [ ] Initial migration created
+### Phase 2: Domain & Database Design
+- [x] Domain entities defined (DomainLayer) — all module entities exist
+- [x] EF Core entity configurations (Persistence)
+- [x] PostgreSQL DbContext configured
+- [x] Initial migration created + applied (AlignHrSchema … Add_StationCodes, Fix_TeamLeader_Composite_Fk)
 - [ ] Permission catalog seeded
-- [ ] Default Super Admin seeded
+- [x] Default Super Admin seeded (Development seeder: admin@revive.hr + 2 gyms + station codes + 3 test employees)
 
 ## Phase 3: Authentication
-- [ ] Login endpoint
-- [ ] JWT token generation
-- [ ] Refresh token rotation
+- [x] Login endpoint (POST /api/auth/login + login/select-gym for 2-gym employees)
+- [x] JWT token generation (access-token-only)
+- [ ] Refresh token rotation — **removed by decision** (RefreshTokens table dropped; revisit only if sessions need extending)
 - [ ] Logout endpoint
 - [ ] Password reset
-- [ ] Account lockout
+- [ ] Account lockout — mitigated for now by auth-login rate limiting (10/min/IP)
 
 ## Phase 4: Authorization
 - [ ] Permission checking service
@@ -113,11 +121,11 @@ The solution structure is scaffolded with Clean Architecture layers. No domain e
 - [ ] Publish cycle
 
 ## Phase 10: Attendance
-- [ ] Biometric integration boundary
-- [ ] Manual check-in/check-out
-- [ ] Schedule comparison engine
-- [ ] Status determination
-- [ ] Manual correction
+- [x] Biometric integration boundary — station login + events API (6-digit station code auth, no device token)
+- [x] Manual check-in/check-out (POST /api/attendance/manual, reason audited, method=Manual)
+- [x] Basic schedule comparison at event time (OnTime / Late / EarlyCheckout vs shift template)
+- [ ] Full status engine (Absent, MissingCheckout sweeps — scheduled job)
+- [ ] Manual correction (HR, attendance.edit)
 - [ ] Repeated-issue flagging
 
 ## Phase 11: Requests & Approvals
@@ -156,7 +164,7 @@ The solution structure is scaffolded with Clean Architecture layers. No domain e
 - [ ] HR can edit TotalEntitlement with permission
 
 ## Phase 14: Frontend (React SPA)
-- [ ] Vite + React + TypeScript project setup
+- [x] Vite + React + TypeScript project setup (Client/)
 - [ ] Tailwind + shadcn/ui configuration
 - [ ] Auth flow (login, token management)
 - [ ] Permission-driven navigation
@@ -168,11 +176,12 @@ The solution structure is scaffolded with Clean Architecture layers. No domain e
 - [ ] Public application page
 
 ## Phase 15: QA & Security
-- [ ] Authorization tests (permission + gym scope)
-- [ ] Cross-gym isolation tests
+- [x] Integration test suite — 44 tests: login/kiosk/attendance/station-code coverage matrix + IDOR (gym-scope) + rate-limit regressions + face-enrollment authorization (Tests/ReviveHRSystem.IntegrationTests)
+- [ ] Authorization tests (permission system — pending Phase 4)
+- [x] Cross-gym isolation tests (CROSS_GYM_ACCESS_DENIED, WRONG_BRANCH_SCHEDULE, SCHEDULED_DAY_OFF, GYM_ACCESS_DENIED)
 - [ ] Workflow integration tests
-- [ ] Audit log verification
-- [ ] Security review
+- [ ] Audit log verification (manual-entry reason audit covered by test)
+- [ ] Security review — 2026-10-07 pass on the login/attendance surface (IDOR + brute-force + headers fixed; see session report)
 
 ## Phase 16: Deployment
 - [ ] Docker containerization

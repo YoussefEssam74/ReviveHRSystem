@@ -100,8 +100,7 @@ namespace Presistence.Data.Configurations
 
             builder.HasOne(tl => tl.Employee)
                    .WithMany(e => e.TeamLeaders)
-                   .HasForeignKey(tl => new { tl.EmployeeId, tl.TeamId })
-                   .HasPrincipalKey(e => new { e.Id, e.TeamId })
+                   .HasForeignKey(tl => tl.EmployeeId)
                    .OnDelete(DeleteBehavior.Cascade);
 
             builder.HasIndex(tl => tl.EmployeeId).IsUnique().HasFilter("\"IsDeleted\" = FALSE");

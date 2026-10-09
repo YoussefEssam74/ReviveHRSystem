@@ -1,0 +1,53 @@
+### Admin login (Super Admin) — returns accessToken + user
+# @name adminLogin
+POST {{baseUrl}}/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "{{adminEmail}}",
+  "password": "{{adminPassword}}"
+}
+
+###
+### Employee login (single gym) — session scoped to that gym
+# @name employeeLogin
+POST {{baseUrl}}/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "{{employeeEmail}}",
+  "password": "{{employeePassword}}"
+}
+
+###
+### Wrong password → 401 INVALID_CREDENTIALS (identical to unknown email — no enumeration)
+# @name loginWrongPassword
+POST {{baseUrl}}/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "{{adminEmail}}",
+  "password": "definitely-wrong"
+}
+
+###
+### Missing email → 400 VALIDATION_FAILED
+# @name loginMissingEmail
+POST {{baseUrl}}/api/auth/login
+Content-Type: application/json
+
+{
+  "password": "{{adminPassword}}"
+}
+
+###
+### Gym selection for an employee with two gyms (ADR-002).
+### Requires a tempSessionToken from a login where requiresGymSelection=true.
+# @name selectGym
+POST {{baseUrl}}/api/auth/login/select-gym
+Content-Type: application/json
+
+{
+  "gymId": 1,
+  "tempSessionToken": "PASTE-tempSessionToken-here"
+}

@@ -1,5 +1,9 @@
+using System.Threading;
 using DomainLayer.Contracts;
+using DomainLayer.Exceptions;
 using DomainLayer.Models;
+using Microsoft.EntityFrameworkCore;
+using Npgsql;
 using Presistence.Data;
 
 namespace Presistence.Repository
@@ -19,6 +23,34 @@ namespace Presistence.Repository
                 return Repo;
             }
         }
-        public async Task<int> SaveChangesAsync() => await _dbContext.SaveChangesAsync();
+
+        public async Task ExecuteInTransactionAsync(Func<Task> operation, CancellationToken cancellationToken = default)
+        {
+            await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
+            try
+            {
+                await operation();
+                await transaction.CommitAsync(cancellationToken);
+            }
+            catch
+            {
+                await transaction.RollbackAsync(CancellationToken.None);
+                throw;
+            }
+        }
+
+        public async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
+        {
+            try
+            {
+                return await _dbContext.SaveChangesAsync(cancellationToken);
+            }
+            catch (DbUpdateException ex) when (ex.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation })
+            {
+                // Unique-constraint race (e.g. two simultaneous check-ins for the same
+                // employee+date) — surfaced as a bad request, not a server error.
+                throw new BadRequestException("The record already exists (concurrent update).", innerException: ex);
+            }
+        }
     }
 }
