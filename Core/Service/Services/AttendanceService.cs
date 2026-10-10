@@ -15,22 +15,21 @@ using Shared.DataTransferObject.Kiosk;
 namespace Service.Services
 {
     /// <summary>
-    /// Attendance station API. Callers authenticate with the 6-digit station code at
-    /// kiosk login, which returns a station JWT bound to the resolved gym; every event
-    /// must present that token (or a gym-scoped user token) and carries no deviceId,
-    /// so replacing broken station hardware never breaks the integration.
-    ///
-    /// Station-gym binding (alongside ADR-004 cross-gym validation):
-    ///   the authorized token's gymId claim must equal the gym the station code
-    ///   resolves to — otherwise the event is rejected with STATION_GYM_MISMATCH.
+    /// Attendance station API. Callers redeem a short-lived 6-digit enrollment code at
+    /// kiosk login, which creates a DB-backed station session and returns its opaque
+    /// token; every event must present that token (X-Station-Token) or a gym-scoped
+    /// user token. The GymId always comes from the validated session (or the user
+    /// token's claim) â€” never from the request body â€” and no deviceId is involved, so
+    /// replacing broken station hardware never breaks the integration.
     ///
     /// ADR-004 cross-gym validation on every event:
-    ///   1. employee has UserGymAccess to the gym the code resolves to
-    ///   2. employee has a ShiftAssignment (with a real shift, not a day off) at THAT gym —
+    ///   1. employee has UserGymAccess to the session's gym
+    ///   2. employee has a ShiftAssignment (with a real shift, not a day off) at THAT gym â€”
     ///      normally today's, or the previous day's overnight shift for events after midnight
-    /// Failures reject the event without creating any AttendanceRecord.
+    /// Failures reject the event without creating any AttendanceRecord. Each record
+    /// stores both GymId and the StationSessionId that issued it.
     /// </summary>
-    public class AttendanceService(IUnitOfWork unitOfWork, IUserAccessRepository userAccess, ITokenService tokenService, TimeZoneInfo? attendanceTimeZone = null) : IAttendanceService
+    public class AttendanceService(IUnitOfWork unitOfWork, IUserAccessRepository userAccess, IStationSessionService stationSessions, TimeZoneInfo? attendanceTimeZone = null) : IAttendanceService
     {
         private const double MinimumLivenessScore = 0.70;
         private static readonly TimeSpan MaxFutureSkew = TimeSpan.FromMinutes(10);
@@ -45,19 +44,27 @@ namespace Service.Services
 
         public async Task<StationLoginResponse> StationLoginAsync(StationLoginRequest request, CancellationToken cancellationToken = default)
         {
-            var (gymId, gymName) = await ResolveStationGymAsync(request.Code, cancellationToken);
+            var stationCode = await ResolveStationCodeAsync(request.Code, cancellationToken)
+                ?? throw new UnAuthorizedException("Invalid or expired station code.");
+
+            var token = await stationSessions.CreateSessionAsync(
+                stationCode.GymId, stationCode.Id, cancellationToken);
+
             return new StationLoginResponse
             {
-                GymId = gymId,
-                GymName = gymName,
-                Token = tokenService.CreateStationToken(gymId)
+                GymId = stationCode.GymId,
+                GymName = stationCode.Gym.Name,
+                Token = token,
+                SessionExpiresAtUtc = DateTime.UtcNow.Add(stationSessions.SessionLifetime)
             };
         }
 
-        public async Task<AttendanceResponse> RecordBiometricEventAsync(
+        public async Task<AttendanceResponse?> RecordBiometricEventAsync(
             AttendanceEventRequest request,
             int? authorizedGymId = null,
+            int? stationSessionId = null,
             string? ipAddress = null,
+            bool confirmCheckout = true,
             CancellationToken cancellationToken = default)
         {
             if (request.LivenessScore is null || request.LivenessScore < MinimumLivenessScore)
@@ -66,20 +73,22 @@ namespace Service.Services
             }
 
             return await RecordAsync(
-                stationCode: request.Code,
                 employeeReference: request.EmployeeId,
                 eventType: request.Type,
                 method: AttendanceMethod.Biometric,
                 timestamp: request.Timestamp ?? DateTime.UtcNow,
                 reason: null,
                 authorizedGymId: authorizedGymId,
+                stationSessionId: stationSessionId,
                 ipAddress: ipAddress,
+                biometricCheckoutConfirmed: confirmCheckout,
                 cancellationToken: cancellationToken);
         }
 
         public async Task<AttendanceResponse> RecordManualEntryAsync(
             ManualAttendanceRequest request,
             int? authorizedGymId = null,
+            int? stationSessionId = null,
             string? ipAddress = null,
             CancellationToken cancellationToken = default)
         {
@@ -91,42 +100,94 @@ namespace Service.Services
             }
 
             return await RecordAsync(
-                stationCode: request.Code,
                 employeeReference: request.EmployeeId,
                 eventType: request.Type,
                 method: AttendanceMethod.Manual,
                 timestamp: request.Timestamp ?? DateTime.UtcNow,
                 reason: request.Reason.Trim(),
                 authorizedGymId: authorizedGymId,
+                stationSessionId: stationSessionId,
                 ipAddress: ipAddress,
+                biometricCheckoutConfirmed: null, // manual punches are explicit IN/OUT decisions
                 cancellationToken: cancellationToken);
         }
 
-        private async Task<AttendanceResponse> RecordAsync(
-            string stationCode,
+        /// <summary>
+        /// Today's view of a gym for the kiosk dashboard: present count, scheduled
+        /// count, and the most recent events. Read-only, station-session scoped.
+        /// </summary>
+        public async Task<StationSummaryResponse> GetStationSummaryAsync(int gymId, CancellationToken cancellationToken = default)
+        {
+            if (gymId <= 0)
+            {
+                throw new UnAuthorizedException("Attendance requests require a station session token.");
+            }
+
+            var today = DateOnly.FromDateTime(
+                TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, _attendanceTimeZone));
+
+            var records = await unitOfWork.GetRepository<AttendanceRecord, int>()
+                .GetAllAsync(new AttendanceRecordsByGymDateSpec(gymId, today), cancellationToken);
+
+            var scheduledToday = await unitOfWork.GetRepository<DomainLayer.Models.SchedulingModule.ShiftAssignment, int>()
+                .CountAsync(new ShiftAssignmentsByGymDateSpec(gymId, today), cancellationToken);
+
+            var recent = records
+                .OrderByDescending(r => r.CheckOutTime ?? r.CheckInTime ?? DateTime.MinValue)
+                .Take(10)
+                .Select(r => new StationSummaryRecord
+                {
+                    RecordId = $"ATT-{r.Id}",
+                    EmployeeId = r.Employee.EmployeeNumber,
+                    EmployeeName = r.Employee.FullName,
+                    Status = r.CheckInTime is null
+                        ? "DAY_OFF"
+                        : r.CheckOutTime is null ? "PRESENT" : "LEFT",
+                    LastEventType = r.CheckOutTime is not null ? "OUT" : r.CheckInTime is not null ? "IN" : null,
+                    LastEventTime = r.CheckOutTime ?? r.CheckInTime,
+                    AttendanceStatus = r.Status.ToString().ToUpperInvariant(),
+                    Method = (r.CheckOutTime is not null ? r.CheckOutMethod : r.CheckInMethod)?.ToString(),
+                })
+                .ToArray();
+
+            return new StationSummaryResponse
+            {
+                PresentCount = records.Count(r => r.CheckInTime is not null),
+                ScheduledTodayCount = scheduledToday,
+                Records = recent,
+            };
+        }
+
+        private async Task<AttendanceResponse?> RecordAsync(
             string employeeReference,
             string eventType,
             AttendanceMethod method,
             DateTime timestamp,
             string? reason,
             int? authorizedGymId,
+            int? stationSessionId,
             string? ipAddress,
+            bool? biometricCheckoutConfirmed,
             CancellationToken cancellationToken)
         {
-            var (gymId, gymName) = await ResolveStationGymAsync(stationCode, cancellationToken);
-
-            // The token's gym binding must match the code's gym (code resolution
-            // first, so unknown codes keep their INVALID_STATION_CODE contract).
+            // The gym comes from the validated station session (or a gym-scoped user
+            // token) â€” it is never read from the request body.
             if (authorizedGymId is null)
             {
-                throw new UnAuthorizedException("Attendance requests require a station token bound to a gym.");
+                throw new UnAuthorizedException("Attendance requests require a station session token.");
             }
 
-            if (authorizedGymId.Value != gymId)
+            var gym = await unitOfWork.GetRepository<DomainLayer.Models.OrganizationModule.Gym, int>()
+                .GetByIdAsync(authorizedGymId.Value, cancellationToken)
+                ?? throw new UnAuthorizedException("This gym is inactive.");
+
+            if (gym.Status != GymStatus.Active)
             {
-                throw new UnAuthorizedException("The station token is not bound to this gym.");
+                throw new UnAuthorizedException("This gym is inactive.");
             }
 
+            var gymId = gym.Id;
+            var gymName = gym.Name;
             var type = NormalizeType(eventType);
             var utcTimestamp = ToUtc(timestamp);
             if (utcTimestamp > DateTime.UtcNow.Add(MaxFutureSkew))
@@ -151,7 +212,7 @@ namespace Service.Services
                 throw new NotFoundException("Employee not found.");
             }
 
-            // ADR-004 check #1 — gym access.
+            // ADR-004 check #1 â€” gym access.
             var hasGymAccess = await userAccess.HasGymAccessAsync(employee.UserId, gymId, cancellationToken);
             if (!hasGymAccess)
             {
@@ -159,7 +220,7 @@ namespace Service.Services
             }
 
             // Resolve which shift this event belongs to. A shift's window can span
-            // midnight (overnight templates such as 22:00 → 05:00 end the next day), so
+            // midnight (overnight templates such as 22:00 â†’ 05:00 end the next day), so
             // events after midnight may still belong to the previous day's shift: an IN
             // while the event is inside that shift's window, an OUT when that shift has
             // a record to close.
@@ -180,6 +241,32 @@ namespace Service.Services
             var todayHasOpenRecord = possibleRecords.Any(r =>
                 r.Date == eventDate && r.GymId == gymId && r.CheckInTime is not null && r.CheckOutTime is null);
 
+            // The always-on kiosk camera sends AUTO: resolve the direction from the
+            // employee's own state â€” an open record today closes (OUT), anything else
+            // opens (IN) â€” so the station never has to guess what the employee did.
+            var requestedAuto = type == "AUTO";
+            if (type == "AUTO")
+            {
+                if (todayHasCheckIn && !todayHasOpenRecord)
+                {
+                    // Typed so the face pipeline can report a silent "already complete"
+                    // scan outcome; HTTP callers of /events still get a 400 (the
+                    // exception middleware matches BadRequestException by base type).
+                    throw new AttendanceAlreadyCompleteException("This employee has already completed attendance for today.");
+                }
+
+                type = todayHasOpenRecord ? "OUT" : "IN";
+            }
+
+            // Kiosk confirmation gate: an AUTO scan that would close today's open record
+            // returns "pending" (null, nothing written) unless the employee confirmed
+            // "check out now" on the terminal. Explicit IN/OUT punches and the /events
+            // integration endpoint (confirmCheckout defaults to true) are unaffected.
+            if (requestedAuto && type == "OUT" && biometricCheckoutConfirmed == false)
+            {
+                return null;
+            }
+
             ShiftAssignment? carriedOverAssignment = null;
             if (type == "IN")
             {
@@ -193,7 +280,7 @@ namespace Service.Services
             }
             else if (!todayHasOpenRecord)
             {
-                // OUT after midnight closes the previous day's record — a late checkout
+                // OUT after midnight closes the previous day's record â€” a late checkout
                 // or an overnight shift finishing in the early hours.
                 carriedOverAssignment = previousDayAtGym
                     .FirstOrDefault(a => possibleRecords.Any(r => r.Date == a.Date && r.GymId == gymId));
@@ -218,8 +305,8 @@ namespace Service.Services
             var attendanceDate = shiftAtThisGym.Date;
 
             // The shift as a full wall-clock window on its scheduled date (attendance
-            // timezone). Overnight templates — EndTime at or before StartTime, e.g.
-            // 22:00 → 05:00 — end the following day, so every comparison below uses
+            // timezone). Overnight templates â€” EndTime at or before StartTime, e.g.
+            // 22:00 â†’ 05:00 â€” end the following day, so every comparison below uses
             // these instants instead of bare clock times that break across midnight.
             var shiftStartsAt = ShiftWindowStartsAt(attendanceDate, template);
             var shiftEndsAt = ShiftWindowEndsAt(attendanceDate, template);
@@ -285,6 +372,13 @@ namespace Service.Services
 
             // Save the punch and required audit event in one transaction. The first
             // save obtains the generated attendance ID; both writes commit or roll back together.
+
+            // Audit: remember which station session issued this punch (when one did).
+            if (stationSessionId is not null)
+            {
+                record.StationSessionId = stationSessionId;
+            }
+
             if (method == AttendanceMethod.Manual)
             {
                 await unitOfWork.ExecuteInTransactionAsync(async () =>
@@ -302,7 +396,8 @@ namespace Service.Services
                             gymId,
                             type,
                             timestamp = utcTimestamp,
-                            reason
+                            reason,
+                            stationSessionId
                         }),
                         Timestamp = DateTime.UtcNow,
                         IpAddress = ipAddress
@@ -333,13 +428,16 @@ namespace Service.Services
             };
         }
 
-        /// <summary>Resolves the gym behind a station code, or rejects the station.</summary>
-        private async Task<(int GymId, string GymName)> ResolveStationGymAsync(string code, CancellationToken cancellationToken)
+        /// <summary>
+        /// Resolves the active, unexpired station enrollment code behind a 6-digit
+        /// value, including its gym, or null when the code is unknown/malformed.
+        /// </summary>
+        private async Task<StationCode?> ResolveStationCodeAsync(string code, CancellationToken cancellationToken)
         {
             var normalized = code?.Trim() ?? string.Empty;
             if (normalized.Length != 6 || !normalized.All(char.IsDigit))
             {
-                throw new UnAuthorizedException("Invalid or expired station code.");
+                return null;
             }
 
             var stationCode = await unitOfWork.GetRepository<StationCode, int>()
@@ -347,16 +445,17 @@ namespace Service.Services
 
             if (stationCode is null)
             {
-                throw new UnAuthorizedException("Invalid or expired station code.");
+                return null;
             }
 
-            if (stationCode.Gym.Status != GymStatus.Active)
+            // A rotated code is inactive; a live code still stops being accepted once
+            // its short lifetime elapses.
+            if (stationCode.ExpiresAtUtc is { } expiresAtUtc && expiresAtUtc <= DateTime.UtcNow)
             {
-                throw new UnAuthorizedException("This gym is inactive.");
+                return null;
             }
 
-            cancellationToken.ThrowIfCancellationRequested();
-            return (stationCode.GymId, stationCode.Gym.Name);
+            return stationCode;
         }
 
         private static string NormalizeType(string eventType)
@@ -366,6 +465,7 @@ namespace Service.Services
             {
                 "IN" or "CHECKIN" or "CHECK_IN" => "IN",
                 "OUT" or "CHECKOUT" or "CHECK_OUT" => "OUT",
+                "AUTO" => "AUTO", // resolved from the employee's current state
                 _ => throw new BadRequestException("Type must be \"IN\" or \"OUT\".")
             };
         }
@@ -376,7 +476,7 @@ namespace Service.Services
 
         /// <summary>
         /// Wall-clock end of the shift on its scheduled date. Overnight templates
-        /// (EndTime at or before StartTime, e.g. 22:00 → 05:00) end on the following day.
+        /// (EndTime at or before StartTime, e.g. 22:00 â†’ 05:00) end on the following day.
         /// </summary>
         private static DateTime ShiftWindowEndsAt(DateOnly date, ShiftTemplate template) =>
             template.EndTime > template.StartTime
@@ -387,7 +487,7 @@ namespace Service.Services
         {
             DateTimeKind.Utc => timestamp,
             DateTimeKind.Local => timestamp.ToUniversalTime(),
-            _ => DateTime.SpecifyKind(timestamp, DateTimeKind.Utc) // no offset sent → assumed UTC
+            _ => DateTime.SpecifyKind(timestamp, DateTimeKind.Utc) // no offset sent â†’ assumed UTC
         };
     }
 }

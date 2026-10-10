@@ -1,11 +1,14 @@
 ### ============================================================
-### Station (kiosk) login — {{gym1StationCode}} / {{gym2StationCode}}
-### are filled from the live API: run attendance.http > syncGym1StationCode
-### (or open the Station Code page in the app) before this folder.
+### Station enrollment: redeem a short-lived 6-digit code for a
+### station SESSION token. Codes are generated server-side and
+### expire after StationCode:ExpirationMinutes (5 by default).
+### Run syncGym1StationCode / syncGym2StationCode in attendance.http
+### first so the live codes are in the environment.
 ### ============================================================
 
-### Station (kiosk) login with the 6-digit code — no deviceId, no token.
-### Response: { gymId, gymName, token } — the token binds the station to its gym.
+### Station (kiosk) login — no deviceId, no token.
+### Response: { gymId, gymName, token, sessionExpiresAtUtc }
+### The response handler saves the session token for this folder.
 # @name stationLogin
 POST {{baseUrl}}/api/kiosk/login
 Content-Type: application/json
@@ -14,8 +17,13 @@ Content-Type: application/json
   "code": "{{gym1StationCode}}"
 }
 
+> {%
+client.global.set('stationToken', response.body.token);
+client.log('Station session until ' + response.body.sessionExpiresAtUtc);
+%}
+
 ###
-### Wrong code → 401 INVALID_STATION_CODE
+### Wrong code → 401 INVALID_STATION_CODE (rotated/expired codes look identical)
 # @name stationLoginWrongCode
 POST {{baseUrl}}/api/kiosk/login
 Content-Type: application/json
@@ -43,3 +51,7 @@ Content-Type: application/json
 {
   "code": "{{gym2StationCode}}"
 }
+
+> {%
+client.global.set('stationTokenGym2', response.body.token);
+%}

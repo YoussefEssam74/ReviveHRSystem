@@ -16,7 +16,7 @@ namespace Service.Specifications
         }
     }
 
-    /// <summary>Finds any station code (active or not) by value — uniqueness checks.</summary>
+    /// <summary>Finds any station code (active or not) by value â€” uniqueness checks.</summary>
     public class StationCodeExactSpec : BaseSpecification<StationCode, int>
     {
         public StationCodeExactSpec(string code)
@@ -33,6 +33,68 @@ namespace Service.Specifications
         {
             Criteria = sc => sc.GymId == gymId && sc.IsActive;
             AddInclude(sc => sc.Gym);
+        }
+    }
+
+    /// <summary>
+    /// Looks up a station session by the SHA-256 hash of its opaque token, including
+    /// the gym â€” the hot path every station-authenticated attendance request takes.
+    /// </summary>
+    public class StationSessionByTokenHashSpec : BaseSpecification<StationSession, int>
+    {
+        public StationSessionByTokenHashSpec(string tokenHash)
+        {
+            Criteria = ss => ss.TokenHash == tokenHash;
+            AddInclude(ss => ss.Gym);
+        }
+    }
+
+    /// <summary>Finds a station session by its id, including the gym (revoke on kiosk logout).</summary>
+    public class StationSessionByIdSpec : BaseSpecification<StationSession, int>
+    {
+        public StationSessionByIdSpec(int stationSessionId)
+        {
+            Criteria = ss => ss.Id == stationSessionId;
+            AddInclude(ss => ss.Gym);
+        }
+    }
+
+    /// <summary>Live (unrevoked, unexpired) sessions of one gym, newest first.</summary>
+    public class LiveStationSessionsByGymSpec : BaseSpecification<StationSession, int>
+    {
+        public LiveStationSessionsByGymSpec(int gymId, DateTime nowUtc)
+        {
+            Criteria = ss => ss.GymId == gymId
+                && ss.RevokedAtUtc == null
+                && ss.ExpiresAtUtc > nowUtc;
+            OrderByDescending = ss => ss.CreatedAtUtc;
+        }
+    }
+
+    /// <summary>
+    /// Every attendance record of one gym on one date, including the employee —
+    /// the kiosk dashboard feed.
+    /// </summary>
+    public class AttendanceRecordsByGymDateSpec : BaseSpecification<AttendanceRecord, int>
+    {
+        public AttendanceRecordsByGymDateSpec(int gymId, DateOnly date)
+        {
+            Criteria = ar => ar.GymId == gymId && ar.Date == date;
+            AddInclude(ar => ar.Employee);
+        }
+    }
+
+    /// <summary>
+    /// Real shifts (not days off) scheduled at one gym on one date — the kiosk
+    /// dashboard's "scheduled today" count.
+    /// </summary>
+    public class ShiftAssignmentsByGymDateSpec : BaseSpecification<ShiftAssignment, int>
+    {
+        public ShiftAssignmentsByGymDateSpec(int gymId, DateOnly date)
+        {
+            Criteria = sa => sa.ShiftCycle.GymId == gymId
+                && sa.Date == date
+                && sa.ShiftTemplateId != null;
         }
     }
 

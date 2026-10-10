@@ -29,6 +29,15 @@ namespace DomainLayer.Models.AttendanceModule
         public int? ScheduledShiftTemplateId { get; set; }
         public virtual ShiftTemplate? ScheduledShiftTemplate { get; set; }
 
+        /// <summary>
+        /// Station session that issued this record — tenant isolation + audit trail
+        /// ("where was attendance taken"). Null only when the event was recorded with
+        /// a gym-scoped user token instead of a station session. The plaintext station
+        /// code is deliberately never stored here.
+        /// </summary>
+        public int? StationSessionId { get; set; }
+        public virtual StationSession? StationSession { get; set; }
+
         public virtual ICollection<AttendanceCorrection> Corrections { get; set; } = new List<AttendanceCorrection>();
     }
 }

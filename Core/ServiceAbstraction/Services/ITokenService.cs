@@ -14,9 +14,6 @@ namespace ServiceAbstraction.Services
         /// <summary>Validates a temp session token and returns its userId, or null when invalid/expired.</summary>
         int? ValidateGymSelectionToken(string token);
 
-        /// <summary>Creates the long-lived station (kiosk) token, bound to one gym via the gymId claim.</summary>
-        string CreateStationToken(int gymId);
-
         /// <summary>Access token lifetime in seconds (for the login response).</summary>
         int AccessTokenExpiresInSeconds { get; }
     }

@@ -9,19 +9,26 @@ using DomainLayer.Models.UserModule;
 using DomainLayer.Models.UserModule.Enums;
 using Service.Specifications;
 using ServiceAbstraction.Services;
+using Shared.Configuration;
 using Shared.DataTransferObject.Gym;
 
 namespace Service.Services
 {
     /// <summary>
-    /// HR-side rotation/reading of a gym's 6-digit station code. Rotating issues a new
-    /// code and immediately deactivates the old one (old stations must re-login).
+    /// HR-side management of a gym's station credentials.
+    ///   Enrollment code: rotating issues a new short-lived code and immediately
+    ///     deactivates the old one (old codes can no longer enroll anything).
+    ///   Station sessions: revoking disconnects enrolled kiosks without touching
+    ///     the codes, so a rotation never kicks a running station off the floor.
     /// Access is limited to TopManagement or HR users assigned to the target gym.
     /// </summary>
-    public class StationCodeService(IUnitOfWork unitOfWork, IUserAccessRepository userAccess, IMapper mapper) : IStationCodeService
+    public class StationCodeService(
+        IUnitOfWork unitOfWork,
+        IUserAccessRepository userAccess,
+        IStationSessionService stationSessions,
+        IMapper mapper,
+        StationCodeOptions options) : IStationCodeService
     {
-        
-
         public async Task<StationCodeResponse> RotateAsync(int gymId, int? actorUserId, CancellationToken cancellationToken = default)
         {
             await EnsureCanManageStationCodesAsync(gymId, actorUserId, cancellationToken);
@@ -37,6 +44,7 @@ namespace Service.Services
 
             var codeRepository = unitOfWork.GetRepository<StationCode, int>();
             var generatedAt = DateTime.UtcNow;
+            var expiresAtUtc = generatedAt.AddMinutes(options.ExpirationMinutes);
             StationCode station = null!;
             await unitOfWork.ExecuteInTransactionAsync(async () =>
             {
@@ -56,6 +64,7 @@ namespace Service.Services
                     Code = await GenerateUniqueCodeAsync(codeRepository, cancellationToken),
                     IsActive = true,
                     GeneratedAt = generatedAt,
+                    ExpiresAtUtc = expiresAtUtc,
                     GeneratedBy = actorUserId
                 };
                 await codeRepository.AddAsync(station, cancellationToken);
@@ -81,6 +90,20 @@ namespace Service.Services
                 ?? throw new NotFoundException("This gym has no active station code. Generate one first.");
 
             return mapper.Map<StationCodeResponse>(activeCode);
+        }
+
+        /// <summary>
+        /// Disconnects every enrolled kiosk of the gym. The authorization check is the
+        /// same one protecting the enrollment codes, so no second rule is introduced.
+        /// </summary>
+        public async Task<int> RevokeStationSessionsAsync(int gymId, int? actorUserId, CancellationToken cancellationToken = default)
+        {
+            await EnsureCanManageStationCodesAsync(gymId, actorUserId, cancellationToken);
+
+            var gym = await unitOfWork.GetRepository<Gym, int>().GetByIdAsync(gymId, cancellationToken)
+                ?? throw new NotFoundException("Gym not found.");
+
+            return await stationSessions.RevokeGymSessionsAsync(gym.Id, cancellationToken);
         }
 
         private async Task EnsureCanManageStationCodesAsync(int gymId, int? actorUserId, CancellationToken cancellationToken)

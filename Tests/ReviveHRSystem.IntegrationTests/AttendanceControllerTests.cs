@@ -1,11 +1,15 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using DomainLayer.Exceptions;
+using DomainLayer.Models.AttendanceModule;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Presistence.Data;
 using ReviveHRSystem.IntegrationTests.Fixtures;
 using ReviveHRSystem.IntegrationTests.Support;
+using ServiceAbstraction.Services;
+using Shared.DataTransferObject.Attendance;
 using Xunit;
 
 namespace ReviveHRSystem.IntegrationTests
@@ -19,30 +23,36 @@ namespace ReviveHRSystem.IntegrationTests
 
         private TestDataBuilder NewBuilder() => new(_fixture.Services);
 
-        private async Task<(HttpStatusCode Status, JsonElement Body)> PostEventAsync(object payload, string? tokenStationCode = null)
+        /// <summary>
+        /// Posts an attendance event authenticated as the station that owns
+        /// <paramref name="stationToken"/>. The gym comes from that session — the body
+        /// carries no station code.
+        /// </summary>
+        private async Task<(HttpStatusCode Status, JsonElement Body)> PostEventAsync(object payload, string stationToken)
         {
-            // Attendance endpoints require a station JWT: sign in as the station the
-            // payload names (or an explicit override for the token/binding tests).
-            var payloadJson = JsonSerializer.SerializeToElement(payload);
-            var payloadCode = payloadJson.GetProperty("code").GetString()
-                ?? throw new InvalidOperationException("Event payload is missing the station code.");
-            var stationToken = await _fixture.GetStationTokenAsync(tokenStationCode ?? payloadCode);
-
-            var request = _fixture.AuthorizedRequest(HttpMethod.Post, "/api/attendance/events", payload, stationToken);
+            var request = _fixture.StationRequest(HttpMethod.Post, "/api/attendance/events", payload, stationToken);
             var response = await _fixture.Client.SendAsync(request);
             var body = await response.Content.ReadFromJsonAsync<JsonElement>();
             return (response.StatusCode, body);
         }
 
-        private static object EventPayload(string code, string employeeNumber, string type, double? liveness = 0.95, DateTime? timestamp = null) =>
-            new { code, employeeId = employeeNumber, type, livenessScore = liveness, timestamp };
+        private static object EventPayload(string employeeNumber, string type, double? liveness = 0.95, DateTime? timestamp = null) =>
+            new { employeeId = employeeNumber, type, livenessScore = liveness, timestamp };
 
-        [Fact]
-        public async Task Event_ValidCheckIn_Returns201_WithRecord()
+        /// <summary>Creates a gym + employee with a shift, and logs the station in.</summary>
+        private async Task<(TestGym Gym, TestEmployee Employee, string StationToken)> NewStationWithEmployeeAsync()
         {
             var builder = NewBuilder();
             var gym = await builder.CreateGymWithStationAsync();
             var employee = await builder.CreateEmployeeAsync(gym, shiftAtGym: gym);
+            var stationToken = await _fixture.GetStationTokenAsync(gym.StationCode);
+            return (gym, employee, stationToken);
+        }
+
+        [Fact]
+        public async Task Event_ValidCheckIn_Returns201_WithRecord()
+        {
+            var (gym, employee, stationToken) = await NewStationWithEmployeeAsync();
 
             // Deterministic event time: start of today in the configured attendance timezone.
             // It is always at or before the 08:00 shift start (so ON_SCHEDULE holds at any
@@ -51,7 +61,7 @@ namespace ReviveHRSystem.IntegrationTests
             var nowLocal = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, attendanceTimeZone);
             var timestamp = TimeZoneInfo.ConvertTimeToUtc(nowLocal.Date, attendanceTimeZone);
 
-            var (status, body) = await PostEventAsync(EventPayload(gym.StationCode, employee.EmployeeNumber, "IN", timestamp: timestamp));
+            var (status, body) = await PostEventAsync(EventPayload(employee.EmployeeNumber, "IN", timestamp: timestamp), stationToken);
 
             Assert.Equal(HttpStatusCode.Created, status);
             Assert.StartsWith("ATT-", body.GetProperty("recordId").GetString());
@@ -65,12 +75,10 @@ namespace ReviveHRSystem.IntegrationTests
         [Fact]
         public async Task Event_DuplicateCheckIn_Returns400()
         {
-            var builder = NewBuilder();
-            var gym = await builder.CreateGymWithStationAsync();
-            var employee = await builder.CreateEmployeeAsync(gym, shiftAtGym: gym);
+            var (_, employee, stationToken) = await NewStationWithEmployeeAsync();
 
-            var first = await PostEventAsync(EventPayload(gym.StationCode, employee.EmployeeNumber, "IN"));
-            var second = await PostEventAsync(EventPayload(gym.StationCode, employee.EmployeeNumber, "IN"));
+            var first = await PostEventAsync(EventPayload(employee.EmployeeNumber, "IN"), stationToken);
+            var second = await PostEventAsync(EventPayload(employee.EmployeeNumber, "IN"), stationToken);
 
             Assert.Equal(HttpStatusCode.Created, first.Status);
             Assert.Equal(HttpStatusCode.BadRequest, second.Status);
@@ -80,13 +88,11 @@ namespace ReviveHRSystem.IntegrationTests
         [Fact]
         public async Task Event_CheckOutAfterCheckIn_Returns201_ThenDuplicateOut400()
         {
-            var builder = NewBuilder();
-            var gym = await builder.CreateGymWithStationAsync();
-            var employee = await builder.CreateEmployeeAsync(gym, shiftAtGym: gym);
+            var (_, employee, stationToken) = await NewStationWithEmployeeAsync();
 
-            await PostEventAsync(EventPayload(gym.StationCode, employee.EmployeeNumber, "IN"));
-            var checkOut = await PostEventAsync(EventPayload(gym.StationCode, employee.EmployeeNumber, "OUT"));
-            var duplicateOut = await PostEventAsync(EventPayload(gym.StationCode, employee.EmployeeNumber, "OUT"));
+            await PostEventAsync(EventPayload(employee.EmployeeNumber, "IN"), stationToken);
+            var checkOut = await PostEventAsync(EventPayload(employee.EmployeeNumber, "OUT"), stationToken);
+            var duplicateOut = await PostEventAsync(EventPayload(employee.EmployeeNumber, "OUT"), stationToken);
 
             Assert.Equal(HttpStatusCode.Created, checkOut.Status);
             Assert.Equal("OUT", checkOut.Body.GetProperty("type").GetString());
@@ -97,14 +103,110 @@ namespace ReviveHRSystem.IntegrationTests
         [Fact]
         public async Task Event_CheckOutWithoutCheckIn_Returns400()
         {
-            var builder = NewBuilder();
-            var gym = await builder.CreateGymWithStationAsync();
-            var employee = await builder.CreateEmployeeAsync(gym, shiftAtGym: gym);
+            var (_, employee, stationToken) = await NewStationWithEmployeeAsync();
 
-            var (status, body) = await PostEventAsync(EventPayload(gym.StationCode, employee.EmployeeNumber, "OUT"));
+            var (status, body) = await PostEventAsync(EventPayload(employee.EmployeeNumber, "OUT"), stationToken);
 
             Assert.Equal(HttpStatusCode.BadRequest, status);
             Assert.Equal("No check-in found for today. Check in first.", body.GetProperty("errorMessage").GetString());
+        }
+
+        [Fact]
+        public async Task Event_AutoType_OpensWhenNoRecord_ClosesWhenOpen_RejectsWhenComplete()
+        {
+            // The always-on kiosk camera sends AUTO: the server decides the direction
+            // from the employee's own state, so the terminal never has to guess.
+            var (_, employee, stationToken) = await NewStationWithEmployeeAsync();
+
+            var checkIn = await PostEventAsync(EventPayload(employee.EmployeeNumber, "AUTO"), stationToken);
+            Assert.Equal(HttpStatusCode.Created, checkIn.Status);
+            Assert.Equal("IN", checkIn.Body.GetProperty("type").GetString());
+
+            var checkOut = await PostEventAsync(EventPayload(employee.EmployeeNumber, "AUTO"), stationToken);
+            Assert.Equal(HttpStatusCode.Created, checkOut.Status);
+            Assert.Equal("OUT", checkOut.Body.GetProperty("type").GetString());
+
+            var complete = await PostEventAsync(EventPayload(employee.EmployeeNumber, "AUTO"), stationToken);
+            Assert.Equal(HttpStatusCode.BadRequest, complete.Status);
+            Assert.Equal(
+                "This employee has already completed attendance for today.",
+                complete.Body.GetProperty("errorMessage").GetString());
+        }
+
+        [Fact]
+        public async Task AutoCheckOut_BiometricWithoutConfirmation_IsPending_ThenRecordsWhenConfirmed()
+        {
+            // The kiosk camera sends AUTO. Closing today's open record must first ask
+            // the employee: the biometric pipeline returns null (pending, nothing
+            // written) until the scan is re-sent with confirmCheckout. The /events
+            // endpoint keeps its immediate behaviour (covered by the AUTO test above).
+            var (gym, employee, _) = await NewStationWithEmployeeAsync();
+
+            using var scope = _fixture.Services.CreateScope();
+            var attendance = scope.ServiceProvider.GetRequiredService<IAttendanceService>();
+
+            var checkIn = await attendance.RecordBiometricEventAsync(new AttendanceEventRequest
+            {
+                EmployeeId = employee.EmployeeNumber,
+                Type = "IN",
+                LivenessScore = 0.95,
+            }, gym.GymId);
+            Assert.NotNull(checkIn);
+
+            var pending = await attendance.RecordBiometricEventAsync(new AttendanceEventRequest
+            {
+                EmployeeId = employee.EmployeeNumber,
+                Type = "AUTO",
+                LivenessScore = 0.95,
+            }, gym.GymId, confirmCheckout: false);
+            Assert.Null(pending);
+
+            var checkOut = await attendance.RecordBiometricEventAsync(new AttendanceEventRequest
+            {
+                EmployeeId = employee.EmployeeNumber,
+                Type = "AUTO",
+                LivenessScore = 0.95,
+            }, gym.GymId, confirmCheckout: true);
+            Assert.NotNull(checkOut);
+            Assert.Equal("OUT", checkOut!.Type);
+        }
+
+        [Fact]
+        public async Task AutoScan_AfterDayComplete_ThrowsAlreadyComplete()
+        {
+            // A completed day (IN then OUT) must surface as the typed exception the
+            // face pipeline catches and turns into a silent "already complete" outcome,
+            // rather than a generic rejection the kiosk would nag with.
+            var (gym, employee, _) = await NewStationWithEmployeeAsync();
+
+            using var scope = _fixture.Services.CreateScope();
+            var attendance = scope.ServiceProvider.GetRequiredService<IAttendanceService>();
+
+            var checkIn = await attendance.RecordBiometricEventAsync(new AttendanceEventRequest
+            {
+                EmployeeId = employee.EmployeeNumber,
+                Type = "IN",
+                LivenessScore = 0.95,
+            }, gym.GymId);
+            Assert.NotNull(checkIn);
+
+            var checkOut = await attendance.RecordBiometricEventAsync(new AttendanceEventRequest
+            {
+                EmployeeId = employee.EmployeeNumber,
+                Type = "AUTO",
+                LivenessScore = 0.95,
+            }, gym.GymId, confirmCheckout: true);
+            Assert.NotNull(checkOut);
+            Assert.Equal("OUT", checkOut!.Type);
+
+            var exception = await Assert.ThrowsAsync<AttendanceAlreadyCompleteException>(() =>
+                attendance.RecordBiometricEventAsync(new AttendanceEventRequest
+                {
+                    EmployeeId = employee.EmployeeNumber,
+                    Type = "AUTO",
+                    LivenessScore = 0.95,
+                }, gym.GymId));
+            Assert.Equal("This employee has already completed attendance for today.", exception.Message);
         }
 
         [Fact]
@@ -113,6 +215,7 @@ namespace ReviveHRSystem.IntegrationTests
             var builder = NewBuilder();
             var gym = await builder.CreateGymWithStationAsync();
             var employee = await builder.CreateEmployeeAsync(gym);
+            var stationToken = await _fixture.GetStationTokenAsync(gym.StationCode);
 
             // Overnight shift (22:00 → 05:00) assigned only to yesterday.
             await builder.AssignShiftAsync(
@@ -124,7 +227,7 @@ namespace ReviveHRSystem.IntegrationTests
             var nowLocal = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, attendanceTimeZone);
             var afterMidnight = TimeZoneInfo.ConvertTimeToUtc(nowLocal.Date, attendanceTimeZone);
 
-            var (status, body) = await PostEventAsync(EventPayload(gym.StationCode, employee.EmployeeNumber, "IN", timestamp: afterMidnight));
+            var (status, body) = await PostEventAsync(EventPayload(employee.EmployeeNumber, "IN", timestamp: afterMidnight), stationToken);
 
             Assert.Equal(HttpStatusCode.Created, status);
             Assert.StartsWith("ATT-", body.GetProperty("recordId").GetString());
@@ -140,13 +243,14 @@ namespace ReviveHRSystem.IntegrationTests
             var builder = NewBuilder();
             var gym = await builder.CreateGymWithStationAsync();
             var employee = await builder.CreateEmployeeAsync(gym);
+            var stationToken = await _fixture.GetStationTokenAsync(gym.StationCode);
 
             // Overnight shift assigned to today: starts 22:00 tonight, ends 05:00 tomorrow.
             await builder.AssignShiftAsync(
                 employee.EmployeeId, gym.GymId, builder.AttendanceToday, "IT Night", new TimeOnly(22, 0), new TimeOnly(5, 0));
 
-            var checkIn = await PostEventAsync(EventPayload(gym.StationCode, employee.EmployeeNumber, "IN"));
-            var checkOut = await PostEventAsync(EventPayload(gym.StationCode, employee.EmployeeNumber, "OUT"));
+            var checkIn = await PostEventAsync(EventPayload(employee.EmployeeNumber, "IN"), stationToken);
+            var checkOut = await PostEventAsync(EventPayload(employee.EmployeeNumber, "OUT"), stationToken);
 
             Assert.Equal(HttpStatusCode.Created, checkIn.Status);
             Assert.Equal(HttpStatusCode.Created, checkOut.Status);
@@ -161,19 +265,20 @@ namespace ReviveHRSystem.IntegrationTests
             var builder = NewBuilder();
             var gym = await builder.CreateGymWithStationAsync();
             var employee = await builder.CreateEmployeeAsync(gym);
+            var stationToken = await _fixture.GetStationTokenAsync(gym.StationCode);
 
             // Overnight shift (22:00 → 05:00) assigned only to yesterday.
             await builder.AssignShiftAsync(
                 employee.EmployeeId, gym.GymId, builder.AttendanceToday.AddDays(-1), "IT Night", new TimeOnly(22, 0), new TimeOnly(5, 0));
 
             // Check in after midnight (yesterday's shift is still running), then check out
-            // with the server clock: the OUT must close yesterday's open record, not 404.
+            // with the server clock: the OUT must close yesterday's record, not 404.
             var attendanceTimeZone = _fixture.Services.GetRequiredService<TimeZoneInfo>();
             var nowLocal = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, attendanceTimeZone);
             var afterMidnight = TimeZoneInfo.ConvertTimeToUtc(nowLocal.Date, attendanceTimeZone);
 
-            var checkIn = await PostEventAsync(EventPayload(gym.StationCode, employee.EmployeeNumber, "IN", timestamp: afterMidnight));
-            var checkOut = await PostEventAsync(EventPayload(gym.StationCode, employee.EmployeeNumber, "OUT"));
+            var checkIn = await PostEventAsync(EventPayload(employee.EmployeeNumber, "IN", timestamp: afterMidnight), stationToken);
+            var checkOut = await PostEventAsync(EventPayload(employee.EmployeeNumber, "OUT"), stationToken);
 
             Assert.Equal(HttpStatusCode.Created, checkIn.Status);
             Assert.Equal(HttpStatusCode.Created, checkOut.Status);
@@ -187,7 +292,9 @@ namespace ReviveHRSystem.IntegrationTests
         [Fact]
         public async Task Event_LivenessBelowThreshold_Returns400()
         {
-            var (status, body) = await PostEventAsync(EventPayload(_fixture.Gym1StationCode, "IT-ANY", "IN", liveness: 0.42));
+            var stationToken = await _fixture.GetStationTokenAsync(_fixture.Gym1StationCode);
+
+            var (status, body) = await PostEventAsync(EventPayload("IT-ANY", "IN", liveness: 0.42), stationToken);
 
             Assert.Equal(HttpStatusCode.BadRequest, status);
             Assert.Equal("Liveness score must be at least 70%.", body.GetProperty("errorMessage").GetString());
@@ -196,10 +303,9 @@ namespace ReviveHRSystem.IntegrationTests
         [Fact]
         public async Task Event_UnknownEmployee_Returns404()
         {
-            var builder = NewBuilder();
-            var gym = await builder.CreateGymWithStationAsync();
+            var (_, _, stationToken) = await NewStationWithEmployeeAsync();
 
-            var (status, body) = await PostEventAsync(EventPayload(gym.StationCode, "IT-NOBODY", "IN"));
+            var (status, body) = await PostEventAsync(EventPayload("IT-NOBODY", "IN"), stationToken);
 
             Assert.Equal(HttpStatusCode.NotFound, status);
             Assert.Equal("Employee not found.", body.GetProperty("errorMessage").GetString());
@@ -211,10 +317,11 @@ namespace ReviveHRSystem.IntegrationTests
             var builder = NewBuilder();
             var homeGym = await builder.CreateGymWithStationAsync();
             var otherGym = await builder.CreateGymWithStationAsync();
-            // Access + shift only at homeGym, scanned at otherGym.
+            // Access + shift only at homeGym, scanned by otherGym's station.
             var employee = await builder.CreateEmployeeAsync(homeGym, shiftAtGym: homeGym);
+            var otherStationToken = await _fixture.GetStationTokenAsync(otherGym.StationCode);
 
-            var (status, body) = await PostEventAsync(EventPayload(otherGym.StationCode, employee.EmployeeNumber, "IN"));
+            var (status, body) = await PostEventAsync(EventPayload(employee.EmployeeNumber, "IN"), otherStationToken);
 
             Assert.Equal(HttpStatusCode.Unauthorized, status);
             Assert.Equal("You are not assigned to this gym.", body.GetProperty("errorMessage").GetString());
@@ -231,8 +338,9 @@ namespace ReviveHRSystem.IntegrationTests
                 homeGym,
                 accessGyms: new[] { homeGym, otherGym },
                 shiftAtGym: homeGym);
+            var otherStationToken = await _fixture.GetStationTokenAsync(otherGym.StationCode);
 
-            var (status, body) = await PostEventAsync(EventPayload(otherGym.StationCode, employee.EmployeeNumber, "IN"));
+            var (status, body) = await PostEventAsync(EventPayload(employee.EmployeeNumber, "IN"), otherStationToken);
 
             Assert.Equal(HttpStatusCode.Unauthorized, status);
             Assert.Equal("This employee is scheduled at a different branch today.", body.GetProperty("errorMessage").GetString());
@@ -245,47 +353,54 @@ namespace ReviveHRSystem.IntegrationTests
             var gym = await builder.CreateGymWithStationAsync();
             // Access to the gym but no shift today.
             var employee = await builder.CreateEmployeeAsync(gym);
+            var stationToken = await _fixture.GetStationTokenAsync(gym.StationCode);
 
-            var (status, body) = await PostEventAsync(EventPayload(gym.StationCode, employee.EmployeeNumber, "IN"));
+            var (status, body) = await PostEventAsync(EventPayload(employee.EmployeeNumber, "IN"), stationToken);
 
             Assert.Equal(HttpStatusCode.NotFound, status);
             Assert.Equal("No shift is scheduled for this employee today.", body.GetProperty("errorMessage").GetString());
         }
 
         [Fact]
-        public async Task Event_InvalidStationCode_Returns401()
-        {
-            // Authenticate with a real station token first, so the 401 proves the
-            // body's unknown station code — not a missing JWT — is what failed.
-            var (status, body) = await PostEventAsync(EventPayload("999999", "IT-ANY", "IN"), tokenStationCode: _fixture.Gym1StationCode);
-
-            Assert.Equal(HttpStatusCode.Unauthorized, status);
-            Assert.Equal("Invalid or expired station code.", body.GetProperty("errorMessage").GetString());
-        }
-
-        [Fact]
         public async Task Event_InvalidType_Returns400()
         {
-            var builder = NewBuilder();
-            var gym = await builder.CreateGymWithStationAsync();
+            var (_, _, stationToken) = await NewStationWithEmployeeAsync();
 
-            var (status, body) = await PostEventAsync(EventPayload(gym.StationCode, "IT-ANY", "JUMP"));
+            var (status, body) = await PostEventAsync(EventPayload("IT-ANY", "JUMP"), stationToken);
 
             Assert.Equal(HttpStatusCode.BadRequest, status);
             Assert.Equal("Type must be \"IN\" or \"OUT\".", body.GetProperty("errorMessage").GetString());
         }
 
         [Fact]
+        public async Task Event_RecordsTheStationSessionAndGym_ForAudit()
+        {
+            var (gym, employee, stationToken) = await NewStationWithEmployeeAsync();
+
+            var (status, body) = await PostEventAsync(EventPayload(employee.EmployeeNumber, "IN"), stationToken);
+            Assert.Equal(HttpStatusCode.Created, status);
+            var numericRecordId = int.Parse(body.GetProperty("recordId").GetString()!["ATT-".Length..]);
+
+            using var scope = _fixture.Services.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<ReviveHrDbContext>();
+            var record = await db.AttendanceRecords
+                .Include(ar => ar.StationSession)
+                .FirstOrDefaultAsync(ar => ar.Id == numericRecordId);
+
+            Assert.NotNull(record);
+            // Where the attendance was taken: the gym, linked to the session that issued it.
+            Assert.Equal(gym.GymId, record!.GymId);
+            Assert.NotNull(record.StationSession);
+            Assert.Equal(gym.GymId, record.StationSession!.GymId);
+        }
+
+        [Fact]
         public async Task Manual_ValidEntry_Returns201_AndAuditsReason()
         {
-            var builder = NewBuilder();
-            var gym = await builder.CreateGymWithStationAsync();
-            var employee = await builder.CreateEmployeeAsync(gym, shiftAtGym: gym);
+            var (gym, employee, stationToken) = await NewStationWithEmployeeAsync();
 
-            var stationToken = await _fixture.GetStationTokenAsync(gym.StationCode);
-            var request = _fixture.AuthorizedRequest(HttpMethod.Post, "/api/attendance/manual", new
+            var request = _fixture.StationRequest(HttpMethod.Post, "/api/attendance/manual", new
             {
-                code = gym.StationCode,
                 employeeId = employee.EmployeeNumber,
                 type = "IN",
                 reason = "Face ID camera offline"
@@ -306,53 +421,61 @@ namespace ReviveHRSystem.IntegrationTests
                 a => a.Action == "AttendanceManualEntry" && a.EntityId == numericRecordId);
             Assert.NotNull(audit);
             Assert.Contains("Face ID camera offline", audit!.NewValues);
+
+            // The audit trail records the station session (never the plaintext code).
+            var record = await db.AttendanceRecords
+                .Include(ar => ar.StationSession)
+                .FirstOrDefaultAsync(ar => ar.Id == numericRecordId);
+            Assert.NotNull(record!.StationSession);
+
+            using var auditJson = JsonDocument.Parse(audit!.NewValues!);
+            Assert.True(auditJson.RootElement.TryGetProperty("stationSessionId", out var auditedSessionId));
+            Assert.Equal(record.StationSessionId, auditedSessionId.GetInt32());
+        }
+
+        [Fact]
+        public async Task Manual_MissingReason_Returns400()
+        {
+            var (_, employee, stationToken) = await NewStationWithEmployeeAsync();
+
+            var request = _fixture.StationRequest(HttpMethod.Post, "/api/attendance/manual", new
+            {
+                employeeId = employee.EmployeeNumber,
+                type = "IN"
+            }, stationToken);
+            var response = await _fixture.Client.SendAsync(request);
+            var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+
+            Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+            // The DTO's [Required] reason rejects it before the service layer runs.
+            Assert.Equal("Validation Error", body.GetProperty("errorMessage").GetString());
         }
 
         [Fact]
         public async Task Event_WithoutToken_Returns401()
         {
-            // Global fallback policy: any request without a JWT is rejected outright.
+            // No station session and no user token: the fallback policy rejects outright.
             var response = await _fixture.Client.PostAsJsonAsync(
                 "/api/attendance/events",
-                EventPayload(_fixture.Gym1StationCode, "IT-ANY", "IN"));
+                EventPayload("IT-ANY", "IN"));
 
             Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
         }
 
         [Fact]
-        public async Task Event_UserTokenWithoutGymClaim_Returns401_StationTokenRequired()
+        public async Task Event_UserTokenWithoutGymClaim_Returns401_StationSessionRequired()
         {
             // The seeded admin (TopManagement) logs in without a gymId claim, so a
             // perfectly valid user JWT still cannot act on a station's behalf.
             var adminToken = await _fixture.GetAdminTokenAsync();
             var request = _fixture.AuthorizedRequest(
                 HttpMethod.Post, "/api/attendance/events",
-                EventPayload(_fixture.Gym1StationCode, "IT-ANY", "IN"), adminToken);
+                EventPayload("IT-ANY", "IN"), adminToken);
             var response = await _fixture.Client.SendAsync(request);
             var body = await response.Content.ReadFromJsonAsync<JsonElement>();
 
             Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
-            Assert.Equal("Attendance requests require a station token bound to a gym.", body.GetProperty("errorMessage").GetString());
-        }
-
-        [Fact]
-        public async Task Event_TokenFromOtherStation_Returns401_StationTokenGymMismatch()
-        {
-            var builder = NewBuilder();
-            var tokenGym = await builder.CreateGymWithStationAsync();
-            var targetGym = await builder.CreateGymWithStationAsync();
-            var employee = await builder.CreateEmployeeAsync(targetGym, shiftAtGym: targetGym);
-
-            // JWT issued for tokenGym, but the event targets targetGym's station.
-            var stationToken = await _fixture.GetStationTokenAsync(tokenGym.StationCode);
-            var request = _fixture.AuthorizedRequest(
-                HttpMethod.Post, "/api/attendance/events",
-                EventPayload(targetGym.StationCode, employee.EmployeeNumber, "IN"), stationToken);
-            var response = await _fixture.Client.SendAsync(request);
-            var body = await response.Content.ReadFromJsonAsync<JsonElement>();
-
-            Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
-            Assert.Equal("The station token is not bound to this gym.", body.GetProperty("errorMessage").GetString());
+            Assert.Equal("Attendance requests require a station session token.", body.GetProperty("errorMessage").GetString());
         }
     }
 }

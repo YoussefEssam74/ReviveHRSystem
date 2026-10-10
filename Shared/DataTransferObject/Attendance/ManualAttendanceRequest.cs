@@ -2,12 +2,9 @@ using System.ComponentModel.DataAnnotations;
 
 namespace Shared.DataTransferObject.Attendance;
 
-/// <summary>Manual check-in/out fallback from an attendance station.</summary>
+/// <summary>Manual check-in/out fallback from an attendance station (station-session authenticated).</summary>
 public sealed class ManualAttendanceRequest
 {
-    [Required, RegularExpression(@"^\d{6}$", ErrorMessage = "Station code must be exactly 6 digits.")]
-    public string Code { get; init; } = string.Empty;
-
     [Required, StringLength(50, MinimumLength = 1)]
     public string EmployeeId { get; init; } = string.Empty;
 

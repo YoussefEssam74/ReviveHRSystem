@@ -2,17 +2,14 @@ using System.ComponentModel.DataAnnotations;
 
 namespace Shared.DataTransferObject.Attendance;
 
-/// <summary>Biometric check-in/out event from an attendance station.</summary>
+/// <summary>Biometric check-in/out event from an attendance station (station-session authenticated).</summary>
 public sealed class AttendanceEventRequest
 {
-    [Required, RegularExpression(@"^\d{6}$", ErrorMessage = "Station code must be exactly 6 digits.")]
-    public string Code { get; init; } = string.Empty;
-
     /// <summary>Employee number (for example, EMP-1042) or numeric employee ID.</summary>
     [Required, StringLength(50, MinimumLength = 1)]
     public string EmployeeId { get; init; } = string.Empty;
 
-    /// <summary>IN/OUT (CHECKIN/CHECKOUT aliases are accepted).</summary>
+    /// <summary>IN/OUT (CHECKIN/CHECKOUT and AUTO aliases are accepted).</summary>
     [Required, StringLength(10)]
     public string Type { get; init; } = string.Empty;
 

@@ -13,12 +13,13 @@ namespace Service.Services
     /// no refresh tokens). Permissions are deliberately NOT embedded in the token;
     /// they are loaded server-side per request from the database.
     /// The gym-selection temp token is a purpose-scoped, short-lived JWT.
+    /// Station (kiosk) credentials are NOT JWTs: kiosks redeem an enrollment code for
+    /// an opaque DB-backed session token (see StationSessionService).
     /// </summary>
     public class TokenService(JwtSettings settings) : ITokenService
     {
         private const string SelectionPurposeClaim = "purpose";
         private const string SelectionPurposeValue = "gym-selection";
-        private const string StationPurposeValue = "station";
 
         // Selection tokens carry a distinct audience so they can never satisfy the
         // JwtBearer audience check in Program.cs and authenticate as access tokens.
@@ -62,22 +63,6 @@ namespace Service.Services
             };
 
             return CreateSignedToken(claims, DateTime.UtcNow.AddMinutes(settings.SelectionTokenMinutes));
-        }
-
-        public string CreateStationToken(int gymId)
-        {
-            // Station tokens use the same issuer/audience as access tokens so the
-            // JwtBearer pipeline accepts them; the gymId claim is the binding that
-            // attendance endpoints verify against the station code's gym (ADR-004).
-            List<Claim> claims = new()
-            {
-                new(JwtRegisteredClaimNames.Sub, $"gym-{gymId}"),
-                new("gymId", gymId.ToString()),
-                new(SelectionPurposeClaim, StationPurposeValue),
-                new(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString())
-            };
-
-            return CreateSignedToken(claims, DateTime.UtcNow.AddMinutes(settings.StationTokenMinutes));
         }
 
         public int? ValidateGymSelectionToken(string token)

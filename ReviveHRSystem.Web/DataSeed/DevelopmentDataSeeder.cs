@@ -22,7 +22,11 @@ namespace ReviveHRSystem.Web.DataSeed
     ///
     /// Station codes are never hardcoded: each gym gets a freshly generated unique
     /// code (the seeded value is logged), and production codes are created by HR via
-    /// POST /api/gyms/{gymId}/station-codes.
+    /// POST /api/gyms/{gymId}/station-codes. Seeded codes only carry an expiry when
+    /// DevelopmentSeeder:StationCodeLifetimeMinutes is configured (by default they
+    /// never expire, so development sessions and the integration suite are stable);
+    /// codes generated through the HR rotation endpoint always get the production
+    /// StationCode:ExpirationMinutes lifetime.
     ///
     /// Scenario matrix:
     ///   EMP-1042 Karim — access: gym1 only, shift at gym1 today
@@ -36,11 +40,15 @@ namespace ReviveHRSystem.Web.DataSeed
         public const string Gym1Name = "Revive Main Gym";
         public const string Gym2Name = "Revive Second Gym";
 
+        /// <summary>Optional lifetime (minutes) for seeded station codes; null keeps them valid forever.</summary>
+        private const string StationCodeLifetimeKey = "DevelopmentSeeder:StationCodeLifetimeMinutes";
+
         public static async Task SeedAsync(IServiceProvider services)
         {
             using var scope = services.CreateScope();
             var db = scope.ServiceProvider.GetRequiredService<ReviveHrDbContext>();
             var hasher = scope.ServiceProvider.GetRequiredService<IPasswordHasher>();
+            var configuration = scope.ServiceProvider.GetRequiredService<Microsoft.Extensions.Configuration.IConfiguration>();
             var logger = scope.ServiceProvider
                 .GetRequiredService<ILoggerFactory>()
                 .CreateLogger("DevelopmentDataSeeder");
@@ -54,8 +62,9 @@ namespace ReviveHRSystem.Web.DataSeed
             await EnsureGymAccessAsync(db, admin.Id, gym1.Id);
             await EnsureGymAccessAsync(db, admin.Id, gym2.Id);
 
-            var gym1StationCode = await EnsureStationCodeAsync(db, gym1.Id, admin.Id, logger);
-            var gym2StationCode = await EnsureStationCodeAsync(db, gym2.Id, admin.Id, logger);
+            var stationCodeLifetimeMinutes = configuration.GetValue<int?>(StationCodeLifetimeKey);
+            var gym1StationCode = await EnsureStationCodeAsync(db, gym1.Id, admin.Id, stationCodeLifetimeMinutes, logger);
+            var gym2StationCode = await EnsureStationCodeAsync(db, gym2.Id, admin.Id, stationCodeLifetimeMinutes, logger);
 
             var position1 = await EnsurePositionAsync(db, gym1.Id, "Fitness Trainer");
             var position2 = await EnsurePositionAsync(db, gym2.Id, "Fitness Trainer");
@@ -147,10 +156,11 @@ namespace ReviveHRSystem.Web.DataSeed
         /// Ensures the gym has an active station code, generating a fresh random
         /// unique 6-digit code when none exists. Returns the active code so
         /// callers (logs, test fixtures) can read the live value — nothing is
-        /// ever hardcoded.
+        /// ever hardcoded. <paramref name="lifetimeMinutes"/> is null by default,
+        /// which keeps seeded codes valid indefinitely for development use.
         /// </summary>
         private static async Task<string> EnsureStationCodeAsync(
-            ReviveHrDbContext db, int gymId, int generatedBy, ILogger logger)
+            ReviveHrDbContext db, int gymId, int generatedBy, int? lifetimeMinutes, ILogger logger)
         {
             var existing = await db.StationCodes
                 .FirstOrDefaultAsync(sc => sc.GymId == gymId && sc.IsActive);
@@ -159,13 +169,15 @@ namespace ReviveHRSystem.Web.DataSeed
                 return existing.Code;
             }
 
+            var generatedAt = DateTime.UtcNow;
             var code = await GenerateUniqueStationCodeAsync(db);
             db.StationCodes.Add(new StationCode
             {
                 GymId = gymId,
                 Code = code,
                 IsActive = true,
-                GeneratedAt = DateTime.UtcNow,
+                GeneratedAt = generatedAt,
+                ExpiresAtUtc = lifetimeMinutes.HasValue ? generatedAt.AddMinutes(lifetimeMinutes.Value) : null,
                 GeneratedBy = generatedBy
             });
             await db.SaveChangesAsync();

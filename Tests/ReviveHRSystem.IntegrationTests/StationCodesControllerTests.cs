@@ -79,6 +79,10 @@ namespace ReviveHRSystem.IntegrationTests
             Assert.NotNull(newCode);
             Assert.NotEqual(gym.StationCode, newCode);
 
+            // Rotated codes get the production lifetime (StationCode:ExpirationMinutes = 5).
+            Assert.True(body.GetProperty("expiresAtUtc").GetDateTime() > DateTime.UtcNow);
+            Assert.True(body.GetProperty("expiresAtUtc").GetDateTime() <= DateTime.UtcNow.AddMinutes(6));
+
             // Old code stops working immediately…
             var oldCodeLogin = await _fixture.Client.PostAsJsonAsync("/api/kiosk/login", new { code = gym.StationCode });
             Assert.Equal(HttpStatusCode.Unauthorized, oldCodeLogin.StatusCode);

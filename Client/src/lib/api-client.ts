@@ -35,10 +35,23 @@ export interface RequestOptions {
   /**
    * Explicit bearer token that overrides the stored web session (e.g. the
    * gym-bound station token issued by POST /api/kiosk/login). Requests sent
-   * with one never touch the session store — a station 401 must not sign the
+   * with one never touch the session store --- a station 401 must not sign the
    * HR user out.
    */
   accessToken?: string
+  /**
+   * Opaque station session token (POST /api/kiosk/login) sent in the
+   * X-Station-Token header. When present the stored web-session token is NOT
+   * attached: a public kiosk browser must never emit an HR user's token.
+   */
+  stationToken?: string
+  /**
+   * Cookie-authenticated station request: no bearer token and no header are
+   * attached; the browser sends the HttpOnly StationSession cookie automatically
+   * (the request includes credentials). Like stationToken, a 401 must never
+   * touch the HR user's session.
+   */
+  stationAuth?: boolean
 }
 
 const STATUS_FALLBACK_MESSAGES: Record<number, string> = {
@@ -125,9 +138,13 @@ export function describeApiError(error: unknown): string {
 }
 
 export async function apiRequest<T>(path: string, options: RequestOptions = {}): Promise<T> {
-  const { method = 'GET', body, signal, accessToken } = options
+  const { method = 'GET', body, signal, accessToken, stationToken, stationAuth } = options
   const session = loadStoredSession()
-  const bearerToken = accessToken ?? session?.accessToken
+  // Station requests authenticate with their own header or session cookie; a kiosk
+  // browser may also hold a stale web session, which must never be sent from a
+  // public terminal.
+  const isStationRequest = Boolean(stationToken || stationAuth)
+  const bearerToken = isStationRequest ? undefined : accessToken ?? session?.accessToken
 
   const controller = new AbortController()
   let timedOut = false
@@ -150,8 +167,13 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
         Accept: 'application/json',
         ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}),
         ...(bearerToken ? { Authorization: 'Bearer ' + bearerToken } : {}),
+        ...(stationToken ? { 'X-Station-Token': stationToken } : {}),
       },
       body: body === undefined ? undefined : JSON.stringify(body),
+      // Cookie-authenticated station requests must carry the HttpOnly session
+      // cookie (and accept Set-Cookie on login) even when the API is on another
+      // origin; same-origin requests already behave this way by default.
+      ...(isStationRequest ? { credentials: 'include' as const } : {}),
       signal: controller.signal,
     })
   } catch (error) {
@@ -171,10 +193,10 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
 
   if (!response.ok) {
     // The API issues short-lived access tokens with no refresh endpoint, so a
-    // 401 always means the session is over — clear it and let the UI react.
+    // 401 always means the session is over --- clear it and let the UI react.
     // Only session-signed requests are allowed to do that: an expired or
     // rotated station token must leave the HR user's session alone.
-    if (response.status === 401 && !accessToken && session) clearSession()
+    if (response.status === 401 && !accessToken && !stationToken && !stationAuth && session) clearSession()
     throw toApiError(response.status, json)
   }
 

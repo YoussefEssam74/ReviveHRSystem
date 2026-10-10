@@ -4,6 +4,7 @@ using System.Threading.RateLimiting;
 using AutoMapper;
 using Biometrics;
 using DomainLayer.Contracts;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -12,6 +13,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Presistence.Data;
 using Presistence.Repository;
+using ReviveHRSystem.Web.Authentication;
 using ReviveHRSystem.Web.CustomMiddleWares;
 using ReviveHRSystem.Web.DataSeed;
 using ReviveHRSystem.Web.Factories;
@@ -46,6 +48,17 @@ namespace ReviveHRSystem.Web
             }
 
             builder.Services.AddSingleton(jwtSettings);
+
+            // Station (kiosk) credentials are opaque, DB-backed session tokens — not JWTs.
+            // Both schemes back the authorization policies below: a request signed in as a
+            // web user presents a Bearer JWT, a kiosk presents the X-Station-Token header.
+            var stationCodeSettings = builder.Configuration.GetSection(StationCodeOptions.SectionName).Get<StationCodeOptions>()
+                ?? new StationCodeOptions();
+            var stationSessionSettings = builder.Configuration.GetSection(StationSessionOptions.SectionName).Get<StationSessionOptions>()
+                ?? new StationSessionOptions();
+            builder.Services.AddSingleton(stationCodeSettings);
+            builder.Services.AddSingleton(stationSessionSettings);
+
             builder.Services
                 .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
                 .AddJwtBearer(options =>
@@ -61,15 +74,25 @@ namespace ReviveHRSystem.Web
                         ValidateLifetime = true,
                         ClockSkew = TimeSpan.FromSeconds(30)
                     };
-                });
-            // Fallback policy: every endpoint requires an authenticated user unless it
-            // explicitly opts out with [AllowAnonymous] (only the 3 login endpoints).
-            // New controllers are therefore secured by default.
+                })
+                .AddScheme<AuthenticationSchemeOptions, StationSessionAuthenticationHandler>(
+                    StationSessionAuthentication.SchemeName, _ => { });
+
+            // Fallback policy: every endpoint requires an authenticated principal unless it
+            // explicitly opts out with [AllowAnonymous] (only the 3 login endpoints). Either
+            // scheme satisfies the policy — web user tokens and station session tokens —
+            // and per-endpoint claim checks (GetActorUserId / GetGymIdFromToken) decide what
+            // each identity is allowed to do. New controllers are secured by default.
             builder.Services.AddAuthorization(options =>
             {
-                options.FallbackPolicy = new AuthorizationPolicyBuilder()
+                var requireAuthenticated = new AuthorizationPolicyBuilder(
+                        JwtBearerDefaults.AuthenticationScheme,
+                        StationSessionAuthentication.SchemeName)
                     .RequireAuthenticatedUser()
                     .Build();
+
+                options.DefaultPolicy = requireAuthenticated;
+                options.FallbackPolicy = requireAuthenticated;
             });
 
             // --- Rate limiting for the public endpoints (limits configurable per environment;
@@ -134,6 +157,7 @@ namespace ReviveHRSystem.Web
             builder.Services.AddCors(options => options.AddDefaultPolicy(policy => policy
                 .WithOrigins(allowedOrigins)
                 .AllowAnyHeader()
+                .AllowCredentials() // the station session travels in an HttpOnly cookie for cross-origin kiosk SPAs
                 .WithMethods("GET", "POST", "PUT", "PATCH", "DELETE")));
 
             // Schedule comparisons use an explicit organization timezone, independent of
@@ -157,6 +181,7 @@ namespace ReviveHRSystem.Web
             builder.Services.AddScoped<IAuthService, AuthService>();
             builder.Services.AddScoped<IAttendanceService, AttendanceService>();
             builder.Services.AddScoped<IStationCodeService, StationCodeService>();
+            builder.Services.AddScoped<IStationSessionService, StationSessionService>();
             builder.Services.AddFaceBiometrics(builder.Configuration);
 
             builder.Services.AddEndpointsApiExplorer();
@@ -175,6 +200,15 @@ namespace ReviveHRSystem.Web
                     Scheme = "bearer",
                     BearerFormat = "JWT",
                     Description = "Paste the access token returned by POST /api/auth/login."
+                });
+                // Stations authenticate with the opaque session token from
+                // POST /api/kiosk/login instead of a Bearer JWT.
+                options.AddSecurityDefinition("StationSession", new Microsoft.OpenApi.Models.OpenApiSecurityScheme
+                {
+                    Name = StationSessionAuthentication.TokenHeader,
+                    In = Microsoft.OpenApi.Models.ParameterLocation.Header,
+                    Type = Microsoft.OpenApi.Models.SecuritySchemeType.ApiKey,
+                    Description = "Station session token returned by POST /api/kiosk/login (attendance stations only). The kiosk SPA instead authenticates automatically via the HttpOnly 'StationSession' cookie set by that same login — no header needed."
                 });
                 options.AddSecurityRequirement(new Microsoft.OpenApi.Models.OpenApiSecurityRequirement
                 {

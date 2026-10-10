@@ -1,4 +1,5 @@
 using System.Net;
+using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
 using DomainLayer.Models.UserModule.Enums;
@@ -45,58 +46,89 @@ namespace ReviveHRSystem.IntegrationTests
             return "data:image/bmp;base64," + Convert.ToBase64String(bytes);
         }
 
-        private async Task<(HttpStatusCode Status, JsonElement Body)> PostFaceScanAsync(object payload, string tokenStationCode)
+        private async Task<(HttpStatusCode Status, JsonElement Body)> PostFaceScanAsync(object payload, string stationToken)
         {
-            // Face scans are station-authenticated: fetch the station JWT first.
-            var stationToken = await _fixture.GetStationTokenAsync(tokenStationCode);
-            var request = _fixture.AuthorizedRequest(HttpMethod.Post, "/api/attendance/face-scan", payload, stationToken);
+            // Face scans are station-session authenticated via the X-Station-Token header.
+            var request = _fixture.StationRequest(HttpMethod.Post, "/api/attendance/face-scan", payload, stationToken);
             var response = await _fixture.Client.SendAsync(request);
             var body = await response.Content.ReadFromJsonAsync<JsonElement>();
             return (response.StatusCode, body);
         }
 
         [Fact]
-        public async Task FaceScan_UnknownStation_Returns401()
+        public async Task FaceScan_BogusStationToken_Returns401()
         {
-            // A real station token plus an unknown code in the body: station-code
-            // resolution runs before the gym-binding check, so the code still 401s.
-            var (status, body) = await PostFaceScanAsync(new
-            {
-                code = "999999",
-                type = "IN",
-                image = BlackImage(),
-            }, tokenStationCode: _fixture.Gym1StationCode);
+            // A session token that does not match any stored hash is rejected by the
+            // authentication layer (bare 401 — no error envelope, no information leak).
+            var request = _fixture.StationRequest(
+                HttpMethod.Post, "/api/attendance/face-scan",
+                new { type = "IN", image = BlackImage() }, new string('a', 64));
 
-            Assert.Equal(HttpStatusCode.Unauthorized, status);
-            Assert.Equal("Invalid or expired station code.", body.GetProperty("errorMessage").GetString());
+            var response = await _fixture.Client.SendAsync(request);
+            Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
         }
 
         [Fact]
-        public async Task FaceScan_BlackFrame_Returns400_FaceNotDetected()
+        public async Task FaceScan_WithoutStationToken_Returns401()
         {
+            var response = await _fixture.Client.PostAsJsonAsync(
+                "/api/attendance/face-scan",
+                new { type = "IN", image = BlackImage() });
+
+            Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        }
+
+        [Fact]
+        public async Task FaceScan_BlackFrame_Returns200_NoFaceOutcome()
+        {
+            // A frame with no face is an ordinary scan outcome, not an error: the
+            // station shows a live HUD from the discriminator.
+            var stationToken = await _fixture.GetStationTokenAsync(_fixture.Gym1StationCode);
+
             var (status, body) = await PostFaceScanAsync(new
             {
-                code = _fixture.Gym1StationCode,
                 type = "IN",
                 image = BlackImage(),
-            }, tokenStationCode: _fixture.Gym1StationCode);
+            }, stationToken);
 
-            Assert.Equal(HttpStatusCode.BadRequest, status);
-            Assert.Equal("No face was detected in the frame.", body.GetProperty("errorMessage").GetString());
+            Assert.Equal(HttpStatusCode.OK, status);
+            Assert.Equal("no_face", body.GetProperty("outcome").GetString());
+            Assert.Equal("No face was detected in the frame.", body.GetProperty("message").GetString());
         }
 
         [Fact]
         public async Task FaceScan_GarbageImage_Returns400_InvalidImage()
         {
+            var stationToken = await _fixture.GetStationTokenAsync(_fixture.Gym1StationCode);
+
             var (status, body) = await PostFaceScanAsync(new
             {
-                code = _fixture.Gym1StationCode,
                 type = "IN",
                 image = "data:image/jpeg;base64,not-base-64!!",
-            }, tokenStationCode: _fixture.Gym1StationCode);
+            }, stationToken);
 
             Assert.Equal(HttpStatusCode.BadRequest, status);
             Assert.Equal("The frame could not be decoded as an image.", body.GetProperty("errorMessage").GetString());
+        }
+
+        [Fact]
+        public async Task FaceScan_GymScopedUserToken_Authenticates()
+        {
+            // Karim is scoped to gym1, so his access token carries the gymId claim and may
+            // act on behalf of an attendance station; the black frame then proves the
+            // authentication (not the image) is what got the request that far.
+            var token = await _fixture.LoginAsync("karim@revive.hr", ReviveHRSystem.Web.DataSeed.DevelopmentDataSeeder.EmployeePassword);
+            var request = new HttpRequestMessage(HttpMethod.Post, "/api/attendance/face-scan")
+            {
+                Content = JsonContent.Create(new { type = "IN", image = BlackImage() }),
+            };
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+            var response = await _fixture.Client.SendAsync(request);
+            var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            Assert.Equal("no_face", body.GetProperty("outcome").GetString());
         }
 
         [Fact]
@@ -119,7 +151,7 @@ namespace ReviveHRSystem.IntegrationTests
             {
                 Content = JsonContent.Create(new { employeeNumber = "EMP-1042", image = BlackImage() }),
             };
-            request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
             var response = await _fixture.Client.SendAsync(request);
             var body = await response.Content.ReadFromJsonAsync<JsonElement>();
@@ -136,7 +168,7 @@ namespace ReviveHRSystem.IntegrationTests
             {
                 Content = JsonContent.Create(new { employeeNumber = "IT-NOBODY", image = BlackImage() }),
             };
-            request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
             var response = await _fixture.Client.SendAsync(request);
             var body = await response.Content.ReadFromJsonAsync<JsonElement>();
@@ -158,16 +190,20 @@ namespace ReviveHRSystem.IntegrationTests
         // --- Enrollment authorization (HR-side administration) ---
 
         [Fact]
-        public async Task Enroll_StationToken_Returns401()
+        public async Task Enroll_StationSession_Returns401()
         {
-            // Regression: a station token is a valid JWT but carries no numeric uid, so it
-            // must never reach HR-only operations such as enrolling faces.
+            // Regression: a station session authenticates as a station (gym binding, no
+            // uid), so it must never reach HR-only operations such as enrolling faces.
             var gym = await new TestDataBuilder(_fixture.Services).CreateGymWithStationAsync();
             var stationToken = await _fixture.GetStationTokenAsync(gym.StationCode);
 
-            var (status, body) = await PostEnrollAsync(stationToken, "IT-ANY");
+            var request = _fixture.StationRequest(
+                HttpMethod.Post, "/api/employees/face/enroll",
+                new { employeeNumber = "IT-ANY", image = BlackImage() }, stationToken);
+            var response = await _fixture.Client.SendAsync(request);
+            var body = await response.Content.ReadFromJsonAsync<JsonElement>();
 
-            Assert.Equal(HttpStatusCode.Unauthorized, status);
+            Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
             Assert.Equal("Your session is invalid. Please sign in again.", body.GetProperty("errorMessage").GetString());
         }
 
@@ -220,12 +256,12 @@ namespace ReviveHRSystem.IntegrationTests
         }
 
         [Fact]
-        public async Task Remove_StationToken_Returns401()
+        public async Task Remove_StationSession_Returns401()
         {
             var gym = await new TestDataBuilder(_fixture.Services).CreateGymWithStationAsync();
             var stationToken = await _fixture.GetStationTokenAsync(gym.StationCode);
 
-            var request = _fixture.AuthorizedRequest(HttpMethod.Delete, "/api/employees/face/IT-ANY", null, stationToken);
+            var request = _fixture.StationRequest(HttpMethod.Delete, "/api/employees/face/IT-ANY", null, stationToken);
             var response = await _fixture.Client.SendAsync(request);
             var body = await response.Content.ReadFromJsonAsync<JsonElement>();
 

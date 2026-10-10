@@ -1,12 +1,12 @@
 ### ============================================================
-### Station-code sync — run these TWO first (after auth.http >
+### Station-code sync - run these TWO first (after auth.http >
 ### adminLogin). Codes are generated server-side and never
 ### hardcoded: each response writes the live code into the
 ### environment for every other request in this folder and
 ### in kiosk.http.
 ### ============================================================
 
-### Sync gym 1's live station code → sets {{gym1StationCode}}
+### Sync gym 1's live station code -> sets {{gym1StationCode}}
 # @name syncGym1StationCode
 GET {{baseUrl}}/api/gyms/1/station-codes
 Authorization: Bearer {{adminLogin.response.body.accessToken}}
@@ -16,7 +16,7 @@ client.global.set('gym1StationCode', response.body.code);
 %}
 
 ###
-### Sync gym 2's live station code → sets {{gym2StationCode}}
+### Sync gym 2's live station code -> sets {{gym2StationCode}}
 # @name syncGym2StationCode
 GET {{baseUrl}}/api/gyms/2/station-codes
 Authorization: Bearer {{adminLogin.response.body.accessToken}}
@@ -27,150 +27,167 @@ client.global.set('gym2StationCode', response.body.code);
 
 ###
 ### ============================================================
-### Attendance events — every request carries ONLY the 6-digit
-### station code (no deviceId, no device token). gymId is resolved
-### server-side from the code.
+### Attendance events - every request authenticates with the
+### X-Station-Token header (the station session issued by
+### POST /api/kiosk/login in kiosk.http). There is NO station code
+### in the body: the server derives GymId from the validated
+### session. Run kiosk.http first so {{stationToken}} is populated.
 ### Timestamp is optional; omit it to use server time.
+### type AUTO lets the server decide IN vs OUT from the
+### employee's own state (what the always-on camera sends).
 ### ============================================================
 
-### Check-in (biometric) → 201
+### Check-in (biometric) -> 201
 ### NOTE: repeated runs return 409 ALREADY_CHECKED_IN for the same day.
 # @name eventCheckIn
 POST {{baseUrl}}/api/attendance/events
 Content-Type: application/json
+X-Station-Token: {{stationToken}}
 
 {
-  "code": "{{gym1StationCode}}",
   "employeeId": "{{employeeKarim}}",
   "type": "IN",
   "livenessScore": 0.95
 }
 
 ###
-### Check-out (biometric) → 201 (after a check-in)
+### Check-out (biometric) -> 201 (after a check-in)
 # @name eventCheckOut
 POST {{baseUrl}}/api/attendance/events
 Content-Type: application/json
+X-Station-Token: {{stationToken}}
 
 {
-  "code": "{{gym1StationCode}}",
   "employeeId": "{{employeeKarim}}",
   "type": "OUT",
   "livenessScore": 0.95
 }
 
 ###
-### Duplicate check-in → 409 ALREADY_CHECKED_IN
+### Auto direction: the server picks IN/OUT from the employee's state
+# @name eventAuto
+POST {{baseUrl}}/api/attendance/events
+Content-Type: application/json
+X-Station-Token: {{stationToken}}
+
+{
+  "employeeId": "{{employeeKarim}}",
+  "type": "AUTO",
+  "livenessScore": 0.95
+}
+
+###
+### Duplicate check-in -> 409 ALREADY_CHECKED_IN
 # @name eventDuplicateIn
 POST {{baseUrl}}/api/attendance/events
 Content-Type: application/json
+X-Station-Token: {{stationToken}}
 
 {
-  "code": "{{gym1StationCode}}",
   "employeeId": "{{employeeKarim}}",
   "type": "IN",
   "livenessScore": 0.95
 }
 
 ###
-### Liveness below 0.60 → 422 LIVENESS_FAILED
+### Liveness below 0.60 -> 422 LIVENESS_FAILED
 # @name eventLivenessFail
 POST {{baseUrl}}/api/attendance/events
 Content-Type: application/json
+X-Station-Token: {{stationToken}}
 
 {
-  "code": "{{gym1StationCode}}",
   "employeeId": "{{employeeKarim}}",
   "type": "IN",
   "livenessScore": 0.42
 }
 
 ###
-### Unknown employee → 404 EMPLOYEE_NOT_FOUND
+### Unknown employee -> 404 EMPLOYEE_NOT_FOUND
 # @name eventUnknownEmployee
 POST {{baseUrl}}/api/attendance/events
 Content-Type: application/json
+X-Station-Token: {{stationToken}}
 
 {
-  "code": "{{gym1StationCode}}",
   "employeeId": "EMP-0000",
   "type": "IN",
   "livenessScore": 0.9
 }
 
 ###
-### Karim (gym1 only) scanned at gym2 → 403 CROSS_GYM_ACCESS_DENIED
+### Karim (gym1 only) scanned at gym2 -> 403 CROSS_GYM_ACCESS_DENIED
 # @name eventCrossGymDenied
 POST {{baseUrl}}/api/attendance/events
 Content-Type: application/json
+X-Station-Token: {{stationTokenGym2}}
 
 {
-  "code": "{{gym2StationCode}}",
   "employeeId": "{{employeeKarim}}",
   "type": "IN",
   "livenessScore": 0.9
 }
 
 ###
-### Omar (access to both, scheduled at gym1) scanned at gym2 → 403 WRONG_BRANCH_SCHEDULE
+### Omar (access to both, scheduled at gym1) scanned at gym2 -> 403 WRONG_BRANCH_SCHEDULE
 # @name eventWrongBranch
 POST {{baseUrl}}/api/attendance/events
 Content-Type: application/json
+X-Station-Token: {{stationTokenGym2}}
 
 {
-  "code": "{{gym2StationCode}}",
   "employeeId": "{{employeeOmar}}",
   "type": "IN",
   "livenessScore": 0.9
 }
 
 ###
-### Sara (no shift today) → 404 SCHEDULED_DAY_OFF
+### Sara (no shift today) -> 404 SCHEDULED_DAY_OFF
 # @name eventDayOff
 POST {{baseUrl}}/api/attendance/events
 Content-Type: application/json
+X-Station-Token: {{stationTokenGym2}}
 
 {
-  "code": "{{gym2StationCode}}",
   "employeeId": "{{employeeSara}}",
   "type": "IN",
   "livenessScore": 0.9
 }
 
 ###
-### Bad station code → 401 INVALID_STATION_CODE
-# @name eventBadStationCode
+### Missing/expired station session -> 401 (no envelope: the auth layer challenges)
+# @name eventNoStationToken
 POST {{baseUrl}}/api/attendance/events
 Content-Type: application/json
+X-Station-Token: 0000000000000000000000000000000000000000000000000000000000000000
 
 {
-  "code": "999999",
   "employeeId": "{{employeeKarim}}",
   "type": "IN",
   "livenessScore": 0.9
 }
 
 ###
-### Invalid type → 400 INVALID_TYPE
+### Invalid type -> 400 INVALID_TYPE
 # @name eventInvalidType
 POST {{baseUrl}}/api/attendance/events
 Content-Type: application/json
+X-Station-Token: {{stationToken}}
 
 {
-  "code": "{{gym1StationCode}}",
   "employeeId": "{{employeeKarim}}",
   "type": "JUMP",
   "livenessScore": 0.9
 }
 
 ###
-### Manual check-in (Face ID fallback) → 201, method=Manual, reason audited
+### Manual check-in (Face ID fallback) -> 201, method=Manual, reason audited
 # @name manualCheckIn
 POST {{baseUrl}}/api/attendance/manual
 Content-Type: application/json
+X-Station-Token: {{stationToken}}
 
 {
-  "code": "{{gym1StationCode}}",
   "employeeId": "{{employeeOmar}}",
   "type": "IN",
   "reason": "Face ID camera offline"
@@ -178,28 +195,46 @@ Content-Type: application/json
 
 ###
 ### ============================================================
-### HR station-code management (requires JWT)
+### Kiosk dashboard data (counters + feed for the connected gym)
 ### ============================================================
 
 ###
-### Get current station code (admin) → 200
+### Today's summary for the station's gym -> 200 (polled by the kiosk UI)
+# @name stationSummary
+GET {{baseUrl}}/api/attendance/station-summary
+X-Station-Token: {{stationToken}}
+
+###
+###
+### ============================================================
+### HR station-code management (requires a user JWT)
+### ============================================================
+
+###
+### Get current station code (admin) -> 200
 # @name getCurrentStationCode
 GET {{baseUrl}}/api/gyms/1/station-codes
 Authorization: Bearer {{adminLogin.response.body.accessToken}}
 
 ###
-### Get station code without token → 401
+### Get station code without token -> 401
 # @name getStationCodeAnonymous
 GET {{baseUrl}}/api/gyms/1/station-codes
 
 ###
-### Employee accessing another gym's station code → 403 GYM_ACCESS_DENIED (IDOR guard)
+### Employee accessing another gym's station code -> 401 GYM_ACCESS_DENIED (IDOR guard)
 # @name getStationCodeCrossGym
 GET {{baseUrl}}/api/gyms/2/station-codes
 Authorization: Bearer {{employeeLogin.response.body.accessToken}}
 
 ###
-### Rotate the station code → 200 (old code stops working immediately)
+### Rotate the station code -> 200 (old code stops being accepted; live sessions keep working)
 # @name rotateStationCode
 POST {{baseUrl}}/api/gyms/2/station-codes
+Authorization: Bearer {{adminLogin.response.body.accessToken}}
+
+###
+### Revoke every live station session of gym 1 -> 200 { revokedCount } (kiosks re-enroll)
+# @name revokeStationSessions
+DELETE {{baseUrl}}/api/gyms/1/station-sessions
 Authorization: Bearer {{adminLogin.response.body.accessToken}}

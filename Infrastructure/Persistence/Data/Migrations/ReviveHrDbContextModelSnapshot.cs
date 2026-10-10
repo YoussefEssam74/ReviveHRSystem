@@ -135,6 +135,9 @@ namespace Persistence.Data.Migrations
                     b.Property<int?>("ScheduledShiftTemplateId")
                         .HasColumnType("integer");
 
+                    b.Property<int?>("StationSessionId")
+                        .HasColumnType("integer");
+
                     b.Property<int>("Status")
                         .HasColumnType("integer");
 
@@ -149,6 +152,8 @@ namespace Persistence.Data.Migrations
                     b.HasIndex("GymId");
 
                     b.HasIndex("ScheduledShiftTemplateId");
+
+                    b.HasIndex("StationSessionId");
 
                     b.HasIndex("EmployeeId", "Date")
                         .IsUnique();
@@ -274,6 +279,9 @@ namespace Persistence.Data.Migrations
                     b.Property<int?>("CreatedBy")
                         .HasColumnType("integer");
 
+                    b.Property<DateTime?>("ExpiresAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<DateTime>("GeneratedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -309,6 +317,65 @@ namespace Persistence.Data.Migrations
                         .HasFilter("\"IsActive\" = TRUE");
 
                     b.ToTable("StationCodes", (string)null);
+                });
+
+            modelBuilder.Entity("DomainLayer.Models.AttendanceModule.StationSession", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int?>("CreatedBy")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("ExpiresAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("GymId")
+                        .HasColumnType("integer");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
+
+                    b.Property<DateTime?>("RevokedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int?>("StationCodeId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("TokenHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int?>("UpdatedBy")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("GymId");
+
+                    b.HasIndex("StationCodeId");
+
+                    b.HasIndex("TokenHash")
+                        .IsUnique();
+
+                    b.ToTable("StationSessions", (string)null);
                 });
 
             modelBuilder.Entity("DomainLayer.Models.AuditModule.AuditLog", b =>
@@ -2908,11 +2975,18 @@ namespace Persistence.Data.Migrations
                         .HasForeignKey("ScheduledShiftTemplateId")
                         .OnDelete(DeleteBehavior.SetNull);
 
+                    b.HasOne("DomainLayer.Models.AttendanceModule.StationSession", "StationSession")
+                        .WithMany()
+                        .HasForeignKey("StationSessionId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
                     b.Navigation("Employee");
 
                     b.Navigation("Gym");
 
                     b.Navigation("ScheduledShiftTemplate");
+
+                    b.Navigation("StationSession");
                 });
 
             modelBuilder.Entity("DomainLayer.Models.AttendanceModule.BiometricDevice", b =>
@@ -2953,6 +3027,24 @@ namespace Persistence.Data.Migrations
                     b.Navigation("Generator");
 
                     b.Navigation("Gym");
+                });
+
+            modelBuilder.Entity("DomainLayer.Models.AttendanceModule.StationSession", b =>
+                {
+                    b.HasOne("DomainLayer.Models.OrganizationModule.Gym", "Gym")
+                        .WithMany()
+                        .HasForeignKey("GymId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("DomainLayer.Models.AttendanceModule.StationCode", "StationCode")
+                        .WithMany()
+                        .HasForeignKey("StationCodeId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("Gym");
+
+                    b.Navigation("StationCode");
                 });
 
             modelBuilder.Entity("DomainLayer.Models.EmployeeModule.Compensation", b =>

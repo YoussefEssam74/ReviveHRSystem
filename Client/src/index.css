@@ -8,8 +8,27 @@ html {
   font-family: var(--font-sans);
 }
 
-/* Decorative site background. If the asset is missing, the layout keeps its
-   solid bg-slate-50 — this degrades gracefully instead of leaving a gap. */
-.app-background {
-  background-image: url("./assets/background.svg");
+/* Kiosk viewfinder: the scanning laser that sweeps while the camera watches.
+   Layout + gradient copied from the Mock UI so the beam renders the same way. */
+.scanline {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, #22c55e, transparent);
+  pointer-events: none;
+  animation: kiosk-scan-sweep 1.4s linear infinite;
 }
+
+@keyframes kiosk-scan-sweep {
+  0% { top: 6%; }
+  100% { top: 94%; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .scanline { animation: none; opacity: 0.6; }
+}
+
+/* Kiosk cards: quick entrance for result/rejection overlays. */
+.fade-in { animation: fadeIn .25s ease; }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }

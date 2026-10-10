@@ -76,7 +76,10 @@ namespace ReviveHRSystem.IntegrationTests.Fixtures
                 builder.UseSetting("RateLimiting:StationAttendancePermits", "100000");
             });
 
-            Client = _factory.CreateClient();
+            // No cookie jar: the station session cookie set by kiosk login would otherwise
+            // leak between tests like a shared browser. Tests that need the cookie attach
+            // it explicitly to a request.
+            Client = _factory.CreateClient(new WebApplicationFactoryClientOptions { HandleCookies = false });
 
             // Migrate + seed the shared scenario (idempotent, Development-only in normal runs).
             await DevelopmentDataSeeder.SeedAsync(_factory.Services);
@@ -152,7 +155,7 @@ namespace ReviveHRSystem.IntegrationTests.Fixtures
             return token;
         }
 
-        /// <summary>Builds an authorized GET/POST request.</summary>
+        /// <summary>Builds an authorized GET/POST request (web user Bearer token).</summary>
         public HttpRequestMessage AuthorizedRequest(HttpMethod method, string url, object? body, string token)
         {
             var request = new HttpRequestMessage(method, url)
@@ -162,6 +165,24 @@ namespace ReviveHRSystem.IntegrationTests.Fixtures
             request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
             return request;
         }
+
+        /// <summary>
+        /// Builds a request authenticated as an attendance station: the opaque session
+        /// token from kiosk login travels in the X-Station-Token header, and the gym is
+        /// resolved server-side from that session (no station code in the body).
+        /// </summary>
+        public HttpRequestMessage StationRequest(HttpMethod method, string url, object? body, string stationToken)
+        {
+            var request = new HttpRequestMessage(method, url)
+            {
+                Content = body is null ? null : JsonContent.Create(body)
+            };
+            request.Headers.Add(StationTokenHeader, stationToken);
+            return request;
+        }
+
+        /// <summary>Header a station sends its session token in.</summary>
+        public const string StationTokenHeader = "X-Station-Token";
 
         private static string FindAppsettings()
         {

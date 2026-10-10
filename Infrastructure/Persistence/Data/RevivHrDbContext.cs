@@ -70,6 +70,7 @@ namespace Presistence.Data
         public DbSet<AttendanceCorrection> AttendanceCorrections => Set<AttendanceCorrection>();
         public DbSet<FaceEmbedding> FaceEmbeddings => Set<FaceEmbedding>();
         public DbSet<StationCode> StationCodes => Set<StationCode>();
+        public DbSet<StationSession> StationSessions => Set<StationSession>();
 
         // Requests
         public DbSet<EmployeeRequest> EmployeeRequests => Set<EmployeeRequest>();

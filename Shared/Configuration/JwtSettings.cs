@@ -11,7 +11,5 @@ namespace Shared.Configuration
         public int AccessTokenMinutes { get; set; } = 30;
         /// <summary>Lifetime of the temporary gym-selection session token in minutes.</summary>
         public int SelectionTokenMinutes { get; set; } = 5;
-        /// <summary>Lifetime of the station (kiosk) token in minutes — one shift (8 hours) by default.</summary>
-        public int StationTokenMinutes { get; set; } = 480;
     }
 }

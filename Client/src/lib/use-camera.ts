@@ -2,6 +2,11 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 
 const GET_MEDIA_TIMEOUT_MS = 12_000
 
+// Downscale target for uploaded frames (the face pipeline needs little detail).
+const CAPTURE_MAX_WIDTH = 480
+const CAPTURE_MAX_HEIGHT = 360
+const CAPTURE_JPEG_QUALITY = 0.72
+
 /** Shared webcam control: start/stop the stream and capture JPEG frames. */
 export function useCamera() {
   const videoRef = useRef<HTMLVideoElement | null>(null)
@@ -57,17 +62,26 @@ export function useCamera() {
     }
   }, [])
 
-  /** Captures the current frame as a JPEG data URL (null when not ready). */
+  /**
+   * Captures the current frame as a JPEG data URL (null when not ready). Frames
+   * are downscaled before upload: the always-on kiosk loop sends one every
+   * ~1.3s, and face recognition needs far less detail than the source stream.
+   */
   const capture = useCallback((): string | null => {
     const video = videoRef.current
     if (!video || video.readyState < 2 || video.videoWidth === 0) return null
+    const scale = Math.min(
+      CAPTURE_MAX_WIDTH / video.videoWidth,
+      CAPTURE_MAX_HEIGHT / video.videoHeight,
+      1,
+    )
     const canvas = document.createElement('canvas')
-    canvas.width = video.videoWidth
-    canvas.height = video.videoHeight
+    canvas.width = Math.round(video.videoWidth * scale)
+    canvas.height = Math.round(video.videoHeight * scale)
     const context = canvas.getContext('2d')
     if (!context) return null
     context.drawImage(video, 0, 0, canvas.width, canvas.height)
-    return canvas.toDataURL('image/jpeg', 0.8)
+    return canvas.toDataURL('image/jpeg', CAPTURE_JPEG_QUALITY)
   }, [])
 
   return { videoRef, active, error, start, stop, capture }

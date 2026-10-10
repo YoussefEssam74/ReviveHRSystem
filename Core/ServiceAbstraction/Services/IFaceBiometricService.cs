@@ -10,11 +10,12 @@ namespace ServiceAbstraction.Services
     {
         /// <summary>
         /// Detects a live face in the frame, matches it against enrolled employees with
-        /// access to the station's gym, and records the attendance event atomically.
-        /// <paramref name="authorizedGymId"/> is the gymId claim of the caller's token —
-        /// it must match the gym the station code resolves to.
+        /// access to the station session's gym, and records the attendance event atomicically.
+        /// <paramref name="authorizedGymId"/> is the gym derived from the validated station
+        /// session — never from the request body. <paramref name="stationSessionId"/> is the
+        /// issuing session, stored on the record for audit.
         /// </summary>
-        Task<FaceScanResponse> ScanFaceAsync(FaceScanRequest request, int? authorizedGymId = null, string? ipAddress = null, CancellationToken cancellationToken = default);
+        Task<FaceScanResponse> ScanFaceAsync(FaceScanRequest request, int? authorizedGymId = null, int? stationSessionId = null, string? ipAddress = null, CancellationToken cancellationToken = default);
 
         /// <summary>
         /// Enrolls (or replaces) an employee's face embedding from one frame.

@@ -1,1036 +1,1507 @@
 {
-  "info": {
-    "name": "Revive HR System API",
-    "_postman_id": "b7f3c1a2-5e64-4d18-9c07-2a1f0b6d84e1",
-    "description": "Revive HR System API - full surface, one folder per controller.\n\n**Auto-JWT**: a collection-level pre-request script signs in once per run and injects `Bearer {{accessToken}}` into every request, so no manual token handling is needed. Requests that must stay anonymous opt out with the header `X-Skip-Auth: true`.\n\nSelect the **Revive HR - Dev** environment before running.",
-    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
-  },
-  "event": [
-    {
-      "listen": "prerequest",
-      "script": {
-        "type": "text/javascript",
-        "exec": [
-          "/**",
-          " * Auto-JWT - signs in once per run and injects the bearer token into every request.",
-          " * Login is rate limited (10/min), so a still-valid token is always reused.",
-          " * Opt out per request with the header  X-Skip-Auth: true  (anonymous-access tests).",
-          " */",
-          "const BASE_URL = pm.environment.get('baseUrl') || pm.collectionVariables.get('baseUrl');",
-          "const LOGIN_PATH = '/api/auth/login';",
-          "",
-          "if (pm.request.headers.get('X-Skip-Auth') === 'true') {",
-          "  pm.request.headers.remove('X-Skip-Auth');",
-          "  return; // deliberately anonymous request",
-          "}",
-          "",
-          "if (pm.request.url.toString().includes(LOGIN_PATH)) {",
-          "  return; // never authenticate the login call itself",
-          "}",
-          "",
-          "// Reuse a token that is not about to expire (60s skew).",
-          "const token = pm.environment.get('accessToken');",
-          "const expiresAt = Number(pm.environment.get('accessTokenExpiresAt') || 0);",
-          "if (token && expiresAt - 60000 > Date.now()) {",
-          "  pm.request.headers.upsert({ key: 'Authorization', value: 'Bearer ' + token });",
-          "  return;",
-          "}",
-          "",
-          "const res = await pm.sendRequest({",
-          "  url: BASE_URL + LOGIN_PATH,",
-          "  method: 'POST',",
-          "  header: { 'Content-Type': 'application/json' },",
-          "  body: {",
-          "    mode: 'raw',",
-          "    raw: JSON.stringify({",
-          "      email: pm.environment.get('autoLoginEmail'),",
-          "      password: pm.environment.get('autoLoginPassword')",
-          "    })",
-          "  }",
-          "});",
-          "",
-          "if (res.code !== 200) {",
-          "  console.error('[auto-login] ' + res.code + ' ' + res.text());",
-          "  throw new Error('Auto-login failed with HTTP ' + res.code);",
-          "}",
-          "",
-          "let data = res.json();",
-          "",
-          "// Employees scoped to two gyms get a selection challenge instead of a token.",
-          "if (data.requiresGymSelection && data.tempSessionToken) {",
-          "  const preferred = Number(pm.environment.get('autoLoginGymId') || 0);",
-          "  const gym = (data.gyms || []).find(g => g.gymId === preferred) || (data.gyms || [])[0];",
-          "  if (!gym) throw new Error('Auto-login: gym selection required but no gyms returned');",
-          "  const pick = await pm.sendRequest({",
-          "    url: BASE_URL + LOGIN_PATH + '/select-gym',",
-          "    method: 'POST',",
-          "    header: { 'Content-Type': 'application/json' },",
-          "    body: { mode: 'raw', raw: JSON.stringify({ gymId: gym.gymId, tempSessionToken: data.tempSessionToken }) }",
-          "  });",
-          "  if (pick.code !== 200) {",
-          "    console.error('[auto-login] select-gym ' + pick.code + ' ' + pick.text());",
-          "    throw new Error('Auto-login gym selection failed with HTTP ' + pick.code);",
-          "  }",
-          "  data = pick.json();",
-          "}",
-          "",
-          "pm.environment.set('accessToken', data.accessToken);",
-          "pm.environment.set('accessTokenExpiresAt', String(Date.now() + Number(data.expiresInSeconds || 0) * 1000));",
-          "if (data.user) pm.environment.set('currentUser', data.user.email);",
-          "",
-          "pm.request.headers.upsert({ key: 'Authorization', value: 'Bearer ' + data.accessToken });"
-        ]
-      }
-    }
-  ],
-  "variable": [
-    {
-      "key": "baseUrl",
-      "value": "http://localhost:5248",
-      "type": "string",
-      "description": "Fallback base URL, used only when no environment is selected."
-    }
-  ],
-  "item": [
-    {
-      "name": "01 - Auth",
-      "description": "AuthController - `/api/auth`. Email + password to access token. Both endpoints are anonymous; everything else in the API needs this token.",
-      "item": [
-        {
-          "name": "Login - Admin",
-          "request": {
-            "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"email\": \"{{adminEmail}}\",\n  \"password\": \"{{adminPassword}}\"\n}",
-              "options": { "raw": { "language": "json" } }
-            },
-            "url": {
-              "raw": "{{baseUrl}}/api/auth/login",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "auth", "login"]
-            },
-            "description": "POST /api/auth/login - super admin. Returns an access token directly (no gym challenge)."
-          },
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
-                  "",
-                  "const json = pm.response.json();",
-                  "",
-                  "pm.test('Returns an access token', () =>",
-                  "  pm.expect(json.accessToken).to.be.a('string').and.not.empty);",
-                  "",
-                  "pm.test('Echoes the signed-in user', () => {",
-                  "  pm.expect(json.user.email).to.eql(pm.environment.get('adminEmail'));",
-                  "  pm.expect(json.user.id).to.be.a('number');",
-                  "});",
-                  "",
-                  "pm.test('Admin is not challenged for gym selection', () =>",
-                  "  pm.expect(json.requiresGymSelection).to.eql(false));",
-                  "",
-                  "pm.test('Advertises a positive token lifetime', () =>",
-                  "  pm.expect(json.expiresInSeconds).to.be.above(0));",
-                  "",
-                  "pm.test('Token is a JWT with three segments', () =>",
-                  "  pm.expect(json.accessToken.split('.')).to.have.lengthOf(3));",
-                  "",
-                  "// Keep the token for the rest of the run.",
-                  "pm.environment.set('accessToken', json.accessToken);",
-                  "pm.environment.set('accessTokenExpiresAt', String(Date.now() + json.expiresInSeconds * 1000));",
-                  "pm.environment.set('currentUser', json.user.email);"
-                ]
-              }
-            }
-          ]
-        },
-        {
-          "name": "Login - Employee",
-          "request": {
-            "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"email\": \"{{employeeEmail}}\",\n  \"password\": \"{{employeePassword}}\"\n}",
-              "options": { "raw": { "language": "json" } }
-            },
-            "url": {
-              "raw": "{{baseUrl}}/api/auth/login",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "auth", "login"]
-            },
-            "description": "POST /api/auth/login - employee session scoped to one gym. An employee with access to two gyms gets a selection challenge instead of a token; the test captures `tempSessionToken` so **Select Gym** can use it."
-          },
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
-                  "",
-                  "const json = pm.response.json();",
-                  "",
-                  "pm.test('Echoes the signed-in employee', () =>",
-                  "  pm.expect(json.user.email).to.eql(pm.environment.get('employeeEmail')));",
-                  "",
-                  "pm.test('Either a token or a gym challenge', () => {",
-                  "  if (json.requiresGymSelection) {",
-                  "    pm.expect(json.accessToken, 'no token before gym selection').to.eql(null);",
-                  "    pm.expect(json.tempSessionToken).to.be.a('string').and.not.empty;",
-                  "    pm.expect(json.gyms).to.be.an('array').with.length.above(0);",
-                  "    pm.environment.set('tempSessionToken', json.tempSessionToken);",
-                  "    pm.environment.set('availableGyms', JSON.stringify(json.gyms));",
-                  "  } else {",
-                  "    pm.expect(json.accessToken).to.be.a('string').and.not.empty;",
-                  "    pm.expect(json.user.gymId).to.be.a('number');",
-                  "  }",
-                  "});"
-                ]
-              }
-            }
-          ]
-        },
-        {
-          "name": "Select Gym",
-          "request": {
-            "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"gymId\": {{gymId}},\n  \"tempSessionToken\": \"{{tempSessionToken}}\"\n}",
-              "options": { "raw": { "language": "json" } }
-            },
-            "url": {
-              "raw": "{{baseUrl}}/api/auth/login/select-gym",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "auth", "login", "select-gym"]
-            },
-            "description": "POST /api/auth/login/select-gym - completes a two-gym employee login. Run **Login - Employee** first so `{{tempSessionToken}}` is populated."
-          },
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "// Skipped (not failed) when the employee has only one gym and never got a challenge.",
-                  "if (!pm.environment.get('tempSessionToken')) {",
-                  "  pm.execution.skipRequest();",
-                  "}",
-                  "",
-                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
-                  "",
-                  "const json = pm.response.json();",
-                  "",
-                  "pm.test('Returns the access token', () =>",
-                  "  pm.expect(json.accessToken).to.be.a('string').and.not.empty);",
-                  "",
-                  "pm.test('Session is scoped to the chosen gym', () =>",
-                  "  pm.expect(json.user.gymId).to.eql(Number(pm.environment.get('gymId'))));",
-                  "",
-                  "pm.test('Challenge is resolved', () =>",
-                  "  pm.expect(json.requiresGymSelection).to.eql(false));",
-                  "",
-                  "pm.environment.set('accessToken', json.accessToken);",
-                  "pm.environment.set('accessTokenExpiresAt', String(Date.now() + json.expiresInSeconds * 1000));",
-                  "pm.environment.set('currentUser', json.user.email);",
-                  "pm.environment.set('tempSessionToken', '');"
-                ]
-              }
-            }
-          ]
-        },
-        {
-          "name": "Login - Wrong Password (expect 401)",
-          "request": {
-            "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"email\": \"{{adminEmail}}\",\n  \"password\": \"definitely-wrong\"\n}",
-              "options": { "raw": { "language": "json" } }
-            },
-            "url": {
-              "raw": "{{baseUrl}}/api/auth/login",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "auth", "login"]
-            },
-            "description": "Negative test - the error is identical to an unknown email, so the endpoint cannot be used to enumerate accounts."
-          },
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('Status 401', () => pm.response.to.have.status(401));",
-                  "",
-                  "const json = pm.response.json();",
-                  "",
-                  "pm.test('Error code is INVALID_CREDENTIALS', () =>",
-                  "  pm.expect(json.error).to.eql('INVALID_CREDENTIALS'));",
-                  "",
-                  "pm.test('Uses the project error envelope', () => {",
-                  "  pm.expect(json.statusCode).to.eql(401);",
-                  "  pm.expect(json.message).to.be.a('string');",
-                  "  pm.expect(json.errors).to.be.an('array');",
-                  "});",
-                  "",
-                  "pm.test('Never leaks a token', () =>",
-                  "  pm.expect(json.accessToken).to.eql(undefined));"
-                ]
-              }
-            }
-          ]
-        },
-        {
-          "name": "Login - Missing Email (expect 400)",
-          "request": {
-            "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"password\": \"{{adminPassword}}\"\n}",
-              "options": { "raw": { "language": "json" } }
-            },
-            "url": {
-              "raw": "{{baseUrl}}/api/auth/login",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "auth", "login"]
-            },
-            "description": "Negative test - model-state validation is returned in the project envelope instead of ProblemDetails."
-          },
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('Status 400', () => pm.response.to.have.status(400));",
-                  "",
-                  "const json = pm.response.json();",
-                  "",
-                  "pm.test('Error code is VALIDATION_FAILED', () =>",
-                  "  pm.expect(json.error).to.eql('VALIDATION_FAILED'));",
-                  "",
-                  "pm.test('Reports the offending field', () => {",
-                  "  pm.expect(json.errors).to.be.an('array').with.length.above(0);",
-                  "  pm.expect(json.errors[0].field).to.be.a('string');",
-                  "});"
-                ]
-              }
-            }
-          ]
-        }
-      ]
-    },
-    {
-      "name": "02 - Attendance",
-      "description": "AttendanceController - `/api/attendance`. Public station endpoints: every request carries only the gym's 6-digit station code and the gym is resolved server-side. No JWT and no device token.\n\n`timestamp` is optional throughout - omit it to use server time. Requests are order-sensitive: run **Check In - Biometric** before the duplicate and check-out tests.",
-      "item": [
-        {
-          "name": "Check In - Biometric",
-          "request": {
-            "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"code\": \"{{gym1StationCode}}\",\n  \"employeeId\": \"{{employeeKarim}}\",\n  \"type\": \"IN\",\n  \"livenessScore\": 0.95\n}",
-              "options": { "raw": { "language": "json" } }
-            },
-            "url": {
-              "raw": "{{baseUrl}}/api/attendance/events",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "attendance", "events"]
-            },
-            "description": "POST /api/attendance/events - face check-in. A liveness score below 0.70 is rejected, so this uses 0.95."
-          },
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('Status 201 Created', () => pm.response.to.have.status(201));",
-                  "",
-                  "const json = pm.response.json();",
-                  "",
-                  "pm.test('Echoes the employee that was scanned', () =>",
-                  "  pm.expect(json.employeeId).to.eql(pm.environment.get('employeeKarim')));",
-                  "",
-                  "pm.test('Recorded as a biometric check-in', () => {",
-                  "  pm.expect(json.type).to.eql('IN');",
-                  "  pm.expect(json.method).to.eql('Biometric');",
-                  "});",
-                  "",
-                  "pm.test('Gym resolved from the station code', () => {",
-                  "  pm.expect(json.gymId).to.be.a('number');",
-                  "  pm.expect(json.gymName).to.be.a('string').and.not.empty;",
-                  "});",
-                  "",
-                  "pm.test('Returns a record id and a timestamp', () => {",
-                  "  pm.expect(json.recordId).to.be.a('string').and.not.empty;",
-                  "  pm.expect(json.timestamp).to.be.a('string');",
-                  "});",
-                  "",
-                  "pm.test('Compared against today shift', () =>",
-                  "  pm.expect(json.shiftComparison).to.eql('ON_SCHEDULE'));"
-                ]
-              }
-            }
-          ]
-        },
-        {
-          "name": "Check Out - Biometric",
-          "request": {
-            "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"code\": \"{{gym1StationCode}}\",\n  \"employeeId\": \"{{employeeKarim}}\",\n  \"type\": \"OUT\",\n  \"livenessScore\": 0.95\n}",
-              "options": { "raw": { "language": "json" } }
-            },
-            "url": {
-              "raw": "{{baseUrl}}/api/attendance/events",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "attendance", "events"]
-            },
-            "description": "POST /api/attendance/events - face check-out. Requires a check-in first, so run **Check In - Biometric** before this."
-          },
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('Status 201 Created', () => pm.response.to.have.status(201));",
-                  "",
-                  "const json = pm.response.json();",
-                  "",
-                  "pm.test('Recorded as a biometric check-out', () =>",
-                  "  pm.expect(json.type).to.eql('OUT'));",
-                  "",
-                  "pm.test('Same employee', () =>",
-                  "  pm.expect(json.employeeId).to.eql(pm.environment.get('employeeKarim')));",
-                  "",
-                  "pm.test('Returns a record id', () =>",
-                  "  pm.expect(json.recordId).to.be.a('string').and.not.empty);"
-                ]
-              }
-            }
-          ]
-        },
-        {
-          "name": "Duplicate Check In (expect 409)",
-          "request": {
-            "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"code\": \"{{gym1StationCode}}\",\n  \"employeeId\": \"{{employeeKarim}}\",\n  \"type\": \"IN\",\n  \"livenessScore\": 0.95\n}",
-              "options": { "raw": { "language": "json" } }
-            },
-            "url": {
-              "raw": "{{baseUrl}}/api/attendance/events",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "attendance", "events"]
-            },
-            "description": "Negative test - a second check-in on the same day conflicts. Run after **Check In - Biometric**."
-          },
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('Status 409 Conflict', () => pm.response.to.have.status(409));",
-                  "",
-                  "const json = pm.response.json();",
-                  "",
-                  "pm.test('Error code is ALREADY_CHECKED_IN', () =>",
-                  "  pm.expect(json.error).to.eql('ALREADY_CHECKED_IN'));",
-                  "",
-                  "pm.test('Uses the project error envelope', () => {",
-                  "  pm.expect(json.statusCode).to.eql(409);",
-                  "  pm.expect(json.message).to.be.a('string');",
-                  "});"
-                ]
-              }
-            }
-          ]
-        },
-        {
-          "name": "Check In - Low Liveness (expect 422)",
-          "request": {
-            "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"code\": \"{{gym1StationCode}}\",\n  \"employeeId\": \"{{employeeOmar}}\",\n  \"type\": \"IN\",\n  \"livenessScore\": 0.42\n}",
-              "options": { "raw": { "language": "json" } }
-            },
-            "url": {
-              "raw": "{{baseUrl}}/api/attendance/events",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "attendance", "events"]
-            },
-            "description": "Negative test - the face presented is below the 0.70 liveness threshold, so the scan is refused."
-          },
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('Status 422 Unprocessable Entity', () => pm.response.to.have.status(422));",
-                  "",
-                  "const json = pm.response.json();",
-                  "",
-                  "pm.test('Error code is LIVENESS_FAILED', () =>",
-                  "  pm.expect(json.error).to.eql('LIVENESS_FAILED'));",
-                  "",
-                  "pm.test('Uses the project error envelope', () =>",
-                  "  pm.expect(json.statusCode).to.eql(422));"
-                ]
-              }
-            }
-          ]
-        },
-        {
-          "name": "Check In - Unknown Employee (expect 404)",
-          "request": {
-            "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"code\": \"{{gym1StationCode}}\",\n  \"employeeId\": \"EMP-0000\",\n  \"type\": \"IN\",\n  \"livenessScore\": 0.9\n}",
-              "options": { "raw": { "language": "json" } }
-            },
-            "url": {
-              "raw": "{{baseUrl}}/api/attendance/events",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "attendance", "events"]
-            },
-            "description": "Negative test - no employee carries this number."
-          },
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('Status 404 Not Found', () => pm.response.to.have.status(404));",
-                  "",
-                  "const json = pm.response.json();",
-                  "",
-                  "pm.test('Error code is EMPLOYEE_NOT_FOUND', () =>",
-                  "  pm.expect(json.error).to.eql('EMPLOYEE_NOT_FOUND'));"
-                ]
-              }
-            }
-          ]
-        },
-        {
-          "name": "Check In - Bad Station Code (expect 401)",
-          "request": {
-            "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"code\": \"999999\",\n  \"employeeId\": \"{{employeeKarim}}\",\n  \"type\": \"IN\",\n  \"livenessScore\": 0.9\n}",
-              "options": { "raw": { "language": "json" } }
-            },
-            "url": {
-              "raw": "{{baseUrl}}/api/attendance/events",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "attendance", "events"]
-            },
-            "description": "Negative test - no gym owns this station code."
-          },
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('Status 401 Unauthorized', () => pm.response.to.have.status(401));",
-                  "",
-                  "const json = pm.response.json();",
-                  "",
-                  "pm.test('Error code is INVALID_STATION_CODE', () =>",
-                  "  pm.expect(json.error).to.eql('INVALID_STATION_CODE'));",
-                  "",
-                  "pm.test('Never echoes the station code back', () =>",
-                  "  pm.expect(JSON.stringify(json)).to.not.include('999999'));"
-                ]
-              }
-            }
-          ]
-        },
-        {
-          "name": "Check In - Invalid Type (expect 400)",
-          "request": {
-            "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"code\": \"{{gym1StationCode}}\",\n  \"employeeId\": \"{{employeeKarim}}\",\n  \"type\": \"JUMP\",\n  \"livenessScore\": 0.9\n}",
-              "options": { "raw": { "language": "json" } }
-            },
-            "url": {
-              "raw": "{{baseUrl}}/api/attendance/events",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "attendance", "events"]
-            },
-            "description": "Negative test - only `IN` and `OUT` are accepted."
-          },
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('Status 400 Bad Request', () => pm.response.to.have.status(400));",
-                  "",
-                  "const json = pm.response.json();",
-                  "",
-                  "pm.test('Error code is INVALID_TYPE', () =>",
-                  "  pm.expect(json.error).to.eql('INVALID_TYPE'));"
-                ]
-              }
-            }
-          ]
-        },
-        {
-          "name": "Check In - Cross Gym Denied (expect 403)",
-          "request": {
-            "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"code\": \"{{gym2StationCode}}\",\n  \"employeeId\": \"{{employeeKarim}}\",\n  \"type\": \"IN\",\n  \"livenessScore\": 0.9\n}",
-              "options": { "raw": { "language": "json" } }
-            },
-            "url": {
-              "raw": "{{baseUrl}}/api/attendance/events",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "attendance", "events"]
-            },
-            "description": "Negative test - Karim belongs to gym 1 only, so a scan at gym 2 is refused."
-          },
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('Status 403 Forbidden', () => pm.response.to.have.status(403));",
-                  "",
-                  "const json = pm.response.json();",
-                  "",
-                  "pm.test('Error code is CROSS_GYM_ACCESS_DENIED', () =>",
-                  "  pm.expect(json.error).to.eql('CROSS_GYM_ACCESS_DENIED'));"
-                ]
-              }
-            }
-          ]
-        },
-        {
-          "name": "Check In - Day Off (expect 404)",
-          "request": {
-            "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"code\": \"{{gym2StationCode}}\",\n  \"employeeId\": \"{{employeeSara}}\",\n  \"type\": \"IN\",\n  \"livenessScore\": 0.9\n}",
-              "options": { "raw": { "language": "json" } }
-            },
-            "url": {
-              "raw": "{{baseUrl}}/api/attendance/events",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "attendance", "events"]
-            },
-            "description": "Negative test - Sara has no shift scheduled today."
-          },
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('Status 404 Not Found', () => pm.response.to.have.status(404));",
-                  "",
-                  "const json = pm.response.json();",
-                  "",
-                  "pm.test('Error code is SCHEDULED_DAY_OFF', () =>",
-                  "  pm.expect(json.error).to.eql('SCHEDULED_DAY_OFF'));"
-                ]
-              }
-            }
-          ]
-        },
-        {
-          "name": "Manual Check In - Face ID Fallback",
-          "request": {
-            "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"code\": \"{{gym1StationCode}}\",\n  \"employeeId\": \"{{employeeOmar}}\",\n  \"type\": \"IN\",\n  \"reason\": \"Face ID camera offline\"\n}",
-              "options": { "raw": { "language": "json" } }
-            },
-            "url": {
-              "raw": "{{baseUrl}}/api/attendance/manual",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "attendance", "manual"]
-            },
-            "description": "POST /api/attendance/manual - station fallback when Face ID fails. No liveness score, and the reason is stored in the audit log."
-          },
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('Status 201 Created', () => pm.response.to.have.status(201));",
-                  "",
-                  "const json = pm.response.json();",
-                  "",
-                  "pm.test('Recorded as a manual check-in', () => {",
-                  "  pm.expect(json.method).to.eql('Manual');",
-                  "  pm.expect(json.type).to.eql('IN');",
-                  "});",
-                  "",
-                  "pm.test('Echoes the employee', () =>",
-                  "  pm.expect(json.employeeId).to.eql(pm.environment.get('employeeOmar')));",
-                  "",
-                  "pm.test('Resolves the gym from the station code', () =>",
-                  "  pm.expect(json.gymId).to.be.a('number'));"
-                ]
-              }
-            }
-          ]
-        }
-      ]
-    },
-    {
-      "name": "03 - Kiosk",
-      "description": "KioskController - `/api/kiosk`. The 6-digit station code is the only credential - no deviceId and no device token - so replacing broken hardware only needs the same code.\n\nCodes are never hardcoded: `{{gym1StationCode}}` / `{{gym2StationCode}}` start empty and are filled by **04 - Station Codes > Get Current Station Code** (set `gymId` to 1 or 2 first). Run that once before this folder.",
-      "item": [
-        {
-          "name": "Station Login - Gym 1",
-          "request": {
-            "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"code\": \"{{gym1StationCode}}\"\n}",
-              "options": { "raw": { "language": "json" } }
-            },
-            "url": {
-              "raw": "{{baseUrl}}/api/kiosk/login",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "kiosk", "login"]
-            },
-            "description": "POST /api/kiosk/login - station signs in and receives its gym context."
-          },
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
-                  "",
-                  "const json = pm.response.json();",
-                  "",
-                  "pm.test('Returns the station gym context', () => {",
-                  "  pm.expect(json.gymId).to.be.a('number');",
-                  "  pm.expect(json.gymName).to.be.a('string').and.not.empty;",
-                  "});",
-                  "",
-                  "pm.test('Issues no user token', () =>",
-                  "  pm.expect(json.accessToken).to.eql(undefined));",
-                  "",
-                  "// Feed the resolved gym into the Station Codes folder.",
-                  "pm.environment.set('gymId', json.gymId);",
-                  "pm.environment.set('stationGymName', json.gymName);"
-                ]
-              }
-            }
-          ]
-        },
-        {
-          "name": "Station Login - Gym 2",
-          "request": {
-            "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"code\": \"{{gym2StationCode}}\"\n}",
-              "options": { "raw": { "language": "json" } }
-            },
-            "url": {
-              "raw": "{{baseUrl}}/api/kiosk/login",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "kiosk", "login"]
-            },
-            "description": "POST /api/kiosk/login - the second gym's station resolves to a different gymId."
-          },
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
-                  "",
-                  "const json = pm.response.json();",
-                  "",
-                  "pm.test('Returns the station gym context', () => {",
-                  "  pm.expect(json.gymId).to.be.a('number');",
-                  "  pm.expect(json.gymName).to.be.a('string').and.not.empty;",
-                  "});",
-                  "",
-                  "pm.test('Resolves to a different gym than gym 1', () =>",
-                  "  pm.expect(json.gymId).to.not.eql(Number(pm.environment.get('gymId'))));"
-                ]
-              }
-            }
-          ]
-        },
-        {
-          "name": "Station Login - Wrong Code (expect 401)",
-          "request": {
-            "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"code\": \"000000\"\n}",
-              "options": { "raw": { "language": "json" } }
-            },
-            "url": {
-              "raw": "{{baseUrl}}/api/kiosk/login",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "kiosk", "login"]
-            },
-            "description": "Negative test - no gym owns this code."
-          },
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('Status 401 Unauthorized', () => pm.response.to.have.status(401));",
-                  "",
-                  "const json = pm.response.json();",
-                  "",
-                  "pm.test('Error code is INVALID_STATION_CODE', () =>",
-                  "  pm.expect(json.error).to.eql('INVALID_STATION_CODE'));"
-                ]
-              }
-            }
-          ]
-        },
-        {
-          "name": "Station Login - Short Code (expect 400)",
-          "request": {
-            "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"code\": \"12345\"\n}",
-              "options": { "raw": { "language": "json" } }
-            },
-            "url": {
-              "raw": "{{baseUrl}}/api/kiosk/login",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "kiosk", "login"]
-            },
-            "description": "Negative test - the code must be exactly 6 digits, so this fails model-state validation."
-          },
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('Status 400 Bad Request', () => pm.response.to.have.status(400));",
-                  "",
-                  "const json = pm.response.json();",
-                  "",
-                  "pm.test('Error code is VALIDATION_FAILED', () =>",
-                  "  pm.expect(json.error).to.eql('VALIDATION_FAILED'));",
-                  "",
-                  "pm.test('Points at the Code field', () =>",
-                  "  pm.expect(JSON.stringify(json.errors)).to.include('Code'));"
-                ]
-              }
-            }
-          ]
-        }
-      ]
-    },
-    {
-      "name": "04 - Station Codes",
-      "description": "StationCodesController - `/api/gyms/{gymId}/station-codes`. **Requires a JWT** - the collection auto-JWT supplies it, so nothing is pasted by hand.\n\nCodes are generated server-side and never hardcoded. Set `gymId` (1 or 2) and run **Get Current Station Code** first - its test writes the live code into `gym{{gymId}}StationCode`, which the Kiosk and Attendance folders read. Rotating a code invalidates the previous one immediately, so the Rotate test writes the new code back the same way.",
-      "item": [
-        {
-          "name": "Get Current Station Code",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{baseUrl}}/api/gyms/{{gymId}}/station-codes",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "gyms", "{{gymId}}", "station-codes"]
-            },
-            "description": "GET /api/gyms/{gymId}/station-codes - the gym's current active station code."
-          },
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
-                  "",
-                  "const json = pm.response.json();",
-                  "",
-                  "pm.test('Returns the requested gym', () =>",
-                  "  pm.expect(json.gymId).to.eql(Number(pm.environment.get('gymId'))));",
-                  "",
-                  "pm.test('Returns a 6-digit station code', () =>",
-                  "  pm.expect(json.code).to.match(/^\\d{6}$/));",
-                  "",
-                  "pm.test('Gym has a name', () =>",
-                  "  pm.expect(json.gymName).to.be.a('string').and.not.empty);",
-                  "",
-                  "pm.test('Records when the code was generated', () =>",
-                  "  pm.expect(Date.parse(json.generatedAt)).to.be.a('number'));",
-                  "",
-                  "// Keep the attendance requests aligned with the live code (never hardcoded).",
-                  "pm.environment.set('gym' + pm.environment.get('gymId') + 'StationCode', json.code);"
-                ]
-              }
-            }
-          ]
-        },
-        {
-          "name": "Rotate Station Code",
-          "request": {
-            "method": "POST",
-            "header": [],
-            "url": {
-              "raw": "{{baseUrl}}/api/gyms/{{gymId}}/station-codes",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "gyms", "{{gymId}}", "station-codes"]
-            },
-            "description": "POST /api/gyms/{gymId}/station-codes - issues a new code and invalidates the old one immediately."
-          },
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
-                  "",
-                  "const json = pm.response.json();",
-                  "",
-                  "pm.test('Returns a new 6-digit station code', () =>",
-                  "  pm.expect(json.code).to.match(/^\\d{6}$/));",
-                  "",
-                  "pm.test('Same gym as requested', () =>",
-                  "  pm.expect(json.gymId).to.eql(Number(pm.environment.get('gymId'))));",
-                  "",
-                  "pm.test('Regenerated just now', () =>",
-                  "  pm.expect(Date.parse(json.generatedAt)).to.be.closeTo(Date.now(), 60000));",
-                  "",
-                  "// Keep the attendance folder working against the rotated code (gym-aware).",
-                  "pm.environment.set('gym' + pm.environment.get('gymId') + 'StationCode', json.code);",
-                  "console.log('Station code rotated to ' + json.code);"
-                ]
-              }
-            }
-          ]
-        },
-        {
-          "name": "Get Station Code - No Token (expect 401)",
-          "request": {
-            "method": "GET",
-            "header": [
-              {
-                "key": "X-Skip-Auth",
-                "value": "true",
-                "description": "Opts this one request out of the collection's auto-JWT."
-              }
-            ],
-            "url": {
-              "raw": "{{baseUrl}}/api/gyms/{{gymId}}/station-codes",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "gyms", "{{gymId}}", "station-codes"]
-            },
-            "description": "Negative test - this is the only controller in the API that is not anonymous, so it is the one request that must prove the guard."
-          },
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('Status 401 without a bearer token', () =>",
-                  "  pm.response.to.have.status(401));",
-                  "",
-                  "pm.test('No Authorization header was sent', () =>",
-                  "  pm.expect(pm.request.headers.get('Authorization')).to.eql(undefined));",
-                  "",
-                  "pm.test('No station code leaks', () =>",
-                  "  pm.expect(pm.response.text()).to.not.match(/\"code\"\\s*:\\s*\"\\d{6}\"/));"
-                ]
-              }
-            }
-          ]
-        },
-        {
-          "name": "Get Station Code - Cross Gym (IDOR guard)",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{baseUrl}}/api/gyms/2/station-codes",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "gyms", "2", "station-codes"]
-            },
-            "description": "IDOR guard. The super admin is legitimately allowed across every gym, so this returns 200 by design; a gym-scoped employee gets 403 `GYM_ACCESS_DENIED`. Sign in as an employee in the Auth folder to exercise the guard."
-          },
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('Cross-gym access resolves against the caller role', function () {",
-                  "  if (pm.response.code === 403) {",
-                  "    pm.expect(pm.response.json().error).to.eql('GYM_ACCESS_DENIED');",
-                  "  } else {",
-                  "    pm.expect(pm.response.code, 'super admin reads across gyms by role').to.eql(200);",
-                  "    console.log('Signed in as a cross-gym role - read is allowed by design.');",
-                  "  }",
-                  "});"
-                ]
-              }
-            }
-          ]
-        }
-      ]
-    }
-  ]
+    "info":  {
+                 "name":  "Revive HR System API",
+                 "_postman_id":  "b7f3c1a2-5e64-4d18-9c07-2a1f0b6d84e1",
+                 "description":  "Revive HR System API - full surface, one folder per controller.\n\n**Auto-JWT**: a collection-level pre-request script signs in once per run and injects `Bearer {{accessToken}}` into every request, so no manual token handling is needed. Requests that must stay anonymous opt out with the header `X-Skip-Auth: true`.\n\nSelect the **Revive HR - Dev** environment before running.",
+                 "schema":  "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+             },
+    "event":  [
+                  {
+                      "listen":  "prerequest",
+                      "script":  {
+                                     "type":  "text/javascript",
+                                     "exec":  [
+                                                  "/**",
+                                                  " * Auto-JWT - signs in once per run and injects the bearer token into every request.",
+                                                  " * Login is rate limited (10/min), so a still-valid token is always reused.",
+                                                  " * Opt out per request with the header  X-Skip-Auth: true  (anonymous-access tests).",
+                                                  " */",
+                                                  "const BASE_URL = pm.environment.get(\u0027baseUrl\u0027) || pm.collectionVariables.get(\u0027baseUrl\u0027);",
+                                                  "const LOGIN_PATH = \u0027/api/auth/login\u0027;",
+                                                  "",
+                                                  "if (pm.request.headers.get(\u0027X-Skip-Auth\u0027) === \u0027true\u0027) {",
+                                                  "  pm.request.headers.remove(\u0027X-Skip-Auth\u0027);",
+                                                  "  return; // deliberately anonymous request",
+                                                  "}",
+                                                  "",
+                                                  "if (pm.request.url.toString().includes(LOGIN_PATH)) {",
+                                                  "  return; // never authenticate the login call itself",
+                                                  "}",
+                                                  "",
+                                                  "// Reuse a token that is not about to expire (60s skew).",
+                                                  "const token = pm.environment.get(\u0027accessToken\u0027);",
+                                                  "const expiresAt = Number(pm.environment.get(\u0027accessTokenExpiresAt\u0027) || 0);",
+                                                  "if (token \u0026\u0026 expiresAt - 60000 \u003e Date.now()) {",
+                                                  "  pm.request.headers.upsert({ key: \u0027Authorization\u0027, value: \u0027Bearer \u0027 + token });",
+                                                  "  return;",
+                                                  "}",
+                                                  "",
+                                                  "const res = await pm.sendRequest({",
+                                                  "  url: BASE_URL + LOGIN_PATH,",
+                                                  "  method: \u0027POST\u0027,",
+                                                  "  header: { \u0027Content-Type\u0027: \u0027application/json\u0027 },",
+                                                  "  body: {",
+                                                  "    mode: \u0027raw\u0027,",
+                                                  "    raw: JSON.stringify({",
+                                                  "      email: pm.environment.get(\u0027autoLoginEmail\u0027),",
+                                                  "      password: pm.environment.get(\u0027autoLoginPassword\u0027)",
+                                                  "    })",
+                                                  "  }",
+                                                  "});",
+                                                  "",
+                                                  "if (res.code !== 200) {",
+                                                  "  console.error(\u0027[auto-login] \u0027 + res.code + \u0027 \u0027 + res.text());",
+                                                  "  throw new Error(\u0027Auto-login failed with HTTP \u0027 + res.code);",
+                                                  "}",
+                                                  "",
+                                                  "let data = res.json();",
+                                                  "",
+                                                  "// Employees scoped to two gyms get a selection challenge instead of a token.",
+                                                  "if (data.requiresGymSelection \u0026\u0026 data.tempSessionToken) {",
+                                                  "  const preferred = Number(pm.environment.get(\u0027autoLoginGymId\u0027) || 0);",
+                                                  "  const gym = (data.gyms || []).find(g =\u003e g.gymId === preferred) || (data.gyms || [])[0];",
+                                                  "  if (!gym) throw new Error(\u0027Auto-login: gym selection required but no gyms returned\u0027);",
+                                                  "  const pick = await pm.sendRequest({",
+                                                  "    url: BASE_URL + LOGIN_PATH + \u0027/select-gym\u0027,",
+                                                  "    method: \u0027POST\u0027,",
+                                                  "    header: { \u0027Content-Type\u0027: \u0027application/json\u0027 },",
+                                                  "    body: { mode: \u0027raw\u0027, raw: JSON.stringify({ gymId: gym.gymId, tempSessionToken: data.tempSessionToken }) }",
+                                                  "  });",
+                                                  "  if (pick.code !== 200) {",
+                                                  "    console.error(\u0027[auto-login] select-gym \u0027 + pick.code + \u0027 \u0027 + pick.text());",
+                                                  "    throw new Error(\u0027Auto-login gym selection failed with HTTP \u0027 + pick.code);",
+                                                  "  }",
+                                                  "  data = pick.json();",
+                                                  "}",
+                                                  "",
+                                                  "pm.environment.set(\u0027accessToken\u0027, data.accessToken);",
+                                                  "pm.environment.set(\u0027accessTokenExpiresAt\u0027, String(Date.now() + Number(data.expiresInSeconds || 0) * 1000));",
+                                                  "if (data.user) pm.environment.set(\u0027currentUser\u0027, data.user.email);",
+                                                  "",
+                                                  "pm.request.headers.upsert({ key: \u0027Authorization\u0027, value: \u0027Bearer \u0027 + data.accessToken });"
+                                              ]
+                                 }
+                  }
+              ],
+    "variable":  [
+                     {
+                         "key":  "baseUrl",
+                         "value":  "http://localhost:5248",
+                         "type":  "string",
+                         "description":  "Fallback base URL, used only when no environment is selected."
+                     }
+                 ],
+    "item":  [
+                 {
+                     "name":  "01 - Auth",
+                     "description":  "AuthController - `/api/auth`. Email + password to access token. Both endpoints are anonymous; everything else in the API needs this token.",
+                     "item":  [
+                                  {
+                                      "name":  "Login - Admin",
+                                      "request":  {
+                                                      "method":  "POST",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json"
+                                                                     }
+                                                                 ],
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "{\n  \"email\": \"{{adminEmail}}\",\n  \"password\": \"{{adminPassword}}\"\n}",
+                                                                   "options":  {
+                                                                                   "raw":  {
+                                                                                               "language":  "json"
+                                                                                           }
+                                                                               }
+                                                               },
+                                                      "url":  {
+                                                                  "raw":  "{{baseUrl}}/api/auth/login",
+                                                                  "host":  [
+                                                                               "{{baseUrl}}"
+                                                                           ],
+                                                                  "path":  [
+                                                                               "api",
+                                                                               "auth",
+                                                                               "login"
+                                                                           ]
+                                                              },
+                                                      "description":  "POST /api/auth/login - super admin. Returns an access token directly (no gym challenge)."
+                                                  },
+                                      "event":  [
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "pm.test(\u0027Status 200\u0027, () =\u003e pm.response.to.have.status(200));",
+                                                                                    "",
+                                                                                    "const json = pm.response.json();",
+                                                                                    "",
+                                                                                    "pm.test(\u0027Returns an access token\u0027, () =\u003e",
+                                                                                    "  pm.expect(json.accessToken).to.be.a(\u0027string\u0027).and.not.empty);",
+                                                                                    "",
+                                                                                    "pm.test(\u0027Echoes the signed-in user\u0027, () =\u003e {",
+                                                                                    "  pm.expect(json.user.email).to.eql(pm.environment.get(\u0027adminEmail\u0027));",
+                                                                                    "  pm.expect(json.user.id).to.be.a(\u0027number\u0027);",
+                                                                                    "});",
+                                                                                    "",
+                                                                                    "pm.test(\u0027Admin is not challenged for gym selection\u0027, () =\u003e",
+                                                                                    "  pm.expect(json.requiresGymSelection).to.eql(false));",
+                                                                                    "",
+                                                                                    "pm.test(\u0027Advertises a positive token lifetime\u0027, () =\u003e",
+                                                                                    "  pm.expect(json.expiresInSeconds).to.be.above(0));",
+                                                                                    "",
+                                                                                    "pm.test(\u0027Token is a JWT with three segments\u0027, () =\u003e",
+                                                                                    "  pm.expect(json.accessToken.split(\u0027.\u0027)).to.have.lengthOf(3));",
+                                                                                    "",
+                                                                                    "// Keep the token for the rest of the run.",
+                                                                                    "pm.environment.set(\u0027accessToken\u0027, json.accessToken);",
+                                                                                    "pm.environment.set(\u0027accessTokenExpiresAt\u0027, String(Date.now() + json.expiresInSeconds * 1000));",
+                                                                                    "pm.environment.set(\u0027currentUser\u0027, json.user.email);"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ]
+                                  },
+                                  {
+                                      "name":  "Login - Employee",
+                                      "request":  {
+                                                      "method":  "POST",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json"
+                                                                     }
+                                                                 ],
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "{\n  \"email\": \"{{employeeEmail}}\",\n  \"password\": \"{{employeePassword}}\"\n}",
+                                                                   "options":  {
+                                                                                   "raw":  {
+                                                                                               "language":  "json"
+                                                                                           }
+                                                                               }
+                                                               },
+                                                      "url":  {
+                                                                  "raw":  "{{baseUrl}}/api/auth/login",
+                                                                  "host":  [
+                                                                               "{{baseUrl}}"
+                                                                           ],
+                                                                  "path":  [
+                                                                               "api",
+                                                                               "auth",
+                                                                               "login"
+                                                                           ]
+                                                              },
+                                                      "description":  "POST /api/auth/login - employee session scoped to one gym. An employee with access to two gyms gets a selection challenge instead of a token; the test captures `tempSessionToken` so **Select Gym** can use it."
+                                                  },
+                                      "event":  [
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "pm.test(\u0027Status 200\u0027, () =\u003e pm.response.to.have.status(200));",
+                                                                                    "",
+                                                                                    "const json = pm.response.json();",
+                                                                                    "",
+                                                                                    "pm.test(\u0027Echoes the signed-in employee\u0027, () =\u003e",
+                                                                                    "  pm.expect(json.user.email).to.eql(pm.environment.get(\u0027employeeEmail\u0027)));",
+                                                                                    "",
+                                                                                    "pm.test(\u0027Either a token or a gym challenge\u0027, () =\u003e {",
+                                                                                    "  if (json.requiresGymSelection) {",
+                                                                                    "    pm.expect(json.accessToken, \u0027no token before gym selection\u0027).to.eql(null);",
+                                                                                    "    pm.expect(json.tempSessionToken).to.be.a(\u0027string\u0027).and.not.empty;",
+                                                                                    "    pm.expect(json.gyms).to.be.an(\u0027array\u0027).with.length.above(0);",
+                                                                                    "    pm.environment.set(\u0027tempSessionToken\u0027, json.tempSessionToken);",
+                                                                                    "    pm.environment.set(\u0027availableGyms\u0027, JSON.stringify(json.gyms));",
+                                                                                    "  } else {",
+                                                                                    "    pm.expect(json.accessToken).to.be.a(\u0027string\u0027).and.not.empty;",
+                                                                                    "    pm.expect(json.user.gymId).to.be.a(\u0027number\u0027);",
+                                                                                    "  }",
+                                                                                    "});"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ]
+                                  },
+                                  {
+                                      "name":  "Select Gym",
+                                      "request":  {
+                                                      "method":  "POST",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json"
+                                                                     }
+                                                                 ],
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "{\n  \"gymId\": {{gymId}},\n  \"tempSessionToken\": \"{{tempSessionToken}}\"\n}",
+                                                                   "options":  {
+                                                                                   "raw":  {
+                                                                                               "language":  "json"
+                                                                                           }
+                                                                               }
+                                                               },
+                                                      "url":  {
+                                                                  "raw":  "{{baseUrl}}/api/auth/login/select-gym",
+                                                                  "host":  [
+                                                                               "{{baseUrl}}"
+                                                                           ],
+                                                                  "path":  [
+                                                                               "api",
+                                                                               "auth",
+                                                                               "login",
+                                                                               "select-gym"
+                                                                           ]
+                                                              },
+                                                      "description":  "POST /api/auth/login/select-gym - completes a two-gym employee login. Run **Login - Employee** first so `{{tempSessionToken}}` is populated."
+                                                  },
+                                      "event":  [
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "// Skipped (not failed) when the employee has only one gym and never got a challenge.",
+                                                                                    "if (!pm.environment.get(\u0027tempSessionToken\u0027)) {",
+                                                                                    "  pm.execution.skipRequest();",
+                                                                                    "}",
+                                                                                    "",
+                                                                                    "pm.test(\u0027Status 200\u0027, () =\u003e pm.response.to.have.status(200));",
+                                                                                    "",
+                                                                                    "const json = pm.response.json();",
+                                                                                    "",
+                                                                                    "pm.test(\u0027Returns the access token\u0027, () =\u003e",
+                                                                                    "  pm.expect(json.accessToken).to.be.a(\u0027string\u0027).and.not.empty);",
+                                                                                    "",
+                                                                                    "pm.test(\u0027Session is scoped to the chosen gym\u0027, () =\u003e",
+                                                                                    "  pm.expect(json.user.gymId).to.eql(Number(pm.environment.get(\u0027gymId\u0027))));",
+                                                                                    "",
+                                                                                    "pm.test(\u0027Challenge is resolved\u0027, () =\u003e",
+                                                                                    "  pm.expect(json.requiresGymSelection).to.eql(false));",
+                                                                                    "",
+                                                                                    "pm.environment.set(\u0027accessToken\u0027, json.accessToken);",
+                                                                                    "pm.environment.set(\u0027accessTokenExpiresAt\u0027, String(Date.now() + json.expiresInSeconds * 1000));",
+                                                                                    "pm.environment.set(\u0027currentUser\u0027, json.user.email);",
+                                                                                    "pm.environment.set(\u0027tempSessionToken\u0027, \u0027\u0027);"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ]
+                                  },
+                                  {
+                                      "name":  "Login - Wrong Password (expect 401)",
+                                      "request":  {
+                                                      "method":  "POST",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json"
+                                                                     }
+                                                                 ],
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "{\n  \"email\": \"{{adminEmail}}\",\n  \"password\": \"definitely-wrong\"\n}",
+                                                                   "options":  {
+                                                                                   "raw":  {
+                                                                                               "language":  "json"
+                                                                                           }
+                                                                               }
+                                                               },
+                                                      "url":  {
+                                                                  "raw":  "{{baseUrl}}/api/auth/login",
+                                                                  "host":  [
+                                                                               "{{baseUrl}}"
+                                                                           ],
+                                                                  "path":  [
+                                                                               "api",
+                                                                               "auth",
+                                                                               "login"
+                                                                           ]
+                                                              },
+                                                      "description":  "Negative test - the error is identical to an unknown email, so the endpoint cannot be used to enumerate accounts."
+                                                  },
+                                      "event":  [
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "pm.test(\u0027Status 401\u0027, () =\u003e pm.response.to.have.status(401));",
+                                                                                    "",
+                                                                                    "const json = pm.response.json();",
+                                                                                    "",
+                                                                                    "pm.test(\u0027Error code is INVALID_CREDENTIALS\u0027, () =\u003e",
+                                                                                    "  pm.expect(json.error).to.eql(\u0027INVALID_CREDENTIALS\u0027));",
+                                                                                    "",
+                                                                                    "pm.test(\u0027Uses the project error envelope\u0027, () =\u003e {",
+                                                                                    "  pm.expect(json.statusCode).to.eql(401);",
+                                                                                    "  pm.expect(json.message).to.be.a(\u0027string\u0027);",
+                                                                                    "  pm.expect(json.errors).to.be.an(\u0027array\u0027);",
+                                                                                    "});",
+                                                                                    "",
+                                                                                    "pm.test(\u0027Never leaks a token\u0027, () =\u003e",
+                                                                                    "  pm.expect(json.accessToken).to.eql(undefined));"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ]
+                                  },
+                                  {
+                                      "name":  "Login - Missing Email (expect 400)",
+                                      "request":  {
+                                                      "method":  "POST",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json"
+                                                                     }
+                                                                 ],
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "{\n  \"password\": \"{{adminPassword}}\"\n}",
+                                                                   "options":  {
+                                                                                   "raw":  {
+                                                                                               "language":  "json"
+                                                                                           }
+                                                                               }
+                                                               },
+                                                      "url":  {
+                                                                  "raw":  "{{baseUrl}}/api/auth/login",
+                                                                  "host":  [
+                                                                               "{{baseUrl}}"
+                                                                           ],
+                                                                  "path":  [
+                                                                               "api",
+                                                                               "auth",
+                                                                               "login"
+                                                                           ]
+                                                              },
+                                                      "description":  "Negative test - model-state validation is returned in the project envelope instead of ProblemDetails."
+                                                  },
+                                      "event":  [
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "pm.test(\u0027Status 400\u0027, () =\u003e pm.response.to.have.status(400));",
+                                                                                    "",
+                                                                                    "const json = pm.response.json();",
+                                                                                    "",
+                                                                                    "pm.test(\u0027Error code is VALIDATION_FAILED\u0027, () =\u003e",
+                                                                                    "  pm.expect(json.error).to.eql(\u0027VALIDATION_FAILED\u0027));",
+                                                                                    "",
+                                                                                    "pm.test(\u0027Reports the offending field\u0027, () =\u003e {",
+                                                                                    "  pm.expect(json.errors).to.be.an(\u0027array\u0027).with.length.above(0);",
+                                                                                    "  pm.expect(json.errors[0].field).to.be.a(\u0027string\u0027);",
+                                                                                    "});"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ]
+                                  }
+                              ]
+                 },
+                 {
+                     "name":  "02 - Attendance",
+                     "description":  "AttendanceController - `/api/attendance`. Public station endpoints: every request carries only the gym\u0027s 6-digit station code and the gym is resolved server-side. No JWT and no device token.\n\n`timestamp` is optional throughout - omit it to use server time. Requests are order-sensitive: run **Check In - Biometric** before the duplicate and check-out tests.",
+                     "item":  [
+                                  {
+                                      "name":  "Check In - Biometric",
+                                      "request":  {
+                                                      "method":  "POST",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json"
+                                                                     },
+                                                                     {
+                                                                         "key":  "X-Station-Token",
+                                                                         "value":  "{{stationToken}}",
+                                                                         "type":  "text",
+                                                                         "description":  "Station session token from Kiosk \u003e Station Login; the gym is derived from it server-side."
+                                                                     }
+                                                                 ],
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "{\n  \"employeeId\": \"{{employeeKarim}}\",\n  \"type\": \"IN\",\n  \"livenessScore\": 0.95\n}",
+                                                                   "options":  {
+                                                                                   "raw":  {
+                                                                                               "language":  "json"
+                                                                                           }
+                                                                               }
+                                                               },
+                                                      "url":  {
+                                                                  "raw":  "{{baseUrl}}/api/attendance/events",
+                                                                  "host":  [
+                                                                               "{{baseUrl}}"
+                                                                           ],
+                                                                  "path":  [
+                                                                               "api",
+                                                                               "attendance",
+                                                                               "events"
+                                                                           ]
+                                                              },
+                                                      "description":  "POST /api/attendance/events - face check-in. A liveness score below 0.70 is rejected, so this uses 0.95."
+                                                  },
+                                      "event":  [
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "pm.test(\u0027Status 201 Created\u0027, () =\u003e pm.response.to.have.status(201));",
+                                                                                    "",
+                                                                                    "const json = pm.response.json();",
+                                                                                    "",
+                                                                                    "pm.test(\u0027Echoes the employee that was scanned\u0027, () =\u003e",
+                                                                                    "  pm.expect(json.employeeId).to.eql(pm.environment.get(\u0027employeeKarim\u0027)));",
+                                                                                    "",
+                                                                                    "pm.test(\u0027Recorded as a biometric check-in\u0027, () =\u003e {",
+                                                                                    "  pm.expect(json.type).to.eql(\u0027IN\u0027);",
+                                                                                    "  pm.expect(json.method).to.eql(\u0027Biometric\u0027);",
+                                                                                    "});",
+                                                                                    "",
+                                                                                    "pm.test(\u0027Gym resolved from the station code\u0027, () =\u003e {",
+                                                                                    "  pm.expect(json.gymId).to.be.a(\u0027number\u0027);",
+                                                                                    "  pm.expect(json.gymName).to.be.a(\u0027string\u0027).and.not.empty;",
+                                                                                    "});",
+                                                                                    "",
+                                                                                    "pm.test(\u0027Returns a record id and a timestamp\u0027, () =\u003e {",
+                                                                                    "  pm.expect(json.recordId).to.be.a(\u0027string\u0027).and.not.empty;",
+                                                                                    "  pm.expect(json.timestamp).to.be.a(\u0027string\u0027);",
+                                                                                    "});",
+                                                                                    "",
+                                                                                    "pm.test(\u0027Compared against today shift\u0027, () =\u003e",
+                                                                                    "  pm.expect(json.shiftComparison).to.eql(\u0027ON_SCHEDULE\u0027));"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ]
+                                  },
+                                  {
+                                      "name":  "Check Out - Biometric",
+                                      "request":  {
+                                                      "method":  "POST",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json"
+                                                                     },
+                                                                     {
+                                                                         "key":  "X-Station-Token",
+                                                                         "value":  "{{stationToken}}",
+                                                                         "type":  "text",
+                                                                         "description":  "Station session token from Kiosk \u003e Station Login; the gym is derived from it server-side."
+                                                                     }
+                                                                 ],
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "{\n  \"employeeId\": \"{{employeeKarim}}\",\n  \"type\": \"OUT\",\n  \"livenessScore\": 0.95\n}",
+                                                                   "options":  {
+                                                                                   "raw":  {
+                                                                                               "language":  "json"
+                                                                                           }
+                                                                               }
+                                                               },
+                                                      "url":  {
+                                                                  "raw":  "{{baseUrl}}/api/attendance/events",
+                                                                  "host":  [
+                                                                               "{{baseUrl}}"
+                                                                           ],
+                                                                  "path":  [
+                                                                               "api",
+                                                                               "attendance",
+                                                                               "events"
+                                                                           ]
+                                                              },
+                                                      "description":  "POST /api/attendance/events - face check-out. Requires a check-in first, so run **Check In - Biometric** before this."
+                                                  },
+                                      "event":  [
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "pm.test(\u0027Status 201 Created\u0027, () =\u003e pm.response.to.have.status(201));",
+                                                                                    "",
+                                                                                    "const json = pm.response.json();",
+                                                                                    "",
+                                                                                    "pm.test(\u0027Recorded as a biometric check-out\u0027, () =\u003e",
+                                                                                    "  pm.expect(json.type).to.eql(\u0027OUT\u0027));",
+                                                                                    "",
+                                                                                    "pm.test(\u0027Same employee\u0027, () =\u003e",
+                                                                                    "  pm.expect(json.employeeId).to.eql(pm.environment.get(\u0027employeeKarim\u0027)));",
+                                                                                    "",
+                                                                                    "pm.test(\u0027Returns a record id\u0027, () =\u003e",
+                                                                                    "  pm.expect(json.recordId).to.be.a(\u0027string\u0027).and.not.empty);"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ]
+                                  },
+                                  {
+                                      "name":  "Duplicate Check In (expect 409)",
+                                      "request":  {
+                                                      "method":  "POST",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json"
+                                                                     },
+                                                                     {
+                                                                         "key":  "X-Station-Token",
+                                                                         "value":  "{{stationToken}}",
+                                                                         "type":  "text",
+                                                                         "description":  "Station session token from Kiosk \u003e Station Login; the gym is derived from it server-side."
+                                                                     }
+                                                                 ],
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "{\n  \"employeeId\": \"{{employeeKarim}}\",\n  \"type\": \"IN\",\n  \"livenessScore\": 0.95\n}",
+                                                                   "options":  {
+                                                                                   "raw":  {
+                                                                                               "language":  "json"
+                                                                                           }
+                                                                               }
+                                                               },
+                                                      "url":  {
+                                                                  "raw":  "{{baseUrl}}/api/attendance/events",
+                                                                  "host":  [
+                                                                               "{{baseUrl}}"
+                                                                           ],
+                                                                  "path":  [
+                                                                               "api",
+                                                                               "attendance",
+                                                                               "events"
+                                                                           ]
+                                                              },
+                                                      "description":  "Negative test - a second check-in on the same day conflicts. Run after **Check In - Biometric**."
+                                                  },
+                                      "event":  [
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "pm.test(\u0027Status 409 Conflict\u0027, () =\u003e pm.response.to.have.status(409));",
+                                                                                    "",
+                                                                                    "const json = pm.response.json();",
+                                                                                    "",
+                                                                                    "pm.test(\u0027Error code is ALREADY_CHECKED_IN\u0027, () =\u003e",
+                                                                                    "  pm.expect(json.error).to.eql(\u0027ALREADY_CHECKED_IN\u0027));",
+                                                                                    "",
+                                                                                    "pm.test(\u0027Uses the project error envelope\u0027, () =\u003e {",
+                                                                                    "  pm.expect(json.statusCode).to.eql(409);",
+                                                                                    "  pm.expect(json.message).to.be.a(\u0027string\u0027);",
+                                                                                    "});"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ]
+                                  },
+                                  {
+                                      "name":  "Check In - Low Liveness (expect 422)",
+                                      "request":  {
+                                                      "method":  "POST",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json"
+                                                                     },
+                                                                     {
+                                                                         "key":  "X-Station-Token",
+                                                                         "value":  "{{stationToken}}",
+                                                                         "type":  "text",
+                                                                         "description":  "Station session token from Kiosk \u003e Station Login; the gym is derived from it server-side."
+                                                                     }
+                                                                 ],
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "{\n  \"employeeId\": \"{{employeeOmar}}\",\n  \"type\": \"IN\",\n  \"livenessScore\": 0.42\n}",
+                                                                   "options":  {
+                                                                                   "raw":  {
+                                                                                               "language":  "json"
+                                                                                           }
+                                                                               }
+                                                               },
+                                                      "url":  {
+                                                                  "raw":  "{{baseUrl}}/api/attendance/events",
+                                                                  "host":  [
+                                                                               "{{baseUrl}}"
+                                                                           ],
+                                                                  "path":  [
+                                                                               "api",
+                                                                               "attendance",
+                                                                               "events"
+                                                                           ]
+                                                              },
+                                                      "description":  "Negative test - the face presented is below the 0.70 liveness threshold, so the scan is refused."
+                                                  },
+                                      "event":  [
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "pm.test(\u0027Status 422 Unprocessable Entity\u0027, () =\u003e pm.response.to.have.status(422));",
+                                                                                    "",
+                                                                                    "const json = pm.response.json();",
+                                                                                    "",
+                                                                                    "pm.test(\u0027Error code is LIVENESS_FAILED\u0027, () =\u003e",
+                                                                                    "  pm.expect(json.error).to.eql(\u0027LIVENESS_FAILED\u0027));",
+                                                                                    "",
+                                                                                    "pm.test(\u0027Uses the project error envelope\u0027, () =\u003e",
+                                                                                    "  pm.expect(json.statusCode).to.eql(422));"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ]
+                                  },
+                                  {
+                                      "name":  "Check In - Unknown Employee (expect 404)",
+                                      "request":  {
+                                                      "method":  "POST",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json"
+                                                                     },
+                                                                     {
+                                                                         "key":  "X-Station-Token",
+                                                                         "value":  "{{stationToken}}",
+                                                                         "type":  "text",
+                                                                         "description":  "Station session token from Kiosk \u003e Station Login; the gym is derived from it server-side."
+                                                                     }
+                                                                 ],
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "{\n  \"employeeId\": \"EMP-0000\",\n  \"type\": \"IN\",\n  \"livenessScore\": 0.9\n}",
+                                                                   "options":  {
+                                                                                   "raw":  {
+                                                                                               "language":  "json"
+                                                                                           }
+                                                                               }
+                                                               },
+                                                      "url":  {
+                                                                  "raw":  "{{baseUrl}}/api/attendance/events",
+                                                                  "host":  [
+                                                                               "{{baseUrl}}"
+                                                                           ],
+                                                                  "path":  [
+                                                                               "api",
+                                                                               "attendance",
+                                                                               "events"
+                                                                           ]
+                                                              },
+                                                      "description":  "Negative test - no employee carries this number."
+                                                  },
+                                      "event":  [
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "pm.test(\u0027Status 404 Not Found\u0027, () =\u003e pm.response.to.have.status(404));",
+                                                                                    "",
+                                                                                    "const json = pm.response.json();",
+                                                                                    "",
+                                                                                    "pm.test(\u0027Error code is EMPLOYEE_NOT_FOUND\u0027, () =\u003e",
+                                                                                    "  pm.expect(json.error).to.eql(\u0027EMPLOYEE_NOT_FOUND\u0027));"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ]
+                                  },
+                                  {
+                                      "name":  "Check In - Bad Station Session (expect 401)",
+                                      "request":  {
+                                                      "method":  "POST",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json"
+                                                                     },
+                                                                     {
+                                                                         "key":  "X-Station-Token",
+                                                                         "value":  "{{stationToken}}",
+                                                                         "type":  "text",
+                                                                         "description":  "Station session token from Kiosk \u003e Station Login; the gym is derived from it server-side."
+                                                                     }
+                                                                 ],
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "{\n  \"employeeId\": \"{{employeeKarim}}\",\n  \"type\": \"IN\",\n  \"livenessScore\": 0.9\n}",
+                                                                   "options":  {
+                                                                                   "raw":  {
+                                                                                               "language":  "json"
+                                                                                           }
+                                                                               }
+                                                               },
+                                                      "url":  {
+                                                                  "raw":  "{{baseUrl}}/api/attendance/events",
+                                                                  "host":  [
+                                                                               "{{baseUrl}}"
+                                                                           ],
+                                                                  "path":  [
+                                                                               "api",
+                                                                               "attendance",
+                                                                               "events"
+                                                                           ]
+                                                              },
+                                                      "description":  "POST /api/attendance/events with a token that matches no stored session hash: 401 (the station credential is opaque and DB-backed, so there is no \"wrong code\" case here)."
+                                                  },
+                                      "event":  [
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "pm.test(\u0027Status 401 Unauthorized\u0027, () =\u003e pm.response.to.have.status(401));",
+                                                                                    "",
+                                                                                    "const json = pm.response.json();",
+                                                                                    "",
+                                                                                    "pm.test(\u0027Error code is INVALID_STATION_CODE\u0027, () =\u003e",
+                                                                                    "  pm.expect(json.error).to.eql(\u0027INVALID_STATION_CODE\u0027));",
+                                                                                    "",
+                                                                                    "pm.test(\u0027Never echoes the station code back\u0027, () =\u003e",
+                                                                                    "  pm.expect(JSON.stringify(json)).to.not.include(\u0027999999\u0027));"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ]
+                                  },
+                                  {
+                                      "name":  "Check In - Invalid Type (expect 400)",
+                                      "request":  {
+                                                      "method":  "POST",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json"
+                                                                     },
+                                                                     {
+                                                                         "key":  "X-Station-Token",
+                                                                         "value":  "{{stationToken}}",
+                                                                         "type":  "text",
+                                                                         "description":  "Station session token from Kiosk \u003e Station Login; the gym is derived from it server-side."
+                                                                     }
+                                                                 ],
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "{\n  \"employeeId\": \"{{employeeKarim}}\",\n  \"type\": \"JUMP\",\n  \"livenessScore\": 0.9\n}",
+                                                                   "options":  {
+                                                                                   "raw":  {
+                                                                                               "language":  "json"
+                                                                                           }
+                                                                               }
+                                                               },
+                                                      "url":  {
+                                                                  "raw":  "{{baseUrl}}/api/attendance/events",
+                                                                  "host":  [
+                                                                               "{{baseUrl}}"
+                                                                           ],
+                                                                  "path":  [
+                                                                               "api",
+                                                                               "attendance",
+                                                                               "events"
+                                                                           ]
+                                                              },
+                                                      "description":  "Negative test - only `IN` and `OUT` are accepted."
+                                                  },
+                                      "event":  [
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "pm.test(\u0027Status 400 Bad Request\u0027, () =\u003e pm.response.to.have.status(400));",
+                                                                                    "",
+                                                                                    "const json = pm.response.json();",
+                                                                                    "",
+                                                                                    "pm.test(\u0027Error code is INVALID_TYPE\u0027, () =\u003e",
+                                                                                    "  pm.expect(json.error).to.eql(\u0027INVALID_TYPE\u0027));"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ]
+                                  },
+                                  {
+                                      "name":  "Check In - Cross Gym Denied (expect 403)",
+                                      "request":  {
+                                                      "method":  "POST",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json"
+                                                                     },
+                                                                     {
+                                                                         "key":  "X-Station-Token",
+                                                                         "value":  "{{stationTokenGym2}}",
+                                                                         "type":  "text",
+                                                                         "description":  "Station session token from Kiosk \u003e Station Login; the gym is derived from it server-side."
+                                                                     }
+                                                                 ],
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "{\n  \"employeeId\": \"{{employeeKarim}}\",\n  \"type\": \"IN\",\n  \"livenessScore\": 0.9\n}",
+                                                                   "options":  {
+                                                                                   "raw":  {
+                                                                                               "language":  "json"
+                                                                                           }
+                                                                               }
+                                                               },
+                                                      "url":  {
+                                                                  "raw":  "{{baseUrl}}/api/attendance/events",
+                                                                  "host":  [
+                                                                               "{{baseUrl}}"
+                                                                           ],
+                                                                  "path":  [
+                                                                               "api",
+                                                                               "attendance",
+                                                                               "events"
+                                                                           ]
+                                                              },
+                                                      "description":  "Negative test - Karim belongs to gym 1 only, so a scan at gym 2 is refused."
+                                                  },
+                                      "event":  [
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "pm.test(\u0027Status 403 Forbidden\u0027, () =\u003e pm.response.to.have.status(403));",
+                                                                                    "",
+                                                                                    "const json = pm.response.json();",
+                                                                                    "",
+                                                                                    "pm.test(\u0027Error code is CROSS_GYM_ACCESS_DENIED\u0027, () =\u003e",
+                                                                                    "  pm.expect(json.error).to.eql(\u0027CROSS_GYM_ACCESS_DENIED\u0027));"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ]
+                                  },
+                                  {
+                                      "name":  "Check In - Day Off (expect 404)",
+                                      "request":  {
+                                                      "method":  "POST",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json"
+                                                                     },
+                                                                     {
+                                                                         "key":  "X-Station-Token",
+                                                                         "value":  "{{stationTokenGym2}}",
+                                                                         "type":  "text",
+                                                                         "description":  "Station session token from Kiosk \u003e Station Login; the gym is derived from it server-side."
+                                                                     }
+                                                                 ],
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "{\n  \"employeeId\": \"{{employeeSara}}\",\n  \"type\": \"IN\",\n  \"livenessScore\": 0.9\n}",
+                                                                   "options":  {
+                                                                                   "raw":  {
+                                                                                               "language":  "json"
+                                                                                           }
+                                                                               }
+                                                               },
+                                                      "url":  {
+                                                                  "raw":  "{{baseUrl}}/api/attendance/events",
+                                                                  "host":  [
+                                                                               "{{baseUrl}}"
+                                                                           ],
+                                                                  "path":  [
+                                                                               "api",
+                                                                               "attendance",
+                                                                               "events"
+                                                                           ]
+                                                              },
+                                                      "description":  "Negative test - Sara has no shift scheduled today."
+                                                  },
+                                      "event":  [
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "pm.test(\u0027Status 404 Not Found\u0027, () =\u003e pm.response.to.have.status(404));",
+                                                                                    "",
+                                                                                    "const json = pm.response.json();",
+                                                                                    "",
+                                                                                    "pm.test(\u0027Error code is SCHEDULED_DAY_OFF\u0027, () =\u003e",
+                                                                                    "  pm.expect(json.error).to.eql(\u0027SCHEDULED_DAY_OFF\u0027));"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ]
+                                  },
+                                  {
+                                      "name":  "Manual Check In - Face ID Fallback",
+                                      "request":  {
+                                                      "method":  "POST",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json"
+                                                                     },
+                                                                     {
+                                                                         "key":  "X-Station-Token",
+                                                                         "value":  "{{stationToken}}",
+                                                                         "type":  "text",
+                                                                         "description":  "Station session token from Kiosk \u003e Station Login; the gym is derived from it server-side."
+                                                                     }
+                                                                 ],
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "{\n  \"employeeId\": \"{{employeeOmar}}\",\n  \"type\": \"IN\",\n  \"reason\": \"Face ID camera offline\"\n}",
+                                                                   "options":  {
+                                                                                   "raw":  {
+                                                                                               "language":  "json"
+                                                                                           }
+                                                                               }
+                                                               },
+                                                      "url":  {
+                                                                  "raw":  "{{baseUrl}}/api/attendance/manual",
+                                                                  "host":  [
+                                                                               "{{baseUrl}}"
+                                                                           ],
+                                                                  "path":  [
+                                                                               "api",
+                                                                               "attendance",
+                                                                               "manual"
+                                                                           ]
+                                                              },
+                                                      "description":  "POST /api/attendance/manual - station fallback when Face ID fails. No liveness score, and the reason is stored in the audit log."
+                                                  },
+                                      "event":  [
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "pm.test(\u0027Status 201 Created\u0027, () =\u003e pm.response.to.have.status(201));",
+                                                                                    "",
+                                                                                    "const json = pm.response.json();",
+                                                                                    "",
+                                                                                    "pm.test(\u0027Recorded as a manual check-in\u0027, () =\u003e {",
+                                                                                    "  pm.expect(json.method).to.eql(\u0027Manual\u0027);",
+                                                                                    "  pm.expect(json.type).to.eql(\u0027IN\u0027);",
+                                                                                    "});",
+                                                                                    "",
+                                                                                    "pm.test(\u0027Echoes the employee\u0027, () =\u003e",
+                                                                                    "  pm.expect(json.employeeId).to.eql(pm.environment.get(\u0027employeeOmar\u0027)));",
+                                                                                    "",
+                                                                                    "pm.test(\u0027Resolves the gym from the station code\u0027, () =\u003e",
+                                                                                    "  pm.expect(json.gymId).to.be.a(\u0027number\u0027));"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ]
+                                  },
+                                  {
+                                      "name":  "Station Summary - Gym Dashboard",
+                                      "request":  {
+                                                      "method":  "GET",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "X-Station-Token",
+                                                                         "value":  "{{stationToken}}",
+                                                                         "type":  "text",
+                                                                         "description":  "Station session token from Kiosk \u003e Station Login."
+                                                                     }
+                                                                 ],
+                                                      "url":  {
+                                                                  "raw":  "{{baseUrl}}/api/attendance/station-summary",
+                                                                  "host":  [
+                                                                               "{{baseUrl}}"
+                                                                           ],
+                                                                  "path":  [
+                                                                               "api",
+                                                                               "attendance",
+                                                                               "station-summary"
+                                                                           ]
+                                                              },
+                                                      "description":  "GET /api/attendance/station-summary - today counters and recent feed for the station gym (the kiosk dashboard data)."
+                                                  },
+                                      "event":  [
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "pm.test(\u0027Status 200\u0027, () =\u003e pm.response.to.have.status(200));",
+                                                                                    "",
+                                                                                    "const json = pm.response.json();",
+                                                                                    "",
+                                                                                    "pm.test(\u0027Reports counters\u0027, () =\u003e {",
+                                                                                    "  pm.expect(json.presentCount).to.be.a(\u0027number\u0027);",
+                                                                                    "  pm.expect(json.scheduledTodayCount).to.be.a(\u0027number\u0027);",
+                                                                                    "});",
+                                                                                    "",
+                                                                                    "pm.test(\u0027Feed rows carry employee + status\u0027, () =\u003e",
+                                                                                    "  pm.expect(json.records).to.be.an(\u0027array\u0027));"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ]
+                                  }
+                              ]
+                 },
+                 {
+                     "name":  "03 - Kiosk",
+                     "description":  "KioskController - `/api/kiosk`. The 6-digit station code is the only credential - no deviceId and no device token - so replacing broken hardware only needs the same code.\n\nCodes are never hardcoded: `{{gym1StationCode}}` / `{{gym2StationCode}}` start empty and are filled by **04 - Station Codes \u003e Get Current Station Code** (set `gymId` to 1 or 2 first). Run that once before this folder.",
+                     "item":  [
+                                  {
+                                      "name":  "Station Login - Gym 1",
+                                      "request":  {
+                                                      "method":  "POST",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json"
+                                                                     }
+                                                                 ],
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "{\n  \"code\": \"{{gym1StationCode}}\"\n}",
+                                                                   "options":  {
+                                                                                   "raw":  {
+                                                                                               "language":  "json"
+                                                                                           }
+                                                                               }
+                                                               },
+                                                      "url":  {
+                                                                  "raw":  "{{baseUrl}}/api/kiosk/login",
+                                                                  "host":  [
+                                                                               "{{baseUrl}}"
+                                                                           ],
+                                                                  "path":  [
+                                                                               "api",
+                                                                               "kiosk",
+                                                                               "login"
+                                                                           ]
+                                                              },
+                                                      "description":  "POST /api/kiosk/login - station signs in and receives its gym context."
+                                                  },
+                                      "event":  [
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "pm.test(\u0027Status 200\u0027, () =\u003e pm.response.to.have.status(200));",
+                                                                                    "",
+                                                                                    "const json = pm.response.json();",
+                                                                                    "",
+                                                                                    "pm.test(\u0027Returns the station gym context\u0027, () =\u003e {",
+                                                                                    "  pm.expect(json.gymId).to.be.a(\u0027number\u0027);",
+                                                                                    "  pm.expect(json.gymName).to.be.a(\u0027string\u0027).and.not.empty;",
+                                                                                    "});",
+                                                                                    "",
+                                                                                    "pm.test(\u0027Issues no user token\u0027, () =\u003e",
+                                                                                    "  pm.expect(json.accessToken).to.eql(undefined));",
+                                                                                    "",
+                                                                                    "// Feed the resolved gym into the Station Codes folder.",
+                                                                                    "pm.environment.set(\u0027gymId\u0027, json.gymId);",
+                                                                                    "// Opaque station session token (sent as X-Station-Token afterwards).",
+                                                                                    "pm.environment.set(\u0027stationToken\u0027, json.token);",
+                                                                                    "console.log(\u0027Station session valid until \u0027 + json.sessionExpiresAtUtc);",
+                                                                                    "pm.environment.set(\u0027stationGymName\u0027, json.gymName);"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ]
+                                  },
+                                  {
+                                      "name":  "Station Login - Gym 2",
+                                      "request":  {
+                                                      "method":  "POST",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json"
+                                                                     }
+                                                                 ],
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "{\n  \"code\": \"{{gym2StationCode}}\"\n}",
+                                                                   "options":  {
+                                                                                   "raw":  {
+                                                                                               "language":  "json"
+                                                                                           }
+                                                                               }
+                                                               },
+                                                      "url":  {
+                                                                  "raw":  "{{baseUrl}}/api/kiosk/login",
+                                                                  "host":  [
+                                                                               "{{baseUrl}}"
+                                                                           ],
+                                                                  "path":  [
+                                                                               "api",
+                                                                               "kiosk",
+                                                                               "login"
+                                                                           ]
+                                                              },
+                                                      "description":  "POST /api/kiosk/login - the second gym\u0027s station resolves to a different gymId."
+                                                  },
+                                      "event":  [
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "pm.test(\u0027Status 200\u0027, () =\u003e pm.response.to.have.status(200));",
+                                                                                    "",
+                                                                                    "const json = pm.response.json();",
+                                                                                    "",
+                                                                                    "pm.test(\u0027Returns the station gym context\u0027, () =\u003e {",
+                                                                                    "  pm.expect(json.gymId).to.be.a(\u0027number\u0027);",
+                                                                                    "  pm.expect(json.gymName).to.be.a(\u0027string\u0027).and.not.empty;",
+                                                                                    "});",
+                                                                                    "",
+                                                                                    "pm.test(\u0027Resolves to a different gym than gym 1\u0027, () =\u003e",
+                                                                                    "  pm.expect(json.gymId).to.not.eql(Number(pm.environment.get(\u0027gymId\u0027))));",
+                                                                                    "// The gym-2 kiosk\u0027s session token, used by the cross-gym attendance requests.",
+                                                                                    "pm.environment.set(\u0027stationTokenGym2\u0027, json.token);",
+                                                                                    "pm.environment.set(\u0027stationGymName\u0027, json.gymName);"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ]
+                                  },
+                                  {
+                                      "name":  "Station Login - Wrong Code (expect 401)",
+                                      "request":  {
+                                                      "method":  "POST",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json"
+                                                                     }
+                                                                 ],
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "{\n  \"code\": \"000000\"\n}",
+                                                                   "options":  {
+                                                                                   "raw":  {
+                                                                                               "language":  "json"
+                                                                                           }
+                                                                               }
+                                                               },
+                                                      "url":  {
+                                                                  "raw":  "{{baseUrl}}/api/kiosk/login",
+                                                                  "host":  [
+                                                                               "{{baseUrl}}"
+                                                                           ],
+                                                                  "path":  [
+                                                                               "api",
+                                                                               "kiosk",
+                                                                               "login"
+                                                                           ]
+                                                              },
+                                                      "description":  "Negative test - no gym owns this code."
+                                                  },
+                                      "event":  [
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "pm.test(\u0027Status 401 Unauthorized\u0027, () =\u003e pm.response.to.have.status(401));",
+                                                                                    "",
+                                                                                    "const json = pm.response.json();",
+                                                                                    "",
+                                                                                    "pm.test(\u0027Reports the invalid or expired code\u0027, () =\u003e",
+                                                                                    "  pm.expect(json.errorMessage).to.eql(\u0027Invalid or expired station code.\u0027));"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ]
+                                  },
+                                  {
+                                      "name":  "Station Login - Short Code (expect 400)",
+                                      "request":  {
+                                                      "method":  "POST",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "Content-Type",
+                                                                         "value":  "application/json"
+                                                                     }
+                                                                 ],
+                                                      "body":  {
+                                                                   "mode":  "raw",
+                                                                   "raw":  "{\n  \"code\": \"12345\"\n}",
+                                                                   "options":  {
+                                                                                   "raw":  {
+                                                                                               "language":  "json"
+                                                                                           }
+                                                                               }
+                                                               },
+                                                      "url":  {
+                                                                  "raw":  "{{baseUrl}}/api/kiosk/login",
+                                                                  "host":  [
+                                                                               "{{baseUrl}}"
+                                                                           ],
+                                                                  "path":  [
+                                                                               "api",
+                                                                               "kiosk",
+                                                                               "login"
+                                                                           ]
+                                                              },
+                                                      "description":  "Negative test - the code must be exactly 6 digits, so this fails model-state validation."
+                                                  },
+                                      "event":  [
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "pm.test(\u0027Status 400 Bad Request\u0027, () =\u003e pm.response.to.have.status(400));",
+                                                                                    "",
+                                                                                    "const json = pm.response.json();",
+                                                                                    "",
+                                                                                    "pm.test(\u0027Validation error envelope\u0027, () =\u003e",
+                                                                                    "  pm.expect(json.errorMessage).to.eql(\u0027Validation Error\u0027));",
+                                                                                    "",
+                                                                                    "pm.test(\u0027Points at the Code field\u0027, () =\u003e",
+                                                                                    "  pm.expect(JSON.stringify(json.validationErrors)).to.include(\u0027code\u0027));"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ]
+                                  }
+                              ]
+                 },
+                 {
+                     "name":  "04 - Station Codes",
+                     "description":  "StationCodesController - `/api/gyms/{gymId}/station-codes`. **Requires a JWT** - the collection auto-JWT supplies it, so nothing is pasted by hand.\n\nCodes are generated server-side and never hardcoded. Set `gymId` (1 or 2) and run **Get Current Station Code** first - its test writes the live code into `gym{{gymId}}StationCode`, which the Kiosk and Attendance folders read. Rotating a code invalidates the previous one immediately, so the Rotate test writes the new code back the same way.",
+                     "item":  [
+                                  {
+                                      "name":  "Get Current Station Code",
+                                      "request":  {
+                                                      "method":  "GET",
+                                                      "header":  [
+
+                                                                 ],
+                                                      "url":  {
+                                                                  "raw":  "{{baseUrl}}/api/gyms/{{gymId}}/station-codes",
+                                                                  "host":  [
+                                                                               "{{baseUrl}}"
+                                                                           ],
+                                                                  "path":  [
+                                                                               "api",
+                                                                               "gyms",
+                                                                               "{{gymId}}",
+                                                                               "station-codes"
+                                                                           ]
+                                                              },
+                                                      "description":  "GET /api/gyms/{gymId}/station-codes - the gym\u0027s current active station code."
+                                                  },
+                                      "event":  [
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "pm.test(\u0027Status 200\u0027, () =\u003e pm.response.to.have.status(200));",
+                                                                                    "",
+                                                                                    "const json = pm.response.json();",
+                                                                                    "",
+                                                                                    "pm.test(\u0027Returns the requested gym\u0027, () =\u003e",
+                                                                                    "  pm.expect(json.gymId).to.eql(Number(pm.environment.get(\u0027gymId\u0027))));",
+                                                                                    "",
+                                                                                    "pm.test(\u0027Returns a 6-digit station code\u0027, () =\u003e",
+                                                                                    "  pm.expect(json.code).to.match(/^\\d{6}$/));",
+                                                                                    "",
+                                                                                    "pm.test(\u0027Gym has a name\u0027, () =\u003e",
+                                                                                    "  pm.expect(json.gymName).to.be.a(\u0027string\u0027).and.not.empty);",
+                                                                                    "",
+                                                                                    "pm.test(\u0027Records when the code was generated\u0027, () =\u003e",
+                                                                                    "  pm.expect(Date.parse(json.generatedAt)).to.be.a(\u0027number\u0027));",
+                                                                                    "",
+                                                                                    "// Keep the attendance requests aligned with the live code (never hardcoded).",
+                                                                                    "pm.environment.set(\u0027gym\u0027 + pm.environment.get(\u0027gymId\u0027) + \u0027StationCode\u0027, json.code);"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ]
+                                  },
+                                  {
+                                      "name":  "Rotate Station Code",
+                                      "request":  {
+                                                      "method":  "POST",
+                                                      "header":  [
+
+                                                                 ],
+                                                      "url":  {
+                                                                  "raw":  "{{baseUrl}}/api/gyms/{{gymId}}/station-codes",
+                                                                  "host":  [
+                                                                               "{{baseUrl}}"
+                                                                           ],
+                                                                  "path":  [
+                                                                               "api",
+                                                                               "gyms",
+                                                                               "{{gymId}}",
+                                                                               "station-codes"
+                                                                           ]
+                                                              },
+                                                      "description":  "POST /api/gyms/{gymId}/station-codes - issues a new code and invalidates the old one immediately."
+                                                  },
+                                      "event":  [
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "pm.test(\u0027Status 200\u0027, () =\u003e pm.response.to.have.status(200));",
+                                                                                    "",
+                                                                                    "const json = pm.response.json();",
+                                                                                    "",
+                                                                                    "pm.test(\u0027Returns a new 6-digit station code\u0027, () =\u003e",
+                                                                                    "  pm.expect(json.code).to.match(/^\\d{6}$/));",
+                                                                                    "",
+                                                                                    "pm.test(\u0027Same gym as requested\u0027, () =\u003e",
+                                                                                    "  pm.expect(json.gymId).to.eql(Number(pm.environment.get(\u0027gymId\u0027))));",
+                                                                                    "",
+                                                                                    "pm.test(\u0027Regenerated just now\u0027, () =\u003e",
+                                                                                    "  pm.expect(Date.parse(json.generatedAt)).to.be.closeTo(Date.now(), 60000));",
+                                                                                    "",
+                                                                                    "// Keep the attendance folder working against the rotated code (gym-aware).",
+                                                                                    "pm.environment.set(\u0027gym\u0027 + pm.environment.get(\u0027gymId\u0027) + \u0027StationCode\u0027, json.code);",
+                                                                                    "console.log(\u0027Station code rotated to \u0027 + json.code);"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ]
+                                  },
+                                  {
+                                      "name":  "Get Station Code - No Token (expect 401)",
+                                      "request":  {
+                                                      "method":  "GET",
+                                                      "header":  [
+                                                                     {
+                                                                         "key":  "X-Skip-Auth",
+                                                                         "value":  "true",
+                                                                         "description":  "Opts this one request out of the collection\u0027s auto-JWT."
+                                                                     }
+                                                                 ],
+                                                      "url":  {
+                                                                  "raw":  "{{baseUrl}}/api/gyms/{{gymId}}/station-codes",
+                                                                  "host":  [
+                                                                               "{{baseUrl}}"
+                                                                           ],
+                                                                  "path":  [
+                                                                               "api",
+                                                                               "gyms",
+                                                                               "{{gymId}}",
+                                                                               "station-codes"
+                                                                           ]
+                                                              },
+                                                      "description":  "Negative test - this is the only controller in the API that is not anonymous, so it is the one request that must prove the guard."
+                                                  },
+                                      "event":  [
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "pm.test(\u0027Status 401 without a bearer token\u0027, () =\u003e",
+                                                                                    "  pm.response.to.have.status(401));",
+                                                                                    "",
+                                                                                    "pm.test(\u0027No Authorization header was sent\u0027, () =\u003e",
+                                                                                    "  pm.expect(pm.request.headers.get(\u0027Authorization\u0027)).to.eql(undefined));",
+                                                                                    "",
+                                                                                    "pm.test(\u0027No station code leaks\u0027, () =\u003e",
+                                                                                    "  pm.expect(pm.response.text()).to.not.match(/\"code\"\\s*:\\s*\"\\d{6}\"/));"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ]
+                                  },
+                                  {
+                                      "name":  "Get Station Code - Cross Gym (IDOR guard)",
+                                      "request":  {
+                                                      "method":  "GET",
+                                                      "header":  [
+
+                                                                 ],
+                                                      "url":  {
+                                                                  "raw":  "{{baseUrl}}/api/gyms/2/station-codes",
+                                                                  "host":  [
+                                                                               "{{baseUrl}}"
+                                                                           ],
+                                                                  "path":  [
+                                                                               "api",
+                                                                               "gyms",
+                                                                               "2",
+                                                                               "station-codes"
+                                                                           ]
+                                                              },
+                                                      "description":  "IDOR guard. The super admin is legitimately allowed across every gym, so this returns 200 by design; a gym-scoped employee gets 403 `GYM_ACCESS_DENIED`. Sign in as an employee in the Auth folder to exercise the guard."
+                                                  },
+                                      "event":  [
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "pm.test(\u0027Cross-gym access resolves against the caller role\u0027, function () {",
+                                                                                    "  if (pm.response.code === 403) {",
+                                                                                    "    pm.expect(pm.response.json().error).to.eql(\u0027GYM_ACCESS_DENIED\u0027);",
+                                                                                    "  } else {",
+                                                                                    "    pm.expect(pm.response.code, \u0027super admin reads across gyms by role\u0027).to.eql(200);",
+                                                                                    "    console.log(\u0027Signed in as a cross-gym role - read is allowed by design.\u0027);",
+                                                                                    "  }",
+                                                                                    "});"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ]
+                                  },
+                                  {
+                                      "name":  "Revoke Station Sessions",
+                                      "request":  {
+                                                      "method":  "DELETE",
+                                                      "header":  [
+
+                                                                 ],
+                                                      "url":  {
+                                                                  "raw":  "{{baseUrl}}/api/gyms/{{gymId}}/station-sessions",
+                                                                  "host":  [
+                                                                               "{{baseUrl}}"
+                                                                           ],
+                                                                  "path":  [
+                                                                               "api",
+                                                                               "gyms",
+                                                                               "{{gymId}}",
+                                                                               "station-sessions"
+                                                                           ]
+                                                              },
+                                                      "description":  "DELETE /api/gyms/{gymId}/station-sessions - revokes every live station session of the gym; enrolled kiosks fall back to the enrollment screen. The enrollment codes are untouched."
+                                                  },
+                                      "event":  [
+                                                    {
+                                                        "listen":  "test",
+                                                        "script":  {
+                                                                       "type":  "text/javascript",
+                                                                       "exec":  [
+                                                                                    "pm.test(\u0027Status 200\u0027, () =\u003e pm.response.to.have.status(200));",
+                                                                                    "",
+                                                                                    "const json = pm.response.json();",
+                                                                                    "",
+                                                                                    "pm.test(\u0027Reports how many sessions were revoked\u0027, () =\u003e",
+                                                                                    "  pm.expect(json.revokedCount).to.be.a(\u0027number\u0027));"
+                                                                                ]
+                                                                   }
+                                                    }
+                                                ]
+                                  }
+                              ]
+                 }
+             ]
 }

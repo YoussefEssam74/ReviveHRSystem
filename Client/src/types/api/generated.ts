@@ -1104,8 +1104,8 @@ export interface components {
             message?: string | null;
         };
         AttendanceEventRequest: {
-            code: string;
             employeeId: string;
+            /** IN, OUT, or AUTO (server resolves AUTO from the employee's state). */
             type: string;
             /** Format: double */
             livenessScore?: number | null;
@@ -1139,7 +1139,7 @@ export interface components {
             enrolledAt?: string;
         };
         FaceScanRequest: {
-            code: string;
+            /** IN, OUT, or AUTO (server resolves AUTO from the employee's state). */
             type: string;
             image: string;
             /** Format: date-time */
@@ -1172,7 +1172,6 @@ export interface components {
             tempSessionToken?: string | null;
         };
         ManualAttendanceRequest: {
-            code: string;
             employeeId: string;
             type: string;
             /** Format: date-time */
@@ -1191,8 +1190,14 @@ export interface components {
             code?: string | null;
             /** Format: date-time */
             generatedAt?: string;
+            /** Format: date-time */
+            expiresAtUtc?: string | null;
             /** Format: int32 */
             generatedBy?: number | null;
+        };
+        StationSessionsRevokedResponse: {
+            /** Format: int32 */
+            revokedCount?: number;
         };
         StationLoginRequest: {
             code: string;
@@ -1201,6 +1206,9 @@ export interface components {
             /** Format: int32 */
             gymId?: number;
             gymName?: string | null;
+            token?: string | null;
+            /** Format: date-time */
+            sessionExpiresAtUtc?: string;
         };
         UserInfo: {
             /** Format: int32 */

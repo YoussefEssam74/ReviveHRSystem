@@ -1,5 +1,4 @@
 using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using ServiceAbstraction.Services;
@@ -21,7 +20,6 @@ namespace Presentation.Controllers
         [HttpPost("login")]
         [AllowAnonymous]
         [EnableRateLimiting("auth-login")]
-        [ProducesResponseType(typeof(LoginResponse), StatusCodes.Status200OK)]
         public async Task<ActionResult<LoginResponse>> Login([FromBody] LoginRequest request, CancellationToken cancellationToken)
         {
             var response = await _authService.LoginAsync(request, cancellationToken);
@@ -37,7 +35,6 @@ namespace Presentation.Controllers
         [HttpPost("login/select-gym")]
         [AllowAnonymous]
         [EnableRateLimiting("auth-login")]
-        [ProducesResponseType(typeof(LoginResponse), StatusCodes.Status200OK)]
         public async Task<ActionResult<LoginResponse>> SelectGym([FromBody] SelectGymRequest request, CancellationToken cancellationToken)
         {
             var response = await _authService.SelectGymAsync(request, cancellationToken);

@@ -2,13 +2,14 @@ using System.ComponentModel.DataAnnotations;
 
 namespace Shared.DataTransferObject.Face;
 
-/// <summary>Face scan request from an attendance station (public, station-code authenticated).</summary>
+/// <summary>Face scan request from an attendance station (station-session authenticated).</summary>
 public sealed class FaceScanRequest
 {
-    [Required, RegularExpression(@"^\d{6}$", ErrorMessage = "Station code must be exactly 6 digits.")]
-    public string Code { get; init; } = string.Empty;
-
-    /// <summary>IN/OUT (CHECKIN/CHECKOUT aliases are accepted).</summary>
+    /// <summary>
+    /// IN/OUT (CHECKIN/CHECKOUT aliases are accepted). AUTO lets the server pick the
+    /// direction from the employee's current state — what the always-on kiosk camera
+    /// sends, since it watches whoever steps in front of it.
+    /// </summary>
     [Required, StringLength(10)]
     public string Type { get; init; } = string.Empty;
 
@@ -18,4 +19,12 @@ public sealed class FaceScanRequest
 
     /// <summary>Frame time as ISO 8601. An omitted offset is interpreted as UTC.</summary>
     public DateTime? Timestamp { get; init; }
+
+    /// <summary>
+    /// True only when the employee confirmed "check out now" on the kiosk. An AUTO
+    /// scan that would close today's open record returns a pending response (nothing
+    /// recorded) unless this flag is set, so a face scan never checks anyone out
+    /// silently.
+    /// </summary>
+    public bool ConfirmCheckout { get; init; }
 }
