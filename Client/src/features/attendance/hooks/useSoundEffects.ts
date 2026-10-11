@@ -1,4 +1,4 @@
-import { useCallback, useRef } from 'react'
+import { useCallback, useMemo, useRef } from 'react'
 
 /**
  * Short synthesized alerts for the kiosk (no audio assets to ship or cache):
@@ -64,5 +64,10 @@ export function useSoundEffects() {
     contextRef.current = null
   }, [])
 
-  return { playSuccess, playRejected, setEnabled, dispose }
+  // Memoized so consumers' effects keyed on this object (e.g. dispose cleanup)
+  // do not re-run on every render when the callbacks are unchanged.
+  return useMemo(
+    () => ({ playSuccess, playRejected, setEnabled, dispose }),
+    [playSuccess, playRejected, setEnabled, dispose],
+  )
 }

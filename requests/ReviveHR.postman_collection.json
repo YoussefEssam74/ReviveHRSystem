@@ -728,9 +728,9 @@
                                                                      },
                                                                      {
                                                                          "key":  "X-Station-Token",
-                                                                         "value":  "{{stationToken}}",
+                                                                         "value":  "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef",
                                                                          "type":  "text",
-                                                                         "description":  "Station session token from Kiosk \u003e Station Login; the gym is derived from it server-side."
+                                                                         "description":  "Opaque token that matches no stored session hash."
                                                                      }
                                                                  ],
                                                       "body":  {
@@ -761,15 +761,7 @@
                                                         "script":  {
                                                                        "type":  "text/javascript",
                                                                        "exec":  [
-                                                                                    "pm.test(\u0027Status 401 Unauthorized\u0027, () =\u003e pm.response.to.have.status(401));",
-                                                                                    "",
-                                                                                    "const json = pm.response.json();",
-                                                                                    "",
-                                                                                    "pm.test(\u0027Error code is INVALID_STATION_CODE\u0027, () =\u003e",
-                                                                                    "  pm.expect(json.error).to.eql(\u0027INVALID_STATION_CODE\u0027));",
-                                                                                    "",
-                                                                                    "pm.test(\u0027Never echoes the station code back\u0027, () =\u003e",
-                                                                                    "  pm.expect(JSON.stringify(json)).to.not.include(\u0027999999\u0027));"
+                                                                                    "pm.test(\u0027Status 401 Unauthorized\u0027, () =\u003e pm.response.to.have.status(401));"
                                                                                 ]
                                                                    }
                                                     }

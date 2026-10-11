@@ -16,6 +16,9 @@ namespace DomainLayer.Models.EmployeeModule
         public string FilePath { get; set; } = string.Empty;
         public DateOnly? ExpiryDate { get; set; }
         public bool EmployeeEditable { get; set; } = false;
+
+        /// <summary>When the document was uploaded (shown in the employee's vault).</summary>
+        public DateTime UploadedAt { get; set; } = DateTime.UtcNow;
     }
 }
 

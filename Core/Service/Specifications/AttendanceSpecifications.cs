@@ -16,7 +16,7 @@ namespace Service.Specifications
         }
     }
 
-    /// <summary>Finds any station code (active or not) by value â€” uniqueness checks.</summary>
+    /// <summary>Finds any station code (active or not) by value ├óΓé¼ΓÇ¥ uniqueness checks.</summary>
     public class StationCodeExactSpec : BaseSpecification<StationCode, int>
     {
         public StationCodeExactSpec(string code)
@@ -38,7 +38,7 @@ namespace Service.Specifications
 
     /// <summary>
     /// Looks up a station session by the SHA-256 hash of its opaque token, including
-    /// the gym â€” the hot path every station-authenticated attendance request takes.
+    /// the gym ├óΓé¼ΓÇ¥ the hot path every station-authenticated attendance request takes.
     /// </summary>
     public class StationSessionByTokenHashSpec : BaseSpecification<StationSession, int>
     {
@@ -72,7 +72,7 @@ namespace Service.Specifications
     }
 
     /// <summary>
-    /// Every attendance record of one gym on one date, including the employee —
+    /// Every attendance record of one gym on one date, including the employee ΓÇö
     /// the kiosk dashboard feed.
     /// </summary>
     public class AttendanceRecordsByGymDateSpec : BaseSpecification<AttendanceRecord, int>
@@ -85,7 +85,7 @@ namespace Service.Specifications
     }
 
     /// <summary>
-    /// Real shifts (not days off) scheduled at one gym on one date — the kiosk
+    /// Real shifts (not days off) scheduled at one gym on one date ΓÇö the kiosk
     /// dashboard's "scheduled today" count.
     /// </summary>
     public class ShiftAssignmentsByGymDateSpec : BaseSpecification<ShiftAssignment, int>
@@ -131,6 +131,30 @@ namespace Service.Specifications
             Criteria = sa => sa.EmployeeId == employeeId && (sa.Date == eventDate || sa.Date == previousDate);
             AddInclude(sa => sa.ShiftCycle.Gym);
             AddInclude(sa => sa.ShiftTemplate!);
+        }
+    }
+
+    /// <summary>
+    /// Attendance records of one employee in one calendar month, with the scheduled
+    /// shift template loaded (records are rendered against the shift they worked).
+    /// </summary>
+    public class AttendanceByEmployeeSpec : BaseSpecification<AttendanceRecord, int>
+    {
+        public AttendanceByEmployeeSpec(int employeeId, DateOnly monthStart)
+        {
+            var monthEnd = monthStart.AddMonths(1);
+            Criteria = r => r.EmployeeId == employeeId && r.Date >= monthStart && r.Date < monthEnd;
+            AddInclude(r => r.ScheduledShiftTemplate);
+            OrderByDescending = r => r.Date;
+        }
+    }
+
+    /// <summary>Attendance records of one employee on a single date.</summary>
+    public class AttendanceByEmployeeDateSpec : BaseSpecification<AttendanceRecord, int>
+    {
+        public AttendanceByEmployeeDateSpec(int employeeId, DateOnly date)
+        {
+            Criteria = r => r.EmployeeId == employeeId && r.Date == date;
         }
     }
 }

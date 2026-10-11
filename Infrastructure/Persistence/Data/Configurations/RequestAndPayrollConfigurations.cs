@@ -135,6 +135,12 @@ namespace Presistence.Data.Configurations
 
             builder.Property(dc => dc.Amount).HasPrecision(18, 2);
             builder.Property(dc => dc.Reason).IsRequired().HasMaxLength(500);
+            builder.Property(dc => dc.Note).HasMaxLength(1000);
+
+            builder.HasOne(dc => dc.IssuedByUser)
+                   .WithMany()
+                   .HasForeignKey(dc => dc.IssuedBy)
+                   .OnDelete(DeleteBehavior.Restrict);
 
             builder.HasOne(dc => dc.Employee)
                    .WithMany()

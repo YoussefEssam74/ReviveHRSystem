@@ -1,4 +1,5 @@
 using DomainLayer.Models.UserModule;
+using DomainLayer.Models.UserModule.Enums;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
@@ -81,6 +82,11 @@ namespace Presistence.Data.Configurations
             builder.ToTable("RolePermissions");
             builder.HasKey(rp => new { rp.RoleId, rp.PermissionId });
 
+            builder.Property(rp => rp.Level)
+                   .IsRequired()
+                   .HasDefaultValue(AccessLevel.None)
+                   .HasConversion<int>();
+
             builder.HasOne(rp => rp.Role)
                    .WithMany(r => r.RolePermissions)
                    .HasForeignKey(rp => rp.RoleId)
@@ -100,6 +106,11 @@ namespace Presistence.Data.Configurations
             builder.ToTable("UserPermissions");
             builder.HasKey(up => new { up.UserId, up.PermissionId });
 
+            builder.Property(up => up.Level)
+                   .IsRequired()
+                   .HasDefaultValue(AccessLevel.None)
+                   .HasConversion<int>();
+
             builder.HasOne(up => up.User)
                    .WithMany(u => u.UserPermissions)
                    .HasForeignKey(up => up.UserId)
@@ -109,6 +120,63 @@ namespace Presistence.Data.Configurations
                    .WithMany(p => p.UserPermissions)
                    .HasForeignKey(up => up.PermissionId)
                    .OnDelete(DeleteBehavior.Cascade);
+        }
+    }
+
+    public class UserGymRoleConfiguration : IEntityTypeConfiguration<UserGymRole>
+    {
+        public void Configure(EntityTypeBuilder<UserGymRole> builder)
+        {
+            builder.ToTable("UserGymRoles");
+            builder.HasKey(ugr => new { ugr.UserId, ugr.GymId, ugr.RoleId });
+
+            builder.HasOne(ugr => ugr.User)
+                   .WithMany(u => u.UserGymRoles)
+                   .HasForeignKey(ugr => ugr.UserId)
+                   .OnDelete(DeleteBehavior.Cascade);
+
+            builder.HasOne(ugr => ugr.Gym)
+                   .WithMany(g => g.UserGymRoles)
+                   .HasForeignKey(ugr => ugr.GymId)
+                   .OnDelete(DeleteBehavior.Cascade);
+
+            builder.HasOne(ugr => ugr.Role)
+                   .WithMany(r => r.UserGymRoles)
+                   .HasForeignKey(ugr => ugr.RoleId)
+                   .OnDelete(DeleteBehavior.Cascade);
+
+            builder.HasIndex(ugr => new { ugr.UserId, ugr.GymId });
+        }
+    }
+
+    public class UserGymPermissionConfiguration : IEntityTypeConfiguration<UserGymPermission>
+    {
+        public void Configure(EntityTypeBuilder<UserGymPermission> builder)
+        {
+            builder.ToTable("UserGymPermissions");
+            builder.HasKey(ugp => new { ugp.UserId, ugp.GymId, ugp.PermissionId });
+
+            builder.Property(ugp => ugp.Level)
+                   .IsRequired()
+                   .HasDefaultValue(AccessLevel.None)
+                   .HasConversion<int>();
+
+            builder.HasOne(ugp => ugp.User)
+                   .WithMany(u => u.UserGymPermissions)
+                   .HasForeignKey(ugp => ugp.UserId)
+                   .OnDelete(DeleteBehavior.Cascade);
+
+            builder.HasOne(ugp => ugp.Gym)
+                   .WithMany(g => g.UserGymPermissions)
+                   .HasForeignKey(ugp => ugp.GymId)
+                   .OnDelete(DeleteBehavior.Cascade);
+
+            builder.HasOne(ugp => ugp.Permission)
+                   .WithMany(p => p.UserGymPermissions)
+                   .HasForeignKey(ugp => ugp.PermissionId)
+                   .OnDelete(DeleteBehavior.Cascade);
+
+            builder.HasIndex(ugp => new { ugp.UserId, ugp.GymId });
         }
     }
 

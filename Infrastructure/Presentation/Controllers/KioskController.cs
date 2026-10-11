@@ -101,6 +101,7 @@ namespace Presentation.Controllers
         /// <response code="204">Cookie cleared; any live session behind it was revoked.</response>
         [HttpPost("logout")]
         [AllowAnonymous]
+        [EnableRateLimiting("station-attendance")]
         [ProducesResponseType(StatusCodes.Status204NoContent)]
         public async Task<IActionResult> Logout(CancellationToken cancellationToken)
         {

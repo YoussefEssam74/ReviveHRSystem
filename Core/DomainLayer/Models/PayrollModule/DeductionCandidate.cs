@@ -18,7 +18,18 @@ namespace DomainLayer.Models.PayrollModule
         public virtual AttendanceRecord? AttendanceRecord { get; set; }
 
         public decimal Amount { get; set; }
+
+        /// <summary>Category picked by the issuing manager (e.g. "Unapproved absence").</summary>
         public string Reason { get; set; } = string.Empty;
+
+        /// <summary>Free-text context for the HR reviewer.</summary>
+        public string? Note { get; set; }
+
+        public int IssuedBy { get; set; }
+        public virtual User IssuedByUser { get; set; } = null!;
+
+        public DateTime IssuedAt { get; set; } = DateTime.UtcNow;
+
         public DeductionStatus Status { get; set; } = DeductionStatus.Pending;
 
         public int? ReviewedBy { get; set; }

@@ -13,7 +13,7 @@ This document follows the current Employee Interface Specification. Permissions 
 | Role | User Type | Primary Scope | Main Purpose |
 | --- | --- | --- | --- |
 | Regular Employee | Employee | Own data | Self-service HR operations |
-| Team Leader | Employee | Own data + assigned team | Team follow-up and team operations |
+| Team Leader | Employee | Own data + assigned team | Same capabilities as Branch Manager, team-scoped |
 | Branch Manager | Employee | Own data + assigned gym | Branch-level management and operations |
 
 ## 2. Common Employee Pages
@@ -119,25 +119,23 @@ Role definition: User Type = Employee, Role = Regular Employee. The regular empl
 
 ## 4. Team Leader
 
-Role definition: User Type = Employee, Role = Team Leader. The Team Leader keeps the complete Regular Employee self-service experience and can receive additional team-level functionality. Team access is limited to the assigned team unless broader access is explicitly granted.
+Role definition: User Type = Employee, Role = Team Leader. The Team Leader keeps the complete Regular Employee self-service experience and receives the **same capability set as the Branch Manager**, applied to his assigned team. Team access is limited to the assigned team unless broader access is explicitly granted.
 
 ## What is different from Regular Employee?
 
-- Can have access to team information and team operational follow-up.
+- Has the same management capabilities as the Branch Manager (team roster, attendance, schedule/shift management, requests, performance, actions), all scoped to the assigned team.
 
-- Can view team attendance when the corresponding permission is granted.
+- Can view team attendance, team schedules, team requests and team performance information for his team.
 
-- Can view team schedules when the corresponding permission is granted.
+- Can review/follow team requests, including stage-1 approval where granted.
 
-- Can review/follow team requests when the corresponding permission is granted.
+- Can perform team-related updates only when explicitly permitted.
 
-- Can access team performance/evaluation information when the corresponding permission is granted.
-
-- Can perform other team-related updates only when explicitly permitted.
-
-- Does not automatically receive Branch Manager branch-wide management capabilities.
+- Does not automatically receive Branch Manager branch-wide capabilities: capabilities are granted per feature and per gym, and the resolved scope is the team, never the whole gym.
 
 ## Team Leader Pages
+
+(The Team Leader sees the same management pages as the Branch Manager — Employees, Attendance Management, Requests, Schedule, Shift Management, Recruitment, Employee Leaving, Actions — with every page showing team data only.)
 
 ## My Team
 
@@ -220,26 +218,26 @@ Initiates or follows resignation/termination-related employee leaving workflows 
 | --- | --- | --- |
 | Self-service | Yes | Yes |
 | Scope | Assigned team | Assigned gym |
-| All branch employees | No by default | Yes, if permitted |
-| Team attendance | If permitted | If permitted |
+| All branch employees | No — team members only | Yes, if granted |
+| Team attendance | If granted | If granted |
 
 
 | Area | Team Leader | Branch Manager |
 | --- | --- | --- |
-| Team schedule | If permitted | If permitted |
-| Requests | Team follow-up if permitted | Branch request management if permitted |
-| Employee management | Not a default capability | Possible if permitted |
-| Shift management | Not a default capability | Possible if permitted |
-| Recruitment | Not a default capability | Possible if permitted |
-| Employee leaving | Not a default capability | Possible if permitted |
-| Payroll/deductions | Not a default capability | Only if explicitly permitted |
+| Team schedule | If granted | If granted |
+| Requests | Team request management if granted | Branch request management if granted |
+| Employee management | Same capability, team scope | If granted |
+| Shift management | Same capability, team scope | If granted |
+| Recruitment | If granted (team scope) | If granted |
+| Employee leaving | If granted (team scope) | If granted |
+| Payroll/deductions | Only if explicitly granted | Only if explicitly granted |
 
 
 ## 7. Permission & UI Rules
 
 ## Permission-driven UI
 
-A page or action must only appear when the logged-in user has the relevant permission. Do not rely on role name alone for sensitive actions.
+A page or action must only appear when the logged-in user has the relevant permission. Do not rely on role name alone for sensitive actions. Permissions are granted per feature and per gym: a feature may be granted in one gym and withheld in another. Each feature has three access levels: none, view-only, edit.
 
 ## Access scope
 
@@ -247,7 +245,7 @@ Regular Employee = own data. Team Leader = own data + assigned team. Branch Mana
 
 ## Gym context
 
-An employee may be assigned to one or two gyms. If two gyms are assigned, gym selection occurs after login. The selected gym becomes the active context and controls the data shown.
+An employee may be assigned to one or more gyms (not capped at two — three or more gym assignments are supported). Each employee has exactly one account; additional gyms are access grants on that same account, with one primary gym. If more than one gym is assigned, gym selection occurs after login (and the active gym can be switched in-session). The selected gym becomes the active context and controls the data shown.
 
 ## Published schedule principle
 

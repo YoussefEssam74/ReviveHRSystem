@@ -1,3 +1,33 @@
+## 2026-10-10 (employee portal, continued 3) - All slices complete
+
+- **Branch Actions queue (Slice 3):** `POST /api/deduction-candidates` (attendance Edit), `/api/warning-notices` and `/api/bonus-proposals` (employees Edit) - all created Pending for HR; `GET /api/branch-actions/pending-hr` merges the three kinds into the manager's queue; `POST /api/branch-reports` (any employee) lands in the HR action queue as an `EventType.BranchReport` event. New tables `WarningNotices` / `BonusProposals`; `DeductionCandidate` extended with IssuedBy/IssuedAt/Note.
+- **Docs/hand-off:** `api.md` documents every employee-portal endpoint; `ReviveHRSystem.Web.http` now has named logins per role (Employee / Branch Manager / Team Leader / HR) plus a full request walkthrough; plan + tracker mark all slices complete.
+- **Verification:** build clean (0 warnings), **153/153 integration tests**, live smoke test in Development (login + select-gym + `/api/me` feature levels + deduction + queue + report).
+- **Deferred (documented):** HR-portal decision endpoints for the Pending HR queue (deduction/warning/bonus/vacancy) belong to the HR portal work; document/payslip binary downloads need a file-storage service; the mock UI still needs re-gating from `hasPermission` to `/api/me` levels and the Team Leader branch nav pool.
+
+## 2026-10-10 (employee portal, continued 2) - Management surface complete
+
+- **Attendance management** (`GET /api/attendance` day view with late/absent/no-show split, `POST /api/attendance/mark-attendance` audited manual entry reusing the ADR-004 validation).
+- **Team overview** (`GET /api/teams/my-teams`, `GET /api/teams/{teamId}/today`: members, shifts, live status, pending requests).
+- **Vacancy requests** (gym-scoped list + create; the mock's count/urgency/department fields have no domain home, so the contract follows VacancyRequest) and **offboarding** (scoped list + initiate, duplicate-case guard, Offboard history event).
+- **Shift management**: gym cycles (create/read/assignment upserts/publish/delete) and shift templates CRUD; publishing is what makes a cycle visible to employees through the Slice 1 schedule endpoint; template deletion turns its cells into Off days.
+- Tests: **144 passing** (was 138): attendance day view, team scope isolation, vacancy gym isolation, offboarding duplicate/cross-gym, cycle publish visibility, template CRUD + cleanup, 403 matrix.
+
+## 2026-10-10 (employee portal, continued) - Self-service surface complete + management start
+
+- **Slice 1 finished** (all 12 self-service areas): evaluations (own), employment history (month-grouped), events feed (gym-scoped), payroll (open periods hidden), and the `GET /api/dashboard/employee` aggregate (today shift/attendance, upcoming schedule, pending requests, latest payroll, recent notifications, required actions, team/gym overview strip scoped by role). New: `Event.CreatedAt` (migration `Add_EventCreatedAt`).
+- **Slice 2 started** with the feature gates now exercised by real endpoints: employee management (`GET/POST /api/employees`, `PUT /api/employees/{id}`, `POST .../{id}/status-change` â€” status changes append to the history timeline) and the request inbox (`GET /api/requests`, `POST .../{id}/decide` stage-1 approveâ†’PendingHRReview / rejectâ†’releases leave, `PUT .../{id}`). Employee creation provisions the 1:1 login account (the domain requires the Userâ†”Employee link) with a random temporary password.
+- **Domain constraints discovered while testing:** `Employee.TeamId` is FK-anchored to the team's gym (teams cannot span gyms) and `TeamLeaders.EmployeeId` is unique (one team per leader) â€” team scope therefore applies only in a user's primary gym; per-gym team membership needs a schema change.
+- Tests: **131 passing** (was 72): +9 Slice 1g, +13 Slice 2 (authorization matrix 403, cross-team/cross-gym 404, leave release on rejection, timeline history records).
+
+## 2026-10-10 (employee portal) - Authorization model + employee self-service APIs
+
+- **Docs first:** `docs/architecture/employee-portal-api-plan.md` (full plan), `docs/implementation/employee-portal-progress.md` (step tracker), `api-spec-from-ui.md` Â§3 refreshed to the current mock (feature gates, stub markings, TL/BM parity, multi-gym), ADR-002 Amendment 1 (N gyms, in-session switch, one account), ADR-003 Amendment 1 (per-gym feature Ã— level grants, scope from per-gym role), roles guide updated.
+- **Authorization foundation (Slice 0):** migration `Add_FeatureLevelAuthorization` (Level columns on RolePermission/UserPermission, new UserGymRoles/UserGymPermissions tables), 12-feature permission catalog + 6 preset role bundles seeded (TL = BM parity), `IPermissionService`/`ITeamScopeService`, `[HasFeatureAccess]` policies, `GET /api/me` and `POST /api/auth/switch-gym`. Single-gym users of any user type now get a gym-scoped token at login. Fixed during the slice: handler registered scoped (was singleton; would have crashed the Development host).
+- **Self-service APIs (Slice 1, partial):** employee profile + contact/emergency edits, documents (+ `UploadedAt`), attendance month view, leave balance with reserve/release on Day Off create/cancel (+ `RequestStatus.Cancelled`, `EmployeeRequest.SubmittedAt`), published schedule, requests (list/create/detail/cancel) + request-type catalog, notifications, settings + change-password. `api.md` documents every new endpoint.
+- Tests: **109 passing** (was 72) - authorization matrix, per-gym isolation, override precedence, team scope, IDOR (cross-team/cross-gym 404), leave-balance workflow, switch-gym lifecycle.
+- **Next (tracker has the exact stop point):** evaluations/history/events/payroll/dashboard for Slice 1, then Slice 2 management endpoints (TL team-scope / BM gym-scope) and Slice 3 HR hand-off contracts.
+
 ## 2026-10-10 (follow-up 4) - Live liveness HUD + silent "already complete"
 
 - **face-scan now returns an outcome for every frame** instead of throwing on
@@ -119,16 +149,19 @@
 
 > Last updated: 2026-10-07
 
-## Current State: **Login + Attendance APIs implemented**
+## Current State: **Login + Attendance + Employee Portal APIs implemented**
 
-Web login (email/password → access token), station login (6-digit code → gym), and
-attendance events/manual (6-digit code auth, ADR-004 validation) are implemented,
-secured (rate limits, gym-scoped station codes, security headers), documented, and
-covered by 44 integration tests. See handoff notes in the 2026-10-07 session summary.
+Web login (email/password -> access token), station login (6-digit code -> gym), attendance events/manual, station-summary, station codes, face biometrics, and the full Employee Portal surface (session context + gym switching, self-service, permission-gated management for Team Leaders/Branch Managers) are implemented, secured, documented, and covered by 153 integration tests. See the handoff notes in the 2026-10-10 employee portal entries and `docs/architecture/employee-portal-api-plan.md`.
+
+**Key decisions applied 2026-10-07 through 2026-10-10:**
+- Attendance/station auth depends ONLY on the 6-digit station code â€” no deviceId, no device token (ADR-004 amended)
+- Access-token-only login (no refresh tokens â€” RefreshTokens table was removed)
+- Model fix: (Id, TeamId) alternate key + composite TeamLeaders FK dropped (blocked all employee inserts)
+- Authorization is per-gym feature x level (ADR-003 Amendment 1); Team Leader = Branch Manager capability parity with team scope; gym count unbounded with login-time selection + in-session switch (ADR-002 Amendment 1)
 
 **Key decisions applied 2026-10-07:**
-- Attendance/station auth depends ONLY on the 6-digit station code — no deviceId, no device token (ADR-004 amended)
-- Access-token-only login (no refresh tokens — RefreshTokens table was removed)
+- Attendance/station auth depends ONLY on the 6-digit station code â€” no deviceId, no device token (ADR-004 amended)
+- Access-token-only login (no refresh tokens â€” RefreshTokens table was removed)
 - Model fix: (Id, TeamId) alternate key + composite TeamLeaders FK dropped (blocked all employee inserts)
 
 ---
@@ -167,20 +200,20 @@ covered by 44 integration tests. See handoff notes in the 2026-10-07 session sum
 ---
 
 ### Phase 2: Domain & Database Design
-- [x] Domain entities defined (DomainLayer) — all module entities exist
+- [x] Domain entities defined (DomainLayer) â€” all module entities exist
 - [x] EF Core entity configurations (Persistence)
 - [x] PostgreSQL DbContext configured
-- [x] Initial migration created + applied (AlignHrSchema … Add_StationCodes, Fix_TeamLeader_Composite_Fk)
+- [x] Initial migration created + applied (AlignHrSchema â€¦ Add_StationCodes, Fix_TeamLeader_Composite_Fk)
 - [ ] Permission catalog seeded
 - [x] Default Super Admin seeded (Development seeder: admin@revive.hr + 2 gyms + station codes + 3 test employees)
 
 ## Phase 3: Authentication
 - [x] Login endpoint (POST /api/auth/login + login/select-gym for 2-gym employees)
 - [x] JWT token generation (access-token-only)
-- [ ] Refresh token rotation — **removed by decision** (RefreshTokens table dropped; revisit only if sessions need extending)
+- [ ] Refresh token rotation â€” **removed by decision** (RefreshTokens table dropped; revisit only if sessions need extending)
 - [ ] Logout endpoint
 - [ ] Password reset
-- [ ] Account lockout — mitigated for now by auth-login rate limiting (10/min/IP)
+- [ ] Account lockout â€” mitigated for now by auth-login rate limiting (10/min/IP)
 
 ## Phase 4: Authorization
 - [ ] Permission checking service
@@ -208,7 +241,7 @@ covered by 44 integration tests. See handoff notes in the 2026-10-07 session sum
 - [ ] Waiting list
 
 ## Phase 7: Hiring Transition
-- [ ] Candidate → Employee conversion
+- [ ] Candidate â†’ Employee conversion
 - [ ] Employee account creation
 - [ ] Gym + position assignment
 - [ ] Credential generation
@@ -238,10 +271,10 @@ covered by 44 integration tests. See handoff notes in the 2026-10-07 session sum
 - [ ] Publish cycle
 
 ## Phase 10: Attendance
-- [x] Biometric integration boundary — station login + events API (6-digit station code auth, no device token)
+- [x] Biometric integration boundary â€” station login + events API (6-digit station code auth, no device token)
 - [x] Manual check-in/check-out (POST /api/attendance/manual, reason audited, method=Manual)
 - [x] Basic schedule comparison at event time (OnTime / Late / EarlyCheckout vs shift template)
-- [ ] Full status engine (Absent, MissingCheckout sweeps — scheduled job)
+- [ ] Full status engine (Absent, MissingCheckout sweeps â€” scheduled job)
 - [ ] Manual correction (HR, attendance.edit)
 - [ ] Repeated-issue flagging
 
@@ -293,12 +326,12 @@ covered by 44 integration tests. See handoff notes in the 2026-10-07 session sum
 - [ ] Public application page
 
 ## Phase 15: QA & Security
-- [x] Integration test suite — 44 tests: login/kiosk/attendance/station-code coverage matrix + IDOR (gym-scope) + rate-limit regressions + face-enrollment authorization (Tests/ReviveHRSystem.IntegrationTests)
-- [ ] Authorization tests (permission system — pending Phase 4)
+- [x] Integration test suite â€” 44 tests: login/kiosk/attendance/station-code coverage matrix + IDOR (gym-scope) + rate-limit regressions + face-enrollment authorization (Tests/ReviveHRSystem.IntegrationTests)
+- [ ] Authorization tests (permission system â€” pending Phase 4)
 - [x] Cross-gym isolation tests (CROSS_GYM_ACCESS_DENIED, WRONG_BRANCH_SCHEDULE, SCHEDULED_DAY_OFF, GYM_ACCESS_DENIED)
 - [ ] Workflow integration tests
 - [ ] Audit log verification (manual-entry reason audit covered by test)
-- [ ] Security review — 2026-10-07 pass on the login/attendance surface (IDOR + brute-force + headers fixed; see session report)
+- [ ] Security review â€” 2026-10-07 pass on the login/attendance surface (IDOR + brute-force + headers fixed; see session report)
 
 ## Phase 16: Deployment
 - [ ] Docker containerization

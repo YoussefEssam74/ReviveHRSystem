@@ -13,8 +13,10 @@ namespace DomainLayer.Models.RequestModule
         public int EmployeeId { get; set; }
         public virtual Employee Employee { get; set; } = null!;
 
-        // String type for business flexibility without schema migration
         public string Type { get; set; } = string.Empty;
+
+        /// <summary>When the employee submitted the request (My Requests "Submitted" column).</summary>
+        public DateTime SubmittedAt { get; set; } = DateTime.UtcNow;
 
         public DateOnly RequestDate { get; set; }
         public DateOnly? TargetStartDate { get; set; }

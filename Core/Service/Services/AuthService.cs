@@ -105,8 +105,10 @@ namespace Service.Services
             var permissions = await userAccess.GetPermissionKeysAsync(user.Id, cancellationToken);
 
             int? scopedGymId = forcedGymId;
-            if (scopedGymId is null && user.UserType == UserType.Employee && gymAccess.Count == 1)
+            if (scopedGymId is null && gymAccess.Count == 1)
             {
+                // Single-gym users (any type) get a token scoped to that gym; users with
+                // more than one gym select one via select-gym or switch-gym.
                 scopedGymId = gymAccess[0].GymId;
             }
 

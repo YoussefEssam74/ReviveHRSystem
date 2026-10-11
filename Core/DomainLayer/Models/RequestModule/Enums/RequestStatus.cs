@@ -9,6 +9,7 @@ namespace DomainLayer.Models.RequestModule.Enums
         Pending = 1,
         PendingHRReview = 2,
         Approved = 3,
-        Rejected = 4
+        Rejected = 4,
+        Cancelled = 5
     }
 }

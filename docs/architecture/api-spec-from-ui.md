@@ -332,9 +332,9 @@ Same dedicated Biometric AI service, **no user JWT**:
 ## Section 3 - Employee Portal
 
 
-**Source scope:** `Mock UI/Employee/` (index.html, app.js, core.js, data.js, pages-employee.js, pages-employee2.js, pages-management.js, roles guide). Fields below are exact UI/mock field names. Conventions: list endpoints use `{items,page,pageSize,totalCount,totalPages}`; errors use `{statusCode,message,errors[]}`. Auth = user JWT everywhere unless noted. Permission keys are the dotted keys the UI gates on (`hasPermission(...)`), mapped to the roles guide.
+**Source scope:** `Mock UI/Employee/` (index.html, app.js, core.js, data.js, pages-employee.js, pages-employee2.js, pages-management.js, roles guide). Fields below are exact UI/mock field names. Conventions: list endpoints use `{items,page,pageSize,totalCount,totalPages}`; errors use `{statusCode,message,errors[]}`. Auth = user JWT everywhere unless noted.
 
-**Permission vocabulary used below (from UI + guide):** self-service pages = JWT only (own data, guide §2/§3); `team.view`, `attendance.view.team`, `schedule.view.team`, `requests.view.team`, `requests.approve.team`, `evaluations.view.team`, `team.manage` (Team Leader, guide §4); `employees.view/create/edit/status.change/offboard`, `attendance.view/edit`, `schedule.manage`, `requests.view/approve`, `recruitment.vacancy_request.create` (Branch Manager, guide §5); `payroll.view`, `evaluations.manage` (HR, only if granted).
+**Authorization (v2 model — see `docs/architecture/employee-portal-api-plan.md` and ADR-003):** access is **feature × level × gym**. A feature is a UI area (`employees`, `attendance`, `schedule`, `requests`, `payroll`, `evaluations`, `recruitment`, `offboarding`, `documents`, `reports`, `announcements`, `audit`); a level is `None|View|Edit` (Edit implies View); grants are **per gym** (individual rows or a per-gym role bundle — "Branch Manager at gym A, Team Leader at gym B" is expressible). Endpoint gates below are written `[feature:View]` / `[feature:Edit]`. **Team Leader = full Branch Manager capability parity on his team**: TL and BM share the same feature levels, but scope resolves server-side from the per-gym role (TL ⇒ team filter via the leader's `TeamLeaders` row in the active gym; BM ⇒ gym filter). Self-service endpoints below need only the JWT (own data). The mock's `hasPermission('x.y')` checks collapse onto these feature levels (all `x.*` write keys ⇒ Edit on feature `x`). The dotted keys are listed for traceability against `data.js` DEMO_USERS.
 
 ---
 
@@ -351,7 +351,7 @@ Same dedicated Biometric AI service, **no user JWT**:
 
 | # | Method + Path | Auth / Permission | Request | Response | Caller | Status |
 |---|---|---|---|---|---|---|
-| 2.1 | `GET /api/employees/{id}` | JWT (own; BM/TL may view subordinate per `employees.view`/`team.view`) | — | `{ id, fullName, initials, position, level, status, employmentType, hireDate, dateOfBirth, nationalId, gender, address, phone, email, gym:{id,name,branch}, emergencyContact:{name,relationship,phone}, baseSalary, permissions:[] }` | Profile header, Personal/Contact/Employment cards, header user menu | EXISTING |
+| 2.1 | `GET /api/employees/{id}` | JWT (own; BM/TL may view subordinate per [employees:View]) | — | `{ id, fullName, initials, position, level, status, employmentType, hireDate, dateOfBirth, nationalId, gender, address, phone, email, gym:{id,name,branch}, emergencyContact:{name,relationship,phone}, baseSalary, permissions:[] }` | Profile header, Personal/Contact/Employment cards, header user menu | EXISTING |
 | 2.2 | `PUT /api/employees/{id}/contact` | JWT (own, permitted editable fields per guide §7) | body: `{ phone, email, address }` (labels: Mobile Number, Personal Email, Address) | `{ phone, email, address }` (204-style ok also fine) | "Edit Contact Information" modal → Save | **NEW** |
 | 2.3 | `PATCH /api/employees/{id}/emergency-contact` | JWT (own) | body: `{ name, relationship, phone }` (fields as displayed; mock edit button is a toast stub) | same | Emergency Contact "Edit" button | **NEW** |
 | 2.4 | `PUT /api/employees/{id}/photo` | JWT (own) | multipart: `file` (avatar camera button, no form in mock) | `{ photoUrl }` | Profile avatar edit button (stub) | **NEW** (stub) |
@@ -419,8 +419,8 @@ Note: `futureRequests` (statuses `Pending BM / Pending HR`, types `Leave Request
 
 | # | Method + Path | Auth / Permission | Request | Response | Caller | Status |
 |---|---|---|---|---|---|---|
-| 8.1 | `GET /api/employees/{id}/payroll` | JWT (self; `payroll.view` for others) | — | `{items:[{id,period,status:"Processing"\|"Paid",paidDate,visible,baseSalary,annualIncrease,workingDays,workedDays,scheduledWeeklyDays,weeklyPattern,overtimeHours,usedAnnualLeave,paidLeaveDays,remainingAnnualLeave,netSalary,grossEarnings,totalDeductions,items:[{label,amount,type:"earning"\|"deduction",icon,color,isGroup?,subItems:[{label,amount,date,detail,icon}]}]}]}` | Current-period card, contract/leave overview, YTD bento (Earned/Deductions/Net Pay/Avg), monthly history expandable cards, full payslip modal, sidebar `payroll.view` badge | EXISTING |
-| 8.2 | `GET /api/payroll-periods` | JWT (`payroll.view`; employee needs own current period) | query: `gymId?` | `{items:[{id,label/start,end,status}]}` | Current Period card ("August 2026 · Processing") | EXISTING |
+| 8.1 | `GET /api/employees/{id}/payroll` | JWT (self; [payroll:View] for others) | — | `{items:[{id,period,status:"Processing"\|"Paid",paidDate,visible,baseSalary,annualIncrease,workingDays,workedDays,scheduledWeeklyDays,weeklyPattern,overtimeHours,usedAnnualLeave,paidLeaveDays,remainingAnnualLeave,netSalary,grossEarnings,totalDeductions,items:[{label,amount,type:"earning"\|"deduction",icon,color,isGroup?,subItems:[{label,amount,date,detail,icon}]}]}]}` | Current-period card, contract/leave overview, YTD bento (Earned/Deductions/Net Pay/Avg), monthly history expandable cards, full payslip modal, sidebar [payroll:View] badge | EXISTING |
+| 8.2 | `GET /api/payroll-periods` | JWT (own current period; [payroll:View] for broader scope) | query: `gymId?` | `{items:[{id,label/start,end,status}]}` | Current Period card ("August 2026 · Processing") | EXISTING |
 | 8.3 | `GET /api/employees/{id}/payroll/{periodId}/payslip` | JWT (own; `visible:true` only) | — | PDF stream | Payslip modal → "Download PDF" | **NEW** |
 | 8.4 | `GET /api/employees/{id}/leave-balance` | JWT | — | as §6.2 | Payroll page leave cards (used/remaining/paid) | **NEW** |
 
@@ -475,13 +475,13 @@ Session hydration: login/refresh (EXISTING) supplies JWT; effective `permissions
 | # | Method + Path | Auth / Permission | Request | Response | Caller | Status |
 |---|---|---|---|---|---|---|
 | 13.1 | `GET /api/teams/my-teams` | JWT | — | `{items:[{id,name,gymId,...}]}` — resolves the user's assigned team(s) (guide §4 scope) | Team scope resolution for all team pages | EXISTING |
-| 13.2 | `GET /api/teams/{teamId}/today` | JWT, `team.view` | query: `q` (search team), `month` (select "August 2026"), `date` | `{stats:{total,present,late,absent,pendingRequests,upcomingIssues}, items:[{id,name,position,status,checkIn,initials,shift:{id,name,start,end,isOff,color,bgColor,textColor},checkOut}]}` — `status ∈ Present,Late,Absent` | Stats row, Needs Attention box (Mark Present/Remind/View), desktop table (Employee, Position, Scheduled, Check In, Check Out, Status), mobile cards | **NEW** (aggregate) |
-| 13.3 | `POST /api/attendance/manual` | JWT, `attendance.edit`/`attendance.manual_entry` | body: `{employeeId, gymId, timestamp, direction:"CheckIn", reason}` | attendance record | "Mark Present" (attention row + member profile) | EXISTING (docs) |
-| 13.4 | `POST /api/teams/members/{id}/reminders` | JWT, `team.manage` | no body fields in mock | ok | "Remind" button | **NEW** |
-| 13.5 | `POST /api/teams/follow-ups` | JWT, `team.manage` | body: `{employeeId, action:"Send reminder"\|"Schedule a meeting"\|"Escalate to manager"\|"Mark as resolved", note}` (creates/updates item with `type`, `description`, `severity`) | `{id,employee,type,description,severity,lastAction,note}` | `addTeamFollowUp` modal → Save Action | **NEW** |
-| 13.6 | `GET /api/teams/{teamId}/follow-ups` | JWT, `team.view` | — | `{items:[{id,employee,type,description,severity,lastAction,note}]}` | Team Actions page, team sidebar badge | **NEW** |
-| 13.7 | `PUT /api/teams/follow-ups/{id}` | JWT, `team.manage` | body: `{action, note}` | updated item | `saveFollowUp` (Team Actions → Action modal) | **NEW** |
-| 13.8 | `POST /api/employees/{id}/messages` | JWT, `team.manage` | body: `{message}` (no field captured in mock — toast stub) | ok | "Message" button on member profile | **NEW** (stub) |
+| 13.2 | `GET /api/teams/{teamId}/today` | JWT, [employees:View] (team scope) | query: `q` (search team), `month` (select "August 2026"), `date` | `{stats:{total,present,late,absent,pendingRequests,upcomingIssues}, items:[{id,name,position,status,checkIn,initials,shift:{id,name,start,end,isOff,color,bgColor,textColor},checkOut}]}` — `status ∈ Present,Late,Absent` | Stats row, Needs Attention box (Mark Present/Remind/View), desktop table (Employee, Position, Scheduled, Check In, Check Out, Status), mobile cards | **NEW** (aggregate) |
+| 13.3 | `POST /api/attendance/manual` | JWT, [attendance:Edit] | body: `{employeeId, gymId, timestamp, direction:"CheckIn", reason}` | attendance record | "Mark Present" (attention row + member profile) | EXISTING (docs) |
+| 13.4 | `POST /api/teams/members/{id}/reminders` | JWT, [employees:Edit] | no body fields in mock | ok | "Remind" button | **NEW** |
+| 13.5 | `POST /api/teams/follow-ups` | JWT, [employees:Edit] | body: `{employeeId, action:"Send reminder"\|"Schedule a meeting"\|"Escalate to manager"\|"Mark as resolved", note}` (creates/updates item with `type`, `description`, `severity`) | `{id,employee,type,description,severity,lastAction,note}` | `addTeamFollowUp` modal → Save Action | **NEW** |
+| 13.6 | `GET /api/teams/{teamId}/follow-ups` | JWT, [employees:View] (team scope) | — | `{items:[{id,employee,type,description,severity,lastAction,note}]}` | Team Actions page, team sidebar badge | **NEW** |
+| 13.7 | `PUT /api/teams/follow-ups/{id}` | JWT, [employees:Edit] | body: `{action, note}` | updated item | `saveFollowUp` (Team Actions → Action modal) | **NEW** |
+| 13.8 | `POST /api/employees/{id}/messages` | JWT, [employees:Edit] | body: `{message}` (no field captured in mock — toast stub) | ok | "Message" button on member profile | **NEW** (stub) |
 
 ---
 
@@ -489,14 +489,14 @@ Session hydration: login/refresh (EXISTING) supplies JWT; effective `permissions
 
 | # | Method + Path | Auth / Permission | Request | Response | Caller | Status |
 |---|---|---|---|---|---|---|
-| 14.1 | `GET /api/employees/{id}` | JWT, `team.view`/`employees.view` (scoped) | — | fields as §2.1 plus `{dateOfBirth,gender,nationalId,address,email,phone,emergencyContact:{name,relationship,phone},hireDate,employmentType,level,baseSalary,gym}` | Profile header + PERSONAL INFO / CONTACT & EMERGENCY / EMPLOYMENT cards | EXISTING |
-| 14.2 | `GET /api/employees/{id}/attendance?date=` | JWT, `attendance.view.team` | query: `date` | today's `{scheduledShift,checkIn,checkOut,source}` + history items | TODAY'S ATTENDANCE cards; `openMemberAttendance` modal rows (date, shift, checkIn, checkOut, status) | EXISTING |
-| 14.3 | `GET /api/employees/{id}/requests` | JWT, `requests.view.team` | — | as §10.1 (UI uses `{id,type,date,submitted,status,reason,teamApprovedBy}`) | Member REQUESTS card (+ Approve/Reject inline) | EXISTING |
-| 14.4 | `GET /api/employees/{id}/evaluations` | JWT, `evaluations.view.team` | — | as §9.1 (list view uses `{id,employee,position,period,score,result,status}`) | Member EVALUATIONS card (+ Edit) | EXISTING |
-| 14.5 | Weekly schedule of member | JWT, `schedule.view.team` | — | `{days:[{date,shiftTemplateId}]}` (Mon 25 … Sun 31 in mock) | WEEKLY SCHEDULE card / `openMemberSchedule` modal | covered by §15 roster/assignments (see 15.2) |
-| 14.6 | `POST /api/evaluation-forms/{formId}/responses` | JWT, `evaluations.view.team`/`team.manage` | body: `{employeeId, period, score, criteria:[{name,score,comment}], overallComment}` — criteria names fixed list: `Customer Service, Team Collaboration, Punctuality & Attendance, Technical Skills, Initiative`; `result` derived (`≥4 Exceeds, ≥3 Meets, else Below`) | created `{id,employee,position,period,score,result,status:"Completed",criteria,overallComment}` | "Evaluate" button / "New Evaluation" modal → Save | EXISTING (forms from `GET /api/evaluation-forms`) |
-| 14.7 | `PUT /api/employees/{id}/evaluations/{evaluationId}` | JWT, `evaluations.manage`/`team.manage` | body: `{period, score, criteria:[{name,score,comment}], overallComment}` | updated evaluation | `openEditTeamEvaluation` → Save Changes | **NEW** |
-| 14.8 | `POST /api/requests/{id}/decide` | JWT, `requests.approve.team` | body: `{stage:"BranchManager", decision:"Approved"\|"Rejected", comment?}` | request with `status:"Pending HR"` (approve) or `"Rejected Pending HR"` (reject) | Inline Approve/Reject on member request | EXISTING |
+| 14.1 | `GET /api/employees/{id}` | JWT, [employees:View] (team scope)/[employees:View] (scoped) | — | fields as §2.1 plus `{dateOfBirth,gender,nationalId,address,email,phone,emergencyContact:{name,relationship,phone},hireDate,employmentType,level,baseSalary,gym}` | Profile header + PERSONAL INFO / CONTACT & EMERGENCY / EMPLOYMENT cards | EXISTING |
+| 14.2 | `GET /api/employees/{id}/attendance?date=` | JWT, [attendance:View] (team scope) | query: `date` | today's `{scheduledShift,checkIn,checkOut,source}` + history items | TODAY'S ATTENDANCE cards; `openMemberAttendance` modal rows (date, shift, checkIn, checkOut, status) | EXISTING |
+| 14.3 | `GET /api/employees/{id}/requests` | JWT, [requests:View] (team scope) | — | as §10.1 (UI uses `{id,type,date,submitted,status,reason,teamApprovedBy}`) | Member REQUESTS card (+ Approve/Reject inline) | EXISTING |
+| 14.4 | `GET /api/employees/{id}/evaluations` | JWT, [evaluations:View] (team scope) | — | as §9.1 (list view uses `{id,employee,position,period,score,result,status}`) | Member EVALUATIONS card (+ Edit) | EXISTING |
+| 14.5 | Weekly schedule of member | JWT, [schedule:View] (team scope) | — | `{days:[{date,shiftTemplateId}]}` (Mon 25 … Sun 31 in mock) | WEEKLY SCHEDULE card / `openMemberSchedule` modal | covered by §15 roster/assignments (see 15.2) |
+| 14.6 | `POST /api/evaluation-forms/{formId}/responses` | JWT, [evaluations:Edit] | body: `{employeeId, period, score, criteria:[{name,score,comment}], overallComment}` — criteria names fixed list: `Customer Service, Team Collaboration, Punctuality & Attendance, Technical Skills, Initiative`; `result` derived (`≥4 Exceeds, ≥3 Meets, else Below`) | created `{id,employee,position,period,score,result,status:"Completed",criteria,overallComment}` | "Evaluate" button / "New Evaluation" modal → Save | EXISTING (forms from `GET /api/evaluation-forms`) |
+| 14.7 | `PUT /api/employees/{id}/evaluations/{evaluationId}` | JWT, [evaluations:Edit] | body: `{period, score, criteria:[{name,score,comment}], overallComment}` | updated evaluation | `openEditTeamEvaluation` → Save Changes | **NEW** |
+| 14.8 | `POST /api/requests/{id}/decide` | JWT, [requests:Edit] | body: `{stage:"BranchManager", decision:"Approved"\|"Rejected", comment?}` | request with `status:"Pending HR"` (approve) or `"Rejected Pending HR"` (reject) | Inline Approve/Reject on member request | EXISTING |
 
 ---
 
@@ -504,13 +504,13 @@ Session hydration: login/refresh (EXISTING) supplies JWT; effective `permissions
 
 | # | Method + Path | Auth / Permission | Request | Response | Caller | Status |
 |---|---|---|---|---|---|---|
-| 15.1 | `GET /api/gyms/{gymId}/shift-cycles` | JWT, `schedule.view.team` | query: `month=YYYY-MM` (Jan–Dec window) | `{items:[{id,start,end,label,days:[{iso,num,dow}],custom:bool,published:bool,employeeCount}]}` — status badge Draft/Published/Custom | Month dropdown, period strip, period stats | EXISTING (path) |
-| 15.2 | `GET /api/shift-cycles/{id}` | JWT, `schedule.view.team` | — | `{id,start,end,label,days:[{iso,num,dow}],assignments:{ [employeeId]: [shiftTemplateId per day] },shiftTemplates:[{id,name,start,end,color,bgColor,textColor,isOff}]}` | Roster grid (desktop + mobile), assigned-count stats, member weekly schedule (14.5) | EXISTING |
-| 15.3 | `POST /api/gyms/{gymId}/shift-cycles` | JWT, `schedule.manage` | body: `{startDate (cs-start), endDate (cs-end)}` | created cycle (as 15.1 item) | "Create New Schedule" modal → Create Schedule | EXISTING |
-| 15.4 | `PUT /api/shift-cycles/{id}/assignments` | JWT, `schedule.manage` | body: `{assignments:[{employeeId,date,shiftTemplateId}]}` (cell paint, drag-paint, Fill row/day/All, Reset → auto-draft, delete → all `st-off`) | updated assignments | paint/fill/reset/delete actions, Shift Management grid cells | EXISTING |
-| 15.5 | `POST /api/shift-cycles/{id}/publish` | JWT, `schedule.manage` | — | cycle with `published:true` | Publish button (also from Shift Management header) | EXISTING |
-| 15.6 | `DELETE /api/shift-cycles/{id}` | JWT, `schedule.manage` | — | ok | "Delete Schedule" (sets all shifts OFF) | **NEW** |
-| 15.7 | `GET /api/teams/{teamId}/unscheduled-count` | JWT, `schedule.view.team` | — | `{count}` (members whose roster is empty/all-OFF) | Team Schedule sidebar badge "unscheduled" | **NEW** (or fold into 13.2) |
+| 15.1 | `GET /api/gyms/{gymId}/shift-cycles` | JWT, [schedule:View] (team scope) | query: `month=YYYY-MM` (Jan–Dec window) | `{items:[{id,start,end,label,days:[{iso,num,dow}],custom:bool,published:bool,employeeCount}]}` — status badge Draft/Published/Custom | Month dropdown, period strip, period stats | EXISTING (path) |
+| 15.2 | `GET /api/shift-cycles/{id}` | JWT, [schedule:View] (team scope) | — | `{id,start,end,label,days:[{iso,num,dow}],assignments:{ [employeeId]: [shiftTemplateId per day] },shiftTemplates:[{id,name,start,end,color,bgColor,textColor,isOff}]}` | Roster grid (desktop + mobile), assigned-count stats, member weekly schedule (14.5) | EXISTING |
+| 15.3 | `POST /api/gyms/{gymId}/shift-cycles` | JWT, [schedule:Edit] | body: `{startDate (cs-start), endDate (cs-end)}` | created cycle (as 15.1 item) | "Create New Schedule" modal → Create Schedule | EXISTING |
+| 15.4 | `PUT /api/shift-cycles/{id}/assignments` | JWT, [schedule:Edit] | body: `{assignments:[{employeeId,date,shiftTemplateId}]}` (cell paint, drag-paint, Fill row/day/All, Reset → auto-draft, delete → all `st-off`) | updated assignments | paint/fill/reset/delete actions, Shift Management grid cells | EXISTING |
+| 15.5 | `POST /api/shift-cycles/{id}/publish` | JWT, [schedule:Edit] | — | cycle with `published:true` | Publish button (also from Shift Management header) | EXISTING |
+| 15.6 | `DELETE /api/shift-cycles/{id}` | JWT, [schedule:Edit] | — | ok | "Delete Schedule" (sets all shifts OFF) | **NEW** |
+| 15.7 | `GET /api/teams/{teamId}/unscheduled-count` | JWT, [schedule:View] (team scope) | — | `{count}` (members whose roster is empty/all-OFF) | Team Schedule sidebar badge "unscheduled" | **NEW** (or fold into 13.2) |
 
 ---
 
@@ -518,14 +518,15 @@ Session hydration: login/refresh (EXISTING) supplies JWT; effective `permissions
 
 | # | Method + Path | Auth / Permission | Request | Response | Caller | Status |
 |---|---|---|---|---|---|---|
-| 16.1 | `GET /api/gyms/{gymId}/shift-templates` | JWT, `schedule.view` | — | `{items:[{id,name,start,end,color,bgColor,textColor,isOff}]}` | Palette, grid rendering, stats | EXISTING |
-| 16.2 | `POST /api/gyms/{gymId}/shift-templates` | JWT, `schedule.manage` | body: `{name, start, end, color, isOff}` (`bgColor`/`textColor` derived) | created template | "Create Shift Template" modal → Create Template | EXISTING |
-| 16.3 | `PUT /api/gyms/{gymId}/shift-templates/{id}` | JWT, `schedule.manage` | body: `{name, start, end, color, isOff}` | updated template | "Edit Shift Template" → Save Changes | **NEW** |
-| 16.4 | `DELETE /api/gyms/{gymId}/shift-templates/{id}` | JWT, `schedule.manage` | — | ok (cells reassign to Off Day) | Delete Template → confirm | **NEW** |
-| 16.5 | Grid paint / cycle cell | JWT, `schedule.manage` | `PUT /api/shift-cycles/{id}/assignments` body as 15.4 | updated | `paintShift` cell clicks | EXISTING |
-| 16.6 | `POST /api/shift-cycles/{id}/copy-previous` | JWT, `schedule.manage` | — | updated assignments | "Copy Previous" quick action | EXISTING |
-| 16.7 | `PUT /api/shift-cycles/{id}` (draft) | JWT, `schedule.manage` | body: draft assignments | cycle | "Save Draft" | EXISTING |
-| 16.8 | `GET /api/gyms/{gymId}/shift-cycles/{id}/utilization` (or fold into 15.2) | JWT, `schedule.view` | — | `{totalHours, utilization, shiftCounts:{templateId}, offCount, perEmployee:[{employeeId,hours}]}` | CYCLE UTILIZATION stats + per-row hours bars | **NEW** (computable client-side from 15.2 — optional) |
+| 16.1 | `GET /api/gyms/{gymId}/shift-templates` | JWT, [schedule:View] | — | `{items:[{id,name,start,end,color,bgColor,textColor,isOff}]}` | Palette, grid rendering, stats | EXISTING |
+| 16.2 | `POST /api/gyms/{gymId}/shift-templates` | JWT, [schedule:Edit] | body: `{name, start, end, color, isOff}` (`bgColor`/`textColor` derived) | created template | "Create Shift Template" modal → Create Template | EXISTING |
+| 16.3 | `PUT /api/gyms/{gymId}/shift-templates/{id}` | JWT, [schedule:Edit] | body: `{name, start, end, color, isOff}` | updated template | "Edit Shift Template" → Save Changes | **NEW** |
+| 16.4 | `DELETE /api/gyms/{gymId}/shift-templates/{id}` | JWT, [schedule:Edit] | — | ok (cells reassign to Off Day) | Delete Template → confirm | **NEW** |
+| 16.5 | Grid paint / cycle cell | JWT, [schedule:Edit] | `PUT /api/shift-cycles/{id}/assignments` body as 15.4 | updated | `paintShift` cell clicks | EXISTING |
+| 16.6 | `POST /api/shift-cycles/{id}/copy-previous` | JWT, [schedule:Edit] | — | updated assignments | "Copy Previous" quick action — **mock stub** (`showToast` only; optional endpoint, assignments can be copied via 15.4) | **NEW** (stub) |
+| 16.7 | `PUT /api/shift-cycles/{id}` (draft) | JWT, [schedule:Edit] | body: draft assignments | cycle | "Save Draft" — **mock stub** (`showToast` only; drafts already persist through 15.4 autosave) | **NEW** (stub, optional) |
+| 16.8 | "Bulk Assign" | JWT, [schedule:Edit] | — | — | **mock stub** (`showToast` only) — express as a bulk `PUT /api/shift-cycles/{id}/assignments` call if implemented | see 15.4 |
+| 16.8 | `GET /api/gyms/{gymId}/shift-cycles/{id}/utilization` (or fold into 15.2) | JWT, [schedule:View] | — | `{totalHours, utilization, shiftCounts:{templateId}, offCount, perEmployee:[{employeeId,hours}]}` | CYCLE UTILIZATION stats + per-row hours bars | **NEW** (computable client-side from 15.2 — optional) |
 
 ---
 
@@ -533,11 +534,11 @@ Session hydration: login/refresh (EXISTING) supplies JWT; effective `permissions
 
 | # | Method + Path | Auth / Permission | Request | Response | Caller | Status |
 |---|---|---|---|---|---|---|
-| 17.1 | `GET /api/requests` | JWT, `requests.view.team` (TL) / `requests.view` (BM) | query: `status, type, dateFrom, dateTo, teamId, page, pageSize` (filters per guide §5) | `{items:[{id,employee,type,date,submitted,status,reason,teamApprovedBy,teamApprovedDate,hrApprovedBy,hrApprovedDate,teamRejectedBy,teamRejectedDate,hrRejectedBy,hrRejectedDate,rejectionReason,rejectionType}], …pager}` — statuses `Pending, Pending HR, Rejected Pending HR, Approved, Rejected` | Tabs NEED ACTION / PENDING HR / APPROVED / REJECTED, rows, sidebar badge | EXISTING (path; team-scoped query is the extension) |
-| 17.2 | `POST /api/requests/{id}/decide` | JWT, `requests.approve.team` | body: `{stage:"BranchManager", decision, comment}` — `comment` from "Rejection reason (optional)" textarea | updated request (+ stage fields) | Approve / Reject → "Reject Request" modal | EXISTING |
-| 17.3 | `PUT /api/requests/{id}` | JWT, `requests.approve.team` | body: `{type, date, reason}` (edit modal: Type select incl. `Sick Leave`, Date, Reason / Note) | updated request (still needs HR) | Edit → Save Changes | **NEW** |
+| 17.1 | `GET /api/requests` | JWT, [requests:View] (TL team scope / BM gym scope) | query: `status, type, dateFrom, dateTo, teamId, page, pageSize` (filters per guide §5) | `{items:[{id,employee,type,date,submitted,status,reason,teamApprovedBy,teamApprovedDate,hrApprovedBy,hrApprovedDate,teamRejectedBy,teamRejectedDate,hrRejectedBy,hrRejectedDate,rejectionReason,rejectionType}], …pager}` — statuses `Pending, Pending HR, Rejected Pending HR, Approved, Rejected` | Tabs NEED ACTION / PENDING HR / APPROVED / REJECTED, rows, sidebar badge | EXISTING (path; team-scoped query is the extension) |
+| 17.2 | `POST /api/requests/{id}/decide` | JWT, [requests:Edit] | body: `{stage:"BranchManager", decision, comment}` — `comment` from "Rejection reason (optional)" textarea | updated request (+ stage fields) | Approve / Reject → "Reject Request" modal | EXISTING |
+| 17.3 | `PUT /api/requests/{id}` | JWT, [requests:Edit] | body: `{type, date, reason}` (edit modal: Type select incl. `Sick Leave`, Date, Reason / Note) | updated request (still needs HR) | Edit → Save Changes | **NEW** |
 | 17.4 | `GET /api/requests/{id}` | JWT, requester or approver | — | detail incl. timeline fields above (timeline built from `Submitted / Team Leader Approved\|Rejected / HR Approved\|Rejected / expired` + pending step) | "View" → Request Review modal | EXISTING |
-| 17.5 | `POST /api/requests/{id}/comments` | JWT, `requests.view`+ | body: `{comment}` | created comment | Comment modal → Post Comment (`openRequestComment`, dormant in mock) | **NEW** |
+| 17.5 | `POST /api/requests/{id}/comments` | JWT, [requests:View]+ | body: `{comment}` | created comment | Comment modal → Post Comment (`openRequestComment`, dormant in mock) | **NEW** |
 
 ---
 
@@ -545,7 +546,7 @@ Session hydration: login/refresh (EXISTING) supplies JWT; effective `permissions
 
 | # | Method + Path | Auth / Permission | Request | Response | Caller | Status |
 |---|---|---|---|---|---|---|
-| 18.1 | `GET /api/teams/{teamId}/evaluations` | JWT, `evaluations.view.team` | query: `period` (`Q2 2026`, `Q1 2026`) | `{items:[{id,employee,position,period,score,result,status}]}` — `result ∈ Exceeds,Meets,Below` | Table (Employee, Period, Score, Result, Status), mobile cards, stats (avg/exceeds/meets/below), sidebar badge (`evaluations.view` on own evals) | **NEW** |
+| 18.1 | `GET /api/teams/{teamId}/evaluations` | JWT, [evaluations:View] (team scope) | query: `period` (`Q2 2026`, `Q1 2026`) | `{items:[{id,employee,position,period,score,result,status}]}` — `result ∈ Exceeds,Meets,Below` | Table (Employee, Period, Score, Result, Status), mobile cards, stats (avg/exceeds/meets/below), sidebar badge ([evaluations:View] on own evals) | **NEW** |
 | 18.2 | Create / edit / detail | as 14.6 / 14.7 | — | — | New Evaluation, Detail, Edit modals | see 14.6, 14.7 |
 
 ---
@@ -560,13 +561,13 @@ Uses 13.6 (list), 13.7 (Action modal), and the Branch Actions palette (§20). "T
 
 | # | Method + Path | Auth / Permission | Request | Response | Caller | Status |
 |---|---|---|---|---|---|---|
-| 20.1 | `POST /api/deduction-candidates` | JWT, `attendance.edit` | body: `{employee, amount, date, reason, note}` — reason select: `Unapproved absence, Late arrival (30+ min), Early checkout without approval, Damaged equipment / property, Policy violation, Other (see note)`; `issuedBy`,`status:"Pending HR"` server-set | `{id,employee,amount,reason,date,note,issuedBy,status}` | Issue Deduction modal → Send to HR | **NEW** (docs only have list + HR review) |
-| 20.2 | `GET /api/deduction-candidates` | JWT, `attendance.edit`/HR `payroll.view` | query: `status` | items as 20.1 | "Awaiting HR" merged queue | EXISTING |
-| 20.3 | `POST /api/warning-notices` | JWT, `employees.edit` | body: `{employee, type, date, reason, note}` — `type` select: `Attendance, Conduct, Performance, Safety, Policy violation` | `{id,employee,type,date,reason,note,issuedBy,status:"Pending HR"}` | Issue Warning Notice → Send to HR | **NEW** |
-| 20.4 | `GET /api/warning-notices` | JWT, `employees.edit` | query: `status` | items as 20.3 | Awaiting HR queue | **NEW** |
-| 20.5 | `POST /api/bonus-proposals` | JWT, `employees.edit` | body: `{employee, type, amount, date, reason, note}` — `type` select: `Performance Bonus, Overtime Pay, Attendance Reward, Referral Bonus, Other` | `{id,employee,type,amount,date,reason,note,issuedBy,status:"Pending HR"}` | Propose Bonus → Send to HR | **NEW** |
-| 20.6 | `GET /api/bonus-proposals` | JWT, `employees.edit` | query: `status` | items as 20.5 | Awaiting HR queue | **NEW** |
-| 20.7 | `POST /api/branch-reports` | JWT (any employee action `perm:null` in palette) | body: `{period ("August 2026"), type ("Monthly branch summary"\|"Attendance exceptions"\|"Incident report"\|"Request escalations"), message}` | created report | Send Report to HR modal | **NEW** |
+| 20.1 | `POST /api/deduction-candidates` | JWT, [attendance:Edit] | body: `{employee, amount, date, reason, note}` — reason select: `Unapproved absence, Late arrival (30+ min), Early checkout without approval, Damaged equipment / property, Policy violation, Other (see note)`; `issuedBy`,`status:"Pending HR"` server-set | `{id,employee,amount,reason,date,note,issuedBy,status}` | Issue Deduction modal → Send to HR | **NEW** (docs only have list + HR review) |
+| 20.2 | `GET /api/deduction-candidates` | JWT, [attendance:Edit]/HR [payroll:View] | query: `status` | items as 20.1 | "Awaiting HR" merged queue | EXISTING |
+| 20.3 | `POST /api/warning-notices` | JWT, [employees:Edit] | body: `{employee, type, date, reason, note}` — `type` select: `Attendance, Conduct, Performance, Safety, Policy violation` | `{id,employee,type,date,reason,note,issuedBy,status:"Pending HR"}` | Issue Warning Notice → Send to HR | **NEW** |
+| 20.4 | `GET /api/warning-notices` | JWT, [employees:Edit] | query: `status` | items as 20.3 | Awaiting HR queue | **NEW** |
+| 20.5 | `POST /api/bonus-proposals` | JWT, [employees:Edit] | body: `{employee, type, amount, date, reason, note}` — `type` select: `Performance Bonus, Overtime Pay, Attendance Reward, Referral Bonus, Other` | `{id,employee,type,amount,date,reason,note,issuedBy,status:"Pending HR"}` | Propose Bonus → Send to HR | **NEW** |
+| 20.6 | `GET /api/bonus-proposals` | JWT, [employees:Edit] | query: `status` | items as 20.5 | Awaiting HR queue | **NEW** |
+| 20.7 | `POST /api/branch-reports` | JWT (palette action `perm:null` — any employee may report to HR) | body: `{period ("August 2026"), type ("Monthly branch summary"\|"Attendance exceptions"\|"Incident report"\|"Request escalations"), message}` | created report | Send Report to HR modal — **mock stub** (form values discarded; endpoint makes it real) | **NEW** |
 | 20.8 | Palette queue badge | JWT | `GET` 20.2/20.4/20.6 filtered `status=Pending HR` | counts | Sidebar "Actions" badge `awaiting HR` | see above |
 
 ---
@@ -575,11 +576,11 @@ Uses 13.6 (list), 13.7 (Action modal), and the Branch Actions palette (§20). "T
 
 | # | Method + Path | Auth / Permission | Request | Response | Caller | Status |
 |---|---|---|---|---|---|---|
-| 21.1 | `GET /api/employees` | JWT, `employees.view` | query: `gymId, q, position, status, page, pageSize` | `{items:[{id,name,position,shift,status,initials,todayShift:{name,start,end,isOff}}], …pager}` — `status ∈ Active, On Leave, Suspended, Terminated`; live badge (`On Shift/Upcoming/Shift Ended/Off/…`) derived client-side from shift + server `now` | Directory table (Employee, Position, Shift (Today), Status), mobile cards, stats, sidebar badge (status ≠ Active) | EXISTING |
-| 21.2 | `POST /api/employees` | JWT, `employees.create` | body: `{name, position}` — position select: `Trainer, Receptionist, Cleaner, Maintenance` | created `{id,name,position,status:"Active",initials}` | New Employee modal → Add Employee | EXISTING |
-| 21.3 | `PUT /api/employees/{id}` | JWT, `employees.edit` | body: `{name, position, status}` | updated employee | Edit modal → Save Changes | EXISTING |
-| 21.4 | `POST /api/employees/{id}/status-change` | JWT, `employees.status.change` | body: `{status, note}` — status select `Active, On Leave, Suspended, Terminated`; note textarea optional | updated + history event | Change Status modal → Update Status | EXISTING |
-| 21.5 | `GET /api/employees/{id}` | JWT, `employees.view` | — | §2.1 | Row click → profile (routes to team-member-profile when mapped) | EXISTING |
+| 21.1 | `GET /api/employees` | JWT, [employees:View] | query: `gymId, q, position, status, page, pageSize` | `{items:[{id,name,position,shift,status,initials,todayShift:{name,start,end,isOff}}], …pager}` — `status ∈ Active, On Leave, Suspended, Terminated`; live badge (`On Shift/Upcoming/Shift Ended/Off/…`) derived client-side from shift + server `now` | Directory table (Employee, Position, Shift (Today), Status), mobile cards, stats, sidebar badge (status ≠ Active) | EXISTING |
+| 21.2 | `POST /api/employees` | JWT, [employees:Edit] | body: `{name, position}` — position select: `Trainer, Receptionist, Cleaner, Maintenance` | created `{id,name,position,status:"Active",initials}` | New Employee modal → Add Employee | EXISTING |
+| 21.3 | `PUT /api/employees/{id}` | JWT, [employees:Edit] | body: `{name, position, status}` | updated employee | Edit modal → Save Changes | EXISTING |
+| 21.4 | `POST /api/employees/{id}/status-change` | JWT, [employees:Edit] | body: `{status, note}` — status select `Active, On Leave, Suspended, Terminated`; note textarea optional | updated + history event | Change Status modal → Update Status | EXISTING |
+| 21.5 | `GET /api/employees/{id}` | JWT, [employees:View] | — | §2.1 | Row click → profile (routes to team-member-profile when mapped) | EXISTING |
 
 ---
 
@@ -587,10 +588,10 @@ Uses 13.6 (list), 13.7 (Action modal), and the Branch Actions palette (§20). "T
 
 | # | Method + Path | Auth / Permission | Request | Response | Caller | Status |
 |---|---|---|---|---|---|---|
-| 22.1 | `GET /api/attendance` | JWT, `attendance.view` | query: `gymId, date/range (Today\|This Week\|This Month), status, page, pageSize` | `{items:[{id,name,position,status,checkIn,initials,lateMinutes}], summary:{present,late,absent,...}}` — `status ∈ Present,Late,Absent` | Stats, LATE CHECK-INS list (name, position, checkIn), ABSENT list, sidebar badge | EXISTING |
-| 22.2 | "Follow Up" (late row) | JWT, `attendance.edit` | `POST /api/teams/follow-ups` (§13.5) or toast-only | — | Follow Up button (toast in mock) | see 13.5 |
-| 22.3 | "Mark Absent" | JWT, `attendance.edit` | `POST /api/attendance/manual` body `{employeeId,gymId,timestamp,reason,direction}` | record | Mark Absent button (toast in mock) | EXISTING (docs) |
-| 22.4 | Correct Attendance action | JWT, `attendance.edit` | navigates to this page; actual corrections are `PUT /api/attendance/{id}/correct` (HR) + employee request workflow (§7.3 `correction` type) | — | Branch Actions → Correct Attendance | EXISTING |
+| 22.1 | `GET /api/attendance` | JWT, [attendance:View] | query: `gymId, date/range (Today\|This Week\|This Month), status, page, pageSize` | `{items:[{id,name,position,status,checkIn,initials,lateMinutes}], summary:{present,late,absent,...}}` — `status ∈ Present,Late,Absent` | Stats, LATE CHECK-INS list (name, position, checkIn), ABSENT list, sidebar badge | EXISTING |
+| 22.2 | "Follow Up" (late row) | JWT, [attendance:Edit] | `POST /api/teams/follow-ups` (§13.5) or toast-only | — | Follow Up button (toast in mock) | see 13.5 |
+| 22.3 | "Mark Absent" | JWT, [attendance:Edit] | `POST /api/attendance/manual` body `{employeeId,gymId,timestamp,reason,direction}` | record | Mark Absent button (toast in mock) | EXISTING (docs) |
+| 22.4 | Correct Attendance action | JWT, [attendance:Edit] | navigates to this page; actual corrections are `PUT /api/attendance/{id}/correct` (HR) + employee request workflow (§7.3 `correction` type) | — | Branch Actions → Correct Attendance | EXISTING |
 
 ---
 
@@ -598,8 +599,8 @@ Uses 13.6 (list), 13.7 (Action modal), and the Branch Actions palette (§20). "T
 
 | # | Method + Path | Auth / Permission | Request | Response | Caller | Status |
 |---|---|---|---|---|---|---|
-| 23.1 | `GET /api/vacancy-requests` | JWT, `recruitment.vacancy_request.create` (own gym) | query: `gymId, status` | `{items:[{id,position,count,urgency,status,date,requestedBy,department,reason,timeline,candidates}]}` — status `Submitted\|Pending\|Approved\|Rejected`; urgency `High\|Medium\|Low` | Stats (Open Positions/Submitted/Pending/Approved), pipeline, request cards, sidebar badge | EXISTING |
-| 23.2 | `POST /api/vacancy-requests` | JWT, `recruitment.vacancy_request.create` | body: `{position, count, urgency, department, reason}` — department select `Training, Front Desk, Facilities, Maintenance` | created `{…,status:"Submitted",requestedBy,date,candidates:0}` | New Recruitment Request modal → Submit | EXISTING |
+| 23.1 | `GET /api/vacancy-requests` | JWT, [recruitment:View] (own gym) | query: `gymId, status` | `{items:[{id,position,count,urgency,status,date,requestedBy,department,reason,timeline,candidates}]}` — status `Submitted\|Pending\|Approved\|Rejected`; urgency `High\|Medium\|Low` | Stats (Open Positions/Submitted/Pending/Approved), pipeline, request cards, sidebar badge | EXISTING |
+| 23.2 | `POST /api/vacancy-requests` | JWT, [recruitment:Edit] | body: `{position, count, urgency, department, reason}` — department select `Training, Front Desk, Facilities, Maintenance` | created `{…,status:"Submitted",requestedBy,date,candidates:0}` | New Recruitment Request modal → Submit | EXISTING |
 | 23.3 | `GET /api/vacancy-requests/{id}` | JWT | — | as 23.1 item (+ full fields) | Detail modal (Positions, Department, Requested By, Requested On, Reason, Timeline) | **NEW** (no detail route in docs) |
 
 ---
@@ -608,8 +609,8 @@ Uses 13.6 (list), 13.7 (Action modal), and the Branch Actions palette (§20). "T
 
 | # | Method + Path | Auth / Permission | Request | Response | Caller | Status |
 |---|---|---|---|---|---|---|
-| 24.1 | `GET /api/offboarding-requests` | JWT, `employees.offboard` | query: `gymId, status` | `{items:[{id,employee,position,lastDay,status,reason}]}` — status `Notice Period` (+ `Draft/Cancelled` per badge map) | List cards, sidebar badge (count) | **NEW** |
-| 24.2 | `POST /api/employees/{id}/offboard` | JWT, `employees.offboard` | body: `{lastWorkingDay (date), reason (textarea)}`; employee chosen from select (maps to id) | created offboarding request (24.1 item) | Initiate Employee Leaving modal → Initiate Leaving | EXISTING |
+| 24.1 | `GET /api/offboarding-requests` | JWT, [offboarding:Edit] | query: `gymId, status` | `{items:[{id,employee,position,lastDay,status,reason}]}` — status `Notice Period` (+ `Draft/Cancelled` per badge map) | List cards, sidebar badge (count) | **NEW** |
+| 24.2 | `POST /api/employees/{id}/offboard` | JWT, [offboarding:Edit] | body: `{lastWorkingDay (date), reason (textarea)}`; employee chosen from select (maps to id) | created offboarding request (24.1 item) | Initiate Employee Leaving modal → Initiate Leaving — **mock stub** (form has no handler; values discarded) | EXISTING |
 
 ---
 
@@ -619,7 +620,10 @@ Uses 13.6 (list), 13.7 (Action modal), and the Branch Actions palette (§20). "T
 2. **Sidebar/header badges** (`computePendingActions`) are all derivable from: 10.1 (`status=Pending`), 3.1+3.2 (doc statuses), 6.1 (attendance statuses), 4.1 (`urgent`), 11.2, 13.6, 15.7, 17.1, 21.1, 22.1, 8.1 (`Processing`), 9.1/18.1 (`status≠Completed`), 23.1 (`Pending|Submitted`), 24.1, 20.2/20.4/20.6 (`Pending HR`).
 3. **Two-stage workflow** (guide §5, UI statuses): employee `POST /api/requests` → TL/BM `POST /api/requests/{id}/decide {stage:"BranchManager"}` → `Pending HR` → HR `decide {stage:"HR"}` final. Deduction/Warning/Bonus/Vacancy follow the same "→ HR" pattern (20.x, 23.2).
 4. **NEW endpoints summary (not in docs):** employee contact/emergency/photo updates (2.2–2.4), required-documents & HR-documents lists + downloads (3.2, 3.3, 3.5, 3.6), employee events projection (4.1 payload), leave balance (6.2), employee schedule view (7.1), request-types config (7.2), payslip download (8.3), request cancel/attachment (10.4, 10.5), change-password + settings/preferences (12.1–12.3), team today overview (13.2), reminders/messages/follow-ups (13.4–13.8), team evaluation update (14.7), cycle delete + unscheduled count (15.6, 15.7), shift-template update/delete (16.3, 16.4), utilization (16.8, optional), request PUT/comments (17.3, 17.5), team evaluations list (18.1), deduction/warning/bonus create+list (20.1, 20.3–20.6), branch reports (20.7), vacancy detail (23.3), offboarding list (24.1).
-5. **UI-only stubs (no API required / optional):** profile Personal Info edit & Employment Info (read-only), "Copy Previous"-style toast-only buttons beyond 16.6, dormant helpers (`addTeamFollowUp`, `openMemberRequests/Schedule/Attendance`, `openRequestComment`, `renderTeamOverview`, `futureRequests`), prototype role switcher/Show-All toolbar (demo-only).
+5. **UI-only stubs (mock discards the data; the listed endpoints make them real):** profile Personal/Employment info edits (read-only by rule — no API), avatar photo upload (2.4), emergency-contact edit (2.3), document upload + payslip download (3.4/3.5/3.6, 8.3), request cancel (10.4) and attachment download (10.5), notifications mark-read from the page (11.3/11.4 — `core.js` has the functions; the page's own button is a toast), settings toggles + language (12.2/12.3), change password (12.1), reminders/messages (13.4/13.8), request comments (17.5), Shift Mgmt "Save Draft"/"Copy Previous"/"Bulk Assign" (16.6–16.8), Attendance Mgmt "Follow Up"/"Mark Absent" (22.2/22.3), Leaving form (24.2), Report-to-HR form (20.7). Dormant mock helpers with no caller: `addTeamFollowUp`, `openMemberRequests/Schedule/Attendance`, `openRequestComment`, `renderTeamOverview`, `futureRequests`.
+6. **Team Leader = Branch Manager parity, team-scoped:** both hold the same feature levels (plan §2); management endpoints return team data for a TL (leader's `TeamLeaders` row in the active gym) and gym data for a BM. Never a client-supplied scope: gym comes from the JWT `gymId` claim; team is resolved from the actor.
+7. **Multi-gym:** `UserGymAccess` is N:M and login already selects a gym at `>= 2` gyms (3+ works). One account per employee (`User.EmployeeProfile` 1:1; `Employee.GymId` = primary gym). Active gym for the whole session = the chosen gym; `POST /api/auth/switch-gym` re-scopes in-session.
+8. **Slice mapping for implementation** (tracker: `docs/implementation/employee-portal-progress.md`): Slice 0 = authorization foundation (§12.1 auth gates, `/api/me`, `switch-gym`); Slice 1 = §§1–12 (self-service); Slice 2 = §§13–24 (management); Slice 3 = HR hand-off contracts for the `Pending HR` queue.
 
 ---
 

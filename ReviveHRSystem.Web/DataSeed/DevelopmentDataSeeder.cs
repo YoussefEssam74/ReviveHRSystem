@@ -10,15 +10,18 @@ using DomainLayer.Models.UserModule.Enums;
 using Microsoft.EntityFrameworkCore;
 using Presistence.Data;
 using ServiceAbstraction.Services;
+using Shared.Authorization;
 using System.Security.Cryptography;
 
 namespace ReviveHRSystem.Web.DataSeed
 {
     /// <summary>
     /// Idempotent Development-only seed so login + attendance are testable end-to-end.
-    /// Creates two gyms, three employees covering the ADR-004 validation matrix, a
-    /// randomly generated active 6-digit station code per gym, and a published shift
-    /// cycle covering today. Also applies pending EF migrations on startup in Development.
+    /// Creates two gyms, the authorization catalog (features + preset roles with
+    /// per-gym role assignments), HR/Admin/employee accounts covering the ADR-004
+    /// validation matrix, a randomly generated active 6-digit station code per gym,
+    /// and a published shift cycle covering today. Also applies pending EF migrations
+    /// on startup in Development.
     ///
     /// Station codes are never hardcoded: each gym gets a freshly generated unique
     /// code (the seeded value is logged), and production codes are created by HR via
@@ -29,13 +32,16 @@ namespace ReviveHRSystem.Web.DataSeed
     /// StationCode:ExpirationMinutes lifetime.
     ///
     /// Scenario matrix:
-    ///   EMP-1042 Karim — access: gym1 only, shift at gym1 today
-    ///   EMP-1051 Omar  — access: gym1 + gym2, shift at gym1 today (→ WRONG_BRANCH at gym2)
-    ///   EMP-1060 Sara  — access: gym2 only, no shift today        (→ SCHEDULED_DAY_OFF at gym2)
+    ///   EMP-1042 Karim — access: gym1 only, shift at gym1 today, Employee role
+    ///   EMP-1051 Omar  — access: gym1 + gym2, shift at gym1 today (→ WRONG_BRANCH at gym2),
+    ///                    Branch Manager role at gym1, Team Leader role at gym2
+    ///   EMP-1060 Sara  — access: gym2 only, no shift today       (→ SCHEDULED_DAY_OFF at gym2)
     /// </summary>
     public static class DevelopmentDataSeeder
     {
         public const string AdminEmail = "admin@revive.hr";
+        public const string HrEmail = "hr@revive.hr";
+        public const string HrManagerEmail = "hrmanager@revive.hr";
         public const string EmployeePassword = "Revive!2026";
         public const string Gym1Name = "Revive Main Gym";
         public const string Gym2Name = "Revive Second Gym";
@@ -56,11 +62,28 @@ namespace ReviveHRSystem.Web.DataSeed
 
             await db.Database.MigrateAsync();
 
+            // Authorization catalog first: features + preset roles + (feature - level)
+            // bundles, so per-gym role assignments below can reference the roles.
+            await FeatureAccessSeeder.SeedCatalogAsync(db);
+
             var admin = await EnsureUserAsync(db, hasher, AdminEmail, "admin", UserType.TopManagement);
             var gym1 = await EnsureGymAsync(db, Gym1Name, "Cairo");
             var gym2 = await EnsureGymAsync(db, Gym2Name, "Alexandria");
             await EnsureGymAccessAsync(db, admin.Id, gym1.Id);
             await EnsureGymAccessAsync(db, admin.Id, gym2.Id);
+            await FeatureAccessSeeder.EnsureUserGymRoleAsync(db, admin.Id, gym1.Id, RoleNames.SuperAdmin);
+            await FeatureAccessSeeder.EnsureUserGymRoleAsync(db, admin.Id, gym2.Id, RoleNames.SuperAdmin);
+
+            // HR users (same password) so per-gym feature access is demonstrable.
+            var hr = await EnsureUserAsync(db, hasher, HrEmail, "hr", UserType.HR);
+            await EnsureGymAccessAsync(db, hr.Id, gym1.Id);
+            await FeatureAccessSeeder.EnsureUserGymRoleAsync(db, hr.Id, gym1.Id, RoleNames.Hr);
+
+            var hrManager = await EnsureUserAsync(db, hasher, HrManagerEmail, "hrmanager", UserType.HR);
+            await EnsureGymAccessAsync(db, hrManager.Id, gym1.Id);
+            await EnsureGymAccessAsync(db, hrManager.Id, gym2.Id);
+            await FeatureAccessSeeder.EnsureUserGymRoleAsync(db, hrManager.Id, gym1.Id, RoleNames.HrManager);
+            await FeatureAccessSeeder.EnsureUserGymRoleAsync(db, hrManager.Id, gym2.Id, RoleNames.HrManager);
 
             var stationCodeLifetimeMinutes = configuration.GetValue<int?>(StationCodeLifetimeKey);
             var gym1StationCode = await EnsureStationCodeAsync(db, gym1.Id, admin.Id, stationCodeLifetimeMinutes, logger);
@@ -75,28 +98,34 @@ namespace ReviveHRSystem.Web.DataSeed
             var today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, attendanceTimeZone));
             var cycle1 = await EnsureCycleAsync(db, gym1.Id, today, admin.Id);
 
-            // Karim — gym1 only, shift today at gym1.
+            // Karim - gym1 only, shift today at gym1. Plain employee (self-service only).
             var (karim, karimUser) = await EnsureEmployeeAsync(db, hasher, "karim@revive.hr", "karim",
                 "Karim Hassan", "EMP-1042", gym1.Id, position1.Id);
             await EnsureGymAccessAsync(db, karimUser.Id, gym1.Id);
+            await FeatureAccessSeeder.EnsureUserGymRoleAsync(db, karimUser.Id, gym1.Id, RoleNames.Employee);
             await EnsureAssignmentAsync(db, cycle1.Id, karim.Id, today, template.Id);
 
-            // Omar — access to both gyms but only scheduled at gym1 today.
+            // Omar - access to both gyms but only scheduled at gym1 today.
+            // Demonstrates per-gym roles: Branch Manager at gym1, Team Leader at gym2.
             var (omar, omarUser) = await EnsureEmployeeAsync(db, hasher, "omar@revive.hr", "omar",
                 "Omar Youssef", "EMP-1051", gym1.Id, position1.Id);
             await EnsureGymAccessAsync(db, omarUser.Id, gym1.Id);
             await EnsureGymAccessAsync(db, omarUser.Id, gym2.Id);
+            await FeatureAccessSeeder.EnsureUserGymRoleAsync(db, omarUser.Id, gym1.Id, RoleNames.BranchManager);
+            await FeatureAccessSeeder.EnsureUserGymRoleAsync(db, omarUser.Id, gym2.Id, RoleNames.TeamLeader);
             await EnsureAssignmentAsync(db, cycle1.Id, omar.Id, today, template.Id);
 
-            // Sara — gym2 only, deliberately no shift today.
+            // Sara - gym2 only, deliberately no shift today.
             var (_, saraUser) = await EnsureEmployeeAsync(db, hasher, "sara@revive.hr", "sara",
                 "Sara Ali", "EMP-1060", gym2.Id, position2.Id);
             await EnsureGymAccessAsync(db, saraUser.Id, gym2.Id);
+            await FeatureAccessSeeder.EnsureUserGymRoleAsync(db, saraUser.Id, gym2.Id, RoleNames.Employee);
 
             logger.LogWarning(
-                "Development seed complete. Logins: {Admin} / employee accounts (karim@revive.hr, omar@revive.hr, sara@revive.hr) password {Password}. " +
-                "Station codes: {Gym1}={Code1}, {Gym2}={Code2} (generated — fetch any time via GET /api/gyms/{{gymId}}/station-codes as an HR/admin user)",
-                AdminEmail, EmployeePassword, gym1.Name, gym1StationCode, gym2.Name, gym2StationCode);
+                "Development seed complete. Logins (password {Password}): {Admin}, hr@revive.hr, hrmanager@revive.hr, and employee accounts (karim@revive.hr, omar@revive.hr, sara@revive.hr). " +
+                "Station codes: {Gym1}={Code1}, {Gym2}={Code2} (generated - fetch any time via GET /api/gyms/{{gymId}}/station-codes as an HR/admin user). " +
+                "Per-gym roles: admin=Super Admin, hr=HR (gym1), hrmanager=HR Manager (both gyms), karim=Employee, omar=Branch Manager (gym1) / Team Leader (gym2), sara=Employee",
+                EmployeePassword, AdminEmail, gym1.Name, gym1StationCode, gym2.Name, gym2StationCode);
         }
 
         private static async Task<User> EnsureUserAsync(

@@ -7,6 +7,7 @@ using DomainLayer.Contracts;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
@@ -18,6 +19,7 @@ using ReviveHRSystem.Web.CustomMiddleWares;
 using ReviveHRSystem.Web.DataSeed;
 using ReviveHRSystem.Web.Factories;
 using ReviveHRSystem.Web.Middleware;
+using Presentation.Authorization;
 using Service.Mapping;
 using Service.Services;
 using ServiceAbstraction.Services;
@@ -93,7 +95,15 @@ namespace ReviveHRSystem.Web
 
                 options.DefaultPolicy = requireAuthenticated;
                 options.FallbackPolicy = requireAuthenticated;
+
+                // Per-gym feature access policies (ADR-003 Amendment 1): one
+                // "feature:{code}:{level}" policy per catalog feature at View and Edit.
+                AuthorizationPolicies.Register(options);
             });
+
+            // Resolves [HasFeatureAccess] policies against the caller's effective
+            // feature levels in the token's gym. Scoped: the permission service is scoped.
+            builder.Services.AddScoped<IAuthorizationHandler, FeatureAccessHandler>();
 
             // --- Rate limiting for the public endpoints (limits configurable per environment;
             //     appsettings.Testing.json raises them so integration tests aren't throttled) ---
@@ -145,6 +155,15 @@ namespace ReviveHRSystem.Web
             });
 
             // Validation errors use the project's envelope instead of ProblemDetails.
+            // Behind a TLS-terminating proxy, the external scheme and client IP arrive
+            // in X-Forwarded-Proto/-For. Only loopback proxies are trusted by default;
+            // extend KnownNetworks/KnownProxies when the proxy runs on another host so
+            // clients cannot spoof the rate limiter's remote-IP partition key.
+            builder.Services.Configure<ForwardedHeadersOptions>(options =>
+            {
+                options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+            });
+
             builder.Services.Configure<ApiBehaviorOptions>(options =>
                 options.InvalidModelStateResponseFactory = ApiResponseFactory.GenerateApiValidationErrorResponse);
 
@@ -180,6 +199,30 @@ namespace ReviveHRSystem.Web
             builder.Services.AddScoped<ITokenService, TokenService>();
             builder.Services.AddScoped<IAuthService, AuthService>();
             builder.Services.AddScoped<IAttendanceService, AttendanceService>();
+            builder.Services.AddScoped<IPermissionService, PermissionService>();
+            builder.Services.AddScoped<ITeamScopeService, TeamScopeService>();
+            builder.Services.AddScoped<IEmployeeAccessService, EmployeeAccessService>();
+            builder.Services.AddScoped<IEmployeeProfileService, EmployeeProfileService>();
+            builder.Services.AddScoped<IEmployeeDocumentService, EmployeeDocumentService>();
+            builder.Services.AddScoped<IAttendanceSelfService, AttendanceSelfService>();
+            builder.Services.AddScoped<IScheduleSelfService, ScheduleSelfService>();
+            builder.Services.AddScoped<IEmployeeRequestService, EmployeeRequestService>();
+            builder.Services.AddScoped<INotificationService, NotificationService>();
+            builder.Services.AddScoped<IAccountSettingsService, AccountSettingsService>();
+            builder.Services.AddScoped<IEvaluationSelfService, EvaluationSelfService>();
+            builder.Services.AddScoped<IEmploymentHistoryService, EmploymentHistoryService>();
+            builder.Services.AddScoped<IEmployeeEventService, EmployeeEventService>();
+            builder.Services.AddScoped<IPayrollSelfService, PayrollSelfService>();
+            builder.Services.AddScoped<IDashboardService, DashboardService>();
+            builder.Services.AddScoped<IEmployeeManagementService, EmployeeManagementService>();
+            builder.Services.AddScoped<IRequestManagementService, RequestManagementService>();
+            builder.Services.AddScoped<IAttendanceManagementService, AttendanceManagementService>();
+            builder.Services.AddScoped<ITeamOverviewService, TeamOverviewService>();
+            builder.Services.AddScoped<IVacancyRequestService, VacancyRequestService>();
+            builder.Services.AddScoped<IOffboardingService, OffboardingService>();
+            builder.Services.AddScoped<IShiftManagementService, ShiftManagementService>();
+            builder.Services.AddScoped<IBranchActionsService, BranchActionsService>();
+            builder.Services.AddScoped<ISessionContextService, SessionContextService>();
             builder.Services.AddScoped<IStationCodeService, StationCodeService>();
             builder.Services.AddScoped<IStationSessionService, StationSessionService>();
             builder.Services.AddFaceBiometrics(builder.Configuration);
@@ -239,6 +282,10 @@ namespace ReviveHRSystem.Web
             });
 
             var app = builder.Build();
+
+            // First in the pipeline so Request.IsHttps (the kiosk session cookie's
+            // Secure flag) reflects the external scheme behind a TLS-terminating proxy.
+            app.UseForwardedHeaders();
 
             app.UseMiddleware<CustomExceptionMiddleWare>();
             app.UseMiddleware<SecurityHeadersMiddleware>();

@@ -1,6 +1,345 @@
 @ReviveHRSystem.Web_HostAddress = http://localhost:5248
+@employeePassword = Revive!2026
 
-GET {{ReviveHRSystem.Web_HostAddress}}/weatherforecast/
-Accept: application/json
+# ==================== Employee Portal - request flows ====================
+# Run top to bottom: each login stores its token in a client variable used by the
+# requests below it. Gym selection: employees with more than one gym pick one after
+# login (select-gym); single-gym accounts and HR/manager tokens with one gym are
+# scoped automatically at login.
+
+# ---------- Logins (one per role) ----------
+
+### Login as plain Employee (karim - gym1 only, self-service role)
+POST {{ReviveHRSystem.Web_HostAddress}}/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "karim@revive.hr",
+  "password": "{{employeePassword}}"
+}
+
+> {%
+  client.global.set("employeeToken", response.body.accessToken);
+%}
 
 ###
+
+### Login as Branch Manager (omar - BM at gym1, TL at gym2): pick gym1
+POST {{ReviveHRSystem.Web_HostAddress}}/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "omar@revive.hr",
+  "password": "{{employeePassword}}"
+}
+
+> {%
+  client.global.set("gym1Id", response.body.gyms[0].gymId);
+  client.global.set("bmToken", response.body.tempSessionToken);
+%}
+
+###
+
+POST {{ReviveHRSystem.Web_HostAddress}}/api/auth/login/select-gym
+Content-Type: application/json
+
+{
+  "gymId": "{{gym1Id}}",
+  "tempSessionToken": "{{bmToken}}"
+}
+
+> {%
+  client.global.set("bmToken", response.body.accessToken);
+%}
+
+###
+
+### Login as Team Leader at gym2 (same account, other gym)
+POST {{ReviveHRSystem.Web_HostAddress}}/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "omar@revive.hr",
+  "password": "{{employeePassword}}"
+}
+
+> {%
+  client.global.set("tlToken", response.body.tempSessionToken);
+  client.global.set("gym2Id", response.body.gyms[1].gymId);
+%}
+
+###
+
+POST {{ReviveHRSystem.Web_HostAddress}}/api/auth/login/select-gym
+Content-Type: application/json
+
+{
+  "gymId": "{{gym2Id}}",
+  "tempSessionToken": "{{tlToken}}"
+}
+
+> {%
+  client.global.set("tlToken", response.body.accessToken);
+%}
+
+###
+
+### Login as HR (hr@revive.hr - HR role at gym1)
+POST {{ReviveHRSystem.Web_HostAddress}}/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "hr@revive.hr",
+  "password": "{{employeePassword}}"
+}
+
+> {%
+  client.global.set("hrToken", response.body.accessToken);
+%}
+
+# ---------- Session & gym context ----------
+
+### My session context (feature levels for the active gym)
+GET {{ReviveHRSystem.Web_HostAddress}}/api/me
+Authorization: Bearer {{bmToken}}
+
+###
+
+### Switch the active gym without re-authenticating
+POST {{ReviveHRSystem.Web_HostAddress}}/api/auth/switch-gym
+Content-Type: application/json
+Authorization: Bearer {{bmToken}}
+
+{
+  "gymId": "{{gym2Id}}"
+}
+
+# ---------- Self-service ----------
+
+### My dashboard
+GET {{ReviveHRSystem.Web_HostAddress}}/api/dashboard/employee
+Authorization: Bearer {{employeeToken}}
+
+###
+
+### My profile, documents, attendance, leave balance
+GET {{ReviveHRSystem.Web_HostAddress}}/api/employees/1
+Authorization: Bearer {{employeeToken}}
+
+###
+
+GET {{ReviveHRSystem.Web_HostAddress}}/api/employees/1/documents
+Authorization: Bearer {{employeeToken}}
+
+###
+
+GET {{ReviveHRSystem.Web_HostAddress}}/api/employees/1/attendance?month=2026-10
+Authorization: Bearer {{employeeToken}}
+
+###
+
+GET {{ReviveHRSystem.Web_HostAddress}}/api/employees/1/leave-balance
+Authorization: Bearer {{employeeToken}}
+
+###
+
+GET {{ReviveHRSystem.Web_HostAddress}}/api/employees/1/schedule?month=2026-10
+Authorization: Bearer {{employeeToken}}
+
+###
+
+### Create a Day Off request (reserves annual leave) then cancel it
+POST {{ReviveHRSystem.Web_HostAddress}}/api/employees/1/requests
+Content-Type: application/json
+Authorization: Bearer {{employeeToken}}
+
+{
+  "type": "day-off",
+  "requestDate": "2026-11-10",
+  "reason": "Family event"
+}
+
+> {%
+  client.global.set("requestId", response.body.id);
+%}
+
+###
+
+POST {{ReviveHRSystem.Web_HostAddress}}/api/requests/{{requestId}}/cancel
+Authorization: Bearer {{employeeToken}}
+
+###
+
+### Update my contact information and preferences
+PUT {{ReviveHRSystem.Web_HostAddress}}/api/employees/1/contact
+Content-Type: application/json
+Authorization: Bearer {{employeeToken}}
+
+{
+  "phone": "+201000000000",
+  "address": "12 Nasr City Street"
+}
+
+###
+
+PUT {{ReviveHRSystem.Web_HostAddress}}/api/me/settings
+Content-Type: application/json
+Authorization: Bearer {{employeeToken}}
+
+{
+  "requests": true,
+  "attendance": true,
+  "recruitment": false,
+  "management": true,
+  "announcements": true
+}
+
+# ---------- Management (Branch Manager / Team Leader) ----------
+
+### Branch employee directory (403 for the plain employee token)
+GET {{ReviveHRSystem.Web_HostAddress}}/api/employees?q=Karim
+Authorization: Bearer {{bmToken}}
+
+###
+
+### Change an employment status (recorded on the history timeline)
+POST {{ReviveHRSystem.Web_HostAddress}}/api/employees/1/status-change
+Content-Type: application/json
+Authorization: Bearer {{bmToken}}
+
+{
+  "status": "OnLeave",
+  "note": "Approved medical leave"
+}
+
+###
+
+### Request inbox and the stage-1 (BranchManager) decision
+GET {{ReviveHRSystem.Web_HostAddress}}/api/requests?status=Pending
+Authorization: Bearer {{bmToken}}
+
+###
+
+POST {{ReviveHRSystem.Web_HostAddress}}/api/requests/{{requestId}}/decide
+Content-Type: application/json
+Authorization: Bearer {{bmToken}}
+
+{
+  "decision": "Approved",
+  "comment": "Coverage confirmed"
+}
+
+###
+
+### Attendance day view and a manual (audited) entry
+GET {{ReviveHRSystem.Web_HostAddress}}/api/attendance
+Authorization: Bearer {{bmToken}}
+
+###
+
+POST {{ReviveHRSystem.Web_HostAddress}}/api/attendance/mark-attendance
+Content-Type: application/json
+Authorization: Bearer {{bmToken}}
+
+{
+  "employeeId": "EMP-1042",
+  "type": "IN",
+  "reason": "Face recognition failed at the station; manager confirmed on site"
+}
+
+###
+
+### Shift management: templates, cycles, assignments, publish
+GET {{ReviveHRSystem.Web_HostAddress}}/api/gyms/{{gym1Id}}/shift-templates
+Authorization: Bearer {{bmToken}}
+
+###
+
+POST {{ReviveHRSystem.Web_HostAddress}}/api/gyms/{{gym1Id}}/shift-cycles
+Content-Type: application/json
+Authorization: Bearer {{bmToken}}
+
+{
+  "startDate": "2026-11-01",
+  "endDate": "2026-11-10"
+}
+
+###
+
+GET {{ReviveHRSystem.Web_HostAddress}}/api/teams/my-teams
+Authorization: Bearer {{tlToken}}
+
+###
+
+GET {{ReviveHRSystem.Web_HostAddress}}/api/teams/1/today
+Authorization: Bearer {{tlToken}}
+
+###
+
+### Branch Actions: deduction, warning, bonus (all await HR) + the queue
+POST {{ReviveHRSystem.Web_HostAddress}}/api/deduction-candidates
+Content-Type: application/json
+Authorization: Bearer {{bmToken}}
+
+{
+  "employeeId": 1,
+  "amount": 150,
+  "reason": "Unapproved absence",
+  "note": "Absent with no prior notice"
+}
+
+###
+
+POST {{ReviveHRSystem.Web_HostAddress}}/api/warning-notices
+Content-Type: application/json
+Authorization: Bearer {{bmToken}}
+
+{
+  "employeeId": 1,
+  "type": "Attendance",
+  "reason": "3rd late arrival within one month",
+  "note": "Verbal warning issued on site"
+}
+
+###
+
+POST {{ReviveHRSystem.Web_HostAddress}}/api/bonus-proposals
+Content-Type: application/json
+Authorization: Bearer {{bmToken}}
+
+{
+  "employeeId": 1,
+  "type": "Performance Bonus",
+  "amount": 500,
+  "reason": "Covered extra classes during event week"
+}
+
+###
+
+GET {{ReviveHRSystem.Web_HostAddress}}/api/branch-actions/pending-hr
+Authorization: Bearer {{bmToken}}
+
+###
+
+### Free-form report to HR (any employee)
+POST {{ReviveHRSystem.Web_HostAddress}}/api/branch-reports
+Content-Type: application/json
+Authorization: Bearer {{employeeToken}}
+
+{
+  "period": "October 2026",
+  "type": "Attendance exceptions",
+  "message": "Two trainers repeatedly late this month."
+}
+
+###
+
+### Change my password (401 for a wrong current password)
+POST {{ReviveHRSystem.Web_HostAddress}}/api/auth/change-password
+Content-Type: application/json
+Authorization: Bearer {{employeeToken}}
+
+{
+  "currentPassword": "Revive!2026",
+  "newPassword": "Revive!2027"
+}

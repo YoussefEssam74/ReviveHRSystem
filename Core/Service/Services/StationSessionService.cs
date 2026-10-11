@@ -107,7 +107,7 @@ namespace Service.Services
         private static bool IsLive(StationSession session) =>
             session.RevokedAtUtc is null
             && session.ExpiresAtUtc > DateTime.UtcNow
-            && session.Gym.Status == GymStatus.Active;
+            && session.Gym is { Status: GymStatus.Active };
 
         private static string GenerateToken() =>
             Convert.ToHexString(RandomNumberGenerator.GetBytes(TokenBytes)).ToLowerInvariant();

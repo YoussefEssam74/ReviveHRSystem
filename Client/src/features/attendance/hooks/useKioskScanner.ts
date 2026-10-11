@@ -195,9 +195,15 @@ export function useKioskScanner({ autoScan = true, onResult, onSessionExpired }:
 
     setPhase('scanning')
     setStatusText('Looking for a face')
-    clearTimer()
-    timerRef.current = window.setInterval(() => void sendFrame(), FRAME_INTERVAL_MS)
-  }, [clearTimer, sendFrame, startCamera])
+    // Auto-scan only: the autoScan effect owns the loop, but it does not re-run on
+    // a camera restart (sendFrame's deps are stable), so re-arm the interval here
+    // when auto-scan is on. Manual mode must not send frames just because the
+    // camera started or was retried.
+    if (autoScan) {
+      clearTimer()
+      timerRef.current = window.setInterval(() => void sendFrame(), FRAME_INTERVAL_MS)
+    }
+  }, [autoScan, clearTimer, sendFrame, startCamera])
 
   const stop = useCallback(() => {
     stoppedRef.current = true

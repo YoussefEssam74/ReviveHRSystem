@@ -20,6 +20,9 @@ namespace DomainLayer.Models.NotificationModule
         public string Description { get; set; } = string.Empty;
         public EventStatus Status { get; set; } = EventStatus.Open;
 
+        /// <summary>When the event was raised (shown on the employee-facing feed).</summary>
+        public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+
         public int? ResolvedBy { get; set; }
         public virtual User? Resolver { get; set; }
 

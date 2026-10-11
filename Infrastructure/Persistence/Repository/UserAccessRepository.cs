@@ -1,4 +1,5 @@
 using DomainLayer.Contracts;
+using DomainLayer.Models.UserModule.Enums;
 using Microsoft.EntityFrameworkCore;
 using Presistence.Data;
 using DomainLayer.Models.OrganizationModule.Enums;
@@ -7,8 +8,9 @@ namespace Presistence.Repository
 {
     /// <summary>
     /// Queries over the identity join tables (UserGymAccess / UserPermissions /
-    /// UserRoles / RolePermissions) which are not BaseEntity-derived and therefore
-    /// not reachable through the generic repository.
+    /// UserRoles / RolePermissions / UserGymRoles / UserGymPermissions) which are
+    /// not BaseEntity-derived and therefore not reachable through the generic
+    /// repository.
     /// </summary>
     public class UserAccessRepository(ReviveHrDbContext _dbContext) : IUserAccessRepository
     {
@@ -55,5 +57,34 @@ namespace Presistence.Repository
                 .Distinct(StringComparer.Ordinal)
                 .ToList();
         }
+
+        public async Task<IReadOnlyList<FeatureLevelEntry>> GetGlobalLevelsAsync(int userId, CancellationToken cancellationToken = default) =>
+            await _dbContext.UserPermissions
+                .Where(up => up.UserId == userId)
+                .Select(up => new FeatureLevelEntry { Feature = up.Permission.Key, Level = up.Level })
+                .ToListAsync(cancellationToken);
+
+        public async Task<IReadOnlyList<FeatureLevelEntry>> GetGymGrantLevelsAsync(int userId, int gymId, CancellationToken cancellationToken = default) =>
+            await _dbContext.UserGymPermissions
+                .Where(ugp => ugp.UserId == userId && ugp.GymId == gymId)
+                .Select(ugp => new FeatureLevelEntry { Feature = ugp.Permission.Key, Level = ugp.Level })
+                .ToListAsync(cancellationToken);
+
+        public async Task<IReadOnlyList<FeatureLevelEntry>> GetGymRoleLevelsAsync(int userId, int gymId, CancellationToken cancellationToken = default) =>
+            await (
+                from ugr in _dbContext.UserGymRoles
+                where ugr.UserId == userId && ugr.GymId == gymId
+                from rp in _dbContext.RolePermissions
+                where rp.RoleId == ugr.RoleId
+                select new FeatureLevelEntry { Feature = rp.Permission.Key, Level = rp.Level }
+            ).ToListAsync(cancellationToken);
+
+        public async Task<IReadOnlyList<string>> GetGymRoleNamesAsync(int userId, int gymId, CancellationToken cancellationToken = default) =>
+            await (
+                from ugr in _dbContext.UserGymRoles
+                where ugr.UserId == userId && ugr.GymId == gymId
+                select ugr.Role.Name
+            ).Distinct()
+             .ToListAsync(cancellationToken);
     }
 }
