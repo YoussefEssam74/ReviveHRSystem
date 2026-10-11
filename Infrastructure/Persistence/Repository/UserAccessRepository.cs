@@ -22,7 +22,7 @@ namespace Presistence.Repository
                     g => g.Id,
                     (uga, g) => g)
                 .Where(g => g.Status == GymStatus.Active)
-                .Select(g => new GymAccessEntry { GymId = g.Id, GymName = g.Name })
+                .Select(g => new GymAccessEntry { GymId = g.Id, GymName = g.Name, Branch = g.Location })
                 .OrderBy(e => e.GymId)
                 .ToListAsync(cancellationToken);
 

@@ -23,6 +23,16 @@ A completed session returns 200 with accessToken, expiresInSeconds, requiresGymS
 
 Request: { gymId, tempSessionToken }. Returns the completed session shape above; the token must be valid and the user must have access to the selected gym. Possible errors: 400, 401, or 429.
 
+### GET /api/auth/me
+
+Authenticated with a ****** Returns the signed-in user's portal profile: { id, firstName, lastName, fullName, email, phone, initials, position, level, role, permissions[], gyms: [{ id, name, branch }], selectedGym, hireDate, employmentType, status }. Derivations: fullName is the employee profile's full name, falling back to the user name when no profile exists (seeded admin); firstName/lastName/initials are derived from that name; branch is the gym's location (Gym.Location); role is the account's user type (TopManagement, HR, Employee); selectedGym echoes the token's gymId claim (null for unscoped tokens, e.g. admin); permissions lists granted keys and is legitimately empty for TopManagement, which bypasses permission checks (ADR-003). Gyms lists every assigned gym regardless of the token's scope. Errors: 401 (missing, invalid, or inactive account).
+
+## Gyms
+
+### GET /api/gyms
+
+Authenticated with a ****** No permission key required. Returns the gyms visible to the signed-in user - every active gym for TopManagement, the assigned gyms otherwise - as [{ id, name, branch, employees }], ordered by name. branch is Gym.Location; employees is the gym's active staff count. The list is not narrowed by the token's selected gym: it is the full set the user may switch between. Errors: 401 (missing, invalid, or inactive account).
+
 ## Attendance station
 
 Kiosk enrollment is public and rate-limited. `POST /api/kiosk/login` redeems the gym's current six-digit enrollment code - codes are generated server-side (never hardcoded; fetch or rotate them via GET/POST /api/gyms/{gymId}/station-codes) and expire after `StationCode:ExpirationMinutes` (5 minutes). A successful redemption creates a DB-backed station session, returns an opaque session token shown exactly once, and sets that token as an HttpOnly `StationSession` cookie (SameSite=Lax, Secure on HTTPS, Path=/, expiring with the session) - browser kiosks authenticate with the cookie alone and the React SPA never reads or stores the token, while non-browser clients use the `X-Station-Token` header. `GET /api/kiosk/session` restores an enrolled kiosk (401 = not enrolled) and `POST /api/kiosk/logout` revokes the session and clears the cookie; because SameSite=Lax cookies are sent only same-site, production must serve the SPA and API from one site (dev Vite proxy; reverse proxy otherwise) with CORS on explicit origins + credentials. Every subsequent attendance request presents that token via cookie or header (never a station code in the body); the server validates the session (hash lookup, not revoked, not expired, gym active) and derives the GymId from the stored session - never from client input. Attendance records store GymId plus the StationSessionId that issued them.

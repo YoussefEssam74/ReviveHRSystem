@@ -5,6 +5,9 @@ namespace DomainLayer.Contracts
     {
         public int GymId { get; set; }
         public string GymName { get; set; } = string.Empty;
+
+        /// <summary>Branch location shown beside the gym name in the portal (Gym.Location).</summary>
+        public string Branch { get; set; } = string.Empty;
     }
 
     /// <summary>

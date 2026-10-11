@@ -14,5 +14,10 @@ namespace ServiceAbstraction.Services
 
         /// <summary>Completes a two-gym employee login by exchanging the temp session token for a gym-scoped access token.</summary>
         Task<LoginResponse> SelectGymAsync(SelectGymRequest request, CancellationToken cancellationToken = default);
+
+        /// <summary>Loads the signed-in user's portal profile: name, position, gyms, permissions (GET /api/auth/me).</summary>
+        /// <param name="actorUserId">The authenticated user's id (uid claim).</param>
+        /// <param name="selectedGymId">The token's gymId claim, when the session is gym-scoped; otherwise null.</param>
+        Task<CurrentUserResponse> GetCurrentUserAsync(int? actorUserId, int? selectedGymId, CancellationToken cancellationToken = default);
     }
 }

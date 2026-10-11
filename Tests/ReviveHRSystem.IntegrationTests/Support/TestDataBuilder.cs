@@ -223,6 +223,38 @@ namespace ReviveHRSystem.IntegrationTests.Support
             await _db.SaveChangesAsync();
         }
 
+        /// <summary>Grants a permission key directly to the user (creates the Permission row when missing).</summary>
+        public async Task GrantPermissionAsync(int userId, string permissionKey, string area = "test")
+        {
+            var permission = await _db.Permissions.FirstOrDefaultAsync(p => p.Key == permissionKey);
+            if (permission is null)
+            {
+                permission = new Permission
+                {
+                    Key = permissionKey,
+                    Area = area,
+                    Description = $"Granted by {nameof(GrantPermissionAsync)}",
+                    IsSystem = false
+                };
+                _db.Permissions.Add(permission);
+                await _db.SaveChangesAsync();
+            }
+
+            if (!await _db.UserPermissions.AnyAsync(up => up.UserId == userId && up.PermissionId == permission.Id))
+            {
+                _db.UserPermissions.Add(new UserPermission { UserId = userId, PermissionId = permission.Id });
+                await _db.SaveChangesAsync();
+            }
+        }
+
+        /// <summary>Deactivates (or reactivates) a user account to exercise inactive-session rejections.</summary>
+        public async Task SetUserActiveAsync(int userId, bool isActive)
+        {
+            var user = await _db.Users.FirstAsync(u => u.Id == userId);
+            user.IsActive = isActive;
+            await _db.SaveChangesAsync();
+        }
+
         private async Task<string> CreateUniqueStationCodeAsync(int gymId)
         {
             for (var attempt = 0; attempt < 20; attempt++)

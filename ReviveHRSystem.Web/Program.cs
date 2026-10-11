@@ -182,6 +182,8 @@ namespace ReviveHRSystem.Web
             builder.Services.AddScoped<IAttendanceService, AttendanceService>();
             builder.Services.AddScoped<IStationCodeService, StationCodeService>();
             builder.Services.AddScoped<IStationSessionService, StationSessionService>();
+            builder.Services.AddScoped<IAccessControlService, AccessControlService>();
+            builder.Services.AddScoped<IGymService, GymService>();
             builder.Services.AddFaceBiometrics(builder.Configuration);
 
             builder.Services.AddEndpointsApiExplorer();
