@@ -9,6 +9,7 @@ namespace Service.Specifications
         public FaceEmbeddingByEmployeeSpec(int employeeId)
         {
             Criteria = f => f.EmployeeId == employeeId;
+            ApplyNoTracking();
         }
     }
 
@@ -22,6 +23,7 @@ namespace Service.Specifications
         {
             Criteria = f => f.Employee.User.UserGymAccesses.Any(a => a.GymId == gymId);
             AddInclude(f => f.Employee);
+            ApplyNoTracking();
         }
     }
 }

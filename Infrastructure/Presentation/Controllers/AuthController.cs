@@ -65,5 +65,25 @@ namespace Presentation.Controllers
         }
 
         #endregion
+
+        #region Logout
+
+        /// <summary>
+        /// Ends the caller's web session. Access-token-only auth means there is no
+        /// server-side session to revoke (ADR-002) — the client discards its token and
+        /// the token's own lifetime ends the session — so this records an audit entry
+        /// and returns 204. It is idempotent: an already-invalid token is a no-op here
+        /// and is answered by the framework's 401 before reaching the handler.
+        /// </summary>
+        /// <response code="204">Logout recorded.</response>
+        /// <response code="401">No valid session.</response>
+        [HttpPost("logout")]
+        public async Task<IActionResult> Logout(CancellationToken cancellationToken)
+        {
+            await _authService.LogoutAsync(GetActorUserId(), cancellationToken);
+            return NoContent();
+        }
+
+        #endregion
     }
 }

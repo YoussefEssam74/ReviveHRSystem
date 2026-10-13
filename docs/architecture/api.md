@@ -6,6 +6,7 @@ This document describes the endpoints currently implemented by the backend. The 
 
 - Base path: /api; requests and responses use JSON.
 - Successful responses return the endpoint DTO directly (there is no data wrapper).
+- **List endpoints are paginated** and return the envelope `{ items, page, pageSize, totalCount, totalPages }` (`PaginationResult<T>`), never a bare array. `page` is 1-based; `totalPages` is at least 1 even when `totalCount` is 0. Paging inputs arrive as `pageNumber` (default 1, floored to 1) and `pageSize` (default 10, clamped to 100); a `pageSize` below 1 falls back to the default.
 - Errors returned by the exception middleware use { statusCode, errorMessage, errors }. errorMessage is the human-readable message; errors is an array of strings carrying extra per-field detail when a BadRequestException supplies it (empty otherwise).
 - Invalid request bodies return 400 with { statusCode: 400, errorMessage, validationErrors } where validationErrors is an array of { field, errors[] }; rate limits return 429 with RATE_LIMITED. Unexpected errors return a generic 500 body.
 - Cross-origin browser calls are off by default: an empty Cors:AllowedOrigins yields no CORS headers (same-origin deployments and the Vite dev proxy are unaffected). Populating the list enables the SPA to call the API from another origin.
@@ -23,6 +24,14 @@ A completed session returns 200 with accessToken, expiresInSeconds, requiresGymS
 
 Request: { gymId, tempSessionToken }. Returns the completed session shape above; the token must be valid and the user must have access to the selected gym. Possible errors: 400, 401, or 429.
 
+### POST /api/auth/logout
+
+Records the caller's logout and returns 204. Auth is access-token-only with no refresh tokens (ADR-002), so there is no server-side session to revoke: the client discards its token and the token's own lifetime ends the session. The endpoint is idempotent and always writes an `AuditLog` entry ({ action: "Logout", entityType: "User" }); a missing/invalid token is answered 401 by the framework before the handler runs.
+
+### GET /api/attendance (range bound)
+
+A single request may cover at most 92 days (`AttendanceQueryParams.MaxRangeDays`); a wider window returns 400. Paging does not bound this, because the roster is built before it is sliced.
+
 ## Employee portal (self-service)
 
 Every endpoint below requires a Bearer access token. Self reads/writes act on the caller's own employee profile; reading another employee's data additionally requires the `employees` feature at `View` level in the gym the token is scoped to, plus the caller's resolved scope (team for Team Leaders, gym for Branch Managers) — cross-scope reads return 404. Employment and compensation fields are HR-controlled: salary appears only on the owner's own profile.
@@ -39,6 +48,10 @@ Self-only. Body: { phone, address }. Returns the updated profile. 404 when the i
 
 Self-only. Body: { name, relationship, phone }. Returns the updated profile.
 
+### GET /api/employees/{id}/photo · PUT /api/employees/{id}/photo
+
+The avatar, replacing the initials placeholder. GET streams the stored image (media type from the file's extension) and answers 404 when no photo has been uploaded; anyone who may already see that employee may read it, so a team screen can render the same URL. PUT is self-only and multipart (`file`), accepts PDF/PNG/JPG/WEBP/GIF up to 10 MB, and returns `{ photoUrl }` pointing back at the GET route — the physical storage path never leaves the server. 400 for a missing or unsupported file; 404 when the route's id is not the caller's own employee. `EmployeeProfileDto.PhotoUrl` carries the same URL so clients need only one round trip.
+
 ### GET /api/employees/{id}/documents
 
 Vault of the employee: [{ id, name, category, uploadDate, expiryDate, status (Valid | Expiring Soon | Expired), canDownload }].
@@ -49,7 +62,19 @@ Checklist: [{ key, label, documentId (null until uploaded) }] — one entry per 
 
 ### POST /api/employees/{id}/documents
 
-Self-only upload. Body: { category (Contract | NationalId | Certification | Other), fileName, filePath?, expiryDate? }. Returns 201 with the created document; 400 on unknown category or missing file name.
+Self-only upload. Body: { category (Contract | NationalId | Certification | Other), fileName, filePath?, expiryDate? }. Returns 201 with the created document; 400 on unknown category or missing file name. This records the document's *metadata*; rows with no stored file report `canDownload: false` and their download route answers 404.
+
+### GET /api/employees/{id}/hr-documents
+
+The official company documents published by HR for this employee (mock §3.3): [{ id, name, category, addedDate, size, sizeBytes }]. `size` is the display string the mock shows ("PDF · 2.1 MB"), labelled from the stored extension; `sizeBytes` is exact. Same access rule as the vault, and the two lists are disjoint — an employee upload never appears here and an HR document never appears in the vault.
+
+### GET /api/employees/{id}/documents/{docId}/download · GET /api/employees/{id}/hr-documents/{docId}/download
+
+Binary streams for a document of the matching owner. Every miss answers the same 404 — an out-of-scope employee, a document belonging to the other owner's list, an unknown id, or a row with nothing stored — so the route never confirms which document ids exist. Feature/visibility is the employee read rule already applied to the lists above.
+
+### File storage
+
+Binaries live behind `IFileStorage` (an interface in ServiceAbstraction) with a local-disk provider, configured by the `Storage` section: `RootPath` (relative values resolve against the host's base directory) and `MaxUploadBytes` (default 10 MB). Only the *relative* path is ever persisted or returned; the provider generates the on-disk name and derives the media type from the extension, re-checks every read against the root so a stored path cannot be turned into a traversal, and refuses anything that resolves outside it. A write that fails or overruns the cap is cleaned up, so no partial file is ever left behind for a row that was never created. `App_Data/storage/` is git-ignored.
 
 ### GET /api/employees/{id}/attendance
 
@@ -93,7 +118,7 @@ Every endpoint below requires a Bearer access token with a gym-scoped token: `[H
 
 ### GET /api/employees
 
-Query: q, status. Directory rows: [{ id, name, position, status, initials, todayShiftName, todayShiftStart, todayShiftEnd }] — the caller's team for Team Leaders, the gym for Branch Managers. Feature: employees View.
+Paged directory. Query: q (name substring), status, positionId, sortBy (name | status), pageNumber, pageSize. Returns the paged envelope of `{ id, name, position, status, initials, todayShiftName, todayShiftStart, todayShiftEnd }` — the caller's team for Team Leaders, the gym for Branch Managers. Ordering is stable (name by default) so pages do not overlap when rows shift between requests. Feature: employees View.
 
 ### POST /api/employees
 
@@ -109,11 +134,11 @@ Body: { status (Active | OnLeave | Suspended | Terminated), note }. Every change
 
 ### GET /api/requests
 
-Management inbox for in-scope employees, query: status (Pending | PendingHRReview | Approved | Rejected | Cancelled). Items as employee requests. Feature: requests View.
+Paged management inbox for in-scope employees. Query: status (Pending | PendingHRReview | Approved | Rejected | Cancelled), type (request-type id or label), dateFrom, dateTo (inclusive bounds on the requested date), pageNumber, pageSize. There is deliberately no `teamId` parameter — scope is resolved server-side from the caller's role in the token's gym, so a client can never widen its own scope. Paging applies after filtering, so `totalCount` reflects the filtered set. Feature: requests View.
 
 ### POST /api/requests/{id}/decide
 
-Stage-1 (BranchManager) decision. Body: { decision: "Approved" | "Rejected", comment? }. Approved moves the request to PendingHRReview (HR's final decision lives in the HR portal); Rejected closes it and releases the leave days it had reserved. 400 for non-pending requests, 404 cross-scope. Feature: requests Edit.
+Stage-1 (BranchManager) decision. Body: { stage? ("BranchManager"; defaults to it, and "HR" is refused with 400 — recording an HR approval from a stage-1 caller would forge a record attributed to a stage the caller does not hold), decision: "Approved" | "Rejected", comment? }. Approved moves the request to PendingHRReview (HR's final decision lives in the HR portal); Rejected closes it and releases the leave days it had reserved. 400 for a non-pending request, an unknown decision, or an unknown/rejected stage; 404 cross-scope. Feature: requests Edit.
 
 ### PUT /api/requests/{id}
 
@@ -121,23 +146,31 @@ Edits type/dates/reason of a pending request on behalf of an in-scope employee. 
 
 ### GET /api/attendance
 
-Management day view. Query: date (YYYY-MM-DD; defaults to today). Returns { date, summary: { present, late, absent, missingCheckout }, late: [{ employeeId, name, position, checkIn, lateMinutes }], absent: [...], missingCheckout: [...] } for the caller's team (Team Leader) or gym (Branch Manager). An employee scheduled with a real shift and without any record counts as absent (no-show). Feature: attendance View.
+Management day view. Query: date (YYYY-MM-DD), or dateFrom/dateTo for an inclusive range of at most 92 days, plus employeeId and status filters, plus pageNumber/pageSize. Returns { date, dateFrom, dateTo, summary: { present, late, absent, missingCheckout }, late: [...], absent: [...], missingCheckout: [...], roster } for the caller's team (Team Leader) or gym (Branch Manager). `late`/`absent`/`missingCheckout` cover the whole window; `roster` is the paged envelope of every in-scope person-day row `{ employeeId, name, position, date, status, checkIn, lateMinutes }`. An employee scheduled with a real shift and without any record counts as absent (no-show). Feature: attendance View.
 
 ### POST /api/attendance/mark-attendance
 
 Management manual entry (audited). Body: { employeeId (employee number), type (IN or OUT), timestamp?, reason }. Gym comes from the token; ADR-004 cross-gym validation applies. 201. Feature: attendance Edit. (The kiosk's `POST /api/attendance/manual` stays station-authenticated and is unchanged.)
 
-### GET /api/teams/my-teams · GET /api/teams/{teamId}/today
+### GET /api/teams/my-teams · GET /api/teams/{teamId}/today · GET /api/teams/{teamId}/unscheduled-count
 
-The teams the caller leads or belongs to in the active gym, and the team-day view: { teamId, teamName, stats: { total, present, late, absent, pendingRequests }, members: [{ employeeId, name, position, status (Present | Late | Absent | Off), checkIn, initials, shiftName, shiftStart, shiftEnd, isOff }] }. Teams of another gym, or teams the caller neither leads nor belongs to, return 404. Feature: employees View.
+The teams the caller leads or belongs to in the active gym, the team-day view: { teamId, teamName, stats: { total, present, late, absent, pendingRequests }, members: [{ employeeId, name, position, status (Present | Late | Absent | Off), checkIn, initials, shiftName, shiftStart, shiftEnd, isOff }] }, and the count of members with no published assignment. Teams of another gym, or teams the caller neither leads nor belongs to, return 404. Feature: employees View.
 
-### GET /api/vacancy-requests · POST /api/vacancy-requests
+### GET /api/notifications (paged)
 
-Gym-scoped vacancy requests: [{ id, position, status, date, requestedBy, justification }]. Create body: { positionId (of the active gym), justification }. 400 for a position outside the gym or a missing justification. Feature: recruitment View / Edit.
+Query: pageNumber, pageSize, unreadOnly. Returns the paged envelope of `{ id, category, title, description, date, read, link }` for the caller, newest first. `unreadOnly=true` drives the bell badge.
+
+### POST /api/requests/{id}/comments
+
+Body: { comment }. Posts a comment on an in-scope request. Comments are a collaboration trail only: they never change the request's status. 201 with `{ id, author, body, date }`; 400 for an empty comment; 404 cross-scope. Feature: requests View.
+
+### GET /api/vacancy-requests · POST /api/vacancy-requests · GET /api/vacancy-requests/{id}
+
+Paged gym-scoped vacancy requests: `{ id, position, status, date, requestedBy, justification }`. Create body: { positionId (of the active gym), justification }. 400 for a position outside the gym or a missing justification; the detail route returns 404 for a request outside the active gym. Feature: recruitment View / Edit.
 
 ### GET /api/offboarding-requests · POST /api/offboarding-requests
 
-Gym-scoped leaving cases: [{ id, employeeId, employee, position, lastWorkingDate, status, reason }]. Create body: { employeeId (in-scope employee), lastWorkingDate, reason }; the case is recorded as "Notice Period" and an Offboard event is appended to the employment-history timeline. 400 for an employee who already has an open case, 404 cross-scope. Feature: offboarding View / Edit.
+Paged gym-scoped leaving cases: `{ id, employeeId, employee, position, lastWorkingDate, status, reason }`. Create body: { employeeId (in-scope employee), lastWorkingDate, reason }; the case is recorded as "Notice Period" and an Offboard event is appended to the employment-history timeline. 400 for an employee who already has an open case, 404 cross-scope. Feature: offboarding View / Edit.
 
 ### GET /api/gyms/{gymId}/shift-cycles · POST /api/gyms/{gymId}/shift-cycles
 
@@ -182,6 +215,46 @@ The manager's "Awaiting HR" queue for the active gym/team: [{ id, kind (Deductio
 ### POST /api/branch-reports
 
 Free-form report to HR. Body: { period?, type (Monthly branch summary | Attendance exceptions | Incident report | Request escalations), message }. Lands in the HR action queue as a BranchReport event; any authenticated employee may report. 400 for an unknown type or an empty message; 204 on success.
+
+## Team Actions
+
+Follow-ups raised about team members, plus the "Remind" and "Message" shortcuts (mock 13.4-13.8 / 19). Every route is gated by the `employees` feature (View to read, Edit to write) and the service resolves the caller's team so a Team Leader only ever touches his own team; out-of-scope targets and other teams' follow-ups return 404 (no existence leak).
+
+### GET /api/teams/follow-ups · POST /api/teams/follow-ups
+
+List the follow-ups of the caller's scope (newest activity first), or raise one. Body: { employeeId (in-scope member), action (Reminder | Meeting | Escalation | Resolution), severity? (Low | Medium | High, default Medium), description, note? }. Returns `[{ id, employeeId, employee, teamId, actionType, description, severity, lastAction, note, isResolved }]`; creating with action Resolution closes the item immediately. 400 for an unknown action/severity or a missing description. Feature: employees View / Edit.
+
+### PUT /api/teams/follow-ups/{id}
+
+Records an action on an existing follow-up. Body: { action (Reminder | Meeting | Escalation | Resolution), note? }. Updates `lastAction`/`note`; a Resolution closes the item and any other action reopens a closed one. 404 for another team's follow-up. Feature: employees Edit.
+
+### POST /api/teams/members/{employeeId}/reminders
+
+Sends a reminder to an in-scope team member. Records a resolved Reminder follow-up and delivers a Notification to the member's own inbox. 204. Feature: employees Edit.
+
+### POST /api/employees/{employeeId}/messages
+
+Body: { message }. Persists a `TeamMessage` (audit trail of what was sent, by whom) and delivers a Notification to the recipient. 400 for an empty message; 204 on success. Feature: employees Edit.
+
+## Evaluation authoring
+
+Evaluation forms are HR artefacts; running an evaluation (filling one in for an employee) is gated by the `evaluations` feature at Edit, so whoever is granted that level per gym may evaluate. Team Leaders and Branch Managers hold evaluations at View per the locked role table — they read evaluations but do not author them until granted Edit (individual per-gym grant or role bundle).
+
+### GET /api/evaluation-forms
+
+Active forms available in the active gym, plus global ones: `[{ id, name, questions: [{ id, text, type (Rating5 | MultipleChoice | Checkbox) }] }]`. Feature: evaluations View.
+
+### POST /api/employees/{employeeId}/evaluations
+
+Body: { evaluationFormId, answers: [{ questionId, score, comment? }], overallComment? }. Every answer must belong to the selected form and the form must be active and in scope; scores are bounded 0-5. Returns 201 with the created evaluation; score is the mean of the numeric answers, exactly as the self-service read computes it. 400 for an empty answer set, a foreign question, an unavailable form, or an out-of-range score; 404 cross-scope. Feature: evaluations Edit.
+
+### PUT /api/employees/{employeeId}/evaluations/{evaluationId}
+
+The path's `employeeId` must be the evaluation's own employee (404 otherwise). Body: { answers: [{ questionId, score, comment? }], overallComment? }. Edits the answers of an in-scope evaluation and re-scores it. Feature: evaluations Edit.
+
+### GET /api/teams/{teamId}/evaluations
+
+Evaluations of the team's members, newest first, in the same shape as the self-service read. 404 for a team the caller neither leads nor belongs to. Feature: evaluations View.
 
 ## Session & gym context
 

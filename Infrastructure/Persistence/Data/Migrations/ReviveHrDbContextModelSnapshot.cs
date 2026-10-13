@@ -576,6 +576,10 @@ namespace Persistence.Data.Migrations
                         .HasMaxLength(50)
                         .HasColumnType("character varying(50)");
 
+                    b.Property<string>("PhotoPath")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
                     b.Property<int>("PositionId")
                         .HasColumnType("integer");
 
@@ -623,6 +627,10 @@ namespace Persistence.Data.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
+                    b.Property<string>("ContentType")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
                     b.Property<DateTime>("CreatedAt")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("timestamp with time zone")
@@ -654,6 +662,12 @@ namespace Persistence.Data.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("boolean")
                         .HasDefaultValue(false);
+
+                    b.Property<long?>("SizeBytes")
+                        .HasColumnType("bigint");
+
+                    b.Property<int>("Source")
+                        .HasColumnType("integer");
 
                     b.Property<int>("Type")
                         .HasColumnType("integer");
@@ -973,6 +987,122 @@ namespace Persistence.Data.Migrations
                     b.ToTable("OnboardingChecklistItems", (string)null);
                 });
 
+            modelBuilder.Entity("DomainLayer.Models.EmployeeModule.TeamFollowUp", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("ActionType")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.Property<int?>("CreatedBy")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<int>("EmployeeId")
+                        .HasColumnType("integer");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
+
+                    b.Property<bool>("IsResolved")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("LastAction")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<int>("RaisedByUserId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Severity")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("TeamId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int?>("UpdatedBy")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EmployeeId");
+
+                    b.HasIndex("RaisedByUserId");
+
+                    b.HasIndex("TeamId", "IsResolved");
+
+                    b.ToTable("TeamFollowUps", (string)null);
+                });
+
+            modelBuilder.Entity("DomainLayer.Models.EmployeeModule.TeamMessage", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Body")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.Property<int?>("CreatedBy")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("FromUserId")
+                        .HasColumnType("integer");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
+
+                    b.Property<int>("ToEmployeeId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int?>("UpdatedBy")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("FromUserId");
+
+                    b.HasIndex("ToEmployeeId");
+
+                    b.ToTable("TeamMessages", (string)null);
+                });
+
             modelBuilder.Entity("DomainLayer.Models.EmployeeModule.WarningNotice", b =>
                 {
                     b.Property<int>("Id")
@@ -1076,7 +1206,9 @@ namespace Persistence.Data.Migrations
 
                     b.HasIndex("EvaluationQuestionId");
 
-                    b.HasIndex("EvaluationResponseId");
+                    b.HasIndex("EvaluationResponseId", "EvaluationQuestionId")
+                        .IsUnique()
+                        .HasFilter("\"IsDeleted\" = FALSE");
 
                     b.ToTable("EvaluationAnswers", (string)null);
                 });
@@ -1282,6 +1414,10 @@ namespace Persistence.Data.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("boolean")
                         .HasDefaultValue(false);
+
+                    b.Property<string>("OverallComment")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
 
                     b.Property<DateTime>("SubmittedAt")
                         .HasColumnType("timestamp with time zone");
@@ -1583,6 +1719,10 @@ namespace Persistence.Data.Migrations
 
                     b.HasIndex("GymId");
 
+                    b.HasIndex("GymId", "Name")
+                        .IsUnique()
+                        .HasFilter("\"IsDeleted\" = FALSE");
+
                     b.ToTable("Departments", (string)null);
                 });
 
@@ -1699,6 +1839,10 @@ namespace Persistence.Data.Migrations
 
                     b.HasIndex("GymId");
 
+                    b.HasIndex("GymId", "Title", "Level")
+                        .IsUnique()
+                        .HasFilter("\"IsDeleted\" = FALSE");
+
                     b.ToTable("Positions", (string)null);
                 });
 
@@ -1743,6 +1887,10 @@ namespace Persistence.Data.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("GymId");
+
+                    b.HasIndex("GymId", "Name")
+                        .IsUnique()
+                        .HasFilter("\"IsDeleted\" = FALSE");
 
                     b.ToTable("Teams", (string)null);
                 });
@@ -2593,6 +2741,53 @@ namespace Persistence.Data.Migrations
                     b.ToTable("EmployeeRequests", (string)null);
                 });
 
+            modelBuilder.Entity("DomainLayer.Models.RequestModule.RequestComment", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("AuthorUserId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Body")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.Property<int?>("CreatedBy")
+                        .HasColumnType("integer");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
+
+                    b.Property<int>("RequestId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int?>("UpdatedBy")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AuthorUserId");
+
+                    b.HasIndex("RequestId");
+
+                    b.ToTable("RequestComments", (string)null);
+                });
+
             modelBuilder.Entity("DomainLayer.Models.RequestModule.RequestDecision", b =>
                 {
                     b.Property<int>("Id")
@@ -2643,7 +2838,9 @@ namespace Persistence.Data.Migrations
 
                     b.HasIndex("DecidedBy");
 
-                    b.HasIndex("RequestId");
+                    b.HasIndex("RequestId", "Stage")
+                        .IsUnique()
+                        .HasFilter("\"IsDeleted\" = FALSE");
 
                     b.ToTable("RequestDecisions", (string)null);
                 });
@@ -3429,6 +3626,52 @@ namespace Persistence.Data.Migrations
                     b.Navigation("Employee");
                 });
 
+            modelBuilder.Entity("DomainLayer.Models.EmployeeModule.TeamFollowUp", b =>
+                {
+                    b.HasOne("DomainLayer.Models.EmployeeModule.Employee", "Employee")
+                        .WithMany()
+                        .HasForeignKey("EmployeeId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("DomainLayer.Models.UserModule.User", "RaisedByUser")
+                        .WithMany()
+                        .HasForeignKey("RaisedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("DomainLayer.Models.OrganizationModule.Team", "Team")
+                        .WithMany()
+                        .HasForeignKey("TeamId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Employee");
+
+                    b.Navigation("RaisedByUser");
+
+                    b.Navigation("Team");
+                });
+
+            modelBuilder.Entity("DomainLayer.Models.EmployeeModule.TeamMessage", b =>
+                {
+                    b.HasOne("DomainLayer.Models.UserModule.User", "FromUser")
+                        .WithMany()
+                        .HasForeignKey("FromUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("DomainLayer.Models.EmployeeModule.Employee", "ToEmployee")
+                        .WithMany()
+                        .HasForeignKey("ToEmployeeId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("FromUser");
+
+                    b.Navigation("ToEmployee");
+                });
+
             modelBuilder.Entity("DomainLayer.Models.EmployeeModule.WarningNotice", b =>
                 {
                     b.HasOne("DomainLayer.Models.EmployeeModule.Employee", "Employee")
@@ -3949,6 +4192,25 @@ namespace Persistence.Data.Migrations
                     b.Navigation("SwapWithEmployee");
                 });
 
+            modelBuilder.Entity("DomainLayer.Models.RequestModule.RequestComment", b =>
+                {
+                    b.HasOne("DomainLayer.Models.UserModule.User", "AuthorUser")
+                        .WithMany()
+                        .HasForeignKey("AuthorUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("DomainLayer.Models.RequestModule.EmployeeRequest", "Request")
+                        .WithMany("Comments")
+                        .HasForeignKey("RequestId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("AuthorUser");
+
+                    b.Navigation("Request");
+                });
+
             modelBuilder.Entity("DomainLayer.Models.RequestModule.RequestDecision", b =>
                 {
                     b.HasOne("DomainLayer.Models.UserModule.User", "DecidedByUser")
@@ -4261,6 +4523,8 @@ namespace Persistence.Data.Migrations
 
             modelBuilder.Entity("DomainLayer.Models.RequestModule.EmployeeRequest", b =>
                 {
+                    b.Navigation("Comments");
+
                     b.Navigation("Decisions");
                 });
 

@@ -22,6 +22,10 @@ public sealed class RequestMappingProfile : Profile
             .ForMember(d => d.Status, o => o.MapFrom(s => s.Status.ToString()))
             .ForMember(d => d.Reason, o => o.MapFrom(s => s.Details))
             .ForMember(d => d.Timeline, o => o.MapFrom(s => BuildTimeline(s)));
+
+        CreateMap<RequestComment, RequestCommentDto>()
+            .ForMember(d => d.Author, o => o.MapFrom(s => s.AuthorUser != null ? s.AuthorUser.UserName : string.Empty))
+            .ForMember(d => d.Date, o => o.MapFrom(s => s.CreatedAt));
     }
 
     private static IReadOnlyList<RequestTimelineStepDto> BuildTimeline(EmployeeRequest request)

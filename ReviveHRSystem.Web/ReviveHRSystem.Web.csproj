@@ -19,6 +19,7 @@
     <ProjectReference Include="..\Infrastructure\Biometrics\Biometrics.csproj" />
     <ProjectReference Include="..\Infrastructure\Persistence\Persistence.csproj" />
     <ProjectReference Include="..\Infrastructure\Presentation\Presentation.csproj" />
+    <ProjectReference Include="..\Infrastructure\Storage\Storage.csproj" />
     <ProjectReference Include="..\Core\Service\Service.csproj" />
   </ItemGroup>
 

@@ -3,7 +3,6 @@ using DomainLayer.Exceptions;
 using DomainLayer.Models.AttendanceModule;
 using DomainLayer.Models.AttendanceModule.Enums;
 using DomainLayer.Models.EmployeeModule;
-using DomainLayer.Models.EmployeeModule.Enums;
 using DomainLayer.Models.OrganizationModule;
 using DomainLayer.Models.RecruitmentModule;
 using DomainLayer.Models.RecruitmentModule.Enums;
@@ -11,99 +10,170 @@ using DomainLayer.Models.RequestModule;
 using DomainLayer.Models.RequestModule.Enums;
 using Service.Specifications;
 using ServiceAbstraction.Services;
+using Shared;
 using Shared.DataTransferObject.EmployeeProfile;
+using Shared.DataTransferObject.QueryParams;
 
 namespace Service.Services
 {
     /// <summary>
-    /// Branch/team attendance day view (mock Â§22). Scope: the caller's team when
+    /// Branch/team attendance day view (mock 22). Scope: the caller's team when
     /// team-scoped in the active gym, otherwise the gym (ADR-003 Amendment 1).
+    /// A single day or an inclusive range can be requested: the exception lists
+    /// cover the whole window and <see cref="AttendanceManagementDto.Roster"/> is the
+    /// paged, filterable view of every in-scope person-day.
     /// </summary>
     public class AttendanceManagementService(
         IUnitOfWork unitOfWork,
-        ITeamScopeService teamScopeService) : IAttendanceManagementService
+        ITeamScopeService teamScopeService,
+        TimeZoneInfo? attendanceTimeZone = null) : IAttendanceManagementService
     {
+        private readonly TimeZoneInfo _attendanceTimeZone = attendanceTimeZone ?? TimeZoneInfo.Local;
+
         public async Task<AttendanceManagementDto> GetDayAsync(
-            int actorUserId, int? activeGymId, DateOnly? date, CancellationToken cancellationToken = default)
+            int actorUserId, int? activeGymId, AttendanceQueryParams query, CancellationToken cancellationToken = default)
         {
             var gymId = activeGymId ?? throw new UnAuthorizedException("This operation requires an active gym context.");
-            var day = date ?? DateOnly.FromDateTime(DateTime.UtcNow);
             var employees = await LoadScopedAsync(actorUserId, gymId, cancellationToken);
+
+            // A single day is the default; DateFrom/DateTo widen the window, capped so a
+            // full-range request cannot materialise every person-day of the scope.
+            var from = query.DateFrom ?? query.Date
+                ?? DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, _attendanceTimeZone));
+            var to = query.DateTo ?? query.Date ?? from;
+            if (to < from)
+            {
+                (from, to) = (to, from);
+            }
+
+            if (to.DayNumber - from.DayNumber + 1 > AttendanceQueryParams.MaxRangeDays)
+            {
+                throw new BadRequestException(
+                    $"The requested range is too wide. Ask for at most {AttendanceQueryParams.MaxRangeDays} days at a time.");
+            }
+
+            var days = Enumerable.Range(0, to.DayNumber - from.DayNumber + 1)
+                .Select(offset => from.AddDays(offset))
+                .ToList();
+
             var ids = employees.Select(e => e.Id).ToList();
-
             var records = await unitOfWork.GetRepository<AttendanceRecord, int>()
-                .GetAllAsync(new AttendanceByEmployeesDateSpec(ids, day), cancellationToken);
-            var byEmployee = records.ToLookup(r => r.EmployeeId);
+                .GetAllAsync(new AttendanceByEmployeesRangeSpec(ids, from, to), cancellationToken);
+            var byEmployeeDay = records.ToLookup(r => (r.EmployeeId, r.Date));
 
-            // Scheduled-with-a-real-shift today: needed to detect no-shows (no record).
+            // Scheduled-with-a-real-shift: needed to detect no-shows (no record).
             var assignments = await unitOfWork.GetRepository<DomainLayer.Models.SchedulingModule.ShiftAssignment, int>()
-                .GetAllAsync(new AssignmentsByEmployeesDateSpec(ids, day), cancellationToken);
+                .GetAllAsync(new AssignmentsByEmployeesRangeSpec(ids, from, to), cancellationToken);
             var scheduled = assignments
                 .Where(a => a.ShiftTemplateId is not null)
-                .ToLookup(a => a.EmployeeId);
+                .ToLookup(a => (a.EmployeeId, a.Date));
+
+            var scopedEmployees = query.EmployeeId is null
+                ? employees
+                : employees.Where(e => e.Id == query.EmployeeId).ToList();
 
             var late = new List<AttendancePersonDto>();
             var absent = new List<AttendancePersonDto>();
             var missing = new List<AttendancePersonDto>();
+            var roster = new List<AttendancePersonDto>();
             var present = 0;
 
-            foreach (var employee in employees)
+            foreach (var employee in scopedEmployees)
             {
-                var person = new AttendancePersonDto
+                foreach (var day in days)
                 {
-                    EmployeeId = employee.Id,
-                    Name = employee.FullName,
-                    Position = employee.Position?.Title ?? string.Empty
-                };
-
-                var record = byEmployee[employee.Id].FirstOrDefault();
-                if (record is not null)
-                {
-                    person = new AttendancePersonDto
+                    var person = new AttendancePersonDto
                     {
-                        EmployeeId = person.EmployeeId,
-                        Name = person.Name,
-                        Position = person.Position,
-                        CheckIn = record.CheckInTime.HasValue ? (TimeOnly?)TimeOnly.FromDateTime(record.CheckInTime.Value) : null,
-                        LateMinutes = record.Status == AttendanceStatus.Late
-                            && record.CheckInTime.HasValue
-                            && record.ScheduledShiftTemplate is not null
-                            ? Math.Max(0, (int)(record.CheckInTime.Value.TimeOfDay - record.ScheduledShiftTemplate.StartTime.ToTimeSpan()).TotalMinutes)
-                            : (int?)null
+                        EmployeeId = employee.Id,
+                        Name = employee.FullName,
+                        Position = employee.Position?.Title ?? string.Empty,
+                        Date = day
                     };
 
-                    switch (record.Status)
+                    var record = byEmployeeDay[(employee.Id, day)].FirstOrDefault();
+                    if (record is not null)
                     {
-                        case AttendanceStatus.OnTime:
-                            present++;
-                            break;
-                        case AttendanceStatus.Late:
-                            late.Add(person);
-                            present++;
-                            break;
-                        case AttendanceStatus.Absent:
-                            absent.Add(person);
-                            break;
-                        case AttendanceStatus.MissingCheckout:
-                        case AttendanceStatus.EarlyCheckout:
-                            missing.Add(person);
-                            present++;
-                            break;
+                        TimeOnly? localCheckInTime = null;
+                        int? lateMinutes = null;
+
+                        if (record.CheckInTime.HasValue)
+                        {
+                            var localCheckIn = TimeZoneInfo.ConvertTimeFromUtc(record.CheckInTime.Value, _attendanceTimeZone);
+                            localCheckInTime = TimeOnly.FromDateTime(localCheckIn);
+
+                            if (record.Status == AttendanceStatus.Late && record.ScheduledShiftTemplate is not null)
+                            {
+                                lateMinutes = Math.Max(0, (int)(localCheckIn.TimeOfDay - record.ScheduledShiftTemplate.StartTime.ToTimeSpan()).TotalMinutes);
+                            }
+                        }
+
+                        person = new AttendancePersonDto
+                        {
+                            EmployeeId = person.EmployeeId,
+                            Name = person.Name,
+                            Position = person.Position,
+                            Date = day,
+                            Status = record.Status.ToString(),
+                            CheckIn = localCheckInTime,
+                            LateMinutes = lateMinutes
+                        };
+
+                        switch (record.Status)
+                        {
+                            case AttendanceStatus.OnTime:
+                                present++;
+                                break;
+                            case AttendanceStatus.Late:
+                                late.Add(person);
+                                present++;
+                                break;
+                            case AttendanceStatus.Absent:
+                                absent.Add(person);
+                                break;
+                            case AttendanceStatus.MissingCheckout:
+                            case AttendanceStatus.EarlyCheckout:
+                                missing.Add(person);
+                                present++;
+                                break;
+                        }
+                    }
+                    // No record at all: a scheduled employee is a no-show (absent).
+                    else if (scheduled[(employee.Id, day)].Any())
+                    {
+                        var noShow = new AttendancePersonDto
+                        {
+                            EmployeeId = person.EmployeeId,
+                            Name = person.Name,
+                            Position = person.Position,
+                            Date = day,
+                            Status = AttendanceStatus.Absent.ToString()
+                        };
+                        absent.Add(noShow);
+                        roster.Add(noShow);
+                        continue;
                     }
 
-                    continue;
-                }
-
-                // No record at all: a scheduled employee is a no-show (absent).
-                if (scheduled[employee.Id].Any())
-                {
-                    absent.Add(person);
+                    roster.Add(person);
                 }
             }
 
+            var statusFiltered = string.IsNullOrWhiteSpace(query.Status)
+                ? roster
+                : roster.Where(p => string.Equals(
+                    p.Status?.Replace(" ", string.Empty),
+                    query.Status.Replace(" ", string.Empty),
+                    StringComparison.OrdinalIgnoreCase)).ToList();
+
+            var page = statusFiltered
+                .Skip(query.SkipCount)
+                .Take(query.PageSize)
+                .ToList();
+
             return new AttendanceManagementDto
             {
-                Date = day,
+                Date = from,
+                DateFrom = from,
+                DateTo = to,
                 Summary = new AttendanceCountsDto
                 {
                     Present = present,
@@ -113,7 +183,8 @@ namespace Service.Services
                 },
                 Late = late,
                 Absent = absent,
-                MissingCheckout = missing
+                MissingCheckout = missing,
+                Roster = new PaginationResult<AttendancePersonDto>(query.PageNumber, query.PageSize, statusFiltered.Count, page)
             };
         }
 

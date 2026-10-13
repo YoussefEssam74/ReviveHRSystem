@@ -9,8 +9,10 @@ namespace DomainLayer.Contracts
         List<Expression<Func<TEntity, object>>> IncludeExpressions { get; }
         Expression<Func<TEntity, object>>? OrderBy { get; }
         Expression<Func<TEntity, object>>? OrderByDescending { get; }
+        Expression<Func<TEntity, object>>? ThenByDescending { get; }
         public int Skip { get; }
         public int Take { get; }
         public bool IsPaginated { get; }
+        public bool AsNoTracking { get; }
     }
 }

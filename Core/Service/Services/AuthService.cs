@@ -135,5 +135,24 @@ namespace Service.Services
                 }
             };
         }
+
+        public async Task LogoutAsync(int userId, CancellationToken cancellationToken = default)
+        {
+            // Access-token-only auth (no refresh tokens, ADR-002) means there is no
+            // server-side session to revoke: the client discards the token and its own
+            // lifetime ends the session. What logout must still do is leave an audit
+            // trail, so the record is written for every caller — including an unknown
+            // user, keeping the endpoint idempotent (204 either way).
+            await unitOfWork.GetRepository<DomainLayer.Models.AuditModule.AuditLog, int>().AddAsync(
+                new DomainLayer.Models.AuditModule.AuditLog
+                {
+                    UserId = userId,
+                    Action = "Logout",
+                    EntityType = "User",
+                    EntityId = userId
+                }, cancellationToken);
+
+            await unitOfWork.SaveChangesAsync(cancellationToken);
+        }
     }
 }

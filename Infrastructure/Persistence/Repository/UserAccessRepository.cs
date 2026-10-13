@@ -16,10 +16,10 @@ namespace Presistence.Repository
     {
         public async Task<IReadOnlyList<GymAccessEntry>> GetGymAccessAsync(int userId, CancellationToken cancellationToken = default)
         {
-            var entries = await _dbContext.UserGymAccesses
+            var entries = await _dbContext.UserGymAccesses.AsNoTracking()
                 .Where(uga => uga.UserId == userId)
                 .Join(
-                    _dbContext.Gyms,
+                    _dbContext.Gyms.AsNoTracking(),
                     uga => uga.GymId,
                     g => g.Id,
                     (uga, g) => g)
@@ -32,21 +32,21 @@ namespace Presistence.Repository
         }
 
         public async Task<bool> HasGymAccessAsync(int userId, int gymId, CancellationToken cancellationToken = default) =>
-            await _dbContext.UserGymAccesses
+            await _dbContext.UserGymAccesses.AsNoTracking()
                 .AnyAsync(uga => uga.UserId == userId && uga.GymId == gymId, cancellationToken);
 
         public async Task<IReadOnlyList<string>> GetPermissionKeysAsync(int userId, CancellationToken cancellationToken = default)
         {
             var directKeys = await (
-                from up in _dbContext.UserPermissions
+                from up in _dbContext.UserPermissions.AsNoTracking()
                 where up.UserId == userId
                 select up.Permission.Key
             ).ToListAsync(cancellationToken);
 
             var roleKeys = await (
-                from ur in _dbContext.UserRoles
+                from ur in _dbContext.UserRoles.AsNoTracking()
                 where ur.UserId == userId
-                from rp in _dbContext.RolePermissions
+                from rp in _dbContext.RolePermissions.AsNoTracking()
                 where rp.RoleId == ur.RoleId
                 select rp.Permission.Key
             ).ToListAsync(cancellationToken);
@@ -59,29 +59,29 @@ namespace Presistence.Repository
         }
 
         public async Task<IReadOnlyList<FeatureLevelEntry>> GetGlobalLevelsAsync(int userId, CancellationToken cancellationToken = default) =>
-            await _dbContext.UserPermissions
+            await _dbContext.UserPermissions.AsNoTracking()
                 .Where(up => up.UserId == userId)
                 .Select(up => new FeatureLevelEntry { Feature = up.Permission.Key, Level = up.Level })
                 .ToListAsync(cancellationToken);
 
         public async Task<IReadOnlyList<FeatureLevelEntry>> GetGymGrantLevelsAsync(int userId, int gymId, CancellationToken cancellationToken = default) =>
-            await _dbContext.UserGymPermissions
+            await _dbContext.UserGymPermissions.AsNoTracking()
                 .Where(ugp => ugp.UserId == userId && ugp.GymId == gymId)
                 .Select(ugp => new FeatureLevelEntry { Feature = ugp.Permission.Key, Level = ugp.Level })
                 .ToListAsync(cancellationToken);
 
         public async Task<IReadOnlyList<FeatureLevelEntry>> GetGymRoleLevelsAsync(int userId, int gymId, CancellationToken cancellationToken = default) =>
             await (
-                from ugr in _dbContext.UserGymRoles
+                from ugr in _dbContext.UserGymRoles.AsNoTracking()
                 where ugr.UserId == userId && ugr.GymId == gymId
-                from rp in _dbContext.RolePermissions
+                from rp in _dbContext.RolePermissions.AsNoTracking()
                 where rp.RoleId == ugr.RoleId
                 select new FeatureLevelEntry { Feature = rp.Permission.Key, Level = rp.Level }
             ).ToListAsync(cancellationToken);
 
         public async Task<IReadOnlyList<string>> GetGymRoleNamesAsync(int userId, int gymId, CancellationToken cancellationToken = default) =>
             await (
-                from ugr in _dbContext.UserGymRoles
+                from ugr in _dbContext.UserGymRoles.AsNoTracking()
                 where ugr.UserId == userId && ugr.GymId == gymId
                 select ugr.Role.Name
             ).Distinct()

@@ -4,13 +4,24 @@
 
 ## STOP POINT (resume here)
 
-- **Last completed:** **ALL SLICES COMPLETE - 153/153 integration tests green**; solution builds clean; suite re-run twice for stability.
-  - Slice 0: authorization foundation (per-gym feature x level grants, scope from per-gym role, `/api/me`, `switch-gym`).
-  - Slice 1: all 12 self-service areas (profile, documents, attendance, leave balance, schedule, requests, notifications, settings/password, evaluations, history, events, payroll, dashboard).
-  - Slice 2: management (employees, request inbox + stage-1, attendance, teams, vacancy requests, offboarding, shift cycles + templates).
-  - Slice 3: Branch Actions queue - `POST /api/deduction-candidates`, `/api/warning-notices`, `/api/bonus-proposals`, `GET /api/branch-actions/pending-hr`, `POST /api/branch-reports` (lands in the HR queue as an `EventType.BranchReport` event). New tables `WarningNotices` / `BonusProposals`; `DeductionCandidate` extended (IssuedBy/IssuedAt/Note). `api.md` and `ReviveHRSystem.Web.http` document everything.
-- **Remaining follow-ups (not blockers):** HR-portal decision endpoints for the Pending HR queue (deduction/warning/bonus/vacancy decisions) belong to the HR portal work; document/payslip binary download streams need a file-storage service; the mock UI needs re-gating from `hasPermission` to `/api/me` feature levels, and the Team Leader gets the branch nav pool (documented in the plan).
-- **Build/test state:** `dotnet build` clean; `dotnet test` **153/153** (72 baseline + 81 new).
+- **Last completed:** **Employee API completion plan — Slices A, B, C, D, E, F implemented: 211/211 integration tests green**; solution builds clean (10 pre-existing warnings, none introduced); suite re-run twice for stability.
+  - **Slice A — Pagination foundation.** `PaginationResult<T>` reshaped to the documented `{ items, page, pageSize, totalCount, totalPages }` envelope (was dead code with a conflicting shape); new `PaginationParams` base + `EmployeeQueryParams`, `RequestQueryParams`, `AttendanceQueryParams`, `NotificationQueryParams`, `VacancyQueryParams`, `OffboardingQueryParams` in `Shared/DataTransferObject/QueryParams`. Six list endpoints paged (employees, requests, attendance, notifications, vacancy-requests, offboarding-requests) plus the new teams/{id}/evaluations. `EmployeeQueryParams.SortBy` added so paging is stable.
+  - **Slice B — Team Actions.** `TeamFollowUp` + `FollowUpActionType` / `FollowUpSeverity`, `TeamMessage` entities; migration `Add_TeamActions` (2 tables, additive). `ITeamActionsService` / `TeamActionsService`; 5 endpoints (follow-ups list/create, follow-up update, reminders, messages). `TeamActionsTests`.
+  - **Slice C — Evaluation authoring.** `IEvaluationManagementService` / `EvaluationManagementService`; forms list, create, update, team evaluations. Reuses `EvaluationResponse`/`EvaluationAnswer`. `EvaluationResponse.OverallComment` added (migration `Add_EvaluationOverallComment`, additive). `EvaluationManagementTests`.
+  - **Slice D — Contract completion.** `RequestDecisionDto.Stage` (defaults to BranchManager, refuses "HR" so a stage-1 caller cannot forge an HR approval), `RequestComment` entity + migration `Add_RequestComments` (additive), `POST /api/requests/{id}/comments`, `GET /api/vacancy-requests/{id}`, `GET /api/teams/{teamId}/unscheduled-count`, new attendance filters (range/employeeId/status).
+  - **Slice F — Logout.** `POST /api/auth/logout` writing an `AuditLog` entry; idempotent 204.
+  - **Slice E — Documents, avatar, downloads.** `IFileStorage` abstraction in ServiceAbstraction + `LocalFileStorage` in the new `Infrastructure/Storage` project (root/size from the `Storage` config section); shared `FileContentTypes` extension→media-type map so a file's stored type and its served type can never disagree. Additive migration `Add_EmployeePhotoAndDocumentSource` (`Employees.PhotoPath`, `EmployeeDocuments.SizeBytes`/`ContentType`/`Source`). New enum `DocumentSource { Employee, Hr }` (default 0 keeps pre-existing rows correctly in the employee vault). New endpoints: `GET`/`PUT /api/employees/{id}/photo` (PUT multipart, self-only), `GET /api/employees/{id}/hr-documents`, `GET /api/employees/{id}/documents/{docId}/download`, `GET /api/employees/{id}/hr-documents/{docId}/download`. `EmployeeProfileDto.PhotoUrl` added. `DocumentStorageTests` (12), including path-traversal and supersede/reap regression tests.
+  - **Security pass (subagent review) — all findings fixed and regression-tested:** attendance date range capped at 92 days; Team Actions + evaluation edit now bind the token's active gym instead of the target's (cross-gym 404); `Skip` computed in long and saturated so an extreme pageNumber yields an empty page instead of a 500; `Enum.IsDefined` guards on all parsed enums; length checks on every user-supplied text vs its column max; evaluation scores bounded 0-5; the evaluation route's `employeeId` validated against the evaluation's own employee; `OverallComment` now actually stored and returned.
+- **Latent bugs fixed along the way (worth remembering):** three services used `Task.WhenAll` to run queries concurrently on one scoped `DbContext` (`EmployeeProfileService.GetProfileAsync`, `EmployeeAccessService.EnsureCanAccessAsync`, `AttendanceService.GetStationSummaryAsync`). They passed while the model was small and started throwing `InvalidOperationException` as soon as the model grew. All three are now sequential. **Do not reintroduce parallel queries on a shared scoped context.**
+- **Remaining follow-ups (not blockers):**
+  - **Downloads still missing two streams:** `GET /api/employees/{id}/payroll/{periodId}/payslip` (needs a PDF generator — none in the solution) and `GET /api/requests/{id}/attachment`. Both ride on the now-existing `IFileStorage` + `FileDownload` plumbing, so they are additive work only.
+  - **`POST /api/employees/{id}/documents` still records metadata only** (JSON body, no bytes), so rows created through it report `canDownload: false` and their download route answers 404. The spec (§3.4) wants multipart here; converting it means changing a working endpoint's contract and its tests. `PUT /photo` shows the multipart shape to copy.
+  - `GET /api/employees/{id}/documents` still returns a bare array while spec §3.1 shows a paged envelope — deliberately left (Slice A scoped six other endpoints); revisit with the mock UI's paging.
+  - HR-portal decision endpoints for the Pending HR queue (deduction/warning/bonus/vacancy decisions).
+  - Mock UI re-gating from `hasPermission` to `/api/me` feature levels, and the Team Leader branch nav pool.
+  - **Authorization-model decision on record:** TL/BM hold `evaluations` at *View*, so evaluation authoring is HR-only (or per-gym granted). The seeder was left unchanged — do not flip it without a product decision.
+  - Team Actions currently requires the caller to belong to/lead a team (no gym-wide fallback), despite the class doc's wording. It fails closed, so this is a functional gap for team-less BMs, not a security one.
+- **Build/test state:** `dotnet build` clean; `dotnet test` **211/211** (153 baseline + 58 new).
 - **Blockers:** none. Note: an autonomous file-organizer in this environment periodically refactors/splits files; rebuild once after any surprise before re-editing.
 
 ---
@@ -55,16 +66,7 @@
 - [x] Team today overview: `GET /api/teams/my-teams`, `GET /api/teams/{teamId}/today`.
 - [x] Vacancy requests (gym-scoped list/create) + offboarding (scoped list/initiate, duplicate guard, history event).
 - [x] Shift cycles + templates CRUD (create/assignments/publish/delete; off-day = null template). `ShiftManagementTests` (6).
-- [ ] Branch Actions queue: deduction/warning/bonus candidates + branch reports.
-
-### Slice 2 (management  TL team-scope / BM gym-scope)
-- [ ] Employees (list/create/edit/status-change) + Attendance (+manual entry).
-- [ ] Schedule: cycles (list/detail/create/assign/publish/delete) + shift templates CRUD.
-- [ ] Requests inbox (decide stage "BranchManager"/edit/comment) + team today/follow-ups/reminders/messages.
-- [ ] Team evaluations (create/edit/detail) + vacancy requests (list/create/detail) + offboarding (list/initiate).
-- [ ] Branch Actions HR queue: deduction/warning/bonus candidates + branch reports.
-- [ ] Tests: authorization matrix per feature (View/Edit/None), TL team-scope, BM gym-scope, two-stage request lifecycle.
-- [ ] `api.md` updated.
+- [x] Branch Actions queue: deduction/warning/bonus candidates + branch reports — **delivered in Slice 3 below** (the same items are re-listed there with their tables and endpoints).
 
 ### Slice 3 (hand-off + wrap-up) - COMPLETE
 - [x] Deduction candidates (attendance Edit), warning notices + bonus proposals (employees Edit), all created Pending for HR.
@@ -74,6 +76,21 @@
 - [x] HR-side decision contracts documented in `api.md` (Pending HR consumption by the HR portal).
 - [x] `ReviveHRSystem.Web.http` updated with named logins per role + the full request walkthrough.
 - [x] Full verification ladder run; `progress.md` checkpoints written.
+
+---
+
+### 2026-10-11/12  Employee API completion plan (Slices A-F)  COMPLETE (211/211 tests)
+
+Plan: `C:\Users\eyous\.opencode\plan\employee-api-completion-plan.md` (decisions D1-D5).
+
+- [x] **Slice A — Pagination.** `PaginationResult<T>` reshaped to `{ items, page, pageSize, totalCount, totalPages }`; `PaginationParams` base + 6 query-param classes; six list endpoints paged with filters; `PaginationTests` (10).
+- [x] **Slice B — Team Actions.** `TeamFollowUp`, `TeamMessage`, `FollowUpActionType`/`FollowUpSeverity`; migration `Add_TeamActions`; 5 endpoints; `TeamActionsTests` (8).
+- [x] **Slice C — Evaluation authoring.** `EvaluationManagementService` (in `EvaluationsHistoryPayrollServices.cs`) + `EvaluationManagementController`; `EvaluationResponse.OverallComment`; migration `Add_EvaluationOverallComment`; `EvaluationManagementTests` (8).
+- [x] **Slice D — Contract completion.** `RequestDecisionDto.Stage` (refuses "HR"), `RequestComment` + migration `Add_RequestComments`, request comments/vacancy detail/unscheduled-count endpoints, attendance range filters; `RequestManagementTests` additions.
+- [x] **Slice E — Documents, avatar, downloads.** `IFileStorage` + `LocalFileStorage` (new `Infrastructure/Storage` project), `FileContentTypes`, `DocumentSource` enum, migration `Add_EmployeePhotoAndDocumentSource`; photo GET/PUT, hr-documents, two download streams; `DocumentStorageTests` (12).
+- [x] **Slice F — Logout.** `POST /api/auth/logout` writing an `AuditLog` entry; `AuthControllerTests` additions.
+- [x] **Security pass** (independent review, all findings fixed + regression-tested): 92-day attendance range cap; token-gym binding on Team Actions and evaluation edit (cross-gym 404); saturating `Skip`; `Enum.IsDefined` guards; column-max length checks; evaluation scores bounded 0-5; route `employeeId` vs evaluation employee; `OverallComment` stored; stage forging refused. Also three latent `Task.WhenAll`-on-one-`DbContext` bugs converted to sequential awaits.
+- [x] `api.md`, this tracker and `ReviveHRSystem.Web.http` updated per slice.
 
 ---
 
@@ -90,6 +107,12 @@
 | 2026-10-10 | - | **138** | Slice 2 part 3 (attendance mgmt, team overview, vacancy, offboarding): +7 |
 | 2026-10-10 | - | **144** | Slice 2 part 4 (shift cycles + templates): +6 |
 | 2026-10-10 | - | **153** | Slice 3 (Branch Actions: deduction/warning/bonus/reports): +9 |
+| 2026-10-11 | - | **163** | Completion plan Slice A (pagination): +10 |
+| 2026-10-11 | - | **171** | Slice B (team actions): +8 |
+| 2026-10-11 | - | **179** | Slice C (evaluation authoring): +8 |
+| 2026-10-11 | - | **191** | Slice D (contract completion) + Slice F (logout) + security regressions: +12 |
+| 2026-10-12 | - | **199** | Security pass findings fixed + regression tests: +8 |
+| 2026-10-12 | - | **211** | Slice E (avatar, hr-documents, downloads, traversal, size cap): +12 |
 
 ## Non-blocking decisions taken
 
@@ -100,7 +123,7 @@
 - Cross-scope employee reads/writes answer 404 (not 403) so the API never confirms another gym's data exists.
 - Domain gaps fixed while implementing: `EmployeeDocument.UploadedAt`, `EmployeeRequest.SubmittedAt`, `Event.CreatedAt` (all migrated), `RequestStatus.Cancelled` (int-stored, no migration).
 - Self-service write endpoints validate the route id equals the caller's own employee (self-only writes); managers editing others is Slice 2.
-- Upload/download are metadata + path contracts for now (no binary storage service yet)  download streams are deferred to the storage service when file storage is chosen.
+- Upload/download started life as metadata + path contracts; **Slice E closed that gap** — `IFileStorage` + `LocalFileStorage` now store real bytes under `App_Data/storage/` (git-ignored), and the two document download streams read them back. `POST /api/employees/{id}/documents` still records metadata only (see follow-ups); payslip and request-attachment streams are the two remaining consumers of the same plumbing.
 - The running dev server on :5248 was stopped at the start of the session (build locks) with the user's approval.
 - **Domain constraint discovered (affects future work):** `Employee.TeamId` has a composite FK to the team's gym, and `TeamLeaders.EmployeeId` has a unique index. Consequences: teams contain only employees anchored to the team's gym, and an employee leads at most one team. So a multi-gym user's team scope applies only in his primary gym; per-gym team membership would require a schema change (employeeteam join table)  raise with the product owner before attempting.
 - Employee creation provisions the 1:1 login account with a random temporary password (never stored/returned); a credential-delivery flow belongs to the account lifecycle (later phase).

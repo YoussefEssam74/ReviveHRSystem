@@ -7,9 +7,9 @@ namespace Service.Specifications
     /// <summary>Notifications of one user, newest first.</summary>
     public class NotificationsByUserSpec : BaseSpecification<Notification, int>
     {
-        public NotificationsByUserSpec(int userId)
+        public NotificationsByUserSpec(int userId, bool? unreadOnly = null)
         {
-            Criteria = n => n.UserId == userId;
+            Criteria = n => n.UserId == userId && (!unreadOnly.HasValue || !unreadOnly.Value || !n.IsRead);
             OrderByDescending = n => n.CreatedAt;
         }
     }
@@ -20,6 +20,15 @@ namespace Service.Specifications
         public UserNotificationPreferenceByUserSpec(int userId)
         {
             Criteria = p => p.UserId == userId;
+        }
+    }
+
+    /// <summary>Unread notifications of one user.</summary>
+    public class UnreadNotificationsByUserSpec : BaseSpecification<Notification, int>
+    {
+        public UnreadNotificationsByUserSpec(int userId)
+        {
+            Criteria = n => n.UserId == userId && !n.IsRead;
         }
     }
 }

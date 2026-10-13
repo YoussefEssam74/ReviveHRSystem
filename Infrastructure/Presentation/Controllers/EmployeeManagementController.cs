@@ -2,8 +2,10 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Presentation.Authorization;
 using ServiceAbstraction.Services;
+using Shared;
 using Shared.Authorization;
 using Shared.DataTransferObject.EmployeeProfile;
+using Shared.DataTransferObject.QueryParams;
 using DomainLayer.Models.UserModule.Enums;
 
 namespace Presentation.Controllers
@@ -20,11 +22,11 @@ namespace Presentation.Controllers
         /// <summary>Directory: the caller's team (Team Leader) or the gym (Branch Manager).</summary>
         [HttpGet]
         [HasFeatureAccess(Features.Employees, AccessLevel.View)]
-        public async Task<ActionResult<IReadOnlyList<EmployeeSummaryDto>>> GetDirectory(
-            [FromQuery] string? q, [FromQuery] string? status, CancellationToken cancellationToken)
+        public async Task<ActionResult<PaginationResult<EmployeeSummaryDto>>> GetDirectory(
+            [FromQuery] EmployeeQueryParams query, CancellationToken cancellationToken)
         {
             var employees = await employeeManagementService.GetDirectoryAsync(
-                GetActorUserId(), GetGymIdFromToken(), q, status, cancellationToken);
+                GetActorUserId(), GetGymIdFromToken(), query, cancellationToken);
             return Ok(employees);
         }
 

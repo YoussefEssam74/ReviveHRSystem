@@ -35,7 +35,9 @@ namespace ReviveHRSystem.IntegrationTests
 
             // No seeded notifications for this user yet: the inbox is empty and count is zero.
             Assert.Equal(0, total);
-            Assert.Equal(0, list.GetArrayLength());
+            Assert.Equal(0, list.GetProperty("totalCount").GetInt32());
+            Assert.Equal(1, list.GetProperty("totalPages").GetInt32());
+            Assert.Empty(list.GetProperty("items").EnumerateArray());
         }
 
         [Fact]

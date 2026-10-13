@@ -21,6 +21,7 @@ namespace Presistence.Data.Configurations
             builder.Property(e => e.EmergencyContactName).HasMaxLength(200);
             builder.Property(e => e.EmergencyContactRelationship).HasMaxLength(100);
             builder.Property(e => e.EmergencyContactPhone).HasMaxLength(50);
+            builder.Property(e => e.PhotoPath).HasMaxLength(500);
 
             builder.HasIndex(e => e.EmployeeNumber).IsUnique();
             builder.HasIndex(e => e.GymId);
@@ -86,6 +87,7 @@ namespace Presistence.Data.Configurations
 
             builder.Property(ed => ed.FileName).IsRequired().HasMaxLength(255);
             builder.Property(ed => ed.FilePath).IsRequired().HasMaxLength(500);
+            builder.Property(ed => ed.ContentType).HasMaxLength(100);
 
             builder.HasOne(ed => ed.Employee)
                    .WithMany(e => e.Documents)
@@ -191,6 +193,61 @@ namespace Presistence.Data.Configurations
             builder.HasOne(i => i.CompletedByUser).WithMany().HasForeignKey(i => i.CompletedBy)
                    .OnDelete(DeleteBehavior.SetNull);
             builder.HasIndex(i => new { i.OffboardingCaseId, i.SortOrder }).IsUnique();
+        }
+    }
+
+    public class TeamFollowUpConfiguration : IEntityTypeConfiguration<TeamFollowUp>
+    {
+        public void Configure(EntityTypeBuilder<TeamFollowUp> builder)
+        {
+            builder.ToTable("TeamFollowUps");
+            builder.HasKey(f => f.Id);
+
+            builder.Property(f => f.Description).IsRequired().HasMaxLength(1000);
+            builder.Property(f => f.LastAction).HasMaxLength(200);
+            builder.Property(f => f.Note).HasMaxLength(1000);
+
+            builder.HasOne(f => f.Employee)
+                   .WithMany()
+                   .HasForeignKey(f => f.EmployeeId)
+                   .OnDelete(DeleteBehavior.Cascade);
+
+            builder.HasOne(f => f.Team)
+                   .WithMany()
+                   .HasForeignKey(f => f.TeamId)
+                   .OnDelete(DeleteBehavior.Cascade);
+
+            builder.HasOne(f => f.RaisedByUser)
+                   .WithMany()
+                   .HasForeignKey(f => f.RaisedByUserId)
+                   .OnDelete(DeleteBehavior.Restrict);
+
+            // The Team Actions page loads a team's items, newest activity first.
+            builder.HasIndex(f => new { f.TeamId, f.IsResolved });
+            builder.HasIndex(f => f.EmployeeId);
+        }
+    }
+
+    public class TeamMessageConfiguration : IEntityTypeConfiguration<TeamMessage>
+    {
+        public void Configure(EntityTypeBuilder<TeamMessage> builder)
+        {
+            builder.ToTable("TeamMessages");
+            builder.HasKey(m => m.Id);
+
+            builder.Property(m => m.Body).IsRequired().HasMaxLength(2000);
+
+            builder.HasOne(m => m.FromUser)
+                   .WithMany()
+                   .HasForeignKey(m => m.FromUserId)
+                   .OnDelete(DeleteBehavior.Restrict);
+
+            builder.HasOne(m => m.ToEmployee)
+                   .WithMany()
+                   .HasForeignKey(m => m.ToEmployeeId)
+                   .OnDelete(DeleteBehavior.Cascade);
+
+            builder.HasIndex(m => new { m.ToEmployeeId });
         }
     }
 }

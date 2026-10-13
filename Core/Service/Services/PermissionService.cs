@@ -70,13 +70,9 @@ namespace Service.Services
                 return false;
             }
 
+            // GetEffectiveLevelsAsync already expands the '*' wildcard into an explicit
+            // Edit entry for every catalog feature, so a single lookup is sufficient.
             var levels = await GetEffectiveLevelsAsync(userId, gymId, cancellationToken);
-
-            if (levels.TryGetValue(Features.Wildcard, out var wildcard) && wildcard >= AccessLevel.Edit)
-            {
-                return true;
-            }
-
             return levels.TryGetValue(feature, out var level) && level >= requiredLevel;
         }
     }

@@ -5,9 +5,10 @@ using DomainLayer.Models.EmployeeModule.Enums;
 using DomainLayer.Models.RequestModule;
 using DomainLayer.Models.RequestModule.Enums;
 using DomainLayer.Models.UserModule;
-using Service.Specifications;
-using ServiceAbstraction.Services;
+using Service.Specifications;using ServiceAbstraction.Services;
+using Shared;
 using Shared.DataTransferObject.EmployeeProfile;
+using Shared.DataTransferObject.QueryParams;
 
 namespace Service.Services
 {
@@ -23,8 +24,8 @@ namespace Service.Services
         ITeamScopeService teamScopeService,
         IMapper mapper) : IRequestManagementService
     {
-        public async Task<IReadOnlyList<EmployeeRequestDto>> GetInboxAsync(
-            int actorUserId, int? activeGymId, string? status, CancellationToken cancellationToken = default)
+        public async Task<PaginationResult<EmployeeRequestDto>> GetInboxAsync(
+            int actorUserId, int? activeGymId, RequestQueryParams query, CancellationToken cancellationToken = default)
         {
             var gymId = RequireGym(activeGymId);
             var employeeIds = await ScopedEmployeeIdsAsync(actorUserId, gymId, cancellationToken);
@@ -32,11 +33,23 @@ namespace Service.Services
             var requests = await unitOfWork.GetRepository<EmployeeRequest, int>()
                 .GetAllAsync(new RequestsByEmployeesSpec(employeeIds), cancellationToken);
 
-            return requests
-                .Where(r => status is null || r.Status.ToString().Equals(status, StringComparison.OrdinalIgnoreCase))
+            var filtered = requests
+                .Where(r => string.IsNullOrWhiteSpace(query.Status)
+                    || r.Status.ToString().Equals(query.Status, StringComparison.OrdinalIgnoreCase))
+                .Where(r => string.IsNullOrWhiteSpace(query.Type)
+                    || r.Type.Equals(query.Type, StringComparison.OrdinalIgnoreCase))
+                .Where(r => query.DateFrom is null || r.RequestDate >= query.DateFrom)
+                .Where(r => query.DateTo is null || r.RequestDate <= query.DateTo)
                 .OrderByDescending(r => r.SubmittedAt)
+                .ToList();
+
+            var page = filtered
+                .Skip(query.SkipCount)
+                .Take(query.PageSize)
                 .Select(r => mapper.Map<EmployeeRequestDto>(r))
                 .ToList();
+
+            return new PaginationResult<EmployeeRequestDto>(query.PageNumber, query.PageSize, filtered.Count, page);
         }
 
         public async Task DecideAsync(
@@ -51,14 +64,14 @@ namespace Service.Services
             }
 
             var outcome = ParseDecision(decision.Decision);
-            request.Status = outcome == DecisionOutcome.Approved
+            var stage = ParseStage(decision.Stage);            request.Status = outcome == DecisionOutcome.Approved
                 ? RequestStatus.PendingHRReview
                 : RequestStatus.Rejected;
 
             request.Decisions.Add(new RequestDecision
             {
                 RequestId = request.Id,
-                Stage = ApprovalStage.BranchManager,
+                Stage = stage,
                 Decision = outcome,
                 Comment = string.IsNullOrWhiteSpace(decision.Comment) ? null : decision.Comment.Trim(),
                 DecidedBy = actorUserId,
@@ -114,6 +127,48 @@ namespace Service.Services
             await unitOfWork.SaveChangesAsync(cancellationToken);
         }
 
+        public async Task<RequestCommentDto> AddCommentAsync(
+            int actorUserId, int requestId, int? activeGymId, CreateRequestCommentDto request, CancellationToken cancellationToken = default)
+        {
+            var gymId = RequireGym(activeGymId);
+
+            if (string.IsNullOrWhiteSpace(request.Comment))
+            {
+                throw new BadRequestException("A comment is required.");
+            }
+
+            var body = request.Comment.Trim();
+            if (body.Length > 1000)
+            {
+                throw new BadRequestException("The comment may not exceed 1000 characters.");
+            }
+
+            // Scope check first: a comment on another team's request must not exist.
+            await LoadInScopeAsync(actorUserId, requestId, gymId, cancellationToken);
+
+            var comment = new RequestComment
+            {
+                RequestId = requestId,
+                AuthorUserId = actorUserId,
+                Body = body
+            };
+
+            await unitOfWork.GetRepository<RequestComment, int>().AddAsync(comment, cancellationToken);
+            await unitOfWork.SaveChangesAsync(cancellationToken);
+
+            var reloaded = await unitOfWork.GetRepository<RequestComment, int>()
+                .GetByIdAsync(new RequestCommentByIdSpec(comment.Id), cancellationToken)
+                ?? throw new NotFoundException("Comment not found.");
+
+            return new RequestCommentDto
+            {
+                Id = reloaded.Id,
+                Author = reloaded.AuthorUser?.UserName ?? string.Empty,
+                Body = reloaded.Body,
+                Date = reloaded.CreatedAt
+            };
+        }
+
         // ---------- helpers ----------
 
         private async Task<List<int>> ScopedEmployeeIdsAsync(int actorUserId, int gymId, CancellationToken cancellationToken)
@@ -153,9 +208,37 @@ namespace Service.Services
         }
 
         private static DecisionOutcome ParseDecision(string decision) =>
-            Enum.TryParse<DecisionOutcome>(decision, ignoreCase: true, out var parsed)
+            Enum.TryParse<DecisionOutcome>(decision, ignoreCase: true, out var parsed) && Enum.IsDefined(parsed)
                 ? parsed
                 : throw new BadRequestException($"Unknown decision '{decision}'.");
+
+        /// <summary>
+        /// Stage carried by the decision. Omitted means stage 1 (BranchManager), which
+        /// is the only stage this portal acts on. The <c>HR</c> stage is rejected rather
+        /// than trusted, because recording an "HR Approved" decision from a stage-1
+        /// caller would let an approver forge a record attributed to a stage he does not
+        /// hold; naming the stage explicitly is still what lets the HR portal add
+        /// stage 2 later without a contract change.
+        /// </summary>
+        private static ApprovalStage ParseStage(string? stage)
+        {
+            if (string.IsNullOrWhiteSpace(stage))
+            {
+                return ApprovalStage.BranchManager;
+            }
+
+            if (!Enum.TryParse<ApprovalStage>(stage, ignoreCase: true, out var parsed) || !Enum.IsDefined(parsed))
+            {
+                throw new BadRequestException($"Unknown approval stage '{stage}'.");
+            }
+
+            if (parsed != ApprovalStage.BranchManager)
+            {
+                throw new BadRequestException("HR decisions are made in the HR portal.");
+            }
+
+            return parsed;
+        }
 
         private async Task ReleaseLeaveAsync(int employeeId, LeaveType leaveType, decimal days, CancellationToken cancellationToken)
         {

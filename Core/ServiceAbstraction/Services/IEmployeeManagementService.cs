@@ -1,4 +1,6 @@
+using Shared;
 using Shared.DataTransferObject.EmployeeProfile;
+using Shared.DataTransferObject.QueryParams;
 
 namespace ServiceAbstraction.Services
 {
@@ -9,8 +11,8 @@ namespace ServiceAbstraction.Services
     /// </summary>
     public interface IEmployeeManagementService
     {
-        Task<IReadOnlyList<EmployeeSummaryDto>> GetDirectoryAsync(
-            int actorUserId, int? activeGymId, string? query, string? status, CancellationToken cancellationToken = default);
+        Task<PaginationResult<EmployeeSummaryDto>> GetDirectoryAsync(
+            int actorUserId, int? activeGymId, EmployeeQueryParams query, CancellationToken cancellationToken = default);
 
         Task<EmployeeSummaryDto> CreateAsync(
             int actorUserId, int? activeGymId, CreateEmployeeDto request, CancellationToken cancellationToken = default);

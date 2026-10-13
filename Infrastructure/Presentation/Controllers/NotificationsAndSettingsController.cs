@@ -1,6 +1,8 @@
 using Microsoft.AspNetCore.Mvc;
 using ServiceAbstraction.Services;
+using Shared;
 using Shared.DataTransferObject.EmployeeProfile;
+using Shared.DataTransferObject.QueryParams;
 
 namespace Presentation.Controllers
 {
@@ -9,11 +11,11 @@ namespace Presentation.Controllers
     public class NotificationsController(INotificationService notificationService) : ApiControllerBase
     {
         [HttpGet]
-        public async Task<ActionResult<IReadOnlyList<NotificationDto>>> GetNotifications(
-            CancellationToken cancellationToken)
+        public async Task<ActionResult<PaginationResult<NotificationDto>>> GetNotifications(
+            [FromQuery] NotificationQueryParams query, CancellationToken cancellationToken)
         {
             var notifications = await notificationService.GetNotificationsAsync(
-                GetActorUserId(), GetGymIdFromToken(), cancellationToken);
+                GetActorUserId(), GetGymIdFromToken(), query, cancellationToken);
             return Ok(notifications);
         }
 

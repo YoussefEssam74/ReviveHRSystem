@@ -2,6 +2,7 @@ using DomainLayer.Contracts;
 using DomainLayer.Models.EmployeeModule;
 using DomainLayer.Models.OrganizationModule;
 using DomainLayer.Models.RecruitmentModule;
+using Microsoft.EntityFrameworkCore;
 
 namespace Service.Specifications
 {
@@ -12,6 +13,15 @@ namespace Service.Specifications
         {
             Criteria = p => p.GymId == gymId;
             OrderBy = p => p.Title;
+        }
+    }
+
+    /// <summary>A single position validated to belong to a specific gym.</summary>
+    public class PositionByIdAndGymSpec : BaseSpecification<Position, int>
+    {
+        public PositionByIdAndGymSpec(int positionId, int gymId)
+        {
+            Criteria = p => p.Id == positionId && p.GymId == gymId;
         }
     }
 
@@ -29,6 +39,15 @@ namespace Service.Specifications
         }
     }
 
+    /// <summary>Every team of one gym (Branch Manager scope).</summary>
+    public class TeamsByGymSpec : BaseSpecification<Team, int>
+    {
+        public TeamsByGymSpec(int gymId)
+        {
+            Criteria = t => t.GymId == gymId;
+        }
+    }
+
     /// <summary>One team with its members and leaders.</summary>
     public class TeamWithMembersSpec : BaseSpecification<Team, int>
     {
@@ -37,6 +56,44 @@ namespace Service.Specifications
             Criteria = t => t.Id == teamId;
             AddInclude(t => t.Members);
             AddInclude(t => t.TeamLeaders);
+        }
+    }
+
+    /// <summary>
+    /// Follow-ups of one team, newest activity first, with the employee they concern.
+    /// </summary>
+    public class TeamFollowUpsByTeamSpec : BaseSpecification<TeamFollowUp, int>
+    {
+        public TeamFollowUpsByTeamSpec(int teamId)
+        {
+            Criteria = f => f.TeamId == teamId;
+            AddInclude(f => f.Employee);
+            OrderByDescending = f => EF.Property<DateTime?>(f, "UpdatedAt") ?? EF.Property<DateTime>(f, "CreatedAt");
+            ThenByDescending = f => f.Id;
+        }
+    }
+
+    /// <summary>
+    /// Follow-ups of a set of teams, newest activity first, with the employee they concern.
+    /// </summary>
+    public class TeamFollowUpsByTeamsSpec : BaseSpecification<TeamFollowUp, int>
+    {
+        public TeamFollowUpsByTeamsSpec(IReadOnlyCollection<int> teamIds)
+        {
+            Criteria = f => teamIds.Contains(f.TeamId);
+            AddInclude(f => f.Employee);
+            OrderByDescending = f => EF.Property<DateTime?>(f, "UpdatedAt") ?? EF.Property<DateTime>(f, "CreatedAt");
+            ThenByDescending = f => f.Id;
+        }
+    }
+
+    /// <summary>One follow-up with the employee it concerns (scope and target checks).</summary>
+    public class TeamFollowUpByIdSpec : BaseSpecification<TeamFollowUp, int>
+    {
+        public TeamFollowUpByIdSpec(int followUpId)
+        {
+            Criteria = f => f.Id == followUpId;
+            AddInclude(f => f.Employee);
         }
     }
 

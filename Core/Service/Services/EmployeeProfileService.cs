@@ -18,17 +18,19 @@ namespace Service.Services
         public async Task<EmployeeProfileDto> GetProfileAsync(
             int actorUserId, int employeeId, int? activeGymId, CancellationToken cancellationToken = default)
         {
+            // Sequential: the three lookups below share one scoped DbContext, and EF Core
+            // forbids concurrent operations on a single context (the previous
+            // Task.WhenAll version threw InvalidOperationException intermittently).
+            var employee = await unitOfWork.GetRepository<Employee, int>()
+                .GetByIdAsync(new EmployeeByUserIdSpec(actorUserId), cancellationToken);
+
             await employeeAccess.EnsureCanAccessAsync(
                 actorUserId, employeeId, Features.Employees, AccessLevel.View, activeGymId, cancellationToken);
 
-            var employee = await LoadProfileAsync(employeeId, cancellationToken);
+            var profile = await LoadProfileAsync(employeeId, cancellationToken);
 
-            // Salary is HR-controlled data: only the owner's own profile carries it.
-            var own = await unitOfWork.GetRepository<Employee, int>()
-                .GetByIdAsync(new EmployeeByUserIdSpec(actorUserId), cancellationToken);
-            var isOwner = own is not null && own.Id == employee.Id;
-
-            return mapper.Map<EmployeeProfileDto>(employee, opts => opts.Items["includeSalary"] = isOwner);
+            var isOwner = employee is not null && employee.Id == profile.Id;
+            return mapper.Map<EmployeeProfileDto>(profile, opts => opts.Items["includeSalary"] = isOwner);
         }
 
         public async Task<EmployeeProfileDto> UpdateContactAsync(
@@ -42,7 +44,9 @@ namespace Service.Services
             unitOfWork.GetRepository<Employee, int>().Update(employee);
             await unitOfWork.SaveChangesAsync(cancellationToken);
 
-            return await GetProfileAsync(actorUserId, employee.Id, employee.GymId, cancellationToken);
+            // Re-load with full includes so navigations are populated for mapping.
+            var updated = await LoadProfileAsync(employee.Id, cancellationToken);
+            return mapper.Map<EmployeeProfileDto>(updated, opts => opts.Items["includeSalary"] = true);
         }
 
         public async Task<EmployeeProfileDto> UpdateEmergencyContactAsync(
@@ -57,7 +61,9 @@ namespace Service.Services
             unitOfWork.GetRepository<Employee, int>().Update(employee);
             await unitOfWork.SaveChangesAsync(cancellationToken);
 
-            return await GetProfileAsync(actorUserId, employee.Id, employee.GymId, cancellationToken);
+            // Re-load with full includes so navigations are populated for mapping.
+            var updated = await LoadProfileAsync(employee.Id, cancellationToken);
+            return mapper.Map<EmployeeProfileDto>(updated, opts => opts.Items["includeSalary"] = true);
         }
 
         private async Task<Employee> LoadProfileAsync(int employeeId, CancellationToken cancellationToken) =>

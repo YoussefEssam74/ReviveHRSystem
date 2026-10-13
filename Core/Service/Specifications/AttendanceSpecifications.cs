@@ -1,4 +1,4 @@
-using DomainLayer.Contracts;
+﻿using DomainLayer.Contracts;
 using DomainLayer.Models.AttendanceModule;
 using DomainLayer.Models.EmployeeModule;
 using DomainLayer.Models.SchedulingModule;
@@ -16,7 +16,7 @@ namespace Service.Specifications
         }
     }
 
-    /// <summary>Finds any station code (active or not) by value ├óΓé¼ΓÇ¥ uniqueness checks.</summary>
+    /// <summary>Finds any station code (active or not) by value — uniqueness checks.</summary>
     public class StationCodeExactSpec : BaseSpecification<StationCode, int>
     {
         public StationCodeExactSpec(string code)
@@ -38,7 +38,7 @@ namespace Service.Specifications
 
     /// <summary>
     /// Looks up a station session by the SHA-256 hash of its opaque token, including
-    /// the gym ├óΓé¼ΓÇ¥ the hot path every station-authenticated attendance request takes.
+    /// the gym — the hot path every station-authenticated attendance request takes.
     /// </summary>
     public class StationSessionByTokenHashSpec : BaseSpecification<StationSession, int>
     {
@@ -72,7 +72,7 @@ namespace Service.Specifications
     }
 
     /// <summary>
-    /// Every attendance record of one gym on one date, including the employee ΓÇö
+    /// Every attendance record of one gym on one date, including the employee —
     /// the kiosk dashboard feed.
     /// </summary>
     public class AttendanceRecordsByGymDateSpec : BaseSpecification<AttendanceRecord, int>
@@ -85,7 +85,36 @@ namespace Service.Specifications
     }
 
     /// <summary>
-    /// Real shifts (not days off) scheduled at one gym on one date ΓÇö the kiosk
+    /// The 10 most-recent attendance records of one gym on one date (kiosk recent-events
+    /// feed). Ordering and capping happen in the database --- no full table scan in memory.
+    /// </summary>
+    public class RecentAttendanceRecordsByGymDateSpec : BaseSpecification<AttendanceRecord, int>
+    {
+        public RecentAttendanceRecordsByGymDateSpec(int gymId, DateOnly date)
+        {
+            Criteria = ar => ar.GymId == gymId && ar.Date == date;
+            AddInclude(ar => ar.Employee);
+            // EF Core translates the nullable coalesce as COALESCE(CheckOutTime, CheckInTime) DESC.
+            OrderByDescending = ar => (object)(ar.CheckOutTime ?? ar.CheckInTime ?? DateTime.MinValue);
+            Take = 10;
+            IsPaginated = true;
+        }
+    }
+
+    /// <summary>
+    /// COUNT of employees who have checked in at one gym on one date (PresentCount).<br/>
+    /// Used instead of loading all records into memory and calling .Count(r => r.CheckInTime is not null).<br/>
+    /// </summary>
+    public class CheckedInCountByGymDateSpec : BaseSpecification<AttendanceRecord, int>
+    {
+        public CheckedInCountByGymDateSpec(int gymId, DateOnly date)
+        {
+            Criteria = ar => ar.GymId == gymId && ar.Date == date && ar.CheckInTime != null;
+        }
+    }
+
+    /// <summary>
+    /// Real shifts (not days off) scheduled at one gym on one date — the kiosk
     /// dashboard's "scheduled today" count.
     /// </summary>
     public class ShiftAssignmentsByGymDateSpec : BaseSpecification<ShiftAssignment, int>

@@ -25,6 +25,62 @@ namespace Service.Specifications
         }
     }
 
+    /// <summary>Active evaluation forms available in a gym or globally.</summary>
+    public class ActiveEvaluationFormsByGymSpec : BaseSpecification<EvaluationForm, int>
+    {
+        public ActiveEvaluationFormsByGymSpec(int? gymId)
+        {
+            Criteria = f => f.IsActive && (f.GymId == null || f.GymId == gymId);
+            AddInclude(f => f.Questions);
+            OrderBy = f => f.Name;
+        }
+    }
+
+    /// <summary>One evaluation form with its questions.</summary>
+    public class EvaluationFormByIdSpec : BaseSpecification<EvaluationForm, int>
+    {
+        public EvaluationFormByIdSpec(int formId)
+        {
+            Criteria = f => f.Id == formId;
+            AddInclude(f => f.Questions);
+        }
+    }
+
+    /// <summary>Answers of one evaluation response, each with its question.</summary>
+    public class EvaluationAnswersByResponseSpec : BaseSpecification<EvaluationAnswer, int>
+    {
+        public EvaluationAnswersByResponseSpec(int responseId)
+        {
+            Criteria = a => a.EvaluationResponseId == responseId;
+            AddInclude(a => a.EvaluationQuestion);
+            AddInclude(a => a.EvaluationResponse);
+            AddInclude(a => a.EvaluationResponse.Evaluator);
+        }
+    }
+
+    /// <summary>Answers of a set of employees, each with its question and response.</summary>
+    public class EvaluationAnswersByEmployeesSpec : BaseSpecification<EvaluationAnswer, int>
+    {
+        public EvaluationAnswersByEmployeesSpec(IReadOnlyCollection<int> employeeIds)
+        {
+            Criteria = a => employeeIds.Contains(a.EvaluationResponse.EmployeeId);
+            AddInclude(a => a.EvaluationQuestion);
+            AddInclude(a => a.EvaluationResponse);
+            AddInclude(a => a.EvaluationResponse.Evaluator);
+        }
+    }
+
+    /// <summary>One evaluation response with its form and answers (edit path).</summary>
+    public class EvaluationResponseByIdSpec : BaseSpecification<EvaluationResponse, int>
+    {
+        public EvaluationResponseByIdSpec(int responseId)
+        {
+            Criteria = r => r.Id == responseId;
+            AddInclude(r => r.EvaluationForm);
+            AddInclude(r => r.Employee);
+        }
+    }
+
     /// <summary>Employment history of one employee, newest first.</summary>
     public class EmploymentHistoryByEmployeeSpec : BaseSpecification<EmploymentHistory, int>
     {
@@ -124,6 +180,17 @@ namespace Service.Specifications
         }
     }
 
+    /// <summary>Attendance records of a set of employees over an inclusive date range.</summary>
+    public class AttendanceByEmployeesRangeSpec : BaseSpecification<AttendanceRecord, int>
+    {
+        public AttendanceByEmployeesRangeSpec(IReadOnlyCollection<int> employeeIds, DateOnly from, DateOnly to)
+        {
+            Criteria = r => employeeIds.Contains(r.EmployeeId) && r.Date >= from && r.Date <= to;
+            AddInclude(r => r.ScheduledShiftTemplate!);
+            OrderByDescending = r => r.Date;
+        }
+    }
+
     /// <summary>Requests of a set of employees (team/gym scope).</summary>
     public class RequestsByEmployeesSpec : BaseSpecification<DomainLayer.Models.RequestModule.EmployeeRequest, int>
     {
@@ -135,12 +202,32 @@ namespace Service.Specifications
         }
     }
 
+    /// <summary>One comment with its author (name lookup for the thread).</summary>
+    public class RequestCommentByIdSpec : BaseSpecification<DomainLayer.Models.RequestModule.RequestComment, int>
+    {
+        public RequestCommentByIdSpec(int commentId)
+        {
+            Criteria = c => c.Id == commentId;
+            AddInclude(c => c.AuthorUser);
+        }
+    }
+
     /// <summary>Shift assignments of a set of employees on one date, with their templates.</summary>
     public class AssignmentsByEmployeesDateSpec : BaseSpecification<DomainLayer.Models.SchedulingModule.ShiftAssignment, int>
     {
         public AssignmentsByEmployeesDateSpec(IReadOnlyCollection<int> employeeIds, DateOnly date)
         {
             Criteria = a => employeeIds.Contains(a.EmployeeId) && a.Date == date;
+            AddInclude(a => a.ShiftTemplate);
+        }
+    }
+
+    /// <summary>Shift assignments of a set of employees over an inclusive date range.</summary>
+    public class AssignmentsByEmployeesRangeSpec : BaseSpecification<DomainLayer.Models.SchedulingModule.ShiftAssignment, int>
+    {
+        public AssignmentsByEmployeesRangeSpec(IReadOnlyCollection<int> employeeIds, DateOnly from, DateOnly to)
+        {
+            Criteria = a => employeeIds.Contains(a.EmployeeId) && a.Date >= from && a.Date <= to;
             AddInclude(a => a.ShiftTemplate);
         }
     }

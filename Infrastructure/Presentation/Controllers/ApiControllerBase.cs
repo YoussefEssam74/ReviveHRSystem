@@ -51,5 +51,24 @@ namespace Presentation.Controllers
                 ? parsedUid
                 : throw new UnAuthorizedException("Your session is invalid. Please sign in again.");
         }
+
+        /// <summary>
+        /// Ensures the route gym ID matches the active token gym ID (preventing cross-gym IDOR),
+        /// unless the caller is TopManagement.
+        /// </summary>
+        protected void EnsureGymScope(int routeGymId)
+        {
+            var userType = User.FindFirst("userType")?.Value;
+            if (userType == "TopManagement")
+            {
+                return;
+            }
+
+            var tokenGymId = GetGymIdFromToken();
+            if (tokenGymId is null || tokenGymId.Value != routeGymId)
+            {
+                throw new UnAuthorizedException("You do not have access to this gym.");
+            }
+        }
     }
 }

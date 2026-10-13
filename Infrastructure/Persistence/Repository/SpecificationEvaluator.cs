@@ -4,12 +4,16 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Presistence
 {
-
     static class SpecificationEvaluator
     {
         public static IQueryable<TEntity> CreateQuery<TEntity, TKey>(IQueryable<TEntity> inputQuery, ISpecification<TEntity, TKey> specification) where TEntity : BaseEntity<TKey>
         {
             var query = inputQuery;
+
+            if (specification.AsNoTracking)
+            {
+                query = query.AsNoTracking();
+            }
 
             if (specification.Criteria is not null)
             {
@@ -18,19 +22,21 @@ namespace Presistence
 
             if (specification.OrderBy is not null)
             {
-                query = query.OrderBy(specification.OrderBy);
+                var ordered = query.OrderBy(specification.OrderBy);
+                query = specification.ThenByDescending is not null
+                    ? ordered.ThenByDescending(specification.ThenByDescending)
+                    : ordered;
             }
             else if (specification.OrderByDescending != null)
             {
-                query = query.OrderByDescending(specification.OrderByDescending);
+                var ordered = query.OrderByDescending(specification.OrderByDescending);
+                query = specification.ThenByDescending is not null
+                    ? ordered.ThenByDescending(specification.ThenByDescending)
+                    : ordered;
             }
 
             if (specification.IncludeExpressions is not null && specification.IncludeExpressions.Count > 0)
             {
-                // foreach (var include in specification.IncludeExpressions)
-                // {
-                //     query = query.Include(include);
-                // }
                 query = specification.IncludeExpressions.Aggregate(query, (current, include) => current.Include(include));
             }
 
@@ -38,7 +44,6 @@ namespace Presistence
             {
                 query = query.Skip(specification.Skip).Take(specification.Take);
             }
-            
 
             return query;
         }

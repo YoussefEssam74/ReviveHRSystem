@@ -44,7 +44,7 @@ namespace ReviveHRSystem.IntegrationTests
 
             response.EnsureSuccessStatusCode();
             var body = await response.Content.ReadFromJsonAsync<JsonElement>();
-            Assert.Contains(body.EnumerateArray(), e => e.GetProperty("name").GetString() == "Karim Hassan");
+            Assert.Contains(body.GetProperty("items").EnumerateArray(), e => e.GetProperty("name").GetString() == "Karim Hassan");
         }
 
         [Fact]
@@ -164,7 +164,7 @@ namespace ReviveHRSystem.IntegrationTests
 
             response.EnsureSuccessStatusCode();
             var body = await response.Content.ReadFromJsonAsync<JsonElement>();
-            var names = body.EnumerateArray().Select(e => e.GetProperty("name").GetString()).ToList();
+            var names = body.GetProperty("items").EnumerateArray().Select(e => e.GetProperty("name").GetString()).ToList();
             Assert.Contains("Karim Hassan", names!);
             // Sara works at another gym and is not in the team.
             Assert.DoesNotContain("Sara Ali", names!);
@@ -179,7 +179,7 @@ namespace ReviveHRSystem.IntegrationTests
             var response = await _fixture.Client.SendAsync(request);
             response.EnsureSuccessStatusCode();
             var body = await response.Content.ReadFromJsonAsync<JsonElement>();
-            return body.EnumerateArray().Select(e => e.GetProperty("name").GetString()!).ToList();
+            return body.GetProperty("items").EnumerateArray().Select(e => e.GetProperty("name").GetString()!).ToList();
         }
 
         private async Task<string> LoginSelectingGymAsync(string email, int gymId)

@@ -1,4 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Http;
+using DomainLayer.Exceptions;
+using DomainLayer.Models.EmployeeModule.Enums;
 using ServiceAbstraction.Services;
 using Shared.DataTransferObject.EmployeeProfile;
 
@@ -36,6 +39,64 @@ namespace Presentation.Controllers
         {
             var document = await documentService.UploadAsync(GetActorUserId(), id, request, cancellationToken);
             return CreatedAtAction(nameof(GetDocuments), new { id }, document);
+        }
+
+        /// <summary>Official company documents published by HR for this employee (mock §3.3).</summary>
+        [HttpGet("~/api/employees/{id}/hr-documents")]
+        public async Task<ActionResult<IReadOnlyList<HrDocumentDto>>> GetHrDocuments(
+            int id, CancellationToken cancellationToken)
+        {
+            var documents = await documentService.GetHrDocumentsAsync(GetActorUserId(), id, GetGymIdFromToken(), cancellationToken);
+            return Ok(documents);
+        }
+
+        /// <summary>
+        /// Streams a document the employee uploaded himself. Respects <c>canDownload</c>:
+        /// a row with nothing stored answers 404 instead of an empty body.
+        /// </summary>
+        [HttpGet("{docId}/download")]
+        public async Task<IActionResult> Download(int id, int docId, CancellationToken cancellationToken)
+        {
+            var file = await documentService.DownloadAsync(
+                GetActorUserId(), id, docId, DocumentSource.Employee, GetGymIdFromToken(), cancellationToken);
+            return File(file.Content, file.ContentType, file.FileName);
+        }
+
+        /// <summary>Streams a document HR published (mock §3.6).</summary>
+        [HttpGet("~/api/employees/{id}/hr-documents/{docId}/download")]
+        public async Task<IActionResult> DownloadHrDocument(int id, int docId, CancellationToken cancellationToken)
+        {
+            var file = await documentService.DownloadAsync(
+                GetActorUserId(), id, docId, DocumentSource.Hr, GetGymIdFromToken(), cancellationToken);
+            return File(file.Content, file.ContentType, file.FileName);
+        }
+    }
+
+    /// <summary>Profile avatar (mock 2.4). Upload is self-only; read follows the
+    /// employee's existing visibility, so a team screen can render the photo.</summary>
+    [Route("api/employees/{id}/photo")]
+    public class EmployeePhotoController(IEmployeeDocumentService documentService) : ApiControllerBase
+    {
+        [HttpGet]
+        public async Task<IActionResult> Get(int id, CancellationToken cancellationToken)
+        {
+            var file = await documentService.GetPhotoAsync(GetActorUserId(), id, GetGymIdFromToken(), cancellationToken);
+            return File(file.Content, file.ContentType);
+        }
+
+        [HttpPut]
+        [RequestSizeLimit(11 * 1024 * 1024)]
+        public async Task<ActionResult<PhotoUploadResultDto>> Upload(
+            int id, [FromForm] IFormFile file, CancellationToken cancellationToken)
+        {
+            if (file is null || file.Length == 0)
+            {
+                throw new BadRequestException("A photo file is required.");
+            }
+
+            await using var content = file.OpenReadStream();
+            var result = await documentService.UploadPhotoAsync(GetActorUserId(), id, file.FileName, content, cancellationToken);
+            return Ok(result);
         }
     }
 

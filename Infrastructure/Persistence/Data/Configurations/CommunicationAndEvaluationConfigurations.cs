@@ -153,6 +153,8 @@ namespace Presistence.Data.Configurations
             builder.ToTable("EvaluationResponses");
             builder.HasKey(er => er.Id);
 
+            builder.Property(er => er.OverallComment).HasMaxLength(1000);
+
             builder.HasOne(er => er.EvaluationForm)
                    .WithMany(ef => ef.Responses)
                    .HasForeignKey(er => er.EvaluationFormId)
@@ -215,7 +217,11 @@ namespace Presistence.Data.Configurations
                    .HasForeignKey(ea => ea.EvaluationQuestionId)
                    .OnDelete(DeleteBehavior.Restrict);
 
-            builder.HasIndex(ea => ea.EvaluationResponseId);
+            // A form question can be answered once within a submitted response.
+            // This protects scoring from duplicate answer rows.
+            builder.HasIndex(ea => new { ea.EvaluationResponseId, ea.EvaluationQuestionId })
+                   .IsUnique()
+                   .HasFilter("\"IsDeleted\" = FALSE");
         }
     }
 

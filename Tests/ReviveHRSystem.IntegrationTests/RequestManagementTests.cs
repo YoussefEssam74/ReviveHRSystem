@@ -58,6 +58,162 @@ namespace ReviveHRSystem.IntegrationTests
         }
 
         [Fact]
+        public async Task Decide_ExplicitStage_IsRecordedOnTheDecision()
+        {
+            // The contract carries the stage; omitting it keeps the pre-existing
+            // BranchManager default, and naming it explicitly is what stage 2 will use.
+            var gym1Id = await GymIdByNameAsync("Revive Main Gym");
+            var token = await LoginSelectingGymAsync("omar@revive.hr", gym1Id);
+            var requestId = await SeedPendingRequestAsync(gym1Id, "Day Off");
+
+            var decide = _fixture.AuthorizedRequest(HttpMethod.Post, $"/api/requests/{requestId}/decide", new
+            {
+                stage = "BranchManager",
+                decision = "Approved"
+            }, token);
+            var decideResponse = await _fixture.Client.SendAsync(decide);
+            Assert.Equal(HttpStatusCode.NoContent, decideResponse.StatusCode);
+
+            using var scope = _fixture.Services.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<ReviveHrDbContext>();
+            var request = await db.EmployeeRequests.Include(r => r.Decisions).FirstAsync(r => r.Id == requestId);
+            Assert.Equal("BranchManager", request.Decisions.Single().Stage.ToString());
+        }
+
+        [Fact]
+        public async Task Decide_UnknownStage_Returns400()
+        {
+            var gym1Id = await GymIdByNameAsync("Revive Main Gym");
+            var token = await LoginSelectingGymAsync("omar@revive.hr", gym1Id);
+            var requestId = await SeedPendingRequestAsync(gym1Id, "Day Off");
+
+            var decide = _fixture.AuthorizedRequest(HttpMethod.Post, $"/api/requests/{requestId}/decide", new
+            {
+                stage = "Committee",
+                decision = "Approved"
+            }, token);
+            var response = await _fixture.Client.SendAsync(decide);
+
+            Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        }
+
+        [Fact]
+        public async Task Decide_Stage1CallerCannotForgeAnHrApproval_Returns400()
+        {
+            // A stage-1 approver naming the HR stage must be refused: recording
+            // "HR Approved" from a caller who does not hold that stage would forge a
+            // record in the audit trail and the employee-facing timeline.
+            var gym1Id = await GymIdByNameAsync("Revive Main Gym");
+            var token = await LoginSelectingGymAsync("omar@revive.hr", gym1Id);
+            var requestId = await SeedPendingRequestAsync(gym1Id, "Day Off");
+
+            var decide = _fixture.AuthorizedRequest(HttpMethod.Post, $"/api/requests/{requestId}/decide", new
+            {
+                stage = "HR",
+                decision = "Approved",
+                comment = "Approved on HR's behalf"
+            }, token);
+            var response = await _fixture.Client.SendAsync(decide);
+
+            Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+
+            // No decision row was written at all.
+            using var scope = _fixture.Services.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<ReviveHrDbContext>();
+            Assert.False(await db.RequestDecisions.AnyAsync(d => d.RequestId == requestId));
+        }
+
+        [Fact]
+        public async Task Decide_NumericStage_Returns400()
+        {
+            // "2" parses to HR via Enum.TryParse but is not a defined value the caller
+            // may use; the request is rejected rather than silently trusted.
+            var gym1Id = await GymIdByNameAsync("Revive Main Gym");
+            var token = await LoginSelectingGymAsync("omar@revive.hr", gym1Id);
+            var requestId = await SeedPendingRequestAsync(gym1Id, "Day Off");
+
+            var decide = _fixture.AuthorizedRequest(HttpMethod.Post, $"/api/requests/{requestId}/decide", new
+            {
+                stage = "2",
+                decision = "Approved"
+            }, token);
+            var response = await _fixture.Client.SendAsync(decide);
+
+            Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        }
+
+        [Fact]
+        public async Task Comment_Post_OnInScopeRequest_Succeeds()
+        {
+            var gym1Id = await GymIdByNameAsync("Revive Main Gym");
+            var token = await LoginSelectingGymAsync("omar@revive.hr", gym1Id);
+            var requestId = await SeedPendingRequestAsync(gym1Id, "Day Off");
+
+            var comment = _fixture.AuthorizedRequest(HttpMethod.Post, $"/api/requests/{requestId}/comments", new
+            {
+                comment = "I will cover the morning shift."
+            }, token);
+            var response = await _fixture.Client.SendAsync(comment);
+
+            response.EnsureSuccessStatusCode();
+            var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+            Assert.Equal("I will cover the morning shift.", body.GetProperty("body").GetString());
+
+            using var scope = _fixture.Services.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<ReviveHrDbContext>();
+            Assert.True(await db.RequestComments.AnyAsync(c => c.RequestId == requestId));
+        }
+
+        [Fact]
+        public async Task Comment_EmptyBody_Returns400()
+        {
+            var gym1Id = await GymIdByNameAsync("Revive Main Gym");
+            var token = await LoginSelectingGymAsync("omar@revive.hr", gym1Id);
+            var requestId = await SeedPendingRequestAsync(gym1Id, "Day Off");
+
+            var comment = _fixture.AuthorizedRequest(HttpMethod.Post, $"/api/requests/{requestId}/comments", new
+            {
+                comment = "   "
+            }, token);
+            var response = await _fixture.Client.SendAsync(comment);
+
+            Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        }
+
+        [Fact]
+        public async Task Comment_OversizedBody_Returns400()
+        {
+            var gym1Id = await GymIdByNameAsync("Revive Main Gym");
+            var token = await LoginSelectingGymAsync("omar@revive.hr", gym1Id);
+            var requestId = await SeedPendingRequestAsync(gym1Id, "Day Off");
+
+            var comment = _fixture.AuthorizedRequest(HttpMethod.Post, $"/api/requests/{requestId}/comments", new
+            {
+                comment = new string('x', 1001)
+            }, token);
+            var response = await _fixture.Client.SendAsync(comment);
+
+            Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        }
+
+        [Fact]
+        public async Task Comment_OtherGymsRequest_Returns404()
+        {
+            var gym1Id = await GymIdByNameAsync("Revive Main Gym");
+            var gym2Id = await GymIdByNameAsync("Revive Second Gym");
+            var outsiderRequestId = await SeedPendingRequestAsync(gym2Id, "Day Off");
+
+            var token = await LoginSelectingGymAsync("omar@revive.hr", gym1Id);
+            var comment = _fixture.AuthorizedRequest(HttpMethod.Post, $"/api/requests/{outsiderRequestId}/comments", new
+            {
+                comment = "Should never land."
+            }, token);
+            var response = await _fixture.Client.SendAsync(comment);
+
+            Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        }
+
+        [Fact]
         public async Task Decide_Reject_ReleasesReservedLeave()
         {
             var gym1Id = await GymIdByNameAsync("Revive Main Gym");
@@ -110,7 +266,7 @@ namespace ReviveHRSystem.IntegrationTests
 
             response.EnsureSuccessStatusCode();
             var body = await response.Content.ReadFromJsonAsync<JsonElement>();
-            var ids = body.EnumerateArray().Select(r => r.GetProperty("id").GetInt32()).ToList();
+            var ids = body.GetProperty("items").EnumerateArray().Select(r => r.GetProperty("id").GetInt32()).ToList();
             Assert.Contains(gym1Request, ids);
             // No request of the other gym ever appears, whatever the shared test data holds.
             Assert.DoesNotContain(gym2Request, ids);
@@ -146,7 +302,7 @@ namespace ReviveHRSystem.IntegrationTests
 
             response.EnsureSuccessStatusCode();
             var body = await response.Content.ReadFromJsonAsync<JsonElement>();
-            var ids = body.EnumerateArray().Select(r => r.GetProperty("id").GetInt32()).ToList();
+            var ids = body.GetProperty("items").EnumerateArray().Select(r => r.GetProperty("id").GetInt32()).ToList();
             Assert.Contains(inTeamRequest, ids);
             Assert.Single(ids);
         }

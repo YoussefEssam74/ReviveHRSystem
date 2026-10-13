@@ -14,9 +14,11 @@ namespace DomainLayer.Contracts
         public List<Expression<Func<TEntity, object>>> IncludeExpressions { get; } = new();
         public Expression<Func<TEntity, object>>? OrderBy { get; protected set; }
         public Expression<Func<TEntity, object>>? OrderByDescending { get; protected set; }
+        public Expression<Func<TEntity, object>>? ThenByDescending { get; protected set; }
         public int Skip { get; protected set; }
         public int Take { get; protected set; }
         public bool IsPaginated { get; protected set; }
+        public bool AsNoTracking { get; protected set; }
 
         protected void AddInclude(Expression<Func<TEntity, object>> includeExpression) =>
             IncludeExpressions.Add(includeExpression);
@@ -26,6 +28,11 @@ namespace DomainLayer.Contracts
             Skip = skip;
             Take = take;
             IsPaginated = true;
+        }
+
+        public void ApplyNoTracking()
+        {
+            AsNoTracking = true;
         }
     }
 }

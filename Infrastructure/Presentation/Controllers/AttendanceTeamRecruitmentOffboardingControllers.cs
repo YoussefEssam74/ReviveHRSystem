@@ -2,9 +2,11 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Presentation.Authorization;
 using ServiceAbstraction.Services;
+using Shared;
 using Shared.Authorization;
 using Shared.DataTransferObject.Attendance;
 using Shared.DataTransferObject.EmployeeProfile;
+using Shared.DataTransferObject.QueryParams;
 using DomainLayer.Models.UserModule.Enums;
 namespace Presentation.Controllers
 {
@@ -18,14 +20,14 @@ namespace Presentation.Controllers
         IAttendanceManagementService attendanceManagementService,
         IAttendanceService attendanceService) : ApiControllerBase
     {
-        /// <summary>Day view of in-scope attendance. Query: date (YYYY-MM-DD).</summary>
+        /// <summary>Day view of in-scope attendance. Query: date or from/to range, employeeId, status.</summary>
         [HttpGet]
         [HasFeatureAccess(Features.Attendance, AccessLevel.View)]
         public async Task<ActionResult<AttendanceManagementDto>> GetDay(
-            [FromQuery] DateOnly? date, CancellationToken cancellationToken)
+            [FromQuery] AttendanceQueryParams query, CancellationToken cancellationToken)
         {
             var day = await attendanceManagementService.GetDayAsync(
-                GetActorUserId(), GetGymIdFromToken(), date, cancellationToken);
+                GetActorUserId(), GetGymIdFromToken(), query, cancellationToken);
             return Ok(day);
         }
 
@@ -72,6 +74,20 @@ namespace Presentation.Controllers
                 GetActorUserId(), teamId, GetGymIdFromToken(), date, cancellationToken);
             return Ok(team);
         }
+
+        /// <summary>
+        /// Members of the team with no published assignment (all Off / empty) — the
+        /// Team Schedule sidebar's "unscheduled" badge.
+        /// </summary>
+        [HttpGet("{teamId}/unscheduled-count")]
+        [HasFeatureAccess(Features.Employees, AccessLevel.View)]
+        public async Task<ActionResult<object>> GetUnscheduledCount(
+            int teamId, CancellationToken cancellationToken)
+        {
+            var count = await teamOverviewService.GetUnscheduledCountAsync(
+                GetActorUserId(), teamId, GetGymIdFromToken(), cancellationToken);
+            return Ok(new { count });
+        }
     }
 
     /// <summary>Branch vacancy requests (mock §23 Recruitment).</summary>
@@ -80,11 +96,22 @@ namespace Presentation.Controllers
     {
         [HttpGet]
         [HasFeatureAccess(Features.Recruitment, AccessLevel.View)]
-        public async Task<ActionResult<IReadOnlyList<VacancyRequestDto>>> GetRequests(CancellationToken cancellationToken)
+        public async Task<ActionResult<PaginationResult<VacancyRequestDto>>> GetRequests(
+            [FromQuery] VacancyQueryParams query, CancellationToken cancellationToken)
         {
             var requests = await vacancyRequestService.GetRequestsAsync(
-                GetActorUserId(), GetGymIdFromToken(), cancellationToken);
+                GetActorUserId(), GetGymIdFromToken(), query, cancellationToken);
             return Ok(requests);
+        }
+
+        /// <summary>Detail of one gym vacancy request (mock §23.3 detail modal).</summary>
+        [HttpGet("{id}")]
+        [HasFeatureAccess(Features.Recruitment, AccessLevel.View)]
+        public async Task<ActionResult<VacancyRequestDto>> GetRequest(int id, CancellationToken cancellationToken)
+        {
+            var request = await vacancyRequestService.GetRequestAsync(
+                GetActorUserId(), GetGymIdFromToken(), id, cancellationToken);
+            return Ok(request);
         }
 
         [HttpPost]
@@ -104,10 +131,11 @@ namespace Presentation.Controllers
     {
         [HttpGet]
         [HasFeatureAccess(Features.Offboarding, AccessLevel.View)]
-        public async Task<ActionResult<IReadOnlyList<OffboardingCaseDto>>> GetCases(CancellationToken cancellationToken)
+        public async Task<ActionResult<PaginationResult<OffboardingCaseDto>>> GetCases(
+            [FromQuery] OffboardingQueryParams query, CancellationToken cancellationToken)
         {
             var cases = await offboardingService.GetCasesAsync(
-                GetActorUserId(), GetGymIdFromToken(), cancellationToken);
+                GetActorUserId(), GetGymIdFromToken(), query, cancellationToken);
             return Ok(cases);
         }
 

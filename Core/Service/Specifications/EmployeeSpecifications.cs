@@ -50,13 +50,24 @@ namespace Service.Specifications
         }
     }
 
-    /// <summary>All documents of one employee, newest first.</summary>
+    /// <summary>All documents of one employee, newest first. Supplying a source
+    /// narrows the list to that owner's uploads (the employee vault vs the official
+    /// company documents HR published).</summary>
     public class DocumentsByEmployeeSpec : BaseSpecification<EmployeeDocument, int>
     {
-        public DocumentsByEmployeeSpec(int employeeId)
+        public DocumentsByEmployeeSpec(int employeeId, DocumentSource? source = null)
         {
-            Criteria = d => d.EmployeeId == employeeId;
+            Criteria = d => d.EmployeeId == employeeId && (source == null || d.Source == source);
             OrderByDescending = d => d.UploadedAt;
+        }
+    }
+
+    /// <summary>One document by id, for the download path (owner and scope checked in the service).</summary>
+    public class DocumentByIdSpec : BaseSpecification<EmployeeDocument, int>
+    {
+        public DocumentByIdSpec(int documentId)
+        {
+            Criteria = d => d.Id == documentId;
         }
     }
 
@@ -66,6 +77,19 @@ namespace Service.Specifications
         public LeaveBalancesByEmployeeSpec(int employeeId, int year)
         {
             Criteria = lb => lb.EmployeeId == employeeId && lb.Year == year;
+        }
+    }
+
+    /// <summary>
+    /// All employees ordered by Id descending for sequence numbering: the high-water
+    /// mark must span every stored number, including seeded or imported rows that can
+    /// sit below the newest Ids.
+    /// </summary>
+    public class LatestEmployeesSpec : BaseSpecification<Employee, int>
+    {
+        public LatestEmployeesSpec()
+        {
+            OrderByDescending = e => e.Id;
         }
     }
 }

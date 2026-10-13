@@ -78,7 +78,7 @@ Recruitment
 Employee
 ├── Employee (Id, UserId, GymId, PositionId, HireDate, Status, CandidateId?)
 ├── EmploymentHistory (Id, EmployeeId, ChangeType, OldValue, NewValue, EffectiveDate, ChangedBy)
-├── EmployeeDocument (Id, EmployeeId, Type, FilePath, ExpiryDate)
+├── EmployeeDocument (Id, EmployeeId, Type, FilePath, SizeBytes, ContentType, Source [Employee/Hr], ExpiryDate)
 └── Compensation (Id, EmployeeId, Amount, Currency, EffectiveDate, ChangedBy)
 
 Scheduling

@@ -20,6 +20,9 @@ namespace DomainLayer.Models.EvaluationModule
 
         public DateTime SubmittedAt { get; set; } = DateTime.UtcNow;
 
+        /// <summary>Evaluator's wrap-up comment (mock 14.6 New Evaluation modal).</summary>
+        public string? OverallComment { get; set; }
+
         public virtual ICollection<EvaluationAnswer> Answers { get; set; } = new List<EvaluationAnswer>();
     }
 }

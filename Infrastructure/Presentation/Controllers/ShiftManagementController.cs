@@ -21,6 +21,7 @@ namespace Presentation.Controllers
         public async Task<ActionResult<IReadOnlyList<ShiftCycleDto>>> GetCycles(
             int gymId, [FromQuery] string? month, CancellationToken cancellationToken)
         {
+            EnsureGymScope(gymId);
             var cycles = await shiftManagementService.GetCyclesAsync(
                 GetActorUserId(), gymId, month, cancellationToken);
             return Ok(cycles);
@@ -31,6 +32,7 @@ namespace Presentation.Controllers
         public async Task<ActionResult<ShiftCycleDto>> Create(
             int gymId, CreateShiftCycleDto request, CancellationToken cancellationToken)
         {
+            EnsureGymScope(gymId);
             var created = await shiftManagementService.CreateCycleAsync(
                 GetActorUserId(), gymId, request, cancellationToken);
             return Created($"/api/gyms/{gymId}/shift-cycles/{created.Id}", created);
@@ -41,6 +43,7 @@ namespace Presentation.Controllers
         public async Task<ActionResult<ShiftCycleDetailDto>> GetCycle(
             int gymId, int cycleId, CancellationToken cancellationToken)
         {
+            EnsureGymScope(gymId);
             var cycle = await shiftManagementService.GetCycleAsync(
                 GetActorUserId(), gymId, cycleId, cancellationToken);
             return Ok(cycle);
@@ -51,6 +54,7 @@ namespace Presentation.Controllers
         public async Task<IActionResult> UpdateAssignments(
             int gymId, int cycleId, UpdateAssignmentsDto request, CancellationToken cancellationToken)
         {
+            EnsureGymScope(gymId);
             await shiftManagementService.UpdateAssignmentsAsync(
                 GetActorUserId(), gymId, cycleId, request, cancellationToken);
             return NoContent();
@@ -60,6 +64,7 @@ namespace Presentation.Controllers
         [HasFeatureAccess(Features.Schedule, AccessLevel.Edit)]
         public async Task<IActionResult> Publish(int gymId, int cycleId, CancellationToken cancellationToken)
         {
+            EnsureGymScope(gymId);
             await shiftManagementService.PublishAsync(GetActorUserId(), gymId, cycleId, cancellationToken);
             return NoContent();
         }
@@ -68,6 +73,7 @@ namespace Presentation.Controllers
         [HasFeatureAccess(Features.Schedule, AccessLevel.Edit)]
         public async Task<IActionResult> Delete(int gymId, int cycleId, CancellationToken cancellationToken)
         {
+            EnsureGymScope(gymId);
             await shiftManagementService.DeleteAsync(GetActorUserId(), gymId, cycleId, cancellationToken);
             return NoContent();
         }
@@ -82,6 +88,7 @@ namespace Presentation.Controllers
         public async Task<ActionResult<IReadOnlyList<ShiftTemplateDto>>> GetTemplates(
             int gymId, CancellationToken cancellationToken)
         {
+            EnsureGymScope(gymId);
             var templates = await shiftManagementService.GetTemplatesAsync(
                 GetActorUserId(), gymId, cancellationToken);
             return Ok(templates);
@@ -92,6 +99,7 @@ namespace Presentation.Controllers
         public async Task<ActionResult<ShiftTemplateDto>> Create(
             int gymId, CreateShiftTemplateDto request, CancellationToken cancellationToken)
         {
+            EnsureGymScope(gymId);
             var created = await shiftManagementService.CreateTemplateAsync(
                 GetActorUserId(), gymId, request, cancellationToken);
             return Created($"/api/gyms/{gymId}/shift-templates/{created.Id}", created);
@@ -102,6 +110,7 @@ namespace Presentation.Controllers
         public async Task<ActionResult<ShiftTemplateDto>> Update(
             int gymId, int templateId, UpdateShiftTemplateDto request, CancellationToken cancellationToken)
         {
+            EnsureGymScope(gymId);
             var updated = await shiftManagementService.UpdateTemplateAsync(
                 GetActorUserId(), gymId, templateId, request, cancellationToken);
             return Ok(updated);
@@ -111,6 +120,7 @@ namespace Presentation.Controllers
         [HasFeatureAccess(Features.Schedule, AccessLevel.Edit)]
         public async Task<IActionResult> Delete(int gymId, int templateId, CancellationToken cancellationToken)
         {
+            EnsureGymScope(gymId);
             await shiftManagementService.DeleteTemplateAsync(GetActorUserId(), gymId, templateId, cancellationToken);
             return NoContent();
         }

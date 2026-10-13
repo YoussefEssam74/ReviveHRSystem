@@ -281,6 +281,8 @@ Employees
 ├── ContractType
 ├── ContractStartDate
 ├── ContractEndDate
+├── PhotoPath (varchar(500), nullable) ← Slice E — avatar storage path; null = initials placeholder.
+│                                         Clients read it back as GET /api/employees/{id}/photo
 └── Common columns
 
 EmploymentHistory
@@ -304,6 +306,10 @@ EmployeeDocuments
 ├── ExpiryDate (nullable)
 ├── EmployeeEditable (bool)            ← NEW — set per Type; false for Contract/NationalId,
 │                                         true for types the employee may self-upload (e.g. Certification)
+├── SizeBytes (bigint, nullable)       ← Slice E — exact length when a file is actually stored
+├── ContentType (varchar(100), null)   ← Slice E — derived from the extension at write time
+├── Source (int: 0 Employee, 1 Hr)     ← Slice E — splits the employee vault from HR's official
+│                                         documents; default 0 so pre-existing rows need no backfill
 └── Common columns
 
 ⚠️ OPEN ITEM: exact per-type EmployeeEditable defaults (beyond the

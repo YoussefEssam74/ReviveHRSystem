@@ -18,6 +18,9 @@ public sealed class EmployeeProfileDto
     public GymSummaryDto Gym { get; init; } = null!;
     public EmergencyContactDto EmergencyContact { get; init; } = null!;
 
+    /// <summary>Avatar URL, or null when the profile still shows initials.</summary>
+    public string? PhotoUrl { get; init; }
+
     /// <summary>HR-controlled salary; only populated for the employee's own profile.</summary>
     public decimal? BaseSalary { get; init; }
 }

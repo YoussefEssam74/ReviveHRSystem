@@ -5,7 +5,9 @@ using DomainLayer.Models.NotificationModule;
 using DomainLayer.Models.UserModule;
 using Service.Specifications;
 using ServiceAbstraction.Services;
+using Shared;
 using Shared.DataTransferObject.EmployeeProfile;
+using Shared.DataTransferObject.QueryParams;
 
 namespace Service.Services
 {
@@ -14,20 +16,25 @@ namespace Service.Services
         IUnitOfWork unitOfWork,
         IMapper mapper) : INotificationService
     {
-        public async Task<IReadOnlyList<NotificationDto>> GetNotificationsAsync(
-            int userId, int? activeGymId, CancellationToken cancellationToken = default)
+        public async Task<PaginationResult<NotificationDto>> GetNotificationsAsync(
+            int userId, int? activeGymId, NotificationQueryParams query, CancellationToken cancellationToken = default)
         {
-            var notifications = await unitOfWork.GetRepository<Notification, int>()
-                .GetAllAsync(new NotificationsByUserSpec(userId), cancellationToken);
+            var notifications = (await unitOfWork.GetRepository<Notification, int>()
+                .GetAllAsync(new NotificationsByUserSpec(userId, query.UnreadOnly), cancellationToken)).ToList();
 
-            return notifications.Select(n => mapper.Map<NotificationDto>(n)).ToList();
+            var page = notifications
+                .Skip(query.SkipCount)
+                .Take(query.PageSize)
+                .Select(n => mapper.Map<NotificationDto>(n))
+                .ToList();
+
+            return new PaginationResult<NotificationDto>(query.PageNumber, query.PageSize, notifications.Count, page);
         }
 
         public async Task<int> GetUnreadCountAsync(int userId, int? activeGymId, CancellationToken cancellationToken = default)
         {
-            var notifications = await unitOfWork.GetRepository<Notification, int>()
-                .GetAllAsync(new NotificationsByUserSpec(userId), cancellationToken);
-            return notifications.Count(n => !n.IsRead);
+            return await unitOfWork.GetRepository<Notification, int>()
+                .CountAsync(new UnreadNotificationsByUserSpec(userId), cancellationToken);
         }
 
         public async Task MarkReadAsync(int userId, int notificationId, CancellationToken cancellationToken = default)

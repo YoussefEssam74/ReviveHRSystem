@@ -9,7 +9,9 @@ using DomainLayer.Models.RecruitmentModule.Enums;
 using DomainLayer.Models.RequestModule.Enums;
 using Service.Specifications;
 using ServiceAbstraction.Services;
+using Shared;
 using Shared.DataTransferObject.EmployeeProfile;
+using Shared.DataTransferObject.QueryParams;
 
 namespace Service.Services
 {
@@ -120,8 +122,59 @@ namespace Service.Services
             };
         }
 
-        private async Task<Employee> OwnEmployeeAsync(int actorUserId, CancellationToken cancellationToken) =>
-            await unitOfWork.GetRepository<Employee, int>()
+        /// <summary>
+        /// Counts team members with no published assignment: either no assignment row at
+        /// all, or only Off-day (null template) rows. Members are the team's own roster,
+        /// so the count is team-scoped by construction.
+        /// </summary>
+        public async Task<int> GetUnscheduledCountAsync(
+            int actorUserId, int teamId, int? activeGymId, CancellationToken cancellationToken = default)
+        {
+            var gymId = RequireGym(activeGymId);
+
+            var team = await unitOfWork.GetRepository<Team, int>()
+                .GetByIdAsync(new TeamWithMembersSpec(teamId), cancellationToken)
+                ?? throw new NotFoundException("Team not found.");
+
+            if (team.GymId != gymId)
+            {
+                throw new NotFoundException("Team not found.");
+            }
+
+            var myTeams = await GetMyTeamsAsync(actorUserId, activeGymId, cancellationToken);
+            if (!myTeams.Any(t => t.Id == teamId))
+            {
+                throw new NotFoundException("Team not found.");
+            }
+
+            var memberIds = team.Members.Select(m => m.Id).ToList();
+            if (memberIds.Count == 0)
+            {
+                return 0;
+            }
+
+            var today = DateOnly.FromDateTime(DateTime.UtcNow);
+            var cycles = await unitOfWork.GetRepository<DomainLayer.Models.SchedulingModule.ShiftCycle, int>()
+                .GetAllAsync(new PublishedCyclesByGymSpec(gymId, today, DateOnly.MaxValue), cancellationToken);
+
+            // A published cycle only ever carries real templates for scheduled days,
+            // and only cycles whose window is current or upcoming count as scheduled.
+            var scheduledIds = new HashSet<int>();
+            foreach (var cycle in cycles)
+            {
+                var assignments = await unitOfWork.GetRepository<DomainLayer.Models.SchedulingModule.ShiftAssignment, int>()
+                    .GetAllAsync(new AssignmentsByCycleAndEmployeesSpec(cycle.Id, memberIds), cancellationToken);
+
+                foreach (var assignment in assignments.Where(a => a.ShiftTemplateId is not null))
+                {
+                    scheduledIds.Add(assignment.EmployeeId);
+                }
+            }
+
+            return memberIds.Count(id => !scheduledIds.Contains(id));
+        }
+
+        private async Task<Employee> OwnEmployeeAsync(int actorUserId, CancellationToken cancellationToken) =>            await unitOfWork.GetRepository<Employee, int>()
                 .GetByIdAsync(new EmployeeByUserIdSpec(actorUserId), cancellationToken)
             ?? throw new UnAuthorizedException("This account has no employee profile.");
 
@@ -141,15 +194,42 @@ namespace Service.Services
         IUnitOfWork unitOfWork,
         IMapper mapper) : IVacancyRequestService
     {
-        public async Task<IReadOnlyList<VacancyRequestDto>> GetRequestsAsync(
-            int actorUserId, int? activeGymId, CancellationToken cancellationToken = default)
+        public async Task<PaginationResult<VacancyRequestDto>> GetRequestsAsync(
+            int actorUserId, int? activeGymId, VacancyQueryParams query, CancellationToken cancellationToken = default)
         {
             var gymId = activeGymId ?? throw new UnAuthorizedException("This operation requires an active gym context.");
 
             var requests = await unitOfWork.GetRepository<VacancyRequest, int>()
                 .GetAllAsync(new VacancyRequestsByGymSpec(gymId), cancellationToken);
 
-            return requests.Select(r => mapper.Map<VacancyRequestDto>(r)).ToList();
+            var filtered = string.IsNullOrWhiteSpace(query.Status)
+                ? requests.ToList()
+                : requests
+                    .Where(r => r.Status.ToString().Equals(query.Status, StringComparison.OrdinalIgnoreCase))
+                    .ToList();
+
+            var page = filtered
+                .OrderByDescending(r => r.Id)
+                .Skip(query.SkipCount)
+                .Take(query.PageSize)
+                .Select(r => mapper.Map<VacancyRequestDto>(r))
+                .ToList();
+
+            return new PaginationResult<VacancyRequestDto>(query.PageNumber, query.PageSize, filtered.Count, page);
+        }
+
+        public async Task<VacancyRequestDto> GetRequestAsync(
+            int actorUserId, int? activeGymId, int vacancyRequestId, CancellationToken cancellationToken = default)
+        {
+            var gymId = activeGymId ?? throw new UnAuthorizedException("This operation requires an active gym context.");
+
+            var requests = await unitOfWork.GetRepository<VacancyRequest, int>()
+                .GetAllAsync(new VacancyRequestsByGymSpec(gymId), cancellationToken);
+
+            var request = requests.FirstOrDefault(r => r.Id == vacancyRequestId)
+                ?? throw new NotFoundException("Vacancy request not found.");
+
+            return mapper.Map<VacancyRequestDto>(request);
         }
 
         public async Task<VacancyRequestDto> CreateAsync(
@@ -197,8 +277,8 @@ namespace Service.Services
         ITeamScopeService teamScopeService,
         IMapper mapper) : IOffboardingService
     {
-        public async Task<IReadOnlyList<OffboardingCaseDto>> GetCasesAsync(
-            int actorUserId, int? activeGymId, CancellationToken cancellationToken = default)
+        public async Task<PaginationResult<OffboardingCaseDto>> GetCasesAsync(
+            int actorUserId, int? activeGymId, OffboardingQueryParams query, CancellationToken cancellationToken = default)
         {
             var gymId = activeGymId ?? throw new UnAuthorizedException("This operation requires an active gym context.");
             var ids = await ScopedEmployeeIdsAsync(actorUserId, gymId, cancellationToken);
@@ -206,7 +286,21 @@ namespace Service.Services
             var cases = await unitOfWork.GetRepository<DomainLayer.Models.EmployeeModule.OffboardingCase, int>()
                 .GetAllAsync(new OffboardingCasesByEmployeesSpec(ids), cancellationToken);
 
-            return cases.Select(c => mapper.Map<OffboardingCaseDto>(c)).ToList();
+            var filtered = string.IsNullOrWhiteSpace(query.Status)
+                ? cases.ToList()
+                : cases
+                    .Where(c => c.Status.Equals(query.Status, StringComparison.OrdinalIgnoreCase))
+                    .ToList();
+
+            var page = filtered
+                .OrderByDescending(c => c.InitiatedAt)
+                .ThenByDescending(c => c.Id)
+                .Skip(query.SkipCount)
+                .Take(query.PageSize)
+                .Select(c => mapper.Map<OffboardingCaseDto>(c))
+                .ToList();
+
+            return new PaginationResult<OffboardingCaseDto>(query.PageNumber, query.PageSize, filtered.Count, page);
         }
 
         public async Task<OffboardingCaseDto> InitiateAsync(

@@ -134,7 +134,7 @@ namespace ReviveHRSystem.IntegrationTests
             var listResponse = await _fixture.Client.SendAsync(list);
             listResponse.EnsureSuccessStatusCode();
             var listBody = await listResponse.Content.ReadFromJsonAsync<JsonElement>();
-            Assert.Contains(listBody.EnumerateArray(), r => r.GetProperty("id").GetInt32() == createdId);
+            Assert.Contains(listBody.GetProperty("items").EnumerateArray(), r => r.GetProperty("id").GetInt32() == createdId);
 
             // The other gym's manager never sees it.
             var gym2Token = await LoginSelectingGymAsync("omar@revive.hr", gym2Id);
@@ -142,7 +142,7 @@ namespace ReviveHRSystem.IntegrationTests
             var gym2Response = await _fixture.Client.SendAsync(gym2List);
             gym2Response.EnsureSuccessStatusCode();
             var gym2Body = await gym2Response.Content.ReadFromJsonAsync<JsonElement>();
-            Assert.DoesNotContain(gym2Body.EnumerateArray(), r => r.GetProperty("id").GetInt32() == createdId);
+            Assert.DoesNotContain(gym2Body.GetProperty("items").EnumerateArray(), r => r.GetProperty("id").GetInt32() == createdId);
         }
 
         [Fact]
@@ -168,7 +168,7 @@ namespace ReviveHRSystem.IntegrationTests
             var listResponse = await _fixture.Client.SendAsync(list);
             listResponse.EnsureSuccessStatusCode();
             var listBody = await listResponse.Content.ReadFromJsonAsync<JsonElement>();
-            Assert.Contains(listBody.EnumerateArray(), c => c.GetProperty("id").GetInt32() == created.GetProperty("id").GetInt32());
+            Assert.Contains(listBody.GetProperty("items").EnumerateArray(), c => c.GetProperty("id").GetInt32() == created.GetProperty("id").GetInt32());
 
             // A second leaving process for the same employee is rejected.
             var duplicate = _fixture.AuthorizedRequest(HttpMethod.Post, "/api/offboarding-requests", new

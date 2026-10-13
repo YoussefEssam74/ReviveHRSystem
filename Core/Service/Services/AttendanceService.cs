@@ -1,4 +1,4 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 using DomainLayer.Contracts;
 using DomainLayer.Exceptions;
 using DomainLayer.Models.AttendanceModule;
@@ -19,12 +19,12 @@ namespace Service.Services
     /// kiosk login, which creates a DB-backed station session and returns its opaque
     /// token; every event must present that token (X-Station-Token) or a gym-scoped
     /// user token. The GymId always comes from the validated session (or the user
-    /// token's claim) â€” never from the request body â€” and no deviceId is involved, so
+    /// token's claim) — never from the request body — and no deviceId is involved, so
     /// replacing broken station hardware never breaks the integration.
     ///
     /// ADR-004 cross-gym validation on every event:
     ///   1. employee has UserGymAccess to the session's gym
-    ///   2. employee has a ShiftAssignment (with a real shift, not a day off) at THAT gym â€”
+    ///   2. employee has a ShiftAssignment (with a real shift, not a day off) at THAT gym —
     ///      normally today's, or the previous day's overnight shift for events after midnight
     /// Failures reject the event without creating any AttendanceRecord. Each record
     /// stores both GymId and the StationSessionId that issued it.
@@ -126,15 +126,17 @@ namespace Service.Services
             var today = DateOnly.FromDateTime(
                 TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, _attendanceTimeZone));
 
-            var records = await unitOfWork.GetRepository<AttendanceRecord, int>()
-                .GetAllAsync(new AttendanceRecordsByGymDateSpec(gymId, today), cancellationToken);
-
+            // Sequential: these three share one scoped DbContext, and EF Core does not
+            // allow concurrent operations on a single context (the previous
+            // Task.WhenAll version threw InvalidOperationException under load).
+            var presentCount = await unitOfWork.GetRepository<AttendanceRecord, int>()
+                .CountAsync(new CheckedInCountByGymDateSpec(gymId, today), cancellationToken);
+            var recentRecords = await unitOfWork.GetRepository<AttendanceRecord, int>()
+                .GetAllAsync(new RecentAttendanceRecordsByGymDateSpec(gymId, today), cancellationToken);
             var scheduledToday = await unitOfWork.GetRepository<DomainLayer.Models.SchedulingModule.ShiftAssignment, int>()
                 .CountAsync(new ShiftAssignmentsByGymDateSpec(gymId, today), cancellationToken);
 
-            var recent = records
-                .OrderByDescending(r => r.CheckOutTime ?? r.CheckInTime ?? DateTime.MinValue)
-                .Take(10)
+            var recent = recentRecords
                 .Select(r => new StationSummaryRecord
                 {
                     RecordId = $"ATT-{r.Id}",
@@ -152,7 +154,7 @@ namespace Service.Services
 
             return new StationSummaryResponse
             {
-                PresentCount = records.Count(r => r.CheckInTime is not null),
+                PresentCount = presentCount,
                 ScheduledTodayCount = scheduledToday,
                 Records = recent,
             };
@@ -171,7 +173,7 @@ namespace Service.Services
             CancellationToken cancellationToken)
         {
             // The gym comes from the validated station session (or a gym-scoped user
-            // token) â€” it is never read from the request body.
+            // token) — it is never read from the request body.
             if (authorizedGymId is null)
             {
                 throw new UnAuthorizedException("Attendance requests require a station session token.");
@@ -212,7 +214,7 @@ namespace Service.Services
                 throw new NotFoundException("Employee not found.");
             }
 
-            // ADR-004 check #1 â€” gym access.
+            // ADR-004 check #1 — gym access.
             var hasGymAccess = await userAccess.HasGymAccessAsync(employee.UserId, gymId, cancellationToken);
             if (!hasGymAccess)
             {
@@ -220,7 +222,7 @@ namespace Service.Services
             }
 
             // Resolve which shift this event belongs to. A shift's window can span
-            // midnight (overnight templates such as 22:00 â†’ 05:00 end the next day), so
+            // midnight (overnight templates such as 22:00 → 05:00 end the next day), so
             // events after midnight may still belong to the previous day's shift: an IN
             // while the event is inside that shift's window, an OUT when that shift has
             // a record to close.
@@ -242,8 +244,8 @@ namespace Service.Services
                 r.Date == eventDate && r.GymId == gymId && r.CheckInTime is not null && r.CheckOutTime is null);
 
             // The always-on kiosk camera sends AUTO: resolve the direction from the
-            // employee's own state â€” an open record today closes (OUT), anything else
-            // opens (IN) â€” so the station never has to guess what the employee did.
+            // employee's own state — an open record today closes (OUT), anything else
+            // opens (IN) — so the station never has to guess what the employee did.
             var requestedAuto = type == "AUTO";
             if (type == "AUTO")
             {
@@ -280,7 +282,7 @@ namespace Service.Services
             }
             else if (!todayHasOpenRecord)
             {
-                // OUT after midnight closes the previous day's record â€” a late checkout
+                // OUT after midnight closes the previous day's record — a late checkout
                 // or an overnight shift finishing in the early hours.
                 carriedOverAssignment = previousDayAtGym
                     .FirstOrDefault(a => possibleRecords.Any(r => r.Date == a.Date && r.GymId == gymId));
@@ -305,8 +307,8 @@ namespace Service.Services
             var attendanceDate = shiftAtThisGym.Date;
 
             // The shift as a full wall-clock window on its scheduled date (attendance
-            // timezone). Overnight templates â€” EndTime at or before StartTime, e.g.
-            // 22:00 â†’ 05:00 â€” end the following day, so every comparison below uses
+            // timezone). Overnight templates — EndTime at or before StartTime, e.g.
+            // 22:00 → 05:00 — end the following day, so every comparison below uses
             // these instants instead of bare clock times that break across midnight.
             var shiftStartsAt = ShiftWindowStartsAt(attendanceDate, template);
             var shiftEndsAt = ShiftWindowEndsAt(attendanceDate, template);
@@ -476,7 +478,7 @@ namespace Service.Services
 
         /// <summary>
         /// Wall-clock end of the shift on its scheduled date. Overnight templates
-        /// (EndTime at or before StartTime, e.g. 22:00 â†’ 05:00) end on the following day.
+        /// (EndTime at or before StartTime, e.g. 22:00 → 05:00) end on the following day.
         /// </summary>
         private static DateTime ShiftWindowEndsAt(DateOnly date, ShiftTemplate template) =>
             template.EndTime > template.StartTime
@@ -487,7 +489,7 @@ namespace Service.Services
         {
             DateTimeKind.Utc => timestamp,
             DateTimeKind.Local => timestamp.ToUniversalTime(),
-            _ => DateTime.SpecifyKind(timestamp, DateTimeKind.Utc) // no offset sent â†’ assumed UTC
+            _ => DateTime.SpecifyKind(timestamp, DateTimeKind.Utc) // no offset sent → assumed UTC
         };
     }
 }

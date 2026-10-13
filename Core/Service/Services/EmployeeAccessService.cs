@@ -38,11 +38,19 @@ namespace Service.Services
             int actorUserId, int employeeId, string feature, AccessLevel requiredLevel,
             int? activeGymId, CancellationToken cancellationToken = default)
         {
+            // Sequential: a scoped DbContext serves these, and EF Core does not allow
+            // two concurrent operations on one context — parallelising these lookups
+            // throws InvalidOperationException once the model grows past the point
+            // where the round-trips happened to serialise themselves.
             var employee = await unitOfWork.GetRepository<Employee, int>()
                 .GetByIdAsync(new EmployeeByIdSpec(employeeId), cancellationToken)
                 ?? throw new NotFoundException("Employee not found.");
 
-            if (await OwnsAsync(actorUserId, employee.Id, cancellationToken))
+            var own = await unitOfWork.GetRepository<Employee, int>()
+                .GetByIdAsync(new EmployeeByUserIdSpec(actorUserId), cancellationToken);
+
+            // Self-access: the actor is the target employee — no further checks needed.
+            if (own is not null && own.Id == employee.Id)
             {
                 return employee.Id;
             }
@@ -65,24 +73,18 @@ namespace Service.Services
                 throw new NotFoundException("Employee not found.");
             }
 
-            // Team scope overrides the gym for team-scoped leaders.
+            // Team scope comes from the per-gym role: a team-scoped actor sees only the
+            // team he leads, and one without a matching team is denied - never gym-wide.
             if (await teamScopeService.IsTeamScopedAsync(actorUserId, activeGymId.Value, cancellationToken))
             {
                 var ledTeamId = await teamScopeService.GetLedTeamIdAsync(actorUserId, activeGymId.Value, cancellationToken);
-                if (employee.TeamId != ledTeamId)
+                if (ledTeamId is null || employee.TeamId != ledTeamId.Value)
                 {
                     throw new NotFoundException("Employee not found.");
                 }
             }
 
             return employee.Id;
-        }
-
-        private async Task<bool> OwnsAsync(int actorUserId, int employeeId, CancellationToken cancellationToken)
-        {
-            var own = await unitOfWork.GetRepository<Employee, int>()
-                .GetByIdAsync(new EmployeeByUserIdSpec(actorUserId), cancellationToken);
-            return own is not null && own.Id == employeeId;
         }
     }
 }

@@ -1,8 +1,10 @@
 using Microsoft.AspNetCore.Mvc;
 using Presentation.Authorization;
 using ServiceAbstraction.Services;
+using Shared;
 using Shared.Authorization;
 using Shared.DataTransferObject.EmployeeProfile;
+using Shared.DataTransferObject.QueryParams;
 using DomainLayer.Models.UserModule.Enums;
 
 namespace Presentation.Controllers
@@ -19,11 +21,10 @@ namespace Presentation.Controllers
         /// <summary>Inbox of in-scope requests, filterable by status.</summary>
         [HttpGet]
         [HasFeatureAccess(Features.Requests, AccessLevel.View)]
-        public async Task<ActionResult<IReadOnlyList<EmployeeRequestDto>>> GetInbox(
-            [FromQuery] string? status, CancellationToken cancellationToken)
-        {
+        public async Task<ActionResult<PaginationResult<EmployeeRequestDto>>> GetInbox(
+            [FromQuery] RequestQueryParams query, CancellationToken cancellationToken)        {
             var requests = await requestManagementService.GetInboxAsync(
-                GetActorUserId(), GetGymIdFromToken(), status, cancellationToken);
+                GetActorUserId(), GetGymIdFromToken(), query, cancellationToken);
             return Ok(requests);
         }
 
@@ -45,6 +46,17 @@ namespace Presentation.Controllers
             await requestManagementService.EditAsync(
                 GetActorUserId(), id, GetGymIdFromToken(), update, cancellationToken);
             return NoContent();
+        }
+
+        /// <summary>Posts a comment on an in-scope request.</summary>
+        [HttpPost("{id}/comments")]
+        [HasFeatureAccess(Features.Requests, AccessLevel.View)]
+        public async Task<ActionResult<RequestCommentDto>> Comment(
+            int id, CreateRequestCommentDto request, CancellationToken cancellationToken)
+        {
+            var comment = await requestManagementService.AddCommentAsync(
+                GetActorUserId(), id, GetGymIdFromToken(), request, cancellationToken);
+            return Created($"/api/requests/{id}/comments/{comment.Id}", comment);
         }
     }
 }

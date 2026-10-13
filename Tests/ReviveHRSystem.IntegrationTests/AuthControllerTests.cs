@@ -136,5 +136,35 @@ namespace ReviveHRSystem.IntegrationTests
             Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
             Assert.Equal("You do not have access to the selected gym.", body.GetProperty("errorMessage").GetString());
         }
+
+        [Fact]
+        public async Task Logout_ValidToken_Returns204_AndWritesAuditEntry()
+        {
+            var token = await _fixture.GetAdminTokenAsync();
+
+            int userId;
+            using (var scope = _fixture.Services.CreateScope())
+            {
+                var db = scope.ServiceProvider.GetRequiredService<ReviveHrDbContext>();
+                userId = (await db.Users.FirstAsync(u => u.Email == "admin@revive.hr")).Id;
+            }
+
+            var request = _fixture.AuthorizedRequest(HttpMethod.Post, "/api/auth/logout", null, token);
+            var response = await _fixture.Client.SendAsync(request);
+
+            Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+
+            using var verify = _fixture.Services.CreateScope();
+            var db2 = verify.ServiceProvider.GetRequiredService<ReviveHrDbContext>();
+            Assert.True(await db2.AuditLogs.AnyAsync(a =>
+                a.UserId == userId && a.Action == "Logout" && a.EntityType == "User"));
+        }
+
+        [Fact]
+        public async Task Logout_WithoutToken_Returns401()
+        {
+            var response = await _fixture.Client.PostAsJsonAsync("/api/auth/logout", new { });
+            Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        }
     }
 }

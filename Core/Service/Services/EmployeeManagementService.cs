@@ -7,7 +7,9 @@ using DomainLayer.Models.UserModule;
 using DomainLayer.Models.UserModule.Enums;
 using Service.Specifications;
 using ServiceAbstraction.Services;
+using Shared;
 using Shared.DataTransferObject.EmployeeProfile;
+using Shared.DataTransferObject.QueryParams;
 
 namespace Service.Services
 {
@@ -23,19 +25,36 @@ namespace Service.Services
         IPasswordHasher passwordHasher,
         IMapper mapper) : IEmployeeManagementService
     {
-        public async Task<IReadOnlyList<EmployeeSummaryDto>> GetDirectoryAsync(
-            int actorUserId, int? activeGymId, string? query, string? status, CancellationToken cancellationToken = default)
+        public async Task<PaginationResult<EmployeeSummaryDto>> GetDirectoryAsync(
+            int actorUserId, int? activeGymId, EmployeeQueryParams query, CancellationToken cancellationToken = default)
         {
             var gymId = RequireGym(activeGymId);
             var employees = await LoadScopedEmployeesAsync(actorUserId, gymId, cancellationToken);
 
-            return employees
-                .Where(e => string.IsNullOrWhiteSpace(query)
-                    || e.FullName.Contains(query, StringComparison.OrdinalIgnoreCase))
-                .Where(e => string.IsNullOrWhiteSpace(status)
-                    || e.Status.ToString().Equals(status, StringComparison.OrdinalIgnoreCase))
+            // Filtering happens on the already-loaded scoped set (team or gym), which is
+            // small; only the slice is projected, so the page costs one materialization.
+            var filtered = employees
+                .Where(e => string.IsNullOrWhiteSpace(query.Q)
+                    || e.FullName.Contains(query.Q, StringComparison.OrdinalIgnoreCase))
+                .Where(e => string.IsNullOrWhiteSpace(query.Status)
+                    || e.Status.ToString().Equals(query.Status, StringComparison.OrdinalIgnoreCase))
+                .Where(e => query.PositionId is null || e.PositionId == query.PositionId);
+
+            // A stable order is part of the paging contract: without it, "page 2" is
+            // undefined when rows shift between requests.
+            var ordered = (query.SortBy?.ToLowerInvariant()) switch
+            {
+                "status" => filtered.OrderBy(e => e.Status).ThenBy(e => e.FullName, StringComparer.OrdinalIgnoreCase),
+                _ => filtered.OrderBy(e => e.FullName, StringComparer.OrdinalIgnoreCase)
+            };
+
+            var page = ordered
+                .Skip(query.SkipCount)
+                .Take(query.PageSize)
                 .Select(e => mapper.Map<EmployeeSummaryDto>(e))
                 .ToList();
+
+            return new PaginationResult<EmployeeSummaryDto>(query.PageNumber, query.PageSize, filtered.Count(), page);
         }
 
         public async Task<EmployeeSummaryDto> CreateAsync(
@@ -47,9 +66,8 @@ namespace Service.Services
                 throw new BadRequestException("A full name is required.");
             }
 
-            var positions = await unitOfWork.GetRepository<DomainLayer.Models.OrganizationModule.Position, int>()
-                .GetAllAsync(new PositionsByGymSpec(gymId), cancellationToken);
-            var position = positions.FirstOrDefault(p => p.Id == request.PositionId)
+            var position = await unitOfWork.GetRepository<DomainLayer.Models.OrganizationModule.Position, int>()
+                .GetByIdAsync(new PositionByIdAndGymSpec(request.PositionId, gymId), cancellationToken)
                 ?? throw new BadRequestException("The selected position does not belong to the active gym.");
 
             var employeeNumber = await NextEmployeeNumberAsync(cancellationToken);
@@ -105,9 +123,8 @@ namespace Service.Services
 
             if (request.PositionId > 0 && request.PositionId != employee.PositionId)
             {
-                var positions = await unitOfWork.GetRepository<DomainLayer.Models.OrganizationModule.Position, int>()
-                    .GetAllAsync(new PositionsByGymSpec(employee.GymId), cancellationToken);
-                var position = positions.FirstOrDefault(p => p.Id == request.PositionId)
+                var position = await unitOfWork.GetRepository<DomainLayer.Models.OrganizationModule.Position, int>()
+                    .GetByIdAsync(new PositionByIdAndGymSpec(request.PositionId, employee.GymId), cancellationToken)
                     ?? throw new BadRequestException("The selected position does not belong to the employee's gym.");
                 employee.PositionId = position.Id;
             }
@@ -187,10 +204,8 @@ namespace Service.Services
                 throw new NotFoundException("Employee not found.");
             }
 
-            var inScope = (await LoadScopedEmployeesAsync(actorUserId, activeGymId, cancellationToken))
-                .Any(e => e.Id == employee.Id);
-
-            if (!inScope)
+            var ledTeamId = await teamScopeService.GetLedTeamIdAsync(actorUserId, activeGymId, cancellationToken);
+            if (ledTeamId is not null && employee.TeamId != ledTeamId.Value)
             {
                 throw new NotFoundException("Employee not found.");
             }
@@ -203,8 +218,12 @@ namespace Service.Services
 
         private async Task<string> NextEmployeeNumberAsync(CancellationToken cancellationToken)
         {
+            // The high-water mark must cover every stored number: seeded or imported
+            // employees can sit outside the newest Id rows, and the number doubles as
+            // the login, so reusing one would collide with an existing account.
             var employees = await unitOfWork.GetRepository<Employee, int>()
-                .GetAllAsync(cancellationToken);
+                .GetAllAsync(new LatestEmployeesSpec(), cancellationToken);
+
             var max = employees
                 .Select(e => int.TryParse(e.EmployeeNumber.Replace("EMP-", string.Empty), out var n) ? n : 0)
                 .DefaultIfEmpty(1000)

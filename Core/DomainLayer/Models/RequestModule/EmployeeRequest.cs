@@ -33,6 +33,8 @@ namespace DomainLayer.Models.RequestModule
         public RequestStatus Status { get; set; } = RequestStatus.Pending;
 
         public virtual ICollection<RequestDecision> Decisions { get; set; } = new List<RequestDecision>();
+
+        public virtual ICollection<RequestComment> Comments { get; set; } = new List<RequestComment>();
     }
 }
 

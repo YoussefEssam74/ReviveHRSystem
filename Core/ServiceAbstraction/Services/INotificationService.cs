@@ -1,4 +1,6 @@
+using Shared;
 using Shared.DataTransferObject.EmployeeProfile;
+using Shared.DataTransferObject.QueryParams;
 
 namespace ServiceAbstraction.Services
 {
@@ -7,8 +9,8 @@ namespace ServiceAbstraction.Services
     /// </summary>
     public interface INotificationService
     {
-        Task<IReadOnlyList<NotificationDto>> GetNotificationsAsync(
-            int userId, int? activeGymId, CancellationToken cancellationToken = default);
+        Task<PaginationResult<NotificationDto>> GetNotificationsAsync(
+            int userId, int? activeGymId, NotificationQueryParams query, CancellationToken cancellationToken = default);
 
         Task<int> GetUnreadCountAsync(int userId, int? activeGymId, CancellationToken cancellationToken = default);
 

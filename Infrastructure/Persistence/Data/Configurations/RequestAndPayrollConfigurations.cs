@@ -51,7 +51,34 @@ namespace Presistence.Data.Configurations
                    .HasForeignKey(rd => rd.DecidedBy)
                    .OnDelete(DeleteBehavior.Restrict);
 
-            builder.HasIndex(rd => rd.RequestId);
+            // The workflow has one decision per approval stage.  Without this,
+            // concurrent requests can approve/reject the same stage twice.
+            builder.HasIndex(rd => new { rd.RequestId, rd.Stage })
+                   .IsUnique()
+                   .HasFilter("\"IsDeleted\" = FALSE");
+        }
+    }
+
+    public class RequestCommentConfiguration : IEntityTypeConfiguration<RequestComment>
+    {
+        public void Configure(EntityTypeBuilder<RequestComment> builder)
+        {
+            builder.ToTable("RequestComments");
+            builder.HasKey(rc => rc.Id);
+
+            builder.Property(rc => rc.Body).IsRequired().HasMaxLength(1000);
+
+            builder.HasOne(rc => rc.Request)
+                   .WithMany(r => r.Comments)
+                   .HasForeignKey(rc => rc.RequestId)
+                   .OnDelete(DeleteBehavior.Cascade);
+
+            builder.HasOne(rc => rc.AuthorUser)
+                   .WithMany()
+                   .HasForeignKey(rc => rc.AuthorUserId)
+                   .OnDelete(DeleteBehavior.Restrict);
+
+            builder.HasIndex(rc => rc.RequestId);
         }
     }
 

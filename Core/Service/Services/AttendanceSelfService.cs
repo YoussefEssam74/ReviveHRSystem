@@ -70,10 +70,10 @@ namespace Service.Services
         private static AttendanceSummaryDto Summarize(IReadOnlyList<AttendanceRecordDto> records)
         {
             var total = records.Count;
-            var present = records.Count(r => r.Status is "OnTime" or "Present");
+            var present = records.Count(r => r.Status is "OnTime" or "Present" or "On Time");
             var late = records.Count(r => r.Status == "Late");
             var absent = records.Count(r => r.Status == "Absent");
-            var early = records.Count(r => r.Status == "EarlyCheckout");
+            var early = records.Count(r => r.Status is "EarlyCheckout" or "Early Checkout");
 
             return new AttendanceSummaryDto
             {

@@ -343,3 +343,183 @@ Authorization: Bearer {{employeeToken}}
   "currentPassword": "Revive!2026",
   "newPassword": "Revive!2027"
 }
+
+###
+
+### Logout (records an audit entry; 204)
+POST {{ReviveHRSystem.Web_HostAddress}}/api/auth/logout
+Authorization: Bearer {{employeeToken}}
+
+###
+
+### Paginated list endpoints ({ items, page, pageSize, totalCount, totalPages })
+GET {{ReviveHRSystem.Web_HostAddress}}/api/employees?q=&status=&positionId=&sortBy=name&pageNumber=1&pageSize=10
+Authorization: Bearer {{bmToken}}
+
+###
+
+GET {{ReviveHRSystem.Web_HostAddress}}/api/requests?status=Pending&type=&dateFrom=2026-10-01&dateTo=2026-10-31&pageNumber=1&pageSize=10
+Authorization: Bearer {{bmToken}}
+
+###
+
+### Attendance day view, a range, and the paged roster
+GET {{ReviveHRSystem.Web_HostAddress}}/api/attendance?date=2026-10-12
+Authorization: Bearer {{bmToken}}
+
+###
+
+GET {{ReviveHRSystem.Web_HostAddress}}/api/attendance?dateFrom=2026-10-01&dateTo=2026-10-31&status=Late&pageSize=100
+Authorization: Bearer {{bmToken}}
+
+###
+
+### Notifications inbox (paged; unreadOnly drives the bell badge)
+GET {{ReviveHRSystem.Web_HostAddress}}/api/notifications?pageNumber=1&pageSize=3&unreadOnly=true
+Authorization: Bearer {{employeeToken}}
+
+###
+
+### Team Actions: follow-ups (list / raise / act) and member shortcuts
+GET {{ReviveHRSystem.Web_HostAddress}}/api/teams/follow-ups
+Authorization: Bearer {{bmToken}}
+
+###
+
+POST {{ReviveHRSystem.Web_HostAddress}}/api/teams/follow-ups
+Content-Type: application/json
+Authorization: Bearer {{bmToken}}
+
+{
+  "employeeId": 0,
+  "action": "Reminder",
+  "severity": "High",
+  "description": "Late three times this week",
+  "note": "Spoke about the transport strike"
+}
+
+###
+
+PUT {{ReviveHRSystem.Web_HostAddress}}/api/teams/follow-ups/0
+Content-Type: application/json
+Authorization: Bearer {{bmToken}}
+
+{
+  "action": "Resolution",
+  "note": "Attendance back to normal"
+}
+
+###
+
+POST {{ReviveHRSystem.Web_HostAddress}}/api/teams/members/0/reminders
+Authorization: Bearer {{bmToken}}
+
+###
+
+POST {{ReviveHRSystem.Web_HostAddress}}/api/employees/0/messages
+Content-Type: application/json
+Authorization: Bearer {{bmToken}}
+
+{
+  "message": "Please review your shift swap request."
+}
+
+###
+
+### Vacancy request detail + the unscheduled badge count
+GET {{ReviveHRSystem.Web_HostAddress}}/api/vacancy-requests/0
+Authorization: Bearer {{bmToken}}
+
+###
+
+GET {{ReviveHRSystem.Web_HostAddress}}/api/teams/0/unscheduled-count
+Authorization: Bearer {{bmToken}}
+
+###
+
+### Request collaboration: post a comment on an in-scope request
+POST {{ReviveHRSystem.Web_HostAddress}}/api/requests/0/comments
+Content-Type: application/json
+Authorization: Bearer {{bmToken}}
+
+{
+  "comment": "I will cover the morning shift."
+}
+
+###
+
+### Evaluation authoring: forms, submit, edit, and the team history
+GET {{ReviveHRSystem.Web_HostAddress}}/api/evaluation-forms
+Authorization: Bearer {{hrToken}}
+
+###
+
+POST {{ReviveHRSystem.Web_HostAddress}}/api/employees/0/evaluations
+Content-Type: application/json
+Authorization: Bearer {{hrToken}}
+
+{
+  "evaluationFormId": 0,
+  "answers": [
+    { "questionId": 0, "score": 4, "comment": "Consistently on time" }
+  ],
+  "overallComment": "Strong quarter."
+}
+
+###
+
+PUT {{ReviveHRSystem.Web_HostAddress}}/api/employees/0/evaluations/0
+Content-Type: application/json
+Authorization: Bearer {{hrToken}}
+
+{
+  "answers": [
+    { "questionId": 0, "score": 5 }
+  ]
+}
+
+###
+
+GET {{ReviveHRSystem.Web_HostAddress}}/api/teams/0/evaluations
+Authorization: Bearer {{bmToken}}
+
+###
+
+# ---------- Documents, avatar and downloads (Slice E) ----------
+# Binaries live behind IFileStorage (local disk, Storage section in appsettings).
+# Only the relative path is ever persisted or returned; the media type is derived
+# from the file's extension. Every download miss answers the same 404, so the route
+# never confirms which document ids exist. requests/avatar-sample.png is a 1x1 PNG
+# shipped for the upload below.
+
+### Replace my avatar (multipart, self-only -> { photoUrl })
+PUT {{ReviveHRSystem.Web_HostAddress}}/api/employees/1/photo
+Authorization: Bearer {{employeeToken}}
+Content-Type: multipart/form-data
+
+form-data;
+file;requests/avatar-sample.png;image/png
+
+###
+
+### Fetch the avatar my profile now points at
+GET {{ReviveHRSystem.Web_HostAddress}}/api/employees/1/photo
+Authorization: Bearer {{employeeToken}}
+
+###
+
+### HR-published official documents (disjoint from the employee vault)
+GET {{ReviveHRSystem.Web_HostAddress}}/api/employees/1/hr-documents
+Authorization: Bearer {{employeeToken}}
+
+###
+
+### Download an employee-uploaded document (binary stream; 404 if none is stored)
+GET {{ReviveHRSystem.Web_HostAddress}}/api/employees/1/documents/0/download
+Authorization: Bearer {{employeeToken}}
+
+###
+
+### Download an HR-published document (only reachable through the HR route)
+GET {{ReviveHRSystem.Web_HostAddress}}/api/employees/1/hr-documents/0/download
+Authorization: Bearer {{employeeToken}}

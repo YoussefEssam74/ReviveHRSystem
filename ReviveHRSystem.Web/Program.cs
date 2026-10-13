@@ -3,6 +3,7 @@ using System.Text.Json;
 using System.Threading.RateLimiting;
 using AutoMapper;
 using Biometrics;
+using Storage;
 using DomainLayer.Contracts;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -210,6 +211,7 @@ namespace ReviveHRSystem.Web
             builder.Services.AddScoped<INotificationService, NotificationService>();
             builder.Services.AddScoped<IAccountSettingsService, AccountSettingsService>();
             builder.Services.AddScoped<IEvaluationSelfService, EvaluationSelfService>();
+            builder.Services.AddScoped<IEvaluationManagementService, EvaluationManagementService>();
             builder.Services.AddScoped<IEmploymentHistoryService, EmploymentHistoryService>();
             builder.Services.AddScoped<IEmployeeEventService, EmployeeEventService>();
             builder.Services.AddScoped<IPayrollSelfService, PayrollSelfService>();
@@ -222,10 +224,12 @@ namespace ReviveHRSystem.Web
             builder.Services.AddScoped<IOffboardingService, OffboardingService>();
             builder.Services.AddScoped<IShiftManagementService, ShiftManagementService>();
             builder.Services.AddScoped<IBranchActionsService, BranchActionsService>();
+            builder.Services.AddScoped<ITeamActionsService, TeamActionsService>();
             builder.Services.AddScoped<ISessionContextService, SessionContextService>();
             builder.Services.AddScoped<IStationCodeService, StationCodeService>();
             builder.Services.AddScoped<IStationSessionService, StationSessionService>();
             builder.Services.AddFaceBiometrics(builder.Configuration);
+            builder.Services.AddLocalFileStorage(builder.Configuration);
 
             builder.Services.AddEndpointsApiExplorer();
             builder.Services.AddSwaggerGen(options =>

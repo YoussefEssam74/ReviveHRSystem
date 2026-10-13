@@ -35,6 +35,11 @@ namespace Presistence.Data.Configurations
                    .OnDelete(DeleteBehavior.Restrict);
 
             builder.HasIndex(d => d.GymId);
+            // A branch should not contain two active departments with the same name.
+            // The filter keeps the name reusable after a soft-delete.
+            builder.HasIndex(d => new { d.GymId, d.Name })
+                   .IsUnique()
+                   .HasFilter("\"IsDeleted\" = FALSE");
         }
     }
 
@@ -54,6 +59,9 @@ namespace Presistence.Data.Configurations
                    .OnDelete(DeleteBehavior.Restrict);
 
             builder.HasIndex(p => p.GymId);
+            builder.HasIndex(p => new { p.GymId, p.Title, p.Level })
+                   .IsUnique()
+                   .HasFilter("\"IsDeleted\" = FALSE");
 
             builder.HasOne(p => p.Department)
                    .WithMany()
@@ -77,6 +85,9 @@ namespace Presistence.Data.Configurations
                    .OnDelete(DeleteBehavior.Restrict);
 
             builder.HasIndex(t => t.GymId);
+            builder.HasIndex(t => new { t.GymId, t.Name })
+                   .IsUnique()
+                   .HasFilter("\"IsDeleted\" = FALSE");
 
             builder.HasMany(t => t.Members)
                    .WithOne(e => e.Team)

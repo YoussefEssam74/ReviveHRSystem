@@ -61,6 +61,8 @@ namespace Presistence.Data
         public DbSet<OnboardingChecklistItem> OnboardingChecklistItems => Set<OnboardingChecklistItem>();
         public DbSet<OffboardingCase> OffboardingCases => Set<OffboardingCase>();
         public DbSet<OffboardingChecklistItem> OffboardingChecklistItems => Set<OffboardingChecklistItem>();
+        public DbSet<TeamFollowUp> TeamFollowUps => Set<TeamFollowUp>();
+        public DbSet<TeamMessage> TeamMessages => Set<TeamMessage>();
 
         // Scheduling
         public DbSet<ShiftTemplate> ShiftTemplates => Set<ShiftTemplate>();
@@ -78,6 +80,7 @@ namespace Presistence.Data
         // Requests
         public DbSet<EmployeeRequest> EmployeeRequests => Set<EmployeeRequest>();
         public DbSet<RequestDecision> RequestDecisions => Set<RequestDecision>();
+        public DbSet<RequestComment> RequestComments => Set<RequestComment>();
 
         // Payroll
         public DbSet<PayrollPeriod> PayrollPeriods => Set<PayrollPeriod>();

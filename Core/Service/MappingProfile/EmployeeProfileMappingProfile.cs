@@ -20,6 +20,8 @@ public sealed class EmployeeProfileMappingProfile : Profile
             .ForMember(d => d.Email, o => o.MapFrom(s => s.User != null ? s.User.Email : string.Empty))
             .ForMember(d => d.Gym, o => o.MapFrom(s => s))
             .ForMember(d => d.EmergencyContact, o => o.MapFrom(s => s))
+            .ForMember(d => d.PhotoUrl, o => o.MapFrom(s =>
+                string.IsNullOrWhiteSpace(s.PhotoPath) ? null : $"/api/employees/{s.Id}/photo"))
             .ForMember(d => d.BaseSalary, o => o.MapFrom((s, _, _, ctx) =>
                 ctx.TryGetItem<bool>("includeSalary") is false
                     ? null

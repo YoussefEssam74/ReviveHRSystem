@@ -51,6 +51,15 @@ namespace ReviveHRSystem.Web.CustomMiddleWares
             // Ensure StatusCode is set in the response object
             Response.StatusCode = context.Response.StatusCode;
 
+            if (context.Response.StatusCode == StatusCodes.Status500InternalServerError)
+            {
+                var env = context.RequestServices.GetService<Microsoft.Extensions.Hosting.IHostEnvironment>();
+                if (env is not null && !env.IsDevelopment())
+                {
+                    Response.ErrorMessage = "An internal server error occurred. Please contact support.";
+                }
+            }
+
             //Return Object as Json
             await context.Response.WriteAsJsonAsync(Response);
         }

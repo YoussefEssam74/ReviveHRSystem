@@ -14,5 +14,12 @@ namespace ServiceAbstraction.Services
 
         /// <summary>Completes a two-gym employee login by exchanging the temp session token for a gym-scoped access token.</summary>
         Task<LoginResponse> SelectGymAsync(SelectGymRequest request, CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// Records the caller's logout. With access-token-only auth (no refresh tokens)
+        /// there is no server-side session to revoke, so this stamps the audit trail and
+        /// the client discards the token; the token's own lifetime ends the session.
+        /// </summary>
+        Task LogoutAsync(int userId, CancellationToken cancellationToken = default);
     }
 }

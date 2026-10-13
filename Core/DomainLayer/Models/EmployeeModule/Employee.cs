@@ -48,6 +48,13 @@ namespace DomainLayer.Models.EmployeeModule
         public bool BiometricRegistered { get; set; } = false;
         public byte[]? FaceEncoding { get; set; }
 
+        /// <summary>
+        /// Storage-relative path of the avatar uploaded through
+        /// PUT /api/employees/{id}/photo. Null means the avatar is the initials
+        /// placeholder; clients read it back through GET /api/employees/{id}/photo.
+        /// </summary>
+        public string? PhotoPath { get; set; }
+
         public int? OnboardingCompletedBy { get; set; }
         public DateTime? OnboardingCompletedAt { get; set; }
         public virtual User? OnboardingCompletedByUser { get; set; }
