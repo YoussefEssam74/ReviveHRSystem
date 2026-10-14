@@ -1,4 +1,5 @@
 using AutoMapper;
+using DomainLayer.Models.OrganizationModule;
 using DomainLayer.Models.RequestModule;
 using DomainLayer.Models.RequestModule.Enums;
 using Shared.DataTransferObject.EmployeeProfile;
@@ -16,9 +17,15 @@ public sealed class RequestMappingProfile : Profile
     {
         CreateMap<EmployeeRequest, EmployeeRequestDto>()
             .ForMember(d => d.SubmittedDate, o => o.MapFrom(s => DateOnly.FromDateTime(s.SubmittedAt)))
-            .ForMember(d => d.RequestDate, o => o.MapFrom(s => s.TargetStartDate ?? s.RequestDate))
+            .ForMember(d => d.RequestDate, o => o.MapFrom(s => s.RequestDate))
             .ForMember(d => d.EndDate, o => o.MapFrom(s => s.TargetEndDate))
+            .ForMember(d => d.TargetDate, o => o.MapFrom(s => s.TargetStartDate))
             .ForMember(d => d.RequestTime, o => o.MapFrom(s => s.TargetTime))
+            .ForMember(d => d.Hours, o => o.MapFrom(s => s.RequestedHours))
+            .ForMember(d => d.Amount, o => o.MapFrom(s => s.RequestedAmount))
+            .ForMember(d => d.SwapWithEmployeeId, o => o.MapFrom(s => s.SwapWithEmployeeId))
+            .ForMember(d => d.SwapWithEmployeeName, o => o.MapFrom(s => s.SwapWithEmployee != null ? s.SwapWithEmployee.FullName : null))
+            .ForMember(d => d.HasAttachment, o => o.MapFrom(s => !string.IsNullOrEmpty(s.AttachmentPath)))
             .ForMember(d => d.Status, o => o.MapFrom(s => s.Status.ToString()))
             .ForMember(d => d.Reason, o => o.MapFrom(s => s.Details))
             .ForMember(d => d.Timeline, o => o.MapFrom(s => BuildTimeline(s)));
@@ -26,6 +33,10 @@ public sealed class RequestMappingProfile : Profile
         CreateMap<RequestComment, RequestCommentDto>()
             .ForMember(d => d.Author, o => o.MapFrom(s => s.AuthorUser != null ? s.AuthorUser.UserName : string.Empty))
             .ForMember(d => d.Date, o => o.MapFrom(s => s.CreatedAt));
+
+        CreateMap<Gym, AttendancePolicyDto>()
+            .ForMember(d => d.GymId, o => o.MapFrom(s => s.Id))
+            .ForMember(d => d.GymName, o => o.MapFrom(s => s.Name));
     }
 
     private static IReadOnlyList<RequestTimelineStepDto> BuildTimeline(EmployeeRequest request)

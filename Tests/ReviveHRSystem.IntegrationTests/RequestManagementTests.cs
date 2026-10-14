@@ -37,7 +37,7 @@ namespace ReviveHRSystem.IntegrationTests
         {
             var gym1Id = await GymIdByNameAsync("Revive Main Gym");
             var token = await LoginSelectingGymAsync("omar@revive.hr", gym1Id);
-            var requestId = await SeedPendingRequestAsync(gym1Id, "Day Off");
+            var requestId = await SeedPendingRequestAsync(gym1Id, "Annual Leave");
 
             var decide = _fixture.AuthorizedRequest(HttpMethod.Post, $"/api/requests/{requestId}/decide", new
             {
@@ -64,7 +64,7 @@ namespace ReviveHRSystem.IntegrationTests
             // BranchManager default, and naming it explicitly is what stage 2 will use.
             var gym1Id = await GymIdByNameAsync("Revive Main Gym");
             var token = await LoginSelectingGymAsync("omar@revive.hr", gym1Id);
-            var requestId = await SeedPendingRequestAsync(gym1Id, "Day Off");
+            var requestId = await SeedPendingRequestAsync(gym1Id, "Annual Leave");
 
             var decide = _fixture.AuthorizedRequest(HttpMethod.Post, $"/api/requests/{requestId}/decide", new
             {
@@ -85,7 +85,7 @@ namespace ReviveHRSystem.IntegrationTests
         {
             var gym1Id = await GymIdByNameAsync("Revive Main Gym");
             var token = await LoginSelectingGymAsync("omar@revive.hr", gym1Id);
-            var requestId = await SeedPendingRequestAsync(gym1Id, "Day Off");
+            var requestId = await SeedPendingRequestAsync(gym1Id, "Annual Leave");
 
             var decide = _fixture.AuthorizedRequest(HttpMethod.Post, $"/api/requests/{requestId}/decide", new
             {
@@ -105,7 +105,7 @@ namespace ReviveHRSystem.IntegrationTests
             // record in the audit trail and the employee-facing timeline.
             var gym1Id = await GymIdByNameAsync("Revive Main Gym");
             var token = await LoginSelectingGymAsync("omar@revive.hr", gym1Id);
-            var requestId = await SeedPendingRequestAsync(gym1Id, "Day Off");
+            var requestId = await SeedPendingRequestAsync(gym1Id, "Annual Leave");
 
             var decide = _fixture.AuthorizedRequest(HttpMethod.Post, $"/api/requests/{requestId}/decide", new
             {
@@ -130,7 +130,7 @@ namespace ReviveHRSystem.IntegrationTests
             // may use; the request is rejected rather than silently trusted.
             var gym1Id = await GymIdByNameAsync("Revive Main Gym");
             var token = await LoginSelectingGymAsync("omar@revive.hr", gym1Id);
-            var requestId = await SeedPendingRequestAsync(gym1Id, "Day Off");
+            var requestId = await SeedPendingRequestAsync(gym1Id, "Annual Leave");
 
             var decide = _fixture.AuthorizedRequest(HttpMethod.Post, $"/api/requests/{requestId}/decide", new
             {
@@ -147,7 +147,7 @@ namespace ReviveHRSystem.IntegrationTests
         {
             var gym1Id = await GymIdByNameAsync("Revive Main Gym");
             var token = await LoginSelectingGymAsync("omar@revive.hr", gym1Id);
-            var requestId = await SeedPendingRequestAsync(gym1Id, "Day Off");
+            var requestId = await SeedPendingRequestAsync(gym1Id, "Annual Leave");
 
             var comment = _fixture.AuthorizedRequest(HttpMethod.Post, $"/api/requests/{requestId}/comments", new
             {
@@ -169,7 +169,7 @@ namespace ReviveHRSystem.IntegrationTests
         {
             var gym1Id = await GymIdByNameAsync("Revive Main Gym");
             var token = await LoginSelectingGymAsync("omar@revive.hr", gym1Id);
-            var requestId = await SeedPendingRequestAsync(gym1Id, "Day Off");
+            var requestId = await SeedPendingRequestAsync(gym1Id, "Annual Leave");
 
             var comment = _fixture.AuthorizedRequest(HttpMethod.Post, $"/api/requests/{requestId}/comments", new
             {
@@ -185,7 +185,7 @@ namespace ReviveHRSystem.IntegrationTests
         {
             var gym1Id = await GymIdByNameAsync("Revive Main Gym");
             var token = await LoginSelectingGymAsync("omar@revive.hr", gym1Id);
-            var requestId = await SeedPendingRequestAsync(gym1Id, "Day Off");
+            var requestId = await SeedPendingRequestAsync(gym1Id, "Annual Leave");
 
             var comment = _fixture.AuthorizedRequest(HttpMethod.Post, $"/api/requests/{requestId}/comments", new
             {
@@ -201,7 +201,7 @@ namespace ReviveHRSystem.IntegrationTests
         {
             var gym1Id = await GymIdByNameAsync("Revive Main Gym");
             var gym2Id = await GymIdByNameAsync("Revive Second Gym");
-            var outsiderRequestId = await SeedPendingRequestAsync(gym2Id, "Day Off");
+            var outsiderRequestId = await SeedPendingRequestAsync(gym2Id, "Annual Leave");
 
             var token = await LoginSelectingGymAsync("omar@revive.hr", gym1Id);
             var comment = _fixture.AuthorizedRequest(HttpMethod.Post, $"/api/requests/{outsiderRequestId}/comments", new
@@ -257,8 +257,8 @@ namespace ReviveHRSystem.IntegrationTests
         {
             var gym1Id = await GymIdByNameAsync("Revive Main Gym");
             var gym2Id = await GymIdByNameAsync("Revive Second Gym");
-            var gym1Request = await SeedPendingRequestAsync(gym1Id, "Day Off");
-            var gym2Request = await SeedPendingRequestAsync(gym2Id, "Day Off");
+            var gym1Request = await SeedPendingRequestAsync(gym1Id, "Annual Leave");
+            var gym2Request = await SeedPendingRequestAsync(gym2Id, "Annual Leave");
 
             var token = await LoginSelectingGymAsync("omar@revive.hr", gym1Id);
             var request = _fixture.AuthorizedRequest(HttpMethod.Get, "/api/requests", null, token);
@@ -354,7 +354,7 @@ namespace ReviveHRSystem.IntegrationTests
             });
             await db.SaveChangesAsync();
 
-            var requestId = await SeedRequestForEmployeeAsync(employeeId, "Day Off");
+            var requestId = await SeedRequestForEmployeeAsync(employeeId, "Annual Leave");
             return (requestId, employeeId, gymId);
         }
         private async Task<string> LoginSelectingGymAsync(string email, int gymId)

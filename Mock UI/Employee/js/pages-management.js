@@ -1823,7 +1823,7 @@ function editTeamRequest(id) {
       <p class="text-[10px] text-charcoal-500 mt-0.5">Submitted ${r.submitted} · ${r.teamApprovedBy?'Approved by '+r.teamApprovedBy:'Team Leader approved'}</p>
     </div>
     <div class="grid grid-cols-2 gap-3">
-      <div><label class="form-label">Type</label><select id="req-edit-type" class="form-select">${['Day Off','Late Arrival','Leave Early','Shift Swap','Overtime','Sick Leave'].map(t=>`<option ${t===r.type?'selected':''}>${t}</option>`).join('')}</select></div>
+      <div><label class="form-label">Type</label><select id="req-edit-type" class="form-select">${['Annual Leave','Sick Leave','Late Attendance','Early Leave','Shift Swap','Weekly Off Swap','Check-in Correction','Salary Advance','Paid Holiday'].map(t=>`<option ${t===r.type?'selected':''}>${t}</option>`).join('')}</select></div>
       <div><label class="form-label">Date</label><input id="req-edit-date" type="text" class="form-input" value="${r.date}" required></div>
     </div>
     <div><label class="form-label">Reason / Note</label><textarea id="req-edit-reason" class="form-input" rows="2" placeholder="Add a note...">${r.reason||''}</textarea></div>

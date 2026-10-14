@@ -125,7 +125,7 @@ namespace ReviveHRSystem.IntegrationTests
         }
 
         [Fact]
-        public async Task LeaveBalance_DayOffRequest_ReservesAnnualDays()
+        public async Task LeaveBalance_AnnualLeaveRequest_ReservesAnnualDays()
         {
             var employeeId = await OwnEmployeeIdAsync("karim@revive.hr");
             var token = await _fixture.LoginAsync("karim@revive.hr", "Revive!2026");
@@ -137,17 +137,19 @@ namespace ReviveHRSystem.IntegrationTests
             var pendingBefore = beforeBody.GetProperty("balances").TryGetProperty("Annual", out var annual)
                 ? annual.GetProperty("pending").GetDecimal() : 0m;
 
-            var create = _fixture.AuthorizedRequest(HttpMethod.Post, $"/api/employees/{employeeId}/requests", new
-            {
-                type = "day-off",
-                requestDate = DateOnly.FromDateTime(DateTime.Today).AddDays(7),
-                reason = "Family event"
-            }, token);
+            var create = MultipartRequest(
+                HttpMethod.Post, $"/api/employees/{employeeId}/requests", token,
+                new Dictionary<string, string>
+                {
+                    ["type"] = "annual-leave",
+                    ["requestDate"] = DateOnly.FromDateTime(DateTime.Today).AddDays(7).ToString("yyyy-MM-dd"),
+                    ["reason"] = "Family event"
+                });
             var createResponse = await _fixture.Client.SendAsync(create);
             createResponse.EnsureSuccessStatusCode();
             var created = await createResponse.Content.ReadFromJsonAsync<JsonElement>();
             Assert.Equal("Pending", created.GetProperty("status").GetString());
-            Assert.Equal("Day Off", created.GetProperty("type").GetString());
+            Assert.Equal("Annual Leave", created.GetProperty("type").GetString());
 
             var after = _fixture.AuthorizedRequest(HttpMethod.Get, $"/api/employees/{employeeId}/leave-balance", null, token);
             var afterResponse = await _fixture.Client.SendAsync(after);
@@ -163,16 +165,24 @@ namespace ReviveHRSystem.IntegrationTests
             var employeeId = await OwnEmployeeIdAsync("karim@revive.hr");
             var token = await _fixture.LoginAsync("karim@revive.hr", "Revive!2026");
 
-            var create = _fixture.AuthorizedRequest(HttpMethod.Post, $"/api/employees/{employeeId}/requests", new
-            {
-                type = "day-off",
-                requestDate = DateOnly.FromDateTime(DateTime.Today).AddDays(9),
-                reason = "Personal day"
-            }, token);
+            var create = MultipartRequest(
+                HttpMethod.Post, $"/api/employees/{employeeId}/requests", token,
+                new Dictionary<string, string>
+                {
+                    ["type"] = "annual-leave",
+                    ["requestDate"] = DateOnly.FromDateTime(DateTime.Today).AddDays(9).ToString("yyyy-MM-dd"),
+                    ["reason"] = "Personal day"
+                });
             var createResponse = await _fixture.Client.SendAsync(create);
             createResponse.EnsureSuccessStatusCode();
             var created = await createResponse.Content.ReadFromJsonAsync<JsonElement>();
             var requestId = created.GetProperty("id").GetInt32();
+
+            var balanceBefore = _fixture.AuthorizedRequest(HttpMethod.Get, $"/api/employees/{employeeId}/leave-balance", null, token);
+            var balanceBeforeResponse = await _fixture.Client.SendAsync(balanceBefore);
+            balanceBeforeResponse.EnsureSuccessStatusCode();
+            var balanceBeforeBody = await balanceBeforeResponse.Content.ReadFromJsonAsync<JsonElement>();
+            var pendingBefore = balanceBeforeBody.GetProperty("balances").GetProperty("Annual").GetProperty("pending").GetDecimal();
 
             var cancel = _fixture.AuthorizedRequest(HttpMethod.Post, $"/api/requests/{requestId}/cancel", new { }, token);
             var cancelResponse = await _fixture.Client.SendAsync(cancel);
@@ -184,11 +194,13 @@ namespace ReviveHRSystem.IntegrationTests
             var detailBody = await detailResponse.Content.ReadFromJsonAsync<JsonElement>();
             Assert.Equal("Cancelled", detailBody.GetProperty("status").GetString());
 
+            // The cancelled request released the day it had reserved (whatever else the
+            // suite left pending for this employee, the delta is exactly -1).
             var balance = _fixture.AuthorizedRequest(HttpMethod.Get, $"/api/employees/{employeeId}/leave-balance", null, token);
             var balanceResponse = await _fixture.Client.SendAsync(balance);
             balanceResponse.EnsureSuccessStatusCode();
             var balanceBody = await balanceResponse.Content.ReadFromJsonAsync<JsonElement>();
-            Assert.Equal(0m, balanceBody.GetProperty("balances").GetProperty("Annual").GetProperty("pending").GetDecimal());
+            Assert.Equal(pendingBefore - 1m, balanceBody.GetProperty("balances").GetProperty("Annual").GetProperty("pending").GetDecimal());
         }
 
         [Fact]
@@ -232,7 +244,50 @@ namespace ReviveHRSystem.IntegrationTests
             var authedResponse = await _fixture.Client.SendAsync(request);
             authedResponse.EnsureSuccessStatusCode();
             var body = await authedResponse.Content.ReadFromJsonAsync<JsonElement>();
-            Assert.Contains(body.EnumerateArray(), t => t.GetProperty("id").GetString() == "day-off");
+
+            // The final 9-type catalog agreed with the product owner.
+            var ids = body.EnumerateArray().Select(t => t.GetProperty("id").GetString()).ToList();
+            Assert.Equal(9, ids.Count);
+            Assert.Contains("annual-leave", ids);
+            Assert.Contains("sick-leave", ids);
+            Assert.Contains("late-attendance", ids);
+            Assert.Contains("early-leave", ids);
+            Assert.Contains("shift-swap", ids);
+            Assert.Contains("weekly-off-swap", ids);
+            Assert.Contains("check-in-correction", ids);
+            Assert.Contains("salary-advance", ids);
+            Assert.Contains("paid-holiday", ids);
+
+            var sick = body.EnumerateArray().First(t => t.GetProperty("id").GetString() == "sick-leave");
+            Assert.True(sick.GetProperty("requiresAttachment").GetBoolean());
+            Assert.Equal("Sick", sick.GetProperty("consumesLeave").GetString());
+
+            var late = body.EnumerateArray().First(t => t.GetProperty("id").GetString() == "late-attendance");
+            Assert.True(late.GetProperty("limitedByMonthlyExcusedHours").GetBoolean());
+        }
+
+        /// <summary>Multipart form post (the request create endpoint accepts an attachment).</summary>
+        private static HttpRequestMessage MultipartRequest(
+            HttpMethod method, string url, string token, Dictionary<string, string> fields,
+            (string FieldName, byte[] Content, string FileName)? file = null)
+        {
+            var content = new MultipartFormDataContent();
+            foreach (var (key, value) in fields)
+            {
+                content.Add(new StringContent(value), key);
+            }
+
+            if (file is not null)
+            {
+                var (fieldName, bytes, fileName) = file.Value;
+                var fileContent = new ByteArrayContent(bytes);
+                fileContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/pdf");
+                content.Add(fileContent, fieldName, fileName);
+            }
+
+            var request = new HttpRequestMessage(method, url) { Content = content };
+            request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+            return request;
         }
     }
 }

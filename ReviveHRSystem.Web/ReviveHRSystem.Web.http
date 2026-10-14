@@ -148,16 +148,34 @@ Authorization: Bearer {{employeeToken}}
 
 ###
 
-### Create a Day Off request (reserves annual leave) then cancel it
-POST {{ReviveHRSystem.Web_HostAddress}}/api/employees/1/requests
-Content-Type: application/json
+### The 9 request types an employee can submit (catalog + rule flags)
+GET {{ReviveHRSystem.Web_HostAddress}}/api/request-types
 Authorization: Bearer {{employeeToken}}
 
-{
-  "type": "day-off",
-  "requestDate": "2026-11-10",
-  "reason": "Family event"
-}
+###
+
+### Annual leave (multipart form; reserves days and refuses to exceed the remaining balance)
+POST {{ReviveHRSystem.Web_HostAddress}}/api/employees/1/requests
+Authorization: Bearer {{employeeToken}}
+Content-Type: multipart/form-data; boundary=----ReviveBoundary
+
+------ReviveBoundary
+Content-Disposition: form-data; name="type"
+
+annual-leave
+------ReviveBoundary
+Content-Disposition: form-data; name="requestDate"
+
+2026-11-10
+------ReviveBoundary
+Content-Disposition: form-data; name="endDate"
+
+2026-11-12
+------ReviveBoundary
+Content-Disposition: form-data; name="reason"
+
+Family event
+------ReviveBoundary--
 
 > {%
   client.global.set("requestId", response.body.id);
@@ -167,6 +185,95 @@ Authorization: Bearer {{employeeToken}}
 
 POST {{ReviveHRSystem.Web_HostAddress}}/api/requests/{{requestId}}/cancel
 Authorization: Bearer {{employeeToken}}
+
+###
+
+### Sick leave — the medical certificate must ride with the request (400 without it)
+POST {{ReviveHRSystem.Web_HostAddress}}/api/employees/1/requests
+Authorization: Bearer {{employeeToken}}
+Content-Type: multipart/form-data; boundary=----ReviveBoundary
+
+------ReviveBoundary
+Content-Disposition: form-data; name="type"
+
+sick-leave
+------ReviveBoundary
+Content-Disposition: form-data; name="requestDate"
+
+2026-11-05
+------ReviveBoundary
+Content-Disposition: form-data; name="reason"
+
+Flu, doctor's note attached
+------ReviveBoundary
+Content-Disposition: form-data; name="attachment"; filename="certificate.png"
+Content-Type: image/png
+
+< ./requests/avatar-sample.png
+------ReviveBoundary--
+
+> {%
+  client.global.set("sickRequestId", response.body.id);
+%}
+
+###
+
+### Stream the medical certificate back (the requester always; others 404)
+GET {{ReviveHRSystem.Web_HostAddress}}/api/requests/{{sickRequestId}}/attachment
+Authorization: Bearer {{employeeToken}}
+
+###
+
+### Late attendance — excused hours come from the published schedule and share the
+### gym's monthly budget (HR-set, default 4h); early leave draws on the same budget.
+POST {{ReviveHRSystem.Web_HostAddress}}/api/employees/1/requests
+Authorization: Bearer {{employeeToken}}
+Content-Type: multipart/form-data; boundary=----ReviveBoundary
+
+------ReviveBoundary
+Content-Disposition: form-data; name="type"
+
+late-attendance
+------ReviveBoundary
+Content-Disposition: form-data; name="requestDate"
+
+2026-11-08
+------ReviveBoundary
+Content-Disposition: form-data; name="requestTime"
+
+09:30
+------ReviveBoundary
+Content-Disposition: form-data; name="reason"
+
+Traffic on the Ring Road
+------ReviveBoundary--
+
+###
+
+### Monthly excused-hours budget: { capHours, usedHours, remainingHours, month }
+GET {{ReviveHRSystem.Web_HostAddress}}/api/employees/1/excused-hours
+Authorization: Bearer {{employeeToken}}
+
+###
+
+### Salary advance (amount, no automatic limit — the approval workflow is the gate)
+POST {{ReviveHRSystem.Web_HostAddress}}/api/employees/1/requests
+Authorization: Bearer {{employeeToken}}
+Content-Type: multipart/form-data; boundary=----ReviveBoundary
+
+------ReviveBoundary
+Content-Disposition: form-data; name="type"
+
+salary-advance
+------ReviveBoundary
+Content-Disposition: form-data; name="amount"
+
+2500
+------ReviveBoundary
+Content-Disposition: form-data; name="reason"
+
+Medical procedure
+------ReviveBoundary--
 
 ###
 

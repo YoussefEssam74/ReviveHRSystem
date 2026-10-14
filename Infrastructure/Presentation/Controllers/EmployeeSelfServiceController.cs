@@ -159,12 +159,42 @@ namespace Presentation.Controllers
             return Ok(requests);
         }
 
+        /// <summary>
+        /// Submits a request. Multipart because a file can ride with it — the sick-leave
+        /// medical certificate must be sent with the request, so it belongs to the same
+        /// call that creates the row rather than to a follow-up upload.
+        /// </summary>
         [HttpPost]
+        [RequestSizeLimit(11 * 1024 * 1024)]
         public async Task<ActionResult<EmployeeRequestDto>> Create(
-            int id, CreateEmployeeRequestDto request, CancellationToken cancellationToken)
+            int id,
+            [FromForm] CreateEmployeeRequestDto request,
+            [FromForm] IFormFile? attachment,
+            CancellationToken cancellationToken)
         {
-            var created = await requestService.CreateAsync(GetActorUserId(), id, request, cancellationToken);
+            AttachmentUpload? upload = null;
+            if (attachment is { Length: > 0 })
+            {
+                upload = new AttachmentUpload(attachment.FileName, attachment.OpenReadStream());
+            }
+
+            var created = await requestService.CreateAsync(GetActorUserId(), id, request, upload, cancellationToken);
             return Created($"/api/requests/{created.Id}", created);
+        }
+    }
+
+    /// <summary>Monthly excused-hours budget of one employee (late attendance / early leave).</summary>
+    [Route("api/employees/{id}/excused-hours")]
+    public class EmployeeExcusedHoursController(
+        IEmployeeRequestService requestService) : ApiControllerBase
+    {
+        [HttpGet]
+        public async Task<ActionResult<ExcusedHoursBudgetDto>> GetExcusedHours(
+            int id, CancellationToken cancellationToken)
+        {
+            var budget = await requestService.GetExcusedHoursBudgetAsync(
+                GetActorUserId(), id, GetGymIdFromToken(), cancellationToken);
+            return Ok(budget);
         }
     }
 
@@ -179,6 +209,18 @@ namespace Presentation.Controllers
         {
             var request = await requestService.GetRequestAsync(GetActorUserId(), id, GetGymIdFromToken(), cancellationToken);
             return Ok(request);
+        }
+
+        /// <summary>
+        /// Streams the file riding with a request (the sick-leave medical certificate).
+        /// The requester gets his own file; anyone else needs employee-scoped access.
+        /// </summary>
+        [HttpGet("~/api/requests/{id}/attachment")]
+        public async Task<IActionResult> DownloadAttachment(int id, CancellationToken cancellationToken)
+        {
+            var file = await requestService.DownloadAttachmentAsync(
+                GetActorUserId(), id, GetGymIdFromToken(), cancellationToken);
+            return File(file.Content, file.ContentType, file.FileName);
         }
 
         [HttpPost("~/api/requests/{id}/cancel")]

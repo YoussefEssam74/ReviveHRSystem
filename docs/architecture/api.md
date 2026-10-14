@@ -82,7 +82,7 @@ Month view. Query: month (YYYY-MM; defaults to the current month). Returns { sum
 
 ### GET /api/employees/{id}/leave-balance
 
-Returns { year, balances: { Annual: { total, used, pending, remaining }, Sick: ..., Emergency: ..., Unpaid: ... } } — only types with a row are present. Submitting a Day Off request reserves days in `pending`; cancelling releases them; approval consumes them (management side).
+Returns { year, balances: { Annual: { total, used, pending, remaining }, Sick: ..., Emergency: ..., Unpaid: ... } } — only types with a row are present. Submitting an Annual Leave / Sick Leave request reserves days in `pending`; cancelling releases them; approval consumes them (management side). Default entitlements for a fresh year: Annual 21, Sick 10, Emergency 6 — HR edits the entitlement per employee (HR portal).
 
 ### GET /api/employees/{id}/schedule
 
@@ -90,11 +90,35 @@ Published schedule. Query: month (YYYY-MM). Returns { month, cycles: [{ id, star
 
 ### GET /api/employees/{id}/requests · POST /api/employees/{id}/requests
 
-List filters by optional `status` (Pending | PendingHRReview | Approved | Rejected | Cancelled). Create body: { type, requestDate, endDate?, requestTime?, endTime?, swapWithEmployeeId?, overtimeHours?, documentCategory?, reason } where `type` is a request-type id or label (see GET /api/request-types). Returns 201 with the request. 400 for missing type/reason. Day Off requests reserve annual leave days.
+List filters by optional `status` (Pending | PendingHRReview | Approved | Rejected | Cancelled).
+
+Create is **multipart/form-data** because a file can ride with it (the sick-leave medical certificate). Fields: { type, requestDate, endDate?, targetDate?, requestTime?, swapWithEmployeeId?, amount?, reason } plus an optional `attachment` file. `type` is a request-type id or label (see GET /api/request-types). Which fields matter is per type:
+
+| Type | Fields used | Rules |
+|---|---|---|
+| annual-leave | requestDate → endDate, reason | balance-checked: 400 when the days exceed the remaining Annual balance (21 default); submits reserve pending days |
+| sick-leave | requestDate → endDate, reason, attachment | same balance check against Sick (10 default) **and the medical certificate is required** (400 without it) |
+| late-attendance | requestDate, requestTime, reason | no submission window; excused hours = arrival − scheduled shift start (from the *published* schedule, 400 without one); hours + pending + approved hours of the month must stay within the gym's cap |
+| early-leave | requestDate, requestTime, reason | same, hours = scheduled shift end − departure (midnight-crossing shifts handled) |
+| shift-swap | requestDate → endDate, swapWithEmployeeId, reason | colleague must be an active employee of the same gym, not the requester |
+| weekly-off-swap | requestDate (off day given up), targetDate (off day taken in exchange), swapWithEmployeeId, reason | same colleague rule; the two dates must differ |
+| check-in-correction | requestDate, requestTime (corrected time), reason | |
+| salary-advance | amount, reason | amount > 0; no automatic limit — approval is the gate |
+| paid-holiday | requestDate, reason | request to work a paid holiday (e.g. Eid) for double day pay; HR decides on approval |
+
+400 for an unknown type, a missing reason, a missing date (advances default to today), an end date before the start, a non-positive amount, or any violated rule above; 404 when posting for another employee. Returns 201 with the request.
+
+### GET /api/employees/{id}/excused-hours
+
+Monthly excused-hours budget of one employee: { capHours, usedHours, remainingHours, month }. `capHours` is the gym's HR-set cap (default 4); `usedHours` counts this calendar month's pending + approved late-attendance and early-leave hours. Self or employee-scoped access (404 cross-scope).
 
 ### GET /api/requests/{id}
 
-Detail with the approval timeline: [{ step, date, done }]. 404 for another employee's request.
+Detail with the approval timeline: [{ step, date, done }]. Also returns the type-specific fields (targetDate, hours, amount, swapWithEmployeeId/Name, hasAttachment). 404 for another employee's request.
+
+### GET /api/requests/{id}/attachment
+
+Streams the file riding with a request (the sick-leave medical certificate). The requester always gets his own; anyone else needs employee-scoped access in the request's gym. 404 when nothing is stored.
 
 ### POST /api/requests/{id}/cancel
 
@@ -102,7 +126,7 @@ Self-only, Pending requests only. 204; 400 for non-pending requests; releases re
 
 ### GET /api/request-types
 
-Configurable catalog: [{ id, label, fields }] — day-off, leave-early, late-arrival, shift-swap, overtime, document-request, correction. Authentication required; not user data.
+Configurable catalog: [{ id, label, fields, consumesLeave, requiresAttachment, requiresColleague, requiresAmount, limitedByMonthlyExcusedHours, requiresTargetDate }] — the final 9 types: annual-leave, sick-leave, late-attendance, early-leave, shift-swap, weekly-off-swap, check-in-correction, salary-advance, paid-holiday. The flags mirror the server-side rules so the client renders the right fields and blocks impossible submissions. Authentication required; not user data.
 
 ### GET /api/notifications · GET /api/notifications/unread-count · PUT /api/notifications/{id}/read · PUT /api/notifications/read-all
 
@@ -142,7 +166,7 @@ Stage-1 (BranchManager) decision. Body: { stage? ("BranchManager"; defaults to i
 
 ### PUT /api/requests/{id}
 
-Edits type/dates/reason of a pending request on behalf of an in-scope employee. 204. Feature: requests Edit.
+Edits type/dates/reason of a pending request on behalf of an in-scope employee. The type must be one of the catalog (400 otherwise), so the request keeps its rules. 204. Feature: requests Edit.
 
 ### GET /api/attendance
 
@@ -195,6 +219,10 @@ Deletes the cycle and its assignments. Feature: schedule Edit.
 ### GET/POST/PUT/DELETE /api/gyms/{gymId}/shift-templates
 
 Reusable shift templates of the gym: [{ id, name, start, end }]. Create/update bodies: { name, start, end } (400 when end is not after start). Deleting a template turns its assigned cells into Off days (null template) so schedules stay valid. Feature: schedule View / Edit.
+
+### GET/PUT /api/gyms/{gymId}/attendance-policy
+
+HR-editable attendance policy: { gymId, gymName, excusedLateHoursCapPerMonth }. The cap is the monthly budget of excused Late Attendance / Early Leave hours — HR decides the number once and it is static for every employee of the gym (default 4, valid 0–200). PUT body: { excusedLateHoursCapPerMonth } → 200 with the updated policy; 400 for an out-of-range cap. The route gym must match the token's active gym (401 otherwise). Feature: attendance View / Edit.
 
 ### POST /api/deduction-candidates
 

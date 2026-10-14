@@ -10,6 +10,7 @@ namespace Service.Specifications
         {
             Criteria = r => r.EmployeeId == employeeId;
             AddInclude(r => r.Decisions);
+            AddInclude(r => r.SwapWithEmployee);
             OrderByDescending = r => r.SubmittedAt;
         }
     }
@@ -21,6 +22,7 @@ namespace Service.Specifications
         {
             Criteria = r => r.Id == requestId;
             AddInclude(r => r.Decisions);
+            AddInclude(r => r.SwapWithEmployee);
         }
     }
 }
