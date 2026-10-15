@@ -170,6 +170,14 @@ namespace Presistence.Data.Configurations
             builder.HasKey(c => c.Id);
             builder.Property(c => c.Reason).IsRequired().HasMaxLength(1000);
             builder.Property(c => c.Status).IsRequired().HasMaxLength(50);
+            builder.Property(c => c.SeparationType).IsRequired().HasMaxLength(30).HasDefaultValue("Resignation");
+            builder.Property(c => c.Notes).HasMaxLength(1000);
+            builder.Property(c => c.FinalReason).HasMaxLength(1000);
+            builder.Property(c => c.SettlementDirection).HasMaxLength(30);
+            builder.Property(c => c.SettlementAmount).HasPrecision(18, 2);
+            builder.Property(c => c.SettlementNote).HasMaxLength(1000);
+            builder.Property(c => c.RehireStatus).HasMaxLength(30);
+            builder.Property(c => c.RehireNote).HasMaxLength(1000);
             builder.HasOne(c => c.Employee).WithMany(e => e.OffboardingCases)
                    .HasForeignKey(c => c.EmployeeId).OnDelete(DeleteBehavior.Restrict);
             builder.HasOne(c => c.InitiatedByUser).WithMany().HasForeignKey(c => c.InitiatedBy)
@@ -191,6 +199,31 @@ namespace Presistence.Data.Configurations
             builder.HasOne(i => i.CompletedByUser).WithMany().HasForeignKey(i => i.CompletedBy)
                    .OnDelete(DeleteBehavior.SetNull);
             builder.HasIndex(i => new { i.OffboardingCaseId, i.SortOrder }).IsUnique();
+        }
+    }
+
+    public class ActionRequestConfiguration : IEntityTypeConfiguration<ActionRequest>
+    {
+        public void Configure(EntityTypeBuilder<ActionRequest> builder)
+        {
+            builder.ToTable("ActionRequests");
+            builder.HasKey(ar => ar.Id);
+            builder.Property(ar => ar.ActionType).IsRequired().HasMaxLength(50);
+            builder.Property(ar => ar.ProposedDetailsJson).IsRequired().HasColumnType("jsonb");
+            builder.Property(ar => ar.Justification).IsRequired().HasMaxLength(2000);
+            builder.Property(ar => ar.Status).IsRequired().HasMaxLength(30);
+            builder.Property(ar => ar.ReviewComment).HasMaxLength(1000);
+            builder.Property(ar => ar.SubmittedDate).HasDefaultValueSql("CURRENT_TIMESTAMP");
+            builder.HasOne(ar => ar.Gym).WithMany().HasForeignKey(ar => ar.GymId)
+                   .OnDelete(DeleteBehavior.Restrict);
+            builder.HasOne(ar => ar.Employee).WithMany().HasForeignKey(ar => ar.EmployeeId)
+                   .OnDelete(DeleteBehavior.SetNull);
+            builder.HasOne(ar => ar.RequestedBy).WithMany().HasForeignKey(ar => ar.RequestedById)
+                   .OnDelete(DeleteBehavior.Restrict);
+            builder.HasOne(ar => ar.ReviewedBy).WithMany().HasForeignKey(ar => ar.ReviewedById)
+                   .OnDelete(DeleteBehavior.SetNull);
+            builder.HasIndex(ar => new { ar.Status, ar.ActionType });
+            builder.HasIndex(ar => ar.GymId);
         }
     }
 }

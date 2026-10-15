@@ -132,6 +132,10 @@ namespace Persistence.Data.Migrations
                         .HasColumnType("boolean")
                         .HasDefaultValue(false);
 
+                    b.Property<string>("Notes")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
                     b.Property<int?>("ScheduledShiftTemplateId")
                         .HasColumnType("integer");
 
@@ -399,6 +403,9 @@ namespace Persistence.Data.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
 
+                    b.Property<int?>("GymId")
+                        .HasColumnType("integer");
+
                     b.Property<string>("IpAddress")
                         .HasMaxLength(45)
                         .HasColumnType("character varying(45)");
@@ -417,11 +424,98 @@ namespace Persistence.Data.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("GymId");
+
                     b.HasIndex("Timestamp");
 
                     b.HasIndex("EntityType", "EntityId");
 
                     b.ToTable("AuditLogs", (string)null);
+                });
+
+            modelBuilder.Entity("DomainLayer.Models.EmployeeModule.ActionRequest", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("ActionType")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.Property<int?>("CreatedBy")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("EmployeeId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("GymId")
+                        .HasColumnType("integer");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
+
+                    b.Property<string>("Justification")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<string>("ProposedDetailsJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb");
+
+                    b.Property<int>("RequestedById")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("ReviewComment")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<int?>("ReviewedById")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("ReviewedDate")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
+                    b.Property<DateTime>("SubmittedDate")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int?>("UpdatedBy")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EmployeeId");
+
+                    b.HasIndex("GymId");
+
+                    b.HasIndex("RequestedById");
+
+                    b.HasIndex("ReviewedById");
+
+                    b.HasIndex("Status", "ActionType");
+
+                    b.ToTable("ActionRequests", (string)null);
                 });
 
             modelBuilder.Entity("DomainLayer.Models.EmployeeModule.Compensation", b =>
@@ -809,6 +903,10 @@ namespace Persistence.Data.Migrations
                     b.Property<int>("EmployeeId")
                         .HasColumnType("integer");
 
+                    b.Property<string>("FinalReason")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
                     b.Property<DateTime>("InitiatedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -823,8 +921,39 @@ namespace Persistence.Data.Migrations
                     b.Property<DateOnly>("LastWorkingDate")
                         .HasColumnType("date");
 
+                    b.Property<string>("Notes")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
                     b.Property<string>("Reason")
                         .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<string>("RehireNote")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<string>("RehireStatus")
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
+                    b.Property<string>("SeparationType")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)")
+                        .HasDefaultValue("Resignation");
+
+                    b.Property<decimal?>("SettlementAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<string>("SettlementDirection")
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
+                    b.Property<string>("SettlementNote")
                         .HasMaxLength(1000)
                         .HasColumnType("character varying(1000)");
 
@@ -1103,6 +1232,9 @@ namespace Persistence.Data.Migrations
                     b.Property<int?>("CreatedBy")
                         .HasColumnType("integer");
 
+                    b.Property<DateTime>("CreatedDate")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<int?>("GymId")
                         .HasColumnType("integer");
 
@@ -1114,6 +1246,9 @@ namespace Persistence.Data.Migrations
                         .HasColumnType("boolean")
                         .HasDefaultValue(false);
 
+                    b.Property<DateTime?>("LastUsedAt")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(200)
@@ -1121,6 +1256,13 @@ namespace Persistence.Data.Migrations
 
                     b.Property<int?>("PositionId")
                         .HasColumnType("integer");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Target")
+                        .HasColumnType("text");
 
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
@@ -1218,6 +1360,19 @@ namespace Persistence.Data.Migrations
                         .HasColumnType("boolean")
                         .HasDefaultValue(false);
 
+                    b.Property<string>("Notes")
+                        .HasColumnType("text");
+
+                    b.Property<string>("Period")
+                        .HasColumnType("text");
+
+                    b.Property<decimal?>("Score")
+                        .HasColumnType("numeric");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("text");
+
                     b.Property<DateTime>("SubmittedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -1236,6 +1391,117 @@ namespace Persistence.Data.Migrations
                     b.HasIndex("EvaluationFormId");
 
                     b.ToTable("EvaluationResponses", (string)null);
+                });
+
+            modelBuilder.Entity("DomainLayer.Models.EvaluationModule.Goal", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.Property<int?>("CreatedBy")
+                        .HasColumnType("integer");
+
+                    b.Property<DateOnly?>("DueDate")
+                        .HasColumnType("date");
+
+                    b.Property<int?>("EmployeeId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("EmployeeName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
+
+                    b.Property<string>("Owner")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<int>("Progress")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int?>("UpdatedBy")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EmployeeId");
+
+                    b.ToTable("Goals", (string)null);
+                });
+
+            modelBuilder.Entity("DomainLayer.Models.EvaluationModule.PerformanceCycle", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.Property<int?>("CreatedBy")
+                        .HasColumnType("integer");
+
+                    b.Property<DateOnly>("EndDate")
+                        .HasColumnType("date");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<DateOnly>("StartDate")
+                        .HasColumnType("date");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int?>("UpdatedBy")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("PerformanceCycles", (string)null);
                 });
 
             modelBuilder.Entity("DomainLayer.Models.NotificationModule.Announcement", b =>
@@ -1375,6 +1641,9 @@ namespace Persistence.Data.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<DateTime?>("DueDate")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<int>("EntityId")
                         .HasColumnType("integer");
 
@@ -1414,11 +1683,18 @@ namespace Persistence.Data.Migrations
                     b.Property<int?>("UpdatedBy")
                         .HasColumnType("integer");
 
+                    b.Property<string>("Urgency")
+                        .IsRequired()
+                        .HasColumnType("text");
+
                     b.HasKey("Id");
 
                     b.HasIndex("ResolvedBy");
 
                     b.HasIndex("GymId", "Status");
+
+                    b.HasIndex("Type", "EntityType", "EntityId")
+                        .IsUnique();
 
                     b.ToTable("Events", (string)null);
                 });
@@ -1602,6 +1878,9 @@ namespace Persistence.Data.Migrations
                         .HasColumnType("integer");
 
                     b.Property<int>("GymId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Headcount")
                         .HasColumnType("integer");
 
                     b.Property<bool>("IsActive")
@@ -1810,6 +2089,9 @@ namespace Persistence.Data.Migrations
                     b.Property<int?>("CreatedBy")
                         .HasColumnType("integer");
 
+                    b.Property<int>("DaysWorked")
+                        .HasColumnType("integer");
+
                     b.Property<int>("EmployeeId")
                         .HasColumnType("integer");
 
@@ -1822,8 +2104,18 @@ namespace Persistence.Data.Migrations
                         .HasPrecision(18, 2)
                         .HasColumnType("numeric(18,2)");
 
+                    b.Property<decimal>("OvertimeHours")
+                        .HasColumnType("numeric");
+
                     b.Property<int>("PayrollPeriodId")
                         .HasColumnType("integer");
+
+                    b.Property<DateTime?>("ReviewedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("text");
 
                     b.Property<decimal>("TotalBonuses")
                         .HasPrecision(18, 2)
@@ -1968,6 +2260,9 @@ namespace Persistence.Data.Migrations
                         .HasColumnType("boolean")
                         .HasDefaultValue(false);
 
+                    b.Property<DateOnly?>("PaidDate")
+                        .HasColumnType("date");
+
                     b.Property<DateOnly>("StartDate")
                         .HasColumnType("date");
 
@@ -2000,6 +2295,10 @@ namespace Persistence.Data.Migrations
                     b.Property<DateTime>("AppliedDate")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<string>("Availability")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
                     b.Property<int>("CandidateId")
                         .HasColumnType("integer");
 
@@ -2014,10 +2313,72 @@ namespace Persistence.Data.Migrations
                     b.Property<int>("CurrentStage")
                         .HasColumnType("integer");
 
+                    b.Property<DateTime?>("DecisionAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int?>("DecisionBy")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("DecisionNote")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<string>("Education")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<int>("ExperienceYears")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("HiredBy")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("HiredDate")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<bool>("IsDeleted")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("boolean")
                         .HasDefaultValue(false);
+
+                    b.Property<string>("LanguagesJson")
+                        .HasColumnType("jsonb");
+
+                    b.Property<DateTime>("LastActivityAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<string>("PositionTitle")
+                        .HasColumnType("text");
+
+                    b.Property<string>("PreferredGym")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("RejectReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<DateTime?>("RejectedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int?>("RejectedBy")
+                        .HasColumnType("integer");
+
+                    b.Property<decimal?>("SalaryExpectation")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)");
+
+                    b.Property<string>("ShiftPreference")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("Source")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
 
                     b.Property<int>("Status")
                         .HasColumnType("integer");
@@ -2028,7 +2389,7 @@ namespace Persistence.Data.Migrations
                     b.Property<int?>("UpdatedBy")
                         .HasColumnType("integer");
 
-                    b.Property<int>("VacancyId")
+                    b.Property<int?>("VacancyId")
                         .HasColumnType("integer");
 
                     b.HasKey("Id");
@@ -2047,6 +2408,13 @@ namespace Persistence.Data.Migrations
                         .HasColumnType("integer");
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("BlockReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<bool>("Blocked")
+                        .HasColumnType("boolean");
 
                     b.Property<string>("CVFilePath")
                         .HasMaxLength(500)
@@ -2097,6 +2465,10 @@ namespace Persistence.Data.Migrations
                         .HasMaxLength(50)
                         .HasColumnType("character varying(50)");
 
+                    b.Property<decimal?>("Rating")
+                        .HasPrecision(4, 2)
+                        .HasColumnType("numeric(4,2)");
+
                     b.Property<string>("SkillsJson")
                         .HasColumnType("jsonb");
 
@@ -2115,6 +2487,160 @@ namespace Persistence.Data.Migrations
                     b.ToTable("Candidates", (string)null);
                 });
 
+            modelBuilder.Entity("DomainLayer.Models.RecruitmentModule.HiringForm", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.Property<int?>("CreatedBy")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("CreatedDate")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.Property<int?>("GymId")
+                        .HasColumnType("integer");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
+
+                    b.Property<DateTime?>("LastUsedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("Position")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("QuestionsJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int?>("UpdatedBy")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedBy");
+
+                    b.HasIndex("GymId");
+
+                    b.HasIndex("Status");
+
+                    b.ToTable("HiringForms", (string)null);
+                });
+
+            modelBuilder.Entity("DomainLayer.Models.RecruitmentModule.HiringFormApplication", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("AnswersJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb");
+
+                    b.Property<DateTime>("AppliedDate")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.Property<int?>("CandidateId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("CareersJson")
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.Property<int?>("CreatedBy")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Email")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<string>("Gym")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<int>("HiringFormId")
+                        .HasColumnType("integer");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("Phone")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<string>("Position")
+                        .HasColumnType("text");
+
+                    b.Property<string>("RejectComment")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int?>("UpdatedBy")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CandidateId");
+
+                    b.HasIndex("Email");
+
+                    b.HasIndex("HiringFormId", "Status");
+
+                    b.ToTable("HiringFormApplications", (string)null);
+                });
+
             modelBuilder.Entity("DomainLayer.Models.RecruitmentModule.Interview", b =>
                 {
                     b.Property<int>("Id")
@@ -2126,6 +2652,9 @@ namespace Persistence.Data.Migrations
                     b.Property<int>("ApplicationId")
                         .HasColumnType("integer");
 
+                    b.Property<DateTime?>("CompletedAt")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<int?>("ConductedBy")
                         .HasColumnType("integer");
 
@@ -2136,6 +2665,14 @@ namespace Persistence.Data.Migrations
 
                     b.Property<int?>("CreatedBy")
                         .HasColumnType("integer");
+
+                    b.Property<string>("Evaluation")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<string>("InterviewerName")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
 
                     b.Property<string>("InterviewerNotes")
                         .HasMaxLength(2000)
@@ -2149,17 +2686,34 @@ namespace Persistence.Data.Migrations
                     b.Property<int>("Outcome")
                         .HasColumnType("integer");
 
+                    b.Property<string>("Room")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
                     b.Property<DateTime>("ScheduledDate")
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<int>("Stage")
                         .HasColumnType("integer");
 
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<string>("Type")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<int?>("UpdatedBy")
                         .HasColumnType("integer");
+
+                    b.Property<string>("Verdict")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
 
                     b.HasKey("Id");
 
@@ -2182,6 +2736,9 @@ namespace Persistence.Data.Migrations
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<int>("ApplicationId")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("ByUserId")
                         .HasColumnType("integer");
 
                     b.Property<DateTime?>("CompletedDate")
@@ -2247,6 +2804,11 @@ namespace Persistence.Data.Migrations
                     b.Property<int?>("CreatedBy")
                         .HasColumnType("integer");
 
+                    b.Property<DateTime>("CreatedDate")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
                     b.Property<string>("Description")
                         .IsRequired()
                         .HasColumnType("text");
@@ -2270,9 +2832,24 @@ namespace Persistence.Data.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
 
+                    b.Property<int?>("RequestedBy")
+                        .HasColumnType("integer");
+
                     b.Property<string>("Requirements")
                         .IsRequired()
                         .HasColumnType("text");
+
+                    b.Property<decimal?>("Salary")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)");
+
+                    b.Property<string>("Shift")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("Source")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
 
                     b.Property<int>("Status")
                         .HasColumnType("integer");
@@ -2288,6 +2865,10 @@ namespace Persistence.Data.Migrations
                     b.Property<int?>("UpdatedBy")
                         .HasColumnType("integer");
 
+                    b.Property<string>("Urgency")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
                     b.HasKey("Id");
 
                     b.HasIndex("GymId");
@@ -2296,6 +2877,8 @@ namespace Persistence.Data.Migrations
 
                     b.HasIndex("PublicLinkToken")
                         .IsUnique();
+
+                    b.HasIndex("RequestedBy");
 
                     b.ToTable("Vacancies", (string)null);
                 });
@@ -2329,6 +2912,9 @@ namespace Persistence.Data.Migrations
                     b.Property<int>("GymId")
                         .HasColumnType("integer");
 
+                    b.Property<int>("Headcount")
+                        .HasColumnType("integer");
+
                     b.Property<bool>("IsDeleted")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("boolean")
@@ -2347,14 +2933,31 @@ namespace Persistence.Data.Migrations
                     b.Property<int?>("ResultingVacancyId")
                         .HasColumnType("integer");
 
+                    b.Property<decimal?>("Salary")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)");
+
+                    b.Property<string>("Shift")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
                     b.Property<int>("Status")
                         .HasColumnType("integer");
+
+                    b.Property<DateTime>("SubmittedDate")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
 
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<int?>("UpdatedBy")
                         .HasColumnType("integer");
+
+                    b.Property<string>("Urgency")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
 
                     b.HasKey("Id");
 
@@ -2406,6 +3009,10 @@ namespace Persistence.Data.Migrations
                     b.Property<decimal?>("OvertimeHoursRequested")
                         .HasPrecision(5, 2)
                         .HasColumnType("numeric(5,2)");
+
+                    b.Property<string>("Payment")
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)");
 
                     b.Property<DateOnly>("RequestDate")
                         .HasColumnType("date");
@@ -2579,6 +3186,9 @@ namespace Persistence.Data.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("boolean")
                         .HasDefaultValue(false);
+
+                    b.Property<string>("Label")
+                        .HasColumnType("text");
 
                     b.Property<DateTime?>("PublishedAt")
                         .HasColumnType("timestamp with time zone");
@@ -3047,6 +3657,39 @@ namespace Persistence.Data.Migrations
                     b.Navigation("StationCode");
                 });
 
+            modelBuilder.Entity("DomainLayer.Models.EmployeeModule.ActionRequest", b =>
+                {
+                    b.HasOne("DomainLayer.Models.EmployeeModule.Employee", "Employee")
+                        .WithMany()
+                        .HasForeignKey("EmployeeId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("DomainLayer.Models.OrganizationModule.Gym", "Gym")
+                        .WithMany()
+                        .HasForeignKey("GymId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("DomainLayer.Models.UserModule.User", "RequestedBy")
+                        .WithMany()
+                        .HasForeignKey("RequestedById")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("DomainLayer.Models.UserModule.User", "ReviewedBy")
+                        .WithMany()
+                        .HasForeignKey("ReviewedById")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("Employee");
+
+                    b.Navigation("Gym");
+
+                    b.Navigation("RequestedBy");
+
+                    b.Navigation("ReviewedBy");
+                });
+
             modelBuilder.Entity("DomainLayer.Models.EmployeeModule.Compensation", b =>
                 {
                     b.HasOne("DomainLayer.Models.UserModule.User", "ChangedByUser")
@@ -3334,6 +3977,16 @@ namespace Persistence.Data.Migrations
                     b.Navigation("Evaluator");
                 });
 
+            modelBuilder.Entity("DomainLayer.Models.EvaluationModule.Goal", b =>
+                {
+                    b.HasOne("DomainLayer.Models.EmployeeModule.Employee", "Employee")
+                        .WithMany()
+                        .HasForeignKey("EmployeeId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("Employee");
+                });
+
             modelBuilder.Entity("DomainLayer.Models.NotificationModule.Announcement", b =>
                 {
                     b.HasOne("DomainLayer.Models.UserModule.User", "Author")
@@ -3577,12 +4230,46 @@ namespace Persistence.Data.Migrations
                     b.HasOne("DomainLayer.Models.RecruitmentModule.Vacancy", "Vacancy")
                         .WithMany("Applications")
                         .HasForeignKey("VacancyId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.Navigation("Candidate");
 
                     b.Navigation("Vacancy");
+                });
+
+            modelBuilder.Entity("DomainLayer.Models.RecruitmentModule.HiringForm", b =>
+                {
+                    b.HasOne("DomainLayer.Models.UserModule.User", "Creator")
+                        .WithMany()
+                        .HasForeignKey("CreatedBy")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("DomainLayer.Models.OrganizationModule.Gym", "Gym")
+                        .WithMany()
+                        .HasForeignKey("GymId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("Creator");
+
+                    b.Navigation("Gym");
+                });
+
+            modelBuilder.Entity("DomainLayer.Models.RecruitmentModule.HiringFormApplication", b =>
+                {
+                    b.HasOne("DomainLayer.Models.RecruitmentModule.Candidate", "Candidate")
+                        .WithMany()
+                        .HasForeignKey("CandidateId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("DomainLayer.Models.RecruitmentModule.HiringForm", "HiringForm")
+                        .WithMany()
+                        .HasForeignKey("HiringFormId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Candidate");
+
+                    b.Navigation("HiringForm");
                 });
 
             modelBuilder.Entity("DomainLayer.Models.RecruitmentModule.Interview", b =>
@@ -3627,6 +4314,11 @@ namespace Persistence.Data.Migrations
                         .HasForeignKey("PositionId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+
+                    b.HasOne("DomainLayer.Models.UserModule.User", null)
+                        .WithMany()
+                        .HasForeignKey("RequestedBy")
+                        .OnDelete(DeleteBehavior.SetNull);
 
                     b.Navigation("Gym");
 

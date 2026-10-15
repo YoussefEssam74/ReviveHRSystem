@@ -20,6 +20,12 @@ namespace DomainLayer.Models.NotificationModule
         public string Description { get; set; } = string.Empty;
         public EventStatus Status { get; set; } = EventStatus.Open;
 
+        /// <summary>"high" | "medium" | "low" (UI urgency badge / filter).</summary>
+        public string Urgency { get; set; } = "medium";
+
+        /// <summary>Due / effective date shown on the card and used by the due-label helper.</summary>
+        public DateTime? DueDate { get; set; }
+
         public int? ResolvedBy { get; set; }
         public virtual User? Resolver { get; set; }
 

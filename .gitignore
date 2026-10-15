@@ -58,3 +58,6 @@ __pycache__/
 *.py[cod]
 *.pyo
 
+
+# Uploaded employee documents (runtime storage, never committed)
+ReviveHRSystem.Web/App_Data/

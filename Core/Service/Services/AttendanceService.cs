@@ -99,6 +99,13 @@ namespace Service.Services
                 throw new BadRequestException("A reason is required for manual attendance.");
             }
 
+            // The DTO's Type became optional when the HR-portal day-write form was
+            // added to this route (S4, A3); the station punch form still requires it.
+            if (string.IsNullOrWhiteSpace(request.Type))
+            {
+                throw new BadRequestException("A type (IN/OUT) is required for a manual station punch.");
+            }
+
             return await RecordAsync(
                 employeeReference: request.EmployeeId,
                 eventType: request.Type,

@@ -103,6 +103,9 @@ namespace Presistence.Data.Configurations
                    .OnDelete(DeleteBehavior.Restrict);
 
             builder.HasIndex(e => new { e.GymId, e.Status });
+
+            // One queue row per underlying entity — the sync-on-read upsert keys on it.
+            builder.HasIndex(e => new { e.Type, e.EntityType, e.EntityId }).IsUnique();
         }
     }
 
@@ -234,6 +237,42 @@ namespace Presistence.Data.Configurations
 
             builder.HasIndex(al => new { al.EntityType, al.EntityId });
             builder.HasIndex(al => al.Timestamp);
+
+            builder.Property(al => al.GymId);
+            builder.HasIndex(al => al.GymId);
+        }
+    }
+
+    public class PerformanceCycleConfiguration : IEntityTypeConfiguration<PerformanceCycle>
+    {
+        public void Configure(EntityTypeBuilder<PerformanceCycle> builder)
+        {
+            builder.ToTable("PerformanceCycles");
+            builder.HasKey(pc => pc.Id);
+
+            builder.Property(pc => pc.Name).IsRequired().HasMaxLength(200);
+            builder.Property(pc => pc.Status).IsRequired().HasMaxLength(30);
+        }
+    }
+
+    public class GoalConfiguration : IEntityTypeConfiguration<Goal>
+    {
+        public void Configure(EntityTypeBuilder<Goal> builder)
+        {
+            builder.ToTable("Goals");
+            builder.HasKey(g => g.Id);
+
+            builder.Property(g => g.EmployeeName).IsRequired().HasMaxLength(200);
+            builder.Property(g => g.Title).IsRequired().HasMaxLength(500);
+            builder.Property(g => g.Status).IsRequired().HasMaxLength(30);
+            builder.Property(g => g.Owner).IsRequired().HasMaxLength(200);
+
+            builder.HasOne(g => g.Employee)
+                   .WithMany()
+                   .HasForeignKey(g => g.EmployeeId)
+                   .OnDelete(DeleteBehavior.SetNull);
+
+            builder.HasIndex(g => g.EmployeeId);
         }
     }
 }

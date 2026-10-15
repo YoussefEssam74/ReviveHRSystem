@@ -16,6 +16,7 @@ namespace Presistence.Data.Configurations
             builder.Property(er => er.Details).IsRequired();
             builder.Property(er => er.AttachmentPath).HasMaxLength(500);
             builder.Property(er => er.OvertimeHoursRequested).HasPrecision(5, 2);
+            builder.Property(er => er.Payment).HasMaxLength(10);
 
             builder.HasOne(er => er.Employee)
                    .WithMany()

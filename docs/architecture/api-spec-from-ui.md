@@ -623,8 +623,7 @@ Uses 13.6 (list), 13.7 (Action modal), and the Branch Actions palette (§20). "T
 
 ---
 
-## Section 4 - HR Portal - Dashboard, Employees, Attendance, Schedule, Requests, Branch Queue, HR Team
-
+mb  
 **Scope:** `Mock UI/HR` — app.js, core.js, data.js, pages-dashboard, pages-employees, pages-attendance, pages-schedule, pages-requests, pages-branch-queue, pages-hr-team, index.html
 **Marked against:** `docs/architecture/api.md`
 

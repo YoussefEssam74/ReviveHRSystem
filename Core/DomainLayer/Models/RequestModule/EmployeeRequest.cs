@@ -30,6 +30,20 @@ namespace DomainLayer.Models.RequestModule
 
         public RequestStatus Status { get; set; } = RequestStatus.Pending;
 
+        /// <summary>
+        /// Submission timestamp surfaced as the UI's submittedDate / timeline origin.
+        /// Maps onto the shared CreatedAt column (shadow-configured for every entity)
+        /// so no schema change is required; stamped by the services on create.
+        /// </summary>
+        public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+
+        /// <summary>
+        /// Payment outcome recorded by the HR approve decision (R3/R9): "paid"
+        /// (deducted from the leave balance) or "unpaid" (payroll deduction).
+        /// Null until approved, and for types that consume no balance.
+        /// </summary>
+        public string? Payment { get; set; }
+
         public virtual ICollection<RequestDecision> Decisions { get; set; } = new List<RequestDecision>();
     }
 }

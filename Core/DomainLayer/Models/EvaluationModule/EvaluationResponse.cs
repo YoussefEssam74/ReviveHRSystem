@@ -20,6 +20,18 @@ namespace DomainLayer.Models.EvaluationModule
 
         public DateTime SubmittedAt { get; set; } = DateTime.UtcNow;
 
+        /// <summary>Review window label as chosen by the evaluator ("Q3 2026", "Probation Review", …).</summary>
+        public string? Period { get; set; }
+
+        /// <summary>Computed score percent (totalPoints / (questions × 5) × 100).</summary>
+        public decimal? Score { get; set; }
+
+        /// <summary>"Completed" | "In Progress" (launch-cycle seeds In Progress rows).</summary>
+        public string Status { get; set; } = "Completed";
+
+        /// <summary>Manager feedback &amp; development plan.</summary>
+        public string? Notes { get; set; }
+
         public virtual ICollection<EvaluationAnswer> Answers { get; set; } = new List<EvaluationAnswer>();
     }
 }

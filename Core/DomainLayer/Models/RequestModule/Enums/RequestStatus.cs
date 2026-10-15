@@ -9,6 +9,9 @@ namespace DomainLayer.Models.RequestModule.Enums
         Pending = 1,
         PendingHRReview = 2,
         Approved = 3,
-        Rejected = 4
+        Rejected = 4,
+
+        /// <summary>Filed away by HR (R6). Restore derives the pre-archive status from the recorded decisions.</summary>
+        Archived = 5
     }
 }

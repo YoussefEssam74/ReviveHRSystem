@@ -15,6 +15,9 @@
         public string? NewValues { get; set; }
         public DateTime Timestamp { get; set; } = DateTime.UtcNow;
         public string? IpAddress { get; set; }
+
+        /// <summary>Gym where the action happened (null for org-wide actions / legacy rows).</summary>
+        public int? GymId { get; set; }
     }
 }
 

@@ -19,6 +19,14 @@
         public string? ExperienceJson { get; set; }
         public string? SkillsJson { get; set; }
 
+        /// <summary>HR pipeline rating (0–5 stars). Null until rated.</summary>
+        public decimal? Rating { get; set; }
+
+        /// <summary>Blocked candidates cannot re-apply (pipeline "Block" action).</summary>
+        public bool Blocked { get; set; }
+
+        public string? BlockReason { get; set; }
+
         // Optional biometric template for kiosk matching
         public byte[]? FaceEncoding { get; set; }
 
