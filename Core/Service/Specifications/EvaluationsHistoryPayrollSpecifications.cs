@@ -198,6 +198,7 @@ namespace Service.Specifications
         {
             Criteria = r => employeeIds.Contains(r.EmployeeId);
             AddInclude(r => r.Decisions);
+            AddInclude(r => r.SwapWithEmployee);
             OrderByDescending = r => r.SubmittedAt;
         }
     }

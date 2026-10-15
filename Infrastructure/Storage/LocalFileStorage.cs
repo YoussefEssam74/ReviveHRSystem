@@ -19,7 +19,8 @@ namespace Storage
         {
             "avatars",
             "documents",
-            "hr-documents"
+            "hr-documents",
+            "request-attachments"
         };
 
         private readonly StorageOptions options = options.Value;

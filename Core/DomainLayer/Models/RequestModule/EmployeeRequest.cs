@@ -27,6 +27,17 @@ namespace DomainLayer.Models.RequestModule
         public virtual Employee? SwapWithEmployee { get; set; }
 
         public decimal? OvertimeHoursRequested { get; set; }
+
+        /// <summary>
+        /// Excused hours a Late Attendance / Early Leave request covers, computed from the
+        /// employee's published schedule at submission. Counted against the gym's monthly
+        /// excused-hours cap (Gym.ExcusedLateHoursCapPerMonth) while pending or approved.
+        /// </summary>
+        public decimal? RequestedHours { get; set; }
+
+        /// <summary>Amount asked for by a Salary Advance request.</summary>
+        public decimal? RequestedAmount { get; set; }
+
         public string Details { get; set; } = string.Empty;
         public string? AttachmentPath { get; set; }
 

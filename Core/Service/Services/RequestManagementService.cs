@@ -82,10 +82,11 @@ namespace Service.Services
 
             // A rejected stage-1 decision releases any reserved leave days immediately;
             // approval consumes them at the HR stage.
-            var leaveType = request.Type.Equals("Day Off", StringComparison.OrdinalIgnoreCase) ? LeaveType.Annual : (LeaveType?)null;
+            var leaveType = LeaveBalanceReservation.LeaveTypeFor(request);
             if (outcome == DecisionOutcome.Rejected && leaveType is not null)
             {
-                await ReleaseLeaveAsync(request.EmployeeId, leaveType.Value, DaysRequested(request), cancellationToken);
+                await LeaveBalanceReservation.AdjustPendingDaysAsync(
+                    unitOfWork, request.EmployeeId, leaveType.Value, -LeaveBalanceReservation.DaysRequested(request), cancellationToken);
             }
 
             await unitOfWork.SaveChangesAsync(cancellationToken);
@@ -104,7 +105,11 @@ namespace Service.Services
 
             if (!string.IsNullOrWhiteSpace(update.Type))
             {
-                request.Type = update.Type.Trim();
+                // A manager edits a request, not invents a type: the label must be one
+                // the catalog knows so its rules (balance, caps) still apply.
+                var type = RequestTypeCatalog.Find(update.Type)
+                    ?? throw new BadRequestException($"Unknown request type '{update.Type}'.");
+                request.Type = type.Label;
             }
 
             if (update.RequestDate.HasValue)
@@ -238,33 +243,6 @@ namespace Service.Services
             }
 
             return parsed;
-        }
-
-        private async Task ReleaseLeaveAsync(int employeeId, LeaveType leaveType, decimal days, CancellationToken cancellationToken)
-        {
-            var year = DateTime.UtcNow.Year;
-            var balances = await unitOfWork.GetRepository<DomainLayer.Models.EmployeeModule.LeaveBalance, int>()
-                .GetAllAsync(new LeaveBalancesByEmployeeSpec(employeeId, year), cancellationToken);
-
-            var balance = balances.FirstOrDefault(b => b.LeaveType == leaveType);
-            if (balance is null)
-            {
-                return;
-            }
-
-            balance.PendingDays = Math.Max(0, balance.PendingDays - days);
-            unitOfWork.GetRepository<DomainLayer.Models.EmployeeModule.LeaveBalance, int>().Update(balance);
-        }
-
-        private static decimal DaysRequested(EmployeeRequest request)
-        {
-            if (request.TargetStartDate is null)
-            {
-                return 1;
-            }
-
-            var end = request.TargetEndDate ?? request.TargetStartDate;
-            return end.Value.DayNumber - request.TargetStartDate.Value.DayNumber + 1;
         }
 
         private static int RequireGym(int? activeGymId) =>

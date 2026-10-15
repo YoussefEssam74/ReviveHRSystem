@@ -208,6 +208,7 @@ namespace ReviveHRSystem.Web
             builder.Services.AddScoped<IAttendanceSelfService, AttendanceSelfService>();
             builder.Services.AddScoped<IScheduleSelfService, ScheduleSelfService>();
             builder.Services.AddScoped<IEmployeeRequestService, EmployeeRequestService>();
+            builder.Services.AddScoped<IGymAttendancePolicyService, GymAttendancePolicyService>();
             builder.Services.AddScoped<INotificationService, NotificationService>();
             builder.Services.AddScoped<IAccountSettingsService, AccountSettingsService>();
             builder.Services.AddScoped<IEvaluationSelfService, EvaluationSelfService>();

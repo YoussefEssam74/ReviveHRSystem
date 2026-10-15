@@ -606,7 +606,7 @@ function renderAttendance() {
       </div>
     </div>
 
-    <!-- Leave Balance + Day Off Request -->
+    <!-- Leave Balance + Annual Leave Request -->
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-3 pt-1">
       <!-- Leave Balance Card -->
       <div class="bg-white rounded-xl border border-charcoal-200 p-4 lg:col-span-1">
@@ -641,11 +641,11 @@ function renderAttendance() {
         })()}
       </div>
 
-      <!-- Day Off Request Form -->
+      <!-- Annual Leave Request Form -->
       <div class="bg-white rounded-xl border border-charcoal-200 p-4 lg:col-span-2">
         <div class="flex items-center gap-2 mb-3">
           <div class="w-6 h-6 rounded-md bg-amber-100 flex items-center justify-center"><svg class="w-3.5 h-3.5 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"/></svg></div>
-          <p class="text-xs font-bold text-charcoal-900">Request Day Off</p>
+          <p class="text-xs font-bold text-charcoal-900">Request Annual Leave</p>
           ${MOCK.leaveBalance.annualTotal - MOCK.leaveBalance.annualUsed <= 0
             ? '<span class="ml-auto text-[9px] font-semibold text-red-600 bg-red-50 px-2 py-0.5 rounded-full">No days remaining</span>'
             : `<span class="ml-auto text-[9px] font-semibold text-brand-600 bg-brand-50 px-2 py-0.5 rounded-full">${MOCK.leaveBalance.annualTotal - MOCK.leaveBalance.annualUsed} annual days left</span>`}
@@ -661,7 +661,7 @@ function renderAttendance() {
                 <label class="text-[10px] font-semibold text-charcoal-600 mb-1 block">Leave Type</label>
                 <select id="att-type" class="form-select w-full text-xs" onchange="attType=this.value">
                   <option value="">Choose type…</option>
-                  <option value="Day Off" ${attType==='Day Off'?'selected':''}>Annual Leave (Day Off)</option>
+                  <option value="Annual Leave" ${attType==='Annual Leave'?'selected':''}>Annual Leave</option>
                 </select>
               </div>
               <div>
@@ -704,18 +704,18 @@ function renderAttendance() {
 function submitLeaveRequest() {
   const lb = MOCK.leaveBalance;
   const remaining = lb.annualTotal - lb.annualUsed;
-  if(remaining <= 0){showToast('No annual leave days remaining — you cannot submit a day-off request','error');return;}
+  if(remaining <= 0){showToast('No annual leave days remaining — you cannot submit an annual-leave request','error');return;}
   if(!attType){showToast('Please choose a leave type','error');return;}
   if(!attDate){showToast('Please pick a date','error');return;}
   const tomorrow = new Date(Date.now()+86400000).toISOString().slice(0,10);
   if(attDate < tomorrow){showToast('Please select a future date (tomorrow or later)','error');return;}
   if(!attReason.trim()){showToast('Please add a reason for your request','error');return;}
-  /* check for date conflicts with existing pending/approved day-off requests */
-  const conflict = MOCK.requests.find(r=>r.requestedDate && r.type==='Day Off' && r.status!=='Rejected' && r.requestedDate===attDate);
-  if(conflict){showToast('You already have a Day Off request for this date','error');return;}
+  /* check for date conflicts with existing pending/approved annual-leave requests */
+  const conflict = MOCK.requests.find(r=>r.requestedDate && r.type==='Annual Leave' && r.status!=='Rejected' && r.requestedDate===attDate);
+  if(conflict){showToast('You already have an Annual Leave request for this date','error');return;}
   MOCK.requests.unshift({
     id:'r'+(MOCK.requests.length+1),
-    type:'Day Off',
+    type:'Annual Leave',
     submittedDate:TODAY_ISO,
     requestedDate:formatDate(attDate),
     status:'Pending',
@@ -728,7 +728,7 @@ function submitLeaveRequest() {
   lb.annualUsed++;
   attType=''; attDate=''; attReason='';
   renderAll();
-  showToast('Day-off request submitted — pending Branch Manager review');
+  showToast('Annual Leave request submitted — pending Branch Manager review');
 }
 function openAttDetail(date) {
   const r=MOCK.attendanceRecords.find(a=>a.date===date); if(!r)return;
@@ -1045,10 +1045,10 @@ function navigateScheduleMonth(dir) {
 
 // Per-day request modal — pre-fills the selected date so employees can
 // submit a request straight from the calendar.
-let dayReqDate='', dayReqType='day-off', dayReqReason='';
+let dayReqDate='', dayReqType='annual-leave', dayReqReason='';
 function openDayRequest(dateISO) {
   dayReqDate = dateISO;
-  dayReqType = 'day-off';
+  dayReqType = 'annual-leave';
   dayReqReason = '';
   const label = formatDate(dateISO);
   const minDate = new Date(Date.parse(TODAY_ISO+'T00:00:00') + 86400000).toISOString().slice(0,10);
@@ -1064,7 +1064,7 @@ function openDayRequest(dateISO) {
     <div>
       <label class="form-label">Request Type</label>
       <select class="form-select" onchange="dayReqType=this.value">
-        ${MOCK.requestTypes.filter(t=>t.id!=='document-request').map(t=>`<option value="${t.id}" ${t.id==='day-off'?'selected':''}>${t.label}</option>`).join('')}
+        ${MOCK.requestTypes.map(t=>`<option value="${t.id}" ${t.id==='annual-leave'?'selected':''}>${t.label}</option>`).join('')}
       </select>
     </div>
     <div>
@@ -1082,12 +1082,12 @@ function submitDayRequest() {
   if(dayReqDate <= TODAY_ISO){showToast('Today and past dates are locked — choose a future date','error');return;}
   if(!dayReqReason.trim()){showToast('Please add a reason for your request','error');return;}
   /* Block day-off if no annual leave remaining */
-  if(dayReqType==='day-off' && annualLeaveRemaining()<=0){showToast('No annual leave days remaining — you cannot submit a day-off request','error');return;}
-  /* Check for date conflicts with existing pending/approved day-off requests */
-  if(dayReqType==='day-off'){
+  if(dayReqType==='annual-leave' && annualLeaveRemaining()<=0){showToast('No annual leave days remaining — you cannot submit an annual-leave request','error');return;}
+  /* Check for date conflicts with existing pending/approved annual-leave requests */
+  if(dayReqType==='annual-leave'){
     const dStr=formatDate(dayReqDate);
-    const conflict=MOCK.requests.find(r=>r.type==='Day Off' && r.status!=='Rejected' && r.requestedDate===dStr);
-    if(conflict){showToast('You already have a Day Off request for this date','error');return;}
+    const conflict=MOCK.requests.find(r=>r.type==='Annual Leave' && r.status!=='Rejected' && r.requestedDate===dStr);
+    if(conflict){showToast('You already have an Annual Leave request for this date','error');return;}
   }
   const t = MOCK.requestTypes.find(x=>x.id===dayReqType);
   MOCK.requests.unshift({
@@ -1102,8 +1102,8 @@ function submitDayRequest() {
     timeline: [{step:'Submitted',date:new Date().toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}),done:true},{step:'Under Review',date:'Pending',done:false},{step:'Approved',date:'',done:false}],
     scheduleContext: null,
   });
-  /* Deduct from leave balance for day-off */
-  if(dayReqType==='day-off') MOCK.leaveBalance.annualUsed++;
+  /* Deduct from leave balance for annual leave */
+  if(dayReqType==='annual-leave') MOCK.leaveBalance.annualUsed++;
   closeModal();
   renderAll();
   showToast('Request submitted for review');

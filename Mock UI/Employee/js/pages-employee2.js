@@ -680,33 +680,38 @@ function updateReqForm() {
   const c=document.getElementById('req-form-fields');
   if(!t){c.innerHTML='';return;}
   let h='<div class="border-t border-charcoal-100 pt-3 space-y-3">';
-  /* Show leave balance banner when Day Off is selected */
-  if(t.id==='day-off') h+=leaveBalanceBannerHtml()+'<div class="border-t border-charcoal-100 pt-3">';
+  /* Show leave balance banner when a balance-consuming type is selected */
+  if(t.id==='annual-leave'||t.id==='sick-leave') h+=leaveBalanceBannerHtml()+'<div class="border-t border-charcoal-100 pt-3">';
   t.fields.forEach(f=>{
     if(f==='date'||f==='date-from') h+=`<div><label class="form-label">${f==='date-from'?'From':'Date'}</label><input type="date" class="form-input" required></div>`;
     else if(f==='date-to') h+=`<div><label class="form-label">To Date</label><input type="date" class="form-input" required></div>`;
+    else if(f==='target-date') h+=`<div><label class="form-label">Off Day Taken</label><input type="date" class="form-input" required></div>`;
     else if(f==='time'||f==='time-from') h+=`<div><label class="form-label">${f==='time-from'?'From':'Time'}</label><input type="time" class="form-input" required></div>`;
     else if(f==='time-to') h+=`<div><label class="form-label">To Time</label><input type="time" class="form-input" required></div>`;
     else if(f==='colleague') h+=`<div><label class="form-label">Colleague</label><select class="form-select" required><option value="">Select...</option>${MOCK.teamMembers.slice(0,5).map(m=>`<option>${m.name}</option>`).join('')}</select></div>`;
-    else if(f==='document-type') h+=`<div><label class="form-label">Document Type</label><input type="text" class="form-input" placeholder="e.g. Employment Contract" required></div>`;
-    else if(f==='correction-type') h+=`<div><label class="form-label">Type</label><select class="form-select" required><option value="">Select...</option><option>Missing Check-in</option><option>Missing Check-out</option><option>Wrong Time</option></select></div>`;
+    else if(f==='amount') h+=`<div><label class="form-label">Amount</label><input type="number" min="1" step="0.01" class="form-input" placeholder="e.g. 2500" required></div>`;
+    else if(f==='certificate') h+=`<div><label class="form-label">Medical Certificate</label><input type="file" class="form-input" accept=".pdf,.png,.jpg,.jpeg,.webp,.gif" required></div>`;
     else h+=`<div><label class="form-label">${f.charAt(0).toUpperCase()+f.slice(1).replace(/-/g,' ')}</label><textarea class="form-input" rows="2" placeholder="Details..." required></textarea></div>`;
   });
-  if(t.id==='day-off') h+='</div>';
+  if(t.id==='annual-leave'||t.id==='sick-leave') h+='</div>';
   c.innerHTML=h+'</div>';
 }
 function submitNewRequest() {
   const sel=document.getElementById('req-type-select');
   const typeId=sel?sel.value:'';
-  /* Block day-off if no annual leave remaining */
-  if(typeId==='day-off' && annualLeaveRemaining()<=0){showToast('No annual leave days remaining — you cannot submit a day-off request','error');return;}
-  if(typeId==='day-off'){
+  /* Block balance-limited types when nothing remains (the server enforces the rest) */
+  if(typeId==='annual-leave' && annualLeaveRemaining()<=0){showToast('No annual leave days remaining — you cannot submit an annual-leave request','error');return;}
+  if(typeId==='sick-leave'){
+    const fileInput=document.querySelector('#req-form-fields input[type=file]');
+    if(fileInput && !fileInput.files.length){showToast('A medical certificate must be attached to a sick-leave request','error');return;}
+  }
+  if(typeId==='annual-leave'){
     /* Check for date conflicts */
     const dateInput=document.querySelector('#req-form-fields input[type=date]');
     if(dateInput && dateInput.value){
       const dStr=formatDate(dateInput.value);
-      const conflict=MOCK.requests.find(r=>r.type==='Day Off' && r.status!=='Rejected' && r.requestedDate===dStr);
-      if(conflict){showToast('You already have a Day Off request for this date','error');return;}
+      const conflict=MOCK.requests.find(r=>r.type==='Annual Leave' && r.status!=='Rejected' && r.requestedDate===dStr);
+      if(conflict){showToast('You already have an Annual Leave request for this date','error');return;}
     }
     /* Deduct from leave balance */
     MOCK.leaveBalance.annualUsed++;

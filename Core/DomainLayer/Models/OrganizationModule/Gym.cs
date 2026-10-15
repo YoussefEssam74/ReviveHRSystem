@@ -18,6 +18,12 @@ namespace DomainLayer.Models.OrganizationModule
         public decimal? AnnualIncreasePercent { get; set; }
         public AnnualIncreaseAnchorDate AnnualIncreaseAnchorDate { get; set; } = AnnualIncreaseAnchorDate.HireAnniversary;
 
+        /// <summary>
+        /// HR-set monthly cap of excused Late Attendance / Early Leave hours, static for
+        /// every employee of the gym. Late attendance and early leave share one budget.
+        /// </summary>
+        public decimal ExcusedLateHoursCapPerMonth { get; set; } = 4;
+
         // Navigations
         public virtual ICollection<UserGymAccess> UserGymAccesses { get; set; } = new List<UserGymAccess>();
         public virtual ICollection<UserGymRole> UserGymRoles { get; set; } = new List<UserGymRole>();
