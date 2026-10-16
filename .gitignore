@@ -46,7 +46,9 @@ Thumbs.db
 ## User-specific files
 *.pfx
 *.p12
+appsettings.json
 appsettings.Development.json
+appsettings.*.json
 
 ## AI & Local Tooling
 .opencode/
@@ -56,3 +58,6 @@ __pycache__/
 *.py[cod]
 *.pyo
 
+
+# Local file storage root (avatars, employee documents) - never commit user files
+**/App_Data/storage/

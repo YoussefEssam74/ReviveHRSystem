@@ -1,9 +1,19 @@
 // ==================== STATE & UTILITIES ====================
-let state = { currentPage: 'dashboard', currentCycleIndex: MOCK.currentCycleIndex, sidebarOpen: false, userMenuOpen: false, mobileMoreOpen: false, selectedReq: null, teamScheduleEdit: false };
+let state = { currentPage: 'dashboard', currentCycleIndex: MOCK.currentCycleIndex, sidebarOpen: false, userMenuOpen: false, selectedReq: null, teamScheduleEdit: false };
 
-// Demo preview state — lets the user preview every page & role in the prototype
-// Defaults to showAll=true so the prototype opens with every page visible.
-const DEMO = { showAll: true, role: 'branchManager' };
+// Demo preview state — lets the user preview every role in the prototype.
+// "Show All Pages" was removed — visibility is always driven by the active
+// role's permissions (matches the HR prototype).
+const DEMO = { showAll: false, role: 'branchManager' };
+
+// The app boots on the preset the toolbar labels, so the role, its permission
+// set and the rendered nav all agree from the first paint. Without this,
+// MOCK.currentUser keeps its own (narrower) permission list until the user
+// re-picks the same role in the Prototype Preview — which hides pages like
+// Employees for a preset that should have them.
+if (typeof DEMO_USERS !== 'undefined' && DEMO_USERS[DEMO.role]) {
+  MOCK.currentUser = DEMO_USERS[DEMO.role];
+}
 
 function hasPermission(perm) {
   const perms = MOCK.currentUser.permissions || [];
@@ -32,16 +42,9 @@ function computePendingActions() {
   put('requests',
     MOCK.requests.filter(x => x.status === 'Pending').length,
     'action', 'pending');
-  put('documents',
-    MOCK.documents.filter(x => x.status === 'Expiring Soon' || x.status === 'Expired').length +
-    MOCK.requiredDocs.filter(x => !x.docId).length,
-    'urgent', 'needs attention');
   put('attendance',
     MOCK.attendanceRecords.filter(x => ['Late','Absent','Early Checkout','Missing Checkout'].includes(x.status)).length,
     'action', 'issues');
-  put('events',
-    MOCK.events.filter(x => x.urgent).length,
-    'urgent', 'urgent');
   put('notifications',
     MOCK.notifications.filter(x => !x.read).length,
     'info', 'unread');
@@ -63,10 +66,18 @@ function computePendingActions() {
       MOCK.teamRequests.filter(x => x.status === 'Pending').length,
       'action', 'awaiting action');
   // --- Branch items (permission-gated) ---
-  if (hasPermission('employees.view'))
+  if (hasPermission('employees.view')) {
     put('employees',
       MOCK.branchEmployees.filter(x => x.status !== 'Active').length,
       'action', 'flagged');
+    // Employees Performance badge: employees with open follow-ups or a
+    // Below-target evaluation — the same "needs review" set the Team page flags.
+    const perfNeedsReview = new Set([
+      ...MOCK.followUpItems.map(x => x.employee),
+      ...MOCK.teamEvaluations.filter(x => x.result === 'Below').map(x => x.employee),
+    ]).size;
+    put('employees-performance', perfNeedsReview, 'action', 'need review');
+  }
   if (hasPermission('attendance.view'))
     put('attendance-management',
       MOCK.teamMembers.filter(x => x.status === 'Late' || x.status === 'Absent').length,
@@ -158,16 +169,29 @@ function branchQueueImport() {
 // ---- Recruitment (vacancy) requests ⇄ HR -----------------------------------
 // Export every recruitment request into the VacancyBridge queue with HR's
 // vocabulary (Pending / Approved / Rejected), and adopt HR's decisions back.
+// The branch owns the matching keys (shift, expected salary) and its own
+// 2nd-interview steps; HR owns the decision and the candidate it sends. All of it
+// rides on the same record so both portals show one pipeline.
 function vacancyQueueExport() {
   if (typeof VacancyBridge === 'undefined') return;
-  const out = (MOCK.recruitmentRequests || []).map(r => ({
-    id: r.id, kind: 'Vacancy',
-    position: r.position, count: Number(r.count) || 1,
-    urgency: r.urgency || 'Medium', department: r.department || '',
-    reason: r.reason || '', date: r.date, requestedBy: r.requestedBy || '',
-    gym: BRIDGE_KIND_GYM,
-    status: (r.status === 'Approved' || r.status === 'Rejected') ? r.status : 'Pending'
-  }));
+  const out = (MOCK.recruitmentRequests || []).map(r => {
+    // Who decided on the HR side — from the rejection object or the approval
+    // history entry, so the HR portal shows a name even for seeded approvals.
+    const hrStep = (r.history || []).find(h => h.step === 'HR approved' || h.step === 'HR rejected');
+    const decidedBy = (r.hrDecision && r.hrDecision.by) || (r.status !== 'Pending' && hrStep ? hrStep.by : '');
+    return {
+      id: r.id, kind: 'Vacancy',
+      position: r.position, count: Number(r.count) || 1,
+      urgency: r.urgency || 'Medium', department: r.department || '',
+      reason: r.reason || '', date: r.date, requestedBy: r.requestedBy || '',
+      gym: BRIDGE_KIND_GYM,
+      shift: r.shift || '', expectedSalary: Number(r.expectedSalary) || 0,
+      iv2: r.iv2 || null,
+      ...(decidedBy ? { decidedBy } : {}),
+      ...(r.hrDecision ? { decidedNote: r.hrDecision.note } : {}),
+      status: (r.status === 'Approved' || r.status === 'Rejected') ? r.status : 'Pending'
+    };
+  });
   VacancyBridge.push(out);
 }
 
@@ -179,10 +203,39 @@ function vacancyQueueImport() {
     const b = VacancyBridge.byId(r.id);
     if (!b) return;
     const next = (b.status === 'Approved' || b.status === 'Rejected') ? b.status : null;
+    const before = { status: r.status, stage: recStageOf(r) };
+    // HR's decision
     if (next && r.status !== next) {
-      changed.push({ label:`${r.position} vacancy request`, status:next, decidedBy:b.decidedBy });
       r.status = next;
       r.timeline = next === 'Approved' ? 'Approved by HR' : 'Declined by HR';
+      if (next === 'Rejected') {
+        r.hrDecision = { by: b.decidedBy || 'HR', date: formatDate(TODAY_ISO), note: b.decidedNote || 'Declined by HR.' };
+      }
+      r.history = r.history || [];
+      r.history.push({ step: next === 'Approved' ? 'HR approved' : 'HR rejected', date: formatDate(TODAY_ISO),
+        by: b.decidedBy || 'HR', note: b.decidedNote || (next === 'Approved' ? 'Approved — looking for a matching candidate.' : 'Declined by HR.') });
+    }
+    // A candidate HR sent from the waiting list
+    if (b.match && r.status !== 'Rejected') {
+      const key = m => m && (m.waitingListId || m.name);
+      const isNew = !r.match || key(r.match) !== key(b.match);
+      if (isNew) {
+        // A fresh candidate starts a fresh 2nd-interview cycle (an old rejected
+        // verdict must not follow the new person around).
+        r.match = { name: b.match.name, phone: b.match.phone, position: b.match.position,
+          skills: b.match.skills || [], shift: b.match.shift, salaryExp: b.match.salaryExp,
+          source: b.match.source, availability: b.match.availability, waitingListId: b.match.waitingListId,
+          note: b.match.note || '', sentBy: b.match.sentBy || '', sentAt: b.match.sentAt || '' };
+        r.iv2 = null;
+        r.timeline = 'Candidate matched by HR';
+        r.history = r.history || [];
+        r.history.push({ step: 'Match sent by HR', date: formatDate(TODAY_ISO), by: b.match.sentBy || 'HR',
+          note: `${b.match.name} sent from the waiting list — call ${b.match.phone} to arrange the 2nd interview.` });
+      }
+    }
+    const after = { status: r.status, stage: recStageOf(r) };
+    if (before.status !== after.status || before.stage !== after.stage) {
+      changed.push({ label: `${r.position} vacancy request`, status: r.status });
     }
   });
   return changed;
@@ -225,11 +278,6 @@ const _badgeColors = {
   action: 'bg-amber-50 text-amber-600 ring-1 ring-inset ring-amber-200',
   info:   'bg-blue-50 text-blue-600 ring-1 ring-inset ring-blue-200',
 };
-const _dotColors = {
-  urgent: 'bg-red-500',
-  action: 'bg-amber-500',
-  info:   'bg-blue-500',
-};
 
 // Sidebar badge — compact pill, number only.
 function badgeHtml(badge) {
@@ -237,14 +285,6 @@ function badgeHtml(badge) {
   const c = _badgeColors[badge.level] || _badgeColors.action;
   const txt = badge.count > 99 ? '99+' : String(badge.count);
   return `<span class="ml-auto flex-shrink-0 inline-flex items-center rounded-md px-1.5 py-0.5 text-[10px] font-semibold leading-none ${c}" title="${badge.label || 'pending'}">${txt}</span>`;
-}
-
-// Mobile grid badge — small colored dot with number overlay.
-function badgeDot(badge) {
-  if (!badge || !badge.count || badge.count < 1) return '';
-  const c = _dotColors[badge.level] || _dotColors.action;
-  const txt = badge.count > 99 ? '99+' : String(badge.count);
-  return `<span class="absolute -top-1 -right-1 min-w-[16px] h-4 px-0.5 ${c} text-white text-[8px] font-bold rounded-full flex items-center justify-center" title="${badge.count} ${badge.label || 'pending'}">${txt}</span>`;
 }
 
 // Update header notification bell count + mobile bottom-nav notification badge.
@@ -279,6 +319,14 @@ function updateBadgeIndicators() {
 }
 
 function formatDate(s) { if (!s) return '—'; return new Date(s).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }); }
+// '08:00' -> '8:00 AM' | '16:00' -> '4:00 PM' | '00:00' -> '12:00 AM'
+function formatTime12(t) {
+  if (!t) return '—';
+  const [h, m] = t.split(':').map(Number);
+  const suffix = h >= 12 ? 'PM' : 'AM';
+  const hour12 = h % 12 || 12;
+  return hour12 + ':' + String(m).padStart(2, '0') + ' ' + suffix;
+}
 function getGreeting() { const h = new Date().getHours(); return h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening'; }
 function statusBadge(status) {
   const m = { 'On Time':'badge-green','Present':'badge-green','Approved':'badge-green','Valid':'badge-green','Paid':'badge-green','Completed':'badge-green','Published':'badge-blue',
@@ -368,12 +416,13 @@ function openDrawer(title, content) {
 // Slim sidebar: only core pages
 const navItems = [
   {id:'dashboard',label:'Dashboard',icon:'M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6'},
-  {id:'schedule',label:'My Schedule',icon:'M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z'},
+  // (My Schedule was removed from the left navbar — the page still exists and
+  // is reached from the dashboard, notifications and the mobile bottom bar.)
   {id:'requests',label:'My Requests',icon:'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2'},
   {id:'attendance',label:'My Attendance',icon:'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4'},
   {id:'payroll',label:'My Payroll',icon:'M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z'},
-  {id:'documents',label:'My Documents',icon:'M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z'},
-  {id:'events',label:'Events',icon:'M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2zm9-5l-3-3 2-2 .5.5L19 8l1 1z'},
+  // (My Documents was removed from the sidebar — it now lives in Settings.)
+  // (Events was removed from the Employee prototype entirely.)
 ];
 // Team-scoped management pages — visible to Team Leader (and anyone granted
 // team-scoped permissions). Scope is limited to the teams the user leads.
@@ -393,14 +442,16 @@ const teamItems = [
 // gym-wide permissions). Scope is the assigned gym.
 const branchItems = [
   {id:'employees',label:'Employees',icon:'M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z', permission:'employees.view'},
+  {id:'employees-performance',label:'Employees Performance',icon:'M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z', permission:'employees.view'},
   {id:'attendance-management',label:'Attendance Management',icon:'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4', permission:'attendance.view'},
   // (Requests Management was removed — its flow lives in Team Requests, which
   // navPools() places here under Branch for the Branch Manager.)
-  // (Shift Management was removed as a sidebar button — the schedule page
-  // (Team/Branch Schedule) is the single entry point; its "Advanced Editor"
-  // button and the Actions palette still open the shift-management page.)
+  // (Shift Management was removed entirely — the schedule page (Team/Branch
+  // Schedule) is the single entry point; its "New Template" button creates
+  // shift templates that feed the paint palette and the legend.)
   {id:'recruitment',label:'Recruitment',icon:'M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z', permission:'recruitment.vacancy_request.create'},
-  {id:'leaving',label:'Employee Leaving',icon:'M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1', permission:'employees.offboard'},
+  // ("Employee Leaving" was removed from the sidebar — the leaving flow is now
+  // started from the Actions palette and from an employee's profile Offboard.)
 ];
 // Extra pages accessible from user dropdown
 const extraPages = [
@@ -411,68 +462,44 @@ const extraPages = [
   {id:'settings',label:'Settings',icon:'M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z M15 12a3 3 0 11-6 0 3 3 0 016 0z'},
 ];
 
-// Single nav-item renderer used by both desktop sidebar and mobile grid.
-// Includes a badge when computePendingActions() returns a count > 0 for the item.
-function navItemHtml(i, counts, opts) {
-  opts = opts || {};
-  const badge = counts[i.id] || null;
-  const badgeHtml_ = opts.grid ? badgeDot(badge) : badgeHtml(badge);
-  if (opts.grid) {
-    return `<button onclick="navigateTo('${i.id}');closeMobileMore()" class="flex flex-col items-center gap-1 p-2 rounded-lg hover:bg-charcoal-50 relative">
-      <div class="w-8 h-8 rounded-lg bg-charcoal-50 flex items-center justify-center text-charcoal-600 relative">
-        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="${i.icon}"/></svg>${badgeHtml_}
-      </div>
-      <span class="text-[9px] font-medium text-charcoal-700 text-center leading-tight">${i.label}</span>
-    </button>`;
-  }
+// Single nav-item renderer used by both the desktop sidebar and the mobile
+// drawer. Includes a badge when computePendingActions() returns a count > 0.
+function navItemHtml(i, counts) {
+  const badgeHtml_ = badgeHtml(counts[i.id] || null);
   return `<a href="javascript:void(0)" onclick="navigateTo('${i.id}')" class="nav-item ${state.currentPage===i.id?'active':''}">
     <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="${i.icon}"/></svg>
     <span class="text-xs">${i.label}</span>${badgeHtml_}
   </a>`;
 }
 
-// "Actions" launcher shown under the Branch section title — opens the Branch
-// Manager quick-action palette (issue deduction → HR, approve requests, etc.).
-function branchActionsBtnHtml(counts, opts) {
-  opts = opts || {};
-  const badge = counts['branch-actions'] || null;
-  if (opts.grid) {
-    return `<button onclick="openBranchActions();closeMobileMore()" class="flex flex-col items-center gap-1 p-2 rounded-lg bg-brand-50 hover:bg-brand-100 relative">
-      <div class="w-8 h-8 rounded-lg bg-brand-100 text-brand-700 flex items-center justify-center relative">
-        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>${badgeDot(badge)}
-      </div>
-      <span class="text-[9px] font-medium text-brand-700 text-center leading-tight">Actions</span>
-    </button>`;
-  }
-  return `<button onclick="openBranchActions()" class="w-full mt-1 mb-1.5 flex items-center gap-2 px-3 py-2 rounded-lg bg-brand-50 ring-1 ring-inset ring-brand-200 text-brand-700 hover:bg-brand-100 transition-colors">
-    <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
-    <span class="text-xs font-semibold">Actions</span>${badgeHtml(badge)}
-  </button>`;
-}
 
-// Per-role nav pools — one schedule button only (Team/Branch Schedule); the
-// shift-management page is reached through its "Advanced Editor" button.
-//   Branch Manager: two Team pages are re-homed under Branch (same page, same
-//   id, new label): Team Requests -> "Requests Management" (branch request desk)
-//   and Team Schedule -> "Branch Schedule".
-//   Team Leader: no Branch section at all — and the sidebar Actions launcher
-//   disappears with it (the Team Updates page exposes "Take Action" instead).
+// Per-role nav pools — one schedule button only (Team/Branch Schedule).
+//   Branch Manager & Team Leader: two Team pages are re-homed under Branch
+//   (same page, same id, new label): Team Requests -> "Requests Management"
+//   (branch request desk) and Team Schedule -> "Branch Schedule".
+//   Team Leader = Branch Manager's page set minus Recruitment (BM-only). The
+//   TL's old team pages (My Team / Team Performance / Team Actions) are gone:
+//   the TL no longer holds team.view / evaluations.view.team / team.manage, so
+//   renderNavItems' permission filter hides them (the Team section ends up
+//   empty and its header is not rendered) — exactly like for the Branch
+//   Manager. The sidebar Actions launcher follows the Branch section.
 function navPools() {
   const role = MOCK.currentUser.role;
-  if (role === 'Team Leader') return { team: teamItems, branch: [] };
-  if (role !== 'Branch Manager') return { team: teamItems, branch: branchItems };
+  if (role !== 'Branch Manager' && role !== 'Team Leader') return { team: teamItems, branch: branchItems };
   const tr = teamItems.find(i => i.id === 'team-requests');
   const ts = teamItems.find(i => i.id === 'team-schedule');
-  // Anchor where Shift Management used to sit — before Recruitment.
+  // Insert the re-homed pages just before Recruitment.
   const at = branchItems.findIndex(i => i.id === 'recruitment');
   const pos = at >= 0 ? at : branchItems.length;
   const bmExtras = [
     { ...ts, label: 'Branch Schedule' },
     { ...tr, label: 'Requests Management' },
   ];
+  const branch = [...branchItems.slice(0, pos), ...bmExtras, ...branchItems.slice(pos)];
   return {
     team: teamItems.filter(i => !['team-requests', 'team-schedule'].includes(i.id)),
-    branch: [...branchItems.slice(0, pos), ...bmExtras, ...branchItems.slice(pos)],
+    // Recruitment is Branch-Manager-only: strip it from the TL's branch pool.
+    branch: role === 'Team Leader' ? branch.filter(i => i.id !== 'recruitment') : branch,
   };
 }
 
@@ -489,42 +516,37 @@ function renderNavItems(id) {
     h += '<div class="nav-section-title mt-3">Self-Service</div>' + extraPages.map(i => navItemHtml(i, counts)).join('');
   }
   if(showAll || visibleTeam.length) { h += '<div class="nav-section-title mt-3">Team</div>' + visibleTeam.map(i => navItemHtml(i, counts)).join(''); }
-  // Branch section (with its Actions launcher) is only rendered when the role's
-  // branch pool has items — it is empty for the Team Leader.
-  if(visibleBranch.length) { h += '<div class="nav-section-title mt-3">Branch</div>' + branchActionsBtnHtml(counts) + visibleBranch.map(i => navItemHtml(i, counts)).join(''); }
+  // Branch section renders whenever the role's branch pool has visible items —
+  // it is populated for the Branch Manager and (minus Recruitment) the Team
+  // Leader, and empty for everyone else.
+  if(visibleBranch.length) { h += '<div class="nav-section-title mt-3">Branch</div>' + visibleBranch.map(i => navItemHtml(i, counts)).join(''); }
   c.innerHTML = h;
   // Update header bell + mobile bottom-nav badges on every render
   updateBadgeIndicators();
 }
 
-function renderMobileMore() {
-  const g = document.getElementById('mobile-more-grid');
-  if(!g) return;
-  const showAll = DEMO.showAll;
-  const counts = computePendingActions();
-  const pools = navPools();
-  const visibleTeam = showAll ? pools.team : pools.team.filter(i => !i.permission || hasPermission(i.permission));
-  const visibleBranch = showAll ? pools.branch : pools.branch.filter(i => !i.permission || hasPermission(i.permission));
-  const items = [...navItems.filter(i=>!['dashboard','schedule','requests','notifications'].includes(i.id)),...(showAll?extraPages:[]),...visibleTeam,...visibleBranch];
-  const head = visibleBranch.length ? branchActionsBtnHtml(counts, {grid:true}) : '';
-  g.innerHTML = head + items.map(i => navItemHtml(i, counts, { grid: true })).join('');
-}
-
 // ==================== NAVIGATION ====================
 function navigateTo(page, params) {
   state.currentPage = page; state.pageParams = params||{};
-  renderAll(); closeSidebar(); closeMobileMore();
+  // Entering Employees Performance from the nav always shows the full list;
+  // a drill-in (setPerfEmp) is reachable only from within the page itself.
+  if (page === 'employees-performance') state.perfEmp = null;
+  renderAll(); closeSidebar();
   const m = document.getElementById('main-content'); if(m) m.scrollTop=0;
   const mb = document.getElementById('mobile-content'); if(mb) mb.scrollTop=0;
 }
 function toggleSidebar() {
+  closeUserMenu();
   state.sidebarOpen = !state.sidebarOpen;
   const s=document.getElementById('mobile-sidebar'),o=document.getElementById('mobile-sidebar-overlay');
   if(state.sidebarOpen){s.classList.remove('-translate-x-full');o.classList.remove('hidden');}else{s.classList.add('-translate-x-full');o.classList.add('hidden');}
 }
 function closeSidebar() { state.sidebarOpen=false; const s=document.getElementById('mobile-sidebar'),o=document.getElementById('mobile-sidebar-overlay'); if(s)s.classList.add('-translate-x-full'); if(o)o.classList.add('hidden'); }
-function toggleUserMenu() { if(!state.userMenuOpen && typeof closeNotifDropdown==='function') closeNotifDropdown(); state.userMenuOpen=!state.userMenuOpen; const d=document.getElementById('user-menu-dropdown'); if(state.userMenuOpen)d.classList.remove('hidden');else d.classList.add('hidden'); }
-function closeUserMenu() { state.userMenuOpen=false; const d=document.getElementById('user-menu-dropdown'); if(d)d.classList.add('hidden'); }
+// The header exists twice (desktop shell + mobile shell), so each toggle/close
+// drives both dropdown copies in lockstep — only one is ever visible at a time.
+const USER_MENU_DROPDOWNS = ['user-menu-dropdown', 'mobile-user-menu-dropdown'];
+function toggleUserMenu() { if(!state.userMenuOpen && typeof closeNotifDropdown==='function') closeNotifDropdown(); state.userMenuOpen=!state.userMenuOpen; USER_MENU_DROPDOWNS.forEach(id => { const d=document.getElementById(id); if(d) d.classList.toggle('hidden', !state.userMenuOpen); }); }
+function closeUserMenu() { state.userMenuOpen=false; USER_MENU_DROPDOWNS.forEach(id => { const d=document.getElementById(id); if(d) d.classList.add('hidden'); }); }
 
 // ---- Header notification bell → dropdown list -------------------------------
 function notifItemHtml(n) {
@@ -572,13 +594,11 @@ function markAllNotificationsRead() {
   if (typeof renderAll === 'function') renderAll();
   showToast('All notifications marked as read');
 }
-function toggleMobileMore() { state.mobileMoreOpen=!state.mobileMoreOpen; const m=document.getElementById('mobile-more-menu'); if(state.mobileMoreOpen){renderMobileMore();m.classList.remove('hidden');}else m.classList.add('hidden'); }
-function closeMobileMore() { state.mobileMoreOpen=false; const m=document.getElementById('mobile-more-menu'); if(m)m.classList.add('hidden'); }
 function handleLogout() { openModal('Confirm Logout','<p class="text-xs text-charcoal-600 mb-3">Are you sure you want to log out?</p>',{footer:'<button onclick="closeModal()" class="btn btn-sm btn-secondary">Cancel</button><button onclick="showToast(\'Logged out\');closeModal();" class="btn btn-sm btn-danger">Logout</button>'}); }
-document.addEventListener('click', e => { if(!e.target.closest('#user-menu-container')) closeUserMenu(); if(!e.target.closest('#notif-container')) closeNotifDropdown(); });
+document.addEventListener('click', e => { if(!e.target.closest('#user-menu-container') && !e.target.closest('#mobile-user-menu-container')) closeUserMenu(); if(!e.target.closest('#notif-container')) closeNotifDropdown(); });
 
 // ==================== DEMO PREVIEW CONTROLS ====================
-// Prototype-only helpers: switch the active role and toggle "show all pages".
+// Prototype-only helper: switch the active role.
 function updateUserUI() {
   const u = MOCK.currentUser;
   const set = (id, v) => { const el = document.getElementById(id); if(el) el.textContent = v; };
@@ -590,10 +610,11 @@ function updateUserUI() {
   set('header-user-meta', `${u.position} · ${u.gym.name}`);
   set('menu-user-name', u.fullName);
   set('menu-user-email', u.email);
+  set('mobile-header-avatar', u.initials);
+  set('mobile-menu-user-name', u.fullName);
+  set('mobile-menu-user-email', u.email);
   const roleBtn = document.getElementById('demo-role-label');
   if(roleBtn) roleBtn.textContent = u.role;
-  const showAllBtn = document.getElementById('demo-showall');
-  if(showAllBtn) showAllBtn.classList.toggle('active', DEMO.showAll);
 }
 
 function switchRole(roleId) {
@@ -602,25 +623,23 @@ function switchRole(roleId) {
   MOCK.currentUser = u;
   DEMO.role = roleId;
   // If the current page is no longer reachable, fall back to dashboard
-  const pagePerms = { 'team':'team.view','team-attendance':'attendance.view.team','team-schedule':'schedule.view.team','team-requests':'requests.view.team','team-performance':'evaluations.view.team','team-updates':'team.manage','employees':'employees.view','attendance-management':'attendance.view','requests-management':'requests.view','shift-management':'schedule.manage','recruitment':'recruitment.vacancy_request.create','leaving':'employees.offboard' };
+  const pagePerms = { 'team':'team.view','team-attendance':'attendance.view.team','team-schedule':'schedule.view.team','team-requests':'requests.view.team','team-performance':'evaluations.view.team','team-updates':'team.manage','employees':'employees.view','employees-performance':'employees.view','attendance-management':'attendance.view','requests-management':'requests.view','recruitment':'recruitment.vacancy_request.create','leaving':'employees.offboard' };
   if(pagePerms[state.currentPage] && !DEMO.showAll && !hasPermission(pagePerms[state.currentPage])) {
     state.currentPage = 'dashboard';
   }
   updateUserUI();
   renderAll();
   closeUserMenu();
+  closeDemoRoleMenu();
   showToast(`Previewing as ${u.role}`, 'info');
-}
-
-function toggleShowAll() {
-  DEMO.showAll = !DEMO.showAll;
-  updateUserUI();
-  renderAll();
-  showToast(DEMO.showAll ? 'Showing all pages' : 'Showing pages by permission', 'info');
 }
 
 function toggleDemoRoleMenu() {
   const m = document.getElementById('demo-role-menu');
   if(m) m.classList.toggle('hidden');
+}
+function closeDemoRoleMenu() {
+  const m = document.getElementById('demo-role-menu');
+  if(m) m.classList.add('hidden');
 }
 document.addEventListener('click', e => { if(!e.target.closest('#demo-role-container')) { const m=document.getElementById('demo-role-menu'); if(m) m.classList.add('hidden'); } });

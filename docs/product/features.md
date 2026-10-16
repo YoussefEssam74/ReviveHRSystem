@@ -275,23 +275,21 @@ Each attendance event is compared against the employee's effective schedule:
 
 ## 9. Employee Requests
 
-### Request Types
+### Request Types (final list — confirmed with product owner)
 
-| # | Type | Fields | Notes |
+| # | Type | Fields | Rules |
 |---|------|--------|-------|
-| 1 | Leave / Vacation | Date range | May have balance tracking later |
-| 2 | Leave Early | Date + specific time | Cross-checks with shift |
-| 3 | Day Off | Single date | Cross-checks with shift |
-| 4 | Sick Leave | Date(s), optional document upload | |
-| 5 | Late Arrival Permission | Date + time | |
-| 6 | Shift Swap | Date + named colleague | Both employees affected |
-| 7 | Emergency Leave | Date + reason (required) | |
-| 8 | Document Request | Type of document requested | e.g., salary certificate |
-| 9 | General Inquiry / Complaint | Free text | |
-| 10 | Resignation / Employee Leaving | Intended last working day, reason | Self-initiated by ANY employee (including a Branch Manager acting as an employee about themselves) — see distinction below |
-| 11 | Overtime | Date, hours requested, reason | Only counts toward Payroll's Overtime figure once Approved (see §10) |
+| 1 | Annual Leave | Date range + reason | Balance-checked: the employee cannot submit more than his remaining Annual balance (default entitlement 21 days/year). Submitting reserves the days as pending; approval consumes them. |
+| 2 | Sick Leave | Date range + reason + **medical certificate** | Same balance check against the Sick entitlement (default 10 days/year). The medical certificate must be sent with the request. |
+| 3 | Late Attendance | Date + actual arrival time + reason | No submission window. Excused hours = arrival − scheduled shift start (from the published schedule). Counted against the gym's monthly excused-hours budget: HR sets one static cap for all employees (default 4h/month). |
+| 4 | Early Leave | Date + departure time + reason | Same as Late Attendance; hours = scheduled shift end − departure. Shares the same monthly budget. |
+| 5 | Shift Swap | Date(s) + colleague + reason | The colleague must be an active employee of the same gym. |
+| 6 | Weekly Off Swap | Off day given up + off day taken in exchange + colleague + reason | Swaps the requester's weekly off with a colleague's off day (both must be active employees of the same gym). |
+| 7 | Check-in Correction | Date + corrected check-in time + reason | HR applies the correction to the attendance record on approval. |
+| 8 | Salary Advance Request | Amount + reason | No automatic limit — the approval workflow is the gate. |
+| 9 | Paid Holiday | Date + reason | Request to work a paid holiday (e.g. Eid) for double day pay; HR decides on approval. |
 
-> **Note:** This list is confirmed directionally but may change before finalization.
+> This list replaces the earlier placeholder/directional list. Requests no longer in the catalog as employee-submitted types: Day Off (superseded by Annual Leave), Overtime, Document Request, Emergency Leave, General Inquiry — Overtime stays a payroll concept fed by HR/Branch Actions, Document Request is served by the Documents module, and resignations are tracked through the Offboarding flow.
 
 ### Two-Stage Approval (Branch Manager → HR)
 
@@ -484,12 +482,13 @@ For each employee, per leave type, per year:
 - **Remaining** — computed: Total - Used - Pending
 
 ### Leave Types That Consume Balance
-- Annual / Vacation Leave
+- Annual / Vacation Leave (Annual Leave requests)
 - Sick Leave
 - Emergency Leave
 
-### Leave Types That Do NOT Consume Balance
-- Day Off, Leave Early, Late Arrival, Shift Swap, Document Request, General Inquiry
+### Request Types That Do NOT Consume Balance
+- Late Attendance, Early Leave (capped in hours, not days — see the gym attendance policy)
+- Shift Swap, Weekly Off Swap, Check-in Correction, Salary Advance, Paid Holiday
 
 ### HR Actions
 - View balance for any employee in their accessible gyms
@@ -543,9 +542,9 @@ and never span gyms.
 
 ### Team Composition
 - `team.manage` (typically held by HR or Branch Manager) creates teams within a gym, assigns members, and assigns one or more Team Leaders per team
-- An employee can be a Team Leader for more than one team
-- An employee can be a member of more than one team
-- A team's effective roster for authorization purposes is the union of all its `TeamMembers`; a Team Leader's effective scope is the union of every team they lead
+- Each employee is assigned to one team at most
+- Each Team Leader leads one team
+- A team's effective roster is the employees whose `TeamId` points to it; each Team Leader leads one team, and each employee belongs to one team only
 
 ### Team Leader Capabilities (all individually permission-gated)
 | Feature | Permission | Scope |
@@ -560,7 +559,7 @@ and never span gyms.
 
 ### Team Leader Dashboard (additive to base Employee Dashboard)
 On top of the standard Regular Employee dashboard (My Attendance, My Schedule, My Requests, My Payroll, My Notifications, My Performance), a Team Leader sees a **My Team** widget block:
-- Number of team members (across all teams they lead)
+- Number of members in the leader's assigned team
 - Team attendance status (present/absent/late today)
 - Pending team actions (requests awaiting review, if `requests.approve.team` granted)
 - Required follow-ups

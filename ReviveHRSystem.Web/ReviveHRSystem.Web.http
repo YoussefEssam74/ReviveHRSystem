@@ -1,6 +1,632 @@
 @ReviveHRSystem.Web_HostAddress = http://localhost:5248
+@employeePassword = Revive!2026
 
-GET {{ReviveHRSystem.Web_HostAddress}}/weatherforecast/
-Accept: application/json
+# ==================== Employee Portal - request flows ====================
+# Run top to bottom: each login stores its token in a client variable used by the
+# requests below it. Gym selection: employees with more than one gym pick one after
+# login (select-gym); single-gym accounts and HR/manager tokens with one gym are
+# scoped automatically at login.
+
+# ---------- Logins (one per role) ----------
+
+### Login as plain Employee (karim - gym1 only, self-service role)
+POST {{ReviveHRSystem.Web_HostAddress}}/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "karim@revive.hr",
+  "password": "{{employeePassword}}"
+}
+
+> {%
+  client.global.set("employeeToken", response.body.accessToken);
+%}
 
 ###
+
+### Login as Branch Manager (omar - BM at gym1, TL at gym2): pick gym1
+POST {{ReviveHRSystem.Web_HostAddress}}/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "omar@revive.hr",
+  "password": "{{employeePassword}}"
+}
+
+> {%
+  client.global.set("gym1Id", response.body.gyms[0].gymId);
+  client.global.set("bmToken", response.body.tempSessionToken);
+%}
+
+###
+
+POST {{ReviveHRSystem.Web_HostAddress}}/api/auth/login/select-gym
+Content-Type: application/json
+
+{
+  "gymId": "{{gym1Id}}",
+  "tempSessionToken": "{{bmToken}}"
+}
+
+> {%
+  client.global.set("bmToken", response.body.accessToken);
+%}
+
+###
+
+### Login as Team Leader at gym2 (same account, other gym)
+POST {{ReviveHRSystem.Web_HostAddress}}/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "omar@revive.hr",
+  "password": "{{employeePassword}}"
+}
+
+> {%
+  client.global.set("tlToken", response.body.tempSessionToken);
+  client.global.set("gym2Id", response.body.gyms[1].gymId);
+%}
+
+###
+
+POST {{ReviveHRSystem.Web_HostAddress}}/api/auth/login/select-gym
+Content-Type: application/json
+
+{
+  "gymId": "{{gym2Id}}",
+  "tempSessionToken": "{{tlToken}}"
+}
+
+> {%
+  client.global.set("tlToken", response.body.accessToken);
+%}
+
+###
+
+### Login as HR (hr@revive.hr - HR role at gym1)
+POST {{ReviveHRSystem.Web_HostAddress}}/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "hr@revive.hr",
+  "password": "{{employeePassword}}"
+}
+
+> {%
+  client.global.set("hrToken", response.body.accessToken);
+%}
+
+# ---------- Session & gym context ----------
+
+### My session context (feature levels for the active gym)
+GET {{ReviveHRSystem.Web_HostAddress}}/api/me
+Authorization: Bearer {{bmToken}}
+
+###
+
+### Switch the active gym without re-authenticating
+POST {{ReviveHRSystem.Web_HostAddress}}/api/auth/switch-gym
+Content-Type: application/json
+Authorization: Bearer {{bmToken}}
+
+{
+  "gymId": "{{gym2Id}}"
+}
+
+# ---------- Self-service ----------
+
+### My dashboard
+GET {{ReviveHRSystem.Web_HostAddress}}/api/dashboard/employee
+Authorization: Bearer {{employeeToken}}
+
+###
+
+### My profile, documents, attendance, leave balance
+GET {{ReviveHRSystem.Web_HostAddress}}/api/employees/1
+Authorization: Bearer {{employeeToken}}
+
+###
+
+GET {{ReviveHRSystem.Web_HostAddress}}/api/employees/1/documents
+Authorization: Bearer {{employeeToken}}
+
+###
+
+GET {{ReviveHRSystem.Web_HostAddress}}/api/employees/1/attendance?month=2026-10
+Authorization: Bearer {{employeeToken}}
+
+###
+
+GET {{ReviveHRSystem.Web_HostAddress}}/api/employees/1/leave-balance
+Authorization: Bearer {{employeeToken}}
+
+###
+
+GET {{ReviveHRSystem.Web_HostAddress}}/api/employees/1/schedule?month=2026-10
+Authorization: Bearer {{employeeToken}}
+
+###
+
+### The 9 request types an employee can submit (catalog + rule flags)
+GET {{ReviveHRSystem.Web_HostAddress}}/api/request-types
+Authorization: Bearer {{employeeToken}}
+
+###
+
+### Annual leave (multipart form; reserves days and refuses to exceed the remaining balance)
+POST {{ReviveHRSystem.Web_HostAddress}}/api/employees/1/requests
+Authorization: Bearer {{employeeToken}}
+Content-Type: multipart/form-data; boundary=----ReviveBoundary
+
+------ReviveBoundary
+Content-Disposition: form-data; name="type"
+
+annual-leave
+------ReviveBoundary
+Content-Disposition: form-data; name="requestDate"
+
+2026-11-10
+------ReviveBoundary
+Content-Disposition: form-data; name="endDate"
+
+2026-11-12
+------ReviveBoundary
+Content-Disposition: form-data; name="reason"
+
+Family event
+------ReviveBoundary--
+
+> {%
+  client.global.set("requestId", response.body.id);
+%}
+
+###
+
+POST {{ReviveHRSystem.Web_HostAddress}}/api/requests/{{requestId}}/cancel
+Authorization: Bearer {{employeeToken}}
+
+###
+
+### Sick leave — the medical certificate must ride with the request (400 without it)
+POST {{ReviveHRSystem.Web_HostAddress}}/api/employees/1/requests
+Authorization: Bearer {{employeeToken}}
+Content-Type: multipart/form-data; boundary=----ReviveBoundary
+
+------ReviveBoundary
+Content-Disposition: form-data; name="type"
+
+sick-leave
+------ReviveBoundary
+Content-Disposition: form-data; name="requestDate"
+
+2026-11-05
+------ReviveBoundary
+Content-Disposition: form-data; name="reason"
+
+Flu, doctor's note attached
+------ReviveBoundary
+Content-Disposition: form-data; name="attachment"; filename="certificate.png"
+Content-Type: image/png
+
+< ./requests/avatar-sample.png
+------ReviveBoundary--
+
+> {%
+  client.global.set("sickRequestId", response.body.id);
+%}
+
+###
+
+### Stream the medical certificate back (the requester always; others 404)
+GET {{ReviveHRSystem.Web_HostAddress}}/api/requests/{{sickRequestId}}/attachment
+Authorization: Bearer {{employeeToken}}
+
+###
+
+### Late attendance — excused hours come from the published schedule and share the
+### gym's monthly budget (HR-set, default 4h); early leave draws on the same budget.
+POST {{ReviveHRSystem.Web_HostAddress}}/api/employees/1/requests
+Authorization: Bearer {{employeeToken}}
+Content-Type: multipart/form-data; boundary=----ReviveBoundary
+
+------ReviveBoundary
+Content-Disposition: form-data; name="type"
+
+late-attendance
+------ReviveBoundary
+Content-Disposition: form-data; name="requestDate"
+
+2026-11-08
+------ReviveBoundary
+Content-Disposition: form-data; name="requestTime"
+
+09:30
+------ReviveBoundary
+Content-Disposition: form-data; name="reason"
+
+Traffic on the Ring Road
+------ReviveBoundary--
+
+###
+
+### Monthly excused-hours budget: { capHours, usedHours, remainingHours, month }
+GET {{ReviveHRSystem.Web_HostAddress}}/api/employees/1/excused-hours
+Authorization: Bearer {{employeeToken}}
+
+###
+
+### Salary advance (amount, no automatic limit — the approval workflow is the gate)
+POST {{ReviveHRSystem.Web_HostAddress}}/api/employees/1/requests
+Authorization: Bearer {{employeeToken}}
+Content-Type: multipart/form-data; boundary=----ReviveBoundary
+
+------ReviveBoundary
+Content-Disposition: form-data; name="type"
+
+salary-advance
+------ReviveBoundary
+Content-Disposition: form-data; name="amount"
+
+2500
+------ReviveBoundary
+Content-Disposition: form-data; name="reason"
+
+Medical procedure
+------ReviveBoundary--
+
+###
+
+### Update my contact information and preferences
+PUT {{ReviveHRSystem.Web_HostAddress}}/api/employees/1/contact
+Content-Type: application/json
+Authorization: Bearer {{employeeToken}}
+
+{
+  "phone": "+201000000000",
+  "address": "12 Nasr City Street"
+}
+
+###
+
+PUT {{ReviveHRSystem.Web_HostAddress}}/api/me/settings
+Content-Type: application/json
+Authorization: Bearer {{employeeToken}}
+
+{
+  "requests": true,
+  "attendance": true,
+  "recruitment": false,
+  "management": true,
+  "announcements": true
+}
+
+# ---------- Management (Branch Manager / Team Leader) ----------
+
+### Branch employee directory (403 for the plain employee token)
+GET {{ReviveHRSystem.Web_HostAddress}}/api/employees?q=Karim
+Authorization: Bearer {{bmToken}}
+
+###
+
+### Change an employment status (recorded on the history timeline)
+POST {{ReviveHRSystem.Web_HostAddress}}/api/employees/1/status-change
+Content-Type: application/json
+Authorization: Bearer {{bmToken}}
+
+{
+  "status": "OnLeave",
+  "note": "Approved medical leave"
+}
+
+###
+
+### Request inbox and the stage-1 (BranchManager) decision
+GET {{ReviveHRSystem.Web_HostAddress}}/api/requests?status=Pending
+Authorization: Bearer {{bmToken}}
+
+###
+
+POST {{ReviveHRSystem.Web_HostAddress}}/api/requests/{{requestId}}/decide
+Content-Type: application/json
+Authorization: Bearer {{bmToken}}
+
+{
+  "decision": "Approved",
+  "comment": "Coverage confirmed"
+}
+
+###
+
+### Attendance day view and a manual (audited) entry
+GET {{ReviveHRSystem.Web_HostAddress}}/api/attendance
+Authorization: Bearer {{bmToken}}
+
+###
+
+POST {{ReviveHRSystem.Web_HostAddress}}/api/attendance/mark-attendance
+Content-Type: application/json
+Authorization: Bearer {{bmToken}}
+
+{
+  "employeeId": "EMP-1042",
+  "type": "IN",
+  "reason": "Face recognition failed at the station; manager confirmed on site"
+}
+
+###
+
+### Shift management: templates, cycles, assignments, publish
+GET {{ReviveHRSystem.Web_HostAddress}}/api/gyms/{{gym1Id}}/shift-templates
+Authorization: Bearer {{bmToken}}
+
+###
+
+POST {{ReviveHRSystem.Web_HostAddress}}/api/gyms/{{gym1Id}}/shift-cycles
+Content-Type: application/json
+Authorization: Bearer {{bmToken}}
+
+{
+  "startDate": "2026-11-01",
+  "endDate": "2026-11-10"
+}
+
+###
+
+GET {{ReviveHRSystem.Web_HostAddress}}/api/teams/my-teams
+Authorization: Bearer {{tlToken}}
+
+###
+
+GET {{ReviveHRSystem.Web_HostAddress}}/api/teams/1/today
+Authorization: Bearer {{tlToken}}
+
+###
+
+### Branch Actions: deduction, warning, bonus (all await HR) + the queue
+POST {{ReviveHRSystem.Web_HostAddress}}/api/deduction-candidates
+Content-Type: application/json
+Authorization: Bearer {{bmToken}}
+
+{
+  "employeeId": 1,
+  "amount": 150,
+  "reason": "Unapproved absence",
+  "note": "Absent with no prior notice"
+}
+
+###
+
+POST {{ReviveHRSystem.Web_HostAddress}}/api/warning-notices
+Content-Type: application/json
+Authorization: Bearer {{bmToken}}
+
+{
+  "employeeId": 1,
+  "type": "Attendance",
+  "reason": "3rd late arrival within one month",
+  "note": "Verbal warning issued on site"
+}
+
+###
+
+POST {{ReviveHRSystem.Web_HostAddress}}/api/bonus-proposals
+Content-Type: application/json
+Authorization: Bearer {{bmToken}}
+
+{
+  "employeeId": 1,
+  "type": "Performance Bonus",
+  "amount": 500,
+  "reason": "Covered extra classes during event week"
+}
+
+###
+
+GET {{ReviveHRSystem.Web_HostAddress}}/api/branch-actions/pending-hr
+Authorization: Bearer {{bmToken}}
+
+###
+
+### Free-form report to HR (any employee)
+POST {{ReviveHRSystem.Web_HostAddress}}/api/branch-reports
+Content-Type: application/json
+Authorization: Bearer {{employeeToken}}
+
+{
+  "period": "October 2026",
+  "type": "Attendance exceptions",
+  "message": "Two trainers repeatedly late this month."
+}
+
+###
+
+### Change my password (401 for a wrong current password)
+POST {{ReviveHRSystem.Web_HostAddress}}/api/auth/change-password
+Content-Type: application/json
+Authorization: Bearer {{employeeToken}}
+
+{
+  "currentPassword": "Revive!2026",
+  "newPassword": "Revive!2027"
+}
+
+###
+
+### Logout (records an audit entry; 204)
+POST {{ReviveHRSystem.Web_HostAddress}}/api/auth/logout
+Authorization: Bearer {{employeeToken}}
+
+###
+
+### Paginated list endpoints ({ items, page, pageSize, totalCount, totalPages })
+GET {{ReviveHRSystem.Web_HostAddress}}/api/employees?q=&status=&positionId=&sortBy=name&pageNumber=1&pageSize=10
+Authorization: Bearer {{bmToken}}
+
+###
+
+GET {{ReviveHRSystem.Web_HostAddress}}/api/requests?status=Pending&type=&dateFrom=2026-10-01&dateTo=2026-10-31&pageNumber=1&pageSize=10
+Authorization: Bearer {{bmToken}}
+
+###
+
+### Attendance day view, a range, and the paged roster
+GET {{ReviveHRSystem.Web_HostAddress}}/api/attendance?date=2026-10-12
+Authorization: Bearer {{bmToken}}
+
+###
+
+GET {{ReviveHRSystem.Web_HostAddress}}/api/attendance?dateFrom=2026-10-01&dateTo=2026-10-31&status=Late&pageSize=100
+Authorization: Bearer {{bmToken}}
+
+###
+
+### Notifications inbox (paged; unreadOnly drives the bell badge)
+GET {{ReviveHRSystem.Web_HostAddress}}/api/notifications?pageNumber=1&pageSize=3&unreadOnly=true
+Authorization: Bearer {{employeeToken}}
+
+###
+
+### Team Actions: follow-ups (list / raise / act) and member shortcuts
+GET {{ReviveHRSystem.Web_HostAddress}}/api/teams/follow-ups
+Authorization: Bearer {{bmToken}}
+
+###
+
+POST {{ReviveHRSystem.Web_HostAddress}}/api/teams/follow-ups
+Content-Type: application/json
+Authorization: Bearer {{bmToken}}
+
+{
+  "employeeId": 0,
+  "action": "Reminder",
+  "severity": "High",
+  "description": "Late three times this week",
+  "note": "Spoke about the transport strike"
+}
+
+###
+
+PUT {{ReviveHRSystem.Web_HostAddress}}/api/teams/follow-ups/0
+Content-Type: application/json
+Authorization: Bearer {{bmToken}}
+
+{
+  "action": "Resolution",
+  "note": "Attendance back to normal"
+}
+
+###
+
+POST {{ReviveHRSystem.Web_HostAddress}}/api/teams/members/0/reminders
+Authorization: Bearer {{bmToken}}
+
+###
+
+POST {{ReviveHRSystem.Web_HostAddress}}/api/employees/0/messages
+Content-Type: application/json
+Authorization: Bearer {{bmToken}}
+
+{
+  "message": "Please review your shift swap request."
+}
+
+###
+
+### Vacancy request detail + the unscheduled badge count
+GET {{ReviveHRSystem.Web_HostAddress}}/api/vacancy-requests/0
+Authorization: Bearer {{bmToken}}
+
+###
+
+GET {{ReviveHRSystem.Web_HostAddress}}/api/teams/0/unscheduled-count
+Authorization: Bearer {{bmToken}}
+
+###
+
+### Request collaboration: post a comment on an in-scope request
+POST {{ReviveHRSystem.Web_HostAddress}}/api/requests/0/comments
+Content-Type: application/json
+Authorization: Bearer {{bmToken}}
+
+{
+  "comment": "I will cover the morning shift."
+}
+
+###
+
+### Evaluation authoring: forms, submit, edit, and the team history
+GET {{ReviveHRSystem.Web_HostAddress}}/api/evaluation-forms
+Authorization: Bearer {{hrToken}}
+
+###
+
+POST {{ReviveHRSystem.Web_HostAddress}}/api/employees/0/evaluations
+Content-Type: application/json
+Authorization: Bearer {{hrToken}}
+
+{
+  "evaluationFormId": 0,
+  "answers": [
+    { "questionId": 0, "score": 4, "comment": "Consistently on time" }
+  ],
+  "overallComment": "Strong quarter."
+}
+
+###
+
+PUT {{ReviveHRSystem.Web_HostAddress}}/api/employees/0/evaluations/0
+Content-Type: application/json
+Authorization: Bearer {{hrToken}}
+
+{
+  "answers": [
+    { "questionId": 0, "score": 5 }
+  ]
+}
+
+###
+
+GET {{ReviveHRSystem.Web_HostAddress}}/api/teams/0/evaluations
+Authorization: Bearer {{bmToken}}
+
+###
+
+# ---------- Documents, avatar and downloads (Slice E) ----------
+# Binaries live behind IFileStorage (local disk, Storage section in appsettings).
+# Only the relative path is ever persisted or returned; the media type is derived
+# from the file's extension. Every download miss answers the same 404, so the route
+# never confirms which document ids exist. requests/avatar-sample.png is a 1x1 PNG
+# shipped for the upload below.
+
+### Replace my avatar (multipart, self-only -> { photoUrl })
+PUT {{ReviveHRSystem.Web_HostAddress}}/api/employees/1/photo
+Authorization: Bearer {{employeeToken}}
+Content-Type: multipart/form-data
+
+form-data;
+file;requests/avatar-sample.png;image/png
+
+###
+
+### Fetch the avatar my profile now points at
+GET {{ReviveHRSystem.Web_HostAddress}}/api/employees/1/photo
+Authorization: Bearer {{employeeToken}}
+
+###
+
+### HR-published official documents (disjoint from the employee vault)
+GET {{ReviveHRSystem.Web_HostAddress}}/api/employees/1/hr-documents
+Authorization: Bearer {{employeeToken}}
+
+###
+
+### Download an employee-uploaded document (binary stream; 404 if none is stored)
+GET {{ReviveHRSystem.Web_HostAddress}}/api/employees/1/documents/0/download
+Authorization: Bearer {{employeeToken}}
+
+###
+
+### Download an HR-published document (only reachable through the HR route)
+GET {{ReviveHRSystem.Web_HostAddress}}/api/employees/1/hr-documents/0/download
+Authorization: Bearer {{employeeToken}}

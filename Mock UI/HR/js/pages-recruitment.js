@@ -1,5 +1,8 @@
 // ==================== RECRUITMENT & HIRING ====================
-let _recTab = 'candidates';
+// One lifecycle board for the whole hiring journey, left to right:
+// Requests & Vacancies → Applied → First Interview → Waiting List →
+// Second Interview (matched to a branch) → Accepted → Rejected.
+let _recTab = 'requests';
 let _recView = 'kanban';
 let _recSearch = '';
 let _recStage = 'All';
@@ -8,7 +11,7 @@ let _recSel = [];
 let _recWizStep = 1;
 let _recCandTab = 'active';   // active | hired | waiting | rejected | blocked
 let _ivFilter = 'all';        // all | pending | completed | cancelled
-let _vrTab = 'pending';       // pending | approved | rejected | all
+let _vrStage = 'review';      // review | match | branch | hiring | rejected
 let _vacSelCand = null;       // selected candidate in the vacancy action panel
 let _ivMonth = '2026-09';   // interviews calendar month (YYYY-MM)
 let _ivDay = '2026-09-10';  // selected calendar day
@@ -31,7 +34,7 @@ const _stageMeta = {
   'Rejected': { cls: 'bg-red-100 text-red-800', dot: 'bg-red-500' },
   'Hired': { cls: 'bg-teal-100 text-teal-800', dot: 'bg-teal-500' },
 };
-const _pipStages = ['Applied','Screening','First Interview','Second Interview','Accepted','Rejected','Hired'];
+const _pipStages = ['Applied','First Interview','Second Interview','Accepted','Rejected','Hired'];
 const _pipColors = { Applied:'#7c3aed', Screening:'#2563eb', 'First Interview':'#d97706', 'Second Interview':'#ea580c', Accepted:'#16a34a', Rejected:'#ef4444', Hired:'#0d9488' };
 function _stageBadge(s) { const m = _stageMeta[s]||_stageMeta.Applied; return `<span class="badge ${m.cls} text-[9px]">${s}</span>`; }
 function _initials(n) { return (n||'?').split(' ').map(w=>w[0]).slice(0,2).join('').toUpperCase(); }
@@ -46,6 +49,89 @@ function _matchingVacancies(position) {
 }
 function _gymOptions(sel) { return ['Nasr City','Heliopolis','6th October'].map(g=>`<option ${sel===g?'selected':''}>${g}</option>`).join(''); }
 
+// ---- Branch request ⇄ waiting-list match helpers ----------------------------
+function _vrSalary(r) { return r.expectedSalary || r.salary || 0; }
+function _samePos(a, b) { const x = String(a||'').toLowerCase().trim(), y = String(b||'').toLowerCase().trim(); return !!x && !!y && (x === y || x.includes(y) || y.includes(x)); }
+// The candidate is "out with the branch" until the BM records a verdict.
+function _sendActive(r) { return !!(r.match && !(r.iv2 && r.iv2.verdict)); }
+// A branch rejection is final for the candidate: they leave the waiting pool
+// and live under the Rejected tab (the request itself goes back for a new match).
+// Sticky: once flagged, a re-match on the request no longer re-opens the pool slot.
+function _wlRejected(wid) {
+  const w = (MOCK.waitingList || []).find(x => x.id === wid);
+  if (w && w.bmRejected) return true;
+  return (MOCK.vacancyRequests || []).some(r => r.match && r.match.waitingListId === wid && r.iv2 && r.iv2.verdict === 'Reject');
+}
+// Freeze the rejected candidate on the waiting-list record so history survives
+// the request being re-matched with somebody else.
+function _wlMarkRejected(r) {
+  if (!r || !r.match) return;
+  const w = (MOCK.waitingList || []).find(x => x.id === r.match.waitingListId);
+  if (!w || w.bmRejected) return;
+  w.bmRejected = {
+    date: (r.iv2 && r.iv2.date) || '', by: (r.iv2 && r.iv2.by) || '', note: (r.iv2 && r.iv2.notes) || '',
+    requestId: r.id, position: r.position, gym: r.gym
+  };
+}
+// The approved branch request a waiting-list candidate is tied to (any state).
+function _wlBranchLink(wid) {
+  return (MOCK.vacancyRequests || []).find(r => r.status === 'Approved' && r.match && r.match.waitingListId === wid) || null;
+}
+// Who can be sent for this request: position fits, not currently out with a
+// branch and not already rejected by one at a 2nd interview.
+function _wlSendCandidates(position) {
+  return (MOCK.waitingList || []).filter(w => {
+    if (_wlRejected(w.id)) return false;
+    if (!_samePos(w.position, position)) return false;
+    return !(MOCK.vacancyRequests || []).some(r => r.match && r.match.waitingListId === w.id && _sendActive(r));
+  });
+}
+function _wlSendOthers(position) {
+  return (MOCK.waitingList || []).filter(w => {
+    if (_wlRejected(w.id)) return false;
+    if (_samePos(w.position, position)) return false;
+    return !(MOCK.vacancyRequests || []).some(r => r.match && r.match.waitingListId === w.id && _sendActive(r));
+  });
+}
+// One-liner for where a branch-sent candidate stands right now.
+function _wlLinkState(link) {
+  const iv2 = link.iv2;
+  if (iv2 && iv2.verdict === 'Accept') return 'accepted at the 2nd interview — employee account pending';
+  if (iv2 && iv2.verdict === 'Reject') return 'rejected at the 2nd interview — moved to the Rejected tab';
+  if (iv2) return `2nd interview ${formatDate(iv2.date)} at ${iv2.time} — awaiting the verdict`;
+  return 'awaiting the Branch Manager\'s call';
+}
+
+// ---- Branch request pipeline stages (HR point of view) ----------------------
+// Derived from who owns which field — never stored, so the branch and HR
+// portals always agree on where a request stands.
+//   review  — HR must approve / decline the request
+//   match   — approved; HR must send a candidate from the waiting list
+//   branch  — a match is out; waiting on the BM's call / 2nd interview
+//   hire    — accepted; HR creates the employee account      (tab: Hiring)
+//   hired   — account created — done                          (tab: Hiring)
+//   rejected— HR declined the request
+function vrStageOf(r) {
+  if (r.status === 'Rejected') return 'rejected';
+  if (r.status === 'Pending') return 'review';
+  const onList = (MOCK.waitingList || []).some(w => w.id === (r.match && r.match.waitingListId));
+  if (r.iv2 && r.iv2.verdict === 'Accept') return onList ? 'hire' : 'hired';
+  if (r.match && !(r.iv2 && r.iv2.verdict)) return 'branch';
+  return 'match';
+}
+const VR_TABS = [
+  { id:'review',   label:'To review',   cls:'yellow' },
+  { id:'match',    label:'To match',    cls:'brand'  },
+  { id:'branch',   label:'With branch', cls:'blue'   },
+  { id:'hiring',   label:'Hiring',      cls:'green'  },
+  { id:'rejected', label:'Rejected',    cls:'red'    },
+];
+function vrMatchesStage(r, stage) {
+  const s = vrStageOf(r);
+  if (stage === 'hiring') return s === 'hire' || s === 'hired';
+  return s === stage;
+}
+
 function candidatesControlsHTML() {
   const n = st => MOCK.candidates.filter(st).length;
   const groups = [
@@ -57,6 +143,49 @@ function candidatesControlsHTML() {
   return `<div class="inline-flex items-center gap-0.5 flex-wrap ml-auto">${sub}${view}</div>`;
 }
 
+// ---- Lifecycle tabs (HR point of view) --------------------------------------
+// requests — branch requests to review (approve / reject), plus the vacancies
+//            they open; decided requests leave this list
+// applied  — who applied from the hiring forms
+// first    — 1st interviews; passing one adds the candidate to the waiting list
+// waiting  — the branch-match pool + approved branch requests needing a candidate
+// second   — matched to a branch; the BM calls and runs the 2nd interview
+// accepted — the branch accepted; create the employee account
+// rejected — rejected by HR anywhere, or by the branch at the 2nd interview
+const REC_TABS = [
+  { id:'requests', label:'Requests & Vacancies' },
+  { id:'applied',  label:'Applied' },
+  { id:'first',    label:'First Interview' },
+  { id:'waiting',  label:'Waiting List' },
+  { id:'second',   label:'Second Interview' },
+  { id:'accepted', label:'Accepted' },
+  { id:'rejected', label:'Rejected' },
+];
+
+// One snapshot of every record the tabs need, so the badges and the bodies can
+// never disagree about where something stands.
+function recPipeline() {
+  const reqs = MOCK.vacancyRequests || [];
+  const cands = MOCK.candidates || [];
+  const apps = MOCK.hiringApplicants || [];
+  return {
+    reqReview:   reqs.filter(r => vrStageOf(r) === 'review'),
+    reqMatch:    reqs.filter(r => vrStageOf(r) === 'match'),
+    reqBranch:   reqs.filter(r => vrStageOf(r) === 'branch'),
+    reqAccepted: reqs.filter(r => ['hire','hired'].includes(vrStageOf(r))),
+    reqRejected: reqs.filter(r => vrStageOf(r) === 'rejected'),
+    bmRejected:  (MOCK.waitingList || []).filter(w => _wlRejected(w.id)),
+    firstCands:    cands.filter(c => !c.blocked && c.stage === 'First Interview'),
+    acceptedCands: cands.filter(c => !c.blocked && ['Accepted','Hired'].includes(c.stage)),
+    rejectedCands: cands.filter(c => !c.blocked && c.stage === 'Rejected'),
+    blockedCands:  cands.filter(c => c.blocked),
+    openApps:      apps.filter(a => ['New','In Review','Shortlisted'].includes(a.status)),
+    movedApps:     apps.filter(a => a.status === 'Moved to Pipeline'),
+    rejectedApps:  apps.filter(a => a.status === 'Rejected'),
+    wl:            (MOCK.waitingList || []).filter(w => !_wlRejected(w.id)),
+  };
+}
+
 function renderRecruitment() {
   const showAll = DEMO.showAll;
   const canApproveVR = showAll || hasPermission('recruitment.vacancy_request.approve');
@@ -64,52 +193,45 @@ function renderRecruitment() {
   const canHire = showAll || hasPermission('recruitment.hire.approve');
   const canCandidates = showAll || hasPermission('recruitment.candidates.manage');
 
+  const p = recPipeline();
   const openVacancies = MOCK.vacancies.filter(v=>v.status==='Open');
-  const totalCandidates = MOCK.candidates.length;
-  const pendingVR = MOCK.vacancyRequests.filter(r=>r.status==='Pending');
   const interviewsSorted = [...MOCK.interviews].sort((a,b)=> (a.date+b.time> b.date+b.time?1:-1));
   const thisWeek = interviewsSorted.filter(iv => (iv.date >= '2026-09-10' && iv.date <= '2026-09-16')).length;
+  const kpiLine = `${openVacancies.length} open position${openVacancies.length===1?'':'s'} · ${p.reqReview.length} request${p.reqReview.length===1?'':'s'} to review`;
 
-  // Tab notice badges: pending / uncompleted / new items per tab (replaces the overview stat tiles)
-  const _badge = (n, cls) => n > 0 ? ` <span class="badge ${cls} text-[9px]">${n}</span>` : '';
-  const newApps = MOCK.candidates.filter(c => !c.blocked && c.stage === 'Applied').length;
-  const pendingIv = MOCK.interviews.filter(iv => ['Scheduled','Invited','Draft'].includes(iv.status)).length;
-  const incompleteNc = MOCK.newComers.filter(n => n.progress < 100).length;
+  // Every tab carries its live pipeline count so nothing hides behind a click.
+  const cnt = (n, cls) => ` <span class="badge ${cls} text-[9px]">${n}</span>`;
+  const counts = {
+    requests: p.reqReview.length,
+    applied:  p.openApps.length + p.movedApps.length,
+    first:    p.firstCands.length,
+    waiting:  p.wl.length + p.reqMatch.length,
+    second:   p.reqBranch.length,
+    accepted: p.reqAccepted.length + p.acceptedCands.length,
+    rejected: p.rejectedCands.length + p.blockedCands.length + p.reqRejected.length + p.rejectedApps.length + p.bmRejected.length,
+  };
+  const badgeCls = { requests:'badge-brand', applied:'badge-blue', first:'badge-yellow', waiting:'badge-purple', second:'badge-blue', accepted:'badge-success', rejected:'badge-red' };
 
-  const tabs = [
-    {id:'candidates',label:'Candidates',b:_badge(newApps,'badge-blue')},
-    {id:'overview',label:'Summary'},
-    {id:'interviews',label:'Interviews',b:_badge(pendingIv,'badge-yellow')},
-    {id:'newcomers',label:'New Comers',b:_badge(incompleteNc,'badge-green')},
-    {id:'vacancies',label:'Vacancies',b:_badge(openVacancies.length,'badge-brand')},
-  ];
-  const _navPages = ['candidates','overview','interviews','newcomers','vacancies','waiting','vacancy-requests'];
-  if (!_navPages.includes(_recTab)) _recTab = 'candidates';
-  if (_recTab === 'vacancy-requests' && !canApproveVR) _recTab = 'candidates';
+  if (!REC_TABS.some(t => t.id === _recTab)) _recTab = 'requests';
 
   let body = '';
-  if (_recTab === 'overview') {
-    body = overviewBody(openVacancies,totalCandidates,pendingVR,totalResults());
-  }
-  else if (_recTab === 'vacancies') { body = vacanciesBody(canManageVac); }
-  else if (_recTab === 'candidates') { body = candidatesBody(canHire, canCandidates, showAll); }
-  else if (_recTab === 'interviews') { body = interviewsBody(interviewsSorted); }
-  else if (_recTab === 'waiting') { body = waitingBody(); }
-  else if (_recTab === 'newcomers') { body = newcomersBody(); }
-  else if (_recTab === 'vacancy-requests') { body = vacancyRequestsBody(); }
-
-  const kpiLine = `${openVacancies.length} open · ${totalCandidates} candidates · ${pendingVR.length} requests pending`;
+  if (_recTab === 'requests') { body = requestsVacanciesBody(p, canApproveVR, canManageVac); }
+  else if (_recTab === 'applied') { body = appliedBody(p); }
+  else if (_recTab === 'first') { body = firstInterviewBody(p, canCandidates); }
+  else if (_recTab === 'waiting') { body = waitingListBody(p); }
+  else if (_recTab === 'second') { body = secondInterviewBody(p); }
+  else if (_recTab === 'accepted') { body = acceptedBody(p, canHire); }
+  else if (_recTab === 'rejected') { body = rejectedBody(p); }
 
   return `<div class="space-y-2.5">
     <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
       <div><h1 class="text-base font-bold text-charcoal-900">Recruitment & Hiring</h1><p class="text-xs text-charcoal-500 mt-0.5">${kpiLine} · ${thisWeek} interviews this week</p></div>
-      ${canManageVac && _recTab==='vacancies'?`<button onclick="openNewVacancy()" class="btn btn-sm btn-primary" style="height:23px;font-size:10px;padding:0 8px"><svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>Create Vacancy</button>`:''}
+      ${canManageVac && _recTab==='requests'?`<button onclick="openNewVacancy()" class="btn btn-sm btn-primary" style="height:23px;font-size:10px;padding:0 8px"><svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>Create Vacancy</button>`:''}
     </div>
     <div class="flex items-center justify-between gap-2 flex-wrap bg-charcoal-100 rounded-xl p-1 border border-charcoal-200">
       <div class="inline-flex flex-wrap items-center gap-1">
-        ${tabs.map(t=>`<button onclick="_recTab='${t.id}';renderAll()" class="tab-btn ${_recTab===t.id?'active':''}">${t.label}${t.b||''}</button>`).join('')}
+        ${REC_TABS.map(t=>`<button onclick="_recTab='${t.id}';renderAll()" class="tab-btn ${_recTab===t.id?'active':''}">${t.label}${cnt(counts[t.id],badgeCls[t.id])}</button>`).join('')}
       </div>
-      ${_recTab==='candidates'?candidatesControlsHTML():''}
     </div>
     <div>${body}</div>
   </div>`;
@@ -124,7 +246,7 @@ function overviewBody(openVacs,pendingVR,pendVRArr,candTotal) {
   return `<div class="grid grid-cols-1 lg:grid-cols-2 gap-3">
     ${waitingMatchHTML()}
     ${openVacs.length?`<div class="bg-white rounded-xl border border-charcoal-200 overflow-hidden">
-      <div class="px-4 py-2.5 border-b border-charcoal-100 flex items-center justify-between bg-charcoal-50/50"><p class="bento-label">OPEN VACANCIES</p><button onclick="_recTab='vacancy-requests';renderAll()" class="text-[10px] text-brand-600 font-semibold hover:underline">Manage</button></div>
+      <div class="px-4 py-2.5 border-b border-charcoal-100 flex items-center justify-between bg-charcoal-50/50"><p class="bento-label">OPEN VACANCIES</p><button onclick="_vrStage='review';_recTab='vacancy-requests';renderAll()" class="text-[10px] text-brand-600 font-semibold hover:underline">Manage</button></div>
       <div class="divide-y divide-charcoal-50">${openVacs.map(v=>`<div class="p-3 flex items-center justify-between gap-2" onclick="openVacancyAction('${v.id}')" style="cursor:pointer">
         <div class="min-w-0">
           <p class="text-xs font-semibold text-charcoal-900">${v.position}</p>
@@ -211,6 +333,7 @@ function waitingMatchHTML() {
     <div class="divide-y divide-charcoal-50 flex-1 min-h-0 overflow-y-auto">
       ${entries.map(w=>{
         const matches=_matchingVacancies(w.position||'');
+        const link=_wlBranchLink(w.id);
         return `<div class="p-3">
           <div class="flex items-center justify-between gap-2">
             <div class="flex items-center gap-2.5 min-w-0">
@@ -223,9 +346,11 @@ function waitingMatchHTML() {
           <p class="text-[9px] text-charcoal-600 mt-1">${w.note||''}</p>
           <div class="flex items-center justify-between gap-2 mt-2">
             <div class="min-w-0">
-              ${matches.length?`<p class="text-[9px] text-brand-700 font-semibold">✓ Match: ${matches.map(v=>v.position+' @ '+v.gym).join(', ')}</p>`:`<p class="text-[9px] text-charcoal-400">No open vacancy for this role yet.</p>`}
+              ${link?`<p class="text-[9px] text-blue-700 font-semibold">→ Sent to ${link.gym} — ${link.position} · ${_wlLinkState(link)}</p>`
+                : matches.length?`<p class="text-[9px] text-brand-700 font-semibold">✓ Match: ${matches.map(v=>v.position+' @ '+v.gym).join(', ')}</p>`:`<p class="text-[9px] text-charcoal-400">No open vacancy for this role yet.</p>`}
             </div>
-            ${canCandidates?`<button onclick="assignWaitingToGym('${w.id}')" class="btn btn-sm btn-primary flex-shrink-0">Assign to Gym</button>`:''}
+            ${link?`<span class="badge badge-blue text-[8px] flex-shrink-0">With the branch</span>`
+              : canCandidates?`<button onclick="assignWaitingToGym('${w.id}')" class="btn btn-sm btn-primary flex-shrink-0">Assign to Gym</button>`:''}
           </div>
         </div>`;
       }).join('')||'<div class="p-6 text-center text-xs text-charcoal-400">Waiting list empty</div>'}
@@ -353,6 +478,10 @@ function confirmWaitingAssign(wid, position) {
   MOCK.newComers.unshift({ id:'NC-'+Date.now(), name:w.name, position:position+' - '+level, startDate:start, progress:0, checklist:[['ID & contract signed',false],['Uniform issued',false],['System access created',false],['Branch tour completed',false],['Welcome meeting with BM',false]] });
   MOCK.auditLog.unshift({ id:'al-'+Date.now(), action:'Waiting-list candidate assigned to gym', user:MOCK.currentUser.fullName, target:w.name, detail:position+' @ '+gym+' | '+salary+' EGP | role '+role, timestamp:'2026-09-09 '+new Date().toLocaleTimeString(), gym });
   MOCK.waitingList = MOCK.waitingList.filter(x=>x.id!==wid);
+  // Fill the seat this candidate was assigned to — the last seat closes the vacancy.
+  const vac = (MOCK.vacancies || []).find(v => v.id === ((_waCtx && _waCtx.vacId) || ''));
+  if (vac) { vac.headcount = Math.max(0, (vac.headcount || 1) - 1); if (vac.headcount <= 0) vac.status = 'Closed'; }
+  _waCtx = null;
   closeModal();
   showToast(w.name+' hired at '+gym+' - employee account created with all terms', 'success');
   renderAll();
@@ -828,6 +957,8 @@ function waitingBody() {
   return `<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
     ${MOCK.waitingList.map(w=>{
       const matches = _matchingVacancies(w.position||'');
+      const link = _wlBranchLink(w.id);
+      const linkState = link ? ((link.iv2 && link.iv2.verdict) || 'sent') : null;
       return `<div class="bg-white rounded-xl border border-charcoal-200 p-3 border-l-4 border-l-purple-400">
       <div class="flex items-start justify-between gap-2">
         <div class="flex items-center gap-2.5">
@@ -838,6 +969,10 @@ function waitingBody() {
       </div>
       <div class="flex flex-wrap gap-1 mt-1.5">${(w.skills||[]).map(s=>`<span class="badge badge-purple text-[8px]">${s}</span>`).join('')}</div>
       <p class="text-[10px] text-charcoal-600 mt-2">${w.note}</p>
+      ${link?`<div class="mt-2 bg-blue-50 border border-blue-100 rounded-lg p-2">
+        <p class="text-[9px] font-semibold text-blue-800">Sent to ${link.gym} — ${link.position} request${link.match && link.match.shift?' · '+link.match.shift+' shift':''}</p>
+        <p class="text-[9px] text-blue-700">${_wlLinkState(link)}</p>
+      </div>`:''}
       ${matches.length
         ? `<div class="mt-2 space-y-1">${matches.map(m=>`<div class="bg-green-50 border border-green-100 rounded-lg p-2 flex items-center justify-between gap-2">
             <div class="min-w-0"><p class="text-[9px] text-green-800 font-semibold truncate">&#10003; Open position: ${m.position} — ${m.gym}</p>
@@ -847,10 +982,12 @@ function waitingBody() {
         : `<div class="mt-2 bg-charcoal-50 border border-dashed border-charcoal-200 rounded-lg p-2"><p class="text-[9px] text-charcoal-500 font-medium">No open position for ${w.position} yet — cannot assign blindly.</p><p class="text-[8px] text-charcoal-400 mt-0.5">Create a vacancy first; this card lights up automatically.</p></div>`}
       <div class="flex items-center justify-between mt-2.5 text-[9px] text-charcoal-400"><span>${w.source} · since ${formatDate(w.since)}</span></div>
       <div class="flex gap-1.5 mt-2">
-        ${canCandidates?(matches.length
+        ${(!link || linkState === 'Reject') && canCandidates ? (matches.length
           ? `<button onclick="assignWaitingToGym('${w.id}')" class="btn btn-sm btn-primary flex-1">Assign to Open Position</button>`
-          : `<button class="btn btn-sm btn-secondary flex-1 opacity-50 cursor-not-allowed" disabled title="No open position matches ${w.position} — create a vacancy first">Assign to Open Position</button>`):''}
-        <button onclick="showToast('Removed from waiting list','info')" class="btn btn-sm btn-ghost">Remove</button>
+          : `<button class="btn btn-sm btn-secondary flex-1 opacity-50 cursor-not-allowed" disabled title="No open position matches ${w.position} — create a vacancy first">Assign to Open Position</button>`) : ''}
+        ${(!link || linkState === 'Reject')
+          ? `<button onclick="showToast('Removed from waiting list','info')" class="btn btn-sm btn-ghost">Remove</button>`
+          : `<span class="text-[9px] text-blue-600 font-semibold flex-1 text-center py-1">Follow the verdict on the vacancy request card</span>`}
       </div>
     </div>`;
     }).join('')}
@@ -874,34 +1011,171 @@ function newcomersBody() {
 }
 
 // ==================== VACANCY REQUESTS ====================
+function _vrStatLine(r) {
+  return `<div class="flex items-center gap-1 mt-1.5 flex-wrap">
+    ${r.shift?`<span class="badge badge-gray text-[9px]">Shift: ${r.shift}</span>`:''}
+    ${_vrSalary(r)?`<span class="badge badge-gray text-[9px]">Expected: EGP ${_vrSalary(r).toLocaleString()}</span>`:''}
+    ${r.department?`<span class="badge badge-gray text-[9px]">${r.department}</span>`:''}
+    ${r.source==='branch'?`<span class="badge badge-purple text-[9px]">From branch portal</span>`:''}
+  </div>`;
+}
+
+// Live status of a branch request after approval: who was sent, how the
+// 2nd interview went, and what HR has to do next.
+function branchPipelineHtml(r) {
+  const m = r.match;
+  const head = `${m ? m.name : ''}${m && m.shift ? ' · ' + m.shift + ' shift' : ''}${m && m.salaryExp ? ' · EGP ' + m.salaryExp.toLocaleString() + ' expected' : ''}`;
+  if (!m) {
+    return `<div class="mt-2 bg-yellow-50 border border-yellow-100 rounded-lg p-2.5 flex items-center justify-between gap-2 flex-wrap">
+      <div class="min-w-0">
+        <p class="text-[10px] font-bold text-yellow-800">Approved — waiting for a matching candidate</p>
+        <p class="text-[9px] text-yellow-700 mt-0.5">Pick a candidate who can cover the <b>${r.shift || 'requested'}</b> shift, then send the match — the Branch Manager gets the phone number and runs the 2nd interview.</p>
+      </div>
+      <button onclick="sendMatchToBranch('${r.id}')" class="btn btn-sm btn-primary flex-shrink-0">Send match to branch</button>
+    </div>`;
+  }
+  if (!r.iv2) {
+    return `<div class="mt-2 bg-blue-50 border border-blue-100 rounded-lg p-2.5">
+      <div class="flex items-center justify-between gap-2 flex-wrap">
+        <p class="text-[10px] font-bold text-blue-800">Match sent — waiting for the BM to call</p>
+        <span class="badge badge-blue text-[9px]">Awaiting call</span>
+      </div>
+      <p class="text-[11px] font-semibold text-charcoal-900 mt-1">${head}</p>
+      <p class="text-[9px] text-blue-700 mt-0.5">Sent by ${m.sentBy || 'HR'} on ${formatDate(m.sentAt)} · phone ${m.phone || '—'} shared with the branch. He schedules the 2nd interview after the call.</p>
+    </div>`;
+  }
+  if (!r.iv2.verdict) {
+    return `<div class="mt-2 bg-brand-50 border border-brand-100 rounded-lg p-2.5">
+      <div class="flex items-center justify-between gap-2 flex-wrap">
+        <p class="text-[10px] font-bold text-brand-800">2nd interview scheduled — awaiting the verdict</p>
+        <span class="badge badge-blue text-[9px]">${formatDate(r.iv2.date)} · ${r.iv2.time}</span>
+      </div>
+      <p class="text-[11px] font-semibold text-charcoal-900 mt-1">${head}</p>
+      <p class="text-[9px] text-brand-700 mt-0.5">${r.iv2.type} interview${r.iv2.by ? ' with ' + r.iv2.by : ''}${r.iv2.notes ? ' — ' + r.iv2.notes : ''}</p>
+    </div>`;
+  }
+  const onList = (MOCK.waitingList || []).some(x => x.id === m.waitingListId);
+  if (r.iv2.verdict === 'Accept') {
+    return `<div class="mt-2 bg-green-50 border border-green-200 rounded-lg p-2.5">
+      <div class="flex items-center justify-between gap-2 flex-wrap">
+        <div class="min-w-0">
+          <p class="text-[10px] font-bold text-green-800">Accepted at the 2nd interview${r.iv2.by ? ' by ' + r.iv2.by : ''}</p>
+          <p class="text-[11px] font-semibold text-charcoal-900 mt-1">${head}</p>
+        </div>
+        ${onList
+          ? `<button onclick="hireFromBranchMatch('${r.id}')" class="btn btn-sm btn-primary flex-shrink-0">Create employee account</button>`
+          : `<span class="badge badge-success text-[9px]">Account created ✓</span>`}
+      </div>
+      <p class="text-[9px] text-green-700 mt-0.5">${onList ? 'Convert him into an active hire — account, terms and onboarding checklist in one step.' : 'The employee account exists and onboarding has started.'}</p>
+    </div>`;
+  }
+  return `<div class="mt-2 bg-red-50 border border-red-100 rounded-lg p-2.5">
+    <div class="flex items-center justify-between gap-2 flex-wrap">
+      <div class="min-w-0">
+        <p class="text-[10px] font-bold text-red-800">Rejected at the 2nd interview${r.iv2.by ? ' by ' + r.iv2.by : ''}</p>
+        <p class="text-[11px] font-semibold text-charcoal-900 mt-1">${head}</p>
+        ${r.iv2.notes ? `<p class="text-[9px] text-red-700 mt-0.5">${r.iv2.notes}</p>` : ''}
+      </div>
+      <button onclick="sendMatchToBranch('${r.id}')" class="btn btn-sm btn-primary flex-shrink-0">Send another candidate</button>
+    </div>
+  </div>`;
+}
+
 function vacancyRequestsBody() {
   const all = MOCK.vacancyRequests;
-  const groups = {
-    pending:  { label:'Pending',  cls:'badge-yellow',  list: all.filter(r=>r.status==='Pending') },
-    approved: { label:'Approved', cls:'badge-success', list: all.filter(r=>r.status==='Approved') },
-    rejected: { label:'Rejected', cls:'badge-red',     list: all.filter(r=>r.status==='Rejected') },
-  };
-  if (!groups[_vrTab]) _vrTab = 'pending';
+  if (!VR_TABS.some(t => t.id === _vrStage)) _vrStage = 'review';
+  const inStage = id => all.filter(r => vrMatchesStage(r, id));
   const subBar = `<div class="inline-flex flex-wrap items-center gap-1 bg-charcoal-100 rounded-xl p-1 border border-charcoal-200 mb-2">
-    ${Object.entries(groups).map(([k,g])=>`<button onclick="_vrTab='${k}';renderAll()" class="tab-btn ${_vrTab===k?'active':''}" style="padding:0.3rem 0.7rem">${g.label}${g.list.length?` <span class="badge ${g.cls} text-[9px] ml-0.5">${g.list.length}</span>`:''}</button>`).join('')}
+    ${VR_TABS.map(t=>{ const n = inStage(t.id).length; return `<button onclick="_vrStage='${t.id}';renderAll()" class="tab-btn ${_vrStage===t.id?'active':''}" style="padding:0.3rem 0.7rem">${t.label}${n?` <span class="badge badge-${t.cls} text-[9px] ml-0.5">${n}</span>`:''}</button>`; }).join('')}
   </div>`;
-  const list = groups[_vrTab].list;
+  const list = inStage(_vrStage);
   return subBar + `<div class="space-y-1.5">
     ${list.map(r=>`<div class="bg-white rounded-xl border ${r.status==='Pending'?'border-yellow-200 border-l-4 border-l-yellow-400':'border-charcoal-200'} p-3">
       <div class="flex items-center justify-between gap-2">
-        <div><p class="text-xs font-semibold text-charcoal-900">${r.position} — ${r.gym}</p><p class="text-[10px] text-charcoal-500">Submitted by ${r.submittedBy} on ${formatDate(r.submittedDate)} · ${r.urgency} urgency</p></div>
+        <div class="min-w-0"><p class="text-xs font-semibold text-charcoal-900">${r.position} — ${r.gym}</p><p class="text-[10px] text-charcoal-500">Submitted by ${r.submittedBy} on ${formatDate(r.submittedDate)} · ${r.headcount||1} seat${(r.headcount||1)>1?'s':''} · ${r.urgency} urgency</p></div>
         ${statusBadge(r.status)}
       </div>
+      ${_vrStatLine(r)}
       <p class="text-[10px] text-charcoal-600 mt-1.5">${r.reason}</p>
       ${r.status==='Pending'?`<div class="flex gap-1.5 mt-2">
         <button onclick="approveVacancyRequest('${r.id}')" class="btn btn-sm btn-primary">Approve → Create Vacancy</button>
         <button onclick="rejectVacancyRequest('${r.id}')" class="btn btn-sm btn-danger-outline">Reject</button>
-      </div>`:`<div class="flex items-center gap-1.5 mt-2 flex-wrap">
-        <button onclick="reopenVacancyRequest('${r.id}')" class="btn btn-sm btn-secondary" title="Reopen this request to change the decision">Edit again — re-open</button>
-        <span class="badge badge-gray text-[9px]">Decided by ${r.decidedBy || MOCK.currentUser.fullName}</span>
+      </div>`
+      : r.status==='Approved'?`${r.source==='branch'?branchPipelineHtml(r)
+          :`<div class="mt-2 bg-green-50 border border-green-100 rounded-lg p-2.5 flex items-center justify-between gap-2 flex-wrap">
+            <p class="text-[10px] text-green-800 font-semibold">Vacancy opened — fill it from the waiting list or the candidate pipeline.</p>
+            <button onclick="_recTab='waiting';renderAll()" class="btn btn-sm btn-secondary flex-shrink-0">Open Waiting List</button>
+          </div>`}
+        <div class="flex items-center gap-1.5 mt-2 flex-wrap">
+          ${!r.match?`<button onclick="reopenVacancyRequest('${r.id}')" class="btn btn-sm btn-secondary" title="Reopen this request to change the decision">Edit again — re-open</button>`:''}
+          <span class="badge badge-gray text-[9px]">Decided by ${r.decidedBy || MOCK.currentUser.fullName}</span>
+        </div>`
+      :`<div class="mt-2 bg-charcoal-50 border border-charcoal-100 rounded-lg p-2">
+        ${r.decidedNote?`<p class="text-[10px] text-charcoal-700"><b>Reason sent to the branch:</b> ${r.decidedNote}</p>`:`<p class="text-[10px] text-charcoal-400">No reason recorded.</p>`}
+        <div class="flex items-center gap-1.5 mt-1 flex-wrap"><span class="badge badge-gray text-[9px]">Decided by ${r.decidedBy || MOCK.currentUser.fullName}</span></div>
       </div>`}
-    </div>`).join('') || `<div class="bg-white rounded-xl border border-dashed border-charcoal-200 p-6 text-center text-xs text-charcoal-400">No ${groups[_vrTab].label.toLowerCase()} requests.</div>`}
+    </div>`).join('') || `<div class="bg-white rounded-xl border border-dashed border-charcoal-200 p-6 text-center text-xs text-charcoal-400">No requests here right now.</div>`}
   </div>`;
+}
+
+// ---- Send a candidate to the branch as a match -------------------------------
+function sendMatchToBranch(rid) {
+  const r = MOCK.vacancyRequests.find(x => x.id === rid); if (!r) return;
+  const matches = _wlSendCandidates(r.position);
+  const others = _wlSendOthers(r.position);
+  const row = (w, mismatch) => `<div class="border border-charcoal-200 rounded-lg p-2.5 flex items-center justify-between gap-2">
+    <div class="min-w-0">
+      <p class="text-[11px] font-semibold text-charcoal-900">${w.name} <span class="text-[9px] font-normal text-charcoal-500">· ${w.position} · since ${formatDate(w.since)}</span>${mismatch?'<span class="badge badge-yellow text-[8px] ml-1">position mismatch</span>':''}</p>
+      <p class="text-[9px] text-charcoal-500">${(w.skills||[]).join(' · ')}</p>
+      <p class="text-[9px] text-charcoal-500 mt-0.5">${w.phone||'no phone'} · ${w.shift||'any'} shift · ${w.salaryExp?w.salaryExp.toLocaleString()+' EGP expected':'—'}</p>
+    </div>
+    <button onclick="closeModal();confirmSendMatch('${r.id}','${w.id}')" class="btn btn-sm btn-primary flex-shrink-0">Send to branch</button>
+  </div>`;
+  openModal(`Send a match — ${r.position} @ ${r.gym}`, `<div class="space-y-3">
+    <div class="bg-blue-50 border border-blue-100 rounded-lg p-2.5 text-[10px] text-blue-800 leading-relaxed">
+      The request asks for <b>${r.position}</b> on the <b>${r.shift || 'any'}</b> shift${_vrSalary(r)?` at <b>EGP ${_vrSalary(r).toLocaleString()}</b> expected`:''}. Sending a match shares the candidate's <b>name and phone number</b> with the ${r.gym} Branch Manager — he calls them and schedules the 2nd interview.
+    </div>
+    ${matches.length?`<div><p class="bento-label text-charcoal-500 mb-1">MATCHES THE POSITION</p><div class="space-y-1.5">${matches.map(w=>row(w,false)).join('')}</div></div>`:''}
+    ${others.length?`<div><p class="bento-label text-charcoal-500 mb-1">${matches.length?'OTHER CANDIDATES':'NO POSITION MATCH — OTHER CANDIDATES'}</p><div class="space-y-1.5">${others.map(w=>row(w,true)).join('')}</div></div>`:''}
+    ${!matches.length&&!others.length?`<p class="text-[10px] text-charcoal-400 text-center py-2">Every candidate is already out with a branch — add more candidates or wait for a verdict.</p>`:''}
+  </div>`, { footer:'<button onclick="closeModal()" class="btn btn-sm btn-secondary">Close</button>' });
+}
+
+function confirmSendMatch(rid, wid) {
+  const r = MOCK.vacancyRequests.find(x => x.id === rid); if (!r) return;
+  const w = MOCK.waitingList.find(x => x.id === wid); if (!w) return;
+  // The outgoing candidate keeps her verdict — reactivating the request with a
+  // new match must not put a branch-rejected candidate back into the pool.
+  if (r.match && r.iv2 && r.iv2.verdict === 'Reject') _wlMarkRejected(r);
+  const match = {
+    name: w.name, phone: w.phone || '', position: w.position, skills: w.skills || [],
+    shift: w.shift || '', salaryExp: w.salaryExp || 0, source: w.source,
+    availability: w.availability || '', waitingListId: w.id,
+    sentBy: MOCK.currentUser.fullName, sentAt: '2026-09-09', note: w.note || ''
+  };
+  r.match = match;
+  r.iv2 = null;
+  // Travels to the Branch Manager portal on the same record.
+  if (typeof VacancyBridge !== 'undefined') VacancyBridge.patch(r.id, { match });
+  MOCK.auditLog.unshift({ id:'al-'+Date.now(), action:'Candidate sent to the branch as a match', user:MOCK.currentUser.fullName, target:w.name, detail:`${r.position} @ ${r.gym} (${r.shift||'any'} shift) — 2nd interview to be scheduled by the Branch Manager`, timestamp:'2026-09-09 '+new Date().toLocaleTimeString(), gym:r.gym });
+  closeModal();
+  renderAll();
+  showToast(`${w.name} sent to ${r.gym} — the Branch Manager will call ${w.phone||'the candidate'} to schedule the 2nd interview`, 'success');
+}
+
+// Accepted at the 2nd interview → the normal hire wizard, pointed at the seat
+// this request opened (created on the fly if the seeded request skipped it).
+function hireFromBranchMatch(rid) {
+  const r = MOCK.vacancyRequests.find(x => x.id === rid); if (!r || !r.match) return;
+  const w = MOCK.waitingList.find(x => x.id === r.match.waitingListId);
+  if (!w) { showToast('This candidate is no longer on the waiting list — the account may already exist', 'info'); return; }
+  let vac = (MOCK.vacancies || []).find(v => v.branchRef === r.id && v.status === 'Open')
+    || (MOCK.vacancies || []).find(v => v.position === r.position && v.gym === r.gym && v.status === 'Open');
+  if (!vac) {
+    vac = { id:'v-'+Date.now().toString(36), position:r.position, gym:r.gym, headcount:1, candidates:0, urgency:r.urgency||'Medium', salary:_vrSalary(r)||null, shift:r.shift||'Morning', requestedBy:r.submittedBy, createdDate:'2026-09-09', applied:0, status:'Open', postedDate:'2026-09-09', branchRef:r.id };
+    MOCK.vacancies.unshift(vac);
+  }
+  assignWaitingToGym(w.id, vac.id);
 }
 
 function reopenVacancyRequest(rid) {
@@ -918,6 +1192,435 @@ function reopenVacancyRequest(rid) {
   }
   showToast(`${r.position} — ${note}`, 'info');
   renderAll();
+}
+
+// ==================== LIFECYCLE TAB BODIES ====================
+function _recHint(text) {
+  return `<div class="bg-white border border-charcoal-200 rounded-xl px-3.5 py-2 text-[10px] text-charcoal-500">${text}</div>`;
+}
+function _recSection(label, n, cls) {
+  return `<p class="text-[10px] font-bold uppercase tracking-wide ${cls} mb-1.5">${label} (${n})</p>`;
+}
+
+// ---- 1. Requests & Vacancies -------------------------------------------------
+// One request card, shared by two tabs: Requests & Vacancies renders the pending
+// ones, and the Waiting List tab renders the approved branch requests that still
+// need a candidate matched to them.
+function _reqCard(r, canApproveVR) {
+  return `<div class="bg-white rounded-xl border ${r.status==='Pending'?'border-yellow-200 border-l-4 border-l-yellow-400':'border-charcoal-200'} p-3">
+    <div class="flex items-center justify-between gap-2">
+      <div class="min-w-0"><p class="text-xs font-semibold text-charcoal-900">${r.position} — ${r.gym}</p><p class="text-[10px] text-charcoal-500">Submitted by ${r.submittedBy} on ${formatDate(r.submittedDate)} · ${r.headcount||1} seat${(r.headcount||1)>1?'s':''} · ${r.urgency} urgency</p></div>
+      ${statusBadge(r.status)}
+    </div>
+    ${_vrStatLine(r)}
+    <p class="text-[10px] text-charcoal-600 mt-1.5">${r.reason}</p>
+    ${r.status==='Pending'
+      ? (canApproveVR
+        ? `<div class="flex gap-1.5 mt-2">
+            <button onclick="approveVacancyRequest('${r.id}')" class="btn btn-sm btn-primary">Approve → Create Vacancy</button>
+            <button onclick="rejectVacancyRequest('${r.id}')" class="btn btn-sm btn-danger-outline">Reject</button>
+          </div>`
+        : `<p class="text-[10px] text-charcoal-400 mt-2">Awaiting an HR Manager decision — <code>recruitment.vacancy_request.approve</code>.</p>`)
+      : `${r.source==='branch' ? branchPipelineHtml(r) : `<div class="mt-2 bg-green-50 border border-green-100 rounded-lg p-2.5">
+          <p class="text-[10px] text-green-800 font-semibold">Vacancy opened — send a candidate from the pipeline when one is ready.</p>
+        </div>`}
+        <div class="flex items-center gap-1.5 mt-2 flex-wrap">
+          ${!r.match?`<button onclick="reopenVacancyRequest('${r.id}')" class="btn btn-sm btn-secondary" title="Reopen this request to change the decision">Edit again — re-open</button>`:''}
+          <span class="badge badge-gray text-[9px]">Decided by ${r.decidedBy || MOCK.currentUser.fullName}</span>
+        </div>`}
+  </div>`;
+}
+
+function requestsVacanciesBody(p, canApproveVR, canManageVac) {
+  return `<div class="space-y-3">
+    <div class="bg-white rounded-xl border border-charcoal-200 overflow-hidden">
+      <div class="px-3.5 py-2.5 border-b border-charcoal-100 flex items-center justify-between gap-2 flex-wrap bg-charcoal-50/50">
+        <p class="bento-label">BRANCH REQUESTS</p>
+        <p class="text-[10px] text-charcoal-400">Approve → the vacancy opens in the table below</p>
+      </div>
+      <div class="p-3 space-y-3">
+        ${p.reqReview.length?`<div>${_recSection('Awaiting review', p.reqReview.length, 'text-yellow-700')}<div class="space-y-1.5">${p.reqReview.map(r=>_reqCard(r, canApproveVR)).join('')}</div></div>`:''}
+        ${!p.reqReview.length?`<p class="text-center text-xs text-charcoal-400 py-3">No requests awaiting review right now.</p>`:''}
+      </div>
+      <p class="px-3.5 pb-2.5 text-[9px] text-charcoal-400">Decided requests leave this list — the vacancy opens below, declines are kept in the <b>Rejected</b> tab.</p>
+    </div>
+    ${vacanciesBody(canManageVac)}
+  </div>`;
+}
+
+// ---- 2. Applied ----------------------------------------------------------------
+function appliedBody(p) {
+  const appCard = a => {
+    const isOpen = ['New','In Review','Shortlisted'].includes(a.status);
+    return `<div class="bg-white rounded-xl border border-charcoal-200 p-3 flex flex-col">
+      <div class="flex items-center justify-between gap-2">
+        <div class="flex items-center gap-2.5 min-w-0">
+          <div class="w-9 h-9 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-[11px] font-semibold flex-shrink-0">${_initials(a.name)}</div>
+          <div class="min-w-0"><p class="text-xs font-bold text-charcoal-900 truncate">${a.name}</p><p class="text-[10px] text-charcoal-400 truncate">${a.position} · ${a.gym} · ${a.formName}</p></div>
+        </div>
+        ${frStatusBadge(a.status)}
+      </div>
+      <p class="text-[10px] text-charcoal-500 mt-2">Applied ${formatDate(a.appliedDate)} · ${(a.answers||[]).length} answers · ${a.phone}</p>
+      <div class="flex gap-1.5 mt-2 pt-2 border-t border-charcoal-100">
+        <button onclick="viewApplicant('${a.id}')" class="btn btn-sm btn-secondary flex-1">View Answers</button>
+        ${isOpen?`<button onclick="moveApplicantToPipeline('${a.id}')" class="btn btn-sm btn-primary flex-1">Add to Pipeline</button>
+          <button onclick="rejectApplicant('${a.id}')" class="btn btn-sm btn-danger-outline">Reject</button>`
+          :`<span class="text-[10px] text-brand-700 font-semibold self-center flex-1 text-right">In the pipeline — see First Interview →</span>`}
+      </div>
+    </div>`;
+  };
+
+  const apps = [...p.openApps, ...p.movedApps];
+
+  return `<div class="space-y-3">
+    ${_recHint('Applications arrive from the hiring forms. <b>Add to Pipeline</b> turns an applicant into a candidate — they start in the <b>First Interview</b> tab, then the journey is waiting list → branch match → accepted.')}
+    <div class="bg-white rounded-xl border border-charcoal-200 overflow-hidden">
+      <div class="px-3.5 py-2.5 border-b border-charcoal-100 flex items-center justify-between gap-2 flex-wrap bg-charcoal-50/50">
+        <p class="bento-label">WHO APPLIED FROM THE FORM</p>
+        <p class="text-[10px] text-charcoal-400">${p.openApps.length} to review · ${p.movedApps.length} already in the pipeline</p>
+      </div>
+      ${apps.length?`<div class="p-3 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">${apps.map(appCard).join('')}</div>`
+        :`<p class="p-6 text-center text-xs text-charcoal-400">No form applications yet — share a hiring form from the Forms page.</p>`}
+    </div>
+  </div>`;
+}
+
+// ---- 3. First Interview --------------------------------------------------------
+function firstInterviewBody(p, canCandidates) {
+  const list = p.firstCands;
+  return `<div class="space-y-3">
+    ${_recHint('Passing the 1st interview adds the candidate to the <b>Waiting List</b> — that pool is where branch matches are picked from. A rejection sends them to <b>Rejected</b>.')}
+    ${list.length?`<div class="bg-white rounded-xl border border-charcoal-200 overflow-hidden">
+      <div class="px-3.5 py-2.5 border-b border-charcoal-100 flex items-center justify-between gap-2 flex-wrap bg-charcoal-50/50">
+        <p class="bento-label">FIRST INTERVIEW — ${list.length} CANDIDATE${list.length>1?'S':''}</p>
+        <p class="text-[10px] text-charcoal-400">On-site or by video · the verdict decides who moves on</p>
+      </div>
+      <div class="p-3 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
+        ${list.map(c=>{
+          const iv = c.iv1;
+          const passed = iv && iv.verdict === 'Pass';
+          const scheduled = iv && ['Scheduled','Invited'].includes(iv.verdict);
+          return `<div class="flex flex-col gap-1.5">
+            ${_pipelineCard(c, 'First Interview')}
+            <div class="flex gap-1.5">
+              ${!canCandidates?`<span class="text-[10px] text-charcoal-400 self-center">Recruitment management permission is required.</span>`
+                : passed
+                  ? `<button onclick="passFirstInterview('${c.id}')" class="btn btn-sm btn-success flex-1">Move to Waiting List →</button>`
+                  : scheduled
+                    ? `<button onclick="passFirstInterview('${c.id}')" class="btn btn-sm btn-success flex-1">Pass → Waiting List</button>`
+                    : `<button onclick="scheduleFirstInterview('${c.id}')" class="btn btn-sm btn-primary flex-1">Schedule 1st interview</button>`}
+              ${canCandidates?`<button onclick="promptRejectCandidate('${c.id}')" class="btn btn-sm btn-danger-outline">Reject</button>`:''}
+            </div>
+          </div>`;
+        }).join('')}
+      </div>
+    </div>`:`<div class="bg-white rounded-xl border border-dashed border-charcoal-200 p-6 text-center text-xs text-charcoal-400">No candidates in the first interview stage — advance someone from <b>Applied</b>.</div>`}
+  </div>`;
+}
+
+function _canManageCandidates() { return DEMO.showAll || hasPermission('recruitment.candidates.manage'); }
+
+function scheduleFirstInterview(cid) {
+  const c = MOCK.candidates.find(x=>x.id===cid); if (!c) return;
+  const f = c.form || {};
+  openModal(`Schedule the 1st interview — ${c.name}`, `<div class="space-y-3">
+    <div class="bg-charcoal-50 border border-charcoal-200 rounded-lg p-2.5 text-[10px] text-charcoal-600">
+      <b>${c.name}</b> · ${c.position} · ${c.phone}${f.availability?` · available ${f.availability}`:''}${f.gymPref?` · prefers ${f.gymPref}`:''}
+    </div>
+    <div class="grid grid-cols-2 gap-3">
+      <div><label class="form-label">Date</label><input type="date" id="ci-date" class="form-input" value="2026-09-16"></div>
+      <div><label class="form-label">Time</label><input type="time" id="ci-time" class="form-input" value="11:00"></div>
+    </div>
+    <div class="grid grid-cols-2 gap-3">
+      <div><label class="form-label">Format</label><select id="ci-type" class="form-select"><option>On-site</option><option>Video</option></select></div>
+      <div><label class="form-label">Interviewer</label><select id="ci-by" class="form-select"><option>Mona El-Sayed</option><option>Youssef Kamal</option><option>Hana Mostafa</option></select></div>
+    </div>
+    <div><label class="form-label">Location / link</label><input id="ci-room" class="form-input" value="HQ — Boardroom"></div>
+  </div>`, { footer:`<button onclick="closeModal()" class="btn btn-sm btn-secondary">Cancel</button><button onclick="confirmScheduleFirstInterview('${cid}')" class="btn btn-sm btn-primary">Schedule</button>` });
+}
+
+function confirmScheduleFirstInterview(cid) {
+  const c = MOCK.candidates.find(x=>x.id===cid); if (!c) return;
+  const g = id => document.getElementById(id);
+  c.iv1 = { date: g('ci-date')?.value || '2026-09-16', time: g('ci-time')?.value || '11:00', by: g('ci-by')?.value || MOCK.currentUser.fullName, type: g('ci-type')?.value || 'On-site', verdict:'Scheduled', eval:null, room: g('ci-room')?.value || '' };
+  MOCK.auditLog.unshift({ id:'al-'+Date.now(), action:'1st interview scheduled', user:MOCK.currentUser.fullName, target:c.name, detail:`${c.iv1.date} at ${c.iv1.time} · ${c.iv1.type} · ${c.iv1.by}`, timestamp:'2026-09-09 '+new Date().toLocaleTimeString(), gym:(c.form&&c.form.gymPref)||'—' });
+  closeModal();
+  showToast(`1st interview scheduled for ${c.name} — ${formatDate(c.iv1.date)} at ${c.iv1.time}`, 'success');
+  renderAll();
+}
+
+// Passing the 1st interview hands the candidate over to the waiting list —
+// her record leaves the candidate pipeline and joins the match pool.
+function passFirstInterview(cid) {
+  const c = MOCK.candidates.find(x=>x.id===cid); if (!c) return;
+  if (!_canManageCandidates()) { showToast('Requires recruitment.candidates.manage', 'error'); return; }
+  const f = c.form || {};
+  if (c.iv1) { c.iv1.verdict = 'Pass'; if (!c.iv1.eval) c.iv1.eval = 4; }
+  const w = {
+    id: 'wl' + Date.now().toString(36),
+    name: c.name, position: c.position, phone: c.phone,
+    shift: f.shift || 'Flexible', salaryExp: f.salaryExp || 0, availability: f.availability || 'Immediate',
+    skills: f.skills || [], source: f.source || 'Application form',
+    note: `Passed the 1st interview${c.iv1 && c.iv1.by ? ' with ' + c.iv1.by : ''} on Sep 9, 2026 — waiting for a branch slot.`,
+    since: '2026-09-09'
+  };
+  MOCK.waitingList.unshift(w);
+  MOCK.candidates = MOCK.candidates.filter(x=>x.id!==cid);
+  MOCK.auditLog.unshift({ id:'al-'+Date.now(), action:'Candidate passed the 1st interview', user:MOCK.currentUser.fullName, target:c.name, detail:`Moved to the waiting list — ${c.position}, ${w.shift} shift${w.salaryExp?', '+w.salaryExp+' EGP expected':''}`, timestamp:'2026-09-09 '+new Date().toLocaleTimeString(), gym:f.gymPref||'—' });
+  showToast(`${c.name} passed — added to the Waiting List`, 'success');
+  renderAll();
+}
+
+function promptRejectCandidate(cid) {
+  const c = MOCK.candidates.find(x=>x.id===cid); if (!c) return;
+  openModal(`Reject — ${c.name}`, `<div class="space-y-3">
+    <div class="bg-red-50 border border-red-100 rounded-lg p-2.5 text-[10px] text-red-800">${c.name} leaves the pipeline (currently <b>${c.stage}</b>) and moves to the <b>Rejected</b> tab. The reason is kept there for the record.</div>
+    <div><label class="form-label">Reason *</label><textarea id="cand-reject-note" rows="2" class="form-input" placeholder="e.g. failed the trial session / shift mismatch / no show"></textarea></div>
+  </div>`, { footer:`<button onclick="closeModal()" class="btn btn-sm btn-secondary">Cancel</button><button onclick="confirmRejectCandidate('${cid}')" class="btn btn-sm btn-danger-outline">Reject candidate</button>` });
+}
+
+function confirmRejectCandidate(cid) {
+  const c = MOCK.candidates.find(x=>x.id===cid); if (!c) return;
+  if (!_canManageCandidates()) { showToast('Requires recruitment.candidates.manage', 'error'); return; }
+  const note = (document.getElementById('cand-reject-note')?.value || '').trim();
+  if (!note) { showToast('A reason is required before rejecting', 'error'); return; }
+  c.stage = 'Rejected';
+  c.rejectedDate = '2026-09-09';
+  c.rejectedBy = MOCK.currentUser.fullName;
+  c.rejectReason = note;
+  MOCK.auditLog.unshift({ id:'al-'+Date.now(), action:'Candidate rejected', user:MOCK.currentUser.fullName, target:c.name, detail:note, timestamp:'2026-09-09 '+new Date().toLocaleTimeString(), gym:(c.form&&c.form.gymPref)||'—' });
+  closeModal();
+  showToast(`${c.name} rejected — reason saved in the Rejected tab`, 'info');
+  renderAll();
+}
+
+// ---- 4. Waiting List -------------------------------------------------------------
+function waitingListBody(p) {
+  const canCandidates = DEMO.showAll || hasPermission('recruitment.candidates.manage');
+  return `<div class="space-y-3">
+    ${_recHint('Passed the 1st interview — this is the pool branch matches are picked from. Approved branch requests needing a candidate are listed above: send a match, or <b>Assign to Open Position</b> to hire directly when a seat fits.')}
+    ${p.reqMatch.length?`<div class="bg-white rounded-xl border border-charcoal-200 overflow-hidden">
+      <div class="px-3.5 py-2.5 border-b border-charcoal-100 flex items-center justify-between gap-2 flex-wrap bg-charcoal-50/50">
+        <p class="bento-label">APPROVED BRANCH REQUESTS — SEND A MATCH</p>
+        <p class="text-[10px] text-charcoal-400">Pick from the pool below · the branch runs the 2nd interview</p>
+      </div>
+      <div class="p-3 space-y-2">${p.reqMatch.map(r=>_reqCard(r)).join('')}</div>
+    </div>`:''}
+    ${_recSection('Waiting candidates', p.wl.length, 'text-purple-700')}
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+      ${p.wl.map(w=>{
+        const matches = _matchingVacancies(w.position||'');
+        const link = _wlBranchLink(w.id);
+        return `<div class="bg-white rounded-xl border border-charcoal-200 p-3 border-l-4 border-l-purple-400">
+        <div class="flex items-start justify-between gap-2">
+          <div class="flex items-center gap-2.5">
+            <div class="w-9 h-9 rounded-full bg-purple-100 text-purple-700 flex items-center justify-center text-[10px] font-semibold flex-shrink-0">${_initials(w.name)}</div>
+            <div><p class="text-xs font-semibold text-charcoal-900">${w.name}</p><p class="text-[10px] text-charcoal-500">${w.position||'Any role'}</p></div>
+          </div>
+          <span class="badge badge-purple text-[9px] flex-shrink-0 flex items-center gap-1"><svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>${Math.max(1,Math.round((new Date()-new Date(w.since))/86400000))}d</span>
+        </div>
+        <div class="flex flex-wrap gap-1 mt-1.5">${(w.skills||[]).map(s=>`<span class="badge badge-purple text-[8px]">${s}</span>`).join('')}</div>
+        <p class="text-[10px] text-charcoal-600 mt-2">${w.note}</p>
+        ${link?`<div class="mt-2 bg-blue-50 border border-blue-100 rounded-lg p-2">
+          <p class="text-[9px] font-semibold text-blue-800">Sent to ${link.gym} — ${link.position} request${link.match && link.match.shift?' · '+link.match.shift+' shift':''}</p>
+          <p class="text-[9px] text-blue-700">${_wlLinkState(link)}</p>
+        </div>`:''}
+        ${!link && matches.length
+          ? `<div class="mt-2 space-y-1">${matches.map(m=>`<div class="bg-green-50 border border-green-100 rounded-lg p-2 flex items-center justify-between gap-2">
+              <div class="min-w-0"><p class="text-[9px] text-green-800 font-semibold truncate">&#10003; Open position: ${m.position} — ${m.gym}</p>
+              <p class="text-[8px] text-green-700">${m.headcount} seat${m.headcount>1?'s':''} · ${m.urgency} urgency · ${m.candidates} applicant${m.candidates===1?'':'s'}</p></div>
+              <span class="badge badge-success text-[8px] flex-shrink-0">OPEN</span>
+            </div>`).join('')}</div>`
+          : ''}
+        ${!link && !matches.length
+          ? `<div class="mt-2 bg-charcoal-50 border border-dashed border-charcoal-200 rounded-lg p-2"><p class="text-[9px] text-charcoal-500 font-medium">No open position for ${w.position} yet — cannot assign blindly.</p><p class="text-[8px] text-charcoal-400 mt-0.5">Create a vacancy first; this card lights up automatically.</p></div>`
+          : ''}
+        <div class="flex items-center justify-between mt-2.5 text-[9px] text-charcoal-400"><span>${w.source} · since ${formatDate(w.since)}</span></div>
+        <div class="flex gap-1.5 mt-2">
+          ${!link && canCandidates ? (matches.length
+            ? `<button onclick="assignWaitingToGym('${w.id}')" class="btn btn-sm btn-primary flex-1">Assign to Open Position</button>`
+            : `<button class="btn btn-sm btn-secondary flex-1 opacity-50 cursor-not-allowed" disabled title="No open position matches ${w.position} — create a vacancy first">Assign to Open Position</button>`) : ''}
+          ${!link
+            ? `<button onclick="showToast('Removed from waiting list','info')" class="btn btn-sm btn-ghost">Remove</button>`
+            : `<span class="text-[9px] text-blue-600 font-semibold flex-1 text-center py-1">Follow the verdict on the branch request card</span>`}
+        </div>
+      </div>`;
+      }).join('') || `<div class="bg-white rounded-xl border border-dashed border-charcoal-200 p-6 text-center text-xs text-charcoal-400 sm:col-span-2 lg:col-span-3">The waiting list is empty — pass a 1st interview (First Interview tab) and the candidate lands here.</div>`}
+    </div>
+  </div>`;
+}
+
+// ---- 5. Second Interview ----------------------------------------------------------
+function secondInterviewBody(p) {
+  const matchCard = r => {
+    const m = r.match;
+    const scheduled = !!r.iv2;
+    return `<div class="bg-white rounded-xl border border-charcoal-200 p-3 border-l-4 border-l-orange-400">
+      <div class="flex items-center justify-between gap-2">
+        <div class="flex items-center gap-2.5 min-w-0">
+          <div class="w-9 h-9 rounded-full bg-orange-100 text-orange-700 flex items-center justify-center text-[10px] font-semibold flex-shrink-0">${_initials(m.name)}</div>
+          <div class="min-w-0">
+            <p class="text-xs font-semibold text-charcoal-900 truncate">${m.name}</p>
+            <p class="text-[10px] text-charcoal-500 truncate">${m.phone||'—'} · matched for ${r.position} @ ${r.gym}</p>
+          </div>
+        </div>
+        <span class="badge ${scheduled?'badge-brand':'badge-blue'} text-[9px] flex-shrink-0">${scheduled?"2nd interview scheduled":"Awaiting the BM's call"}</span>
+      </div>
+      <div class="flex flex-wrap gap-1 mt-1.5">
+        ${(m.skills||[]).map(s=>`<span class="badge badge-purple text-[8px]">${s}</span>`).join('')}
+        ${m.shift?`<span class="badge badge-gray text-[8px]">${m.shift} shift</span>`:''}
+        ${m.salaryExp?`<span class="badge badge-gray text-[8px]">${m.salaryExp.toLocaleString()} EGP expected</span>`:''}
+      </div>
+      ${!scheduled
+        ? `<div class="mt-2 bg-blue-50 border border-blue-100 rounded-lg p-2"><p class="text-[9px] text-blue-700">Match sent by ${m.sentBy||'HR'} on ${formatDate(m.sentAt)} — the phone was shared with the branch; the BM calls to schedule the 2nd interview.</p></div>`
+        : `<div class="mt-2 bg-brand-50 border border-brand-100 rounded-lg p-2">
+            <div class="grid grid-cols-2 gap-1.5">
+              <div><p class="text-[8px] uppercase text-charcoal-400 font-semibold">Date &amp; time</p><p class="text-[10px] font-semibold text-charcoal-900">${formatDate(r.iv2.date)} · ${r.iv2.time}</p></div>
+              <div><p class="text-[8px] uppercase text-charcoal-400 font-semibold">Round</p><p class="text-[10px] font-semibold text-charcoal-900">${r.iv2.type}${r.iv2.by?' with '+r.iv2.by:''}</p></div>
+            </div>
+            ${r.iv2.notes?`<p class="text-[9px] text-charcoal-500 mt-1">${r.iv2.notes}</p>`:''}
+          </div>`}
+    </div>`;
+  };
+
+  return `<div class="space-y-3">
+    ${_recHint('Matched from the waiting list. The Branch Manager runs the 2nd interview — the verdict lands in <b>Accepted</b> or <b>Rejected</b> and travels back to HR automatically.')}
+    ${p.reqBranch.length?`<div class="bg-white rounded-xl border border-charcoal-200 overflow-hidden">
+      <div class="px-3.5 py-2.5 border-b border-charcoal-100 flex items-center justify-between gap-2 flex-wrap bg-charcoal-50/50">
+        <p class="bento-label">WITH THE BRANCH — ${p.reqBranch.length} MATCH${p.reqBranch.length>1?'ES':''}</p>
+        <p class="text-[10px] text-charcoal-400">Waiting on the BM's call / 2nd interview verdict</p>
+      </div>
+      <div class="p-3 grid grid-cols-1 lg:grid-cols-2 gap-2">${p.reqBranch.map(matchCard).join('')}</div>
+    </div>`:''}
+    ${!p.reqBranch.length?`<div class="bg-white rounded-xl border border-dashed border-charcoal-200 p-6 text-center text-xs text-charcoal-400">Nobody in a second interview right now — send a match to a branch from <b>Requests &amp; Vacancies</b>.</div>`:''}
+  </div>`;
+}
+
+// ---- 6. Accepted --------------------------------------------------------------------
+function acceptedBody(p, canHire) {
+  const accBranch = p.reqAccepted;
+  const accCands = p.acceptedCands;
+  const matchCard = r => {
+    const m = r.match;
+    const onList = (MOCK.waitingList||[]).some(w=>w.id===m.waitingListId);
+    return `<div class="bg-white rounded-xl border border-charcoal-200 p-3 border-l-4 border-l-green-400">
+      <div class="flex items-center justify-between gap-2">
+        <div class="flex items-center gap-2.5 min-w-0">
+          <div class="w-9 h-9 rounded-full bg-green-100 text-green-700 flex items-center justify-center text-[10px] font-semibold flex-shrink-0">${_initials(m.name)}</div>
+          <div class="min-w-0">
+            <p class="text-xs font-semibold text-charcoal-900 truncate">${m.name} — ${r.position} @ ${r.gym}</p>
+            <p class="text-[10px] text-charcoal-500">${m.phone||'—'} · ${m.shift||'any'} shift${m.salaryExp?` · ${m.salaryExp.toLocaleString()} EGP expected`:''}</p>
+          </div>
+        </div>
+        ${onList?`<span class="badge badge-yellow text-[9px] flex-shrink-0">Waiting for the account</span>`:`<span class="badge badge-success text-[9px] flex-shrink-0">Account created ✓</span>`}
+      </div>
+      ${branchPipelineHtml(r)}
+    </div>`;
+  };
+  const candCard = c => `<div class="flex flex-col gap-1.5">
+    ${_pipelineCard(c, c.stage)}
+    ${c.stage==='Accepted'&&canHire?`<button onclick="openHireWizard('${c.id}')" class="btn btn-sm btn-success">Hire — Salary, Terms &amp; Account →</button>`:''}
+    ${c.stage==='Hired'?`<p class="text-[9px] text-green-700 font-semibold text-center">Account created · onboarding started ✓</p>`:''}
+  </div>`;
+
+  return `<div class="space-y-3">
+    ${_recHint('Accepted at the 2nd interview (or accepted from the pipeline). The last step: create the employee account — the hire wizard turns the whole interview trail into an employee record and closes the seat.')}
+    ${accBranch.length?`<div class="bg-white rounded-xl border border-charcoal-200 overflow-hidden">
+      <div class="px-3.5 py-2.5 border-b border-charcoal-100 flex items-center justify-between gap-2 flex-wrap bg-charcoal-50/50">
+        <p class="bento-label">ACCEPTED AT THE BRANCH — ${accBranch.length}</p>
+        <p class="text-[10px] text-charcoal-400">Create the account — the vacancy seat closes with it</p>
+      </div>
+      <div class="p-3 grid grid-cols-1 lg:grid-cols-2 gap-2">${accBranch.map(matchCard).join('')}</div>
+    </div>`:''}
+    ${accCands.length?`<div class="bg-white rounded-xl border border-charcoal-200 overflow-hidden">
+      <div class="px-3.5 py-2.5 border-b border-charcoal-100 flex items-center justify-between gap-2 flex-wrap bg-charcoal-50/50">
+        <p class="bento-label">ACCEPTED FROM THE PIPELINE — ${accCands.length}</p>
+        <p class="text-[10px] text-charcoal-400">Panel hires and hires already under way</p>
+      </div>
+      <div class="p-3 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">${accCands.map(candCard).join('')}</div>
+    </div>`:''}
+    ${!accBranch.length&&!accCands.length?`<div class="bg-white rounded-xl border border-dashed border-charcoal-200 p-6 text-center text-xs text-charcoal-400">Nobody accepted yet — matches awaiting a verdict are in <b>Second Interview</b>.</div>`:''}
+  </div>`;
+}
+
+// ---- 7. Rejected ----------------------------------------------------------------------
+function rejectedBody(p) {
+  const bmRejected = p.bmRejected;
+  const cands = p.rejectedCands;
+  const blocked = p.blockedCands;
+  const reqs = p.reqRejected;
+  const apps = p.rejectedApps;
+  const total = bmRejected.length + cands.length + blocked.length + reqs.length + apps.length;
+
+  const bmCard = w => {
+    const live = _wlBranchLink(w.id);
+    const flag = w.bmRejected || {};
+    const pos = flag.position || (live && live.position) || w.position;
+    const gym = flag.gym || (live && live.gym) || '—';
+    const by = flag.by || (live && live.iv2 && live.iv2.by) || '';
+    const date = flag.date || (live && live.iv2 && live.iv2.date) || '';
+    const note = flag.note || (live && live.iv2 && live.iv2.notes) || '';
+    const type = (live && live.iv2 && live.iv2.type) || '';
+    const canResend = !!(live && !_sendActive(live));
+    return `<div class="bg-white rounded-xl border border-red-100 p-3 border-l-4 border-l-red-400">
+      <div class="flex items-center justify-between gap-2">
+        <div class="flex items-center gap-2.5 min-w-0">
+          <div class="w-9 h-9 rounded-full bg-red-100 text-red-700 flex items-center justify-center text-[10px] font-semibold flex-shrink-0">${_initials(w.name)}</div>
+          <div class="min-w-0">
+            <p class="text-xs font-semibold text-charcoal-900 truncate">${w.name} — for ${pos} @ ${gym}</p>
+            <p class="text-[10px] text-charcoal-500">Rejected${by?' by '+by:''}${date?' on '+formatDate(date):''}${type?' · '+type+' interview':''}</p>
+          </div>
+        </div>
+        <span class="badge badge-red text-[9px] flex-shrink-0">2nd interview</span>
+      </div>
+      ${note?`<p class="text-[10px] text-red-700 mt-1.5">${note}</p>`:''}
+      ${canResend
+        ? `<div class="flex items-center justify-between gap-2 mt-2 flex-wrap">
+            <p class="text-[9px] text-charcoal-400">The request is back in <b>Requests &amp; Vacancies</b> waiting for a new match.</p>
+            <button onclick="sendMatchToBranch('${live.id}')" class="btn btn-sm btn-primary flex-shrink-0">Send another candidate</button>
+          </div>`
+        : `<p class="text-[9px] text-charcoal-400 mt-2">A new candidate is already with the branch on this request.</p>`}
+    </div>`;
+  };
+
+  const reqCard = r => `<div class="bg-white rounded-xl border border-red-100 p-3">
+    <div class="flex items-center justify-between gap-2">
+      <div class="min-w-0"><p class="text-xs font-semibold text-charcoal-900">${r.position} — ${r.gym}</p><p class="text-[10px] text-charcoal-500">Submitted by ${r.submittedBy} on ${formatDate(r.submittedDate)} · ${r.urgency} urgency</p></div>
+      ${statusBadge(r.status)}
+    </div>
+    ${r.decidedNote?`<p class="text-[10px] text-charcoal-700 mt-1.5"><b>Reason sent to the branch:</b> ${r.decidedNote}</p>`:`<p class="text-[10px] text-charcoal-400 mt-1.5">No reason recorded.</p>`}
+    <div class="flex items-center gap-1.5 mt-1.5 flex-wrap"><span class="badge badge-gray text-[9px]">Decided by ${r.decidedBy || MOCK.currentUser.fullName}</span></div>
+  </div>`;
+
+  const blockCard = c => `<div class="bg-white rounded-xl border border-red-100 p-3">
+    <div class="flex items-center justify-between gap-2">
+      <div class="flex items-center gap-2.5 min-w-0">
+        <div class="w-8 h-8 rounded-full bg-red-100 text-red-700 flex items-center justify-center text-[10px] font-semibold flex-shrink-0">${_initials(c.name)}</div>
+        <div class="min-w-0"><p class="text-xs font-semibold text-charcoal-900 truncate">${c.name}</p><p class="text-[10px] text-charcoal-500">${c.position} · blocked from hiring</p></div>
+      </div>
+      <span class="badge badge-red text-[9px]">Blocked</span>
+    </div>
+    <p class="text-[9px] text-charcoal-500 mt-1">${c.blockReason||'Blocked manually by HR'}</p>
+    <div class="flex justify-end mt-1.5"><button onclick="_setCandidateBlock('${c.id}', false)" class="btn btn-sm btn-ghost text-brand-700 font-bold">Restore to pipeline</button></div>
+  </div>`;
+
+  const appCard = a => `<div class="bg-white rounded-xl border border-red-100 p-3 flex items-center justify-between gap-2">
+    <div class="flex items-center gap-2.5 min-w-0">
+      <div class="w-8 h-8 rounded-full bg-red-100 text-red-700 flex items-center justify-center text-[10px] font-semibold flex-shrink-0">${_initials(a.name)}</div>
+      <div class="min-w-0"><p class="text-xs font-semibold text-charcoal-900 truncate">${a.name}</p><p class="text-[10px] text-charcoal-500">${a.position} · applied ${formatDate(a.appliedDate)} via ${a.formName}</p></div>
+    </div>
+    <span class="badge badge-red text-[9px] flex-shrink-0">Application rejected</span>
+  </div>`;
+
+  return `<div class="space-y-3">
+    ${_recHint('Everyone rejected along the way — HR decisions and 2nd-interview verdicts from the branches, kept here for the record.')}
+    ${bmRejected.length?`<div>${_recSection('Rejected at the 2nd interview by the branch', bmRejected.length, 'text-red-600')}<div class="space-y-1.5">${bmRejected.map(bmCard).join('')}</div></div>`:''}
+    ${cands.length?`<div>${_recSection('Candidates', cands.length, 'text-red-600')}<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">${cands.map(c=>_pipelineCard(c,'Rejected')).join('')}</div></div>`:''}
+    ${blocked.length?`<div>${_recSection('Blocked', blocked.length, 'text-red-600')}<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">${blocked.map(blockCard).join('')}</div></div>`:''}
+    ${reqs.length?`<div>${_recSection('Requests declined by HR', reqs.length, 'text-red-600')}<div class="space-y-1.5">${reqs.map(reqCard).join('')}</div></div>`:''}
+    ${apps.length?`<div>${_recSection('Applications', apps.length, 'text-red-600')}<div class="grid grid-cols-1 sm:grid-cols-2 gap-2">${apps.map(appCard).join('')}</div></div>`:''}
+    ${!total?`<div class="bg-white rounded-xl border border-dashed border-charcoal-200 p-6 text-center text-xs text-charcoal-400">Nobody rejected — all clear.</div>`:''}
+  </div>`;
 }
 
 // ==================== MODALS ====================
@@ -1023,7 +1726,7 @@ function openCandidateDetail(cid) {
       <p><b>Screened by:</b> ${c.screen.by} · <b>Date:</b> ${formatDate(c.screen.date)}</p>
       <p><b>Score:</b> ${c.screen.eval} / 5 · <b>Verdict:</b> ${c.screen.verdict}</p>
       <p><b>Full comments:</b> ${c.screen.notes||'No comments recorded.'}</p>
-      <p><b>Next step:</b> ${c.stage==='Applied'?'schedule the screening call':'already past screening — see interview rounds below'}</p>
+      <p><b>Next step:</b> ${c.stage==='Applied'?'move on to the first interview':'already past this step — see the interview rounds below'}</p>
       <p class="text-charcoal-400"><b>Expectations:</b> ${f.salaryExp?f.salaryExp.toLocaleString()+' EGP':'—'} · ${f.availability||'—'} · ${f.education||'—'}</p>
     </div>
   </div>`:'';
@@ -1305,6 +2008,6 @@ function confirmHireCandidate(cid) {
   MOCK.auditLog.unshift({ id:'al-'+Date.now(), action:'Employee Hired from Recruitment', user:MOCK.currentUser.fullName, target:c.name, detail:'Candidate converted to employee — '+c.position, timestamp:'2026-09-09 '+new Date().toLocaleTimeString(), gym:'Nasr City' });
   closeModal();
   showToast(c.name + ' hired! Employee profile created + onboarding checklist started.', 'success');
-  _recTab = 'newcomers';
+  _recTab = 'accepted';
   renderAll();
 }

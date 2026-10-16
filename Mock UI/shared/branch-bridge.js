@@ -36,8 +36,10 @@ function makeQueue(KEY) {
     items.forEach(n => {
       const existing = byId[n.id];
       if (existing && (existing.status === 'Approved' || existing.status === 'Rejected')) {
-        // HR already decided — keep the decision, refresh descriptive fields only.
-        byId[n.id] = Object.assign({}, n, {
+        // HR already decided — keep the decision and everything else that was
+        // written onto the item (e.g. a candidate match) unless the pusher
+        // refreshed that exact field.
+        byId[n.id] = Object.assign({}, existing, n, {
           status: existing.status,
           decidedBy: existing.decidedBy,
           decidedNote: existing.decidedNote,
@@ -65,6 +67,18 @@ function makeQueue(KEY) {
     return item;
   }
 
+  // Merge extra fields onto one item without touching the rest. Used by HR to
+  // attach a waiting-list candidate to a request as a match, and by the branch
+  // to let 2nd-interview updates ride the same record.
+  function patch(id, fields) {
+    const queue = read();
+    const item = queue.find(x => x.id === id);
+    if (!item) return null;
+    Object.assign(item, fields);
+    write(queue);
+    return item;
+  }
+
   function pending() {
     return read().filter(i => i.status === 'Pending HR');
   }
@@ -80,7 +94,7 @@ function makeQueue(KEY) {
     });
   }
 
-  return { KEY, read, write, push, decide, pending, byId, onChange };
+  return { KEY, read, write, push, decide, patch, pending, byId, onChange };
 }
 
 const BranchBridge = makeQueue('revive_branch_queue_v1');

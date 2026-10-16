@@ -1,0 +1,34 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, sans-serif;
+}
+
+html {
+  font-family: var(--font-sans);
+}
+
+/* Kiosk viewfinder: the scanning laser that sweeps while the camera watches.
+   Layout + gradient copied from the Mock UI so the beam renders the same way. */
+.scanline {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, #22c55e, transparent);
+  pointer-events: none;
+  animation: kiosk-scan-sweep 1.4s linear infinite;
+}
+
+@keyframes kiosk-scan-sweep {
+  0% { top: 6%; }
+  100% { top: 94%; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .scanline { animation: none; opacity: 0.6; }
+}
+
+/* Kiosk cards: quick entrance for result/rejection overlays. */
+.fade-in { animation: fadeIn .25s ease; }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }

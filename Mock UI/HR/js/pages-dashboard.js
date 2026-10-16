@@ -399,12 +399,17 @@ function openCreateEvaluationFormModal() {
           </select>
         </div>
         <div>
-          <label class="block font-semibold text-charcoal-700 mb-1">Evaluating Manager</label>
+          <label class="block font-semibold text-charcoal-700 mb-1">Routed To (Evaluators)</label>
           <select id="ef-evaluator" class="form-select w-full text-xs">
-            <option value="Branch Manager + HR">Branch Manager + HR Manager</option>
-            <option value="HR Only">HR Department Only</option>
-            <option value="Self + Manager">Self-Assessment + Manager</option>
+            ${(() => {
+              // Permission-derived preview: whoever holds an eval-execution permission
+              // receives the form — evaluated employees are subjects, never recipients.
+              const evals = typeof evaluatorCandidates === 'function' ? evaluatorCandidates() : [];
+              if (!evals.length) return '<option value="">No users hold an evaluation permission</option>';
+              return evals.map(u => `<option value="${u.email}">${u.fullName} — ${u.position}</option>`).join('');
+            })()}
           </select>
+          <p class="text-[10px] text-charcoal-500 mt-1">Routes only to users with an evaluation permission — employees are evaluated as subjects, not recipients.</p>
         </div>
       </div>
 
@@ -638,6 +643,12 @@ function openVacancyRequestModal(vrId) {
         </div>
         <p class="text-xs text-charcoal-600 mt-2">Requested by: <b>${vr.submittedBy}</b> (Branch Manager) on ${vr.submittedDate}</p>
         <p class="text-xs text-charcoal-500 mt-1">Reason: ${vr.reason || 'Operational staffing need'}</p>
+        <div class="flex flex-wrap gap-1 mt-2">
+          ${vr.shift?`<span class="badge badge-gray text-[9px]">${vr.shift} shift</span>`:''}
+          ${(vr.expectedSalary||vr.salary)?`<span class="badge badge-gray text-[9px]">Expected: EGP ${(vr.expectedSalary||vr.salary).toLocaleString()}</span>`:''}
+          ${vr.department?`<span class="badge badge-gray text-[9px]">${vr.department}</span>`:''}
+          ${vr.source==='branch'?`<span class="badge badge-purple text-[9px]">From branch portal</span>`:''}
+        </div>
       </div>
     </div>
   `;
@@ -657,6 +668,7 @@ function approveVacancyRequest(vrId) {
   if (!vr) return;
   vr.status = 'Approved';
   vr.decidedBy = MOCK.currentUser.fullName;
+  vr.decidedNote = '';
   // Write the decision back to the Branch Manager portal (no-op for HR-native requests).
   if (typeof VacancyBridge !== 'undefined') VacancyBridge.decide(vr.id, 'Approved', MOCK.currentUser.fullName, '');
   MOCK.vacancies.unshift({
@@ -666,7 +678,7 @@ function approveVacancyRequest(vrId) {
     headcount: vr.headcount || 1,
     candidates: 0,
     urgency: vr.urgency || 'Normal',
-    salary: vr.salary || null,
+    salary: vr.salary || vr.expectedSalary || null,
     shift: vr.shift || 'Morning',
     requestedBy: vr.submittedBy,
     createdDate: '2026-09-09',
@@ -679,15 +691,47 @@ function approveVacancyRequest(vrId) {
   showToast(`Vacancy approved for ${vr.position} at ${vr.gym}!`, 'success');
 }
 
+// Step 1: collect the reason — it travels back to the Branch Manager's portal.
 function rejectVacancyRequest(vrId) {
   const vr = MOCK.vacancyRequests.find(x => x.id === vrId);
   if (!vr) return;
+  openModal(`Decline — ${vr.position} @ ${vr.gym}`, `
+    <div class="space-y-3">
+      <div class="bg-charcoal-50 border border-charcoal-200 rounded-xl p-3">
+        <div class="flex items-center gap-2 mb-1">
+          <span class="badge badge-purple text-[9px]">${vr.gym}</span>
+          <span class="text-xs font-bold text-charcoal-900">${vr.position}</span>
+        </div>
+        <p class="text-[11px] text-charcoal-600">${vr.headcount || 1} seat${(vr.headcount || 1) > 1 ? 's' : ''} · ${vr.urgency} urgency${vr.shift ? ' · ' + vr.shift + ' shift' : ''}</p>
+        <p class="text-[10px] text-charcoal-400 mt-0.5">Requested by ${vr.submittedBy} on ${vr.submittedDate}</p>
+      </div>
+      <div class="bg-red-50 border border-red-100 rounded-lg p-2.5 text-[10px] text-red-700 leading-relaxed">
+        Declining sends your reason back to the Branch Manager's portal — it shows on the request as <b>"Declined by ${MOCK.currentUser.fullName}"</b>.
+      </div>
+      <div>
+        <label class="form-label">Reason for declining <span class="text-red-500">*</span></label>
+        <textarea id="vr-reject-note" class="form-input" rows="3" placeholder="e.g. No budget this quarter — covered by the facilities contract."></textarea>
+      </div>
+    </div>`, {
+    footer: `<button onclick="closeModal()" class="btn btn-sm btn-secondary">Cancel</button>
+             <button onclick="confirmRejectVacancyRequest('${vr.id}')" class="btn btn-sm btn-primary">Decline request</button>`
+  });
+}
+
+function confirmRejectVacancyRequest(vrId) {
+  const vr = MOCK.vacancyRequests.find(x => x.id === vrId);
+  if (!vr) return;
+  const ta = document.getElementById('vr-reject-note');
+  const note = ta ? ta.value.trim() : '';
+  if (!note) { showToast('A reason is required to decline', 'error'); return; }
   vr.status = 'Rejected';
   vr.decidedBy = MOCK.currentUser.fullName;
-  // Write the decision back to the Branch Manager portal (no-op for HR-native requests).
-  if (typeof VacancyBridge !== 'undefined') VacancyBridge.decide(vr.id, 'Rejected', MOCK.currentUser.fullName, '');
+  vr.decidedNote = note;
+  // Write the decision + reason back to the Branch Manager portal (no-op for HR-native requests).
+  if (typeof VacancyBridge !== 'undefined') VacancyBridge.decide(vr.id, 'Rejected', MOCK.currentUser.fullName, note);
+  closeModal();
   renderAll();
-  showToast(`Vacancy request for ${vr.position} declined`, 'info');
+  showToast(`Vacancy request for ${vr.position} declined — the reason was sent to the branch`, 'info');
 }
 
 // ==================== CONTRACT RENEWAL MODAL ====================

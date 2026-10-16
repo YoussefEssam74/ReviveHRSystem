@@ -12,11 +12,13 @@ import sys
 import time
 import json
 import base64
+import binascii
 import threading
 import cv2
 import numpy as np
-from fastapi import FastAPI, Response, Query
-from fastapi.responses import HTMLResponse, StreamingResponse, JSONResponse, RedirectResponse
+from fastapi import FastAPI, Response, Query, HTTPException
+from fastapi.responses import HTMLResponse, StreamingResponse, JSONResponse, RedirectResponse, FileResponse
+from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 import uvicorn
@@ -277,6 +279,30 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+def decode_base64_image(b64_str: str):
+    """Decode a base64 image (raw or data-URL) into an OpenCV frame."""
+    if not b64_str:
+        return None
+    if "," in b64_str:
+        b64_str = b64_str.split(",", 1)[1]
+    try:
+        img_bytes = base64.b64decode(b64_str, validate=False)
+    except (binascii.Error, ValueError):
+        return None
+    nparr = np.frombuffer(img_bytes, np.uint8)
+    return cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+
+
+class FramePayload(BaseModel):
+    image: str
+
+
+class EnrollPayload(BaseModel):
+    image: str
+    name: str
+    employee_code: str = ""
+
 # Mount Attendance Station UI if found
 STATION_DIR = os.path.abspath(os.path.join(
     SCRIPT_DIR, "..", "Mock UI", "Attendance Station"))
@@ -284,7 +310,31 @@ if os.path.exists(STATION_DIR):
     app.mount("/station", StaticFiles(directory=STATION_DIR,
               html=True), name="station")
 
+# Mock UI root (portal + HR console + employee portal) — mounted LAST (see below)
+# so every API route registered after this point still wins over the static mount.
+MOCK_UI_DIR = os.path.abspath(os.path.join(SCRIPT_DIR, "..", "Mock UI"))
+
 camera = None
+camera_lock = threading.Lock()
+
+
+def ensure_camera():
+    """Open the local camera LAZILY, only when a server-side consumer asks for it.
+
+    The kiosk's primary frame source is the browser webcam (getUserMedia).
+    Chrome cannot open the device while this process holds it exclusively
+    (NotReadableError), so we must NOT open the camera at server startup.
+    """
+    global camera
+    if camera is None:
+        with camera_lock:
+            if camera is None:
+                cam = CameraStream()
+                if cam.cap is None or not cam.cap.isOpened():
+                    cam.running = False  # stop the capture thread
+                    raise HTTPException(status_code=503, detail="Camera unavailable (busy or missing)")
+                camera = cam
+    return camera
 
 
 def generate_frames():
@@ -300,6 +350,7 @@ def generate_frames():
 
 @app.get("/video_feed")
 def video_feed():
+    ensure_camera()  # server preview owns the camera ONLY when this endpoint is used
     return StreamingResponse(generate_frames(), media_type="multipart/x-mixed-replace; boundary=frame")
 
 
@@ -412,8 +463,147 @@ def get_status():
         }
 
 
+@app.post("/process_frame")
+def process_frame(payload: FramePayload):
+    frame = decode_base64_image(payload.image)
+    if frame is None:
+        return JSONResponse({"error": "Invalid image data"}, status_code=400)
+
+    fh, fw, _ = frame.shape
+    detector.setInputSize((fw, fh))
+    _, faces = detector.detect(frame)
+
+    if faces is None or len(faces) == 0:
+        return {
+            "face_detected": False,
+            "is_live": False,
+            "liveness_score": 0.0,
+            "is_match": False,
+            "recognized_name": None,
+            "recognized_id": None,
+            "similarity": 0.0,
+            "status": "SEARCHING"
+        }
+
+    face = faces[0]
+    bbox = face[0:4].astype(int).tolist()
+    x, y, w, h = bbox
+    x = max(0, x)
+    y = max(0, y)
+    w = min(w, fw - x)
+    h = min(h, fh - y)
+
+    # 1. Anti-Spoofing Liveness Check
+    is_live, liveness_score, _ = anti_spoof.check_liveness(frame, [x, y, w, h])
+
+    # 2. SFace Recognition Feature Extraction
+    aligned = recognizer.alignCrop(frame, face)
+    current_feat = recognizer.feature(aligned)
+
+    best_name = None
+    best_id = None
+    best_score = 0.0
+    matched = False
+
+    if is_live:
+        with db_lock:
+            for emp_key, emp_data in employee_db.items():
+                sim = float(recognizer.match(emp_data["feature"], current_feat, cv2.FaceRecognizerSF_FR_COSINE))
+                if sim > best_score:
+                    best_score = sim
+                    best_name = emp_data["name"]
+                    best_id = emp_data.get("employee_code", emp_key)
+
+            if best_score >= COSINE_THRESHOLD:
+                matched = True
+
+    status_tag = "SPOOF" if not is_live else ("MATCHED" if matched else "UNKNOWN")
+
+    return {
+        "face_detected": True,
+        "bbox": [x, y, w, h],
+        "is_live": bool(is_live),
+        "liveness_score": round(float(liveness_score), 3),
+        "is_match": bool(matched),
+        "recognized_name": best_name if matched else None,
+        "recognized_id": best_id if matched else None,
+        "similarity": round(float(best_score), 3),
+        "status": status_tag
+    }
+
+
+@app.post("/enroll_frame")
+def enroll_frame(payload: EnrollPayload):
+    clean_name = payload.name.strip()
+    clean_code = payload.employee_code.strip()
+    if not clean_name:
+        return JSONResponse({"success": False, "message": "Please enter a valid employee name."}, status_code=400)
+
+    frame = decode_base64_image(payload.image)
+    if frame is None:
+        return JSONResponse({"success": False, "message": "Invalid image"}, status_code=400)
+
+    fh, fw, _ = frame.shape
+    detector.setInputSize((fw, fh))
+    _, faces = detector.detect(frame)
+
+    if faces is None or len(faces) == 0:
+        return JSONResponse({"success": False, "message": "No face detected in camera!"})
+
+    face = faces[0]
+    bbox = face[0:4].astype(int).tolist()
+    x, y, w, h = bbox
+    x = max(0, x)
+    y = max(0, y)
+    w = min(w, fw - x)
+    h = min(h, fh - y)
+
+    is_live, score, _ = anti_spoof.check_liveness(frame, [x, y, w, h])
+    if not is_live or score < LIVENESS_THRESHOLD:
+        return JSONResponse({
+            "success": False,
+            "message": f"⚠️ ENROLLMENT REJECTED: Liveness failed ({round(score*100)}% real). You cannot enroll using a photo or phone screen."
+        })
+
+    aligned = recognizer.alignCrop(frame, face)
+    current_feat = recognizer.feature(aligned)
+
+    _, thumb_buf = cv2.imencode('.jpg', aligned)
+    thumb_b64 = f"data:image/jpeg;base64,{base64.b64encode(thumb_buf).decode('utf-8')}"
+
+    emp_id = clean_code if clean_code else str(int(time.time() * 1000))
+    emp_code = clean_code if clean_code else emp_id
+
+    with db_lock:
+        employee_db[emp_id] = {
+            "id": emp_id,
+            "employee_code": emp_code,
+            "name": clean_name,
+            "feature": np.copy(current_feat),
+            "thumb": thumb_b64,
+            "enrolled_at": time.strftime("%H:%M:%S")
+        }
+
+    save_enrolled_faces()
+
+    return {
+        "success": True,
+        "message": f"Verified live person! Successfully enrolled '{clean_name}' ({emp_code}).",
+        "employee": {
+            "id": emp_id,
+            "employee_code": emp_code,
+            "name": clean_name
+        }
+    }
+
+
 @app.get("/")
-def root_redirect():
+def portal_index():
+    """Serve the Mock UI portal (HR + Kiosk + Employee entry points) at the root
+    so HR, kiosk, and employee pages share ONE origin (localStorage pairing works)."""
+    portal = os.path.join(MOCK_UI_DIR, "index.html")
+    if os.path.exists(portal):
+        return FileResponse(portal)
     if os.path.exists(STATION_DIR):
         return RedirectResponse(url="/station/")
     return RedirectResponse(url="/monitor")
@@ -812,15 +1002,21 @@ def monitor():
     """
 
 
+# IMPORTANT: keep this mount LAST so every API route, /station, /monitor, and the
+# portal GET / above are registered before the catch-all static root.
+if os.path.exists(MOCK_UI_DIR):
+    app.mount("/", StaticFiles(directory=MOCK_UI_DIR, html=True), name="mockui")
+
+
 def run_server():
-    global camera
     load_enrolled_faces()
     print("\n" + "=" * 65)
     print(" REVIVE HR - BIOMETRIC ATTENDANCE STATION SERVICE")
     print("=" * 65)
-    print(" [*] Connecting to camera (Index 0)...")
-    camera = CameraStream()
-    print(" [*] Camera active!")
+    print(" [*] Camera: deferred (opens on first /video_feed request only)")
+    print(" [*]        so the kiosk's BROWSER webcam can claim the device.")
+    print(" [*] Portal (start here)      : http://localhost:5050/")
+    print(" [*] HR Console (gym picker)  : http://localhost:5050/HR/")
     print(" [*] Attendance Station Kiosk : http://localhost:5050/station/")
     print(" [*] Biometric Monitor Debug  : http://localhost:5050/monitor")
     print("=" * 65)
@@ -830,7 +1026,7 @@ def run_server():
     def open_browser():
         time.sleep(1.2)
         import webbrowser
-        webbrowser.open("http://localhost:5050/station/")
+        webbrowser.open("http://localhost:5050/")
 
     threading.Thread(target=open_browser, daemon=True).start()
     uvicorn.run(app, host="0.0.0.0", port=5050, log_level="info")

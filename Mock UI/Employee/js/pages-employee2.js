@@ -1,5 +1,6 @@
 // ==================== PAYROLL ====================
 let _payExpanded = null; // track which month card is expanded
+let _paySection = null;  // track which summary panel is open (ytd | salary | leave)
 
 function _payBarWidth(amount, max) {
   if (!max) return 0;
@@ -9,8 +10,10 @@ function _payBarWidth(amount, max) {
 function _payItemIcon(icon, color) {
   const colorMap = {
     brand: 'bg-brand-100 text-brand-600',
+    green: 'bg-green-100 text-green-600',
     yellow: 'bg-yellow-100 text-yellow-600',
     blue: 'bg-blue-100 text-blue-600',
+    purple: 'bg-purple-100 text-purple-600',
     red: 'bg-red-100 text-red-600',
     orange: 'bg-orange-100 text-orange-600',
   };
@@ -18,143 +21,166 @@ function _payItemIcon(icon, color) {
   return `<span class="inline-flex items-center justify-center w-7 h-7 rounded-lg ${cls}"><span class="material-icons text-sm">${icon || 'label'}</span></span>`;
 }
 
+// Annual leave accrues one day per month (12 / 12 = 1). Take more than the month's
+// quota and it goes negative — but that day only costs him if he leaves the job.
+// If he stays, nothing happens and the next month starts again from 0.
+function _payMonthlyLeave() {
+  const lb = MOCK.leaveBalance;
+  const quota = Math.round(lb.annualTotal / 12);
+  const used = lb.annualUsedThisMonth || 0;
+  const over = Math.max(0, used - quota);
+  const yearRem = Math.max(0, lb.annualTotal - (lb.annualUsed || 0));
+  return {
+    quota,
+    used,
+    over,
+    unpaidIfLeave: over,          // days that would be withheld if he resigns now
+    yearRem,
+    yearTotal: lb.annualTotal,
+    yearPct: lb.annualTotal ? Math.round(((lb.annualUsed || 0) / lb.annualTotal) * 100) : 0
+  };
+}
+
+function _payStatTile(icon, value, label, muted, alert) {
+  return `<div class="bg-charcoal-50 rounded-lg p-1.5 text-center${muted ? ' opacity-60' : ''}">
+    <span class="material-icons text-sm ${alert ? 'text-red-400' : 'text-charcoal-400'}">${icon}</span>
+    <p class="text-sm font-bold leading-none mt-0.5 whitespace-nowrap ${alert ? 'text-red-600' : 'text-charcoal-900'}">${value}</p>
+    <p class="text-[9px] text-charcoal-500 leading-tight mt-0.5">${label}</p>
+  </div>`;
+}
+
+// Small collapsible panel used for the summary sections on this page.
+function _payPanel(key, label, summary, note, body, alert) {
+  const open = _paySection === key;
+  return `
+    <div class="bg-white rounded-xl border border-charcoal-200 overflow-hidden">
+      <div class="px-3 py-2.5 cursor-pointer hover:bg-charcoal-50/60 transition-colors" onclick="togglePaySection('${key}')" aria-expanded="${open}">
+        <div class="flex items-center gap-2">
+          <p class="bento-label text-charcoal-500 truncate flex-1 min-w-0">${label}</p>
+          <div class="flex items-center gap-2 flex-shrink-0 min-w-0">
+            ${note ? `<span class="text-[11px] text-charcoal-400 hidden sm:block truncate">${note}</span>` : ''}
+            <span class="text-sm font-bold whitespace-nowrap ${alert ? 'text-red-600' : 'text-charcoal-900'}">${summary}</span>
+            <span class="material-icons text-charcoal-400 text-base transition-transform duration-200 ${open ? 'rotate-180' : ''}">expand_more</span>
+          </div>
+        </div>
+      </div>
+      ${open && body ? `<div class="border-t border-charcoal-100 bg-charcoal-50/40 p-2.5">${body}</div>` : ''}
+    </div>`;
+}
+
 function renderPayroll() {
   const current = MOCK.payroll.find(p => p.id === 'p1');
-  const history = MOCK.payroll.filter(p => p.visible);
-  const totalNet = history.reduce((s, p) => s + p.netSalary, 0);
-  const totalEarn = history.reduce((s, p) => s + p.grossEarnings, 0);
-  const totalDed = history.reduce((s, p) => s + p.totalDeductions, 0);
-  const avgNet = history.length ? Math.round(totalNet / history.length) : 0;
+  const paid = MOCK.payroll.filter(p => p.visible && p.status !== 'Processing'); // closed months only
+  // Closed payslips first, the still-open current month last
+  const months = [...MOCK.payroll.filter(p => p.visible)]
+    .sort((a, b) => (a.status === 'Processing' ? 1 : 0) - (b.status === 'Processing' ? 1 : 0));
+  const totalNet = paid.reduce((s, p) => s + p.netSalary, 0);
+  const totalEarn = paid.reduce((s, p) => s + p.grossEarnings, 0);
+  const totalDed = paid.reduce((s, p) => s + p.totalDeductions, 0);
+  const avgNet = paid.length ? Math.round(totalNet / paid.length) : 0;
+  const maxNet = Math.max(...paid.map(p => p.netSalary), 1);
 
   // Current period processing card
-  let currentCard = '';
-  if (current) {
-    currentCard = `
-      <div class="relative overflow-hidden rounded-2xl border border-brand-200 bg-gradient-to-br from-brand-50 via-white to-brand-50/50 p-2">
+  const currentCard = current ? `
+      <div class="relative overflow-hidden rounded-2xl border border-brand-200 bg-gradient-to-br from-brand-50 via-white to-brand-50/50 p-3.5">
         <div class="absolute top-0 right-0 w-28 h-28 bg-brand-100/40 rounded-full -translate-y-1/2 translate-x-1/2"></div>
-        <div class="relative flex items-center gap-3">
-          <div class="w-10 h-10 rounded-2xl bg-brand-500 flex items-center justify-center shadow-md shadow-brand-200 flex-shrink-0">
-            <span class="material-icons text-white text-xl">pending</span>
+        <div class="relative flex items-center gap-3.5">
+          <div class="w-12 h-12 rounded-2xl bg-brand-500 flex items-center justify-center shadow-md shadow-brand-200 flex-shrink-0">
+            <span class="material-icons text-white text-2xl">pending</span>
           </div>
           <div class="flex-1 min-w-0">
-            <p class="text-[10px] font-bold text-brand-600 uppercase tracking-wider">Current Period</p>
-            <p class="text-base font-bold text-charcoal-900 mt-0.5">${current.period}</p>
-            <div class="flex items-center gap-2 mt-0.5">
+            <p class="text-[11px] font-bold text-brand-600 uppercase tracking-wider">Current Period</p>
+            <p class="text-xl font-bold text-charcoal-900 mt-0.5">${current.period}</p>
+            <div class="flex items-center gap-2 mt-1">
               ${statusBadge('Processing')}
-              <span class="text-[10px] text-charcoal-400">· Payout pending</span>
+              <span class="text-xs text-charcoal-400">· Payout pending</span>
             </div>
           </div>
           <div class="text-right flex-shrink-0 hidden sm:block">
-            <div class="w-24 h-2 bg-brand-100 rounded-full overflow-hidden">
-              <div class="h-full bg-brand-400 rounded-full animate-pulse" style="width:65%"></div>
+            <div class="w-32 h-2.5 bg-brand-100 rounded-full overflow-hidden">
+              <div class="h-full bg-brand-400 rounded-full" style="width:65%"></div>
             </div>
-            <p class="text-[10px] text-charcoal-400 mt-1">Being processed...</p>
+            <p class="text-[11px] text-charcoal-400 mt-1.5">Being processed...</p>
           </div>
         </div>
-      </div>`;
-  }
+      </div>` : '';
 
-  // Contract & leave overview (latest paid period)
-  const ref = history[0];
-  let refCard = '';
-  if (ref) {
-    const annualInc = ref.annualIncrease || 0;
-    const contractSal = ref.baseSalary + annualInc;
-    const attPct = Math.round((ref.workedDays / ref.workingDays) * 100);
-    const leaveUsed = ref.usedAnnualLeave || 0;
-    const leaveRem = ref.remainingAnnualLeave || 0;
-    const leaveTotal = leaveUsed + leaveRem;
-    const leavePct = leaveTotal ? Math.round((leaveUsed / leaveTotal) * 100) : 0;
-    refCard = `
-      <div class="grid grid-cols-1 lg:grid-cols-2 gap-2">
-        <!-- Salary & Schedule -->
-        <div class="bg-white rounded-2xl border border-charcoal-100/80 shadow-sm p-2">
-          <div class="flex items-center justify-between mb-1.5">
-            <p class="bento-label text-charcoal-500">SALARY & SCHEDULE</p>
-            <span class="text-[10px] font-semibold text-charcoal-400">${ref.period}</span>
-          </div>
-          <div class="space-y-1">
-            <div class="flex items-center justify-between">
-              <div class="flex items-center gap-2 text-xs text-charcoal-600">
-                <span class="material-icons text-[16px] text-charcoal-400">payments</span>Basic Salary
-              </div>
-              <span class="text-xs font-bold text-charcoal-900">EGP ${ref.baseSalary.toLocaleString()}</span>
-            </div>
-            <div class="flex items-center justify-between">
-              <div class="flex items-center gap-2 text-xs text-charcoal-600">
-                <span class="material-icons text-[16px] text-green-500">trending_up</span>Annual Increase (10%)
-              </div>
-              <span class="text-xs font-bold text-green-600">+EGP ${annualInc.toLocaleString()}</span>
-            </div>
-            <div class="flex items-center justify-between bg-brand-50 border border-brand-100 rounded-lg px-2.5 py-1.5">
-              <p class="text-xs font-bold text-brand-700">Contractual Salary / month</p>
-              <p class="text-sm font-bold text-brand-700">EGP ${contractSal.toLocaleString()}</p>
-            </div>
-            <div class="grid grid-cols-4 gap-1.5 text-center pt-0.5">
-              <div class="bg-charcoal-50 rounded-lg p-1">
-                <p class="text-sm font-bold text-charcoal-900">${ref.workingDays}</p>
-                <p class="text-[9px] text-charcoal-500 leading-tight mt-0.5">Scheduled Work Days</p>
-              </div>
-              <div class="bg-charcoal-50 rounded-lg p-1">
-                <p class="text-sm font-bold text-charcoal-900">${ref.scheduledWeeklyDays || 6}</p>
-                <p class="text-[9px] text-charcoal-500 leading-tight mt-0.5">Weekly Days</p>
-              </div>
-              <div class="bg-charcoal-50 rounded-lg p-1">
-                <p class="text-sm font-bold text-brand-700">${ref.workedDays}</p>
-                <p class="text-[9px] text-charcoal-500 leading-tight mt-0.5">Attendance · ${attPct}%</p>
-              </div>
-              <div class="bg-charcoal-50 rounded-lg p-1">
-                <p class="text-sm font-bold ${ref.overtimeHours ? 'text-blue-700' : 'text-charcoal-400'}">${ref.overtimeHours || 0}h</p>
-                <p class="text-[9px] text-charcoal-500 leading-tight mt-0.5">Overtime</p>
-              </div>
-            </div>
-          </div>
+  // Body of each collapsible panel
+  const leave = _payMonthlyLeave();
+  const ref = paid[0];
+  const attPct = ref ? Math.round((ref.workedDays / ref.workingDays) * 100) : 0;
+  const salaryBody = ref ? `
+    <div class="space-y-1.5">
+      <div class="flex items-center justify-between">
+        <div class="flex items-center gap-2 text-[13px] text-charcoal-600">
+          <span class="material-icons text-base text-charcoal-400">payments</span>Basic Salary
         </div>
-
-        <!-- Annual Leave Balance -->
-        <div class="bg-white rounded-2xl border border-charcoal-100/80 shadow-sm p-2">
-          <div class="flex items-center justify-between mb-1.5">
-            <p class="bento-label text-charcoal-500">ANNUAL LEAVE BALANCE</p>
-            <span class="text-[10px] font-semibold text-charcoal-400">Used ${leaveUsed} · Remaining ${leaveRem}</span>
-          </div>
-          <div class="flex items-end justify-between gap-3 mb-1">
-            <div>
-              <p class="text-xl font-bold text-charcoal-900">${leaveUsed}<span class="text-xs text-charcoal-400 font-normal"> / ${leaveTotal} days</span></p>
-              <p class="text-[10px] text-charcoal-500">Used this year</p>
-            </div>
-            <div class="text-right">
-              <p class="text-xl font-bold text-brand-700">${leaveRem}</p>
-              <p class="text-[10px] text-charcoal-500">Remaining</p>
-            </div>
-          </div>
-          <div class="w-full h-2 bg-charcoal-100 rounded-full overflow-hidden mb-2">
-            <div class="h-full bg-brand-500 rounded-l-full transition-all" style="width:${leavePct}%"></div>
-          </div>
-          <div class="grid grid-cols-3 gap-1.5">
-            <div class="bg-charcoal-50 rounded-lg p-1.5 text-center">
-              <p class="text-sm font-bold text-charcoal-900">${leaveUsed}</p>
-              <p class="text-[9px] text-charcoal-500 mt-0.5">Used</p>
-            </div>
-            <div class="bg-charcoal-50 rounded-lg p-1.5 text-center">
-              <p class="text-sm font-bold text-brand-700">${leaveRem}</p>
-              <p class="text-[9px] text-charcoal-500 mt-0.5">Remaining</p>
-            </div>
-            <div class="bg-charcoal-50 rounded-lg p-1.5 text-center">
-              <p class="text-sm font-bold text-charcoal-900">${ref.paidLeaveDays || 0}</p>
-              <p class="text-[9px] text-charcoal-500 mt-0.5">Paid Leave</p>
-            </div>
-          </div>
+        <span class="text-[13px] font-bold text-charcoal-900">EGP ${ref.baseSalary.toLocaleString()}</span>
+      </div>
+      <div class="flex items-center justify-between">
+        <div class="flex items-center gap-2 text-[13px] text-charcoal-600">
+          <span class="material-icons text-base text-green-500">trending_up</span>Annual Increase (10%)
         </div>
-      </div>`;
-  }
+        <span class="text-[13px] font-bold text-green-600">+EGP ${(ref.annualIncrease || 0).toLocaleString()}</span>
+      </div>
+      <div class="flex items-center justify-between bg-brand-50 border border-brand-100 rounded-lg px-2.5 py-1.5">
+        <p class="text-[13px] font-bold text-brand-700">Contractual Salary / month</p>
+        <p class="text-sm font-bold text-brand-700">EGP ${(ref.baseSalary + (ref.annualIncrease || 0)).toLocaleString()}</p>
+      </div>
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-1.5 text-center pt-0.5">
+        <div class="bg-charcoal-50 rounded-lg p-1.5">
+          <p class="text-base font-bold text-charcoal-900">${ref.workingDays}</p>
+          <p class="text-[10px] text-charcoal-500 leading-tight mt-0.5">Scheduled Work Days</p>
+        </div>
+        <div class="bg-charcoal-50 rounded-lg p-1.5">
+          <p class="text-base font-bold text-charcoal-900">${ref.scheduledWeeklyDays || 6}</p>
+          <p class="text-[10px] text-charcoal-500 leading-tight mt-0.5">Weekly Days</p>
+        </div>
+        <div class="bg-charcoal-50 rounded-lg p-1.5">
+          <p class="text-base font-bold text-brand-700">${ref.workedDays}</p>
+          <p class="text-[10px] text-charcoal-500 leading-tight mt-0.5">Attendance · ${attPct}%</p>
+        </div>
+        <div class="bg-charcoal-50 rounded-lg p-1.5">
+          <p class="text-base font-bold ${ref.overtimeHours ? 'text-blue-700' : 'text-charcoal-400'}">${ref.overtimeHours || 0}h</p>
+          <p class="text-[10px] text-charcoal-500 leading-tight mt-0.5">Overtime</p>
+        </div>
+      </div>
+    </div>` : '';
 
-  // YTD Summary bento
+  const leaveBody = `
+    <div class="grid grid-cols-3 gap-1.5">
+      <div class="bg-charcoal-50 rounded-lg p-2 text-center">
+        <p class="text-xl font-bold text-charcoal-900 leading-none">${leave.quota}</p>
+        <p class="text-[10px] text-charcoal-500 mt-1">Quota / month</p>
+      </div>
+      <div class="bg-charcoal-50 rounded-lg p-2 text-center">
+        <p class="text-xl font-bold text-charcoal-900 leading-none">${leave.used}</p>
+        <p class="text-[10px] text-charcoal-500 mt-1">Used this month</p>
+      </div>
+      <div class="bg-charcoal-50 rounded-lg p-2 text-center">
+        <p class="text-xl font-bold leading-none ${leave.over ? 'text-red-600' : 'text-charcoal-900'}">${leave.over ? '-' + leave.over : 0}</p>
+        <p class="text-[10px] text-charcoal-500 mt-1">Unpaid if you leave</p>
+      </div>
+    </div>
+    <p class="text-[11px] leading-snug mt-2 ${leave.over ? 'text-red-600 font-semibold' : 'text-charcoal-500'}">
+      ${leave.over
+        ? `You are -${leave.over} over this month's quota — ${leave.unpaidIfLeave} day${leave.unpaidIfLeave === 1 ? '' : 's'} would be unpaid if you left the job. If you stay, nothing happens and next month starts again at 0.`
+        : `Within your monthly quota — nothing would be unpaid if you left the job. Next month starts again at 0.`}
+    </p>
+    <div class="flex items-center gap-2 mt-2">
+      <div class="flex-1 h-2 bg-charcoal-100 rounded-full overflow-hidden">
+        <div class="h-full bg-brand-500 rounded-l-full transition-all" style="width:${leave.yearPct}%"></div>
+      </div>
+      <span class="text-[11px] font-semibold text-charcoal-600 whitespace-nowrap">${leave.yearRem} / ${leave.yearTotal} days left this year</span>
+    </div>`;
+
+  // Year to date — closed months only, so the open month's estimate can't drift into these totals
   const ytdBento = `
     <div class="grid grid-cols-2 lg:grid-cols-4 gap-2">
       <div class="bg-white rounded-xl border border-charcoal-100/80 shadow-sm p-2 hover:shadow-md transition-shadow">
         <div class="flex items-center gap-2">
           <div class="w-8 h-8 rounded-lg bg-brand-50 flex items-center justify-center flex-shrink-0">
-            <span class="material-icons text-brand-500 text-lg">account_balance_wallet</span>
+            <span class="material-icons text-brand-500 text-base">account_balance_wallet</span>
           </div>
           <div class="min-w-0">
             <p class="text-[10px] font-semibold text-charcoal-400 uppercase tracking-wide truncate">Earned</p>
@@ -165,7 +191,7 @@ function renderPayroll() {
       <div class="bg-white rounded-xl border border-charcoal-100/80 shadow-sm p-2 hover:shadow-md transition-shadow">
         <div class="flex items-center gap-2">
           <div class="w-8 h-8 rounded-lg bg-red-50 flex items-center justify-center flex-shrink-0">
-            <span class="material-icons text-red-400 text-lg">remove_circle</span>
+            <span class="material-icons text-red-400 text-base">remove_circle</span>
           </div>
           <div class="min-w-0">
             <p class="text-[10px] font-semibold text-charcoal-400 uppercase tracking-wide truncate">Deductions</p>
@@ -176,7 +202,7 @@ function renderPayroll() {
       <div class="bg-white rounded-xl border border-charcoal-100/80 shadow-sm p-2 hover:shadow-md transition-shadow">
         <div class="flex items-center gap-2">
           <div class="w-8 h-8 rounded-lg bg-green-50 flex items-center justify-center flex-shrink-0">
-            <span class="material-icons text-green-500 text-lg">savings</span>
+            <span class="material-icons text-green-500 text-base">savings</span>
           </div>
           <div class="min-w-0">
             <p class="text-[10px] font-semibold text-charcoal-400 uppercase tracking-wide truncate">Net Pay</p>
@@ -187,7 +213,7 @@ function renderPayroll() {
       <div class="bg-white rounded-xl border border-charcoal-100/80 shadow-sm p-2 hover:shadow-md transition-shadow">
         <div class="flex items-center gap-2">
           <div class="w-8 h-8 rounded-lg bg-purple-50 flex items-center justify-center flex-shrink-0">
-            <span class="material-icons text-purple-500 text-lg">trending_up</span>
+            <span class="material-icons text-purple-500 text-base">trending_up</span>
           </div>
           <div class="min-w-0">
             <p class="text-[10px] font-semibold text-charcoal-400 uppercase tracking-wide truncate">Avg / Month</p>
@@ -197,179 +223,168 @@ function renderPayroll() {
       </div>
     </div>`;
 
-  // Monthly history cards
-  const maxSalary = Math.max(...history.map(p => p.netSalary));
-  let historyCards = history.slice(0,2).map(p => {
-    const earnings = p.items.filter(i => i.type === 'earning');
-    const deductions = p.items.filter(i => i.type === 'deduction');
-    const isExpanded = _payExpanded === p.id;
-    const barPct = _payBarWidth(p.netSalary, maxSalary);
-    const attendanceDed = deductions.find(d => d.isGroup);
-    const attendanceCount = attendanceDed && attendanceDed.subItems ? attendanceDed.subItems.length : 0;
+  // Everything behind the single PAYROLL SUMMARY row, grouped in one panel.
+  const summaryBody = `
+    <div class="space-y-3">
+      <div>
+        <div class="flex items-center justify-between mb-1.5">
+          <p class="bento-label text-charcoal-400">YEAR TO DATE</p>
+          <span class="text-[10px] font-semibold text-charcoal-400">${paid.length} months paid</span>
+        </div>
+        ${ytdBento}
+      </div>
 
+      <div>
+        <div class="flex items-center justify-between mb-1.5">
+          <p class="bento-label text-charcoal-400">SALARY & SCHEDULE</p>
+          <span class="text-[10px] font-semibold text-charcoal-400">${ref ? ref.period : ''}</span>
+        </div>
+        <div class="bg-white rounded-xl border border-charcoal-100 p-2.5">${salaryBody}</div>
+      </div>
+
+      <div>
+        <div class="flex items-center justify-between mb-1.5">
+          <p class="bento-label text-charcoal-400">ANNUAL LEAVE · MONTHLY QUOTA</p>
+          <span class="text-[10px] font-semibold text-charcoal-400">${current ? current.period : ''} · not closed</span>
+        </div>
+        <div class="bg-white rounded-xl border p-2.5 ${leave.over ? 'border-red-200' : 'border-charcoal-100'}">${leaveBody}</div>
+      </div>
+    </div>`;
+
+  // Monthly breakdown — one card per month, newest first
+  const rows = months.map(p => {
+    const open = _payExpanded === p.id;
     return `
-      <div class="bg-white rounded-2xl border border-charcoal-100/80 shadow-sm overflow-hidden transition-all duration-200 hover:shadow-md">
-        <!-- Card Header -->
-        <div class="p-2.5 cursor-pointer hover:bg-charcoal-50/40 transition-colors" onclick="togglePayExpand('${p.id}')">
-          <!-- Row 1: Period + Amount -->
+      <div class="bg-white rounded-xl border border-charcoal-200 overflow-hidden">
+        <div class="px-3 py-2.5 cursor-pointer hover:bg-charcoal-50/60 transition-colors" onclick="togglePayExpand('${p.id}')" aria-expanded="${open}">
           <div class="flex items-center justify-between gap-3">
-            <div class="flex items-center gap-2.5 min-w-0 flex-1">
-              <div class="w-8 h-8 rounded-lg bg-charcoal-100/70 flex items-center justify-center flex-shrink-0">
+            <div class="flex items-center gap-2.5 min-w-0">
+              <div class="w-8 h-8 rounded-lg bg-charcoal-100 flex items-center justify-center flex-shrink-0">
                 <span class="material-icons text-charcoal-500 text-base">receipt_long</span>
               </div>
-              <div class="min-w-0 flex-1">
+              <div class="min-w-0">
                 <p class="text-sm font-bold text-charcoal-900 truncate">${p.period}</p>
-                <p class="text-[10px] text-charcoal-400">Paid ${formatDate(p.paidDate)}</p>
+                <p class="text-[10px] text-charcoal-400 mt-0.5 truncate">${p.paidDate ? 'Paid ' + formatDate(p.paidDate) : 'Not paid yet'}</p>
               </div>
             </div>
             <div class="flex items-center gap-2 flex-shrink-0">
-              <span class="text-sm font-bold text-charcoal-900 whitespace-nowrap">EGP ${p.netSalary.toLocaleString()}</span>
               ${statusBadge(p.status)}
-              <span class="material-icons text-charcoal-400 text-base transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}">expand_more</span>
+              <span class="text-sm font-bold text-charcoal-900 whitespace-nowrap">EGP ${p.netSalary.toLocaleString()}</span>
+              <span class="material-icons text-charcoal-400 text-base transition-transform duration-200 ${open ? 'rotate-180' : ''}">expand_more</span>
             </div>
           </div>
-
-          <!-- Row 2: Progress bar -->
-          <div class="w-full h-1.5 bg-charcoal-100 rounded-full overflow-hidden mt-1.5">
-            <div class="h-full bg-gradient-to-r from-brand-500 to-brand-400 rounded-full transition-all duration-500" style="width:${barPct}%"></div>
-          </div>
-
-          <!-- Row 3: Stat chips -->
-          <div class="flex items-center gap-1.5 mt-1.5 flex-wrap">
-            <span class="inline-flex items-center gap-1 bg-green-50 text-green-700 rounded-full px-2 py-0.5 text-[9px] font-medium">
-              <span class="material-icons text-[10px]">add_circle</span>
-              ${earnings.length} earning${earnings.length !== 1 ? 's' : ''}
-            </span>
-            <span class="inline-flex items-center gap-1 bg-red-50 text-red-600 rounded-full px-2 py-0.5 text-[9px] font-medium">
-              <span class="material-icons text-[10px]">remove_circle</span>
-              ${deductions.length} deduction${deductions.length !== 1 ? 's' : ''}
-            </span>
-            ${attendanceCount > 0 ? `<span class="inline-flex items-center gap-1 bg-orange-50 text-orange-600 rounded-full px-2 py-0.5 text-[9px] font-medium">
-              <span class="material-icons text-[10px]">event_busy</span>
-              ${attendanceCount} late/absent
-            </span>` : ''}
-            ${(p.overtimeHours || 0) > 0 ? `<span class="inline-flex items-center gap-1 bg-blue-50 text-blue-600 rounded-full px-2 py-0.5 text-[9px] font-medium">
-              <span class="material-icons text-[10px]">schedule</span>
-              ${p.overtimeHours}h overtime
-            </span>` : ''}
+          <div class="w-full h-1 bg-charcoal-100 rounded-full overflow-hidden mt-2">
+            <div class="h-full bg-brand-500 rounded-full transition-all duration-500" style="width:${_payBarWidth(p.netSalary, maxNet)}%"></div>
           </div>
         </div>
-
-        <!-- Expanded detail section -->
-        ${isExpanded ? `
-        <div class="border-t border-charcoal-100 bg-gradient-to-b from-charcoal-50/40 to-white">
-          <div class="p-4 space-y-3">
-            <!-- Attendance mini-chart -->
-            ${p.workingDays ? `
-            <div class="bg-white rounded-xl border border-charcoal-100/80 shadow-sm p-3.5">
-              <div class="flex items-center justify-between mb-2.5">
-                <div class="flex items-center gap-1.5">
-                  <span class="material-icons text-charcoal-400 text-sm">event_available</span>
-                  <p class="bento-label text-charcoal-500">ATTENDANCE IMPACT</p>
-                </div>
-                <span class="text-[10px] font-bold text-charcoal-700 bg-charcoal-100/60 px-2 py-0.5 rounded-full">${p.workedDays}/${p.workingDays} days</span>
-              </div>
-              <div class="w-full h-3 bg-charcoal-100 rounded-full overflow-hidden flex">
-                <div class="h-full bg-brand-500 rounded-l-full transition-all" style="width:${Math.round((p.workedDays/p.workingDays)*100)}%"></div>
-                <div class="h-full bg-red-300 rounded-r-full transition-all" style="width:${Math.round(((p.workingDays - p.workedDays)/p.workingDays)*100)}%"></div>
-              </div>
-              <div class="flex items-center justify-between mt-2">
-                <span class="text-[10px] text-charcoal-500 flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-brand-500 inline-block"></span>${p.workedDays} days worked</span>
-                <span class="text-[10px] text-red-500 flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-red-300 inline-block"></span>${p.workingDays - p.workedDays} absent</span>
-              </div>
-            </div>` : ''}
-
-            <!-- Earnings detail -->
-            <div class="bg-white rounded-xl border border-charcoal-100/80 shadow-sm overflow-hidden">
-              <div class="flex items-center justify-between px-4 py-2.5 bg-green-50/60 border-b border-green-100">
-                <div class="flex items-center gap-1.5">
-                  <span class="material-icons text-green-500 text-sm">trending_up</span>
-                  <p class="text-[10px] font-bold text-green-700 uppercase tracking-wider">Earnings</p>
-                </div>
-                <p class="text-xs font-bold text-green-700">+EGP ${p.grossEarnings.toLocaleString()}</p>
-              </div>
-              <div class="divide-y divide-charcoal-50">
-                ${earnings.map(e => `
-                  <div class="flex items-center gap-3 px-4 py-3">
-                    ${_payItemIcon(e.icon, e.color)}
-                    <p class="text-xs font-medium text-charcoal-800 flex-1 min-w-0 truncate">${e.label}</p>
-                    <span class="text-xs font-bold text-green-700 whitespace-nowrap">+EGP ${e.amount.toLocaleString()}</span>
-                  </div>
-                `).join('')}
-              </div>
-            </div>
-
-            <!-- Deductions detail -->
-            <div class="bg-white rounded-xl border border-charcoal-100/80 shadow-sm overflow-hidden">
-              <div class="flex items-center justify-between px-4 py-2.5 bg-red-50/60 border-b border-red-100">
-                <div class="flex items-center gap-1.5">
-                  <span class="material-icons text-red-400 text-sm">trending_down</span>
-                  <p class="text-[10px] font-bold text-red-600 uppercase tracking-wider">Deductions</p>
-                </div>
-                <p class="text-xs font-bold text-red-600">-EGP ${p.totalDeductions.toLocaleString()}</p>
-              </div>
-              <div class="divide-y divide-charcoal-50">
-                ${deductions.map(d => {
-                  let html = `<div class="flex items-center gap-3 px-4 py-3">
-                    ${_payItemIcon(d.icon, d.color)}
-                    <p class="text-xs font-medium text-charcoal-800 flex-1 min-w-0 truncate">${d.label}</p>
-                    <span class="text-xs font-bold text-red-600 whitespace-nowrap">-EGP ${Math.abs(d.amount).toLocaleString()}</span>
-                  </div>`;
-                  if (d.isGroup && d.subItems) {
-                    d.subItems.forEach(s => {
-                      html += `<div class="flex items-start gap-2.5 px-4 py-2.5 pl-14 bg-orange-50/40 border-t border-orange-100/50">
-                        <span class="material-icons text-orange-400 text-xs mt-0.5 flex-shrink-0">${s.icon || 'info'}</span>
-                        <div class="flex-1 min-w-0">
-                          <p class="text-[11px] font-medium text-charcoal-700 leading-snug">${s.label}</p>
-                          ${s.detail ? `<p class="text-[10px] text-charcoal-400 mt-0.5 leading-snug">${s.detail}</p>` : ''}
-                        </div>
-                        <span class="text-[11px] font-semibold text-orange-600 whitespace-nowrap flex-shrink-0">-EGP ${Math.abs(s.amount).toLocaleString()}</span>
-                      </div>`;
-                    });
-                  }
-                  return html;
-                }).join('')}
-              </div>
-            </div>
-
-            <!-- Net salary highlight -->
-            <div class="bg-gradient-to-r from-charcoal-800 to-charcoal-900 rounded-xl p-5 flex items-center justify-between shadow-lg shadow-charcoal-200/50">
-              <div>
-                <p class="text-[10px] font-bold text-charcoal-400 uppercase tracking-wider">Net Salary</p>
-                <p class="text-2xl font-bold text-white mt-0.5">EGP ${p.netSalary.toLocaleString()}</p>
-              </div>
-              <button onclick="openPayDetail('${p.id}');event.stopPropagation();" class="px-5 py-2.5 bg-white/10 hover:bg-white/20 rounded-xl text-xs font-semibold text-white flex items-center gap-1.5 transition-colors backdrop-blur-sm">
-                <span class="material-icons text-sm">visibility</span> Full Payslip
-              </button>
-            </div>
-          </div>
-        </div>` : ''}
+        ${open ? _payBreakdown(p) : ''}
       </div>`;
   }).join('');
 
   return `
-    <div class="space-y-2">
+    <div class="space-y-2.5">
       <div>
-        <h1 class="text-lg font-bold text-charcoal-900">My Payroll <span class="text-[11px] font-normal text-charcoal-400">· ${history.length} payslips</span></h1>
+        <h1 class="text-lg font-bold text-charcoal-900">My Payroll <span class="text-[11px] font-normal text-charcoal-400">· ${paid.length} payslips · ${months.length - paid.length} open</span></h1>
       </div>
 
+      <!-- One summary row — click to drop open everything -->
+      ${_payPanel('summary', 'PAYROLL SUMMARY', 'EGP ' + totalNet.toLocaleString() + ' net',
+        paid.length + ' payslips · ' + (months.length - paid.length) + ' open', summaryBody)}
+
+      <!-- Current period — sits under the summary panels, above the breakdown -->
       ${currentCard}
 
-      <!-- Contract & Leave Overview -->
-      ${refCard}
-
-      <!-- YTD Summary -->
+      <!-- Monthly Breakdown -->
       <div>
-        <p class="bento-label text-charcoal-400 mb-1.5">YEAR TO DATE</p>
-        ${ytdBento}
-      </div>
-
-      <!-- Monthly History -->
-      <div>
-        <h2 class="text-sm font-bold text-charcoal-900 mb-1.5">Monthly Breakdown</h2>
-        <div class="space-y-2">${historyCards}</div>
+        <h2 class="text-base font-bold text-charcoal-900 mb-2">Monthly Breakdown</h2>
+        <div class="space-y-2.5">${rows}</div>
+        <p class="text-[11px] text-charcoal-400 mt-2">Tap a month to drop open its full breakdown.</p>
       </div>
     </div>`;
+}
+
+// The full detail that drops open underneath a month row.
+function _payBreakdown(p) {
+  const earnings = p.items.filter(i => i.type === 'earning');
+  const deductions = p.items.filter(i => i.type === 'deduction');
+  const st = p.stats || {};
+  const workedPct = p.workingDays ? Math.round((p.workedDays / p.workingDays) * 100) : 100;
+
+  return `
+    <div class="border-t border-charcoal-100 bg-charcoal-50/40 p-2.5 space-y-2">
+      <!-- Attendance, late / early, leave and advance — each counted on its own -->
+      <div class="bg-white rounded-xl border border-charcoal-100 p-3">
+        <div class="flex items-center justify-between mb-1.5">
+          <p class="bento-label text-charcoal-500">ATTENDANCE & LEAVE</p>
+          <span class="text-[10px] font-bold text-charcoal-700 bg-charcoal-100 px-2 py-0.5 rounded-full">${p.workedDays}/${p.workingDays} days</span>
+        </div>
+        <div class="w-full h-2 bg-charcoal-100 rounded-full overflow-hidden flex">
+          <div class="h-full bg-brand-500 rounded-l-full" style="width:${workedPct}%"></div>
+          <div class="h-full bg-charcoal-200 rounded-r-full" style="width:${100 - workedPct}%"></div>
+        </div>
+        <div class="flex items-center justify-between mt-1.5 flex-wrap gap-x-3 gap-y-1">
+          <span class="text-[10px] text-charcoal-500 flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-brand-500 inline-block"></span>${p.workedDays} worked</span>
+          <span class="text-[10px] text-charcoal-400 flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-charcoal-200 inline-block"></span>${p.workingDays - p.workedDays} not worked</span>
+          ${(p.overtimeHours || 0) > 0 ? `<span class="text-[10px] text-charcoal-500 flex items-center gap-0.5"><span class="material-icons text-[12px] text-charcoal-400">schedule</span>${p.overtimeHours}h overtime</span>` : ''}
+          ${(p.paidLeaveDays || 0) > 0 ? `<span class="text-[10px] text-charcoal-500 flex items-center gap-0.5"><span class="material-icons text-[12px] text-charcoal-400">beach_access</span>${p.paidLeaveDays} paid leave</span>` : ''}
+        </div>
+        <div class="grid grid-cols-3 sm:grid-cols-6 gap-1.5 mt-2">
+          ${_payStatTile('alarm_off', st.late || 0, 'Late', !st.late)}
+          ${_payStatTile('logout', st.early || 0, 'Early Leave', !st.early)}
+          ${_payStatTile('favorite', st.sick || 0, 'Sick Leave', !st.sick)}
+          ${_payStatTile('beach_access', st.annual || 0, 'Annual Leave', !st.annual)}
+          ${_payStatTile('event_busy', st.absent || 0, 'Absent', !st.absent, !!st.absent)}
+          ${_payStatTile('savings', st.salaryAdvance ? 'EGP ' + st.salaryAdvance.toLocaleString() : '—', 'Salary Advance', !st.salaryAdvance)}
+        </div>
+      </div>
+
+      <!-- Earnings -->
+      <div class="bg-white rounded-xl border border-charcoal-100 overflow-hidden">
+        <div class="flex items-center justify-between px-3 py-2 bg-green-50/60 border-b border-green-100">
+          <div class="flex items-center gap-1.5"><span class="material-icons text-green-500 text-sm">trending_up</span><p class="text-[10px] font-bold text-green-700 uppercase tracking-wider">Earnings</p></div>
+          <p class="text-xs font-bold text-green-700">+EGP ${p.grossEarnings.toLocaleString()}</p>
+        </div>
+        <div class="divide-y divide-charcoal-50">
+          ${earnings.map(e => `<div class="flex items-center gap-2.5 px-3 py-2">${_payItemIcon(e.icon, e.color)}<p class="text-xs font-medium text-charcoal-800 flex-1 min-w-0 truncate">${e.label}</p><span class="text-xs font-bold text-green-700 whitespace-nowrap">+EGP ${e.amount.toLocaleString()}</span></div>`).join('')}
+        </div>
+      </div>
+
+      <!-- Deductions -->
+      <div class="bg-white rounded-xl border border-charcoal-100 overflow-hidden">
+        <div class="flex items-center justify-between px-3 py-2 bg-red-50/60 border-b border-red-100">
+          <div class="flex items-center gap-1.5"><span class="material-icons text-red-400 text-sm">trending_down</span><p class="text-[10px] font-bold text-red-600 uppercase tracking-wider">Deductions</p></div>
+          <p class="text-xs font-bold text-red-600">-EGP ${p.totalDeductions.toLocaleString()}</p>
+        </div>
+        <div class="divide-y divide-charcoal-50">
+          ${deductions.map(d => {
+            let html = `<div class="flex items-center gap-2.5 px-3 py-2">${_payItemIcon(d.icon, d.color)}<p class="text-xs font-medium text-charcoal-800 flex-1 min-w-0 truncate">${d.label}</p><span class="text-xs font-bold text-red-600 whitespace-nowrap">-EGP ${Math.abs(d.amount).toLocaleString()}</span></div>`;
+            (d.subItems || []).forEach(s => {
+              html += `<div class="flex items-start gap-2 px-3 py-2 pl-11 bg-orange-50/40 border-t border-orange-100/50">
+                <span class="material-icons text-orange-400 text-xs mt-0.5 flex-shrink-0">${s.icon || 'info'}</span>
+                <div class="flex-1 min-w-0"><p class="text-[11px] font-medium text-charcoal-700 leading-snug">${s.label}</p>${s.detail ? `<p class="text-[10px] text-charcoal-400 mt-0.5 leading-snug">${s.detail}</p>` : ''}</div>
+                <span class="text-[11px] font-semibold text-orange-600 whitespace-nowrap flex-shrink-0">-EGP ${Math.abs(s.amount).toLocaleString()}</span>
+              </div>`;
+            });
+            return html;
+          }).join('')}
+        </div>
+      </div>
+
+      <!-- Net -->
+      <div class="bg-charcoal-900 rounded-xl px-3 py-2.5 flex items-center justify-between gap-2">
+        <div class="min-w-0">
+          <p class="text-[10px] font-bold text-charcoal-400 uppercase tracking-wider">Net Salary</p>
+          <p class="text-lg font-bold text-white leading-tight whitespace-nowrap">EGP ${(p.netSalary || 0).toLocaleString()}</p>
+        </div>
+        <button onclick="openPayDetail('${p.id}');event.stopPropagation();" class="px-3 py-2 bg-white/10 hover:bg-white/20 rounded-lg text-[11px] font-semibold text-white flex items-center gap-1 flex-shrink-0 transition-colors"><span class="material-icons text-sm">description</span>Payslip</button>
+      </div>
+    </div>`;
+}
+
+
+function togglePaySection(id) {
+  _paySection = _paySection === id ? null : id;
+  renderAll();
 }
 
 function togglePayExpand(id) {
@@ -551,7 +566,7 @@ function openPayDetail(id) {
     <div class="bg-gradient-to-r from-brand-600 to-brand-700 rounded-2xl p-5 text-white text-center shadow-lg shadow-brand-200">
       <p class="text-[10px] font-bold text-white/70 uppercase tracking-wider">Net Salary</p>
       <p class="text-2xl font-bold mt-1">EGP ${p.netSalary.toLocaleString()}</p>
-      <p class="text-[10px] text-white/60 mt-1">Paid on ${formatDate(p.paidDate)}</p>
+      <p class="text-[10px] text-white/60 mt-1">${p.paidDate ? 'Paid on ' + formatDate(p.paidDate) : 'Payroll in progress'}</p>
     </div>
 
     <!-- Salary Breakdown Bar -->
@@ -670,9 +685,12 @@ function filterReq(status) {
   reqActiveFilter = status === 'All' ? '' : status;
   renderAll();
 }
-function openNewRequest() {
+// Opens the shared New Request modal. `preselect` optionally picks a request
+// type up-front (used by the quick-launch chips on the Attendance page).
+function openNewRequest(preselect) {
   const types=MOCK.requestTypes;
-  openModal('New Request',`<div class="space-y-3"><div><label class="form-label">Request Type</label><select class="form-select" id="req-type-select" onchange="updateReqForm()"><option value="">Select type...</option>${types.map(t=>`<option value="${t.id}">${t.label}</option>`).join('')}</select></div><div id="req-form-fields"></div></div>`,{wide:true,footer:'<button onclick="closeModal()" class="btn btn-sm btn-secondary">Cancel</button><button onclick="submitNewRequest()" class="btn btn-sm btn-primary">Submit</button>'});
+  openModal('New Request',`<div class="space-y-3"><div><label class="form-label">Request Type</label><select class="form-select" id="req-type-select" onchange="updateReqForm()"><option value="">Select type...</option>${types.map(t=>`<option value="${t.id}" ${preselect===t.id?'selected':''}>${t.label}</option>`).join('')}</select></div><div id="req-form-fields"></div></div>`,{wide:true,footer:'<button onclick="closeModal()" class="btn btn-sm btn-secondary">Cancel</button><button onclick="submitNewRequest()" class="btn btn-sm btn-primary">Submit</button>'});
+  if(preselect) updateReqForm();
 }
 function updateReqForm() {
   const sel=document.getElementById('req-type-select');
@@ -680,40 +698,66 @@ function updateReqForm() {
   const c=document.getElementById('req-form-fields');
   if(!t){c.innerHTML='';return;}
   let h='<div class="border-t border-charcoal-100 pt-3 space-y-3">';
-  /* Show leave balance banner when Day Off is selected */
-  if(t.id==='day-off') h+=leaveBalanceBannerHtml()+'<div class="border-t border-charcoal-100 pt-3">';
+  /* Show leave balance banner when a balance-consuming type is selected */
+  if(t.id==='annual-leave'||t.id==='sick-leave') h+=leaveBalanceBannerHtml()+'<div class="border-t border-charcoal-100 pt-3">';
   t.fields.forEach(f=>{
     if(f==='date'||f==='date-from') h+=`<div><label class="form-label">${f==='date-from'?'From':'Date'}</label><input type="date" class="form-input" required></div>`;
     else if(f==='date-to') h+=`<div><label class="form-label">To Date</label><input type="date" class="form-input" required></div>`;
+    else if(f==='target-date') h+=`<div><label class="form-label">Off Day Taken</label><input type="date" class="form-input" required></div>`;
     else if(f==='time'||f==='time-from') h+=`<div><label class="form-label">${f==='time-from'?'From':'Time'}</label><input type="time" class="form-input" required></div>`;
     else if(f==='time-to') h+=`<div><label class="form-label">To Time</label><input type="time" class="form-input" required></div>`;
     else if(f==='colleague') h+=`<div><label class="form-label">Colleague</label><select class="form-select" required><option value="">Select...</option>${MOCK.teamMembers.slice(0,5).map(m=>`<option>${m.name}</option>`).join('')}</select></div>`;
-    else if(f==='document-type') h+=`<div><label class="form-label">Document Type</label><input type="text" class="form-input" placeholder="e.g. Employment Contract" required></div>`;
-    else if(f==='correction-type') h+=`<div><label class="form-label">Type</label><select class="form-select" required><option value="">Select...</option><option>Missing Check-in</option><option>Missing Check-out</option><option>Wrong Time</option></select></div>`;
+    else if(f==='amount') h+=`<div><label class="form-label">Amount</label><input type="number" min="1" step="0.01" class="form-input" placeholder="e.g. 2500" required></div>`;
+    else if(f==='certificate') h+=`<div><label class="form-label">Medical Certificate</label><input type="file" class="form-input" accept=".pdf,.png,.jpg,.jpeg,.webp,.gif" required></div>`;
     else h+=`<div><label class="form-label">${f.charAt(0).toUpperCase()+f.slice(1).replace(/-/g,' ')}</label><textarea class="form-input" rows="2" placeholder="Details..." required></textarea></div>`;
   });
-  if(t.id==='day-off') h+='</div>';
+  if(t.id==='annual-leave'||t.id==='sick-leave') h+='</div>';
   c.innerHTML=h+'</div>';
 }
 function submitNewRequest() {
   const sel=document.getElementById('req-type-select');
   const typeId=sel?sel.value:'';
-  /* Block day-off if no annual leave remaining */
-  if(typeId==='day-off' && annualLeaveRemaining()<=0){showToast('No annual leave days remaining — you cannot submit a day-off request','error');return;}
-  if(typeId==='day-off'){
+  if(!typeId){showToast('Please select a request type','error');return;}
+  const t=MOCK.requestTypes.find(x=>x.id===typeId);
+  const wrap=document.getElementById('req-form-fields');
+  const fields=wrap?wrap.querySelectorAll('input,select,textarea'):[];
+  const dates=[...fields].filter(f=>f.type==='date'&&f.value);
+  const reasonEl=[...fields].find(f=>f.tagName==='TEXTAREA');
+  const reason=reasonEl?reasonEl.value.trim():'';
+  if(!reason){showToast('Please add a reason for your request','error');return;}
+  /* Block balance-limited types when nothing remains (the server enforces the rest) */
+  if(typeId==='annual-leave' && annualLeaveRemaining()<=0){showToast('No annual leave days remaining — you cannot submit an annual-leave request','error');return;}
+  if(typeId==='sick-leave'){
+    const fileInput=document.querySelector('#req-form-fields input[type=file]');
+    if(fileInput && !fileInput.files.length){showToast('A medical certificate must be attached to a sick-leave request','error');return;}
+  }
+  if(typeId==='annual-leave'){
     /* Check for date conflicts */
-    const dateInput=document.querySelector('#req-form-fields input[type=date]');
-    if(dateInput && dateInput.value){
-      const dStr=formatDate(dateInput.value);
-      const conflict=MOCK.requests.find(r=>r.type==='Day Off' && r.status!=='Rejected' && r.requestedDate===dStr);
-      if(conflict){showToast('You already have a Day Off request for this date','error');return;}
+    if(dates.length){
+      const dStr=formatDate(dates[0].value);
+      const conflict=MOCK.requests.find(r=>r.type==='Annual Leave' && r.status!=='Rejected' && r.requestedDate===dStr);
+      if(conflict){showToast('You already have an Annual Leave request for this date','error');return;}
     }
     /* Deduct from leave balance */
     MOCK.leaveBalance.annualUsed++;
   }
+  /* Record the request so it shows up on the Requests list */
+  const now=new Date();
+  MOCK.requests.unshift({
+    id:'RQ-'+futureReqSeq++,
+    type:t?t.label:typeId,
+    submittedDate:TODAY_ISO,
+    requestedDate:dates.length?dates.map(d=>formatDate(d.value)).join(' – '):'—',
+    status:'Pending',
+    reason:reason,
+    reviewer:'Pending Review',
+    reviewerComment:'',
+    timeline:[{step:'Submitted',date:now.toLocaleDateString('en-US',{month:'short',day:'numeric'})+', '+now.toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'}),done:true},{step:'Under Review',date:'Pending',done:false},{step:'Approved',date:'',done:false}],
+    scheduleContext:null,
+  });
   closeModal();
   renderAll();
-  showToast('Request submitted');
+  showToast((t?t.label:'Request')+' submitted — pending review');
 }
 function openReqDetail(id) {
   const r=MOCK.requests.find(x=>x.id===id); if(!r)return;
@@ -802,6 +846,13 @@ function renderSettings() {
         <p class="bento-label">ACCOUNT</p>
       </div>
       <div class="p-2 space-y-0.5">
+        <button onclick="navigateTo('documents')" class="w-full flex items-center justify-between p-1.5 rounded-lg hover:bg-charcoal-50 transition-colors text-xs">
+          <div class="flex items-center gap-3">
+            <div class="w-8 h-8 rounded-lg bg-charcoal-100 flex items-center justify-center"><svg class="w-4 h-4 text-charcoal-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg></div>
+            <div class="text-left"><p class="font-medium text-charcoal-900">My Documents</p><p class="text-[10px] text-charcoal-500">View, upload and track your documents</p></div>
+          </div>
+          <svg class="w-4 h-4 text-charcoal-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+        </button>
         <button onclick="openChangePassword()" class="w-full flex items-center justify-between p-1.5 rounded-lg hover:bg-charcoal-50 transition-colors text-xs">
           <div class="flex items-center gap-3">
             <div class="w-8 h-8 rounded-lg bg-charcoal-100 flex items-center justify-center"><svg class="w-4 h-4 text-charcoal-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg></div>

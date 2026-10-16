@@ -1,0 +1,51 @@
+﻿using DomainLayer.Models.EmployeeModule;
+using DomainLayer.Models.RequestModule.Enums;
+
+namespace DomainLayer.Models.RequestModule
+{
+    /// <summary>
+    /// Represents an employee self-service submission (e.g. Leave, SickLeave, DayOff, ShiftSwap, Overtime, Resignation, DocumentRequest).
+    /// Type is a flexible string to allow configurable business request types without schema migrations.
+    /// Follows a two-stage approval workflow (Branch Manager -> HR final decision).
+    /// </summary>
+    public class EmployeeRequest : BaseEntity<int>
+    {
+        public int EmployeeId { get; set; }
+        public virtual Employee Employee { get; set; } = null!;
+
+        public string Type { get; set; } = string.Empty;
+
+        /// <summary>When the employee submitted the request (My Requests "Submitted" column).</summary>
+        public DateTime SubmittedAt { get; set; } = DateTime.UtcNow;
+
+        public DateOnly RequestDate { get; set; }
+        public DateOnly? TargetStartDate { get; set; }
+        public DateOnly? TargetEndDate { get; set; }
+        public TimeOnly? TargetTime { get; set; }
+
+        public int? SwapWithEmployeeId { get; set; }
+        public virtual Employee? SwapWithEmployee { get; set; }
+
+        public decimal? OvertimeHoursRequested { get; set; }
+
+        /// <summary>
+        /// Excused hours a Late Attendance / Early Leave request covers, computed from the
+        /// employee's published schedule at submission. Counted against the gym's monthly
+        /// excused-hours cap (Gym.ExcusedLateHoursCapPerMonth) while pending or approved.
+        /// </summary>
+        public decimal? RequestedHours { get; set; }
+
+        /// <summary>Amount asked for by a Salary Advance request.</summary>
+        public decimal? RequestedAmount { get; set; }
+
+        public string Details { get; set; } = string.Empty;
+        public string? AttachmentPath { get; set; }
+
+        public RequestStatus Status { get; set; } = RequestStatus.Pending;
+
+        public virtual ICollection<RequestDecision> Decisions { get; set; } = new List<RequestDecision>();
+
+        public virtual ICollection<RequestComment> Comments { get; set; } = new List<RequestComment>();
+    }
+}
+

@@ -142,7 +142,7 @@ const MOCK = {
       iv1: { date: '2026-09-10', by: 'Youssef Kamal', type: 'Video', verdict: 'Scheduled', eval: null, room: 'Meet — revive/salah' },
       iv2: null,
       decision: null },
-    { id: 'c2', name: 'Nada Khaled', position: 'Senior Trainer', stage: 'Screening', appliedDate: '2026-08-25', phone: '+20 121 222 3333', rating: 3,
+    { id: 'c2', name: 'Nada Khaled', position: 'Senior Trainer', stage: 'First Interview', appliedDate: '2026-08-25', phone: '+20 121 222 3333', rating: 3,
       form: { email: 'nada.khaled@mail.com', source: 'Referral — Omar', gymPref: 'Nasr City', expYears: 3, education: 'B.Sc. Sports Science', skills: ['CrossFit', 'Recovery', 'Coaching'], languages: ['Arabic', 'English'], shift: 'Flexible', salaryExp: 12000, availability: 'Oct 1, 2026' },
       screen: { date: '2026-08-29', by: 'Omar Youssef', verdict: 'Pass', eval: 3, notes: 'Good energy. Available from Oct 1.' },
       iv1: { date: '2026-09-12', by: 'Youssef Kamal', type: 'Video', verdict: 'Invited', eval: null, room: 'Meet — revive/nada' },
@@ -160,7 +160,7 @@ const MOCK = {
       iv1: { date: '2026-09-10', by: 'Hana Mostafa', type: 'On-site', verdict: 'Scheduled', eval: null, room: 'Heliopolis HQ — Room 2' },
       iv2: null,
       decision: null },
-    { id: 'c5', name: 'Amr Diab', position: 'Receptionist', stage: 'Applied', appliedDate: '2026-08-28', phone: '+20 124 555 6666', rating: 0,
+    { id: 'c5', name: 'Amr Diab', position: 'Receptionist', stage: 'First Interview', appliedDate: '2026-08-28', phone: '+20 124 555 6666', rating: 0,
       form: { email: 'amr.diab@mail.com', source: 'OLX ad', gymPref: 'Heliopolis', expYears: 1, education: 'High school', skills: ['Cash handling', 'Time management'], languages: ['Arabic'], shift: 'Any', salaryExp: 6000, availability: 'Immediate' },
       screen: null, iv1: null, iv2: null, decision: null },
     { id: 'c6', name: 'Shereen Adel', position: 'Trainer', stage: 'Hired', appliedDate: '2026-08-10', phone: '+20 125 666 7777', rating: 5, hiredDate: '2026-09-01',
@@ -169,11 +169,11 @@ const MOCK = {
       iv1: { date: '2026-08-18', by: 'Youssef Kamal', type: 'On-site', verdict: 'Pass', eval: 5, notes: 'Outstanding trial session.' },
       iv2: { date: '2026-08-22', by: 'Mona El-Sayed', type: 'Panel', verdict: 'Pass', eval: 5, notes: 'Hired — assigned to 6th October.' },
       decision: { by: 'Mona El-Sayed', date: '2026-08-25', verdict: 'Accepted', note: 'Hired — starts Sep 1 at 6th October.' } },
-    { id: 'c7', name: 'Mostafa Nabil', position: 'Cleaner', stage: 'Screening', appliedDate: '2026-09-06', phone: '+20 126 777 8888', rating: 3,
+    { id: 'c7', name: 'Mostafa Nabil', position: 'Cleaner', stage: 'First Interview', appliedDate: '2026-09-06', phone: '+20 126 777 8888', rating: 3,
       form: { email: 'mostafa.nabil@mail.com', source: 'OLX ad', gymPref: '6th October', expYears: 4, education: 'Technical diploma', skills: ['Cleaning ops', 'Stock'], languages: ['Arabic'], shift: 'Morning', salaryExp: 5000, availability: 'Sep 15, 2026' },
       screen: { date: '2026-09-08', by: 'Hana Mostafa', verdict: 'Pass', eval: 3, notes: 'References being checked.' },
       iv1: null, iv2: null, decision: null },
-    { id: 'c8', name: 'Heba Said', position: 'Trainer', stage: 'Screening', appliedDate: '2026-09-08', phone: '+20 127 888 9999', rating: 3,
+    { id: 'c8', name: 'Heba Said', position: 'Trainer', stage: 'First Interview', appliedDate: '2026-09-08', phone: '+20 127 888 9999', rating: 3,
       form: { email: 'heba.said@mail.com', source: 'Career fair', gymPref: 'Nasr City', expYears: 3, education: 'Cert. Pilates', skills: ['Pilates', 'Reformer'], languages: ['Arabic', 'English'], shift: 'Morning', salaryExp: 8500, availability: 'Immediate' },
       screen: { date: '2026-09-09', by: 'Omar Youssef', verdict: 'Pass', eval: 3, notes: 'Prefers Nasr City branch.' },
       iv1: null, iv2: null, decision: null },
@@ -189,11 +189,11 @@ const MOCK = {
       iv1: { date: '2026-09-01', by: 'Mona El-Sayed', type: 'Panel', verdict: 'Fail', eval: 2, notes: 'Cannot cover evening shift.' },
       iv2: null,
       decision: { by: 'Hana Mostafa', date: '2026-09-03', verdict: 'Rejected', note: 'Shift availability mismatch.' } },
-    { id: 'c11', name: 'Yasmin Ali', position: 'Trainer', stage: 'Second Interview', appliedDate: '2026-08-24', phone: '+20 121 345 6789', rating: 4,
+    { id: 'c11', name: 'Yasmin Ali', position: 'Trainer', stage: 'First Interview', appliedDate: '2026-08-24', phone: '+20 121 345 6789', rating: 4,
       form: { email: 'yasmin.ali@mail.com', source: 'Career fair', gymPref: '6th October', expYears: 4, education: 'B.Sc. Sports Science', skills: ['Zumba', 'Step', 'Pilates'], languages: ['Arabic', 'English'], shift: 'Morning', salaryExp: 9000, availability: 'Oct 1, 2026' },
       screen: { date: '2026-08-27', by: 'Omar Youssef', verdict: 'Pass', eval: 4, notes: 'Great energy.' },
       iv1: { date: '2026-09-03', by: 'Youssef Kamal', type: 'On-site', verdict: 'Pass', eval: 4, notes: 'Good trial at 6th October.' },
-      iv2: { date: '2026-09-14', by: 'Mona El-Sayed', type: 'Panel', verdict: 'Scheduled', eval: null, room: 'HQ — Boardroom' },
+      iv2: null,
       decision: null },
   ],
   hiringForms: [
@@ -254,6 +254,28 @@ const MOCK = {
   vacancyRequests: [
     { id: 'vr1', position: 'Senior Trainer', gym: 'Nasr City', urgency: 'High', status: 'Pending', submittedBy: 'Youssef Kamal', submittedDate: '2026-08-10', reason: 'Replacing departing trainer.', salary: 14000, shift: 'Morning' },
     { id: 'vr2', position: 'Receptionist', gym: 'Heliopolis', urgency: 'Medium', status: 'Pending', submittedBy: 'Hana Mostafa', submittedDate: '2026-08-15', reason: 'Evening shift coverage needed.', salary: 7500, shift: 'Evening' },
+    // Branch-origin requests synced from the Branch Manager portal. Seeded
+    // mid-flight so every pipeline stage is visible: one waiting for the BM to
+    // call the matched candidate, one 2nd interview scheduled, one rejected at
+    // the 2nd interview (back to waiting for another match).
+    { id: 'rr4', position: 'Trainer', gym: 'Nasr City', urgency: 'Medium', status: 'Approved', source: 'branch',
+      submittedBy: 'Ahmed Mohamed', submittedDate: '2026-08-14', headcount: 1, department: 'Training',
+      reason: 'Extra morning class load — 2 new group slots opened for Q4.', shift: 'Morning', expectedSalary: 10000,
+      decidedBy: 'Sarah Hassan', decidedNote: '',
+      match: { name: 'Dina Farouk', phone: '+20 100 123 4567', position: 'Trainer', skills: ['Group PT', 'Pilates', 'HIIT'], shift: 'Morning', salaryExp: 9500, source: 'Walk-in', availability: 'Immediate', waitingListId: 'wl1', sentBy: 'Sarah Hassan', sentAt: '2026-09-12', note: 'Strong candidate — been on the waiting list since Aug 30, available on mornings.' },
+      iv2: null },
+    { id: 'rr5', position: 'Receptionist', gym: 'Nasr City', urgency: 'Medium', status: 'Approved', source: 'branch',
+      submittedBy: 'Ahmed Mohamed', submittedDate: '2026-08-12', headcount: 1, department: 'Front Desk',
+      reason: 'Evening front desk has no cover since Karim moved to nights.', shift: 'Evening', expectedSalary: 7500,
+      decidedBy: 'Sarah Hassan', decidedNote: '',
+      match: { name: 'Mahmoud Samir', phone: '+20 100 765 4321', position: 'Receptionist', skills: ['CRM', 'Upselling', 'Arabic/English'], shift: 'Evening', salaryExp: 7000, source: 'Referral — Hana', availability: 'Immediate', waitingListId: 'wl2', sentBy: 'Sarah Hassan', sentAt: '2026-09-09', note: 'Waiting for an evening-shift front desk opening.' },
+      iv2: { date: '2026-09-15', time: '13:00', by: 'Ahmed Mohamed', type: 'On-site', verdict: null, notes: 'Called him on Sep 13 — agreed the slot himself.' } },
+    { id: 'rr6', position: 'Junior Trainer', gym: 'Nasr City', urgency: 'Low', status: 'Approved', source: 'branch',
+      submittedBy: 'Ahmed Mohamed', submittedDate: '2026-08-05', headcount: 1, department: 'Training',
+      reason: 'Support slot for weekend group classes.', shift: 'Flexible', expectedSalary: 8000,
+      decidedBy: 'Sarah Hassan', decidedNote: '',
+      match: { name: 'Rania Gomaa', phone: '+20 100 222 3333', position: 'Cleaner', skills: ['Cleaning ops', 'Stock', 'Time management'], shift: 'Morning', salaryExp: 5000, source: 'LinkedIn', availability: 'Sep 15, 2026', waitingListId: 'wl3', sentBy: 'Sarah Hassan', sentAt: '2026-08-28', note: 'On hold while the headcount request was under review.' },
+      iv2: { date: '2026-09-08', time: '10:30', by: 'Ahmed Mohamed', type: 'On-site', verdict: 'Reject', notes: 'Wrong skill set for a trainer slot — not a fit.' } },
   ],
   payrollItems: [
     { employeeId: 'RV-00124', name: 'Ahmed Mohamed', initials: 'AM', gym: 'Nasr City', position: 'Trainer', employmentStatus: 'Active', days: 22, overtime: 8, baseSalary: 11000, bonus: 500, gross: 11500, deductions: 350, net: 11150, status: 'Draft', relatedRequestIds: ['r8'], deductionLines: [
@@ -340,6 +362,21 @@ const MOCK = {
       ] },
     { id: 'ef2', name: 'Receptionist Evaluation Q2 2026', gym: 'All', position: 'Receptionist', questions: 6, status: 'Completed', createdDate: '2026-05-01' },
     { id: 'ef3', name: 'Staff Onboarding Checklist', gym: 'All', position: 'All', questions: 12, status: 'Active', createdDate: '2026-01-01' },
+  ],
+  // Dispatched evaluation assignments — HR creates the form, then routes it to EVALUATORS
+  // (users holding an evaluation-execution permission), never to each evaluated employee.
+  // Employees are subjects of the evaluation; they never receive the form themselves.
+  // Progress is PER-ASSIGNMENT via completedSubjects (the submitting evaluator's own
+  // done list) — a shared/global history match would credit every evaluator with every
+  // other evaluator's submissions of the same subject.
+  // Matching evaluator → assignment is done by EMAIL (MOCK.currentUser is a fresh object
+  // literal, so object identity against DEMO_USERS would fail for the initial user).
+  evaluationAssignments: [
+    { id: 'as1', formId: 'ef1', formName: 'Trainer Evaluation Q3 2026',
+      evaluatorEmail: 'mohamed.alsayed@revive.com', evaluatorName: 'Mohamed Al-Sayed',
+      subjects: ['Ahmed Mohamed', 'Karim Hassan', 'Omar Youssef', 'Ahmed Zaki'],
+      completedSubjects: ['Ahmed Mohamed', 'Karim Hassan'], // seed: eh1 + eh2 already Completed → 2/4
+      status: 'Assigned', dispatchedDate: '2026-09-07', dispatchedBy: 'Mona El-Sayed' },
   ],
   evaluations: [
     { id: 'e1', employee: 'Ahmed Mohamed', position: 'Trainer', period: 'Q2 2026', score: 4.2, result: 'Exceeds', status: 'Completed', gym: 'Nasr City' },
@@ -454,9 +491,10 @@ const MOCK = {
     { id: 'iv5', candidate: 'Amr Diab', position: 'Receptionist', gym: 'Heliopolis', date: '2026-09-15', time: '14:00', type: 'On-site', interviewer: 'Hana Mostafa', status: 'Draft', room: 'Heliopolis HQ — Room 2' },
   ],
   waitingList: [
-    { id: 'wl1', name: 'Dina Farouk', position: 'Trainer', skills: ['Group PT', 'Pilates', 'HIIT'], note: 'Strong candidate — no open vacancy at preferred gym yet.', since: '2026-08-30', source: 'Walk-in' },
-    { id: 'wl2', name: 'Mahmoud Samir', position: 'Receptionist', skills: ['CRM', 'Upselling', 'Arabic/English'], note: 'Waiting for Heliopolis evening shift opening.', since: '2026-09-01', source: 'Referral — Hana' },
-    { id: 'wl3', name: 'Rania Gomaa', position: 'Cleaner', skills: ['Cleaning ops', 'Stock', 'Time management'], note: 'Hold — headcount request under review.', since: '2026-09-05', source: 'LinkedIn' },
+    { id: 'wl1', name: 'Dina Farouk', position: 'Trainer', phone: '+20 100 123 4567', shift: 'Morning', salaryExp: 9500, availability: 'Immediate', skills: ['Group PT', 'Pilates', 'HIIT'], note: 'Strong candidate — no open vacancy at preferred gym yet.', since: '2026-08-30', source: 'Walk-in' },
+    { id: 'wl2', name: 'Mahmoud Samir', position: 'Receptionist', phone: '+20 100 765 4321', shift: 'Evening', salaryExp: 7000, availability: 'Immediate', skills: ['CRM', 'Upselling', 'Arabic/English'], note: 'Waiting for an evening-shift front desk opening.', since: '2026-09-01', source: 'Referral — Hana' },
+    { id: 'wl3', name: 'Rania Gomaa', position: 'Cleaner', phone: '+20 100 222 3333', shift: 'Morning', salaryExp: 5000, availability: 'Sep 15, 2026', skills: ['Cleaning ops', 'Stock', 'Time management'], note: 'On hold while a headcount request was under review.', since: '2026-09-05', source: 'LinkedIn' },
+    { id: 'wl4', name: 'Kareem Fahmy', position: 'Trainer', phone: '+20 100 444 8899', shift: 'Flexible', salaryExp: 9000, availability: 'Immediate', skills: ['Functional Training', 'Rehab', 'Swimming'], note: 'Passed all HR interviews — waiting for a branch slot.', since: '2026-09-03', source: 'Career page' },
   ],
   newComers: [
     { id: 'nc1', name: 'Ahmed Zaki', position: 'Trainer — Junior', startDate: '2026-09-01', progress: 80, checklist: [['Contract signed', true], ['ID uploaded', true], ['Uniform issued', true], ['Bank account set', true], ['First Aid cert', false]] },
@@ -538,5 +576,51 @@ const DEMO_USERS = {
     // (scoped to own gyms) and evaluations.manage (run cycles with forms HR Manager built —
     // but NOT evaluations.forms.manage, so no form builder). No reports.view / audit.view.
     permissions: ['employees.view','employees.create','employees.edit','employees.request_action','employees.position.change','employees.status.change','employees.contract.manage','employees.documents.view','employees.documents.manage','positions.view','attendance.view','attendance.edit','attendance.manual_entry','schedule.view','schedule.manage','requests.view','requests.approve','payroll.view','payroll.edit','payroll.approve','recruitment.view','recruitment.candidates.manage','evaluations.view','evaluations.manage','announcements.view','events.view'],
+  },
+  // ==================== EVALUATOR PRESETS (Mock UI) ====================
+  // Routing is permission-based (ADR-003): the evaluation form goes to whoever HOLDS an
+  // evaluation-execution permission — never "if role == Branch Manager". These presets exist
+  // so the demo can switch into those holders and show the "My Evaluations" inbox.
+  branchManager: {
+    id: 'RV-00041', firstName: 'Youssef', lastName: 'Kamal', fullName: 'Youssef Kamal',
+    email: 'youssef.kamal@revive.com', phone: '+20 104 567 8901', initials: 'YK',
+    position: 'Branch Manager', level: 'Manager',
+    gyms: [
+      { id: 'gym-1', name: 'Revive Gym', branch: 'Nasr City' },
+    ],
+    selectedGym: null,
+    hireDate: '2023-02-01', employmentType: 'Full-time', status: 'Active',
+    role: 'Branch Manager',
+    // Branch-wide evaluator: full evaluation execution + team scope (still no forms.manage —
+    // HR owns the builder).
+    permissions: ['dashboard.view','employees.view','evaluations.view','evaluations.manage','evaluations.view.team','evaluations.manage.team','team.view','team.manage','attendance.view','requests.view'],
+  },
+  teamLeader: {
+    id: 'RV-00077', firstName: 'Mohamed', lastName: 'Al-Sayed', fullName: 'Mohamed Al-Sayed',
+    email: 'mohamed.alsayed@revive.com', phone: '+20 105 678 9012', initials: 'MA',
+    position: 'Team Leader', level: 'Senior',
+    gyms: [
+      { id: 'gym-1', name: 'Revive Gym', branch: 'Nasr City' },
+    ],
+    selectedGym: null,
+    hireDate: '2024-05-15', employmentType: 'Full-time', status: 'Active',
+    role: 'Team Leader',
+    // Team-scoped evaluator: manage.team = run evaluations for subjects in own scope only.
+    permissions: ['dashboard.view','employees.view','evaluations.view','evaluations.view.team','evaluations.manage.team','team.view','attendance.view','requests.view'],
+  },
+  employee: {
+    id: 'RV-00108', firstName: 'Ahmed', lastName: 'Mohamed', fullName: 'Ahmed Mohamed',
+    email: 'ahmed.mohamed@revive.com', phone: '+20 108 765 4321', initials: 'AM',
+    position: 'Trainer', level: 'Senior',
+    gyms: [
+      { id: 'gym-1', name: 'Revive Gym', branch: 'Nasr City' },
+    ],
+    selectedGym: null,
+    hireDate: '2024-09-01', employmentType: 'Full-time', status: 'Active',
+    role: 'Employee',
+    // Proof that a NORMAL EMPLOYEE can be an evaluator: permissions carry
+    // evaluations.view.team (peer/team-scoped evaluation access), not the role name.
+    // Routing code checks permissions only — never role strings.
+    permissions: ['dashboard.view','evaluations.view','evaluations.view.team','attendance.view'],
   },
 };

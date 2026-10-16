@@ -1,0 +1,41 @@
+﻿using DomainLayer.Models.AttendanceModule;
+using DomainLayer.Models.EmployeeModule;
+using DomainLayer.Models.PayrollModule.Enums;
+using DomainLayer.Models.UserModule;
+
+namespace DomainLayer.Models.PayrollModule
+{
+    /// <summary>
+    /// Represents an attendance-triggered deduction (e.g. repeated lateness or unexcused absence) flagged for review.
+    /// Before affecting payroll, an authorized HR manager reviews and either approves or waives the deduction.
+    /// </summary>
+    public class DeductionCandidate : BaseEntity<int>
+    {
+        public int EmployeeId { get; set; }
+        public virtual Employee Employee { get; set; } = null!;
+
+        public int? AttendanceRecordId { get; set; }
+        public virtual AttendanceRecord? AttendanceRecord { get; set; }
+
+        public decimal Amount { get; set; }
+
+        /// <summary>Category picked by the issuing manager (e.g. "Unapproved absence").</summary>
+        public string Reason { get; set; } = string.Empty;
+
+        /// <summary>Free-text context for the HR reviewer.</summary>
+        public string? Note { get; set; }
+
+        public int IssuedBy { get; set; }
+        public virtual User IssuedByUser { get; set; } = null!;
+
+        public DateTime IssuedAt { get; set; } = DateTime.UtcNow;
+
+        public DeductionStatus Status { get; set; } = DeductionStatus.Pending;
+
+        public int? ReviewedBy { get; set; }
+        public virtual User? Reviewer { get; set; }
+
+        public DateTime? ReviewedAt { get; set; }
+    }
+}
+
