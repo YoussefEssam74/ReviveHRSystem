@@ -341,8 +341,13 @@ function addTeamFollowUp(id) {
       <div class="flex items-center justify-between"><p class="text-xs font-semibold text-charcoal-900">${type}</p>${statusBadge(m.status)}</div>
       <p class="text-[10px] text-charcoal-500 mt-0.5">${desc} · ${m.position}</p>
     </div>
-    <div><label class="form-label">Action</label><select id="fu-action" class="form-select"><option>Send reminder</option><option>Schedule a meeting</option><option>Escalate to manager</option><option>Mark as resolved</option></select></div>
+    <div><label class="form-label">Action</label><select id="fu-action" class="form-select"><option>Send reminder</option><option>Schedule a meeting</option><option>Escalate to manager</option><option value="Issue deduction to HR">Issue deduction &rarr; send to HR</option><option>Mark as resolved</option></select></div>
+    <div><label class="form-label">Deduction amount (EGP) — optional</label><input id="fu-ded-amount" type="number" min="1" step="1" class="form-input" placeholder="e.g. 150"></div>
+    <div><label class="form-label">Deduction reason</label><select id="fu-ded-reason" class="form-select">${['Unapproved absence','Late arrival (30+ min)','Early checkout without approval','Damaged equipment / property','Policy violation','Other (see note)'].map(r=>`<option>${r}</option>`).join('')}</select></div>
     <div><label class="form-label">Note</label><textarea id="fu-note" class="form-input" rows="2" placeholder="Add a note..."></textarea></div>
+    <div class="bg-purple-50 border border-purple-100 rounded-lg p-2.5 text-[10px] text-purple-800 leading-relaxed">
+      An amount sent here becomes a <b>Deduction Candidate</b> with status <b>Pending HR</b> — HR approves it before it touches payroll (features.md §10).
+    </div>
     <div class="flex justify-end gap-2 pt-1"><button type="button" onclick="closeModal()" class="btn btn-sm btn-secondary">Cancel</button><button onclick="saveTeamFollowUp('${id}')" class="btn btn-sm btn-primary">Save Action</button></div>
   </div>`);
 }
@@ -357,7 +362,21 @@ function saveTeamFollowUp(id) {
   }
   f.lastAction = action;
   if (note) f.note = note;
-  closeModal(); renderAll(); showToast(`${action} for ${m.name}`);
+  // An amount entered with the action raises a deduction candidate for HR.
+  const amount = parseFloat((document.getElementById('fu-ded-amount') || {}).value || '0');
+  closeModal(); renderAll();
+  if (amount > 0) {
+    MOCK.deductionCandidates.unshift({
+      id:'dc'+Date.now(), employee:m.name, amount,
+      reason:(document.getElementById('fu-ded-reason') || {}).value || 'Other (see note)',
+      date:TODAY_ISO, note: note || action, issuedBy: MOCK.currentUser.fullName, status:'Pending HR',
+    });
+    if (typeof branchQueueExport === 'function') branchQueueExport();
+    showToast(`${action} for ${m.name} · EGP ${amount} deduction sent to HR for approval`);
+    renderAll();
+    return;
+  }
+  showToast(`${action} for ${m.name}`);
 }
 function openMemberRequests(id) {
   const m = MOCK.teamMembers.find(x=>x.id===id); if(!m) return;
@@ -382,15 +401,19 @@ function sendMessage(id) {
   const m = MOCK.teamMembers.find(x=>x.id===id); if(!m) return;
   showToast(`Message sent to ${m.name}`,'info');
 }
-function openMemberAttendance(id) {
-  const m = MOCK.teamMembers.find(x=>x.id===id); if(!m) return;
-  const rows = [
+// Shared with the Employees Performance page — the week-row sample for a team member.
+function memberAttendanceRows(m) {
+  return [
     { date:'Aug 26', shift: shiftLabel(getTeamMemberTodayShift(m)), checkIn: m.checkIn||'—', checkOut: (m.status==='Present'||m.status==='Late')?'16:02':'—', status: m.status },
     { date:'Aug 25', shift:'Evening · 16:00–00:00', checkIn:'16:05', checkOut:'00:01', status:'Late' },
     { date:'Aug 24', shift:'Off', checkIn:'—', checkOut:'—', status:'Off' },
     { date:'Aug 23', shift:'Morning · 08:00–16:00', checkIn:'07:58', checkOut:'16:03', status:'On Time' },
     { date:'Aug 22', shift:'Morning · 08:00–16:00', checkIn:'08:00', checkOut:'15:30', status:'Early Checkout' },
   ];
+}
+function openMemberAttendance(id) {
+  const m = MOCK.teamMembers.find(x=>x.id===id); if(!m) return;
+  const rows = memberAttendanceRows(m);
   openModal(`${m.name} — Attendance`, `<div class="space-y-2">${rows.map(r=>`<div class="flex items-center justify-between bg-charcoal-50 rounded-lg p-2.5">
     <div><p class="text-xs font-medium text-charcoal-900">${r.date}</p><p class="text-[10px] text-charcoal-500">${r.shift}</p></div>
     <div class="text-right"><p class="text-[10px] text-charcoal-500">In ${r.checkIn} · Out ${r.checkOut}</p>${statusBadge(r.status)}</div>
@@ -517,6 +540,72 @@ function tsCanEdit(){
   return true; // all months are editable in this prototype
 }
 
+// --- View range: 7 days vs whole range ("30 days") --------------------------
+// Ranges longer than a week (custom periods from "Create New Schedule") open
+// in a 7-day view. Shifts painted there repeat on the same weekday of every
+// following week inside that period; "Show 30 days" expands the grid to the
+// whole range (up to a full month) so the repetition can be reviewed.
+function tsViewIsMonth(){ return state.tsView === 'month'; }
+function toggleTsView(){
+  state.tsView = tsViewIsMonth() ? 'week' : 'month';
+  renderAll();
+  showToast(tsViewIsMonth() ? 'Showing the whole month (up to 30 days)' : 'Showing 7 days — shifts repeat weekly', 'info');
+}
+function tsCurrentPeriod(){
+  const [,moStr] = tsSelMonth().split('-');
+  const pers = schPeriodsFor(+schAnchorYear(), +moStr);
+  return pers.find(p => p.id === tsSelPeriod()) || pers[pers.length-1] || null;
+}
+function tsPeriodDays(periodId){
+  const [,moStr] = tsSelMonth().split('-');
+  const pers = schPeriodsFor(+schAnchorYear(), +moStr);
+  const pp = pers.find(p => p.id === periodId);
+  return pp ? pp.days : [];
+}
+// Day columns of the current view. Every column carries the period that owns
+// it (pid) and that period's day index (idx) — in the month view one screen
+// can span several periods.
+//   week  → the selected period, capped at 7 days when the range is longer
+//   month → every day of the selected month ("Show 30 days" button)
+function tsViewCols(period){
+  if (tsViewIsMonth()) {
+    const [y, mo] = tsSelMonth().split('-').map(Number);
+    const periods = schPeriodsFor(y, mo);
+    const dim = new Date(Date.UTC(y, mo, 0)).getDate();
+    const cols = [];
+    for (let dd = 1; dd <= dim; dd++) {
+      const iso = `${y}-${String(mo).padStart(2,'0')}-${String(dd).padStart(2,'0')}`;
+      const owners = periods.filter(p => p.days.some(x => x.iso === iso));
+      if (!owners.length) continue;
+      // Selected period wins, then custom (month-long) schedules, then the week.
+      const per = owners.find(p => period && p.id === period.id)
+        || owners.find(p => p.custom) || owners[0];
+      const idx = per.days.findIndex(x => x.iso === iso);
+      const d = per.days[idx];
+      cols.push({ num: d.num, dow: d.dow, iso: d.iso, pid: per.id, idx });
+    }
+    return cols;
+  }
+  if (!period || !period.days) return [];
+  const days = period.days.length > 7 ? period.days.slice(0, 7) : period.days;
+  return days.map((d, i) => ({ num: d.num, dow: d.dow, iso: d.iso, pid: period.id, idx: i }));
+}
+// Shift id of every visible cell for one employee (rosters cached per period).
+function tsRowCells(empId, cols){
+  const cache = {};
+  return cols.map(c => {
+    if (!cache[c.pid]) cache[c.pid] = schRoster(empId, c.pid, tsPeriodLen(c.pid));
+    return cache[c.pid][c.idx];
+  });
+}
+// Same-weekday indices inside a period: this day plus every +7 days after it.
+// Periods of a week or less have nothing to repeat, so they return just [day].
+function tsRepeatIdx(dayIdx, len){
+  const out = [];
+  for(let i = dayIdx; i < len; i += 7) out.push(i);
+  return out.length ? out : [Math.min(dayIdx, len - 1)];
+}
+
 // --- Render ------------------------------------------------------------------
 function renderTeamSchedule() {
   const win = schMonthWindow(8, 3);              // all 12 months of the year (Jan–Dec)
@@ -525,13 +614,17 @@ function renderTeamSchedule() {
   const periods = schPeriodsFor(+schAnchorYear(), +selMm);
   const selPer = tsSelPeriod();
   const period = periods.find(p => p.id === selPer) || periods[periods.length-1];
+  // Day columns actually rendered — 7 days by default for ranges longer than a
+  // week; the always-visible "Show 30 days" button switches to the whole month.
+  const viewCols = tsViewCols(period);
   const lock = schLockState(selMo);
   const canEdit = true; // allow assigning/editing in every month
   const isEditMode = !!state.tsEditing && canEdit;
   const isDeleting = !!state.tsDeleting && isEditMode;
   const teamRows = MOCK.teamMembers.slice(0, 8);
-  // Same page, renamed for the Branch Manager preview (see navPools() in core.js).
-  const schedTitle = MOCK.currentUser.role === 'Branch Manager' ? 'Branch Schedule' : 'Team Schedule';
+  // Same page, renamed for the Branch Manager / Team Leader preview (both get
+  // the BM's page set — see navPools() in core.js).
+  const schedTitle = (MOCK.currentUser.role === 'Branch Manager' || MOCK.currentUser.role === 'Team Leader') ? 'Branch Schedule' : 'Team Schedule';
 
   // header meta
   const histDesc = lock === 'current'
@@ -540,11 +633,9 @@ function renderTeamSchedule() {
       ? 'Past month — archived schedules, still editable.'
       : 'Future month — plan ahead and assign shifts.';
 
-  // stats for the selected period
-  const assignedCount = period ? teamRows.reduce((acc, m) => {
-    const roster = schRoster(m.id, period.id, period.days.length);
-    return acc + roster.filter(sid => !getShiftTemplate(sid).isOff).length;
-  }, 0) : 0;
+  // stats for the visible days (7-day view or whole month)
+  const assignedCount = teamRows.reduce((acc, m) =>
+    acc + tsRowCells(m.id, viewCols).filter(sid => !getShiftTemplate(sid).isOff).length, 0);
   const legend = MOCK.shiftTemplates.filter(t => !t.isOff).map(t => `
     <span class="inline-flex items-center gap-1"><span class="w-2.5 h-2.5 rounded inline-block border" style="background:${t.bgColor};border-color:${t.color}40"></span>${t.name}</span>
   `).join('') + `<span class="inline-flex items-center gap-1"><span class="w-2.5 h-2.5 rounded inline-block border border-charcoal-200 bg-charcoal-100"></span>Off</span>`;
@@ -572,14 +663,10 @@ function renderTeamSchedule() {
           <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/></svg>
           ${isEditMode?'Finish Editing':'Assign Shifts'}
         </button>
-        <button onclick="confirmTsPublish(${(period?`'${period.id}'`: '""')})" class="btn btn-sm btn-primary" ${isEditMode?'':'disabled'}>
-          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 1212l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>Publish
-        </button>
-        <button onclick="deleteTsSchedule(${(period?`'${period.id}'`: '""')})" class="btn btn-sm btn-danger-outline">
-          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
-          Delete Schedule
-        </button>` : ``}
-        <button onclick="navigateTo('shift-management')" class="btn btn-sm btn-secondary"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>Advanced Editor</button>
+        ${isEditMode ? `<button onclick="confirmTsPublish(${(period?`'${period.id}'`: '""')})" class="btn btn-sm btn-primary">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>Publish
+        </button>` : ''}` : ``}
+        <button onclick="openShiftTemplateModal()" class="btn btn-sm btn-secondary" title="Create a shift template — it appears in the paint palette and the schedule legend"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>New Template</button>
       </div>
     </div>
 
@@ -601,11 +688,19 @@ function renderTeamSchedule() {
         </span>
         <div class="ml-auto flex gap-1.5 shrink-0">
           ${canEdit ? `
-          <button onclick="fillTsAll('${period.id}')" class="btn btn-sm btn-secondary" ${isEditMode?'':'style=\"visibility:hidden\"'}>
+          <button onclick="fillTsAll()" class="btn btn-sm btn-secondary" ${isEditMode?'':'style=\"visibility:hidden\"'}>
             <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
             Fill All
           </button>
-          <button onclick="resetTsPeriod('${period.id}')" class="btn btn-sm btn-secondary" ${isEditMode?'':'style=\"visibility:hidden\"'}>Reset</button>` : ''}
+          <button onclick="resetTsPeriod('${period.id}')" class="btn btn-sm btn-secondary" ${isEditMode?'':'style=\"visibility:hidden\"'}>Reset</button>
+          <button onclick="deleteTsSchedule('${period.id}')" class="btn btn-sm btn-danger-outline" title="Set every shift in this period back to Off">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+            Delete Schedule
+          </button>` : ''}
+          <button onclick="toggleTsView()" class="btn btn-sm ${tsViewIsMonth()?'btn-primary':'btn-secondary'}" title="${tsViewIsMonth()?'Back to the 7-day view — shifts repeat weekly':'Show the whole month (up to 30 days)'}">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+            ${tsViewIsMonth() ? 'Show 7 days' : 'Show 30 days'}
+          </button>
         </div>
       </div>
       <!-- Period strip -->
@@ -626,7 +721,7 @@ function renderTeamSchedule() {
       ${period ? `
       <!-- Period hint -->
       <div class="px-4 py-2 border-t border-charcoal-100">
-        <p class="text-[10px] text-charcoal-400">${canEdit?(isEditMode?'Editing enabled — pick a shift below, then click or drag across the grid to paint it. Row ➤ and day ⬇ buttons fill in one click.':'Preview — read only.'):''}</p>
+        <p class="text-[10px] text-charcoal-400">${canEdit?(isEditMode?'Editing enabled — pick a shift below, then click or drag across the grid to paint it. Row ➤ and day ⬇ buttons fill in one click.':'Preview — read only.')+(tsViewIsMonth()?' Whole month visible — shifts painted on a weekday repeat on the same weekday of every following week.':'')+(!tsViewIsMonth()&&period&&period.days.length>7?' This range shows 7 days at a time — every shift repeats on the same weekday of the following weeks. Use “Show 30 days” for the whole month.':''):''}</p>
       </div>
       ${isEditMode ? `
       <!-- Paint palette -->
@@ -642,7 +737,7 @@ function renderTeamSchedule() {
       </div>` : ''}
       <!-- stats + legend -->
       <div class="flex items-center gap-4 px-4 py-2 border-b border-charcoal-100 bg-charcoal-50/40 text-[10px] text-charcoal-500 flex-wrap">
-        <span class="inline-flex items-center gap-1.5"><svg class="w-3.5 h-3.5 text-charcoal-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>${period.days.length} days</span>
+        <span class="inline-flex items-center gap-1.5"><svg class="w-3.5 h-3.5 text-charcoal-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>${tsViewIsMonth() ? viewCols.length+' days · whole '+monthLabel : (viewCols.length < period.days.length ? viewCols.length+' of '+period.days.length+' days (weekly repeat)' : period.days.length+' days')}</span>
         <span class="inline-flex items-center gap-1.5"><svg class="w-3.5 h-3.5 text-charcoal-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/></svg>${teamRows.length} employees</span>
         <span class="inline-flex items-center gap-1.5"><svg class="w-3.5 h-3.5 text-charcoal-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>${assignedCount} shifts assigned</span>
         <span class="ml-auto inline-flex items-center gap-3 flex-wrap">${legend}</span>
@@ -651,14 +746,15 @@ function renderTeamSchedule() {
       <!-- desktop table -->
       <div class="table-responsive hidden lg:flex flex-1 min-h-0 overflow-y-auto">
         <table class="data-table" style="flex:1 1 auto">
-          <thead><tr><th class="sticky left-0 bg-charcoal-50 z-10">Employee</th>${period.days.map((d,di)=>`<th class="text-center">${d.num}<br/><span class="text-[9px] font-normal text-charcoal-400">${d.dow}</span>${isEditMode?`<button onclick="fillTsDay('${period.id}',${di})" title="Apply the selected shift to everyone on ${d.dow} ${d.num}" class="block mx-auto mt-0.5 p-0.5 rounded hover:bg-brand-100 text-charcoal-400 hover:text-brand-600"><svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 5v14M19 12l-7 7-7-7"/></svg></button>`:''}</th>`).join('')}</tr></thead>
+          <thead><tr><th class="sticky left-0 bg-charcoal-50 z-10">Employee</th>${viewCols.map(col=>`<th class="text-center">${col.num}<br/><span class="text-[9px] font-normal text-charcoal-400">${col.dow}</span>${isEditMode?`<button onclick="fillTsDay('${col.pid}',${col.idx})" title="Apply the selected shift to everyone on ${col.dow} ${col.num}${tsPeriodLen(col.pid)>7?' — and on this weekday of every following week':''}" class="block mx-auto mt-0.5 p-0.5 rounded hover:bg-brand-100 text-charcoal-400 hover:text-brand-600"><svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 5v14M19 12l-7 7-7-7"/></svg></button>`:''}</th>`).join('')}</tr></thead>
           <tbody>${teamRows.map(m => {
-            const roster = schRoster(m.id, period.id, period.days.length);
-            return `<tr><td class="sticky left-0 bg-white z-10"><div class="flex items-center gap-2"><div class="w-7 h-7 rounded-full bg-brand-100 text-brand-700 flex items-center justify-center text-[10px] font-semibold">${m.initials}</div><div><p class="text-xs font-medium text-charcoal-900">${m.name}</p><p class="text-[10px] text-charcoal-500">${m.position}</p></div>${isEditMode?`<button onclick="fillTsRow('${m.id}','${period.id}')" title="Fill all ${period.days.length} days for ${m.name} with the selected shift" class="ml-auto shrink-0 p-1 rounded hover:bg-brand-100 text-charcoal-400 hover:text-brand-600"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 12h16m0 0l-6-6m6 6l-6 6"/></svg></button>`:''}</div></td>${
-              roster.map((sid,i)=>{
+            const cells = tsRowCells(m.id, viewCols);
+            return `<tr><td class="sticky left-0 bg-white z-10"><div class="flex items-center gap-2"><div class="w-7 h-7 rounded-full bg-brand-100 text-brand-700 flex items-center justify-center text-[10px] font-semibold">${m.initials}</div><div><p class="text-xs font-medium text-charcoal-900">${m.name}</p><p class="text-[10px] text-charcoal-500">${m.position}</p></div>${isEditMode?`<button onclick="fillTsRow('${m.id}')" title="Fill every visible day for ${m.name} with the selected shift" class="ml-auto shrink-0 p-1 rounded hover:bg-brand-100 text-charcoal-400 hover:text-brand-600"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 12h16m0 0l-6-6m6 6l-6 6"/></svg></button>`:''}</div></td>${
+              cells.map((sid,vi)=>{
+                const col = viewCols[vi];
                 const t=getShiftTemplate(sid); const c=getShiftColor(t);
                 if(isEditMode){
-                  return `<td class="text-center"><button onmousedown="tsPaintDown(event);paintTsCell(this,'${m.id}','${period.id}',${i})" onmouseenter="tsPaintOver(this,'${m.id}','${period.id}',${i})" class="schedule-shift-badge cursor-pointer hover:opacity-90 hover:ring-1 hover:ring-brand-400 text-[10px] border" style="background:${c.bg};color:${c.text};border-color:${c.border}40" data-sid="${sid}">${t.isOff?'OFF':t.start+'–'+t.end}</button></td>`;
+                  return `<td class="text-center"><button onmousedown="tsPaintDown(event);paintTsCell(this,'${m.id}','${col.pid}',${col.idx})" onmouseenter="tsPaintOver(this,'${m.id}','${col.pid}',${col.idx})" class="schedule-shift-badge cursor-pointer hover:opacity-90 hover:ring-1 hover:ring-brand-400 text-[10px] border" style="background:${c.bg};color:${c.text};border-color:${c.border}40" data-iso="${col.iso}" data-sid="${sid}">${t.isOff?'OFF':t.start+'–'+t.end}</button></td>`;
                 }
                 return `<td class="text-center"><span class="schedule-shift-badge text-[10px] border" style="background:${c.bg};color:${c.text};border-color:${c.border}40">${t.isOff?'OFF':t.start}</span></td>`;
               }).join('')
@@ -669,12 +765,13 @@ function renderTeamSchedule() {
 
       <!-- mobile cards -->
       <div class="space-y-1.5 p-3 lg:hidden">${teamRows.map(m => {
-        const roster = schRoster(m.id, period.id, period.days.length);
+        const cells = tsRowCells(m.id, viewCols);
         return `<div class="bg-white rounded-xl border border-charcoal-200 p-3">
           <div class="flex items-center gap-2 mb-2"><div class="w-7 h-7 rounded-full bg-brand-100 text-brand-700 flex items-center justify-center text-[10px] font-semibold">${m.initials}</div><span class="text-xs font-medium text-charcoal-900">${m.name}</span></div>
-          <div class="flex gap-1 flex-wrap">${roster.map((sid,i)=>{
+          <div class="flex gap-1 flex-wrap">${cells.map((sid,vi)=>{
+            const col = viewCols[vi];
             const t=getShiftTemplate(sid); const c=getShiftColor(t);
-            return `<span class="schedule-shift-badge text-[9px] border" style="background:${c.bg};color:${c.text};border-color:${c.border}40">${period.days[i].num}/${period.days[i].dow}: ${t.isOff?'OFF':t.start+'–'+t.end}</span>`;
+            return `<span class="schedule-shift-badge text-[9px] border" style="background:${c.bg};color:${c.text};border-color:${c.border}40">${col.num}/${col.dow}: ${t.isOff?'OFF':t.start+'–'+t.end}</span>`;
           }).join('')}</div>
         </div>`;
       }).join('')}</div>
@@ -726,7 +823,7 @@ function openCreateScheduleModal(){
           <input type="date" id="cs-end" value="${ym}-${String(dim).padStart(2,'0')}" min="${ym}-01" max="${ym}-${String(dim).padStart(2,'0')}" class="w-full px-3 py-2 rounded-lg border border-charcoal-200 text-xs focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500">
         </div>
       </div>
-      <p class="text-[10px] text-charcoal-400">Choose a date range within ${monthLabel}. A new schedule period will be created and you can start assigning shifts immediately.</p>
+      <p class="text-[10px] text-charcoal-400">Choose a date range within ${monthLabel}. A new schedule period will be created and you can start assigning shifts immediately. Ranges longer than a week open in a 7-day view where every shift repeats on the same weekday of the following weeks — the “Show 30 days” button reveals the full range (up to the whole month).</p>
     </div>`;
   openModal('Create New Schedule', content, {
     wide: true,
@@ -771,10 +868,11 @@ function confirmCreateSchedule(){
   // Remove existing custom with same id (re-create)
   schCustomPeriods()[ym] = schCustomPeriods()[ym].filter(p => p.id !== periodId);
   schCustomPeriods()[ym].push(period);
-  // Select and enter edit mode
+  // Select and enter edit mode (new ranges open in the 7-day view)
   state.tsMonth = ym;
   state.tsPeriod = periodId;
   state.tsEditing = true;
+  state.tsView = 'week';
   closeModal();
   renderAll();
   showToast(`Custom schedule created: ${period.label}`);
@@ -803,34 +901,56 @@ function paintTsCell(btn, empId, periodId, dayIdx) {
   const sid = tsPaintSid();
   const len = tsPeriodLen(periodId);
   const roster = schRoster(empId, periodId, len);
-  if (roster[dayIdx] === sid) return;
-  roster[dayIdx] = sid;
+  // Ranges longer than a week: the painted shift also lands on the same
+  // weekday of every following week inside the period (weekly repeat).
+  // tsRepeatIdx() returns just [dayIdx] for periods of 7 days or less.
+  const idxs = tsRepeatIdx(dayIdx, len);
+  if (idxs.every(i => roster[i] === sid)) return;
+  idxs.forEach(i => { roster[i] = sid; });
   schPersist(empId, periodId, roster);
   styleTsCell(btn, sid);
+  // Keep the same-weekday cells of this row in sync (Show 30 days view).
+  const days = tsPeriodDays(periodId);
+  const isos = idxs.map(i => days[i] ? days[i].iso : null).filter(Boolean);
+  const row = btn.closest('tr');
+  if (row) row.querySelectorAll('button[data-iso]').forEach(b => {
+    if (isos.includes(b.getAttribute('data-iso'))) styleTsCell(b, sid);
+  });
 }
 function tsPaintDown(ev) { if (ev) ev.preventDefault(); _tsPainting = true; }
 function tsPaintOver(btn, empId, periodId, dayIdx) { if (_tsPainting) paintTsCell(btn, empId, periodId, dayIdx); }
 document.addEventListener('mouseup', () => { _tsPainting = false; });
-function fillTsRow(empId, periodId) {
-  const len = tsPeriodLen(periodId); const sid = tsPaintSid();
-  schPersist(empId, periodId, Array(len).fill(sid));
+// Row ➤ — fill the whole visible schedule of one employee. In the 7-day view
+// that is the selected period; in the "Show 30 days" view it is every period
+// the month is made of (each week / custom range owns its own days).
+function fillTsRow(empId) {
+  const sid = tsPaintSid();
+  const pids = [...new Set(tsViewCols(tsCurrentPeriod()).map(c => c.pid))];
+  if (!pids.length) return;
+  pids.forEach(pid => schPersist(empId, pid, Array(tsPeriodLen(pid)).fill(sid)));
   renderAll();
-  showToast(`All ${len} days set to ${getShiftTemplate(sid).name}`);
+  showToast(`Whole visible schedule set to ${getShiftTemplate(sid).name}`);
 }
 function fillTsDay(periodId, dayIdx) {
   const len = tsPeriodLen(periodId); const sid = tsPaintSid();
+  const idxs = tsRepeatIdx(dayIdx, len);
   MOCK.teamMembers.slice(0, 8).forEach(m => {
-    const r = schRoster(m.id, periodId, len); r[dayIdx] = sid; schPersist(m.id, periodId, r);
+    const r = schRoster(m.id, periodId, len);
+    idxs.forEach(i => { r[i] = sid; });
+    schPersist(m.id, periodId, r);
   });
   renderAll();
-  showToast(`Day ${dayIdx + 1} set to ${getShiftTemplate(sid).name} for everyone`);
+  showToast(`Day ${dayIdx + 1} set to ${getShiftTemplate(sid).name} for everyone${idxs.length > 1 ? ' — repeated on the same weekday of the following weeks' : ''}`);
 }
-function fillTsAll(periodId) {
-  const len = tsPeriodLen(periodId); const sid = tsPaintSid();
-  if (!confirm(`Set every employee's whole period to ${getShiftTemplate(sid).name}?`)) return;
-  MOCK.teamMembers.forEach(m => schPersist(m.id, periodId, Array(len).fill(sid)));
+// Toolbar Fill All — same as the row fill, but for every employee.
+function fillTsAll() {
+  const sid = tsPaintSid();
+  const pids = [...new Set(tsViewCols(tsCurrentPeriod()).map(c => c.pid))];
+  if (!pids.length) return;
+  if (!confirm(`Set every employee's visible schedule to ${getShiftTemplate(sid).name}?`)) return;
+  MOCK.teamMembers.forEach(m => pids.forEach(pid => schPersist(m.id, pid, Array(tsPeriodLen(pid)).fill(sid))));
   renderAll();
-  showToast(`Entire period filled with ${getShiftTemplate(sid).name}`);
+  showToast(`Entire visible schedule filled with ${getShiftTemplate(sid).name}`);
 }
 
 function deleteTsSchedule(periodId){
@@ -862,12 +982,19 @@ function renderShiftManagement() {
     return { ...m, scheduleIds: schedIds };
   });
 
-  // Calculate stats
+  // Filter team by role
+  const roles = [...new Set(teamData.map(m => m.position))];
+  // Drop a stale selection if the filtered role no longer exists
+  if (_saFilterRole !== 'all' && !roles.includes(_saFilterRole)) _saFilterRole = 'all';
+  const filteredTeam = _saFilterRole === 'all' ? teamData : teamData.filter(m => m.position === _saFilterRole);
+
+  // Calculate stats — over the FILTERED team, so the summary always matches
+  // the grid underneath it instead of reporting the whole branch.
   let totalHours = 0, morningCount = 0, eveningCount = 0, offCount = 0;
   const shiftCounts = {};
   templates.forEach(t => shiftCounts[t.id] = 0);
 
-  teamData.forEach(m => {
+  filteredTeam.forEach(m => {
     m.scheduleIds.forEach(sid => {
       const t = getShiftTemplate(sid);
       const h = getShiftHours(t);
@@ -877,14 +1004,10 @@ function renderShiftManagement() {
     });
   });
 
-  const maxHours = teamData.length * days.length * 8;
+  const maxHours = filteredTeam.length * days.length * 8;
   const utilization = maxHours > 0 ? Math.round((totalHours / maxHours) * 100) : 0;
   morningCount = shiftCounts['st-morning'] || 0;
   eveningCount = shiftCounts['st-evening'] || 0;
-
-  // Filter team by role
-  const filteredTeam = _saFilterRole === 'all' ? teamData : teamData.filter(m => m.position === _saFilterRole);
-  const roles = [...new Set(teamData.map(m => m.position))];
 
   // Selected template indicator
   const selTpl = _saSelectedTemplate ? getShiftTemplate(_saSelectedTemplate) : null;
@@ -1328,86 +1451,297 @@ function renderTeamUpdates() {
 }
 
 // ==================== RECRUITMENT REQUESTS ====================
+// ==================== RECRUITMENT (Branch) ====================
+// Pipeline: BM requests a position with the shift + salary he needs -> HR
+// approves/rejects -> approved requests wait until HR sends a candidate from the
+// waiting list -> the BM calls the candidate, schedules and holds the 2nd
+// interview -> Accepted (HR creates the account) or Rejected (back to waiting).
+// The visible stage is derived from who owns which field, so the branch and HR
+// portals never fight over a stored status.
+const REC_STAGES = [
+  { id:'hrReview',     label:'HR review',           bg:'bg-purple-50', text:'text-purple-700' },
+  { id:'waitingMatch', label:'Waiting for a match', bg:'bg-yellow-50', text:'text-yellow-700' },
+  { id:'matched',      label:'Candidate matched',   bg:'bg-blue-50',   text:'text-blue-700' },
+  { id:'iv2',          label:'2nd interview',       bg:'bg-brand-50',  text:'text-brand-700' },
+  { id:'offerOut',     label:'Hired · account',     bg:'bg-green-50',  text:'text-green-700' },
+];
+const REC_STAGE_REJECTED = { id:'rejected', label:'Rejected by HR', bg:'bg-red-50', text:'text-red-700' };
+
+function recStageOf(r) {
+  if (r.status === 'Rejected') return 'rejected';
+  if (r.match) {
+    if (r.iv2 && r.iv2.verdict === 'Accept') return 'offerOut';
+    if (r.iv2 && r.iv2.verdict === 'Reject') return 'waitingMatch';
+    if (r.iv2) return 'iv2';
+    return 'matched';
+  }
+  return r.status === 'Approved' ? 'waitingMatch' : 'hrReview';
+}
+function recStageMeta(id) {
+  return id === 'rejected' ? REC_STAGE_REJECTED : (REC_STAGES.find(s => s.id === id) || REC_STAGES[0]);
+}
+function recChip(text, cls) {
+  return `<span class="inline-flex items-center gap-1 ${cls} rounded-full px-2 py-0.5 text-[9px] font-semibold">${text}</span>`;
+}
+
+let _recTab = 'open';
+// The tab bar stays short on purpose: the two HR stages share one tab, and the
+// two interview stages share another — the card chips still show the exact step.
+const REC_TABS = [
+  { id:'open',      label:'Open Positions' },
+  { id:'hr',        label:'Hr Accepted' },
+  { id:'interview', label:'To call & interview' },
+  { id:'hired',     label:'Hired' },
+  { id:'rejected',  label:'Rejected' },
+];
+function recMatchesTab(r, tab) {
+  const s = recStageOf(r);
+  if (tab === 'open') return s !== 'rejected';
+  if (tab === 'hr') return s === 'hrReview' || s === 'waitingMatch';
+  if (tab === 'interview') return s === 'matched' || s === 'iv2';
+  if (tab === 'hired') return s === 'offerOut';
+  return s === 'rejected';
+}
+function recSetTab(id){ _recTab = id; renderAll(); }
+
 function renderRecruitment() {
   const reqs = MOCK.recruitmentRequests;
-  const submitted = reqs.filter(r=>r.status==='Submitted').length;
-  const pending = reqs.filter(r=>r.status==='Pending').length;
-  const approved = reqs.filter(r=>r.status==='Approved').length;
-  const openPositions = reqs.reduce((s,r)=>s+r.count,0);
   const urgencyBadge = { High:'badge-red', Medium:'badge-yellow', Low:'badge-blue' };
+  const openPositions = reqs.reduce((s,r)=>s+r.count,0);
+  const shown = reqs.filter(r => recMatchesTab(r, _recTab));
+
+  const tabs = REC_TABS.map(t => {
+    const n = reqs.filter(r => recMatchesTab(r, t.id)).length;
+    const on = _recTab === t.id;
+    return `<button onclick="recSetTab('${t.id}')" class="tab-btn ${on?'active':''}">${t.label}
+      <span class="ml-1 rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${on ? 'bg-brand-100 text-brand-700' : n ? 'bg-charcoal-100 text-charcoal-600' : 'bg-charcoal-50 text-charcoal-400'}">${n}</span></button>`;
+  }).join('');
+
+  const cards = shown.map(r=>{
+    const meta = recStageMeta(recStageOf(r));
+    return `<div class="bg-white rounded-xl border ${recStageOf(r)==='matched' ? 'border-brand-300 ring-1 ring-brand-200' : 'border-charcoal-200'} p-3 card-interactive" onclick="openRecruitmentDetail('${r.id}')">
+      <div class="flex items-center justify-between gap-2">
+        <div class="flex items-center gap-3 min-w-0">
+          <div class="w-9 h-9 rounded-lg ${meta.bg} flex items-center justify-center flex-shrink-0"><svg class="w-4 h-4 ${meta.text}" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 118 0zM3 20a6 6 0 0112 0v1H3v-1z"/></svg></div>
+          <div class="min-w-0">
+            <p class="text-xs font-semibold text-charcoal-900 truncate">${r.position}${r.count > 1 ? ` <span class="text-charcoal-500 font-normal">x${r.count}</span>` : ''}</p>
+            <p class="text-[10px] text-charcoal-500 truncate">${r.department ? r.department + ' · ' : ''}${r.requestedBy} · ${r.date}</p>
+          </div>
+        </div>
+        <div class="flex items-center gap-1.5 flex-shrink-0">
+          <span class="badge ${urgencyBadge[r.urgency]} text-[9px]">${r.urgency}</span>
+          ${recChip(meta.label, meta.bg + ' ' + meta.text)}
+        </div>
+      </div>
+      <p class="text-[10px] text-charcoal-600 mt-2">${r.reason}</p>
+      <div class="flex items-center gap-1.5 mt-2 flex-wrap">
+        ${recChip('Wants ' + (r.shift || 'any shift'), 'bg-charcoal-50 text-charcoal-600')}
+        ${recChip('EGP ' + (r.expectedSalary ? r.expectedSalary.toLocaleString() : '—'), 'bg-charcoal-50 text-charcoal-600')}
+        ${r.match ? recChip('Match: ' + r.match.name + (r.iv2 && r.iv2.verdict === 'Accept' ? ' · accepted' : r.iv2 && r.iv2.verdict === 'Reject' ? ' · rejected' : r.iv2 ? ' · interview scheduled' : ' · call him'), r.iv2 && r.iv2.verdict === 'Reject' ? 'bg-charcoal-50 text-charcoal-500' : 'bg-blue-50 text-blue-700') : ''}
+      </div>
+    </div>`;}).join('');
+
   return `<div class="space-y-3">
     <div class="flex items-center justify-between">
       <div><h1 class="text-xl font-bold text-charcoal-900">Recruitment</h1><p class="text-xs text-charcoal-500 mt-0.5">${openPositions} open positions · ${reqs.length} requests</p></div>
       <button onclick="openNewRecruitment()" class="btn btn-sm btn-primary"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>New Request</button>
     </div>
 
-    <!-- Stats -->
-    <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
-      <div class="bg-white rounded-xl border border-charcoal-200 p-3 text-center border-l-4 border-l-brand-500"><div class="w-8 h-8 rounded-lg bg-brand-100 flex items-center justify-center mx-auto mb-1"><svg class="w-4 h-4 text-brand-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z"/></svg></div><p class="text-lg font-bold text-brand-600">${openPositions}</p><p class="text-[10px] text-charcoal-500">Open Positions</p></div>
-      <div class="bg-white rounded-xl border border-charcoal-200 p-3 text-center"><div class="w-8 h-8 rounded-lg bg-purple-100 flex items-center justify-center mx-auto mb-1"><svg class="w-4 h-4 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg></div><p class="text-lg font-bold text-purple-600">${submitted}</p><p class="text-[10px] text-charcoal-500">Submitted</p></div>
-      <div class="bg-white rounded-xl border border-charcoal-200 p-3 text-center"><div class="w-8 h-8 rounded-lg bg-yellow-100 flex items-center justify-center mx-auto mb-1"><svg class="w-4 h-4 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg></div><p class="text-lg font-bold text-yellow-600">${pending}</p><p class="text-[10px] text-charcoal-500">Pending</p></div>
-      <div class="bg-white rounded-xl border border-charcoal-200 p-3 text-center"><div class="w-8 h-8 rounded-lg bg-green-100 flex items-center justify-center mx-auto mb-1"><svg class="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg></div><p class="text-lg font-bold text-green-600">${approved}</p><p class="text-[10px] text-charcoal-500">Approved</p></div>
-    </div>
-
-    <!-- Pipeline -->
-    <div class="bg-white rounded-xl border border-charcoal-200 p-3">
-      <p class="bento-label text-charcoal-500 mb-2">PIPELINE</p>
-      <div class="flex items-center gap-1.5">
-        <div class="flex-1 text-center rounded-lg bg-purple-50 py-2.5"><p class="text-lg font-bold text-purple-700">${submitted}</p><p class="text-[10px] text-charcoal-500">Submitted</p></div>
-        <svg class="w-4 h-4 text-charcoal-300 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
-        <div class="flex-1 text-center rounded-lg bg-yellow-50 py-2.5"><p class="text-lg font-bold text-yellow-700">${pending}</p><p class="text-[10px] text-charcoal-500">Pending</p></div>
-        <svg class="w-4 h-4 text-charcoal-300 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
-        <div class="flex-1 text-center rounded-lg bg-green-50 py-2.5"><p class="text-lg font-bold text-green-700">${approved}</p><p class="text-[10px] text-charcoal-500">Approved</p></div>
-      </div>
-    </div>
+    <!-- Stage tabs -->
+    <div class="bg-white rounded-xl border border-charcoal-200 px-1.5 flex overflow-x-auto">${tabs}</div>
 
     <!-- Request Cards -->
-    <div class="space-y-1.5">${reqs.map(r=>`<div class="bg-white rounded-xl border border-charcoal-200 p-3 card-interactive" onclick="openRecruitmentDetail('${r.id}')">
-      <div class="flex items-center justify-between">
-        <div class="flex items-center gap-3">
-          <div class="w-9 h-9 rounded-lg bg-charcoal-100 flex items-center justify-center flex-shrink-0"><svg class="w-4.5 h-4.5 text-charcoal-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z"/></svg></div>
-          <div>
-            <p class="text-xs font-semibold text-charcoal-900">${r.position} <span class="text-charcoal-500 font-normal">x${r.count}</span></p>
-            <p class="text-[10px] text-charcoal-500">${r.department} · ${r.requestedBy} · ${r.date}</p>
-          </div>
-        </div>
-        <div class="flex items-center gap-1.5">
-          <span class="badge ${urgencyBadge[r.urgency]} text-[9px]">${r.urgency}</span>
-          ${statusBadge(r.status)}
-        </div>
-      </div>
-      <p class="text-[10px] text-charcoal-600 mt-2">${r.reason}</p>
-    </div>`).join('')}</div>
+    ${shown.length ? `<div class="space-y-1.5">${cards}</div>`
+      : `<div class="bg-white rounded-xl border border-charcoal-200 p-8 text-center"><p class="text-xs text-charcoal-500">No requests here right now.</p></div>`}
   </div>`;
 }
+
 function openRecruitmentDetail(id) {
   const r = MOCK.recruitmentRequests.find(x=>x.id===id);
   if(!r) return;
   const urgencyBadge = { High:'badge-red', Medium:'badge-yellow', Low:'badge-blue' };
-  openModal(`${r.position}`, `<div class="space-y-3">
-    <div class="flex items-center gap-2">
-      <span class="badge ${urgencyBadge[r.urgency]} text-[9px]">${r.urgency} urgency</span>
-      ${statusBadge(r.status)}
+  const stage = recStageOf(r);
+  const meta = recStageMeta(stage);
+
+  // --- matching criteria the BM asked for ---
+  const criteria = `<div class="bg-white rounded-xl border border-charcoal-200 overflow-hidden">
+    <div class="px-3 py-2 border-b border-charcoal-100 bg-charcoal-50/50"><p class="bento-label">WHAT YOU ASKED FOR</p></div>
+    <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 p-3">
+      <div><p class="bento-label text-charcoal-500">Position</p><p class="text-xs font-semibold text-charcoal-900 mt-0.5">${r.position}${r.count>1?' x'+r.count:''}</p></div>
+      <div><p class="bento-label text-charcoal-500">Shift</p><p class="text-xs font-semibold text-charcoal-900 mt-0.5">${r.shift || 'Any'}</p></div>
+      <div><p class="bento-label text-charcoal-500">Expected salary</p><p class="text-xs font-semibold text-charcoal-900 mt-0.5">EGP ${r.expectedSalary ? r.expectedSalary.toLocaleString() : '—'}</p></div>
+      <div><p class="bento-label text-charcoal-500">Requested by</p><p class="text-xs font-semibold text-charcoal-900 mt-0.5">${r.requestedBy}</p></div>
     </div>
-    <div class="grid grid-cols-2 gap-2">
+  </div>`;
+
+  // --- what happens next, per stage ---
+  let nextHtml = '';
+  if (stage === 'hrReview') {
+    nextHtml = `<div class="bg-purple-50 border border-purple-100 rounded-xl p-3">
+      <p class="text-xs font-bold text-purple-800 mb-0.5">With HR — awaiting decision</p>
+      <p class="text-[11px] text-purple-700 leading-snug">HR reviews the position, shift and salary. You can't do anything here yet; you'll be notified either way.</p>
+    </div>`;
+  } else if (stage === 'waitingMatch') {
+    nextHtml = `<div class="bg-yellow-50 border border-yellow-100 rounded-xl p-3">
+      <p class="text-xs font-bold text-yellow-800 mb-0.5">Approved — waiting for a match</p>
+      <p class="text-[11px] text-yellow-700 leading-snug">HR approved the request and is looking for someone who can cover the <b>${r.shift || 'shift'}</b> shift. Nothing to do until HR sends you a candidate.</p>
+    </div>`;
+  } else if (stage === 'rejected') {
+    nextHtml = `<div class="bg-red-50 border border-red-200 rounded-xl p-3">
+      <p class="text-xs font-bold text-red-800 mb-1">HR rejected this request</p>
+      <p class="text-[11px] text-red-700 leading-snug">${(r.hrDecision && r.hrDecision.note) || 'No reason given.'}</p>
+      <p class="text-[10px] text-red-500 mt-1.5">${r.hrDecision ? r.hrDecision.by + ' · ' + r.hrDecision.date : ''}</p>
+      <div class="mt-2"><button onclick="closeModal();openNewRecruitment()" class="btn btn-sm btn-primary">Raise a new request</button></div>
+    </div>`;
+  } else if (r.match && stage === 'matched') {
+    // HR sent a candidate — the BM calls the number, then schedules the 2nd interview
+    nextHtml = `<div class="bg-blue-50 border border-blue-200 rounded-xl p-3">
+      <div class="flex items-start justify-between gap-2 mb-2">
+        <div>
+          <p class="text-[10px] font-bold text-blue-700 uppercase tracking-wider">Candidate sent by HR</p>
+          <p class="text-base font-bold text-charcoal-900">${r.match.name}</p>
+        </div>
+        <a href="tel:${r.match.phone}" onclick="event.stopPropagation()" class="btn btn-sm btn-primary flex-shrink-0">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"/></svg>
+          Call ${r.match.phone}
+        </a>
+      </div>
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-2">
+        <div><p class="bento-label text-blue-600">Phone</p><p class="text-xs font-semibold text-charcoal-900">${r.match.phone}</p></div>
+        <div><p class="bento-label text-blue-600">Shift</p><p class="text-xs font-semibold text-charcoal-900">${r.match.shift || '—'}</p></div>
+        <div><p class="bento-label text-blue-600">Salary expectation</p><p class="text-xs font-semibold text-charcoal-900">${r.match.salaryExp ? 'EGP ' + r.match.salaryExp.toLocaleString() : '—'}</p></div>
+        <div><p class="bento-label text-blue-600">Source</p><p class="text-xs font-semibold text-charcoal-900">${r.match.source || '—'}</p></div>
+      </div>
+      ${r.match.skills && r.match.skills.length ? `<div class="flex flex-wrap gap-1 mb-2">${r.match.skills.map(s=>recChip(s,'bg-white text-charcoal-700')).join('')}</div>` : ''}
+      ${r.match.note ? `<p class="text-[11px] text-blue-800 leading-snug mb-2"><b>HR note:</b> ${r.match.note}</p>` : ''}
+      <form onsubmit="event.preventDefault();saveIv2('${r.id}')" class="bg-white rounded-xl border border-blue-200 p-3 space-y-2">
+        <p class="bento-label text-blue-700">Call him, then schedule the second interview</p>
+        <div class="grid grid-cols-2 gap-2">
+          <div><label class="form-label">Date</label><input id="iv2-date" type="date" class="form-input" value="2026-09-15" required></div>
+          <div><label class="form-label">Time</label><input id="iv2-time" type="time" class="form-input" value="13:00" required></div>
+        </div>
+        <div class="grid grid-cols-2 gap-2">
+          <div><label class="form-label">Type</label><select id="iv2-type" class="form-select"><option>On-site</option><option>Phone</option><option>Video</option></select></div>
+          <div><label class="form-label">Interviewed by</label><input id="iv2-by" type="text" class="form-input" value="${MOCK.currentUser.fullName}"></div>
+        </div>
+        <div><label class="form-label">Note</label><textarea id="iv2-note" class="form-input" rows="2" placeholder="What you agreed on the call..."></textarea></div>
+        <div class="flex justify-end"><button type="submit" class="btn btn-sm btn-primary">Schedule interview</button></div>
+      </form>
+    </div>`;
+  } else if (r.match && stage === 'iv2') {
+    nextHtml = `<div class="bg-brand-50 border border-brand-200 rounded-xl p-3">
+      <p class="text-xs font-bold text-brand-800 mb-1">2nd interview scheduled</p>
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-2">
+        <div><p class="bento-label text-brand-600">Candidate</p><p class="text-xs font-semibold text-charcoal-900">${r.match.name}</p></div>
+        <div><p class="bento-label text-brand-600">Phone</p><p class="text-xs font-semibold text-charcoal-900">${r.match.phone}</p></div>
+        <div><p class="bento-label text-brand-600">When</p><p class="text-xs font-semibold text-charcoal-900">${r.iv2.date} · ${r.iv2.time}</p></div>
+        <div><p class="bento-label text-brand-600">Type</p><p class="text-xs font-semibold text-charcoal-900">${r.iv2.type}${r.iv2.by ? ' · ' + r.iv2.by : ''}</p></div>
+      </div>
+      ${r.iv2.notes ? `<p class="text-[11px] text-brand-800 leading-snug mb-2"><b>Notes:</b> ${r.iv2.notes}</p>` : ''}
+      <div class="bg-white rounded-xl border border-brand-200 p-3">
+        <p class="bento-label text-brand-700 mb-1.5">Interview done? Record the result</p>
+        <div class="flex flex-wrap gap-1.5">
+          <button onclick="recordIv2Result('${r.id}','Accept')" class="btn btn-sm btn-primary"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>Accept — send to HR</button>
+          <button onclick="recordIv2Result('${r.id}','Reject')" class="btn btn-sm btn-danger-outline"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>Reject — keep looking</button>
+        </div>
+      </div>
+    </div>`;
+  } else if (stage === 'offerOut') {
+    nextHtml = `<div class="bg-green-50 border border-green-200 rounded-xl p-3">
+      <p class="text-xs font-bold text-green-800 mb-0.5">Accepted — HR is hiring</p>
+      <p class="text-[11px] text-green-700 leading-snug">You accepted ${r.match.name} after the second interview. HR has been notified and is creating the account and the contract.</p>
+    </div>`;
+  }
+
+  // --- timeline ---
+  const history = r.history || [];
+  const timeline = history.length ? `<div class="bg-white rounded-xl border border-charcoal-200 overflow-hidden">
+    <div class="px-3 py-2 border-b border-charcoal-100 bg-charcoal-50/50"><p class="bento-label">TIMELINE</p></div>
+    <div class="p-3 space-y-0">${history.map((h,i)=>`<div class="flex gap-2.5">
+      <div class="flex flex-col items-center">
+        <div class="w-2.5 h-2.5 rounded-full ${i===history.length-1?'bg-brand-500 ring-2 ring-brand-100':'bg-charcoal-300'} flex-shrink-0 mt-1"></div>
+        ${i<history.length-1?'<div class="w-0.5 flex-1 bg-charcoal-200 my-1"></div>':''}
+      </div>
+      <div class="pb-3 min-w-0">
+        <p class="text-xs font-medium text-charcoal-900">${h.step}</p>
+        <p class="text-[10px] text-charcoal-500">${h.by || ''} · ${h.date || ''}</p>
+        ${h.note ? `<p class="text-[10px] text-charcoal-600 mt-0.5 leading-snug">${h.note}</p>` : ''}
+      </div>
+    </div>`).join('')}</div>
+  </div>` : '';
+
+  openModal(r.position, `<div class="space-y-3">
+    <div class="flex items-center gap-2 flex-wrap">
+      <span class="badge ${urgencyBadge[r.urgency]} text-[9px]">${r.urgency} urgency</span>
+      ${recChip(meta.label, meta.bg + ' ' + meta.text)}
+      <span class="text-[10px] text-charcoal-400">${r.timeline || ''}</span>
+    </div>
+    <div class="grid ${r.department ? 'grid-cols-2' : 'grid-cols-1'} gap-2">
       <div class="bg-charcoal-50 rounded-lg p-2.5"><p class="text-[10px] text-charcoal-500">Positions</p><p class="text-xs font-semibold text-charcoal-900">${r.count}</p></div>
-      <div class="bg-charcoal-50 rounded-lg p-2.5"><p class="text-[10px] text-charcoal-500">Department</p><p class="text-xs font-semibold text-charcoal-900">${r.department}</p></div>
-      <div class="bg-charcoal-50 rounded-lg p-2.5"><p class="text-[10px] text-charcoal-500">Requested By</p><p class="text-xs font-semibold text-charcoal-900">${r.requestedBy}</p></div>
-      <div class="bg-charcoal-50 rounded-lg p-2.5"><p class="text-[10px] text-charcoal-500">Requested On</p><p class="text-xs font-semibold text-charcoal-900">${r.date}</p></div>
+      ${r.department ? `<div class="bg-charcoal-50 rounded-lg p-2.5"><p class="text-[10px] text-charcoal-500">Department</p><p class="text-xs font-semibold text-charcoal-900">${r.department}</p></div>` : ''}
     </div>
     <div><p class="form-label">Reason</p><p class="text-xs text-charcoal-600">${r.reason}</p></div>
-    <div><p class="form-label">Timeline</p><p class="text-xs text-charcoal-600">${r.timeline}</p></div>
+    ${criteria}
+    ${nextHtml}
+    ${timeline}
     <div class="flex justify-end gap-2 pt-1"><button type="button" onclick="closeModal()" class="btn btn-sm btn-secondary">Close</button></div>
   </div>`);
 }
+function saveIv2(id) {
+  const r = MOCK.recruitmentRequests.find(x=>x.id===id);
+  if(!r || !r.match) return;
+  const date = (document.getElementById('iv2-date') || {}).value;
+  const time = (document.getElementById('iv2-time') || {}).value;
+  if(!date || !time){ showToast('Pick a date and time for the interview','error'); return; }
+  r.iv2 = {
+    date, time,
+    type: (document.getElementById('iv2-type') || {}).value || 'On-site',
+    by: (document.getElementById('iv2-by') || {}).value || MOCK.currentUser.fullName,
+    verdict: null,
+    notes: (document.getElementById('iv2-note') || {}).value.trim(),
+  };
+  r.history = r.history || [];
+  r.history.push({ step:'2nd interview scheduled', date:formatDate(TODAY_ISO), by:MOCK.currentUser.fullName,
+    note:`${r.iv2.type} · ${time} on ${formatDate(date)} — called ${r.match.name} on ${r.match.phone} to agree the slot.` });
+  if (typeof vacancyQueueExport === 'function') vacancyQueueExport();
+  closeModal(); renderAll();
+  showToast(`2nd interview with ${r.match.name} scheduled for ${formatDate(date)} at ${time}`);
+  openRecruitmentDetail(id);
+}
+function recordIv2Result(id, verdict) {
+  const r = MOCK.recruitmentRequests.find(x=>x.id===id);
+  if(!r || !r.match || !r.iv2) return;
+  r.iv2.verdict = verdict;
+  r.history = r.history || [];
+  if (verdict === 'Accept') {
+    r.history.push({ step:'2nd interview accepted', date:formatDate(TODAY_ISO), by:MOCK.currentUser.fullName,
+      note:`${r.match.name} accepted after the second interview — sent to HR to create the account.` });
+  } else {
+    r.history.push({ step:'2nd interview rejected', date:formatDate(TODAY_ISO), by:MOCK.currentUser.fullName,
+      note:`${r.match.name} did not fit — back to waiting for another match on the ${r.shift || ''} shift.` });
+  }
+  if (typeof vacancyQueueExport === 'function') vacancyQueueExport();
+  renderAll();
+  showToast(verdict === 'Accept' ? `${r.match.name} accepted — HR notified to create the account`
+    : `${r.match.name} rejected — HR is looking for another candidate on the ${r.shift || ''} shift`, verdict === 'Accept' ? 'success' : 'error');
+  openRecruitmentDetail(id);
+}
+
 function openNewRecruitment() {
   openModal('New Recruitment Request',`<form onsubmit="event.preventDefault();saveNewRecruitment()" class="space-y-3">
+    <div class="bg-brand-50 border border-brand-100 rounded-lg p-2.5 text-[10px] text-brand-800 leading-relaxed">
+      Tell HR exactly what you need — the <b>shift</b> and the <b>expected salary</b> are what HR matches candidates against.
+    </div>
     <div><label class="form-label">Position</label><input id="rec-position" type="text" class="form-input" placeholder="e.g. Senior Trainer" required></div>
     <div class="grid grid-cols-2 gap-3">
       <div><label class="form-label">Count</label><input id="rec-count" type="number" class="form-input" min="1" value="1" required></div>
       <div><label class="form-label">Urgency</label><select id="rec-urgency" class="form-select"><option>Low</option><option>Medium</option><option>High</option></select></div>
     </div>
-    <div><label class="form-label">Department</label><select id="rec-dept" class="form-select"><option>Training</option><option>Front Desk</option><option>Facilities</option><option>Maintenance</option></select></div>
+    <div class="grid grid-cols-2 gap-3">
+      <div><label class="form-label">Shift you want</label>
+        <select id="rec-shift" class="form-select"><option>Morning</option><option>Evening</option><option>Night</option><option>Flexible</option></select></div>
+      <div><label class="form-label">Expected salary (EGP)</label><input id="rec-salary" type="number" class="form-input" min="0" step="500" placeholder="e.g. 12000" required></div>
+    </div>
     <div><label class="form-label">Reason</label><textarea id="rec-reason" class="form-input" rows="2" placeholder="Why is this position needed?" required></textarea></div>
     <div class="flex justify-end gap-2 pt-1"><button type="button" onclick="closeModal()" class="btn btn-sm btn-secondary">Cancel</button><button type="submit" class="btn btn-sm btn-primary">Submit Request</button></div>
   </form>`);
@@ -1417,9 +1751,15 @@ function saveNewRecruitment() {
   if(!position) return;
   const count = parseInt(document.getElementById('rec-count').value)||1;
   const urgency = document.getElementById('rec-urgency').value;
-  const department = document.getElementById('rec-dept').value;
+  const shift = document.getElementById('rec-shift').value;
+  const expectedSalary = parseFloat(document.getElementById('rec-salary').value)||0;
   const reason = document.getElementById('rec-reason').value.trim();
-  MOCK.recruitmentRequests.unshift({ id:'rr'+Date.now().toString(36), position, count, urgency, status:'Submitted', date:'Sep 6, 2026', requestedBy: MOCK.currentUser.fullName, department, reason, timeline:'Submitted today · In review', candidates:0 });
+  const by = MOCK.currentUser.fullName;
+  MOCK.recruitmentRequests.unshift({ id:'rr'+Date.now().toString(36), position, count, urgency, shift, expectedSalary,
+    status:'Submitted', date:formatDate(TODAY_ISO), requestedBy:by, department:'', reason,
+    timeline:'Submitted today · In review', candidates:0,
+    match:null, iv2:null, hrDecision:null,
+    history:[{ step:'Requested', date:formatDate(TODAY_ISO), by, note:`${position}${count>1?' x'+count:''} · ${shift} shift · EGP ${expectedSalary.toLocaleString()} expected` }] });
   // Send it to HR's pending vacancy queue (same transport as branch actions).
   if (typeof vacancyQueueExport === 'function') vacancyQueueExport();
   closeModal(); renderAll(); showToast(`${position} request submitted · awaiting HR`);
@@ -1510,7 +1850,7 @@ function renderTeamOverview() {
     <div class="bg-white rounded-xl border border-charcoal-200 p-3">
       <p class="bento-label text-charcoal-500 mb-2">QUICK ACTIONS</p>
       <div class="flex flex-wrap gap-1.5">
-        <button onclick="navigateTo('shift-management')" class="btn btn-sm btn-secondary"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>Assign Shifts</button>
+        <button onclick="state.tsEditing=true;navigateTo('team-schedule')" class="btn btn-sm btn-secondary"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>Assign Shifts</button>
         <button onclick="navigateTo('team')" class="btn btn-sm btn-secondary"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/></svg>Attendance</button>
         <button onclick="openNewRecruitment()" class="btn btn-sm btn-secondary"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z"/></svg>Recruit</button>
         <button onclick="navigateTo('team-schedule')" class="btn btn-sm btn-secondary"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>Schedule</button>
@@ -1648,7 +1988,7 @@ function saveTeamEvaluationEdit(id) {
 }
 
 // ==================== EMPLOYEES (Branch Directory) ====================
-// Shift comes from the Shift Management assignments (MOCK.teamSchedule + shiftTemplates)
+// Shift comes from the schedule assignments (MOCK.teamSchedule + shiftTemplates)
 // for today. Status is auto-derived from the shift timing vs MOCK.now (employment status
 // like On Leave / Suspended overrides the shift status).
 function timeToMin(t) { const [h,m] = t.split(':').map(Number); return h*60+m; }
@@ -1684,8 +2024,37 @@ function shiftLabel(shift) {
   if (!shift || shift.isOff) return 'Off';
   return `${shift.name} · ${shift.start}–${shift.end}`;
 }
+// Create a request on behalf of one of the branch's employees — it lands in their
+// request history and goes to HR for the final decision.
+function openNewEmployeeRequest() {
+  const opts = MOCK.branchEmployees.filter(e => e.status !== 'Terminated');
+  openModal('Create Request for an Employee', `<form onsubmit="event.preventDefault();saveEmployeeRequest()" class="space-y-3">
+    <div><label class="form-label">Employee</label>
+      <select id="er-emp" class="form-select">${opts.map(e=>`<option value="${e.id}">${e.name} — ${e.position}</option>`).join('')}</select></div>
+    <div><label class="form-label">Request Type</label>
+      <select id="er-type" class="form-select">${['Annual Leave','Sick Leave','Late Attendance','Early Leave','Shift Swap','Paid Holiday'].map(t=>`<option>${t}</option>`).join('')}</select></div>
+    <div><label class="form-label">Requested Date</label><input id="er-date" type="date" class="form-input" value="${TODAY_ISO}" required></div>
+    <div><label class="form-label">Reason</label><textarea id="er-reason" class="form-input" rows="2" placeholder="Why is this request being filed for them?" required></textarea></div>
+    <div class="bg-charcoal-50 rounded-lg p-2.5 text-[10px] text-charcoal-500">Filed on the employee's own record and routed to HR for the final decision.</div>
+    <div class="flex justify-end gap-2 pt-1"><button type="button" onclick="closeModal()" class="btn btn-sm btn-secondary">Cancel</button><button type="submit" class="btn btn-sm btn-primary">Submit Request</button></div>
+  </form>`);
+}
+function saveEmployeeRequest() {
+  const e = MOCK.branchEmployees.find(x=>x.id===document.getElementById('er-emp').value); if(!e) return;
+  const type = document.getElementById('er-type').value;
+  const date = document.getElementById('er-date').value;
+  const reason = document.getElementById('er-reason').value.trim();
+  if(!reason){ showToast('Please add a reason for the request','error'); return; }
+  MOCK.teamRequests.unshift({
+    id:'tr'+Date.now().toString(36), employee:e.name, position:e.position, type,
+    date:date?formatDate(date):'—', submitted:formatDate(TODAY_ISO),
+    status:'Pending', reason, raisedBy:MOCK.currentUser.fullName,
+  });
+  closeModal(); renderAll(); showToast(`${type} request created for ${e.name} — pending HR`);
+}
+
 function renderEmployees() {
-  const emps = MOCK.branchEmployees.map(e => ({ e, ...getEmployeeShiftStatus(e) }));
+  const emps = MOCK.branchEmployees.map(e => ({ e, tm: MOCK.teamMembers.find(x=>x.name===e.name), ...getEmployeeShiftStatus(e) }));
   const onShift = emps.filter(x=>x.status==='On Shift').length;
   const upcoming = emps.filter(x=>x.status==='Upcoming').length;
   const off = emps.filter(x=>['Off','On Leave','Suspended','Terminated'].includes(x.status)).length;
@@ -1693,7 +2062,8 @@ function renderEmployees() {
     <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
       <div><h1 class="text-xl font-bold text-charcoal-900">Employees</h1><p class="text-xs text-charcoal-500 mt-0.5">${emps.length} employees · Revive Gym — Nasr City · Now ${MOCK.now}</p></div>
       <div class="flex gap-1.5">
-        <button onclick="openNewEmployee()" class="btn btn-sm btn-primary"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>New Employee</button>
+        <button onclick="openBranchActions()" class="btn btn-sm btn-secondary"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>Actions</button>
+        <button onclick="openNewEmployeeRequest()" class="btn btn-sm btn-primary"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>Create request for employee</button>
       </div>
     </div>
 
@@ -1707,12 +2077,19 @@ function renderEmployees() {
 
     <!-- Desktop Table -->
     <div class="bg-white rounded-xl border border-charcoal-200 overflow-hidden hidden lg:block">
-      <div class="table-responsive"><table class="data-table"><thead><tr><th>Employee</th><th>Position</th><th>Shift (Today)</th><th>Status</th><th></th></tr></thead>
-      <tbody>${emps.map(x=>`<tr class="cursor-pointer hover:bg-charcoal-50/50" onclick="openEmployeeProfile('${x.e.id}')"><td><div class="flex items-center gap-2.5"><div class="w-8 h-8 rounded-full bg-brand-100 text-brand-700 flex items-center justify-center text-[10px] font-semibold">${x.e.initials}</div><div><p class="text-xs font-medium text-charcoal-900">${x.e.name}</p><p class="text-[10px] text-charcoal-500">${x.e.id}</p></div></div></td><td class="text-xs">${x.e.position}</td><td class="text-xs">${shiftLabel(x.shift)}</td><td><span class="badge ${x.badge}">${x.status}</span></td><td><div class="flex items-center gap-1"><button onclick="event.stopPropagation();openEmployeeProfile('${x.e.id}')" class="btn btn-sm btn-secondary" title="View profile"><svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg></button><button onclick="event.stopPropagation();openEditEmployee('${x.e.id}')" class="btn btn-sm btn-secondary" title="Edit employee"><svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/></svg></button><button onclick="event.stopPropagation();openChangeStatus('${x.e.id}')" class="btn btn-sm btn-secondary" title="Change employment status"><svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"/></svg></button></div></td></tr>`).join('')}</tbody></table></div>
+      <div class="table-responsive"><table class="data-table"><thead><tr><th>Employee</th><th>Position</th><th>Shift (Today)</th><th>Check In</th><th>Check Out</th><th>Status</th></tr></thead>
+      <tbody>${emps.map(x=>{
+        const checkIn = x.tm && x.tm.checkIn ? x.tm.checkIn : (x.status==='Off' ? '—' : 'No record');
+        const checkOut = x.tm && (x.tm.status==='Present'||x.tm.status==='Late') ? '16:02' : '—';
+        return `<tr class="cursor-pointer hover:bg-charcoal-50/50" onclick="openEmployeeProfile('${x.e.id}')"><td><div class="flex items-center gap-2.5"><div class="w-8 h-8 rounded-full bg-brand-100 text-brand-700 flex items-center justify-center text-[10px] font-semibold">${x.e.initials}</div><div><p class="text-xs font-medium text-charcoal-900">${x.e.name}</p><p class="text-[10px] text-charcoal-500">${x.e.id}</p></div></div></td><td class="text-xs">${x.e.position}</td><td class="text-xs">${shiftLabel(x.shift)}</td><td class="text-xs ${x.tm && x.tm.checkIn ? 'font-semibold text-charcoal-900' : 'text-charcoal-400'}">${checkIn}</td><td class="text-xs ${checkOut!=='—' ? 'font-semibold text-charcoal-900' : 'text-charcoal-400'}">${checkOut}</td><td><span class="badge ${x.badge}">${x.status}</span></td></tr>`;
+      }).join('')}</tbody></table></div>
     </div>
 
     <!-- Mobile Cards -->
-    <div class="space-y-1.5 lg:hidden">${emps.map(x=>`<div class="bg-white rounded-xl border border-charcoal-200 p-3 card-interactive" onclick="openEmployeeProfile('${x.e.id}')">
+    <div class="space-y-1.5 lg:hidden">${emps.map(x=>{
+      const checkIn = x.tm && x.tm.checkIn ? x.tm.checkIn : (x.status==='Off' ? '—' : 'No record');
+      const checkOut = x.tm && (x.tm.status==='Present'||x.tm.status==='Late') ? '16:02' : '—';
+      return `<div class="bg-white rounded-xl border border-charcoal-200 p-3 card-interactive" onclick="openEmployeeProfile('${x.e.id}')">
       <div class="flex items-center justify-between">
         <div class="flex items-center gap-2.5">
           <div class="w-9 h-9 rounded-full bg-brand-100 text-brand-700 flex items-center justify-center text-[10px] font-semibold">${x.e.initials}</div>
@@ -1720,7 +2097,473 @@ function renderEmployees() {
         </div>
         <span class="badge ${x.badge}">${x.status}</span>
       </div>
-    </div>`).join('')}</div>
+      <div class="flex gap-4 mt-2 text-[10px] text-charcoal-500">
+        <span class="flex items-center gap-1"><svg class="w-3 h-3 text-brand-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1"/></svg>In: ${checkIn}</span>
+        <span class="flex items-center gap-1"><svg class="w-3 h-3 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg>Out: ${checkOut}</span>
+      </div>
+    </div>`;}).join('')}</div>
+  </div>`;
+}
+
+// ==================== EMPLOYEES PERFORMANCE (Branch Manager) ====================
+// One page with every employee's performance history: requests, payroll
+// deductions, evaluations, bonuses, warnings and attendance — in tabs, each
+// filterable by month. The signed-in employee's own record (PERF_SELF_ID)
+// additionally merges the personal mocks (MOCK.requests / MOCK.evaluations /
+// MOCK.payroll / MOCK.attendanceRecords) so their history is complete.
+const PERF_SELF_ID = 'RV-00124';
+const PERF_MONTH_FULL = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+
+// Normalize any date shape in MOCK into ['YYYY-MM', ...]:
+//   '2026-08-19'   -> ['2026-08']                      (ISO)
+//   'Aug 30, 2026' -> ['2026-08']                      (month + day + year)
+//   'Aug 25'       -> ['2026-08']                      (month + day, default year = mock clock)
+//   'Aug 29-30'    -> ['2026-08']                      (range -> start month)
+//   'August 2026'  -> ['2026-08']                      (payroll period, no day)
+//   'Q2 2026'      -> ['2026-04','2026-05','2026-06']  (quarter -> its three months)
+function perfYmKeys(str) {
+  if (!str) return [];
+  const s = String(str).trim();
+  const q = /^Q([1-4])[\s-]+(20\d{2})$/i.exec(s);                 // quarter
+  if (q) {
+    const start = (Number(q[1]) - 1) * 3 + 1;
+    return [start, start + 1, start + 2].map(m => q[2] + '-' + String(m).padStart(2, '0'));
+  }
+  const iso = /^(20\d{2})-(\d{2})/.exec(s);                        // ISO
+  if (iso) return [iso[1] + '-' + iso[2]];
+  const mon = /^([A-Za-z]{3,9})\.?\s/.exec(s);                     // month-name forms
+  if (mon) {
+    const mi = PERF_MONTH_FULL.findIndex(n => n.toLowerCase().startsWith(mon[1].toLowerCase().slice(0, 3)));
+    if (mi >= 0) {
+      const y = /(\d{4})/.exec(s);
+      return [(y ? y[1] : TODAY_ISO.slice(0, 4)) + '-' + String(mi + 1).padStart(2, '0')];
+    }
+  }
+  return [];
+}
+// 'YYYY-MM-DD' for sorting; day defaults to 01 for month/quarter-only strings.
+function perfSortKey(str) {
+  const ym = perfYmKeys(str)[0];
+  if (!ym) return '';
+  const s = String(str).trim();
+  const iso = /^(\d{4}-\d{2}-\d{2})/.exec(s);
+  if (iso) return iso[1];
+  if (/^[A-Za-z]{3,9}\.?\s+20\d{2}$/.test(s)) return ym + '-01';   // 'August 2026'
+  const d = /^[A-Za-z]{3,9}\.?\s+(\d{1,2})/.exec(s);               // 'Aug 30, 2026' | 'Aug 25' | 'Aug 29-30'
+  return ym + '-' + (d ? String(d[1]).padStart(2, '0') : '01');
+}
+function perfMonthLabel(ym) {
+  const p = String(ym).split('-');
+  return (PERF_MONTH_FULL[Number(p[1]) - 1] || ym) + ' ' + p[0];
+}
+// Union of every month any record touches — one stable dropdown across
+// employee switches. Sorted newest-first.
+function perfAllMonths() {
+  const set = new Set();
+  const add = v => perfYmKeys(v).forEach(k => set.add(k));
+  MOCK.teamRequests.forEach(r => { add(r.date); add(r.submitted); });
+  MOCK.requests.forEach(r => { add(r.requestedDate); add(r.submittedDate); });
+  MOCK.deductionCandidates.forEach(d => add(d.date));
+  MOCK.warningNotices.forEach(w => add(w.date));
+  MOCK.bonusProposals.forEach(b => add(b.date));
+  MOCK.teamEvaluations.forEach(e => add(e.period));
+  MOCK.evaluations.forEach(e => { add(e.period); add(e.date); });
+  MOCK.attendanceRecords.forEach(a => add(a.date));
+  MOCK.payroll.forEach(p => add(p.period));
+  return [...set].sort().reverse();
+}
+// Everything the branch holds on one employee, normalized: each record carries
+// yms[] (months it belongs to) for the filter and a sort key (newest first).
+function perfData(e) {
+  const isSelf = e.id === PERF_SELF_ID;
+  const name = e.name;
+  const ymsOf = (...vals) => [...new Set(vals.flatMap(v => perfYmKeys(v)))];
+  const bySortDesc = (a, b) => (b.sort || '').localeCompare(a.sort || '');
+
+  // Requests — branch-filed (teamRequests) + own record's requests when self.
+  const requests = [];
+  MOCK.teamRequests.filter(r => r.employee === name).forEach(r => requests.push({
+    src: 'team', id: r.id, type: r.type, when: r.date, submitted: r.submitted,
+    status: r.status, reason: r.reason, yms: ymsOf(r.date, r.submitted), sort: perfSortKey(r.date),
+  }));
+  if (isSelf) MOCK.requests.forEach(r => requests.push({
+    src: 'self', id: r.id, type: r.type, when: r.requestedDate, submitted: r.submittedDate,
+    status: r.status, reason: r.reason, yms: ymsOf(r.requestedDate, r.submittedDate), sort: perfSortKey(r.requestedDate),
+  }));
+  requests.sort(bySortDesc);
+
+  // Deductions — manager-issued candidates + (self) payslip deduction items,
+  // groups expanded to their sub-items.
+  const deductions = [];
+  MOCK.deductionCandidates.filter(d => d.employee === name).forEach(d => deductions.push({
+    src: 'branch', title: d.reason, amount: d.amount, when: formatDate(d.date), note: d.note,
+    by: d.issuedBy, status: d.status, yms: ymsOf(d.date), sort: perfSortKey(d.date),
+  }));
+  if (isSelf) MOCK.payroll.forEach(p => (p.items || []).filter(i => i.type === 'deduction').forEach(i => {
+    if (i.isGroup && i.subItems) i.subItems.forEach(s => deductions.push({
+      src: 'payroll', title: i.label + ' — ' + s.label, amount: Math.abs(s.amount), when: formatDate(s.date),
+      note: s.detail, by: p.period, status: p.status, yms: ymsOf(s.date, p.period), sort: perfSortKey(s.date),
+    }));
+    else deductions.push({
+      src: 'payroll', title: i.label, amount: Math.abs(i.amount), when: p.period, note: '',
+      by: p.period, status: p.status, yms: ymsOf(p.period), sort: perfSortKey(p.period),
+    });
+  }));
+  deductions.sort(bySortDesc);
+
+  // Bonuses — branch proposals + (self) bonus earnings inside payslips.
+  const bonuses = [];
+  MOCK.bonusProposals.filter(b => b.employee === name).forEach(b => bonuses.push({
+    src: 'branch', title: b.type, amount: b.amount, when: formatDate(b.date), note: b.reason,
+    detail: b.note, by: b.issuedBy, status: b.status, yms: ymsOf(b.date), sort: perfSortKey(b.date),
+  }));
+  if (isSelf) MOCK.payroll.forEach(p => (p.items || [])
+    .filter(i => i.type === 'earning' && /bonus/i.test(i.label))
+    .forEach(i => bonuses.push({
+      src: 'payroll', title: i.label, amount: i.amount, when: p.period, note: 'Included in the payslip',
+      detail: '', by: p.period, status: p.status, yms: ymsOf(p.period), sort: perfSortKey(p.period),
+    })));
+  bonuses.sort(bySortDesc);
+
+  // Warnings.
+  const warnings = MOCK.warningNotices.filter(w => w.employee === name).map(w => ({
+    title: w.type, when: formatDate(w.date), reason: w.reason, detail: w.note,
+    by: w.issuedBy, status: w.status, yms: ymsOf(w.date), sort: perfSortKey(w.date),
+  })).sort(bySortDesc);
+
+  // Evaluations — team evals (quarter-keyed) + (self) personal evaluations.
+  const evaluations = [];
+  MOCK.teamEvaluations.filter(v => v.employee === name).forEach(v => evaluations.push({
+    src: 'team', id: v.id, period: v.period, score: v.score, maxScore: 5, result: v.result,
+    status: v.status, yms: ymsOf(v.period), sort: perfSortKey(v.period),
+  }));
+  if (isSelf) MOCK.evaluations.forEach(v => evaluations.push({
+    src: 'self', id: v.id, period: v.period, score: v.score, maxScore: v.maxScore || 5,
+    result: v.score >= 4 ? 'Exceeds' : v.score >= 3 ? 'Meets' : 'Below',
+    status: v.status, yms: ymsOf(v.period, v.date), sort: perfSortKey(v.date) || perfSortKey(v.period),
+  }));
+  evaluations.sort(bySortDesc);
+
+  // Attendance — full day records for self, else the member's week sample.
+  let attendance = [];
+  if (isSelf) attendance = MOCK.attendanceRecords.map(a => ({
+    dateLabel: formatDate(a.date),
+    shift: a.shiftName === 'Off' ? 'Off' : `${a.shiftName} · ${a.shift}`,
+    checkIn: a.checkIn || '—', checkOut: a.checkOut || '—', status: a.status, notes: a.notes,
+    yms: ymsOf(a.date), sort: perfSortKey(a.date),
+  }));
+  else {
+    const tm = MOCK.teamMembers.find(m => m.name === name);
+    if (tm) attendance = memberAttendanceRows(tm).map(r => ({
+      dateLabel: r.date, shift: r.shift, checkIn: r.checkIn, checkOut: r.checkOut,
+      status: r.status, notes: '', yms: ymsOf(r.date), sort: perfSortKey(r.date),
+    }));
+  }
+  attendance.sort(bySortDesc);
+
+  // Open attention items + leaving notice (undated — always shown).
+  const followUps = MOCK.followUpItems.filter(f => f.employee === name);
+  const leaving = MOCK.employeeLeaving.find(l => l.employee === name) || null;
+
+  return { requests, deductions, bonuses, warnings, evaluations, attendance, followUps, leaving };
+}
+function setPerfEmp(id) { state.perfEmp = id; renderAll(); }
+function setPerfTab(t) { state.perfTab = t; renderAll(); }
+function setPerfMonth(m) { state.perfMonth = m; renderAll(); }
+
+function renderEmployeesPerformance() {
+  const emps = MOCK.branchEmployees;
+  const month = state.perfMonth || 'all';
+  const months = perfAllMonths();
+  const monthName = month === 'all' ? null : perfMonthLabel(month);
+  const inMonth = r => month === 'all' || r.yms.includes(month);
+
+  const emptyState = msg => `<div class="bg-charcoal-50 rounded-lg p-6 text-center"><p class="text-xs text-charcoal-500">${msg}</p></div>`;
+  const resultBadge = r => `<span class="badge ${r === 'Exceeds' ? 'badge-green' : r === 'Meets' ? 'badge-blue' : 'badge-red'}">${r}</span>`;
+  const empStatusBadge = s => ({ 'Active': 'badge-green', 'On Leave': 'badge-yellow', 'Suspended': 'badge-red', 'Terminated': 'badge-gray' }[s] || 'badge-gray');
+
+  // --- Header: month filter at the right, same line as the title ---
+  const monthSel = `<select class="form-select w-40" style="padding:0.375rem 2rem 0.375rem 0.625rem;font-size:0.8125rem" onchange="setPerfMonth(this.value)" aria-label="Filter by month">
+    <option value="all"${month === 'all' ? ' selected' : ''}>All months</option>
+    ${months.map(m => `<option value="${m}"${month === m ? ' selected' : ''}>${perfMonthLabel(m)}</option>`).join('')}
+  </select>`;
+  const header = sub => `<div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+      <div><h1 class="text-xl font-bold text-charcoal-900">Employees Performance</h1><p class="text-xs text-charcoal-500 mt-0.5">${sub}</p></div>
+      <div class="flex items-center gap-2">${monthSel}</div>
+    </div>`;
+
+  // ==================== VIEW 1: ALL EMPLOYEES ====================
+  // No employee selected -> show the whole branch; clicking a row drills into
+  // that employee's performance history (the tabs below).
+  const emp = state.perfEmp ? emps.find(x => x.id === state.perfEmp) : null;
+  if (!emp) {
+    const rows = emps.map(e => {
+      const d = perfData(e);
+      const reqs = d.requests.filter(inMonth), deds = d.deductions.filter(inMonth),
+        evals = d.evaluations.filter(inMonth), bons = d.bonuses.filter(inMonth),
+        warns = d.warnings.filter(inMonth);
+      return {
+        e, attn: d.followUps.length + (d.leaving ? 1 : 0),
+        reqs: reqs.length, pending: reqs.filter(r => r.status === 'Pending').length,
+        ded: deds.reduce((s, x) => s + x.amount, 0),
+        bon: bons.reduce((s, x) => s + x.amount, 0),
+        avg: evals.length ? (evals.reduce((s, x) => s + x.score, 0) / evals.length) : null,
+        latest: evals[0] || null,
+        warns: warns.length,
+      };
+    });
+    const totReqs = rows.reduce((s, r) => s + r.reqs, 0);
+    const totDed = rows.reduce((s, r) => s + r.ded, 0);
+    const totAttn = rows.filter(r => r.attn).length;
+    const stats = `<div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
+      <div class="bg-white rounded-xl border border-charcoal-200 p-3 text-center border-l-4 border-l-brand-500"><p class="text-xl font-bold text-brand-700">${emps.length}</p><p class="text-[10px] text-charcoal-500">Employees</p></div>
+      <div class="bg-white rounded-xl border border-charcoal-200 p-3 text-center"><p class="text-xl font-bold text-charcoal-900">${totReqs}</p><p class="text-[10px] text-charcoal-500">Requests${monthName ? ' · ' + monthName : ''}</p></div>
+      <div class="bg-white rounded-xl border border-charcoal-200 p-3 text-center"><p class="text-xl font-bold text-red-600">EGP ${totDed.toLocaleString('en-US')}</p><p class="text-[10px] text-charcoal-500">Deductions${monthName ? ' · ' + monthName : ''}</p></div>
+      <div class="bg-white rounded-xl border border-charcoal-200 p-3 text-center"><p class="text-xl font-bold ${totAttn ? 'text-orange-600' : 'text-charcoal-900'}">${totAttn}</p><p class="text-[10px] text-charcoal-500">Need review</p></div>
+    </div>`;
+
+    const desktop = `<div class="bg-white rounded-xl border border-charcoal-200 overflow-hidden hidden lg:block">
+      <div class="table-responsive"><table class="data-table">
+      <thead><tr><th>Employee</th><th>Position</th><th>Status</th><th class="text-right">Requests</th><th class="text-right">Deductions</th><th class="text-right">Bonuses</th><th class="text-right">Evaluations</th><th class="text-right">Warnings</th></tr></thead>
+      <tbody>${rows.map(r => `<tr class="cursor-pointer hover:bg-charcoal-50/50" onclick="setPerfEmp('${r.e.id}')">
+        <td><div class="flex items-center gap-2.5"><div class="w-8 h-8 rounded-full bg-brand-100 text-brand-700 flex items-center justify-center text-[10px] font-semibold">${r.e.initials}</div><div><p class="text-xs font-medium text-charcoal-900">${r.e.name}${r.attn ? ` <span class="inline-block w-1.5 h-1.5 rounded-full bg-red-500 align-middle" title="Needs review"></span>` : ''}</p><p class="text-[10px] text-charcoal-500">${r.e.id}</p></div></div></td>
+        <td class="text-xs">${r.e.position}</td>
+        <td><span class="badge ${empStatusBadge(r.e.status)}">${r.e.status}</span></td>
+        <td class="text-right text-xs">${r.reqs}${r.pending ? `<span class="block text-[10px] text-yellow-600">${r.pending} pending</span>` : ''}</td>
+        <td class="text-right text-xs font-semibold ${r.ded ? 'text-red-600' : 'text-charcoal-400'}">EGP ${r.ded.toLocaleString('en-US')}</td>
+        <td class="text-right text-xs font-semibold ${r.bon ? 'text-green-600' : 'text-charcoal-400'}">EGP ${r.bon.toLocaleString('en-US')}</td>
+        <td class="text-right text-xs">${r.avg !== null ? `${r.avg.toFixed(1)} / 5` : '<span class="text-charcoal-400">—</span>'}${r.latest ? `<span class="block mt-0.5">${resultBadge(r.latest.result)}</span>` : ''}</td>
+        <td class="text-right text-xs font-semibold ${r.warns ? 'text-orange-600' : 'text-charcoal-400'}">${r.warns}</td>
+      </tr>`).join('')}</tbody></table></div>
+    </div>`;
+
+    const mobile = `<div class="space-y-1.5 lg:hidden">${rows.map(r => `<div class="bg-white rounded-xl border border-charcoal-200 p-3 card-interactive" onclick="setPerfEmp('${r.e.id}')">
+      <div class="flex items-center justify-between gap-2">
+        <div class="flex items-center gap-2.5 min-w-0">
+          <div class="w-9 h-9 rounded-full bg-brand-100 text-brand-700 flex items-center justify-center text-[10px] font-semibold flex-shrink-0">${r.e.initials}</div>
+          <div class="min-w-0"><p class="text-xs font-medium text-charcoal-900 truncate">${r.e.name}${r.attn ? ` <span class="inline-block w-1.5 h-1.5 rounded-full bg-red-500 align-middle"></span>` : ''}</p><p class="text-[10px] text-charcoal-500 truncate">${r.e.position} · ${r.e.id}</p></div>
+        </div>
+        <span class="badge flex-shrink-0 ${empStatusBadge(r.e.status)}">${r.e.status}</span>
+      </div>
+      <div class="grid grid-cols-4 gap-1 mt-2 text-center">
+        <div class="bg-charcoal-50 rounded-lg py-1.5"><p class="text-xs font-bold text-charcoal-900">${r.reqs}</p><p class="text-[9px] text-charcoal-500">Requests</p></div>
+        <div class="bg-charcoal-50 rounded-lg py-1.5"><p class="text-xs font-bold ${r.ded ? 'text-red-600' : 'text-charcoal-900'}">${r.ded.toLocaleString('en-US')}</p><p class="text-[9px] text-charcoal-500">Ded. EGP</p></div>
+        <div class="bg-charcoal-50 rounded-lg py-1.5"><p class="text-xs font-bold text-charcoal-900">${r.avg !== null ? r.avg.toFixed(1) : '—'}</p><p class="text-[9px] text-charcoal-500">Eval /5</p></div>
+        <div class="bg-charcoal-50 rounded-lg py-1.5"><p class="text-xs font-bold ${r.warns ? 'text-orange-600' : 'text-charcoal-900'}">${r.warns}</p><p class="text-[9px] text-charcoal-500">Warnings</p></div>
+      </div>
+    </div>`).join('')}</div>`;
+
+    return `<div class="space-y-3">
+      ${header(`${emps.length} employees · Click an employee to open their full performance history · Revive Gym — Nasr City`)}
+      ${stats}
+      ${desktop}
+      ${mobile}
+    </div>`;
+  }
+
+  // ==================== VIEW 2: ONE EMPLOYEE (drill-in) ====================
+  const tab = state.perfTab || 'overview';
+  const d = perfData(emp);
+
+  // Month-filtered slices (follow-ups are undated -> always shown).
+  const reqsF = d.requests.filter(inMonth);
+  const dedsF = d.deductions.filter(inMonth);
+  const evalsF = d.evaluations.filter(inMonth);
+  const bonsF = d.bonuses.filter(inMonth);
+  const warnsF = d.warnings.filter(inMonth);
+  const attF = d.attendance.filter(inMonth);
+
+  // --- Selected employee summary card ---
+  const st = getEmployeeShiftStatus(emp);
+  const summaryCard = `<div class="bg-white rounded-xl border border-charcoal-200 p-3 flex items-center gap-3">
+    <div class="w-11 h-11 rounded-full bg-brand-100 text-brand-700 flex items-center justify-center text-sm font-semibold flex-shrink-0">${emp.initials}</div>
+    <div class="min-w-0 flex-1">
+      <div class="flex items-center gap-2 flex-wrap">
+        <p class="text-sm font-bold text-charcoal-900">${emp.name}</p>
+        <span class="badge ${empStatusBadge(emp.status)}">${emp.status}</span>
+        ${st.status !== emp.status ? `<span class="badge ${st.badge}">${st.status}</span>` : ''}
+        ${d.leaving ? `<span class="badge badge-yellow">Leaving · ${d.leaving.lastDay}</span>` : ''}
+      </div>
+      <p class="text-[11px] text-charcoal-500 mt-0.5">${emp.position} · ${emp.id} · ${emp.shift} shift · Today: ${shiftLabel(st.shift)}</p>
+    </div>
+    <button onclick="openEmployeeProfile('${emp.id}')" class="btn btn-sm btn-secondary flex-shrink-0">Open profile</button>
+  </div>`;
+
+  // --- Tabs with counts ---
+  const counts = {
+    overview: null,
+    requests: reqsF.length, deductions: dedsF.length, evaluations: evalsF.length,
+    bonuses: bonsF.length, warnings: warnsF.length, attendance: attF.length,
+  };
+  const tabs = [
+    { id: 'overview', label: 'Overview' }, { id: 'requests', label: 'Requests' },
+    { id: 'deductions', label: 'Deductions' }, { id: 'evaluations', label: 'Evaluations' },
+    { id: 'bonuses', label: 'Bonuses' }, { id: 'warnings', label: 'Warnings' },
+    { id: 'attendance', label: 'Attendance' },
+  ];
+  const tabBar = `<div class="inline-flex flex-wrap items-center gap-1 bg-charcoal-100 rounded-xl p-1 border border-charcoal-200">
+    ${tabs.map(t => {
+      const n = counts[t.id];
+      const on = tab === t.id;
+      return `<button onclick="setPerfTab('${t.id}')" class="tab-btn ${on ? 'active' : ''}">${t.label}${n !== null ? `<span class="ml-1 rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${on ? 'bg-brand-100 text-brand-700' : n ? 'bg-charcoal-100 text-charcoal-600' : 'bg-charcoal-50 text-charcoal-400'}">${n}</span>` : ''}</button>`;
+    }).join('')}
+  </div>`;
+
+  // --- Tab bodies ---
+  let tabBody = '';
+
+  if (tab === 'overview') {
+    const dedTotal = dedsF.reduce((s, x) => s + x.amount, 0);
+    const bonTotal = bonsF.reduce((s, x) => s + x.amount, 0);
+    const pendingReqs = reqsF.filter(r => r.status === 'Pending').length;
+    const avgScore = evalsF.length ? (evalsF.reduce((s, e) => s + e.score, 0) / evalsF.length) : null;
+    const attWorked = attF.filter(a => a.status !== 'Off').length;
+    const attOk = attF.filter(a => a.status === 'On Time' || a.status === 'Present').length;
+    const kpi = (v, label, cls) => `<div class="bg-white rounded-xl border border-charcoal-200 p-3 text-center"><p class="text-lg font-bold ${cls}">${v}</p><p class="text-[10px] text-charcoal-500">${label}</p></div>`;
+    const kpis = `<div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
+      ${kpi(reqsF.length, `Requests${pendingReqs ? ` · ${pendingReqs} pending` : ''}`, 'text-charcoal-900')}
+      ${kpi(`EGP ${dedTotal.toLocaleString('en-US')}`, `Deductions${dedsF.length ? ` · ${dedsF.length}` : ''}`, 'text-red-600')}
+      ${kpi(avgScore !== null ? `${avgScore.toFixed(1)} / 5` : '—', evalsF.length ? `Evaluations · ${evalsF[0].result}` : 'Evaluations', 'text-charcoal-900')}
+      ${kpi(`EGP ${bonTotal.toLocaleString('en-US')}`, `Bonuses${bonsF.length ? ` · ${bonsF.length}` : ''}`, 'text-green-600')}
+      ${kpi(warnsF.length, 'Warnings', warnsF.length ? 'text-orange-600' : 'text-charcoal-900')}
+      ${kpi(attWorked ? `${attOk}/${attWorked}` : '—', 'Attendance on time', 'text-charcoal-900')}
+    </div>`;
+
+    // Open attention items + leaving notice.
+    const attention = `<div class="bg-white rounded-xl border border-charcoal-200 p-3">
+      <p class="bento-label text-charcoal-500">NEEDS ATTENTION</p>
+      ${d.followUps.length || d.leaving ? `<div class="space-y-1.5 mt-2">
+        ${d.followUps.map(f => {
+          const sev = { high: 'badge-red', medium: 'badge-yellow', low: 'badge-blue' }[f.severity] || 'badge-gray';
+          return `<div class="flex items-start justify-between gap-2 bg-charcoal-50 rounded-lg p-2.5">
+            <div class="min-w-0"><p class="text-xs font-semibold text-charcoal-900">${f.type}</p><p class="text-[10px] text-charcoal-500 mt-0.5">${f.description}</p></div>
+            <span class="badge ${sev} flex-shrink-0">${f.severity}</span>
+          </div>`;
+        }).join('')}
+        ${d.leaving ? `<div class="flex items-start justify-between gap-2 bg-charcoal-50 rounded-lg p-2.5">
+          <div class="min-w-0"><p class="text-xs font-semibold text-charcoal-900">Leaving — ${d.leaving.position}</p><p class="text-[10px] text-charcoal-500 mt-0.5">Last day ${d.leaving.lastDay} · ${d.leaving.reason}</p></div>
+          ${statusBadge(d.leaving.status)}
+        </div>` : ''}
+      </div>` : `<p class="text-xs text-charcoal-500 mt-2">Nothing needs attention right now.</p>`}
+    </div>`;
+
+    // Recent activity across all categories, newest first.
+    const feed = [
+      ...reqsF.map(r => ({ sort: r.sort, title: `${r.type} request`, sub: `${r.when} · submitted ${r.submitted}`, status: r.status, go: r.src === 'team' ? `viewRequest('${r.id}')` : `openReqDetail('${r.id}')` })),
+      ...dedsF.map(x => ({ sort: x.sort, title: `Deduction — ${x.title}`, sub: `${x.when} · EGP ${x.amount.toLocaleString('en-US')}`, status: x.status })),
+      ...bonsF.map(x => ({ sort: x.sort, title: `Bonus — ${x.title}`, sub: `${x.when} · EGP ${x.amount.toLocaleString('en-US')}`, status: x.status })),
+      ...warnsF.map(x => ({ sort: x.sort, title: `Warning — ${x.title}`, sub: x.when, status: x.status })),
+      ...evalsF.map(x => ({ sort: x.sort, title: `Evaluation ${x.period}`, sub: `Score ${x.score}/${x.maxScore} · ${x.result}`, status: x.status, go: x.src === 'team' ? `openTeamEvalDetail('${x.id}')` : `openEvalDetail('${x.id}')` })),
+    ].sort((a, b) => (b.sort || '').localeCompare(a.sort || '')).slice(0, 6);
+    const recent = `<div class="bg-white rounded-xl border border-charcoal-200 p-3">
+      <p class="bento-label text-charcoal-500">RECENT ACTIVITY${monthName ? ` · ${monthName.toUpperCase()}` : ''}</p>
+      <div class="mt-1">${feed.length ? feed.map(f => `<div class="flex items-center justify-between gap-2 py-1.5 border-b border-charcoal-100 last:border-0 ${f.go ? 'cursor-pointer hover:bg-charcoal-50/50' : ''}"${f.go ? ` onclick="${f.go}"` : ''}>
+        <div class="min-w-0"><p class="text-xs text-charcoal-900 truncate">${f.title}</p><p class="text-[10px] text-charcoal-500">${f.sub}</p></div>
+        ${statusBadge(f.status)}
+      </div>`).join('') : emptyState(`No activity${monthName ? ` in ${monthName}` : ''}.`)}</div>
+    </div>`;
+
+    tabBody = `<div class="space-y-2">${kpis}${attention}${recent}</div>`;
+  }
+
+  else if (tab === 'requests') {
+    tabBody = reqsF.length ? `<div class="space-y-1.5">${reqsF.map(r => `<div class="bg-charcoal-50 rounded-lg p-2.5 flex items-start justify-between gap-3">
+      <div class="min-w-0">
+        <p class="text-xs font-semibold text-charcoal-900">${r.type}${r.src === 'self' ? ' <span class="text-[10px] text-charcoal-400 font-normal">(own record)</span>' : ''}</p>
+        <p class="text-[10px] text-charcoal-500 mt-0.5">${r.when} · Submitted ${r.submitted}</p>
+        ${r.reason ? `<p class="text-[10px] text-charcoal-400 mt-0.5">${r.reason}</p>` : ''}
+      </div>
+      <div class="flex items-center gap-2 flex-shrink-0">${statusBadge(r.status)}<button onclick="${r.src === 'team' ? `viewRequest('${r.id}')` : `openReqDetail('${r.id}')`}" class="btn btn-sm btn-secondary">View</button></div>
+    </div>`).join('')}</div>` : emptyState(`No requests${monthName ? ` in ${monthName}` : ' on record'}.`);
+  }
+
+  else if (tab === 'deductions') {
+    const total = dedsF.reduce((s, x) => s + x.amount, 0);
+    tabBody = dedsF.length ? `<div class="space-y-1.5">
+      <div class="flex items-center justify-between bg-white border border-charcoal-200 rounded-lg px-3 py-2">
+        <p class="text-[11px] text-charcoal-500">${dedsF.length} deduction${dedsF.length === 1 ? '' : 's'}${monthName ? ` in ${monthName}` : ''}</p>
+        <p class="text-xs font-bold text-red-600">Total EGP ${total.toLocaleString('en-US')}</p>
+      </div>
+      ${dedsF.map(x => `<div class="bg-charcoal-50 rounded-lg p-2.5 flex items-start justify-between gap-3">
+        <div class="min-w-0">
+          <p class="text-xs font-semibold text-charcoal-900">${x.title}${x.src === 'payroll' ? ' <span class="text-[10px] text-charcoal-400 font-normal">(payslip)</span>' : ''}</p>
+          <p class="text-[10px] text-charcoal-500 mt-0.5">${x.when}${x.by ? ` · ${x.by}` : ''}</p>
+          ${x.note ? `<p class="text-[10px] text-charcoal-400 mt-0.5">${x.note}</p>` : ''}
+        </div>
+        <div class="flex items-center gap-2 flex-shrink-0"><p class="text-xs font-bold text-red-600">EGP ${x.amount.toLocaleString('en-US')}</p>${statusBadge(x.status)}</div>
+      </div>`).join('')}
+    </div>` : emptyState(`No deductions${monthName ? ` in ${monthName}` : ' on record'}.`);
+  }
+
+  else if (tab === 'evaluations') {
+    tabBody = evalsF.length ? `<div class="space-y-1.5">${evalsF.map(v => `<div class="bg-charcoal-50 rounded-lg p-2.5 flex items-start justify-between gap-3">
+      <div class="min-w-0">
+        <div class="flex items-center gap-2 flex-wrap"><p class="text-xs font-semibold text-charcoal-900">${v.period}</p>${resultBadge(v.result)}${statusBadge(v.status)}</div>
+        <p class="text-[10px] text-charcoal-500 mt-0.5">Score ${v.score} / ${v.maxScore}${v.src === 'self' ? ' · Personal record' : ' · Team evaluation'}</p>
+      </div>
+      <button onclick="${v.src === 'team' ? `openTeamEvalDetail('${v.id}')` : `openEvalDetail('${v.id}')`}" class="btn btn-sm btn-secondary flex-shrink-0">Details</button>
+    </div>`).join('')}</div>` : emptyState(`No evaluations${monthName ? ` in ${monthName}` : ' on record'}.`);
+  }
+
+  else if (tab === 'bonuses') {
+    const total = bonsF.reduce((s, x) => s + x.amount, 0);
+    tabBody = bonsF.length ? `<div class="space-y-1.5">
+      <div class="flex items-center justify-between bg-white border border-charcoal-200 rounded-lg px-3 py-2">
+        <p class="text-[11px] text-charcoal-500">${bonsF.length} bonus${bonsF.length === 1 ? '' : 'es'}${monthName ? ` in ${monthName}` : ''}</p>
+        <p class="text-xs font-bold text-green-600">Total EGP ${total.toLocaleString('en-US')}</p>
+      </div>
+      ${bonsF.map(x => `<div class="bg-charcoal-50 rounded-lg p-2.5 flex items-start justify-between gap-3">
+        <div class="min-w-0">
+          <p class="text-xs font-semibold text-charcoal-900">${x.title}${x.src === 'payroll' ? ' <span class="text-[10px] text-charcoal-400 font-normal">(payslip)</span>' : ''}</p>
+          <p class="text-[10px] text-charcoal-500 mt-0.5">${x.when}${x.by ? ` · ${x.by}` : ''}</p>
+          ${x.note ? `<p class="text-[10px] text-charcoal-400 mt-0.5">${x.note}${x.detail ? ` — ${x.detail}` : ''}</p>` : ''}
+        </div>
+        <div class="flex items-center gap-2 flex-shrink-0"><p class="text-xs font-bold text-green-600">EGP ${x.amount.toLocaleString('en-US')}</p>${statusBadge(x.status)}</div>
+      </div>`).join('')}
+    </div>` : emptyState(`No bonuses${monthName ? ` in ${monthName}` : ' on record'}.`);
+  }
+
+  else if (tab === 'warnings') {
+    tabBody = warnsF.length ? `<div class="space-y-1.5">${warnsF.map(x => `<div class="bg-charcoal-50 rounded-lg p-2.5 flex items-start justify-between gap-3">
+      <div class="min-w-0">
+        <p class="text-xs font-semibold text-charcoal-900">${x.title}</p>
+        <p class="text-[10px] text-charcoal-500 mt-0.5">${x.when}${x.by ? ` · ${x.by}` : ''}</p>
+        <p class="text-[10px] text-charcoal-400 mt-0.5">${x.reason}${x.detail ? ` — ${x.detail}` : ''}</p>
+      </div>
+      ${statusBadge(x.status)}
+    </div>`).join('')}</div>` : emptyState(`No warnings${monthName ? ` in ${monthName}` : ' on record'}.`);
+  }
+
+  else { // attendance
+    const attOk = attF.filter(a => a.status === 'On Time' || a.status === 'Present').length;
+    const attLate = attF.filter(a => a.status === 'Late').length;
+    const attAbsent = attF.filter(a => a.status === 'Absent').length;
+    tabBody = attF.length ? `<div class="space-y-1.5">
+      <div class="flex flex-wrap gap-1.5">
+        <span class="badge badge-green">${attOk} on time</span>
+        <span class="badge badge-yellow">${attLate} late</span>
+        <span class="badge badge-red">${attAbsent} absent</span>
+        <span class="badge badge-blue">${attF.filter(a => a.status === 'Early Checkout').length} early</span>
+      </div>
+      ${attF.map(a => `<div class="bg-charcoal-50 rounded-lg p-2.5 flex items-center justify-between gap-3">
+        <div class="min-w-0"><p class="text-xs font-medium text-charcoal-900">${a.dateLabel}</p><p class="text-[10px] text-charcoal-500 mt-0.5">${a.shift}${a.notes ? ` · ${a.notes}` : ''}</p></div>
+        <div class="text-right flex-shrink-0"><p class="text-[10px] text-charcoal-500">In ${a.checkIn} · Out ${a.checkOut}</p>${statusBadge(a.status)}</div>
+      </div>`).join('')}
+    </div>` : emptyState(d.attendance.length ? `No attendance records${monthName ? ` in ${monthName}` : ''}.` : 'No attendance records on file for this employee.');
+  }
+
+  return `<div class="space-y-3">
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+      <div>
+        <button onclick="setPerfEmp(null)" class="inline-flex items-center gap-1 text-xs font-medium text-brand-600 hover:text-brand-700 mb-1"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/></svg>All employees</button>
+        <h1 class="text-xl font-bold text-charcoal-900">${emp.name} — Performance</h1>
+        <p class="text-xs text-charcoal-500 mt-0.5">${emp.position} · ${emp.id} · ${monthName || 'All months'} · Revive Gym — Nasr City</p>
+      </div>
+      <div class="flex items-center gap-2">${monthSel}</div>
+    </div>
+    ${summaryCard}
+    ${tabBar}
+    <div class="bg-white rounded-xl border border-charcoal-200 p-4">${tabBody}</div>
   </div>`;
 }
 
@@ -1748,12 +2591,12 @@ function renderAttendanceManagement() {
       <div class="px-4 py-2.5 border-b border-charcoal-100 bg-yellow-50/50">
         <p class="bento-label flex items-center gap-1.5 text-yellow-700"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>LATE CHECK-INS (${late.length})</p>
       </div>
-      <div class="divide-y divide-charcoal-50">${late.map(m=>`<div class="p-3 hover:bg-charcoal-50/50 transition-colors flex items-center justify-between">
+      <div class="divide-y divide-charcoal-50">${late.map(m=>`<div class="p-3 hover:bg-charcoal-50/50 transition-colors flex flex-col sm:flex-row sm:items-center justify-between gap-2">
         <div class="flex items-center gap-3">
           <div class="w-8 h-8 rounded-full bg-brand-100 text-brand-700 flex items-center justify-center text-[10px] font-semibold flex-shrink-0">${m.initials}</div>
           <div><p class="text-xs font-medium text-charcoal-900">${m.name}</p><p class="text-[10px] text-charcoal-500">${m.position} · Checked in ${m.checkIn}</p></div>
         </div>
-        <button onclick="showToast('Follow up with ${m.name}','info')" class="btn btn-sm btn-secondary">Follow Up</button>
+        ${attRowActions(m)}
       </div>`).join('')}</div>
     </div>
 
@@ -1762,14 +2605,104 @@ function renderAttendanceManagement() {
       <div class="px-4 py-2.5 border-b border-charcoal-100 bg-red-50/50">
         <p class="bento-label flex items-center gap-1.5 text-red-700"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"/></svg>ABSENT (${absent.length})</p>
       </div>
-      <div class="divide-y divide-charcoal-50">${absent.map(m=>`<div class="p-3 hover:bg-charcoal-50/50 transition-colors flex items-center justify-between">
+      <div class="divide-y divide-charcoal-50">${absent.map(m=>`<div class="p-3 hover:bg-charcoal-50/50 transition-colors flex flex-col sm:flex-row sm:items-center justify-between gap-2">
         <div class="flex items-center gap-3">
           <div class="w-8 h-8 rounded-full bg-brand-100 text-brand-700 flex items-center justify-center text-[10px] font-semibold flex-shrink-0">${m.initials}</div>
           <div><p class="text-xs font-medium text-charcoal-900">${m.name}</p><p class="text-[10px] text-charcoal-500">${m.position} · No check-in</p></div>
         </div>
-        <button onclick="showToast('Mark ${m.name} absent','info')" class="btn btn-sm btn-danger-outline">Mark Absent</button>
+        ${attRowActions(m)}
       </div>`).join('')}</div>
     </div>
+  </div>`;
+}
+
+// "View" on an Attendance Management row — today's record plus whether this
+// person has been late or absent before.
+function openAttDetail(id) {
+  const m = MOCK.teamMembers.find(x=>x.id===id); if(!m) return;
+  const be = MOCK.branchEmployees.find(x=>x.name===m.name);
+  const e = be || { id:m.id, name:m.name, position:m.position, initials:m.initials, status:'Active' };
+  const shift = getEmployeeTodayShift(e);
+  const checkOut = (m.status==='Present'||m.status==='Late') ? '16:02' : '—';
+
+  // Late / absent history from the branch's own follow-ups and pending
+  // deductions — attendance issues only, not document or performance notes.
+  const isAttIssue = t => /late|absent|unapproved|no ?show|missing/i.test(t || '');
+  const events = [
+    ...MOCK.followUpItems.filter(f=>f.employee===m.name && isAttIssue(f.type)).map(f=>({ label:f.type, detail:f.description, tone:f.severity==='high'?'red':'yellow', when:'Open follow-up' })),
+    ...MOCK.deductionCandidates.filter(d=>d.employee===m.name && isAttIssue(d.reason)).map(d=>({ label:d.reason, detail:`EGP ${d.amount} deduction · ${d.status} by ${d.issuedBy}`, tone:/late/i.test(d.reason)?'yellow':'red', when:formatDate(d.date) })),
+  ];
+  const lateBefore = events.filter(x=>/late/i.test(x.label)).length;
+  const absentBefore = events.length - lateBefore;
+  const reqs = MOCK.teamRequests.filter(r=>r.employee===m.name);
+
+  const tone = { red:'bg-red-50 text-red-700', yellow:'bg-yellow-50 text-yellow-700' };
+  openModal(`${m.name} — today's attendance`, `<div class="space-y-3">
+    <div class="flex items-center gap-3">
+      <div class="w-11 h-11 rounded-full bg-brand-100 text-brand-700 flex items-center justify-center text-sm font-semibold flex-shrink-0">${m.initials}</div>
+      <div class="min-w-0">
+        <p class="text-sm font-bold text-charcoal-900">${m.name} ${statusBadge(m.status)}</p>
+        <p class="text-[10px] text-charcoal-500">${m.position} · ${e.id}</p>
+      </div>
+      <div class="ml-auto text-right flex-shrink-0">
+        <p class="text-[10px] text-charcoal-400">Scheduled today</p>
+        <p class="text-xs font-semibold text-charcoal-900">${shiftLabel(shift)}</p>
+      </div>
+    </div>
+
+    <div class="grid grid-cols-3 gap-2 text-center">
+      <div class="bg-charcoal-50 rounded-lg p-2"><p class="bento-label text-charcoal-500">Check in</p><p class="text-sm font-bold ${m.checkIn?'text-charcoal-900':'text-charcoal-400'} mt-0.5">${m.checkIn || '—'}</p></div>
+      <div class="bg-charcoal-50 rounded-lg p-2"><p class="bento-label text-charcoal-500">Check out</p><p class="text-sm font-bold ${checkOut!=='—'?'text-charcoal-900':'text-charcoal-400'} mt-0.5">${checkOut}</p></div>
+      <div class="bg-charcoal-50 rounded-lg p-2"><p class="bento-label text-charcoal-500">Today</p><p class="text-sm font-bold ${m.status==='Late'?'text-yellow-600':m.status==='Absent'?'text-red-600':'text-brand-700'} mt-0.5">${m.status}</p></div>
+    </div>
+
+    <div class="bg-white rounded-xl border border-charcoal-200 overflow-hidden">
+      <div class="px-3 py-2 border-b border-charcoal-100 bg-charcoal-50/50 flex items-center justify-between">
+        <p class="bento-label">LATE / ABSENT HISTORY</p>
+        <div class="flex items-center gap-1.5">
+          <span class="inline-flex items-center gap-1 bg-yellow-50 text-yellow-700 rounded-full px-2 py-0.5 text-[9px] font-semibold">${lateBefore} late</span>
+          <span class="inline-flex items-center gap-1 bg-red-50 text-red-700 rounded-full px-2 py-0.5 text-[9px] font-semibold">${absentBefore} absent</span>
+        </div>
+      </div>
+      <div class="divide-y divide-charcoal-50">
+        ${events.length ? events.map(x=>`<div class="px-3 py-2 flex items-center justify-between gap-2">
+          <div class="min-w-0">
+            <p class="text-xs font-medium text-charcoal-900 truncate">${x.label}</p>
+            <p class="text-[10px] text-charcoal-500 truncate">${x.detail}</p>
+          </div>
+          <span class="inline-flex items-center rounded-md px-1.5 py-0.5 text-[9px] font-semibold flex-shrink-0 ${tone[x.tone]||tone.red}">${x.when}</span>
+        </div>`).join('')
+        : `<div class="px-3 py-4 text-center"><p class="text-xs text-charcoal-500">No late arrivals or absences on record</p></div>`}
+      </div>
+    </div>
+
+    <div class="bg-white rounded-xl border border-charcoal-200 overflow-hidden">
+      <div class="px-3 py-2 border-b border-charcoal-100 bg-charcoal-50/50"><p class="bento-label">REQUESTS (${reqs.length})</p></div>
+      <div class="divide-y divide-charcoal-50">
+        ${reqs.length ? reqs.map(r=>`<div class="px-3 py-2 flex items-center justify-between gap-2">
+          <div class="min-w-0"><p class="text-xs font-medium text-charcoal-900 truncate">${r.type}</p><p class="text-[10px] text-charcoal-500 truncate">${r.date} · submitted ${r.submitted}</p></div>
+          ${statusBadge(r.status)}
+        </div>`).join('') : `<div class="px-3 py-4 text-center"><p class="text-xs text-charcoal-500">No requests on record</p></div>`}
+      </div>
+    </div>
+
+    <div class="flex flex-wrap gap-1.5">
+      <button onclick="sendMessage('${m.id}')" class="btn btn-sm btn-secondary">Message</button>
+      <button onclick="sendReminder('${m.id}')" class="btn btn-sm btn-secondary">Remind</button>
+      <button onclick="addTeamFollowUp('${m.id}')" class="btn btn-sm btn-secondary">Take action</button>
+      <button onclick="closeModal();openEmployeeProfile('${e.id}')" class="btn btn-sm btn-primary">Full profile</button>
+    </div>
+  </div>`, { wide:true });
+}
+
+// The three actions available on every Attendance Management row.
+function attRowActions(m) {
+  const be = MOCK.branchEmployees.find(x=>x.name===m.name);
+  return `<div class="flex items-center gap-1.5 flex-shrink-0">
+    <button onclick="addTeamFollowUp('${m.id}')" class="btn btn-sm btn-secondary">Take action</button>
+    <button onclick="sendReminder('${m.id}')" class="btn btn-sm btn-secondary">Reminder</button>
+    <button onclick="openAttDetail('${m.id}')" class="btn btn-sm btn-secondary">View</button>
+    ${m.status==='Absent' ? `<button onclick="markPresent('${m.id}')" class="btn btn-sm btn-primary">Mark Present</button>` : ''}
   </div>`;
 }
 
@@ -1940,17 +2873,279 @@ function saveFollowUp(id) {
 // ==================== EMPLOYEE ACTIONS ====================
 // Open a branch employee's full profile. Branch employees use RV-XXXX ids,
 // so map to the matching team member (by name) for the profile page.
-function openEmployeeProfile(id) {
-  const e = MOCK.branchEmployees.find(x=>x.id===id); if(!e) return;
-  const tm = MOCK.teamMembers.find(x=>x.name===e.name);
-  if (tm) { navigateTo('team-member-profile', { id: tm.id }); return; }
-  showToast(`No profile data for ${e.name}`,'info');
+// ==================== EMPLOYEE PROFILE (same page HR sees) ====================
+// Clicking an employee on the Employees page opens the identical tabbed profile
+// page HR gets — same header, same nine tabs, same data blocks — but bound to this
+// branch's own data (teamProfiles / teamRequests / teamEvaluations / teamSchedule).
+function empResolve(id) {
+  const be = MOCK.branchEmployees.find(x=>x.id===id);
+  if (be) {
+    const tm = MOCK.teamMembers.find(x=>x.name===be.name);
+    return { be, tm, p: (tm && MOCK.teamProfiles[tm.id]) || (be.name===MOCK.currentUser.fullName ? MOCK.currentUser : {}) };
+  }
+  const tm = MOCK.teamMembers.find(x=>x.id===id);
+  if (!tm) return null;
+  const match = MOCK.branchEmployees.find(x=>x.name===tm.name);
+  return { be: match || { id: tm.id.toUpperCase(), name: tm.name, position: tm.position, status: tm.status, initials: tm.initials }, tm, p: MOCK.teamProfiles[tm.id] || {} };
 }
+
+// Contact details a Branch Manager may correct for their own branch's people.
+// Seeded lazily from the employee's profile so the data is never duplicated.
+function empContact(be, p) {
+  if (!MOCK.memberContacts) MOCK.memberContacts = {};
+  if (!MOCK.memberContacts[be.id]) {
+    MOCK.memberContacts[be.id] = { phone: p.phone || '', email: p.email || '', address: p.address || '' };
+  }
+  return MOCK.memberContacts[be.id];
+}
+
+function openEditMemberContact(id) {
+  const r = empResolve(id); if (!r) return;
+  const c = empContact(r.be, r.p);
+  openModal('Edit Contact Information', `<form onsubmit="event.preventDefault();saveMemberContact('${id}')" class="space-y-3">
+    <div class="bg-charcoal-50 rounded-lg p-2.5 text-[10px] text-charcoal-500">Editing the contact details of <b>${r.be.name}</b> (${r.be.id}). Personal information above is read-only and stays with HR.</div>
+    <div><label class="form-label">Mobile Number</label><input id="mc-phone" type="tel" class="form-input" value="${c.phone}" required></div>
+    <div><label class="form-label">Personal Email</label><input id="mc-email" type="email" class="form-input" value="${c.email}" required></div>
+    <div><label class="form-label">Address</label><textarea id="mc-address" class="form-input" rows="2" required>${c.address}</textarea></div>
+    <div class="flex justify-end gap-2 pt-1"><button type="button" onclick="closeModal()" class="btn btn-sm btn-secondary">Cancel</button><button type="submit" class="btn btn-sm btn-primary">Save</button></div>
+  </form>`, { wide:true });
+}
+
+function saveMemberContact(id) {
+  const r = empResolve(id); if (!r) return;
+  const c = empContact(r.be, r.p);
+  c.phone = (document.getElementById('mc-phone') || {}).value.trim() || c.phone;
+  c.email = (document.getElementById('mc-email') || {}).value.trim() || c.email;
+  c.address = (document.getElementById('mc-address') || {}).value.trim() || c.address;
+  closeModal(); renderAll(); showToast(`${r.be.name}'s contact information updated`);
+}
+
+function openEmployeeProfile(id) {
+  const r = empResolve(id);
+  if (!r) { showToast('Employee not found','error'); return; }
+  state.empTab = 'personal';
+  navigateTo('employee-profile', { id: r.be.id });
+}
+
+function renderEmployeeProfile() {
+  const r = empResolve((state.pageParams && state.pageParams.id) || '');
+  if (!r) return '<div class="text-center py-20"><p class="text-charcoal-500">Employee not found</p></div>';
+  const e = r.be, m = r.tm, p = r.p || {};
+  const tab = state.empTab || 'personal';
+
+  const gym = (p.gym && p.gym.name) ? (p.gym.name + ' — ' + p.gym.branch) : (p.gym || 'Revive Gym — Nasr City');
+  const salary = p.baseSalary || MOCK.currentUser.baseSalary;
+  const level = p.level || 'Mid';
+  const hireDate = p.hireDate ? formatDate(p.hireDate) : '—';
+  const reqs = m ? MOCK.teamRequests.filter(x=>x.employee===m.name) : [];
+  const evals = m ? MOCK.teamEvaluations.filter(x=>x.employee===m.name) : [];
+  const days = ['Mon 25','Tue 26','Wed 27','Thu 28','Fri 29','Sat 30','Sun 31'];
+  const schedIds = m ? (MOCK.teamSchedule[m.id] || []) : [];
+  const shift = m ? getTeamMemberTodayShift(m) : null;
+  const isAbsent = !!m && m.status === 'Absent';
+  const isLate = !!m && m.status === 'Late';
+  // Live status on the header — the same one the Employees list shows, falling
+  // back to the employment status when they are away (on leave / suspended).
+  const statusText = (e.status && e.status !== 'Active') ? e.status : (m ? m.status : e.status);
+  const canApprove = hasPermission('requests.approve.team') || hasPermission('requests.approve');
+  const canLeaveManage = hasPermission('employees.leave_balance.manage');
+  const contact = empContact(e, p);
+
+  const tabs = [
+    {id:'personal',label:'Personal Info'}, {id:'documents',label:'Documents'},
+    {id:'employment',label:'Employment History'}, {id:'attendance',label:'Attendance Summary'},
+    {id:'shift',label:'Current Shift'}, {id:'requests',label:'Requests History'},
+    {id:'leave',label:'Leave Balance'}, {id:'eval',label:'Evaluations History'}, {id:'payroll',label:'Payroll Snapshot'},
+  ];
+
+  // Actions a Branch Manager holds on their own branch's people.
+  let lifecycleActions = '';
+  if (m) lifecycleActions += `<button onclick="sendMessage('${m.id}')" class="btn btn-sm btn-secondary">Message</button>`;
+  if (m) lifecycleActions += `<button onclick="openEvaluateMember('${m.id}')" class="btn btn-sm btn-secondary">Evaluate</button>`;
+  if (isAbsent && m) lifecycleActions += `<button onclick="markPresent('${m.id}')" class="btn btn-sm btn-primary">Mark Present</button>`;
+  if ((isAbsent || isLate) && m) lifecycleActions += `<button onclick="sendReminder('${m.id}')" class="btn btn-sm btn-secondary">Remind</button>`;
+  lifecycleActions += `<button onclick="openChangeStatus('${e.id}')" class="btn btn-sm btn-secondary">Change Status</button>`;
+  if (hasPermission('employees.offboard')) lifecycleActions += `<button onclick="navigateTo('leaving')" class="btn btn-sm btn-danger-outline">Offboard</button>`;
+
+  const tabContent = {
+    // Personal Info — same layout as the "My Profile" page (bento: 2 editable
+    // cols + 1 HR-controlled col), minus the Emergency Contact block.
+    personal: `<div class="grid grid-cols-1 lg:grid-cols-3 gap-2">
+      <div class="lg:col-span-2 space-y-2">
+        <!-- Personal Info — read-only for a Branch Manager -->
+        <div class="bg-white rounded-xl border border-charcoal-200 overflow-hidden">
+          <div class="px-3 py-2 border-b border-charcoal-100 flex justify-between items-center bg-charcoal-50/50">
+            <div>
+              <p class="bento-label">PROFILE DETAILS</p>
+              <h3 class="text-sm font-bold text-charcoal-900 mt-0.5">Personal Info</h3>
+            </div>
+            <span class="inline-flex items-center gap-1 text-[10px] font-semibold text-charcoal-400">
+              <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
+              Read-only
+            </span>
+          </div>
+          <div class="p-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <div><label class="bento-label text-charcoal-500">Full Name</label><p class="text-xs text-charcoal-900 mt-0.5">${e.name}</p></div>
+            <div><label class="bento-label text-charcoal-500">Date of Birth</label><p class="text-xs text-charcoal-900 mt-0.5">${p.dateOfBirth ? formatDate(p.dateOfBirth) : '—'}</p></div>
+            <div><label class="bento-label text-charcoal-500">National ID</label><p class="text-xs text-charcoal-900 mt-0.5">${p.nationalId || '—'}</p></div>
+            <div><label class="bento-label text-charcoal-500">Gender</label><p class="text-xs text-charcoal-900 mt-0.5">${p.gender || '—'}</p></div>
+          </div>
+        </div>
+
+        <!-- Contact Info — the only thing a Branch Manager may correct -->
+        <div class="bg-white rounded-xl border border-charcoal-200 overflow-hidden">
+          <div class="px-3 py-2 border-b border-charcoal-100 flex justify-between items-center bg-charcoal-50/50">
+            <div>
+              <p class="bento-label">COMMUNICATION</p>
+              <h3 class="text-sm font-bold text-charcoal-900 mt-0.5">Contact Info</h3>
+            </div>
+            <button onclick="openEditMemberContact('${e.id}')" class="text-brand-600 hover:text-brand-700 text-[10px] font-semibold flex items-center gap-1">
+              <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/></svg>
+              Edit
+            </button>
+          </div>
+          <div class="p-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <div><label class="bento-label text-charcoal-500">Mobile Number</label><p class="text-xs text-charcoal-900 mt-0.5">${contact.phone || '—'}</p></div>
+            <div><label class="bento-label text-charcoal-500">Personal Email</label><p class="text-xs text-charcoal-900 mt-0.5">${contact.email || '—'}</p></div>
+            <div class="sm:col-span-2"><label class="bento-label text-charcoal-500">Residential Address</label><p class="text-xs text-charcoal-900 mt-0.5">${contact.address || '—'}</p></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Employment Info — HR controlled, mirrors the My Profile right column -->
+      <div class="space-y-2">
+        <div class="bg-charcoal-50 rounded-xl border border-charcoal-200 overflow-hidden relative">
+          <div class="absolute inset-0 opacity-[0.03] bg-[repeating-linear-gradient(45deg,transparent,transparent_10px,#000_10px,#000_20px)] pointer-events-none"></div>
+          <div class="px-3 py-2 border-b border-charcoal-200 flex justify-between items-center bg-charcoal-100/50 relative z-10">
+            <div>
+              <p class="bento-label flex items-center gap-1 text-charcoal-600">
+                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
+                HR CONTROLLED
+              </p>
+              <h3 class="text-sm font-bold text-charcoal-900 mt-0.5">Employment Info</h3>
+            </div>
+          </div>
+          <div class="p-3 space-y-2 relative z-10">
+            ${[
+              ['Employee ID', e.id, 'M10 6H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V8a2 2 0 00-2-2h-5m-4 0V5a2 2 0 114 0v1m-4 0a2 2 0 104 0'],
+              ['Primary Location', gym, 'M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z'],
+              ['Job Title / Position', e.position, 'M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z'],
+              ['Employment Level', level, null],
+              ['Hire Date', hireDate, 'M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z'],
+            ].map(([k,v,icon])=>`<div class="flex justify-between items-end border-b border-charcoal-200 pb-2">
+              <div><p class="bento-label text-charcoal-500">${k}</p><p class="text-xs font-semibold text-charcoal-900 mt-0.5">${v || '—'}</p></div>
+              ${icon ? `<svg class="w-3.5 h-3.5 text-charcoal-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="${icon}"/></svg>` : ''}
+            </div>`).join('')}
+            <div class="flex justify-between items-end">
+              <div><p class="bento-label text-charcoal-500">Current Status</p><p class="text-xs font-semibold text-charcoal-900 mt-0.5 flex items-center gap-1.5"><span class="w-2 h-2 rounded-full ${statusText==='Active'||m ? 'bg-brand-500' : 'bg-charcoal-400'}"></span>${statusText}${p.employmentType ? ' · ' + p.employmentType : ''}</p></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>`,
+    documents: `<div class="space-y-2">
+      ${[
+        {name:'Employment Contract',cat:'Employment',status:'Valid'},
+        {name:'National ID (Front & Back)',cat:'Identification',status:'Valid'},
+        {name:'Personal Photo',cat:'Identification',status:'Valid'},
+        {name:'First Aid Certification',cat:'Certification',status:'Expiring Soon'},
+        {name:'Medical Fitness Certificate',cat:'Medical',status:'Valid'},
+        {name:'Degree Certificate',cat:'Education',status:'Valid'},
+      ].map(d=>`<div class="flex items-center justify-between bg-charcoal-50 rounded-lg p-2.5">
+        <div class="flex items-center gap-2.5"><div class="w-8 h-8 rounded-lg bg-brand-100 text-brand-600 flex items-center justify-center"><span class="material-icons text-sm">description</span></div><div><p class="text-xs font-medium text-charcoal-900">${d.name}</p><p class="text-[10px] text-charcoal-500">${d.cat}</p></div></div>
+        ${statusBadge(d.status)}
+      </div>`).join('')}
+    </div>`,
+    employment: `<div class="space-y-2">
+      ${[
+        {type:'Position Changed',from:'Junior Trainer',to:e.position,date:'01 Aug 2026',detail:'Promoted based on the Q2 2026 evaluation.'},
+        {type:'Gym Transfer',from:'Heliopolis',to:gym,date:'01 May 2026',detail:'Requested transfer approved by HR.'},
+        {type:'Joined Revive',from:null,to:null,date:hireDate,detail:'Initial hire.'},
+      ].map(h=>`<div class="flex items-start gap-3 bg-charcoal-50 rounded-lg p-2.5">
+        <div class="w-8 h-8 rounded-full bg-brand-100 text-brand-700 flex items-center justify-center text-[10px] font-semibold flex-shrink-0">${h.type.split(' ').map(w=>w[0]).join('')}</div>
+        <div><p class="text-xs font-medium text-charcoal-900">${h.type}</p><p class="text-[10px] text-charcoal-500">${h.date}${h.from?` · ${h.from} → ${h.to}`:''}</p><p class="text-[10px] text-charcoal-600 mt-0.5">${h.detail}</p></div>
+      </div>`).join('')}
+    </div>`,
+    attendance: `<div class="bg-charcoal-50 rounded-lg p-3 text-center mb-2"><p class="text-2xl font-bold text-brand-600">${m && isAbsent ? '96.2%' : '96.4%'}</p><p class="text-[10px] text-charcoal-500">Attendance Rate</p></div>
+    <div class="grid grid-cols-3 gap-2 mb-2">
+      ${[['Present', m && isAbsent ? 24 : 25, 'text-green-600'],['Late', m && isLate ? 3 : 2, 'text-yellow-600'],['Absent', m && isAbsent ? 2 : 1, 'text-red-600']].map(([k,v,c])=>`<div class="bg-white rounded-lg border border-charcoal-200 p-2 text-center"><p class="text-base font-bold ${c}">${v}</p><p class="text-[10px] text-charcoal-500">${k}</p></div>`).join('')}
+    </div>
+    <div class="space-y-1.5">${[
+      ['Aug 26', m ? (m.checkIn || '—') : '—', m && (m.status==='Present'||m.status==='Late') ? '16:02' : '—', m ? m.status : 'On Time'],
+      ['Aug 25','16:08','00:01','Late'],
+      ['Aug 24','—','—','Off'],
+      ['Aug 23','07:58','16:03','On Time'],
+    ].map(([d,ci,co,st])=>`<div class="flex items-center justify-between bg-charcoal-50 rounded-lg p-2">
+      <p class="text-xs text-charcoal-700">${d}</p><p class="text-[10px] text-charcoal-500">${ci} → ${co}</p>${statusBadge(st)}
+    </div>`).join('')}</div>`,
+    shift: `<div class="bg-charcoal-50 rounded-lg p-3 text-center"><p class="text-base font-bold text-charcoal-900">${shift ? shiftLabel(shift) : (e.shift || 'Morning') + ' · assigned this week'}</p><p class="text-[10px] text-charcoal-500 mt-1">Current Week · Sep 7 – 13</p></div>
+    <div class="grid grid-cols-7 gap-1 mt-3">${['M','T','W','T','F','S','S'].map((d,i)=>{
+      const sid = schedIds[i];
+      const t = sid ? getShiftTemplate(sid) : null;
+      const c = t ? getShiftColor(t) : null;
+      return `<div class="rounded-lg border p-2 text-center ${i===1?'border-brand-500 bg-brand-50':''}"><p class="text-[9px] text-charcoal-400 font-semibold">${d}</p><p class="text-[10px] mt-1 ${c?'font-medium':'text-charcoal-300'}" ${c?`style="color:${c.text}"`:''}>${t ? (t.isOff ? 'OFF' : t.start) : (i===1 && m ? (m.checkIn ? m.checkIn : '08:00') : '08:00')}</p></div>`;
+    }).join('')}</div>`,
+    requests: `<div class="space-y-1.5">${reqs.map(r=>`<div class="flex items-center justify-between gap-2 bg-charcoal-50 rounded-lg p-2.5">
+      <div class="min-w-0"><p class="text-xs font-medium text-charcoal-900">${r.type}</p><p class="text-[10px] text-charcoal-500">${r.date} · Submitted ${r.submitted}${r.teamApprovedBy?' · Approved by '+r.teamApprovedBy:''}${r.hrApprovedBy?' · HR: '+r.hrApprovedBy:''}</p>${r.reason?`<p class="text-[10px] text-charcoal-400 mt-0.5">${r.reason}</p>`:''}</div>
+      <div class="flex items-center gap-1.5 flex-shrink-0">
+        ${statusBadge(r.status)}
+        ${canApprove && r.status==='Pending' ? `<button onclick="approveRequest('${r.id}')" class="btn btn-sm btn-primary">Approve</button><button onclick="rejectRequest('${r.id}')" class="btn btn-sm btn-danger-outline">Reject</button>` : ''}
+      </div>
+    </div>`).join('') || `<div class="bg-charcoal-50 rounded-lg p-4 text-center"><p class="text-xs text-charcoal-500">No requests found</p></div>`}</div>`,
+    leave: `${canLeaveManage?`<div class="flex justify-end mb-2"><button onclick="showToast('Edit leave balance — simulated')" class="btn btn-sm btn-primary">Edit Balance</button></div>`:''}
+    <div class="border${canLeaveManage?'':'-2 border-dashed border-charcoal-200 rounded-xl'} space-y-2 ${canLeaveManage?'':'p-3'}">
+      ${[['Annual Leave','10','of 21 days'],['Sick Leave','3','of 10 days'],['Unpaid Leave','0','of 5 days']].map(([k,v,t])=>`<div class="bg-charcoal-50 rounded-lg p-2.5"><div class="flex items-center justify-between"><p class="text-xs font-medium text-charcoal-900">${k}</p><p class="text-xs font-bold text-brand-600">${v} <span class="text-charcoal-400 font-normal">${t}</span></p></div><div class="w-full h-1.5 bg-charcoal-200 rounded-full mt-1.5 overflow-hidden"><div class="h-full bg-brand-500 rounded-full" style="width:${Math.min(100,parseInt(v)*10)}%"></div></div></div>`).join('')}
+    </div>
+    ${!canLeaveManage?`<p class="text-[10px] text-charcoal-400 mt-2 text-center">Leave balance is <strong>view-only</strong> — you do not have <code>employees.leave_balance.manage</code>.</p>`:''}`,
+    eval: `<div class="space-y-1.5">${(evals.length ? evals : [['Q2 2026','4.2','Exceeds'],['Q1 2026','3.8','Meets']]).map(v=>{
+      const isObj = typeof v === 'object';
+      const period = isObj ? v.period : v[0], score = isObj ? v.score : v[1], result = isObj ? v.result : v[2];
+      return `<div class="flex items-center justify-between bg-charcoal-50 rounded-lg p-2.5">
+        <div><p class="text-xs font-medium text-charcoal-900">${period}</p><p class="text-[10px] text-charcoal-500">Score: ${score}/5</p></div>${statusBadge(result)}
+      </div>`;
+    }).join('')}</div>`,
+    payroll: `<div class="bg-charcoal-50 rounded-lg p-3 flex items-center justify-between">
+        <div><p class="text-[10px] text-charcoal-500">LATEST PAYSLIP</p><p class="text-xs font-semibold text-charcoal-900 mt-0.5">July 2026 · Paid Aug 5</p></div>
+        <p class="text-sm font-bold text-charcoal-900">EGP ${salary.toLocaleString()}</p>
+      </div>
+      <p class="text-[10px] text-charcoal-400 text-center mt-2">Full payslips live in HR payroll — the Branch Manager sees the net figure only.</p>`,
+  }[tab];
+
+  return `<div class="space-y-3">
+    <div class="flex items-center gap-2">
+      <button onclick="navigateTo('employees')" class="btn btn-sm btn-ghost"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>Employees</button>
+      <span class="text-charcoal-300">/</span>
+      <p class="text-xs text-charcoal-500">${e.name}</p>
+    </div>
+
+    <!-- Profile Header -->
+    <div class="bg-white rounded-xl border border-charcoal-200 p-4">
+      <div class="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
+        <div class="flex items-center gap-3">
+          <div class="w-14 h-14 rounded-full bg-brand-100 text-brand-700 flex items-center justify-center text-lg font-semibold flex-shrink-0">${e.initials}</div>
+          <div class="min-w-0">
+            <p class="text-base font-bold text-charcoal-900">${e.name} ${statusBadge(statusText)}</p>
+            <p class="text-xs text-charcoal-500 mt-0.5">${e.position} · ${level} · ${gym}${hireDate!=='—' ? ' · ' + hireDate : ''}</p>
+          </div>
+        </div>
+        <div class="flex flex-wrap gap-1.5">
+          ${lifecycleActions ? lifecycleActions : '<p class="text-[10px] text-charcoal-400">No lifecycle actions granted for your role.</p>'}
+        </div>
+      </div>
+      <div class="inline-flex flex-wrap items-center gap-1 bg-charcoal-100 rounded-xl p-1 border border-charcoal-200 mt-3">
+        ${tabs.map(t=>`<button onclick="state.empTab='${t.id}';renderAll()" class="tab-btn ${state.empTab===t.id?'active':''}">${t.label}</button>`).join('')}
+      </div>
+    </div>
+
+    <div class="bg-white rounded-xl border border-charcoal-200 p-4">${tabContent}</div>
+  </div>`;
+}
+
 function openNewEmployee() {
   openModal('New Employee', `<form onsubmit="event.preventDefault();saveNewEmployee()" class="space-y-3">
     <div><label class="form-label">Full Name</label><input id="emp-new-name" type="text" class="form-input" placeholder="e.g. Mohamed Ali" required></div>
     <div><label class="form-label">Position</label><select id="emp-new-position" class="form-select"><option>Trainer</option><option>Receptionist</option><option>Cleaner</option><option>Maintenance</option></select></div>
-    <div class="bg-charcoal-50 rounded-lg p-2.5 text-[10px] text-charcoal-500">Their shift will be assigned from <b>Shift Management</b>.</div>
+    <div class="bg-charcoal-50 rounded-lg p-2.5 text-[10px] text-charcoal-500">Their shift will be assigned from the <b>${MOCK.currentUser.role === 'Branch Manager' ? 'Branch Schedule' : 'Team Schedule'}</b>.</div>
     <div class="flex justify-end gap-2 pt-1"><button type="button" onclick="closeModal()" class="btn btn-sm btn-secondary">Cancel</button><button type="submit" class="btn btn-sm btn-primary">Add Employee</button></div>
   </form>`);
 }
@@ -1968,7 +3163,7 @@ function openEditEmployee(id) {
     <div><label class="form-label">Full Name</label><input id="emp-name" type="text" class="form-input" value="${e.name}" required></div>
     <div><label class="form-label">Position</label><select id="emp-position" class="form-select">${['Trainer','Receptionist','Cleaner','Maintenance'].map(p=>`<option ${p===e.position?'selected':''}>${p}</option>`).join('')}</select></div>
     <div><label class="form-label">Employment Status</label><select id="emp-status" class="form-select">${['Active','On Leave','Suspended','Terminated'].map(s=>`<option ${s===e.status?'selected':''}>${s}</option>`).join('')}</select></div>
-    <div class="bg-charcoal-50 rounded-lg p-2.5 text-[10px] text-charcoal-500">Shift is assigned from <b>Shift Management</b> — edit it there.</div>
+    <div class="bg-charcoal-50 rounded-lg p-2.5 text-[10px] text-charcoal-500">Shift is assigned from the <b>${MOCK.currentUser.role === 'Branch Manager' ? 'Branch Schedule' : 'Team Schedule'}</b> — edit it there.</div>
     <div class="flex justify-end gap-2 pt-1"><button type="button" onclick="closeModal()" class="btn btn-sm btn-secondary">Cancel</button><button type="submit" class="btn btn-sm btn-primary">Save Changes</button></div>
   </form>`);
 }
@@ -2011,7 +3206,7 @@ const BRANCH_ACTIONS = [
   { id:'requests', label:'Review Team Requests', desc:'Stage-1 approve/reject — HR gives the final decision', icon:'M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z', perm:'requests.view', toHR:true, run:"navigateTo('team-requests')" },
   { id:'attendance', label:'Correct Attendance', desc:'Fix missing check-ins/outs and flag absences', icon:'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4', perm:'attendance.edit', run:"navigateTo('attendance-management')" },
   { id:'vacancy', label:'Request Vacancy', desc:'Ask HR to open a new position for the gym', icon:'M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z', perm:'recruitment.vacancy_request.create', toHR:true, run:"navigateTo('recruitment')" },
-  { id:'shifts', label:'Publish Shift Schedule', desc:'Assign shifts for the next cycle and publish', icon:'M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z', perm:'schedule.manage', run:"navigateTo('shift-management')" },
+  { id:'shifts', label:'Publish Shift Schedule', desc:'Assign shifts for the next cycle and publish', icon:'M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z', perm:'schedule.manage', run:"state.tsEditing=true;navigateTo('team-schedule')" },
   { id:'status', label:'Change Employment Status', desc:'Active / On Leave / Suspended / Terminated', icon:'M10 14l2-2m0 0l2-2m-2 2l2-2m-2 2l-2-2M21 12a9 9 0 11-18 0 9 9 0 0118 0z', perm:'employees.status.change', run:"navigateTo('employees')" },
   { id:'offboard', label:'Offboard Employee', desc:'Start the leaving flow for a subordinate', icon:'M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1', perm:'employees.offboard', toHR:true, run:"navigateTo('leaving')" },
   { id:'report', label:'Send Report to HR', desc:'Monthly branch summary: attendance, requests, incidents', icon:'M9 17v-6m4 6V7m4 10v-3M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z', perm:null, toHR:true, run:'openSendReportToHR()' },
@@ -2020,14 +3215,13 @@ const BRANCH_ACTIONS = [
 function openBranchActions() {
   const showAll = DEMO.showAll;
   const can = p => showAll || !p || hasPermission(p);
-  // The Team Leader opens this same palette from the Team Updates page
-  // ("Take Action") — brand it for their role instead of the branch.
-  const isTL = MOCK.currentUser.role === 'Team Leader';
-  const modalTitle = isTL ? 'Team Actions' : 'Branch Actions';
+  // Opened from the branch Employees page ("Actions"). Both the Branch Manager
+  // and the Team Leader (who now gets the BM's branch-wide pages) act on the
+  // whole branch roster, so brand it for the branch and name the acting role.
+  const roleName = MOCK.currentUser.role;
+  const modalTitle = 'Branch Actions';
   const hrTag = '<span class="text-[9px] font-bold uppercase bg-purple-50 text-purple-700 ring-1 ring-inset ring-purple-200 px-1 py-0.5 rounded">&rarr; HR</span>';
-  const intro = isTL
-    ? `Actions you can take as Team Leader for <b>your assigned team</b>. Items tagged ${hrTag} are sent to HR for final approval.`
-    : `Actions you can take as Branch Manager for <b>Revive Gym — Nasr City</b>. Items tagged ${hrTag} are sent to HR for final approval.`;
+  const intro = `Actions you can take as ${roleName} for <b>Revive Gym — Nasr City</b>. Items tagged ${hrTag} are sent to HR for final approval.`;
   const acts = BRANCH_ACTIONS.filter(a => can(a.perm));
   const pend = branchHrQueue().filter(d=>d.status==='Pending HR');
   const cards = acts.map(a => `

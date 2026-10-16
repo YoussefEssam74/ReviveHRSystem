@@ -193,7 +193,7 @@ function fbDetailApplicantsHtml(apps) {
           <button class="btn btn-sm btn-secondary flex-1" onclick="viewApplicant('${a.id}')">View Answers</button>
           ${isOpen ? `<button class="btn btn-sm btn-primary flex-1" onclick="moveApplicantToPipeline('${a.id}')">Add to Pipeline</button>
           <button class="btn btn-sm btn-danger-outline flex-1" onclick="rejectApplicant('${a.id}')">Reject</button>` : ''}
-          ${a.status === 'Moved to Pipeline' ? `<button class="btn btn-sm btn-ghost flex-1" onclick="_recTab='candidates';navigateTo('recruitment')">In Pipeline →</button>` : ''}
+          ${a.status === 'Moved to Pipeline' ? `<button class="btn btn-sm btn-ghost flex-1" onclick="_recTab='first';navigateTo('recruitment')">In Pipeline →</button>` : ''}
         </div>
       </div>`;
     }).join('')}
@@ -544,7 +544,7 @@ function moveApplicantToPipeline(id) {
 
   MOCK.candidates.unshift({
     id: 'c' + Date.now(),
-    name: a.name, position: a.position, stage: 'Applied', appliedDate: a.appliedDate,
+    name: a.name, position: a.position, stage: 'First Interview', appliedDate: a.appliedDate,
     phone: a.phone, rating: 0,
     form: {
       email: a.email, source: 'Hiring Form — ' + a.formName, gymPref: a.gym,
@@ -558,7 +558,7 @@ function moveApplicantToPipeline(id) {
     action: 'Candidate Added',
     user: MOCK.currentUser.fullName,
     target: a.name,
-    detail: `Moved from hiring form "${a.formName}" into the candidate pipeline (stage: Applied)`,
+    detail: `Moved from hiring form "${a.formName}" into the candidate pipeline (stage: First Interview)`,
     timestamp: '2026-09-09',
     gym: a.gym
   });

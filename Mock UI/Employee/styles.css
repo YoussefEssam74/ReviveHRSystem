@@ -299,7 +299,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 /* Horizontal scroll schedule */
 .schedule-scroll { display: flex; gap: 0.5rem; overflow-x: auto; padding-bottom: 0.5rem; scroll-snap-type: x mandatory; -ms-overflow-style: none; scrollbar-width: none; }
 .schedule-scroll::-webkit-scrollbar { display: none; }
-.schedule-scroll > .schedule-day-card { min-width: 120px; flex: 1; scroll-snap-align: start; }
+.schedule-scroll > .schedule-day-card { min-width: 104px; flex: 1; scroll-snap-align: start; }
 .schedule-day-card { padding: 0.75rem; border-radius: 0.5rem; border: 1px solid #e5e7eb; background: white; transition: all 0.15s; }
 .schedule-day-card.is-today { background: #f0fdf4; border-color: #bbf7d0; }
 .schedule-day-card.is-off { opacity: 0.6; background: #f1f3f5; }

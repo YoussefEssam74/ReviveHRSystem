@@ -27,6 +27,12 @@ const MOCK = {
     { date: '2026-08-19', shift: '08:00–16:00', shiftName: 'Morning', checkIn: '08:30', checkOut: '16:00', status: 'Late', source: 'Manual', notes: 'Medical appointment' },
     { date: '2026-08-18', shift: '16:00–00:00', shiftName: 'Evening', checkIn: '15:58', checkOut: '00:02', status: 'On Time', source: 'Biometric Device', notes: '' },
     { date: '2026-08-17', shift: '08:00–16:00', shiftName: 'Morning', checkIn: null, checkOut: null, status: 'Absent', source: '', notes: 'No show' },
+    { date: '2026-07-31', shift: '08:00–16:00', shiftName: 'Morning', checkIn: '07:56', checkOut: '16:04', status: 'On Time', source: 'Biometric Device', notes: '' },
+    { date: '2026-07-30', shift: '16:00–00:00', shiftName: 'Evening', checkIn: '15:55', checkOut: '00:03', status: 'On Time', source: 'Biometric Device', notes: '' },
+    { date: '2026-07-29', shift: '08:00–16:00', shiftName: 'Morning', checkIn: '08:12', checkOut: '16:00', status: 'Late', source: 'Biometric Device', notes: 'Bus delay' },
+    { date: '2026-07-28', shift: 'OFF', shiftName: 'Off', checkIn: null, checkOut: null, status: 'Off', source: '', notes: '' },
+    { date: '2026-07-27', shift: '08:00–16:00', shiftName: 'Morning', checkIn: '07:59', checkOut: '16:01', status: 'On Time', source: 'Biometric Device', notes: '' },
+    { date: '2026-07-26', shift: '16:00–00:00', shiftName: 'Evening', checkIn: '16:01', checkOut: '00:00', status: 'On Time', source: 'Biometric Device', notes: '' },
   ],
   scheduleCycles: [
     { id: 'c1', label: 'Aug 4 – Aug 13', status: 'Published' },
@@ -66,15 +72,34 @@ const MOCK = {
     't10': ['st-morning','st-evening','st-morning','st-off','st-morning','st-evening','st-morning'],
   },
   currentCycleIndex: 2,
-  todayIndex: 1, // Tue 26 in the Shift Management week (Mon 25 – Sun 31) — index into teamSchedule arrays
+  todayIndex: 1, // Tue 26 in the schedule week (Mon 25 – Sun 31) — index into teamSchedule arrays
   now: '14:30',  // mock current time — drives the auto shift status on the Employees page
   payroll: [
-    { id: 'p1', period: 'August 2026', status: 'Processing', paidDate: null, netSalary: null, visible: false,
-      items: [], grossEarnings: 0, totalDeductions: 0 },
+    // Current period — still open, so these are ESTIMATES until payroll is paid.
+    { id: 'p1', period: 'August 2026', status: 'Processing', paidDate: null, netSalary: 7030, visible: true,
+      closesOn: '2026-08-31', paidOn: '2026-09-05',
+      baseSalary: 12000, annualIncrease: 1200,
+      workingDays: 26, workedDays: 22, scheduledWeeklyDays: 6, weeklyPattern: 'Sun – Fri',
+      overtimeHours: 4, usedAnnualLeave: 0, paidLeaveDays: 1, remainingAnnualLeave: 8,
+      stats: { late: 2, early: 1, sick: 1, annual: 0, absent: 0, salaryAdvance: 5000 },
+      items: [
+        { label: 'Basic Salary', amount: 12000, type: 'earning', icon: 'payments', color: 'brand' },
+        { label: 'Annual Increase (10%)', amount: 1200, type: 'earning', icon: 'trending_up', color: 'green' },
+        { label: 'Overtime Pay (4 hrs)', amount: 150, type: 'earning', icon: 'schedule', color: 'blue' },
+        { label: 'Social Insurance (7%)', amount: -840, type: 'deduction', icon: 'health_and_safety', color: 'red' },
+        { label: 'Tax', amount: -480, type: 'deduction', icon: 'receipt_long', color: 'red' },
+        { label: 'Salary Advance (repayment)', amount: -5000, type: 'deduction', icon: 'savings', color: 'purple', isGroup: true,
+          subItems: [
+            { label: 'Salary Advance — approved Jul 28, 2026', amount: -5000, date: '2026-07-28', detail: 'EGP 5,000 advance repaid from the August payroll.', icon: 'savings' },
+          ]
+        },
+      ], grossEarnings: 13350, totalDeductions: 6320 },
     { id: 'p2', period: 'July 2026', status: 'Paid', paidDate: '2026-08-05', netSalary: 12400, visible: true,
       baseSalary: 12000, annualIncrease: 1200, workingDays: 26, workedDays: 25,
       scheduledWeeklyDays: 6, weeklyPattern: 'Sun – Fri',
       overtimeHours: 6, usedAnnualLeave: 1, paidLeaveDays: 0, remainingAnnualLeave: 8,
+      // Jul 5 & 12 late (tardiness deductions), Jul 18 unapproved day off, 1 annual leave day
+      stats: { late: 2, early: 0, sick: 0, annual: 1, absent: 1, salaryAdvance: 0 },
       items: [
         { label: 'Basic Salary', amount: 12000, type: 'earning', icon: 'payments', color: 'brand' },
         { label: 'Annual Increase (10%)', amount: 1200, type: 'earning', icon: 'trending_up', color: 'green' },
@@ -98,6 +123,7 @@ const MOCK = {
       baseSalary: 12000, annualIncrease: 1200, workingDays: 26, workedDays: 25,
       scheduledWeeklyDays: 6, weeklyPattern: 'Sun – Fri',
       overtimeHours: 0, usedAnnualLeave: 1, paidLeaveDays: 0, remainingAnnualLeave: 9,
+      stats: { late: 0, early: 0, sick: 0, annual: 1, absent: 0, salaryAdvance: 0 },
       items: [
         { label: 'Basic Salary', amount: 12000, type: 'earning', icon: 'payments', color: 'brand' },
         { label: 'Annual Increase (10%)', amount: 1200, type: 'earning', icon: 'trending_up', color: 'green' },
@@ -109,6 +135,7 @@ const MOCK = {
       baseSalary: 12000, annualIncrease: 1200, workingDays: 27, workedDays: 25,
       scheduledWeeklyDays: 6, weeklyPattern: 'Sun – Fri',
       overtimeHours: 0, usedAnnualLeave: 1, paidLeaveDays: 1, remainingAnnualLeave: 10,
+      stats: { late: 0, early: 0, sick: 0, annual: 1, absent: 0, salaryAdvance: 0 },
       items: [
         { label: 'Basic Salary', amount: 12000, type: 'earning', icon: 'payments', color: 'brand' },
         { label: 'Annual Increase (10%)', amount: 1200, type: 'earning', icon: 'trending_up', color: 'green' },
@@ -206,6 +233,10 @@ const MOCK = {
     sickUsed: 1,
     personalTotal: 3,
     personalUsed: 0,
+    // Time-based allowances, tracked in minutes — 4 hrs each, untouched so far.
+    earlyLeaveTotalMin: 240,  // 4 hrs
+    earlyLeaveUsedMin: 0,
+    annualUsedThisMonth: 0,  // annual leave days taken in the current (open) month
     pendingRequests: 1, // currently pending annual-leave requests
   },
   requests: [
@@ -233,17 +264,27 @@ const MOCK = {
       reviewerComment: 'Approved — will be deducted from the August payroll.',
       timeline: [{ step: 'Submitted', date: 'Jul 28, 10:00 AM', done: true },{ step: 'Under Review', date: 'Jul 28, 02:00 PM', done: true },{ step: 'Approved', date: 'Jul 29, 09:00 AM', done: true }],
       scheduleContext: null },
+    { id: 'r6', type: 'Sick Leave', submittedDate: '2026-08-17', requestedDate: 'Aug 17, 2026', status: 'Approved',
+      reason: 'Viral fever — doctor advised rest for the day', reviewer: 'Sarah Hassan (Branch Manager)',
+      reviewerComment: 'Approved. Please hand the medical certificate to HR on your next shift.',
+      timeline: [{ step: 'Submitted', date: 'Aug 17, 07:35 AM', done: true },{ step: 'Under Review', date: 'Aug 17, 08:10 AM', done: true },{ step: 'Approved', date: 'Aug 17, 08:25 AM', done: true }],
+      scheduleContext: 'Scheduled: Morning Shift (08:00–16:00)' },
+    { id: 'r7', type: 'Late Attendance', submittedDate: '2026-08-19', requestedDate: 'Aug 19, 2026', status: 'Approved',
+      reason: 'Morning medical appointment ran over — checked in at 08:30', reviewer: 'Sarah Hassan (Branch Manager)',
+      reviewerComment: 'Approved — excused lateness for this occurrence.',
+      timeline: [{ step: 'Submitted', date: 'Aug 19, 09:05 AM', done: true },{ step: 'Under Review', date: 'Aug 19, 10:30 AM', done: true },{ step: 'Approved', date: 'Aug 19, 11:15 AM', done: true }],
+      scheduleContext: 'Scheduled: Morning Shift (08:00–16:00)' },
   ],
   requestTypes: [
-    { id: 'annual-leave', label: 'Annual Leave', fields: ['date-from','date-to','reason'] },
-    { id: 'sick-leave', label: 'Sick Leave', fields: ['date-from','date-to','reason','certificate'] },
-    { id: 'late-attendance', label: 'Late Attendance', fields: ['date','time','reason'] },
-    { id: 'early-leave', label: 'Early Leave', fields: ['date','time','reason'] },
-    { id: 'shift-swap', label: 'Shift Swap', fields: ['date-from','date-to','colleague','reason'] },
-    { id: 'weekly-off-swap', label: 'Weekly Off Swap', fields: ['date','target-date','colleague','reason'] },
-    { id: 'check-in-correction', label: 'Check-in Correction', fields: ['date','time','reason'] },
-    { id: 'salary-advance', label: 'Salary Advance', fields: ['amount','reason'] },
-    { id: 'paid-holiday', label: 'Paid Holiday', fields: ['date','reason'] },
+    { id: 'annual-leave', label: 'Annual Leave', fields: ['date-from','date-to','reason'], icon: 'M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z' },
+    { id: 'sick-leave', label: 'Sick Leave', fields: ['date-from','date-to','reason','certificate'], icon: 'M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z' },
+    { id: 'late-attendance', label: 'Late Attendance', fields: ['date','time','reason'], icon: 'M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z' },
+    { id: 'early-leave', label: 'Early Leave', fields: ['date','time','reason'], icon: 'M12 14l4-4m0 0l-4-4m4 4H3' },
+    { id: 'shift-swap', label: 'Shift Swap', fields: ['date-from','date-to','colleague','reason'], icon: 'M8 7h12m0 0l-3-3m3 3l-3 3m3 3H4m0 0l3 3m-3-3l3-3' },
+    { id: 'weekly-off-swap', label: 'Weekly Off Swap', fields: ['date','target-date','colleague','reason'], icon: 'M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2zm4-6l4 4m0 0l4-4m-4 4V7' },
+    { id: 'check-in-correction', label: 'Check-in Correction', fields: ['date','time','reason'], icon: 'M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z' },
+    { id: 'salary-advance', label: 'Salary Advance', fields: ['amount','reason'], icon: 'M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z' },
+    { id: 'paid-holiday', label: 'Paid Holiday', fields: ['date','reason'], icon: 'M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6' },
   ],
   notifications: [
     { id: 'n1', category: 'Requests', title: 'Request Approved', description: 'Your Early Leave request for Aug 22 has been approved.', date: '2026-08-20 15:00', read: true, color: 'green', link: 'requests' },
@@ -296,10 +337,68 @@ const MOCK = {
     { id: 'f3', employee: 'Fatma Hassan', type: 'Document Expiring', description: 'PT Certificate expires in 15 days', severity: 'low' },
     { id: 'f4', employee: 'Tarek Nabil', type: 'Performance', description: 'Q2 evaluation below expectations', severity: 'medium' },
   ],
+  // Recruitment pipeline: BM requests a position (with the shift + salary he
+  // needs) → HR approves/rejects → approved requests wait until HR sends a
+  // candidate from the waiting list → the BM calls them, schedules and holds the
+  // 2nd interview → Accepted (HR creates the account) or Rejected (back to
+  // waiting for a match). `match`, `iv2` and the verdict are owned by whoever
+  // wrote them (HR sends the match, the BM runs the 2nd interview), and the
+  // visible stage is derived from them by recStageOf().
   recruitmentRequests: [
-    { id: 'rr1', position: 'Senior Trainer', count: 1, urgency: 'High', status: 'Approved', date: 'Aug 20, 2026', requestedBy: 'Omar Youssef', department: 'Training', reason: 'Replacing a departing trainer; Q4 class load is increasing.', timeline: 'Submitted Aug 10 · Approved Aug 20', candidates: 3 },
-    { id: 'rr2', position: 'Receptionist', count: 1, urgency: 'Medium', status: 'Pending', date: 'Aug 15, 2026', requestedBy: 'Sara Ali', department: 'Front Desk', reason: 'Covering evening shift demand at the front desk.', timeline: 'Submitted Aug 15 · Awaiting approval', candidates: 0 },
-    { id: 'rr3', position: 'Cleaner', count: 2, urgency: 'Low', status: 'Submitted', date: 'Aug 10, 2026', requestedBy: 'Hassan Ali', department: 'Facilities', reason: 'New branch floor area added; current team cannot cover it.', timeline: 'Submitted Aug 10 · In review', candidates: 0 },
+    { id: 'rr1', position: 'Senior Trainer', count: 1, urgency: 'High', status: 'Approved', date: 'Aug 20, 2026', requestedBy: 'Omar Youssef', department: 'Training',
+      shift: 'Morning', expectedSalary: 14000,
+      reason: 'Replacing a departing trainer; Q4 class load is increasing.', timeline: 'Submitted Aug 10 · Approved Aug 20', candidates: 3,
+      match: null, iv2: null, hrDecision: null,
+      history: [{ step: 'Requested', date: 'Aug 10, 2026', by: 'Omar Youssef', note: 'Senior Trainer · Morning shift · EGP 14,000 expected' },
+                { step: 'HR approved', date: 'Aug 20, 2026', by: 'Sarah Hassan', note: 'Approved — waiting for a matching candidate on Morning.' }] },
+    { id: 'rr2', position: 'Receptionist', count: 1, urgency: 'Medium', status: 'Pending', date: 'Aug 15, 2026', requestedBy: 'Sara Ali', department: 'Front Desk',
+      shift: 'Evening', expectedSalary: 7500,
+      reason: 'Covering evening shift demand at the front desk.', timeline: 'Submitted Aug 15 · Awaiting approval', candidates: 0,
+      match: null, iv2: null, hrDecision: null,
+      history: [{ step: 'Requested', date: 'Aug 15, 2026', by: 'Sara Ali', note: 'Receptionist · Evening shift · EGP 7,500 expected' }] },
+    { id: 'rr3', position: 'Cleaner', count: 2, urgency: 'Low', status: 'Submitted', date: 'Aug 10, 2026', requestedBy: 'Hassan Ali', department: 'Facilities',
+      shift: 'Morning', expectedSalary: 5000,
+      reason: 'New branch floor area added; current team cannot cover it.', timeline: 'Submitted Aug 10 · In review', candidates: 0,
+      match: null, iv2: null, hrDecision: null,
+      history: [{ step: 'Requested', date: 'Aug 10, 2026', by: 'Hassan Ali', note: 'Cleaner x2 · Morning shift · EGP 5,000 expected' }] },
+
+    /* ---- seeded pipeline examples so every stage is visible ---- */
+    { id: 'rr4', position: 'Trainer', count: 1, urgency: 'Medium', status: 'Approved', date: 'Aug 18, 2026', requestedBy: 'Ahmed Mohamed', department: 'Training',
+      shift: 'Morning', expectedSalary: 10000,
+      reason: 'Extra morning class load — 2 new group slots opened for Q4.', timeline: 'Submitted Aug 14 · Approved Aug 18', candidates: 1,
+      match: { name: 'Dina Farouk', phone: '+20 100 123 4567', position: 'Trainer', skills: ['Group PT', 'Pilates', 'HIIT'], shift: 'Morning', salaryExp: 9500, source: 'Walk-in', availability: 'Immediate', waitingListId: 'wl1', note: 'Strong candidate — been on the waiting list since Aug 30, available on mornings.' },
+      iv2: null, hrDecision: null,
+      history: [{ step: 'Requested', date: 'Aug 14, 2026', by: 'Ahmed Mohamed', note: 'Trainer · Morning shift · EGP 10,000 expected' },
+                { step: 'HR approved', date: 'Aug 18, 2026', by: 'Sarah Hassan', note: 'Approved — looking for a Morning trainer.' },
+                { step: 'Match sent by HR', date: 'Sep 12, 2026', by: 'Sarah Hassan', note: 'Dina Farouk sent from the waiting list — call her number to arrange the 2nd interview.' }] },
+    { id: 'rr5', position: 'Receptionist', count: 1, urgency: 'Medium', status: 'Approved', date: 'Aug 12, 2026', requestedBy: 'Ahmed Mohamed', department: 'Front Desk',
+      shift: 'Evening', expectedSalary: 7500,
+      reason: 'Evening front desk has no cover since Karim moved to nights.', timeline: 'Submitted Aug 12 · Approved Aug 13', candidates: 2,
+      match: { name: 'Mahmoud Samir', phone: '+20 100 765 4321', position: 'Receptionist', skills: ['CRM', 'Upselling', 'Arabic/English'], shift: 'Evening', salaryExp: 7000, source: 'Referral — Hana', availability: 'Immediate', waitingListId: 'wl2', note: 'Waiting for an evening-shift front desk opening.' },
+      iv2: { date: 'Sep 15, 2026', time: '13:00', by: 'Ahmed Mohamed', type: 'On-site', verdict: null, notes: 'Called him on Sep 13 — agreed the slot himself.' },
+      hrDecision: null,
+      history: [{ step: 'Requested', date: 'Aug 12, 2026', by: 'Ahmed Mohamed', note: 'Receptionist · Evening shift · EGP 7,500 expected' },
+                { step: 'HR approved', date: 'Aug 13, 2026', by: 'Sarah Hassan', note: 'Approved.' },
+                { step: 'Match sent by HR', date: 'Sep 9, 2026', by: 'Sarah Hassan', note: 'Mahmoud Samir sent from the waiting list.' },
+                { step: '2nd interview scheduled', date: 'Sep 13, 2026', by: 'Ahmed Mohamed', note: 'On-site, 13:00 — called the candidate to agree the slot.' }] },
+    { id: 'rr6', position: 'Junior Trainer', count: 1, urgency: 'Low', status: 'Approved', date: 'Aug 5, 2026', requestedBy: 'Ahmed Mohamed', department: 'Training',
+      shift: 'Flexible', expectedSalary: 8000,
+      reason: 'Support slot for weekend group classes.', timeline: 'Submitted Aug 5 · Approved Aug 7', candidates: 1,
+      match: { name: 'Rania Gomaa', phone: '+20 100 222 3333', position: 'Cleaner', skills: ['Cleaning ops', 'Stock', 'Time management'], shift: 'Morning', salaryExp: 5000, source: 'LinkedIn', availability: 'Sep 15, 2026', waitingListId: 'wl3', note: 'On hold while the headcount request was under review.' },
+      iv2: { date: 'Sep 8, 2026', time: '10:30', by: 'Ahmed Mohamed', type: 'On-site', verdict: 'Reject', notes: 'Wrong skill set for a trainer slot — not a fit.' },
+      hrDecision: null,
+      history: [{ step: 'Requested', date: 'Aug 5, 2026', by: 'Ahmed Mohamed', note: 'Junior Trainer · flexible · EGP 8,000 expected' },
+                { step: 'HR approved', date: 'Aug 7, 2026', by: 'Sarah Hassan', note: 'Approved.' },
+                { step: 'Match sent by HR', date: 'Aug 28, 2026', by: 'Sarah Hassan', note: 'Rania Gomaa sent from the waiting list.' },
+                { step: '2nd interview held', date: 'Sep 8, 2026', by: 'Ahmed Mohamed', note: 'On-site, 10:30.' },
+                { step: 'Rejected by BM', date: 'Sep 8, 2026', by: 'Ahmed Mohamed', note: 'Wrong skill set for a trainer slot — not a fit. Back to waiting for a match.' }] },
+    { id: 'rr7', position: 'Maintenance', count: 1, urgency: 'Low', status: 'Rejected', date: 'Aug 2, 2026', requestedBy: 'Ahmed Mohamed', department: 'Maintenance',
+      shift: 'Morning', expectedSalary: 6000,
+      reason: 'Extra hand for the equipment servicing backlog.', timeline: 'Submitted Aug 2 · Rejected Aug 4', candidates: 0,
+      match: null, iv2: null,
+      hrDecision: { by: 'Sarah Hassan', date: 'Aug 4, 2026', note: 'Facilities contract already covers servicing until December — no budget for extra headcount.' },
+      history: [{ step: 'Requested', date: 'Aug 2, 2026', by: 'Ahmed Mohamed', note: 'Maintenance · Morning shift · EGP 6,000 expected' },
+                { step: 'HR rejected', date: 'Aug 4, 2026', by: 'Sarah Hassan', note: 'Covered by the facilities contract until December — no budget.' }] },
   ],
   employeeLeaving: [
     { id: 'el1', employee: 'Mona Said', position: 'Trainer', lastDay: 'Sep 30, 2026', status: 'Notice Period', reason: 'Personal reasons' },
@@ -379,11 +478,14 @@ const DEMO_USERS = {
     gym: { id: 'gym-1', name: 'Revive Gym', branch: 'Nasr City' },
     hireDate: '2026-01-12', employmentType: 'Full-time', status: 'Active',
     role: 'Team Leader',
-    // Team-scoped — scope is the assigned team, NOT the whole gym. Shift
-    // Management is granted alongside team scheduling so the TL can manage
-    // shift assignments for their team.
-    // Team leader can approve/reject team requests; HR still signs off final approval.
-    permissions: ['team.view','attendance.view.team','schedule.view.team','requests.view.team','requests.approve.team','evaluations.view.team','team.manage','schedule.manage'],
+    // Same capability set as the Branch Manager, minus Recruitment (BM-only).
+    // The TL gets the BM's Branch pages (Employees, Employees Performance,
+    // Attendance Management, Branch Schedule, Requests Management); the
+    // team-scoped pages (My Team / Team Performance / Team Actions) are
+    // dropped because team.view / evaluations.view.team / team.manage stay
+    // out, so renderNavItems filters them away exactly as it does for the BM.
+    // Team Requests keeps stage-1 approve/reject; HR still signs off finally.
+    permissions: ['employees.view','employees.create','employees.edit','employees.status.change','attendance.view','attendance.edit','schedule.view','schedule.manage','schedule.view.team','requests.view','requests.approve','requests.view.team','requests.approve.team','employees.offboard'],
     dateOfBirth: '1995-03-15', nationalId: '29503151234567', gender: 'Male',
     address: '15 El-Thawra St, Nasr City, Cairo',
     emergencyContact: { name: 'Mohamed Ahmed', relationship: 'Father', phone: '+20 100 987 6543' },
