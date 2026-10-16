@@ -112,6 +112,7 @@ namespace ReviveHRSystem.Web
             var authLoginPermits = rateLimitSection.GetValue<int?>("AuthLoginPermits") ?? 10;
             var stationLoginPermits = rateLimitSection.GetValue<int?>("StationLoginPermits") ?? 10;
             var stationAttendancePermits = rateLimitSection.GetValue<int?>("StationAttendancePermits") ?? 120;
+            var publicFormPermits = rateLimitSection.GetValue<int?>("PublicFormPermits") ?? 30;
             builder.Services.AddRateLimiter(options =>
             {
                 options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
@@ -139,6 +140,16 @@ namespace ReviveHRSystem.Web
                         factory: _ => new FixedWindowRateLimiterOptions
                         {
                             PermitLimit = stationAttendancePermits,
+                            Window = TimeSpan.FromMinutes(1),
+                            QueueLimit = 0
+                        }));
+                // Public hiring-form submissions (POST /api/applications, §5.2).
+                options.AddPolicy<string>("public-forms", context =>
+                    RateLimitPartition.GetFixedWindowLimiter(
+                        partitionKey: context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+                        factory: _ => new FixedWindowRateLimiterOptions
+                        {
+                            PermitLimit = publicFormPermits,
                             Window = TimeSpan.FromMinutes(1),
                             QueueLimit = 0
                         }));
@@ -209,8 +220,6 @@ namespace ReviveHRSystem.Web
             builder.Services.AddScoped<IScheduleSelfService, ScheduleSelfService>();
             builder.Services.AddScoped<IEmployeeRequestService, EmployeeRequestService>();
             builder.Services.AddScoped<IGymAttendancePolicyService, GymAttendancePolicyService>();
-            builder.Services.AddScoped<INotificationService, NotificationService>();
-            builder.Services.AddScoped<IAccountSettingsService, AccountSettingsService>();
             builder.Services.AddScoped<IEvaluationSelfService, EvaluationSelfService>();
             builder.Services.AddScoped<IEvaluationManagementService, EvaluationManagementService>();
             builder.Services.AddScoped<IEmploymentHistoryService, EmploymentHistoryService>();
@@ -229,6 +238,21 @@ namespace ReviveHRSystem.Web
             builder.Services.AddScoped<ISessionContextService, SessionContextService>();
             builder.Services.AddScoped<IStationCodeService, StationCodeService>();
             builder.Services.AddScoped<IStationSessionService, StationSessionService>();
+            builder.Services.AddScoped<IAccessControlService, AccessControlService>();
+            builder.Services.AddScoped<IGymService, GymService>();
+            builder.Services.AddScoped<IEmployeeService, EmployeeService>();
+            builder.Services.AddScoped<IRoleService, RoleService>();
+            builder.Services.AddScoped<IRequestService, RequestService>();
+            builder.Services.AddScoped<IShiftCycleService, ShiftCycleService>();
+            builder.Services.AddScoped<IRecruitmentService, RecruitmentService>();
+            builder.Services.AddScoped<INotificationService, NotificationService>();
+            builder.Services.AddScoped<IAccountSettingsService, AccountSettingsService>();
+            builder.Services.AddScoped<IReportingService, ReportingService>();
+            builder.Services.AddScoped<IPayrollService, PayrollService>();
+            builder.Services.AddScoped<IEvaluationService, EvaluationService>();
+            builder.Services.AddScoped<IEventsService, EventsService>();
+            builder.Services.AddScoped<ISeparationsService, SeparationsService>();
+            builder.Services.AddScoped<IActionRequestService, ActionRequestService>();
             builder.Services.AddFaceBiometrics(builder.Configuration);
             builder.Services.AddLocalFileStorage(builder.Configuration);
 

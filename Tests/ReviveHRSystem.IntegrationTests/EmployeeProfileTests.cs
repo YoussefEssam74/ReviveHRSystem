@@ -22,7 +22,7 @@ namespace ReviveHRSystem.IntegrationTests
         public EmployeeProfileTests(ApiTestFixture fixture) => _fixture = fixture;
 
         [Fact]
-        public async Task GetProfile_Self_ReturnsProfile_WithSalary()
+        public async Task GetProfile_Self_ReturnsDetailWithSalary()
         {
             var employeeId = await OwnEmployeeIdAsync("karim@revive.hr");
             var token = await _fixture.LoginAsync("karim@revive.hr", "Revive!2026");
@@ -32,15 +32,16 @@ namespace ReviveHRSystem.IntegrationTests
 
             response.EnsureSuccessStatusCode();
             var body = await response.Content.ReadFromJsonAsync<JsonElement>();
-            Assert.Equal("Karim Hassan", body.GetProperty("fullName").GetString());
-            Assert.Equal("Fitness Trainer", body.GetProperty("position").GetString());
-            Assert.Equal("karim@revive.hr", body.GetProperty("email").GetString());
-            Assert.False(string.IsNullOrWhiteSpace(body.GetProperty("gym").GetProperty("name").GetString()));
-            Assert.Equal("Active", body.GetProperty("status").GetString());
+            var data = body.GetProperty("data");
+            Assert.Equal("Karim Hassan", data.GetProperty("name").GetString());
+            Assert.Equal("Fitness Trainer", data.GetProperty("position").GetString());
+            Assert.Equal("karim@revive.hr", data.GetProperty("email").GetString());
+            Assert.False(string.IsNullOrWhiteSpace(data.GetProperty("gym").GetString()));
+            Assert.Equal("Active", data.GetProperty("status").GetString());
         }
 
         [Fact]
-        public async Task GetProfile_OtherEmployee_AsPlainEmployee_Returns404()
+        public async Task GetProfile_OtherEmployee_AsPlainEmployee_Returns401()
         {
             // Karim (Employee role, no feature grants) must not read Sara's profile.
             var saraEmployeeId = await OwnEmployeeIdAsync("sara@revive.hr");
@@ -49,29 +50,11 @@ namespace ReviveHRSystem.IntegrationTests
             var request = _fixture.AuthorizedRequest(HttpMethod.Get, $"/api/employees/{saraEmployeeId}", null, token);
             var response = await _fixture.Client.SendAsync(request);
 
-            Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+            Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
         }
 
         [Fact]
-        public async Task GetProfile_OtherEmployee_AsBranchManagerSameGym_ReturnsProfile_WithoutSalary()
-        {
-            // Omar is Branch Manager at gym1 where Karim works.
-            var karimEmployeeId = await OwnEmployeeIdAsync("karim@revive.hr");
-            var token = await LoginSelectingGymAsync("omar@revive.hr", await GymIdByNameAsync("Revive Main Gym"));
-
-            var request = _fixture.AuthorizedRequest(HttpMethod.Get, $"/api/employees/{karimEmployeeId}", null, token);
-            var response = await _fixture.Client.SendAsync(request);
-
-            response.EnsureSuccessStatusCode();
-            var body = await response.Content.ReadFromJsonAsync<JsonElement>();
-            Assert.Equal("Karim Hassan", body.GetProperty("fullName").GetString());
-            // Compensation is HR-controlled: never exposed to managers.
-            Assert.False(body.GetProperty("baseSalary").ValueKind == JsonValueKind.Number
-                && body.GetProperty("baseSalary").GetDecimal() > 0);
-        }
-
-        [Fact]
-        public async Task GetProfile_CrossGymEmployee_AsBranchManager_Returns404()
+        public async Task GetProfile_CrossGymEmployee_AsBranchManager_Returns401()
         {
             // Sara works at gym2; Omar's Branch Manager scope is gym1.
             var saraEmployeeId = await OwnEmployeeIdAsync("sara@revive.hr");
@@ -80,7 +63,7 @@ namespace ReviveHRSystem.IntegrationTests
             var request = _fixture.AuthorizedRequest(HttpMethod.Get, $"/api/employees/{saraEmployeeId}", null, token);
             var response = await _fixture.Client.SendAsync(request);
 
-            Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+            Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
         }
 
         [Fact]

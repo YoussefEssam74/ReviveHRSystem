@@ -13,8 +13,9 @@ namespace Presentation.Controllers
     /// attendance feature (like attendance corrections), warnings and bonuses on the
     /// employees feature; the service enforces team/gym scope on the target.
     /// </summary>
+    /// <summary>Branch-raised deduction candidate (attendance Edit → HR review).</summary>
     [Route("api/deduction-candidates")]
-    public class DeductionCandidatesController(IBranchActionsService branchActionsService) : ApiControllerBase
+    public class BranchDeductionController(IBranchActionsService branchActionsService) : ApiControllerBase
     {
         [HttpPost]
         [HasFeatureAccess(Features.Attendance, AccessLevel.Edit)]

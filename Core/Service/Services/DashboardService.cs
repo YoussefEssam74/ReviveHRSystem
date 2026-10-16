@@ -129,7 +129,7 @@ namespace Service.Services
 
             // Recent notifications.
             var notifications = await unitOfWork.GetRepository<Notification, int>()
-                .GetAllAsync(new NotificationsByUserSpec(employee.UserId), cancellationToken);
+                .GetAllAsync(new NotificationsByUserSpec(employee.UserId, unreadOnly: false, category: null, skip: 0, take: 5), cancellationToken);
 
             // Required actions: documents expiring within 30 days.
             var documents = await unitOfWork.GetRepository<EmployeeDocument, int>()

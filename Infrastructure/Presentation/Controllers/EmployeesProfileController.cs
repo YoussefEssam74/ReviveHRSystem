@@ -9,22 +9,14 @@ namespace Presentation.Controllers
     /// access to another employee additionally requires the [employees] feature level
     /// in the active gym plus matching scope (team/gym), enforced in the service layer
     /// (ADR-003 Amendment 1). Employment and compensation fields stay HR-controlled.
+    /// The profile read itself is the HR directory's GET /api/employees/{id}
+    /// ({ data } envelope); this surface owns the self-service writes.
     /// </summary>
     [Route("api/employees")]
     public class EmployeesProfileController(
         IEmployeeProfileService employeeProfileService,
         IEmployeeAccessService employeeAccessService) : ApiControllerBase
     {
-        /// <summary>Returns the employee profile the caller may access.</summary>
-        [HttpGet("{id}")]
-        public async Task<ActionResult<EmployeeProfileDto>> GetProfile(int id, CancellationToken cancellationToken)
-        {
-            var actorUserId = GetActorUserId();
-            var gymId = GetGymIdFromToken();
-            var profile = await employeeProfileService.GetProfileAsync(actorUserId, id, gymId, cancellationToken);
-            return Ok(profile);
-        }
-
         /// <summary>Updates the caller's own contact fields (phone, address).</summary>
         [HttpPut("{id}/contact")]
         public async Task<ActionResult<EmployeeProfileDto>> UpdateContact(

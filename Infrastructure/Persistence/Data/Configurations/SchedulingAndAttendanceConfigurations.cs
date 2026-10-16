@@ -121,6 +121,9 @@ namespace Presistence.Data.Configurations
                    .HasForeignKey(ar => ar.StationSessionId)
                    .OnDelete(DeleteBehavior.SetNull);
 
+            // HR attendance grid notes (S4, A1): manual-entry / correction reasons.
+            builder.Property(ar => ar.Notes).HasMaxLength(500);
+
             builder.HasIndex(ar => new { ar.EmployeeId, ar.Date }).IsUnique();
             builder.HasIndex(ar => ar.GymId);
             builder.HasIndex(ar => ar.StationSessionId);

@@ -61,3 +61,6 @@ __pycache__/
 
 # Local file storage root (avatars, employee documents) - never commit user files
 **/App_Data/storage/
+
+# Uploaded employee documents (runtime storage, never committed)
+ReviveHRSystem.Web/App_Data/

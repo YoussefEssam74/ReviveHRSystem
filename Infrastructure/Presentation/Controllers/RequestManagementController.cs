@@ -10,34 +10,14 @@ using DomainLayer.Models.UserModule.Enums;
 namespace Presentation.Controllers
 {
     /// <summary>
-    /// Management request inbox and the stage-1 (BranchManager) decision
-    /// (mock §17 Team / Requests Management). Gated by the `requests` feature;
-    /// the service resolves team scope for Team Leaders and gym scope for BMs.
-    /// HR's final decision lives in the HR portal.
+    /// Branch-manager request actions (mock §17 Team / Requests Management) that the
+    /// HR portal does not own: editing a pending request and posting a comment.
+    /// The directory inbox and both decision endpoints live in the HR portal's
+    /// RequestsController.
     /// </summary>
     [Route("api/requests")]
     public class RequestManagementController(IRequestManagementService requestManagementService) : ApiControllerBase
     {
-        /// <summary>Inbox of in-scope requests, filterable by status.</summary>
-        [HttpGet]
-        [HasFeatureAccess(Features.Requests, AccessLevel.View)]
-        public async Task<ActionResult<PaginationResult<EmployeeRequestDto>>> GetInbox(
-            [FromQuery] RequestQueryParams query, CancellationToken cancellationToken)        {
-            var requests = await requestManagementService.GetInboxAsync(
-                GetActorUserId(), GetGymIdFromToken(), query, cancellationToken);
-            return Ok(requests);
-        }
-
-        /// <summary>Stage-1 decision: Approved moves the request to HR review, Rejected closes it.</summary>
-        [HttpPost("{id}/decide")]
-        [HasFeatureAccess(Features.Requests, AccessLevel.Edit)]
-        public async Task<IActionResult> Decide(int id, RequestDecisionDto decision, CancellationToken cancellationToken)
-        {
-            await requestManagementService.DecideAsync(
-                GetActorUserId(), id, GetGymIdFromToken(), decision, cancellationToken);
-            return NoContent();
-        }
-
         /// <summary>Edits a pending request of an in-scope employee.</summary>
         [HttpPut("{id}")]
         [HasFeatureAccess(Features.Requests, AccessLevel.Edit)]

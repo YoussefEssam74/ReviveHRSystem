@@ -7,26 +7,6 @@ using DomainLayer.Models.UserModule.Enums;
 
 namespace Presentation.Controllers
 {
-    /// <summary>
-    /// Evaluation authoring for managers (mock 14.6/14.7/18.1): the forms a leader may
-    /// fill in, submitting and editing evaluations of in-scope employees, and the
-    /// team's evaluation history. Gated by the `evaluations` feature; the service
-    /// resolves team/gym scope so a Team Leader only touches his own team.
-    /// </summary>
-    [Route("api/evaluation-forms")]
-    public class EvaluationFormsController(IEvaluationManagementService evaluationManagementService) : ApiControllerBase
-    {
-        /// <summary>Active forms available in the active gym (or global ones).</summary>
-        [HttpGet]
-        [HasFeatureAccess(Features.Evaluations, AccessLevel.View)]
-        public async Task<ActionResult<IReadOnlyList<EvaluationFormDto>>> GetForms(CancellationToken cancellationToken)
-        {
-            var forms = await evaluationManagementService.GetFormsAsync(
-                GetActorUserId(), GetGymIdFromToken(), cancellationToken);
-            return Ok(forms);
-        }
-    }
-
     /// <summary>Submitting and editing evaluations of in-scope employees.</summary>
     [Route("api/employees/{employeeId}/evaluations")]
     public class EmployeeEvaluationsManagementController(

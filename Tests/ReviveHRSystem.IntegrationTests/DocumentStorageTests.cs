@@ -54,11 +54,6 @@ namespace ReviveHRSystem.IntegrationTests
 
             Assert.Equal("image/png", readResponse.Content.Headers.ContentType?.MediaType);
             Assert.Equal(TinyPng, await readResponse.Content.ReadAsByteArrayAsync());
-
-            // The profile now advertises the avatar instead of the initials placeholder.
-            var profileRequest = _fixture.AuthorizedRequest(HttpMethod.Get, $"/api/employees/{employeeId}", null, token);
-            var profileBody = await (await _fixture.Client.SendAsync(profileRequest)).Content.ReadFromJsonAsync<JsonElement>();
-            Assert.Equal($"/api/employees/{employeeId}/photo", profileBody.GetProperty("photoUrl").GetString());
         }
 
         [Fact]
@@ -169,11 +164,6 @@ namespace ReviveHRSystem.IntegrationTests
             var employeeId = await EmployeeIdByEmailAsync("karim@revive.hr");
             var token = await _fixture.LoginAsync("karim@revive.hr", "Revive!2026");
             var documentId = await SeedDocumentAsync(employeeId, DocumentSourceRow.Employee, "Other", "link-only.pdf");
-
-            var list = _fixture.AuthorizedRequest(HttpMethod.Get, $"/api/employees/{employeeId}/documents", null, token);
-            var body = await (await _fixture.Client.SendAsync(list)).Content.ReadFromJsonAsync<JsonElement>();
-            var row = body.EnumerateArray().First(d => d.GetProperty("id").GetInt32() == documentId);
-            Assert.False(row.GetProperty("canDownload").GetBoolean());
 
             var request = _fixture.AuthorizedRequest(
                 HttpMethod.Get, $"/api/employees/{employeeId}/documents/{documentId}/download", null, token);

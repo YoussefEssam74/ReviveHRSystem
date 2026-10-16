@@ -66,6 +66,10 @@ namespace ReviveHRSystem.Web.DataSeed
             // bundles, so per-gym role assignments below can reference the roles.
             await FeatureAccessSeeder.SeedCatalogAsync(db);
 
+            // The tracked permission keys (attendance.view, payroll.export, ...) the
+            // HR-portal guards check, inserted alongside the feature catalog.
+            await EnsurePermissionCatalogAsync(db);
+
             var admin = await EnsureUserAsync(db, hasher, AdminEmail, "admin", UserType.TopManagement);
             var gym1 = await EnsureGymAsync(db, Gym1Name, "Cairo");
             var gym2 = await EnsureGymAsync(db, Gym2Name, "Alexandria");
@@ -126,6 +130,100 @@ namespace ReviveHRSystem.Web.DataSeed
                 "Station codes: {Gym1}={Code1}, {Gym2}={Code2} (generated - fetch any time via GET /api/gyms/{{gymId}}/station-codes as an HR/admin user). " +
                 "Per-gym roles: admin=Super Admin, hr=HR (gym1), hrmanager=HR Manager (both gyms), karim=Employee, omar=Branch Manager (gym1) / Team Leader (gym2), sara=Employee",
                 EmployeePassword, AdminEmail, gym1.Name, gym1StationCode, gym2.Name, gym2StationCode);
+        }
+
+        // ------------------------------------------------------------------
+        // Permission catalog (S2)
+        // ------------------------------------------------------------------
+
+        /// <summary>
+        /// The 50 tracked permission keys / 13 areas from docs/product/features.md plus the
+        /// api-spec-from-ui.md additions (payroll.export, events.view, evaluations.forms.manage) —
+        /// the stated seeding source of truth. Idempotent: existing keys are left
+        /// untouched (grants are the source of truth), missing ones are inserted
+        /// with IsSystem=true. The UI mock's "42" total is stale; api.md documents
+        /// the discrepancy.
+        /// </summary>
+        private static readonly (string Area, string Key, string Description)[] PermissionCatalog =
+        [
+            ("Employees", "employees.view", "View the employee directory and profiles."),
+            ("Employees", "employees.create", "Onboard new employees."),
+            ("Employees", "employees.edit", "Edit employee profiles."),
+            ("Employees", "employees.transfer", "Transfer employees between gyms."),
+            ("Employees", "employees.position.change", "Change an employee's position or level."),
+            ("Employees", "employees.role.assign", "Assign or change an employee's system role."),
+            ("Employees", "employees.status.change", "Change employee status (leave, suspend, terminate)."),
+            ("Employees", "employees.compensation.manage", "Manage compensation records."),
+            ("Employees", "employees.contract.manage", "Manage contract terms."),
+            ("Employees", "employees.offboard", "Offboard employees."),
+            ("Employees", "employees.documents.view", "View employee documents."),
+            ("Employees", "employees.documents.manage", "Upload or manage employee documents."),
+            ("Employees", "employees.bulk_import", "Bulk import employees from CSV."),
+            ("Employees", "employees.leave_balance.manage", "Edit leave balances."),
+            ("Positions", "positions.view", "View the positions catalog."),
+            ("Positions", "positions.manage", "Create and edit positions."),
+            ("Recruitment", "recruitment.view", "View vacancies, candidates, and the pipeline."),
+            ("Recruitment", "recruitment.vacancies.manage", "Create and edit vacancies."),
+            ("Recruitment", "recruitment.candidates.manage", "Manage candidates and stages."),
+            ("Recruitment", "recruitment.hire.approve", "Approve offers and hire candidates."),
+            ("Recruitment", "recruitment.vacancy_request.create", "Submit vacancy requests."),
+            ("Recruitment", "recruitment.vacancy_request.approve", "Approve or reject vacancy requests."),
+            ("Attendance", "attendance.view", "View attendance logs."),
+            ("Attendance", "attendance.edit", "Edit attendance records."),
+            ("Attendance", "attendance.manual_entry", "Record manual attendance entries (failed Face ID)."),
+            ("Schedule", "schedule.view", "View shift templates and cycles."),
+            ("Schedule", "schedule.manage", "Manage shift templates, cycles, and assignments."),
+            ("Requests", "requests.view", "View time-off and shift-swap requests."),
+            ("Requests", "requests.approve.branch", "Stage-1 approval of requests for own branch."),
+            ("Requests", "requests.approve", "Final approval authority over requests."),
+            ("Payroll", "payroll.view", "View payroll data."),
+            ("Payroll", "payroll.edit", "Edit payroll records."),
+            ("Payroll", "payroll.approve", "Approve payroll runs."),
+            ("Payroll", "payroll.export", "Export payroll (CSV/PDF)."),
+            ("Evaluations", "evaluations.view", "View evaluations."),
+            ("Evaluations", "evaluations.manage", "Create and manage evaluation forms."),
+            ("Evaluations", "evaluations.forms.manage", "Create, edit, and dispatch hiring/evaluation forms."),
+            ("Events", "events.view", "View the HR action queue (events)."),
+            ("Reports", "reports.view", "View and export reports."),
+            ("Announcements", "announcements.view", "View announcements."),
+            ("Announcements", "announcements.manage", "Compose and broadcast announcements."),
+            ("Audit Logs", "audit.view", "View audit logs."),
+            ("Teams", "team.view", "View the Roles & Permissions admin page."),
+            ("Teams", "team.manage", "Manage roles, permissions, and user assignments."),
+            ("Teams", "attendance.view.team", "View attendance of own team members."),
+            ("Teams", "schedule.view.team", "View the schedule of own team members."),
+            ("Teams", "requests.view.team", "View requests from own team members."),
+            ("Teams", "requests.approve.team", "Approve requests from own team members."),
+            ("Teams", "evaluations.view.team", "View evaluations of own team members."),
+            ("Teams", "evaluations.manage.team", "Manage evaluations of own team members."),
+        ];
+
+        /// <summary>Inserts any catalog keys that are not yet tracked (never overwrites existing rows).</summary>
+        private static async Task EnsurePermissionCatalogAsync(ReviveHrDbContext db)
+        {
+            var existingKeys = (await db.Permissions.Select(p => p.Key).ToListAsync())
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+            var missing = PermissionCatalog
+                .Where(entry => !existingKeys.Contains(entry.Key))
+                .ToList();
+            if (missing.Count == 0)
+            {
+                return;
+            }
+
+            foreach (var (area, key, description) in missing)
+            {
+                db.Permissions.Add(new Permission
+                {
+                    Key = key,
+                    Area = area,
+                    Description = description,
+                    IsSystem = true,
+                });
+            }
+
+            await db.SaveChangesAsync();
         }
 
         private static async Task<User> EnsureUserAsync(

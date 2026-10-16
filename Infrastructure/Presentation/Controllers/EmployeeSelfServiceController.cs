@@ -17,28 +17,12 @@ namespace Presentation.Controllers
     public class EmployeeDocumentsController(
         IEmployeeDocumentService documentService) : ApiControllerBase
     {
-        [HttpGet]
-        public async Task<ActionResult<IReadOnlyList<EmployeeDocumentDto>>> GetDocuments(
-            int id, CancellationToken cancellationToken)
-        {
-            var documents = await documentService.GetDocumentsAsync(GetActorUserId(), id, GetGymIdFromToken(), cancellationToken);
-            return Ok(documents);
-        }
-
         [HttpGet("~/api/employees/{id}/required-documents")]
         public async Task<ActionResult<IReadOnlyList<RequiredDocumentDto>>> GetRequiredDocuments(
             int id, CancellationToken cancellationToken)
         {
             var documents = await documentService.GetRequiredDocumentsAsync(GetActorUserId(), id, GetGymIdFromToken(), cancellationToken);
             return Ok(documents);
-        }
-
-        [HttpPost]
-        public async Task<ActionResult<EmployeeDocumentDto>> Upload(
-            int id, UploadDocumentRequestDto request, CancellationToken cancellationToken)
-        {
-            var document = await documentService.UploadAsync(GetActorUserId(), id, request, cancellationToken);
-            return CreatedAtAction(nameof(GetDocuments), new { id }, document);
         }
 
         /// <summary>Official company documents published by HR for this employee (mock §3.3).</summary>
@@ -100,36 +84,6 @@ namespace Presentation.Controllers
         }
     }
 
-    /// <summary>Attendance and leave balance for one employee (mock §6).</summary>
-    [Route("api/employees/{id}/attendance")]
-    public class EmployeeAttendanceController(
-        IAttendanceSelfService attendanceService) : ApiControllerBase
-    {
-        [HttpGet]
-        public async Task<ActionResult<AttendanceOverviewDto>> GetAttendance(
-            int id, [FromQuery] string? month, CancellationToken cancellationToken)
-        {
-            var overview = await attendanceService.GetAttendanceAsync(
-                GetActorUserId(), id, month, GetGymIdFromToken(), cancellationToken);
-            return Ok(overview);
-        }
-    }
-
-    /// <summary>Leave balance for one employee (mock §6 leave card).</summary>
-    [Route("api/employees/{id}/leave-balance")]
-    public class EmployeeLeaveBalanceController(
-        IAttendanceSelfService attendanceService) : ApiControllerBase
-    {
-        [HttpGet]
-        public async Task<ActionResult<LeaveBalanceOverviewDto>> GetLeaveBalance(
-            int id, CancellationToken cancellationToken)
-        {
-            var overview = await attendanceService.GetLeaveBalanceAsync(
-                GetActorUserId(), id, GetGymIdFromToken(), cancellationToken);
-            return Ok(overview);
-        }
-    }
-
     /// <summary>Published schedule for one employee (mock §7; published cycles only).</summary>
     [Route("api/employees/{id}/schedule")]
     public class EmployeeScheduleController(
@@ -150,15 +104,6 @@ namespace Presentation.Controllers
     public class EmployeeRequestsController(
         IEmployeeRequestService requestService) : ApiControllerBase
     {
-        [HttpGet]
-        public async Task<ActionResult<IReadOnlyList<EmployeeRequestDto>>> GetRequests(
-            int id, [FromQuery] string? status, CancellationToken cancellationToken)
-        {
-            var requests = await requestService.GetRequestsAsync(
-                GetActorUserId(), id, status, GetGymIdFromToken(), cancellationToken);
-            return Ok(requests);
-        }
-
         /// <summary>
         /// Submits a request. Multipart because a file can ride with it — the sick-leave
         /// medical certificate must be sent with the request, so it belongs to the same
@@ -203,14 +148,6 @@ namespace Presentation.Controllers
     public class EmployeeRequestDetailController(
         IEmployeeRequestService requestService) : ApiControllerBase
     {
-        [HttpGet("~/api/requests/{id}")]
-        public async Task<ActionResult<EmployeeRequestDto>> GetRequest(
-            int id, CancellationToken cancellationToken)
-        {
-            var request = await requestService.GetRequestAsync(GetActorUserId(), id, GetGymIdFromToken(), cancellationToken);
-            return Ok(request);
-        }
-
         /// <summary>
         /// Streams the file riding with a request (the sick-leave medical certificate).
         /// The requester gets his own file; anyone else needs employee-scoped access.

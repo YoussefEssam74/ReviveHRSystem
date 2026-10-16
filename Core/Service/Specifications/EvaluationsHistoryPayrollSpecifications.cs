@@ -36,16 +36,6 @@ namespace Service.Specifications
         }
     }
 
-    /// <summary>One evaluation form with its questions.</summary>
-    public class EvaluationFormByIdSpec : BaseSpecification<EvaluationForm, int>
-    {
-        public EvaluationFormByIdSpec(int formId)
-        {
-            Criteria = f => f.Id == formId;
-            AddInclude(f => f.Questions);
-        }
-    }
-
     /// <summary>Answers of one evaluation response, each with its question.</summary>
     public class EvaluationAnswersByResponseSpec : BaseSpecification<EvaluationAnswer, int>
     {
@@ -126,17 +116,6 @@ namespace Service.Specifications
         {
             Criteria = p => p.GymId == gymId && p.Status != PayrollPeriodStatus.Open;
             OrderByDescending = p => p.EndDate;
-        }
-    }
-
-    /// <summary>Payroll entries of one employee across the given periods.</summary>
-    public class PayrollEntriesByEmployeeSpec : BaseSpecification<PayrollEntry, int>
-    {
-        public PayrollEntriesByEmployeeSpec(int employeeId, IReadOnlyCollection<int> periodIds)
-        {
-            Criteria = e => e.EmployeeId == employeeId && periodIds.Contains(e.PayrollPeriodId);
-            AddInclude(e => e.PayrollPeriod);
-            AddInclude(e => e.LineItems);
         }
     }
 

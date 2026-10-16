@@ -20,7 +20,11 @@ namespace Presentation.Controllers
     /// </summary>
     [Route("api/attendance")]
     [Authorize]
-    public class AttendanceController(IAttendanceService _attendanceService, IFaceBiometricService _faceBiometricService) : ApiControllerBase
+    public class AttendanceController(
+        IAttendanceService _attendanceService,
+        IAttendanceManagementService _attendanceManagement,
+        IFaceBiometricService _faceBiometricService,
+        IPayrollService _payroll) : ApiControllerBase
     {
         #region Record Event
 
@@ -107,21 +111,100 @@ namespace Presentation.Controllers
 
         #region Record Manual
 
-        /// <summary>Manual check-in/out fallback (Face ID failure) â€” the reason is audited.</summary>
+        /// <summary>
+        /// Manual attendance, two shapes on one route. The HR-portal day-write form
+        /// (IsHrForm) is user-token authenticated and guarded by the
+        /// attendance.manual_entry permission — it upserts the (employee, day) record
+        /// and returns the composed grid row. The station punch form (IN/OUT/AUTO)
+        /// keeps its kiosk-session authentication and audit trail, unchanged.
+        /// </summary>
         /// <response code="201">Manual attendance event recorded and audited.</response>
         /// <response code="401">Missing/expired station session, or no gym-bound credential.</response>
+        /// <response code="403">HR form without attendance.manual_entry on the employee's gym.</response>
         [HttpPost("manual")]
         [EnableRateLimiting("station-attendance")]
         [ProducesResponseType(typeof(Shared.DataTransferObject.Attendance.AttendanceResponse), StatusCodes.Status201Created)]
-        public async Task<ActionResult<Shared.DataTransferObject.Attendance.AttendanceResponse>> RecordManual([FromBody] Shared.DataTransferObject.Attendance.ManualAttendanceRequest request, CancellationToken cancellationToken)
+        [ProducesResponseType(typeof(HrAttendanceRecordResponse), StatusCodes.Status201Created)]
+        public async Task<IActionResult> RecordManual([FromBody] Shared.DataTransferObject.Attendance.ManualAttendanceRequest request, CancellationToken cancellationToken)
         {
-            var response = await _attendanceService.RecordManualEntryAsync(
+            if (request.IsHrForm)
+            {
+                var response = await _attendanceManagement.RecordManualEntryAsync(
+                    GetActorUserId(), request.ToHrRequest(), cancellationToken);
+                return StatusCode(StatusCodes.Status201Created, response);
+            }
+
+            var stationResponse = await _attendanceService.RecordManualEntryAsync(
                 request,
                 GetGymIdFromToken(),
                 GetStationSessionId(),
                 HttpContext.Connection.RemoteIpAddress?.ToString(),
                 cancellationToken);
-            return StatusCode(StatusCodes.Status201Created, response);
+            return StatusCode(StatusCodes.Status201Created, stationResponse);
+        }
+
+        #endregion
+
+        #region HR Directory Grid
+
+        /// <summary>
+        /// The HR attendance directory grid (A1): one row per (employee, day) for the
+        /// requested range, composing stored punches with shift assignments, approved
+        /// Day Off requests and employment status — exactly what the mock UI generates
+        /// client-side. Gym-scoped by the caller's access; requires attendance.view.
+        /// </summary>
+        /// <response code="200">Composed attendance rows for the range.</response>
+        /// <response code="401">Missing/expired token.</response>
+        /// <response code="403">No attendance.view on any of the requested gyms.</response>
+        [HttpGet]
+        [ProducesResponseType(typeof(AttendanceListResponse), StatusCodes.Status200OK)]
+        public async Task<ActionResult<AttendanceListResponse>> GetAttendance([FromQuery] AttendanceListQuery query, CancellationToken cancellationToken)
+        {
+            var response = await _attendanceManagement.GetAttendanceAsync(GetActorUserId(), query, cancellationToken);
+            return Ok(response);
+        }
+
+        #endregion
+
+        #region Punch audit (payroll settlement refs)
+
+        /// <summary>
+        /// <summary>
+        /// GET /api/attendance/{id} — punch audit for a referenced record (payroll
+        /// settlement sheet, §5.5). The id is an attendance ref ("ATT-123") or a bare
+        /// record id; requires payroll.view or attendance.view and the record's gym.
+        /// </summary>
+        /// </summary>
+        [HttpGet("{id}")]
+        [ProducesResponseType(typeof(Shared.DataTransferObject.Payroll.AttendanceRefResponse), StatusCodes.Status200OK)]
+        public async Task<ActionResult<Shared.DataTransferObject.Payroll.AttendanceRefResponse>> GetAttendanceRef(string id, CancellationToken cancellationToken)
+        {
+            var response = await _payroll.GetAttendanceRefAsync(GetActorUserId(), id, cancellationToken);
+            return Ok(response);
+        }
+
+        #endregion
+
+        #region Correct Record
+
+        /// <summary>
+        /// Corrects one attendance record with a full audit trail (A4): the previous
+        /// punch/status is preserved on an AttendanceCorrection row (alongside the
+        /// editing user), and the record takes the new values. Requires
+        /// attendance.edit on the record's gym; a reason of at least 3 characters is
+        /// mandatory. Returns the composed grid row for the corrected record.
+        /// </summary>
+        /// <response code="200">The corrected record.</response>
+        /// <response code="400">Missing reason or invalid punch format.</response>
+        /// <response code="401">Missing/expired token.</response>
+        /// <response code="403">No attendance.edit on the record's gym.</response>
+        /// <response code="404">Unknown attendance record.</response>
+        [HttpPut("{id:int}/correct")]
+        [ProducesResponseType(typeof(HrAttendanceRecordResponse), StatusCodes.Status200OK)]
+        public async Task<ActionResult<HrAttendanceRecordResponse>> CorrectRecord(int id, [FromBody] AttendanceCorrectionRequest request, CancellationToken cancellationToken)
+        {
+            var response = await _attendanceManagement.CorrectRecordAsync(GetActorUserId(), id, request, cancellationToken);
+            return Ok(response);
         }
 
         #endregion

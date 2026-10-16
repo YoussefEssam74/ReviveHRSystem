@@ -12,32 +12,13 @@ namespace Presentation.Controllers
     /// Gated by the `schedule` feature (View to read, Edit to manage); team-scoped
     /// leaders act on their team's members inside the gym's cycles, Branch Managers
     /// on the whole roster. Publishing makes the cycle visible to employees.
+    /// The gym-level list/create verbs live in the HR schedule controllers
+    /// (GymShiftCyclesController / ShiftTemplatesController); this surface owns the
+    /// per-cycle and per-template operations.
     /// </summary>
     [Route("api/gyms/{gymId}/shift-cycles")]
-    public class ShiftCyclesController(IShiftManagementService shiftManagementService) : ApiControllerBase
+    public class ShiftCycleManagementController(IShiftManagementService shiftManagementService) : ApiControllerBase
     {
-        [HttpGet]
-        [HasFeatureAccess(Features.Schedule, AccessLevel.View)]
-        public async Task<ActionResult<IReadOnlyList<ShiftCycleDto>>> GetCycles(
-            int gymId, [FromQuery] string? month, CancellationToken cancellationToken)
-        {
-            EnsureGymScope(gymId);
-            var cycles = await shiftManagementService.GetCyclesAsync(
-                GetActorUserId(), gymId, month, cancellationToken);
-            return Ok(cycles);
-        }
-
-        [HttpPost]
-        [HasFeatureAccess(Features.Schedule, AccessLevel.Edit)]
-        public async Task<ActionResult<ShiftCycleDto>> Create(
-            int gymId, CreateShiftCycleDto request, CancellationToken cancellationToken)
-        {
-            EnsureGymScope(gymId);
-            var created = await shiftManagementService.CreateCycleAsync(
-                GetActorUserId(), gymId, request, cancellationToken);
-            return Created($"/api/gyms/{gymId}/shift-cycles/{created.Id}", created);
-        }
-
         [HttpGet("~/api/gyms/{gymId}/shift-cycles/{cycleId}")]
         [HasFeatureAccess(Features.Schedule, AccessLevel.View)]
         public async Task<ActionResult<ShiftCycleDetailDto>> GetCycle(
@@ -81,19 +62,8 @@ namespace Presentation.Controllers
 
     /// <summary>Reusable shift templates of a gym (mock §16).</summary>
     [Route("api/gyms/{gymId}/shift-templates")]
-    public class ShiftTemplatesController(IShiftManagementService shiftManagementService) : ApiControllerBase
+    public class ShiftTemplateManagementController(IShiftManagementService shiftManagementService) : ApiControllerBase
     {
-        [HttpGet]
-        [HasFeatureAccess(Features.Schedule, AccessLevel.View)]
-        public async Task<ActionResult<IReadOnlyList<ShiftTemplateDto>>> GetTemplates(
-            int gymId, CancellationToken cancellationToken)
-        {
-            EnsureGymScope(gymId);
-            var templates = await shiftManagementService.GetTemplatesAsync(
-                GetActorUserId(), gymId, cancellationToken);
-            return Ok(templates);
-        }
-
         [HttpPost]
         [HasFeatureAccess(Features.Schedule, AccessLevel.Edit)]
         public async Task<ActionResult<ShiftTemplateDto>> Create(

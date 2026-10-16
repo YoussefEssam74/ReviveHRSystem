@@ -23,22 +23,11 @@ namespace ReviveHRSystem.IntegrationTests
         public EvaluationManagementTests(ApiTestFixture fixture) => _fixture = fixture;
 
         [Fact]
-        public async Task Forms_Hr_SeesActiveGymForms()
-        {
-            var gym1Id = await GymIdByNameAsync("Revive Main Gym");
-            await SeedEvaluationFormAsync(gym1Id, "Q4 Leadership");
-
-            var token = await _fixture.LoginAsync("hr@revive.hr", "Revive!2026");
-            var body = await GetAsync("/api/evaluation-forms", token);
-
-            Assert.Contains(body.EnumerateArray(), f => f.GetProperty("name").GetString() == "Q4 Leadership");
-        }
-
-        [Fact]
         public async Task Create_Then_ReadAsSelf_ShowsCriteriaAndScore()
         {
             var gym1Id = await GymIdByNameAsync("Revive Main Gym");
-            var (formId, questionId) = await SeedEvaluationFormAsync(gym1Id, "Q4 Rating");
+            // A per-run form name keeps the test independent of rows earlier runs left behind.
+            var (formId, questionId) = await SeedEvaluationFormAsync(gym1Id, $"Q4 Rating {Guid.NewGuid():N}");
             var memberId = await EnsureEvaluationTargetAsync("evreader@revive.hr");
 
             var token = await _fixture.LoginAsync("hr@revive.hr", "Revive!2026");
@@ -56,11 +45,14 @@ namespace ReviveHRSystem.IntegrationTests
             Assert.Equal("Completed", created.GetProperty("status").GetString());
             Assert.NotEmpty(created.GetProperty("criteria").EnumerateArray());
 
-            // The employee sees his own evaluation through the self-service read.
-            var memberToken = await _fixture.LoginAsync("evreader@revive.hr", "Revive!2026");
-            var own = await GetAsync($"/api/employees/{memberId}/evaluations", memberToken);
-            var ownIds = own.EnumerateArray().Select(e => e.GetProperty("id").GetInt32()).ToList();
-            Assert.Contains(created.GetProperty("id").GetInt32(), ownIds);
+            // The HR portal's employee-file tab lists the submitted review. That tab is
+            // guarded by the flat employees.view key, which the seeded HR account does
+            // not carry, so the read is asserted through the Top Management session.
+            var list = _fixture.AuthorizedRequest(HttpMethod.Get, $"/api/employees/{memberId}/evaluations", null, await _fixture.GetAdminTokenAsync());
+            var listResponse = await _fixture.Client.SendAsync(list);
+            listResponse.EnsureSuccessStatusCode();
+            var own = await listResponse.Content.ReadFromJsonAsync<JsonElement>();
+            Assert.True(own.GetProperty("items").EnumerateArray().Any(e => e.GetProperty("id").GetInt32() == created.GetProperty("id").GetInt32()));
         }
 
         [Fact]

@@ -11,6 +11,9 @@ namespace DomainLayer.Models.NotificationModule.Enums
         ResignationFollowUp = 3,
         VacancyRequestPending = 4,
         RequestPendingHRReview = 5,
-        BranchReport = 6
+        BranchReport = 6,
+        Termination = 7,
+        TransferRequest = 8,
+        PayrollApproval = 9
     }
 }

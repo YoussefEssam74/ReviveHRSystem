@@ -21,7 +21,6 @@ namespace Service.Services
     /// </summary>
     public class TeamOverviewService(
         IUnitOfWork unitOfWork,
-        ITeamScopeService teamScopeService,
         IMapper mapper) : ITeamOverviewService
     {
         public async Task<IReadOnlyList<TeamDto>> GetMyTeamsAsync(

@@ -1,47 +1,9 @@
 using Microsoft.AspNetCore.Mvc;
 using ServiceAbstraction.Services;
-using Shared;
 using Shared.DataTransferObject.EmployeeProfile;
-using Shared.DataTransferObject.QueryParams;
 
 namespace Presentation.Controllers
 {
-    /// <summary>Notifications inbox for the signed-in user (mock §11).</summary>
-    [Route("api/notifications")]
-    public class NotificationsController(INotificationService notificationService) : ApiControllerBase
-    {
-        [HttpGet]
-        public async Task<ActionResult<PaginationResult<NotificationDto>>> GetNotifications(
-            [FromQuery] NotificationQueryParams query, CancellationToken cancellationToken)
-        {
-            var notifications = await notificationService.GetNotificationsAsync(
-                GetActorUserId(), GetGymIdFromToken(), query, cancellationToken);
-            return Ok(notifications);
-        }
-
-        [HttpGet("unread-count")]
-        public async Task<ActionResult<object>> GetUnreadCount(CancellationToken cancellationToken)
-        {
-            var count = await notificationService.GetUnreadCountAsync(
-                GetActorUserId(), GetGymIdFromToken(), cancellationToken);
-            return Ok(new { count });
-        }
-
-        [HttpPut("{id}/read")]
-        public async Task<IActionResult> MarkRead(int id, CancellationToken cancellationToken)
-        {
-            await notificationService.MarkReadAsync(GetActorUserId(), id, cancellationToken);
-            return NoContent();
-        }
-
-        [HttpPut("read-all")]
-        public async Task<IActionResult> MarkAllRead(CancellationToken cancellationToken)
-        {
-            await notificationService.MarkAllReadAsync(GetActorUserId(), cancellationToken);
-            return NoContent();
-        }
-    }
-
     /// <summary>Account settings for the signed-in user (mock §12).</summary>
     [Route("api/me/settings")]
     public class AccountSettingsController(IAccountSettingsService settingsService) : ApiControllerBase

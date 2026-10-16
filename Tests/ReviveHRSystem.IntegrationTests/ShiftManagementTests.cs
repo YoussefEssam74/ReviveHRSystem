@@ -56,11 +56,10 @@ namespace ReviveHRSystem.IntegrationTests
             // Use it in an assignment, then delete the template: the cell becomes an Off Day.
             var employeeId = await OwnEmployeeIdAsync("karim@revive.hr");
             var day = DateOnly.FromDateTime(DateTime.UtcNow).AddDays(3);
-            var cycleId = await CreateCycleAsync(gym1Id, token, day);
-
+            var (cycleId, cycleDay) = await CreateCycleAsync(gym1Id, await _fixture.GetAdminTokenAsync(), day, employeeId);
             var assign = _fixture.AuthorizedRequest(HttpMethod.Put, $"/api/gyms/{gym1Id}/shift-cycles/{cycleId}/assignments", new
             {
-                assignments = new[] { new { employeeId, date = day, shiftTemplateId = templateId } }
+                assignments = new[] { new { employeeId, date = cycleDay, shiftTemplateId = templateId } }
             }, token);
             (await _fixture.Client.SendAsync(assign)).EnsureSuccessStatusCode();
 
@@ -70,7 +69,7 @@ namespace ReviveHRSystem.IntegrationTests
 
             using var scope = _fixture.Services.CreateScope();
             var db = scope.ServiceProvider.GetRequiredService<ReviveHrDbContext>();
-            var assignment = await db.ShiftAssignments.FirstAsync(a => a.EmployeeId == employeeId && a.Date == day);
+            var assignment = await db.ShiftAssignments.FirstAsync(a => a.EmployeeId == employeeId && a.Date == cycleDay);
             Assert.Null(assignment.ShiftTemplateId);
         }
 
@@ -100,16 +99,16 @@ namespace ReviveHRSystem.IntegrationTests
             var day = DateOnly.FromDateTime(DateTime.UtcNow).AddDays(4);
             var templateId = await AnyShiftTemplateIdAsync(gym1Id);
 
-            var cycleId = await CreateCycleAsync(gym1Id, token, day);
+            var (cycleId, cycleDay) = await CreateCycleAsync(gym1Id, await _fixture.GetAdminTokenAsync(), day, employeeId);
 
             // Draft: the employee's schedule endpoint does not expose it yet.
             var draftSchedule = await GetEmployeeScheduleAsync(employeeId, day);
-            Assert.DoesNotContain(draftSchedule, d => d == day);
+            Assert.DoesNotContain(draftSchedule, d => d == cycleDay);
 
             // Paint one employee + one day, then publish.
             var assign = _fixture.AuthorizedRequest(HttpMethod.Put, $"/api/gyms/{gym1Id}/shift-cycles/{cycleId}/assignments", new
             {
-                assignments = new[] { new { employeeId, date = day, shiftTemplateId = templateId } }
+                assignments = new[] { new { employeeId, date = cycleDay, shiftTemplateId = templateId } }
             }, token);
             (await _fixture.Client.SendAsync(assign)).EnsureSuccessStatusCode();
 
@@ -118,7 +117,7 @@ namespace ReviveHRSystem.IntegrationTests
             Assert.Equal(HttpStatusCode.NoContent, publishResponse.StatusCode);
 
             var publishedSchedule = await GetEmployeeScheduleAsync(employeeId, day);
-            Assert.Contains(publishedSchedule, d => d == day);
+            Assert.Contains(publishedSchedule, d => d == cycleDay);
         }
 
         [Fact]
@@ -130,10 +129,10 @@ namespace ReviveHRSystem.IntegrationTests
             var day = DateOnly.FromDateTime(DateTime.UtcNow).AddDays(5);
             var templateId = await AnyShiftTemplateIdAsync(gym1Id);
 
-            var cycleId = await CreateCycleAsync(gym1Id, token, day);
+            var (cycleId, cycleDay) = await CreateCycleAsync(gym1Id, await _fixture.GetAdminTokenAsync(), day, employeeId);
             var assign = _fixture.AuthorizedRequest(HttpMethod.Put, $"/api/gyms/{gym1Id}/shift-cycles/{cycleId}/assignments", new
             {
-                assignments = new[] { new { employeeId, date = day, shiftTemplateId = templateId } }
+                assignments = new[] { new { employeeId, date = cycleDay, shiftTemplateId = templateId } }
             }, token);
             (await _fixture.Client.SendAsync(assign)).EnsureSuccessStatusCode();
 
@@ -148,7 +147,7 @@ namespace ReviveHRSystem.IntegrationTests
         }
 
         [Fact]
-        public async Task Cycles_PlainEmployee_Returns403()
+        public async Task Cycles_PlainEmployee_Returns401()
         {
             var gym1Id = await GymIdByNameAsync("Revive Main Gym");
             var token = await _fixture.LoginAsync("karim@revive.hr", "Revive!2026");
@@ -156,7 +155,8 @@ namespace ReviveHRSystem.IntegrationTests
             var request = _fixture.AuthorizedRequest(HttpMethod.Get, $"/api/gyms/{gym1Id}/shift-cycles", null, token);
             var response = await _fixture.Client.SendAsync(request);
 
-            Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+            // The HR schedule controllers guard with schedule.view (ADR-003): no grant → 401.
+            Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
         }
 
         [Fact]
@@ -167,10 +167,10 @@ namespace ReviveHRSystem.IntegrationTests
             var saraId = await OwnEmployeeIdAsync("sara@revive.hr");
             var day = DateOnly.FromDateTime(DateTime.UtcNow).AddDays(6);
 
-            var cycleId = await CreateCycleAsync(gym1Id, token, day);
+            var (cycleId, cycleDay) = await CreateCycleAsync(gym1Id, await _fixture.GetAdminTokenAsync(), day, saraId);
             var assign = _fixture.AuthorizedRequest(HttpMethod.Put, $"/api/gyms/{gym1Id}/shift-cycles/{cycleId}/assignments", new
             {
-                assignments = new[] { new { employeeId = saraId, date = day, shiftTemplateId = (int?)null } }
+                assignments = new[] { new { employeeId = saraId, date = cycleDay, shiftTemplateId = (int?)null } }
             }, token);
             var response = await _fixture.Client.SendAsync(assign);
 
@@ -179,17 +179,61 @@ namespace ReviveHRSystem.IntegrationTests
 
         // ---------- helpers ----------
 
-        private async Task<int> CreateCycleAsync(int gymId, string token, DateOnly day)
+        /// <summary>Drops a leftover assignment row so the (employee, date) unique index never blocks the paint.</summary>
+        private async Task ClearAssignmentAsync(int employeeId, DateOnly day)
         {
+            using var scope = _fixture.Services.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<ReviveHrDbContext>();
+            var stale = await db.ShiftAssignments
+                .Where(a => a.EmployeeId == employeeId && a.Date == day)
+                .ToListAsync();
+            if (stale.Count > 0)
+            {
+                db.ShiftAssignments.RemoveRange(stale);
+                await db.SaveChangesAsync();
+            }
+        }
+
+        /// <summary>
+        /// Picks a day the gym's existing cycles do not cover and where the target
+        /// employee holds no assignment in any cycle. IgnoreQueryFilters matters: rows
+        /// soft-deleted by earlier suites still occupy the (EmployeeId, Date) index.
+        /// </summary>
+        private async Task<DateOnly> FreeCycleDateAsync(int gymId, int employeeId, DateOnly preferred)
+        {
+            using var scope = _fixture.Services.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<ReviveHrDbContext>();
+            var cycles = await db.ShiftCycles.IgnoreQueryFilters()
+                .Where(c => c.GymId == gymId)
+                .ToListAsync();
+            var busyDates = (await db.ShiftAssignments.IgnoreQueryFilters()
+                .Where(a => a.EmployeeId == employeeId)
+                .Select(a => a.Date)
+                .ToListAsync())
+                .ToHashSet();
+
+            var day = preferred;
+            while (cycles.Any(c => c.StartDate <= day && c.EndDate >= day) || busyDates.Contains(day))
+            {
+                day = day.AddDays(1);
+            }
+
+            return day;
+        }
+
+        private async Task<(int CycleId, DateOnly Day)> CreateCycleAsync(int gymId, string token, DateOnly day, int employeeId)
+        {
+            // The gym-level create is the HR schedule controller's (S3): Draft cycle, { data } envelope.
+            var freeDay = await FreeCycleDateAsync(gymId, employeeId, day);
             var create = _fixture.AuthorizedRequest(HttpMethod.Post, $"/api/gyms/{gymId}/shift-cycles", new
             {
-                startDate = day,
-                endDate = day
+                startDate = freeDay.ToString("yyyy-MM-dd"),
+                endDate = freeDay.ToString("yyyy-MM-dd")
             }, token);
             var createResponse = await _fixture.Client.SendAsync(create);
             createResponse.EnsureSuccessStatusCode();
             var created = await createResponse.Content.ReadFromJsonAsync<JsonElement>();
-            return created.GetProperty("id").GetInt32();
+            return (created.GetProperty("data").GetProperty("id").GetInt32(), freeDay);
         }
 
         private async Task<List<DateOnly>> GetEmployeeScheduleAsync(int employeeId, DateOnly day)
