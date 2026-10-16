@@ -135,7 +135,7 @@ Role definition: User Type = Employee, Role = Team Leader. The Team Leader keeps
 
 ## Team Leader Pages
 
-(The Team Leader sees the same management pages as the Branch Manager — Employees, Attendance Management, Requests, Schedule, Shift Management, Recruitment, Employee Leaving, Actions — with every page showing team data only.)
+(The Team Leader sees the same management pages as the Branch Manager — Employees, Attendance Management, Requests, Schedule, Recruitment, Employee Leaving, Actions — with every page showing team data only.)
 
 ## My Team
 
@@ -200,9 +200,9 @@ Branch attendance operations. Shows team/branch attendance, late check-ins, miss
 
 Central branch request workflow. Lists employee requests, filters by status/type/date, opens request details and supports permitted review actions such as approve, reject or comment.
 
-## Shift Management
+## Shift Management (merged into Schedule)
 
-Manages the branch's dynamic employee shifts/schedules when authorized. Supports the configured scheduling model without hard-coding shift names, times or cycle lengths.
+Shift templates are created directly from the Schedule (Branch Schedule) page through its "New Template" action — name, start/end times and color — and appear in the schedule's paint palette and legend. The schedule page is the single entry point: assigning, editing and publishing shifts plus template management all live there, without hard-coding shift names, times or cycle lengths.
 
 ## Recruitment
 

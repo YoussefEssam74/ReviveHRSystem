@@ -250,34 +250,62 @@ function branchQueueRehydratePayroll() {
 branchQueueRehydratePayroll();
 
 // ---- Recruitment (vacancy) bridge → HR -------------------------------------
-// Pulls vacancy requests created in the Branch Manager portal into
-// MOCK.vacancyRequests so they appear in the recruitment tab, the dashboard
-// "Vacancies" actions and the nav badge. Idempotent: existing ids are skipped.
+// Pulls branch vacancy requests into MOCK.vacancyRequests and keeps the fields
+// the branch owns in sync (shift, expected salary, the 2nd-interview record).
+// Idempotent: new ids are created, existing ids are field-merged.
+// Returns { created, updated, verdicts } — verdicts are 2nd-interview
+// Accept/Reject results the BM just recorded.
 function vacancyBridgeImportHr() {
-  if (typeof VacancyBridge === 'undefined') return [];
-  const created = [];
+  const result = { created: [], updated: [], verdicts: [] };
+  if (typeof VacancyBridge === 'undefined') return result;
   VacancyBridge.read().forEach(e => {
-    if ((MOCK.vacancyRequests || []).some(v => v.id === e.id)) return;
-    const decided = e.status === 'Approved' || e.status === 'Rejected';
-    const vr = {
-      id: e.id,
-      position: e.position || 'Open Role',
-      gym: e.gym || 'Nasr City',
-      urgency: e.urgency || 'Medium',
-      status: decided ? e.status : 'Pending',
-      submittedBy: e.requestedBy || 'Branch Manager',
-      submittedDate: e.date || '2026-09-06',
-      reason: e.reason || '',
-      headcount: Number(e.count) || 1,
-      department: e.department || '',
-      source: 'branch',
-      decidedBy: decided ? (e.decidedBy || 'HR') : null
+    const existing = (MOCK.vacancyRequests || []).find(v => v.id === e.id);
+    if (!existing) {
+      const decided = e.status === 'Approved' || e.status === 'Rejected';
+      const vr = {
+        id: e.id,
+        position: e.position || 'Open Role',
+        gym: e.gym || 'Nasr City',
+        urgency: e.urgency || 'Medium',
+        status: decided ? e.status : 'Pending',
+        submittedBy: e.requestedBy || 'Branch Manager',
+        submittedDate: e.date || '2026-09-06',
+        reason: e.reason || '',
+        headcount: Number(e.count) || 1,
+        department: e.department || '',
+        shift: e.shift || '',
+        expectedSalary: Number(e.expectedSalary) || 0,
+        source: 'branch',
+        decidedBy: decided ? (e.decidedBy || 'HR') : null,
+        decidedNote: e.decidedNote || '',
+        match: e.match || null,
+        iv2: e.iv2 || null
+      };
+      MOCK.vacancyRequests.unshift(vr);
+      result.created.push(vr);
+      vacancyRehydrateOpen(vr);
+      return;
+    }
+    // Field-merge what the branch owns into the HR copy.
+    let changed = false;
+    const same = (a, b) => JSON.stringify(a === undefined ? null : a) === JSON.stringify(b === undefined ? null : b);
+    const merge = (key, val) => {
+      if (val === undefined) return;
+      if (!same(existing[key], val)) { existing[key] = val; changed = true; }
     };
-    MOCK.vacancyRequests.unshift(vr);
-    created.push(vr);
-    vacancyRehydrateOpen(vr);
+    merge('shift', e.shift ? e.shift : undefined);
+    merge('expectedSalary', e.expectedSalary ? Number(e.expectedSalary) : undefined);
+    const prevVerdict = (existing.iv2 && existing.iv2.verdict) || null;
+    merge('iv2', e.iv2 || null);
+    if (!existing.decidedNote && e.decidedNote) merge('decidedNote', e.decidedNote);
+    const nextVerdict = (existing.iv2 && existing.iv2.verdict) || null;
+    if (!prevVerdict && nextVerdict) result.verdicts.push({ vr: existing, verdict: nextVerdict });
+    // A rejected candidate is rejected for good — freeze her on the waiting-list
+    // record so a later re-match on this request cannot put her back in the pool.
+    if (nextVerdict === 'Reject' && typeof _wlMarkRejected === 'function') _wlMarkRejected(existing);
+    if (changed) result.updated.push(existing);
   });
-  return created;
+  return result;
 }
 
 // Reload-safe: an already-approved branch request must still have its open
@@ -293,6 +321,7 @@ function vacancyRehydrateOpen(vr) {
     position: vr.position, gym: vr.gym, headcount: vr.headcount || 1,
     urgency: vr.urgency || 'Medium', status: 'Open',
     createdDate: '2026-09-09', candidates: 0, applied: 0, postedDate: '2026-09-09',
+    shift: vr.shift || 'Morning', salary: vr.expectedSalary || vr.salary || null,
     branchRef: vr.id
   });
 }
@@ -300,14 +329,19 @@ function vacancyRehydrateOpen(vr) {
 vacancyBridgeImportHr(); // silent initial import — runs before first render
 let _vqLastCount = (MOCK.vacancyRequests || []).length;
 
-// Live link: fires when the Branch Manager portal pushes a new request.
+// Live link: fires when the Branch Manager portal pushes or updates a request.
 function vacancyBridgeHrRefresh() {
-  const created = vacancyBridgeImportHr();
-  if (_vqLastCount !== null && created.length) {
-    showToast(`Branch Manager sent ${created.length} vacancy request${created.length > 1 ? 's' : ''} for review`, 'info');
+  const res = vacancyBridgeImportHr();
+  if (_vqLastCount !== null && res.created.length) {
+    showToast(`Branch Manager sent ${res.created.length} vacancy request${res.created.length > 1 ? 's' : ''} for review`, 'info');
   }
+  res.verdicts.forEach(v => {
+    const who = v.vr.match ? v.vr.match.name : 'the candidate';
+    if (v.verdict === 'Accept') showToast(`Branch Manager accepted ${who} — create the employee account`, 'success');
+    else showToast(`Branch Manager rejected ${who} at the 2nd interview — send another match`, 'info');
+  });
   _vqLastCount = (MOCK.vacancyRequests || []).length;
-  if (typeof state !== 'undefined' && ['dashboard', 'recruitment'].includes(state.currentPage)) renderAll();
+  if (res.created.length + res.updated.length && typeof state !== 'undefined' && ['dashboard', 'recruitment'].includes(state.currentPage)) renderAll();
 }
 
 // ---- Live link --------------------------------------------------------------

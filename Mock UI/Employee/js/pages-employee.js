@@ -14,8 +14,7 @@ function renderDashboard() {
   const unread=MOCK.notifications.filter(n=>!n.read).length, pending=MOCK.requests.filter(r=>r.status==='Pending').length;
   const sched=MOCK.scheduleData['c3'];
   const todayIdx=sched.findIndex(d=>d.isToday);
-  const upcoming=sched.slice(todayIdx, todayIdx+5);
-  const notifs=MOCK.notifications.slice(0,3);
+  const upcoming=sched.slice(todayIdx, todayIdx+7);
   const pendingReqs=MOCK.requests.filter(r=>r.status==='Pending');
   const isProcessing=MOCK.payroll[0]?.status==='Processing';
 
@@ -29,11 +28,11 @@ function renderDashboard() {
       </p>
     </div>
 
-    <!-- Bento Grid: 12-col, 8+4 -->
+    <!-- Bento Grid: 12-col, full width -->
     <div class="grid grid-cols-1 md:grid-cols-12 gap-2">
 
-      <!-- LEFT COLUMN: 8 cols -->
-      <div class="md:col-span-8 flex flex-col gap-2">
+      <!-- LEFT COLUMN: full width -->
+      <div class="md:col-span-12 flex flex-col gap-2">
 
         <!-- Shift & Attendance Row -->
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -42,7 +41,7 @@ function renderDashboard() {
             <p class="bento-label mb-2">TODAY'S SHIFT</p>
             <div class="flex items-start justify-between">
               <div>
-                <p class="text-base font-bold text-charcoal-900">${sh.startTime} &mdash; ${sh.endTime}</p>
+                <p class="text-base font-bold text-charcoal-900">${formatTime12(sh.startTime)} &mdash; ${formatTime12(sh.endTime)}</p>
                 <p class="text-xs text-charcoal-500 mt-0.5">${sh.shiftName} Shift</p>
               </div>
               <span class="bg-brand-50 text-brand-700 px-2 py-0.5 rounded text-[10px] font-semibold flex items-center gap-1">
@@ -56,7 +55,7 @@ function renderDashboard() {
             <p class="bento-label mb-2">TODAY'S ATTENDANCE</p>
             <div class="flex items-start justify-between">
               <div>
-                <p class="text-base font-bold text-charcoal-900">${at.checkedIn?at.checkIn+' AM':'—'}</p>
+                <p class="text-base font-bold text-charcoal-900">${at.checkedIn?formatTime12(at.checkIn):'—'}</p>
                 <p class="text-xs text-charcoal-500 mt-0.5">${at.checkedIn?'Checked In':'Not Checked In'}</p>
               </div>
               <span class="px-2 py-0.5 rounded text-[10px] font-semibold flex items-center gap-1 ${at.status==='On Time'||at.status==='Present'?'bg-blue-50 text-blue-700':at.status==='Late'?'bg-yellow-50 text-yellow-700':'bg-charcoal-50 text-charcoal-600'}">
@@ -79,11 +78,17 @@ function renderDashboard() {
             ${upcoming.map(d=>{
               const isOff=d.isOff;
               const dayLabel=d.day.toUpperCase()+' '+d.dayNum+(d.isToday?' (TODAY)':'');
+              const shiftCls = d.shiftName==='Morning' ? 'schedule-shift-morning' : d.shiftName==='Evening' ? 'schedule-shift-evening' : 'schedule-shift-off';
               return `<div class="schedule-day-card ${d.isToday?'is-today':''} ${isOff?'is-off':''}">
                 <p class="bento-label ${d.isToday?'!text-brand-600':''} mb-1">${dayLabel}</p>
                 ${isOff
                   ?`<p class="text-xs font-semibold text-charcoal-500 flex items-center gap-1 mt-2"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/></svg> OFF</p>`
-                  :`<p class="text-xs font-bold text-charcoal-900 mt-1">${d.start}</p><p class="text-xs text-charcoal-500">${d.end}</p>`
+                  :`<span class="schedule-shift-badge ${shiftCls} inline-block">${d.shiftName}</span>
+                    <div class="mt-1.5">
+                      <p class="text-[11px] font-bold text-charcoal-900 leading-tight">${formatTime12(d.start)}</p>
+                      <svg class="w-3 h-3 text-charcoal-300 my-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 14l-7 7m0 0l-7-7m7 7V3"/></svg>
+                      <p class="text-[11px] font-semibold text-charcoal-500 leading-tight">${formatTime12(d.end)}</p>
+                    </div>`
                 }
               </div>`;
             }).join('')}
@@ -116,53 +121,6 @@ function renderDashboard() {
               </div>
             </div>
           </div>
-        </div>
-      </div>
-
-      <!-- RIGHT COLUMN: 4 cols -->
-      <div class="md:col-span-4 flex flex-col gap-2">
-        <!-- Action Required -->
-        <div class="action-alert bg-red-50 border border-red-200">
-          <p class="bento-label mb-3 flex items-center gap-1.5 font-bold text-red-700">
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"/></svg>
-            ACTION REQUIRED
-          </p>
-          <div class="space-y-0">
-            <div class="action-alert-item cursor-pointer" onclick="navigateTo('events')">
-              <svg class="w-4 h-4 text-red-600 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
-              <div>
-                <p class="text-xs font-semibold text-charcoal-900">Document expiring soon</p>
-                <p class="text-[10px] text-charcoal-500">First Aid Certification expires in 14 days.</p>
-              </div>
-            </div>
-            <div class="action-alert-item cursor-pointer" onclick="navigateTo('schedule')">
-              <svg class="w-4 h-4 text-red-600 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
-              <div>
-                <p class="text-xs font-semibold text-charcoal-900">New schedule published</p>
-                <p class="text-[10px] text-charcoal-500">Please acknowledge your new shifts.</p>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Recent Notifications -->
-        <div class="bg-white rounded-xl border border-charcoal-200 p-3 flex-1">
-          <div class="flex justify-between items-center mb-3 pb-2 border-b border-charcoal-100">
-            <p class="bento-label">RECENT NOTIFICATIONS</p>
-          </div>
-          <div class="space-y-0">
-            ${notifs.map(n=>`<div class="notif-item cursor-pointer group" onclick="${n.link?`navigateTo('${n.link}')`:''}">
-              <div class="notif-icon">${catIcon(n.category)}</div>
-              <div class="flex-1 min-w-0">
-                <p class="text-xs font-semibold text-charcoal-900 group-hover:text-brand-600">${n.title}</p>
-                <p class="text-[10px] text-charcoal-500 truncate">${n.description}</p>
-                <p class="bento-label mt-1 !text-[9px]">${n.date.split(' ')[0].toUpperCase()}</p>
-              </div>
-            </div>`).join('')}
-          </div>
-          <button onclick="navigateTo('notifications')" class="w-full mt-3 text-brand-600 text-xs font-semibold py-2 hover:bg-charcoal-50 rounded-lg transition-colors">
-            View All
-          </button>
         </div>
       </div>
     </div>
@@ -222,10 +180,10 @@ function renderProfile() {
               <p class="bento-label">PROFILE DETAILS</p>
               <h3 class="text-sm font-bold text-charcoal-900 mt-0.5">Personal Info</h3>
             </div>
-            <button onclick="showToast('Profile editing is managed by HR','info')" class="text-brand-600 hover:text-brand-700 text-[10px] font-semibold flex items-center gap-1">
-              <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/></svg>
-              Edit
-            </button>
+            <span class="inline-flex items-center gap-1 text-[10px] font-semibold text-charcoal-400">
+              <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
+              Read-only
+            </span>
           </div>
           <div class="p-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
             <div><label class="bento-label text-charcoal-500">Full Name</label><p class="text-xs text-charcoal-900 mt-0.5">${u.fullName}</p></div>
@@ -251,25 +209,6 @@ function renderProfile() {
             <div><label class="bento-label text-charcoal-500">Mobile Number</label><p class="text-xs text-charcoal-900 mt-0.5">${u.phone}</p></div>
             <div><label class="bento-label text-charcoal-500">Personal Email</label><p class="text-xs text-charcoal-900 mt-0.5">${u.email}</p></div>
             <div class="sm:col-span-2"><label class="bento-label text-charcoal-500">Residential Address</label><p class="text-xs text-charcoal-900 mt-0.5">${u.address}</p></div>
-          </div>
-        </div>
-
-        <!-- Emergency Contact -->
-        <div class="bg-white rounded-xl border border-charcoal-200 overflow-hidden">
-          <div class="px-3 py-2 border-b border-charcoal-100 flex justify-between items-center bg-charcoal-50/50">
-            <div>
-              <p class="bento-label">IN CASE OF EMERGENCY</p>
-              <h3 class="text-sm font-bold text-charcoal-900 mt-0.5">Emergency Contact</h3>
-            </div>
-            <button onclick="showToast('Emergency contact updated','info')" class="text-brand-600 hover:text-brand-700 text-[10px] font-semibold flex items-center gap-1">
-              <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/></svg>
-              Edit
-            </button>
-          </div>
-          <div class="p-3 grid grid-cols-1 sm:grid-cols-3 gap-2">
-            <div><label class="bento-label text-charcoal-500">Contact Name</label><p class="text-xs text-charcoal-900 mt-0.5">${u.emergencyContact.name}</p></div>
-            <div><label class="bento-label text-charcoal-500">Relationship</label><p class="text-xs text-charcoal-900 mt-0.5">${u.emergencyContact.relationship}</p></div>
-            <div><label class="bento-label text-charcoal-500">Phone Number</label><p class="text-xs text-charcoal-900 mt-0.5">${u.emergencyContact.phone}</p></div>
           </div>
         </div>
       </div>
@@ -423,57 +362,6 @@ function openUploadModal(key) {
   openModal('Upload Document',`<form onsubmit="event.preventDefault();closeModal();showToast('Document uploaded for HR review');" class="space-y-3"><div><label class="form-label">Document Type</label><select class="form-select" required><option value="">Select...</option>${MOCK.requiredDocs.map(r=>`<option ${tgt&&tgt.key===r.key?'selected':''}>${r.label}</option>`).join('')}</select></div><div><label class="form-label">Document Name</label><input type="text" class="form-input" placeholder="e.g. Updated Certification" required></div><div><label class="form-label">File</label><div class="border-2 border-dashed border-charcoal-200 rounded-lg p-6 text-center hover:border-brand-400 cursor-pointer transition-colors"><svg class="w-6 h-6 text-charcoal-300 mx-auto mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/></svg><p class="text-xs text-charcoal-500">Click to upload or drag & drop</p><p class="text-[10px] text-charcoal-400 mt-0.5">PDF, JPG, PNG up to 10MB</p></div></div><div class="flex justify-end gap-2 pt-1"><button type="button" onclick="closeModal()" class="btn btn-sm btn-secondary">Cancel</button><button type="submit" class="btn btn-sm btn-primary">Upload</button></div></form>`,{wide:true});
 }
 
-// ==================== EVENTS ====================
-// HR-side published events replace the expiring-document notification:
-// compliance deadlines, training and company events.
-function renderEvents() {
-  const events = MOCK.events;
-  const groups = ['Compliance','Benefits','Onboarding','Training','Company Event'];
-  const iconFor = t => t==='Document Expiry'?'M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z'
-    : t==='Contract'?'M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z'
-    : t==='Benefits'?'M3 6h18M3 6v12a2 2 0 002 2h14a2 2 0 002-2V6m-9 3a3 3 0 100 6 3 3 0 000-6z'
-    : t==='Onboarding'?'M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z'
-    : t==='Training'?'M13 7h8m0 0v8m0-8l-8 8-4-4-6 6'
-    : 'M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z';
-  const colorFor = t => t==='Document Expiry'||t==='Onboarding'?'bg-orange-100 text-orange-600'
-    : t==='Contract'?'bg-blue-100 text-blue-600'
-    : t==='Benefits'?'bg-green-100 text-green-600'
-    : t==='Training'?'bg-purple-100 text-purple-600'
-    : 'bg-charcoal-100 text-charcoal-600';
-  return `<div class="space-y-1.5">
-    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-      <div><h1 class="text-lg font-bold text-charcoal-900">Events</h1><p class="text-[11px] text-charcoal-500 mt-0.5">Compliance deadlines, training and company events from HR</p></div>
-      <span class="inline-flex items-center gap-1 text-[10px] text-charcoal-400"><svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>${events.length} upcoming events</span>
-    </div>
-    ${groups.map(g=>{
-      const list = events.filter(e=>e.category===g);
-      if(!list.length) return '';
-      return `<div class="bg-white rounded-xl border border-charcoal-200 overflow-hidden">
-        <div class="px-3 py-2 border-b border-charcoal-100 flex items-center justify-between">
-          <p class="bento-label">${g.toUpperCase()}</p>
-          <span class="text-[10px] text-charcoal-400">${list.length} event${list.length>1?'s':''}</span>
-        </div>
-        <div class="divide-y divide-charcoal-50">
-          ${list.map(e=>`<div class="px-3 py-2 flex items-center gap-3">
-            <div class="w-8 h-8 rounded-lg ${colorFor(e.type)} flex items-center justify-center flex-shrink-0"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="${iconFor(e.type)}"/></svg></div>
-            <div class="flex-1 min-w-0">
-              <div class="flex items-center gap-1.5">
-                <p class="text-xs font-semibold text-charcoal-900">${e.title}</p>
-                ${e.urgent?'<span class="px-1.5 py-0.5 rounded-full bg-red-50 text-red-600 text-[9px] font-bold uppercase">Due soon</span>':''}
-              </div>
-              <p class="text-[10px] text-charcoal-500 mt-0.5">${e.detail}</p>
-            </div>
-            <div class="flex flex-col items-end gap-1.5 flex-shrink-0">
-              <span class="text-[10px] font-medium text-charcoal-600">${formatDate(e.date)}</span>
-              ${e.action?`<button onclick="${e.link?`navigateTo('${e.link}')`:`showToast('${e.action}')`}" class="btn btn-sm btn-secondary"><svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6"/></svg>${e.action}</button>`:''}
-            </div>
-          </div>`).join('')}
-        </div>
-      </div>`;
-    }).join('')}
-  </div>`;
-}
-
 // ==================== EMPLOYMENT HISTORY ====================
 function renderHistory() {
   return `<div class="space-y-2 max-w-2xl"><h1 class="text-lg font-bold text-charcoal-900">Employment History</h1>
@@ -494,9 +382,7 @@ let futureRequests = [
   { id: 'RQ-1038', type: 'Schedule Change', date: '2026-09-10', status: 'Rejected', requiresHR: true, reason: "Requesting off-day swap", submitted: 'Aug 20, 2026' },
 ];
 let futureReqSeq = 1039;
-let attType = 'Leave Request';
-let attDate = '2026-08-27';
-let attReason = '';
+let attMonth = '2026-08'; // month shown in the Attendance History list
 
 const TODAY_ISO = '2026-08-26'; // matches the mock "today" in MOCK data
 
@@ -519,22 +405,16 @@ function renderAttendance() {
   const ts = MOCK.todayShift, ta = MOCK.todayAttendance;
   const checkIn = ta.checkIn, checkOut = ta.checkOut, status = ta.status;
   const wm = attWorkMinutes(checkIn, checkOut);
+  /* Attendance History rows for the selected month — off days (no shift) are omitted */
+  const histRecords = MOCK.attendanceRecords.filter(r=>r.date.slice(0,7)===attMonth && r.status!=='Off' && r.shiftName!=='Off' && r.shift!=='OFF');
+  const histEmpty = `<div class="bg-white rounded-xl border border-charcoal-200 p-6 text-center"><p class="text-xs text-charcoal-500">No attendance records for this month</p></div>`;
   const shortcuts = [
     { id: 'attendance', label: 'Attendance', icon: 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4', active: true },
     { id: 'schedule', label: 'Schedule', icon: 'M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z', active: false },
     { id: 'requests', label: 'Requests', icon: 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01', active: false },
   ];
 
-  return `<div class="flex flex-col space-y-3 pb-2">
-    <!-- Header -->
-    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-      <div>
-        <h1 class="text-lg font-bold text-charcoal-900">Attendance &amp; Schedule</h1>
-        <p class="text-[11px] text-charcoal-500 mt-0.5">Daily attendance and assigned shift · ${s.rate}% rate</p>
-      </div>
-      <select class="form-select w-36" style="padding:0.375rem 2rem 0.375rem 0.625rem;font-size:0.8125rem"><option>August 2026</option><option>July 2026</option></select>
-    </div>
-
+  return `<div class="flex flex-col space-y-2 pb-2">
     <!-- Today's View (Read-Only) -->
     <div class="bg-white rounded-xl border border-charcoal-200 overflow-hidden">
       <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-1 border-b border-charcoal-100 px-4 py-2">
@@ -606,129 +486,97 @@ function renderAttendance() {
       </div>
     </div>
 
-    <!-- Leave Balance + Annual Leave Request -->
-    <div class="grid grid-cols-1 lg:grid-cols-3 gap-3 pt-1">
-      <!-- Leave Balance Card -->
-      <div class="bg-white rounded-xl border border-charcoal-200 p-4 lg:col-span-1">
-        <div class="flex items-center gap-2 mb-3">
-          <div class="w-6 h-6 rounded-md bg-brand-100 flex items-center justify-center"><svg class="w-3.5 h-3.5 text-brand-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg></div>
-          <p class="text-xs font-bold text-charcoal-900">Leave Balance</p>
+    <!-- Leave Balance + New Request (compact) -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-2">
+      <!-- Leave Balance -->
+      <div class="bg-white rounded-xl border border-charcoal-200 px-3 py-2">
+        <p class="bento-label mb-1.5">LEAVE BALANCE</p>
+        <div class="space-y-1.5">
+          ${(() => {
+            const lb = MOCK.leaveBalance;
+            /* Days for leave types, minutes for the early-leave / late-arrival allowances */
+            const rows = [
+              { label: 'Annual', used: lb.annualUsed, total: lb.annualTotal, color: 'bg-brand-500' },
+              { label: 'Sick', used: lb.sickUsed, total: lb.sickTotal, color: 'bg-red-400' },
+              { label: 'Personal', used: lb.personalUsed, total: lb.personalTotal, color: 'bg-blue-500' },
+              { label: 'Hours Left', used: lb.earlyLeaveUsedMin, total: lb.earlyLeaveTotalMin, time: true, color: 'bg-purple-400' },
+             
+            ];
+            const fmtTime = m => {
+              if (m < 60) return m + ' min';
+              const h = Math.round(m / 60 * 10) / 10;
+              return h + (h === 1 ? ' hr' : ' hrs');
+            };
+            return rows.map(r => {
+              const rem = Math.max(0, r.total - r.used);
+              const pct = Math.min(100, Math.round((r.used / r.total) * 100));
+              const remTxt = r.time ? fmtTime(rem) : rem;
+              const totTxt = r.time ? fmtTime(r.total) : r.total;
+              const spent = rem <= 0;
+              const low = !spent && pct >= 75;
+              const barColor = spent ? 'bg-red-500' : low ? 'bg-yellow-500' : r.color;
+              const remColor = spent ? 'text-red-600' : low ? 'text-yellow-600' : 'text-charcoal-900';
+              return `<div class="flex items-center gap-2" title="${r.label}: ${remTxt} left of ${totTxt}">
+                <span class="text-[10px] font-medium text-charcoal-600 w-16 flex-shrink-0 truncate">${r.label}</span>
+                <div class="flex-1 min-w-0">
+                  <div class="w-full h-1.5 bg-charcoal-100 rounded-full overflow-hidden">
+                    <div class="${barColor} h-full rounded-full transition-all" style="width:${pct}%"></div>
+                  </div>
+                </div>
+                <span class="text-[11px] font-bold ${remColor} whitespace-nowrap flex-shrink-0">${remTxt}<span class="text-[9px] font-medium text-charcoal-400">/${totTxt}</span></span>
+              </div>`;
+            }).join('');
+          })()}
         </div>
-        ${(() => {
-          const lb = MOCK.leaveBalance;
-          const annRem = lb.annualTotal - lb.annualUsed;
-          const sickRem = lb.sickTotal - lb.sickUsed;
-          const persRem = lb.personalTotal - lb.personalUsed;
-          const rows = [
-            { label: 'Annual Leave', total: lb.annualTotal, used: lb.annualUsed, rem: annRem, color: 'brand' },
-            { label: 'Sick Leave', total: lb.sickTotal, used: lb.sickUsed, rem: sickRem, color: 'red' },
-            { label: 'Personal Days', total: lb.personalTotal, used: lb.personalUsed, rem: persRem, color: 'blue' },
-          ];
-          return rows.map(r => {
-            const pct = Math.round((r.used / r.total) * 100);
-            const barColor = r.rem <= 0 ? 'bg-red-500' : r.rem <= 2 ? 'bg-yellow-500' : r.color === 'brand' ? 'bg-brand-500' : r.color === 'red' ? 'bg-red-400' : 'bg-blue-500';
-            return `<div class="mb-2.5 last:mb-0">
-              <div class="flex items-center justify-between mb-1">
-                <span class="text-[10px] font-medium text-charcoal-700">${r.label}</span>
-                <span class="text-[10px] font-bold ${r.rem<=0?'text-red-600':r.rem<=2?'text-yellow-600':'text-brand-600'}">${r.rem} left</span>
-              </div>
-              <div class="w-full h-1.5 bg-charcoal-100 rounded-full overflow-hidden">
-                <div class="${barColor} h-full rounded-full transition-all" style="width:${pct}%"></div>
-              </div>
-              <p class="text-[9px] text-charcoal-400 mt-0.5">${r.used} of ${r.total} used</p>
-            </div>`;
-          }).join('');
-        })()}
       </div>
 
-      <!-- Annual Leave Request Form -->
-      <div class="bg-white rounded-xl border border-charcoal-200 p-4 lg:col-span-2">
-        <div class="flex items-center gap-2 mb-3">
-          <div class="w-6 h-6 rounded-md bg-amber-100 flex items-center justify-center"><svg class="w-3.5 h-3.5 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"/></svg></div>
-          <p class="text-xs font-bold text-charcoal-900">Request Annual Leave</p>
-          ${MOCK.leaveBalance.annualTotal - MOCK.leaveBalance.annualUsed <= 0
-            ? '<span class="ml-auto text-[9px] font-semibold text-red-600 bg-red-50 px-2 py-0.5 rounded-full">No days remaining</span>'
-            : `<span class="ml-auto text-[9px] font-semibold text-brand-600 bg-brand-50 px-2 py-0.5 rounded-full">${MOCK.leaveBalance.annualTotal - MOCK.leaveBalance.annualUsed} annual days left</span>`}
+      <!-- New Request: launch any of the employee's request types -->
+      <div class="bg-white rounded-xl border border-charcoal-200 px-3 py-2 lg:col-span-2">
+        <div class="flex items-center justify-between mb-1.5">
+          <p class="bento-label">NEW REQUEST</p>
+          <button onclick="navigateTo('requests')" class="text-[10px] text-brand-600 font-semibold hover:underline">View All</button>
         </div>
-        ${MOCK.leaveBalance.annualTotal - MOCK.leaveBalance.annualUsed <= 0
-          ? `<div class="flex flex-col items-center justify-center py-6 text-center">
-              <div class="w-10 h-10 rounded-full bg-red-50 flex items-center justify-center mb-2"><svg class="w-5 h-5 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"/></svg></div>
-              <p class="text-xs font-bold text-charcoal-800 mb-1">Annual Leave Exhausted</p>
-              <p class="text-[10px] text-charcoal-500 max-w-[260px]">You've used all ${MOCK.leaveBalance.annualTotal} annual leave days this year. You can still request <strong>Sick Leave</strong> or <strong>Personal Days</strong> from the Requests page.</p>
-            </div>`
-          : `<div class="space-y-2.5">
-              <div>
-                <label class="text-[10px] font-semibold text-charcoal-600 mb-1 block">Leave Type</label>
-                <select id="att-type" class="form-select w-full text-xs" onchange="attType=this.value">
-                  <option value="">Choose type…</option>
-                  <option value="Annual Leave" ${attType==='Annual Leave'?'selected':''}>Annual Leave</option>
-                </select>
-              </div>
-              <div>
-                <label class="text-[10px] font-semibold text-charcoal-600 mb-1 block">Date</label>
-                <input id="att-date" type="date" class="form-input w-full text-xs" min="${new Date(Date.now()+86400000).toISOString().slice(0,10)}" value="${attDate}" onchange="attDate=this.value" />
-              </div>
-              <div>
-                <label class="text-[10px] font-semibold text-charcoal-600 mb-1 block">Reason</label>
-                <textarea id="att-reason" class="form-input w-full text-xs resize-none" rows="2" placeholder="Brief reason for your day off…" oninput="attReason=this.value">${attReason}</textarea>
-              </div>
-              <button onclick="submitLeaveRequest()" class="w-full btn btn-sm btn-primary justify-center text-[11px]">
-                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/></svg>
-                Submit Request
-              </button>
-              <p class="text-[9px] text-charcoal-400 text-center">Routes to Branch Manager → HR for approval</p>
-            </div>`}
+        <div class="grid grid-cols-3 gap-1.5">
+          ${MOCK.requestTypes.map(t=>`
+            <button onclick="openNewRequest('${t.id}')" class="flex items-center gap-1.5 px-2 py-1.5 rounded-lg border border-charcoal-200 text-left hover:border-brand-300 hover:bg-brand-50 transition-colors min-w-0">
+              <svg class="w-3.5 h-3.5 text-brand-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="${t.icon}"/></svg>
+              <span class="text-[10px] font-semibold text-charcoal-700 truncate">${t.label}</span>
+            </button>`).join('')}
+        </div>
       </div>
     </div>
 
     <!-- Attendance History -->
     <div class="flex items-center justify-between pt-1">
       <p class="text-xs font-bold text-charcoal-900">Attendance History</p>
-      <span class="text-[10px] text-charcoal-400">Tap a row for details</span>
+      <div class="flex items-center gap-2">
+        <span class="text-[10px] text-charcoal-400 hidden sm:block">Tap a row for details</span>
+        <select class="form-select w-32" style="padding:0.25rem 1.75rem 0.25rem 0.5rem;font-size:0.75rem" onchange="attMonth=this.value;renderAll()" title="Select month">
+          <option value="2026-08" ${attMonth==='2026-08'?'selected':''}>August 2026</option>
+          <option value="2026-07" ${attMonth==='2026-07'?'selected':''}>July 2026</option>
+        </select>
+      </div>
     </div>
 
     <!-- Desktop Table -->
     <div class="bg-white rounded-xl border border-charcoal-200 overflow-hidden hidden lg:block">
-      <div class="table-responsive">
+      ${histRecords.length ? `<div class="table-responsive">
         <table class="data-table data-table-compact">
-          <thead><tr><th>Date</th><th>Shift</th><th>Check In</th><th>Check Out</th><th>Status</th><th></th></tr></thead>
-          <tbody>${MOCK.attendanceRecords.slice(0,4).map(r=>`<tr class="cursor-pointer ${r.date===MOCK.attendanceRecords[0]?.date?'bg-brand-50/50':''}" onclick="openAttDetail('${r.date}')"><td class="text-xs font-medium">${formatDate(r.date)}</td><td class="text-xs">${r.shift}</td><td class="text-xs">${r.checkIn||'—'}</td><td class="text-xs">${r.checkOut||'—'}</td><td>${statusBadge(r.status)}</td><td><svg class="w-3.5 h-3.5 text-charcoal-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg></td></tr>`).join('')}</tbody>
+          <thead><tr><th>Date</th><th>Shift</th><th>Check In</th><th>Check Out</th><th>Status</th><th>Requests</th><th></th></tr></thead>
+          <tbody>${histRecords.map(r=>{
+            const lv = leaveOnDate(r.date);
+            return `<tr class="cursor-pointer ${r.date===histRecords[0]?.date?'bg-brand-50/50':''}" onclick="openAttDetail('${r.date}')"><td class="text-xs font-medium">${formatDate(r.date)}</td><td class="text-xs">${r.shift}</td><td class="text-xs">${r.checkIn||'—'}</td><td class="text-xs">${r.checkOut||'—'}</td><td>${lv?leaveBadge(lv):statusBadge(r.status)}</td><td>${dayRequestChips(r.date)}</td><td><svg class="w-3.5 h-3.5 text-charcoal-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg></td></tr>`;
+          }).join('')}</tbody>
         </table>
-      </div>
+      </div>` : `<div class="p-6 text-center"><p class="text-xs text-charcoal-500">No attendance records for this month</p></div>`}
     </div>
 
     <!-- Mobile Cards -->
-    <div class="space-y-2 lg:hidden">${MOCK.attendanceRecords.map(r=>`<div class="bg-white rounded-xl border border-charcoal-200 p-3 card-interactive" onclick="openAttDetail('${r.date}')"><div class="flex items-center justify-between"><div><p class="text-xs font-medium text-charcoal-900">${formatDate(r.date)}</p><p class="text-[10px] text-charcoal-500">${r.shift}</p></div>${statusBadge(r.status)}</div><div class="flex gap-4 mt-2 text-[10px] text-charcoal-500"><span class="flex items-center gap-1"><svg class="w-3 h-3 text-brand-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1"/></svg>In: ${r.checkIn||'—'}</span><span class="flex items-center gap-1"><svg class="w-3 h-3 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg>Out: ${r.checkOut||'—'}</span></div></div>`).join('')}</div>
+    <div class="space-y-2 lg:hidden">${histRecords.length ? histRecords.map(r=>{
+      const lv = leaveOnDate(r.date), chips = requestsOnDate(r.date);
+      return `<div class="bg-white rounded-xl border border-charcoal-200 p-3 card-interactive" onclick="openAttDetail('${r.date}')"><div class="flex items-center justify-between"><div><p class="text-xs font-medium text-charcoal-900">${formatDate(r.date)}</p><p class="text-[10px] text-charcoal-500">${r.shift}</p></div>${lv?leaveBadge(lv):statusBadge(r.status)}</div><div class="flex gap-4 mt-2 text-[10px] text-charcoal-500"><span class="flex items-center gap-1"><svg class="w-3 h-3 text-brand-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1"/></svg>In: ${r.checkIn||'—'}</span><span class="flex items-center gap-1"><svg class="w-3 h-3 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg>Out: ${r.checkOut||'—'}</span></div>${chips.length?`<div class="flex flex-wrap gap-1 mt-2">${chips.map(reqChip).join('')}</div>`:''}</div>`;
+    }).join('') : histEmpty}</div>
   </div>`;
-}
-function submitLeaveRequest() {
-  const lb = MOCK.leaveBalance;
-  const remaining = lb.annualTotal - lb.annualUsed;
-  if(remaining <= 0){showToast('No annual leave days remaining — you cannot submit an annual-leave request','error');return;}
-  if(!attType){showToast('Please choose a leave type','error');return;}
-  if(!attDate){showToast('Please pick a date','error');return;}
-  const tomorrow = new Date(Date.now()+86400000).toISOString().slice(0,10);
-  if(attDate < tomorrow){showToast('Please select a future date (tomorrow or later)','error');return;}
-  if(!attReason.trim()){showToast('Please add a reason for your request','error');return;}
-  /* check for date conflicts with existing pending/approved annual-leave requests */
-  const conflict = MOCK.requests.find(r=>r.requestedDate && r.type==='Annual Leave' && r.status!=='Rejected' && r.requestedDate===attDate);
-  if(conflict){showToast('You already have an Annual Leave request for this date','error');return;}
-  MOCK.requests.unshift({
-    id:'r'+(MOCK.requests.length+1),
-    type:'Annual Leave',
-    submittedDate:TODAY_ISO,
-    requestedDate:formatDate(attDate),
-    status:'Pending',
-    reason:attReason.trim(),
-    reviewer:'Pending Review',
-    reviewerComment:'',
-    timeline:[{step:'Submitted',date:new Date().toLocaleDateString('en-US',{month:'short',day:'numeric'})+', '+new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'}),done:true},{step:'Under Review',date:'Pending',done:false},{step:'Approved',date:'',done:false}],
-    scheduleContext:'Scheduled: '+MOCK.todayShift.shiftName+' ('+MOCK.todayShift.startTime+'–'+MOCK.todayShift.endTime+')',
-  });
-  lb.annualUsed++;
-  attType=''; attDate=''; attReason='';
-  renderAll();
-  showToast('Annual Leave request submitted — pending Branch Manager review');
 }
 function openAttDetail(date) {
   const r=MOCK.attendanceRecords.find(a=>a.date===date); if(!r)return;
@@ -746,6 +594,12 @@ function openAttDetail(date) {
       ${r.source?`<div class="flex justify-between items-center py-1.5 border-b border-charcoal-100 text-xs"><span class="text-charcoal-500 flex items-center gap-1.5"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>Source</span><span class="font-medium text-charcoal-900">${r.source}</span></div>`:''}
       ${r.notes?`<div class="py-1.5 text-xs"><span class="text-charcoal-500 flex items-center gap-1.5 mb-1"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z"/></svg>Notes</span><p class="text-charcoal-700 bg-charcoal-50 rounded-lg p-2.5">${r.notes}</p></div>`:''}
     </div>
+    ${(()=>{
+      const lv = leaveOnDate(r.date), others = requestsOnDate(r.date);
+      if (!lv && !others.length) return '';
+      return `<div><p class="bento-label text-charcoal-500 mb-1.5">LEAVE & REQUESTS</p>
+        <div class="flex flex-wrap gap-1.5">${lv?leaveBadge(lv):''}${others.map(x=>`<span class="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg border border-charcoal-200 bg-white text-[10px] font-semibold text-charcoal-700">${x.type}<span class="text-charcoal-300 font-normal">·</span><span class="${x.status==='Approved'?'text-brand-600':x.status==='Rejected'?'text-red-600':'text-yellow-600'}">${x.status}</span></span>`).join('')}</div></div>`;
+    })()}
     ${r.status!=='Off'?`<button onclick="closeModal();navigateTo('requests');showToast('Redirecting to request form...','info')" class="w-full btn btn-sm btn-primary justify-center"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/></svg>Request Correction</button>`:''}
   </div>`);
 }
@@ -760,12 +614,20 @@ let _selectedDay = TODAY_ISO; // ISO date of the day shown in the left detail pa
 
 const MONTH_SHIFT_PATTERN = ['Morning','Evening','Off','Morning','Evening','Morning','Off'];
 
-function parseReqDate(str) {
-  if (!str) return null;
-  const m = String(str).match(/([A-Za-z]{3})\s+(\d{1,2}),?\s*(\d{4})/);
-  if (!m) return null;
+// Every ISO date a request covers — expands ranges like "Aug 29, 2026 – Sep 1, 2026".
+function parseReqDates(str) {
   const months = {Jan:'01',Feb:'02',Mar:'03',Apr:'04',May:'05',Jun:'06',Jul:'07',Aug:'08',Sep:'09',Oct:'10',Nov:'11',Dec:'12'};
-  return `${m[3]}-${months[m[1]]}-${String(Number(m[2])).padStart(2,'0')}`;
+  const hits = [...String(str||'').matchAll(/([A-Za-z]{3})\s+(\d{1,2}),?\s*(\d{4})/g)];
+  if (!hits.length) return [];
+  const isos = hits.map(m => `${m[3]}-${months[m[1]]}-${String(Number(m[2])).padStart(2,'0')}`).sort();
+  if (isos.length === 1) return isos;
+  const pad = n => String(n).padStart(2,'0');
+  const iso = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+  const out = [];
+  const cur = new Date(`${isos[0]}T00:00:00`);
+  const end = new Date(`${isos[isos.length-1]}T00:00:00`);
+  while (cur <= end) { out.push(iso(cur)); cur.setDate(cur.getDate()+1); }
+  return out;
 }
 
 function getDayShift(dateISO) {
@@ -790,7 +652,29 @@ function getDayShift(dateISO) {
 }
 
 function getDayAttendance(dateISO) { return MOCK.attendanceRecords.find(r=>r.date===dateISO)||null; }
-function getDayRequests(dateISO) { return MOCK.requests.filter(r=>parseReqDate(r.requestedDate)===dateISO); }
+function getDayRequests(dateISO) { return MOCK.requests.filter(r=>parseReqDates(r.requestedDate).includes(dateISO)); }
+
+// Full-day leave types — when one is approved it defines the day in Attendance History.
+const LEAVE_TYPES = ['Annual Leave','Sick Leave','Paid Holiday'];
+function leaveOnDate(dateISO) {
+  return MOCK.requests.find(r => r.status==='Approved' && LEAVE_TYPES.includes(r.type) && parseReqDates(r.requestedDate).includes(dateISO)) || null;
+}
+// Other requests tied to the day (the approved leave is already shown as the status).
+function requestsOnDate(dateISO) {
+  const lv = leaveOnDate(dateISO);
+  return MOCK.requests.filter(r => parseReqDates(r.requestedDate).includes(dateISO) && (!lv || r.id !== lv.id));
+}
+function leaveBadge(r) {
+  const c = r.type==='Sick Leave' ? 'bg-red-50 text-red-700 border-red-200'
+    : r.type==='Paid Holiday' ? 'bg-purple-50 text-purple-700 border-purple-200'
+    : 'bg-brand-50 text-brand-700 border-brand-200';
+  return `<span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded border ${c} text-[9px] font-semibold whitespace-nowrap">${r.type}</span>`;
+}
+function dayRequestChips(dateISO) {
+  const list = requestsOnDate(dateISO);
+  if (!list.length) return `<span class="text-[10px] text-charcoal-300">—</span>`;
+  return `<span class="inline-flex flex-wrap gap-1">${list.map(reqChip).join('')}</span>`;
+}
 
 function buildMonthDays(ym) {
   const [y,m] = ym.split('-').map(Number);
