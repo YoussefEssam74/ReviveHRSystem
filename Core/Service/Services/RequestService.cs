@@ -25,7 +25,8 @@ namespace Service.Services
     public class RequestService(
         IUnitOfWork _unitOfWork,
         IAccessControlService _accessControl,
-        IUserAccessRepository _userAccess) : IRequestService
+        IUserAccessRepository _userAccess,
+        ITeamScopeService _teamScope) : IRequestService
     {
         private const int DefaultPageSize = 20;
         private const int MaxPageSize = 100;
@@ -91,7 +92,12 @@ namespace Service.Services
                 .GetByIdAsync(new RequestByIdSpec(requestId), cancellationToken)
                 ?? throw new NotFoundException("Request not found.");
 
-            await _accessControl.EnsurePermissionForGymAsync(actor.Id, "requests.view", request.Employee.GymId, cancellationToken);
+            // The requester can always follow his own request's progress (mock §10.4
+            // detail timeline); other readers need requests.view on the request's gym.
+            if (!await IsOwnEmployeeAsync(actor.Id, request.EmployeeId, cancellationToken))
+            {
+                await _accessControl.EnsurePermissionForGymAsync(actor.Id, "requests.view", request.Employee.GymId, cancellationToken);
+            }
 
             return new RequestDetailResponse { Data = MapItem(request) };
         }
@@ -211,6 +217,28 @@ namespace Service.Services
             if (offboarding)
             {
                 entity.Employee.Status = EmployeeStatus.NoticePeriod;
+            }
+
+            // Rejecting a Resignation whose approval parked the employee in Notice
+            // Period (and no live offboarding case exists) must release them back
+            // to Active — the standing-only path leaves no case to reset from.
+            if (decision == DecisionOutcome.Rejected
+                && entity.Type == "Resignation"
+                && entity.Employee.Status == EmployeeStatus.NoticePeriod
+                && !await HasLiveOffboardingCaseAsync(entity.EmployeeId, cancellationToken))
+            {
+                entity.Employee.Status = EmployeeStatus.Active;
+                _unitOfWork.GetRepository<Employee, int>().Update(entity.Employee);
+                await _unitOfWork.GetRepository<EmploymentHistory, int>().AddAsync(
+                    EmployeeService.NewHistory(
+                        entity.EmployeeId,
+                        DateOnly.FromDateTime(DateTime.UtcNow),
+                        EmploymentChangeType.StatusChange,
+                        EmployeeService.StatusDisplay(EmployeeStatus.NoticePeriod),
+                        EmployeeService.StatusDisplay(EmployeeStatus.Active),
+                        "Resignation rejected — employment continues.",
+                        actor.Id),
+                    cancellationToken);
             }
 
             entity.Status = decision == DecisionOutcome.Approved ? RequestStatus.Approved : RequestStatus.Rejected;
@@ -434,7 +462,14 @@ namespace Service.Services
                 .GetByIdAsync(new EmployeeByIdSpec(employeeId), cancellationToken)
                 ?? throw new NotFoundException("Employee not found.");
 
-            await _accessControl.EnsurePermissionForGymAsync(actor.Id, "requests.view", employee.GymId, cancellationToken);
+            // The employee's own requests tab is self-service — no key needed. Anyone
+            // else reads it from the employee file with requests.view on that gym,
+            // and a team-scoped Team Leader only ever sees his team members (F1).
+            if (!await IsOwnEmployeeAsync(actor.Id, employeeId, cancellationToken))
+            {
+                await _accessControl.EnsurePermissionForGymAsync(actor.Id, "requests.view", employee.GymId, cancellationToken);
+                await EnsureTeamScopeAsync(actor.Id, employee, cancellationToken);
+            }
 
             var requests = await _unitOfWork.GetRepository<EmployeeRequest, int>()
                 .GetAllAsync(new EmployeeRequestsSpec(employeeId), cancellationToken);
@@ -444,6 +479,7 @@ namespace Service.Services
                 Id = r.Id,
                 Type = r.Type,
                 RequestedDate = r.RequestDate,
+                EndDate = r.TargetEndDate is { } end && end != r.RequestDate ? end : null,
                 SubmittedDate = DateOnly.FromDateTime(r.CreatedAt),
                 Status = StatusDisplay(r.Status),
                 Reason = r.Details,
@@ -451,9 +487,44 @@ namespace Service.Services
             }).ToList();
         }
 
-        // ------------------------------------------------------------------
-        // Payment & balance helpers (R3/R9)
-        // ------------------------------------------------------------------
+        /// <summary>
+        /// True while the employee still has an offboarding case that is neither
+        /// completed nor cancelled — i.e. the standing change is still owned by the
+        /// separations module and must not be released by a rejection here.
+        /// </summary>
+        private async Task<bool> HasLiveOffboardingCaseAsync(int employeeId, CancellationToken cancellationToken)
+        {
+            var cases = await _unitOfWork.GetRepository<OffboardingCase, int>()
+                .GetAllAsync(new OffboardingCasesByEmployeesSpec([employeeId]), cancellationToken);
+            return cases.Any(c => c.Status is not ("Completed" or "Cancelled"));
+        }
+
+        /// <summary>True when the employee row belongs to the caller's own login.</summary>
+        private async Task<bool> IsOwnEmployeeAsync(int actorUserId, int employeeId, CancellationToken cancellationToken)
+        {
+            var own = await _unitOfWork.GetRepository<Employee, int>()
+                .GetByIdAsync(new EmployeeByUserIdSpec(actorUserId), cancellationToken);
+            return own is not null && own.Id == employeeId;
+        }
+
+        /// <summary>
+        /// Team-scoped Team Leaders see only the members of the team they lead in
+        /// the employee's gym (F1/F2/F3 convergence); every other role is gym-wide
+        /// already. Conceals out-of-team targets with the generic not-found.
+        /// </summary>
+        private async Task EnsureTeamScopeAsync(int actorUserId, Employee employee, CancellationToken cancellationToken)
+        {
+            if (!await _teamScope.IsTeamScopedAsync(actorUserId, employee.GymId, cancellationToken))
+            {
+                return;
+            }
+
+            var ledTeamId = await _teamScope.GetLedTeamIdAsync(actorUserId, employee.GymId, cancellationToken);
+            if (ledTeamId is null || employee.TeamId != ledTeamId.Value)
+            {
+                throw new NotFoundException("Employee not found.");
+            }
+        }
 
         /// <summary>
         /// The payment recorded on an approve: an explicit paid/unpaid wins; otherwise
@@ -595,6 +666,7 @@ namespace Service.Services
                 Type = entity.Type,
                 SubmittedDate = DateOnly.FromDateTime(entity.CreatedAt),
                 RequestedDate = entity.RequestDate,
+                EndDate = NormalizeDisplayRange(entity),
                 Status = StatusDisplay(entity.Status),
                 BmDecision = bm?.Decision.ToString(),
                 BmComment = bm?.Comment,
@@ -605,6 +677,13 @@ namespace Service.Services
                 Timeline = BuildTimeline(entity, bm, hr),
             };
         }
+
+        /// <summary>
+        /// Range end the detail drawer renders (mock §10 "Oct 20 – Oct 22"): the
+        /// entity's TargetEndDate when it actually extends past the request date.
+        /// </summary>
+        private static DateOnly? NormalizeDisplayRange(EmployeeRequest entity) =>
+            entity.TargetEndDate is { } end && end != entity.RequestDate ? end : null;
 
         /// <summary>Submitted → BM step → HR step, mirroring the mock UI's timeline chips.</summary>
         private static List<RequestTimelineStep> BuildTimeline(EmployeeRequest entity, RequestDecision? bm, RequestDecision? hr)

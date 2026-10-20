@@ -31,15 +31,18 @@ namespace Service.Services
         private readonly IUnitOfWork _unitOfWork;
         private readonly IAccessControlService _accessControl;
         private readonly IUserAccessRepository _userAccess;
+        private readonly ITeamScopeService _teamScope;
 
         public ShiftCycleService(
             IUnitOfWork unitOfWork,
             IAccessControlService accessControl,
-            IUserAccessRepository userAccess)
+            IUserAccessRepository userAccess,
+            ITeamScopeService teamScope)
         {
             _unitOfWork = unitOfWork;
             _accessControl = accessControl;
             _userAccess = userAccess;
+            _teamScope = teamScope;
         }
 
         // ------------------------------------------------------------------
@@ -55,7 +58,14 @@ namespace Service.Services
 
             var cycles = await _unitOfWork.GetRepository<ShiftCycle, int>().GetAllAsync(new ShiftCyclesByGymSpec(gymId), cancellationToken);
             return cycles
-                .Select(c => new ShiftCycleListItem { Id = c.Id, Label = LabelFor(c), Status = StatusFor(c) })
+                .Select(c => new ShiftCycleListItem
+                {
+                    Id = c.Id,
+                    Label = LabelFor(c),
+                    Status = StatusFor(c),
+                    StartDate = c.StartDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+                    EndDate = c.EndDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+                })
                 .ToList();
         }
 
@@ -81,13 +91,18 @@ namespace Service.Services
             var cycle = await LoadCycleAsync(cycleId, cancellationToken);
             await _accessControl.EnsurePermissionForGymAsync(actor.Id, "schedule.view", cycle.GymId, cancellationToken);
 
-            var employees = await LoadAssignedEmployeesAsync(cycle, cancellationToken);
+            // The grid lists the FULL assignable roster (assigned or not) so an
+            // employee is never hidden from assignment: for team leaders the
+            // members of the team they lead in this gym, otherwise the gym's
+            // non-terminated roster. Assignments overlay the pattern on top.
+            var roster = await LoadRosterEmployeesAsync(actor.Id, cycle.GymId, cancellationToken);
+            var assigned = await LoadAssignedEmployeesAsync(cycle, cancellationToken);
             var allTemplates = (await _unitOfWork.GetRepository<ShiftTemplate, int>()
                 .GetAllAsync(new AnyShiftTemplatesByGymSpec(cycle.GymId), cancellationToken)).ToList();
-            var conflicts = await ComputeConflictsAsync(cycle, allTemplates, employees, cancellationToken);
+            var conflicts = await ComputeConflictsAsync(cycle, allTemplates, assigned, cancellationToken);
 
             var rows = new List<ShiftAssignmentRow>();
-            foreach (var employee in employees.OrderBy(e => e.FullName, StringComparer.OrdinalIgnoreCase))
+            foreach (var employee in roster.OrderBy(e => e.FullName, StringComparer.OrdinalIgnoreCase))
             {
                 // days[0 = Mon … 6 = Sun]; first occurrence wins so a later
                 // duplicate row can never overwrite an explicit cell.
@@ -119,6 +134,8 @@ namespace Service.Services
                 Id = cycle.Id,
                 Label = LabelFor(cycle),
                 Status = StatusFor(cycle),
+                StartDate = cycle.StartDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+                EndDate = cycle.EndDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
                 ShiftTemplates = allTemplates.Where(t => t.IsActive).Select(ToTemplateItem).ToList(),
                 Assignments = rows,
                 Conflicts = conflicts,
@@ -164,6 +181,8 @@ namespace Service.Services
                     Id = cycle.Id,
                     Label = LabelFor(cycle),
                     Status = StatusFor(cycle),
+                    StartDate = cycle.StartDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+                    EndDate = cycle.EndDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
                 },
             };
         }
@@ -319,8 +338,8 @@ namespace Service.Services
             var cycle = await LoadCycleAsync(cycleId, cancellationToken);
             await _accessControl.EnsurePermissionForGymAsync(actor.Id, "schedule.manage", cycle.GymId, cancellationToken);
 
-            if (cycle.Status != ShiftCycleStatus.Draft)
-                throw new BadRequestException("Only draft cycles can be edited.");
+            if (cycle.Status == ShiftCycleStatus.Archived)
+                throw new BadRequestException("Archived cycles are read-only.");
 
             foreach (var input in request.Assignments)
             {
@@ -435,6 +454,22 @@ namespace Service.Services
             var ids = cycle.ShiftAssignments.Select(a => a.EmployeeId).Distinct().ToArray();
             if (ids.Length == 0) return [];
             return (await _unitOfWork.GetRepository<Employee, int>().GetAllAsync(new EmployeesByIdsSpec(ids), cancellationToken)).ToList();
+        }
+
+        /// <summary>
+        /// The cycle's assignable roster: members of the team the caller leads
+        /// in this gym when they lead one, otherwise every non-terminated
+        /// employee of the gym. Fresh drafts therefore open with the complete
+        /// grid instead of "no employees".
+        /// </summary>
+        private async Task<List<Employee>> LoadRosterEmployeesAsync(int actorUserId, int gymId, CancellationToken cancellationToken)
+        {
+            var ledTeamId = await _teamScope.GetLedTeamIdAsync(actorUserId, gymId, cancellationToken);
+            var employeeRepo = _unitOfWork.GetRepository<Employee, int>();
+            var employees = ledTeamId is int teamId
+                ? await employeeRepo.GetAllAsync(new EmployeesByTeamSpec(teamId), cancellationToken)
+                : await employeeRepo.GetAllAsync(new EmployeesForRosterSpec(new[] { gymId }), cancellationToken);
+            return employees.ToList();
         }
 
         /// <summary>All rows of these employees inside [from, to], keyed by (employee, date) — cross-cycle collision lookup.</summary>

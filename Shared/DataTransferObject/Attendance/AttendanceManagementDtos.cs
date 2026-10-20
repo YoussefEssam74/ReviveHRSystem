@@ -128,6 +128,7 @@ namespace Shared.DataTransferObject.Attendance
         public int Total { get; init; }
         public int Present { get; init; }
         public int Late { get; init; }
+        public int Early { get; init; }
         public int Absent { get; init; }
         public int Off { get; init; }
         public decimal Hours { get; init; }

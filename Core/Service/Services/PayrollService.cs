@@ -27,7 +27,8 @@ namespace Service.Services
     public sealed class PayrollService(
         IUnitOfWork _unitOfWork,
         IAccessControlService _accessControl,
-        IUserAccessRepository _userAccess) : IPayrollService
+        IUserAccessRepository _userAccess,
+        ITeamScopeService _teamScope) : IPayrollService
     {
         // ==================================================================
         // Period directory + detail
@@ -427,7 +428,12 @@ namespace Service.Services
         public async Task<PayslipResponse> GetPayslipAsync(int? actorUserId, int periodId, int employeeId, CancellationToken cancellationToken = default)
         {
             var actor = await HrPortalHelpers.ResolveActorAsync(_unitOfWork, actorUserId, cancellationToken);
-            await _accessControl.EnsurePermissionAsync(actor.Id, "payroll.view", cancellationToken);
+            // The slip's owner reads his own payslip; anyone else needs payroll.view
+            // (the HR payroll runs use the same endpoint).
+            if (!await IsOwnEmployeeAsync(actor.Id, employeeId, cancellationToken))
+            {
+                await _accessControl.EnsurePermissionAsync(actor.Id, "payroll.view", cancellationToken);
+            }
 
             var period = await _unitOfWork.GetRepository<PayrollPeriod, int>().GetByIdAsync(periodId, cancellationToken)
                 ?? throw new NotFoundException("Payroll period not found.");
@@ -437,42 +443,51 @@ namespace Service.Services
                 .GetByIdAsync(new PayrollEntryForEmployeeSpec(period.Id, employeeId), cancellationToken)
                 ?? throw new NotFoundException("Payroll entry not found.");
 
+            return new PayslipResponse
+            {
+                Data = BuildPayslip(entry),
+            };
+        }
+
+        /// <summary>
+        /// The mock §8 payslip card (period, money lines, deductions with statuses)
+        /// shared by the HR preview and the portal's self-service payslip.
+        /// </summary>
+        internal static PayslipData BuildPayslip(PayrollEntry entry)
+        {
             var gross = GrossOf(entry);
             var approved = ApprovedDeductionsOf(entry);
 
-            return new PayslipResponse
+            return new PayslipData
             {
-                Data = new PayslipData
+                Period = PeriodLabel(entry.PayrollPeriod),
+                Gym = entry.PayrollPeriod.Gym.Name,
+                Employee = new PayslipEmployeeData
                 {
-                    Period = PeriodLabel(period),
-                    Gym = period.Gym.Name,
-                    Employee = new PayslipEmployeeData
-                    {
-                        EmployeeId = entry.EmployeeId,
-                        Name = entry.Employee.FullName,
-                        Position = entry.Employee.Position?.Title ?? "None",
-                    },
-                    BaseSalary = entry.BaseSalary,
-                    Overtime = entry.OvertimeHours,
-                    OvertimePay = OvertimePay(entry),
-                    Bonus = entry.TotalBonuses,
-                    Gross = gross,
-                    Deductions = entry.LineItems
-                        .OrderBy(l => l.EffectiveDate)
-                        .ThenBy(l => l.Id)
-                        .Select(l => new PayslipDeductionLine
-                        {
-                            Label = l.Label,
-                            Reason = l.Reason,
-                            Source = UiSource(l.Source),
-                            Amount = l.Amount,
-                            Status = l.Status,
-                        })
-                        .ToList(),
-                    Net = gross - approved,
-                    Days = entry.DaysWorked,
-                    Status = entry.Status,
+                    EmployeeId = entry.EmployeeId,
+                    Name = entry.Employee.FullName,
+                    Position = entry.Employee.Position?.Title ?? "None",
                 },
+                BaseSalary = entry.BaseSalary,
+                Overtime = entry.OvertimeHours,
+                OvertimePay = OvertimePay(entry),
+                Bonus = entry.TotalBonuses,
+                Gross = gross,
+                Deductions = entry.LineItems
+                    .OrderBy(l => l.EffectiveDate)
+                    .ThenBy(l => l.Id)
+                    .Select(l => new PayslipDeductionLine
+                    {
+                        Label = l.Label,
+                        Reason = l.Reason,
+                        Source = UiSource(l.Source),
+                        Amount = l.Amount,
+                        Status = l.Status,
+                    })
+                    .ToList(),
+                Net = gross - approved,
+                Days = entry.DaysWorked,
+                Status = entry.Status,
             };
         }
 
@@ -538,10 +553,19 @@ namespace Service.Services
         public async Task<EmployeePayrollResponse> GetEmployeePayrollAsync(int? actorUserId, int employeeId, CancellationToken cancellationToken = default)
         {
             var actor = await HrPortalHelpers.ResolveActorAsync(_unitOfWork, actorUserId, cancellationToken);
-            await _accessControl.EnsurePermissionAsync(actor.Id, "payroll.view", cancellationToken);
 
-            _ = await _unitOfWork.GetRepository<Employee, int>().GetByIdAsync(employeeId, cancellationToken)
+            var employee = await _unitOfWork.GetRepository<Employee, int>().GetByIdAsync(employeeId, cancellationToken)
                 ?? throw new NotFoundException("Employee not found.");
+
+            // Payroll visibility model (matrix rows 13/34): the owner reads his own
+            // salary history; a Team Leader sees his team members; the Branch Manager
+            // of the employee's gym sees them too; everyone else needs payroll.view
+            // (HR/HRM hold it; Top Management bypasses). Out-of-scope targets stay
+            // concealed behind the generic not-found.
+            if (!await IsOwnEmployeeAsync(actor.Id, employeeId, cancellationToken))
+            {
+                await EnsurePayrollViewerAsync(actor, employee, cancellationToken);
+            }
 
             var scope = await HrPortalHelpers.ResolveGymScopeAsync(_unitOfWork, _userAccess, actor, null, cancellationToken);
             var rows = (await _unitOfWork.GetRepository<PayrollEntry, int>()
@@ -554,6 +578,57 @@ namespace Service.Services
             {
                 Items = rows.Select(e => MapEntry(e, PeriodLabel(e.PayrollPeriod))).ToList(),
             };
+        }
+
+        /// <summary>True when the employee row belongs to the caller's own login.</summary>
+        private async Task<bool> IsOwnEmployeeAsync(int actorUserId, int employeeId, CancellationToken cancellationToken)
+        {
+            var own = await _unitOfWork.GetRepository<Employee, int>()
+                .GetByIdAsync(new EmployeeByUserIdSpec(actorUserId), cancellationToken);
+            return own is not null && own.Id == employeeId;
+        }
+
+        /// <summary>
+        /// Non-owner payroll viewers (matrix rows 13/34: TL=team, BM/HR/HRM=gym,
+        /// TopManagement unscoped, and payroll.view key holders). Out-of-scope
+        /// callers learn nothing (generic not-found, never a 403).
+        /// </summary>
+        private async Task EnsurePayrollViewerAsync(User actor, Employee employee, CancellationToken cancellationToken)
+        {
+            if (actor.UserType == DomainLayer.Models.UserModule.Enums.UserType.TopManagement)
+            {
+                return;
+            }
+
+            var roleNames = await _userAccess.GetGymRoleNamesAsync(actor.Id, employee.GymId, cancellationToken);
+
+            // Team Leader: the team he leads in the employee's gym, members only.
+            if (roleNames.Contains(Shared.Authorization.RoleNames.TeamLeader, StringComparer.Ordinal))
+            {
+                var ledTeamId = await _teamScope.GetLedTeamIdAsync(actor.Id, employee.GymId, cancellationToken);
+                if (ledTeamId is null || employee.TeamId != ledTeamId.Value)
+                {
+                    throw new NotFoundException("Employee not found.");
+                }
+
+                return;
+            }
+
+            // Branch Manager / HR / HR Manager: the whole employee's gym.
+            if (roleNames.Any(name => name is Shared.Authorization.RoleNames.BranchManager
+                or Shared.Authorization.RoleNames.Hr
+                or Shared.Authorization.RoleNames.HrManager))
+            {
+                return;
+            }
+
+            // Any remaining payroll.view holder (e.g. direct grants on HRM/Hr users
+            // modeled without per-gym roles).
+            var keys = await _userAccess.GetPermissionKeysForGymAsync(actor.Id, employee.GymId, cancellationToken);
+            if (!keys.Contains("payroll.view", StringComparer.Ordinal))
+            {
+                throw new NotFoundException("Employee not found.");
+            }
         }
 
         public async Task<AttendanceRefResponse> GetAttendanceRefAsync(int? actorUserId, string id, CancellationToken cancellationToken = default)

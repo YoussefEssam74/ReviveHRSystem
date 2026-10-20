@@ -1,6 +1,7 @@
 using DomainLayer.Contracts;
 using DomainLayer.Models.AttendanceModule;
 using DomainLayer.Models.EmployeeModule;
+using DomainLayer.Models.EmployeeModule.Enums;
 using DomainLayer.Models.EvaluationModule;
 using DomainLayer.Models.NotificationModule;
 using DomainLayer.Models.NotificationModule.Enums;
@@ -22,6 +23,7 @@ namespace Service.Specifications
             Criteria = a => a.EvaluationResponse.EmployeeId == employeeId;
             AddInclude(a => a.EvaluationQuestion);
             AddInclude(a => a.EvaluationResponse);
+            AddInclude(a => a.EvaluationResponse.Employee);
         }
     }
 
@@ -44,6 +46,7 @@ namespace Service.Specifications
             Criteria = a => a.EvaluationResponseId == responseId;
             AddInclude(a => a.EvaluationQuestion);
             AddInclude(a => a.EvaluationResponse);
+            AddInclude(a => a.EvaluationResponse.Employee);
             AddInclude(a => a.EvaluationResponse.Evaluator);
         }
     }
@@ -56,6 +59,7 @@ namespace Service.Specifications
             Criteria = a => employeeIds.Contains(a.EvaluationResponse.EmployeeId);
             AddInclude(a => a.EvaluationQuestion);
             AddInclude(a => a.EvaluationResponse);
+            AddInclude(a => a.EvaluationResponse.Employee);
             AddInclude(a => a.EvaluationResponse.Evaluator);
         }
     }
@@ -135,7 +139,9 @@ namespace Service.Specifications
     {
         public EmployeesByTeamSpec(int teamId)
         {
-            Criteria = e => e.TeamId == teamId;
+            Criteria = e => e.TeamId == teamId && e.Status != EmployeeStatus.Terminated;
+            AddInclude(e => e.Position);
+            AddInclude(e => e.Gym);
             OrderBy = e => e.FullName;
         }
     }
@@ -176,6 +182,7 @@ namespace Service.Specifications
         public RequestsByEmployeesSpec(IReadOnlyCollection<int> employeeIds)
         {
             Criteria = r => employeeIds.Contains(r.EmployeeId);
+            AddInclude(r => r.Employee);
             AddInclude(r => r.Decisions);
             AddInclude(r => r.SwapWithEmployee);
             OrderByDescending = r => r.SubmittedAt;

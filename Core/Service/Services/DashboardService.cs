@@ -1,4 +1,4 @@
-﻿using AutoMapper;
+using AutoMapper;
 using DomainLayer.Contracts;
 using DomainLayer.Models.AttendanceModule;
 using DomainLayer.Models.AttendanceModule.Enums;
@@ -17,14 +17,15 @@ using Shared.DataTransferObject.EmployeeProfile;
 namespace Service.Services
 {
     /// <summary>
-    /// Dashboard aggregate (mock Â§1). The gym context and the caller's team scope are
-    /// resolved server-side from the token and the per-gym role; the overview strip is
-    /// only populated when the caller holds the employees feature at View level.
+    /// Dashboard aggregate (mock §1). The gym context and the caller's team scope are
+    /// resolved server-side from the token and the per-gym role. The role strip
+    /// (Team/Branch Overview) is only built for managers (Team Leader / Branch
+    /// Manager) — plain employees get no overview block.
     /// </summary>
     public class DashboardService(
         IUnitOfWork unitOfWork,
-        IPermissionService permissionService,
         ITeamScopeService teamScopeService,
+        IUserAccessRepository userAccess,
         IMapper mapper) : IDashboardService
     {
         public async Task<EmployeeDashboardDto> GetDashboardAsync(int userId, int? activeGymId, CancellationToken cancellationToken = default)
@@ -104,14 +105,39 @@ namespace Service.Services
                 .GetAllAsync(new AttendanceByEmployeeSpec(employee.Id, monthStart), cancellationToken)).ToList();
             var present = monthRecords.Count(r => r.Status is AttendanceStatus.OnTime or AttendanceStatus.Late);
 
-            // Upcoming schedule: the next five published days.
-            var upcoming = (await unitOfWork.GetRepository<ShiftAssignment, int>()
-                .GetAllAsync(new AssignmentsByEmployeeRangeSpec(employee.Id, today, today.AddDays(6)), cancellationToken))
-                .Where(a => a.Date >= today)
-                .OrderBy(a => a.Date)
-                .Take(5)
-                .Select(a => mapper.Map<ScheduleDayDto>(a, opts => opts.Items["today"] = today))
-                .ToList();
+            // 7-day schedule strip: two recent past days (so the check-in/check-out
+            // clock times have context), today, and the next four upcoming days.
+            // Every date gets a tile — assignments only exist for scheduled dates.
+            var stripStart = today.AddDays(-2);
+            var stripEnd = today.AddDays(4);
+            var assignments = (await unitOfWork.GetRepository<ShiftAssignment, int>()
+                .GetAllAsync(new AssignmentsByEmployeeRangeSpec(employee.Id, stripStart, stripEnd), cancellationToken))
+                .Where(a => a.Date >= stripStart)
+                .GroupBy(a => a.Date)
+                .ToDictionary(g => g.Key, g => g.OrderBy(a => a.ShiftTemplateId == null).First());
+            var stripAttendance = (await unitOfWork.GetRepository<AttendanceRecord, int>()
+                .GetAllAsync(new AttendanceByEmployeeRangeSpec(employee.Id, stripStart, stripEnd), cancellationToken))
+                .GroupBy(r => r.Date)
+                .ToDictionary(g => g.Key, g => g.First());
+            var upcoming = new List<ScheduleDayDto>();
+            for (var date = stripStart; date <= stripEnd; date = date.AddDays(1))
+            {
+                assignments.TryGetValue(date, out var assignment);
+                stripAttendance.TryGetValue(date, out var dayRecord);
+                var template = assignment?.ShiftTemplate;
+                upcoming.Add(new ScheduleDayDto
+                {
+                    Date = date,
+                    DayName = date.DayOfWeek.ToString(),
+                    ShiftName = template?.Name,
+                    Start = template?.StartTime,
+                    End = template?.EndTime,
+                    IsOff = template is null,
+                    IsToday = date == today,
+                    CheckIn = dayRecord?.CheckInTime is null ? null : TimeOnly.FromDateTime(dayRecord.CheckInTime.Value),
+                    CheckOut = dayRecord?.CheckOutTime is null ? null : TimeOnly.FromDateTime(dayRecord.CheckOutTime.Value),
+                });
+            }
 
             // Pending requests.
             var requests = await unitOfWork.GetRepository<EmployeeRequest, int>()
@@ -163,15 +189,6 @@ namespace Service.Services
         private async Task<DashboardOverviewDto?> LoadOverviewAsync(
             DomainLayer.Models.UserModule.User user, Employee employee, int activeGymId, DateOnly today, CancellationToken cancellationToken)
         {
-            // Only callers with the employees feature at View level in the ACTIVE gym
-            // see the strip.
-            var hasAccess = await permissionService.HasAccessAsync(
-                user.Id, activeGymId, Features.Employees, DomainLayer.Models.UserModule.Enums.AccessLevel.View, cancellationToken);
-            if (!hasAccess)
-            {
-                return null;
-            }
-
             var ledTeamId = await teamScopeService.GetLedTeamIdAsync(user.Id, activeGymId, cancellationToken);
 
             List<Employee> scoped;
@@ -184,6 +201,12 @@ namespace Service.Services
             }
             else
             {
+                // Gym-wide strip is a manager view: only a Branch Manager of the
+                // active gym gets it; a plain employee gets no overview block at all.
+                var roleNames = await userAccess.GetGymRoleNamesAsync(user.Id, activeGymId, cancellationToken);
+                if (!roleNames.Contains(RoleNames.BranchManager))
+                    return null;
+
                 scoped = (await unitOfWork.GetRepository<Employee, int>()
                     .GetAllAsync(new EmployeesByGymSpec(activeGymId), cancellationToken)).ToList();
                 scope = "branch";

@@ -180,7 +180,25 @@ namespace Biometrics
 
         private FaceProcessOutcome ProcessCore(byte[] imageBytes)
         {
-            using var bitmap = SKBitmap.Decode(imageBytes);
+            // Malformed frames must surface as input errors (the enroll flow answers
+            // FaceDetected=false with 400), not as 500s: the SkiaSharp decoder can
+            // throw (e.g. ArgumentNullException 'codec') on hostile or truncated
+            // bytes instead of returning a null bitmap.
+            SKBitmap? bitmap;
+            try
+            {
+                bitmap = SKBitmap.Decode(imageBytes);
+            }
+            catch (Exception ex)
+            {
+                return new FaceProcessOutcome
+                {
+                    FaceDetected = false,
+                    Debug = $"decode-failure: {ex.GetType().Name} ({ex.Message})"
+                };
+            }
+
+            using var _ = bitmap; // dispose ownership from here on
             if (bitmap is null || bitmap.Width < 16 || bitmap.Height < 16)
                 return new FaceProcessOutcome { FaceDetected = false };
 

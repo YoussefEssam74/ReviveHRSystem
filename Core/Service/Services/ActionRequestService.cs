@@ -294,6 +294,32 @@ namespace Service.Services
             request.ReviewComment = comment;
             _unitOfWork.GetRepository<ActionRequest, int>().Update(request);
 
+            // Rejecting an Offboard escalation while the employee is parked in Notice
+            // Period and no real offboarding case exists must release them back to
+            // Active — the escalation never executed, so the standing cannot stick.
+            if (request.ActionType == "Offboard" && request.EmployeeId is { } rejectedEmployeeId)
+            {
+                var employee = await _unitOfWork.GetRepository<Employee, int>()
+                    .GetByIdAsync(rejectedEmployeeId, cancellationToken);
+                if (employee is not null
+                    && employee.Status == EmployeeStatus.NoticePeriod
+                    && !await HasLiveOffboardingCaseAsync(rejectedEmployeeId, cancellationToken))
+                {
+                    employee.Status = EmployeeStatus.Active;
+                    _unitOfWork.GetRepository<Employee, int>().Update(employee);
+                    await _unitOfWork.GetRepository<EmploymentHistory, int>().AddAsync(
+                        EmployeeService.NewHistory(
+                            employee.Id,
+                            DateOnly.FromDateTime(DateTime.UtcNow),
+                            EmploymentChangeType.StatusChange,
+                            EmployeeService.StatusDisplay(EmployeeStatus.NoticePeriod),
+                            EmployeeService.StatusDisplay(EmployeeStatus.Active),
+                            "Offboarding escalation rejected — employment continues.",
+                            actor.Id),
+                        cancellationToken);
+                }
+            }
+
             await AuditAsync(actor, $"{EventsService.ActionTypeLabel(request.ActionType)} Request Rejected", "ActionRequest", request.Id, request.GymId,
                 new { target = request.Employee?.FullName, detail = $"{ActionSummary(request)}. Comment: {comment}" }, cancellationToken);
             await _unitOfWork.SaveChangesAsync(cancellationToken);
@@ -315,6 +341,18 @@ namespace Service.Services
         // ------------------------------------------------------------------
         // Shared plumbing
         // ------------------------------------------------------------------
+
+        /// <summary>
+        /// True while the employee still has an offboarding case that is neither
+        /// completed nor cancelled — i.e. the Notice Period standing is owned by the
+        /// separations module and must not be released by a rejection here.
+        /// </summary>
+        private async Task<bool> HasLiveOffboardingCaseAsync(int employeeId, CancellationToken cancellationToken)
+        {
+            var cases = await _unitOfWork.GetRepository<OffboardingCase, int>()
+                .GetAllAsync(new OffboardingCasesByEmployeesSpec([employeeId]), cancellationToken);
+            return cases.Any(c => c.Status is not ("Completed" or "Cancelled"));
+        }
 
         /// <summary>read gate: events.view OR any ACTION_TYPES meta key (the mock's _canReadAction).</summary>
         private async Task EnsureAnyPermissionAsync(User actor, string[] keys, CancellationToken cancellationToken)

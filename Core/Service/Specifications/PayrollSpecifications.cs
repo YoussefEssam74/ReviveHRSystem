@@ -62,6 +62,18 @@ namespace Service.Specifications
         }
     }
 
+    /// <summary>One entry by id with everything the payslip build needs (self-service portal).</summary>
+    public sealed class PayrollEntryByIdSpec : BaseSpecification<PayrollEntry, int>
+    {
+        public PayrollEntryByIdSpec(int entryId)
+        {
+            Criteria = e => e.Id == entryId;
+            AddInclude(e => e.LineItems);
+            AddInclude(e => e.PayrollPeriod.Gym);
+            AddInclude(e => e.Employee.Position!);
+        }
+    }
+
     /// <summary>An employee's sheets across periods (payroll history).</summary>
     public sealed class PayrollEntriesByEmployeeSpec : BaseSpecification<PayrollEntry, int>
     {

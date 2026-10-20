@@ -19,7 +19,7 @@ namespace ServiceAbstraction.Services
         /// single date or a from/to range (default today), the gym filter,
         /// employeeId, the display status, and paging.
         /// </summary>
-        Task<AttendanceListResponse> GetAttendanceAsync(int? actorUserId, AttendanceListQuery query, CancellationToken cancellationToken = default);
+        Task<AttendanceListResponse> GetAttendanceAsync(int? actorUserId, AttendanceListQuery query, int? activeGymId = null, CancellationToken cancellationToken = default);
 
         /// <summary>
         /// A3/A5 — manual entry / quick marks: upserts the full-day record for

@@ -631,8 +631,11 @@ namespace ReviveHRSystem.IntegrationTests
         }
 
         [Fact]
-        public async Task EmployeePayroll_WithoutPermission_Returns401()
+        public async Task EmployeePayroll_WithoutPermission_IsConcealed()
         {
+            // Payroll visibility model (matrix rows 13/34): no key holders and no
+            // manager role in the employee's gym learn nothing — the API never
+            // confirms the target exists (404-conceal, not a pull-forest 403).
             var (gym, employee, _, _) = await SetupSheetAsync();
             var builder = NewBuilder();
             var hr = await builder.CreateUserAsync(UserType.HR, new[] { gym });
@@ -642,7 +645,7 @@ namespace ReviveHRSystem.IntegrationTests
                 $"/api/employees/{employee.EmployeeId}/payroll", null, token);
             var response = await _fixture.Client.SendAsync(request);
 
-            Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+            Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
         }
 
         [Fact]

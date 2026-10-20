@@ -15,6 +15,7 @@ namespace Service.Specifications
         public RequestsByEmployeeSpec(int employeeId)
         {
             Criteria = r => r.EmployeeId == employeeId;
+            AddInclude(r => r.Employee);
             AddInclude(r => r.Decisions);
             AddInclude(r => r.SwapWithEmployee!);
             OrderByDescending = r => r.SubmittedAt;

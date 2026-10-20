@@ -444,7 +444,7 @@ function ActivationView({
   onConnect: (code: string) => void
 }) {
   return (
-    <div className="relative flex min-h-0 flex-1 items-center justify-center overflow-y-auto bg-gray-900 p-4 text-white sm:p-6">
+    <div className="relative flex min-h-0 flex-1 items-center justify-center overflow-y-auto bg-gray-900 p-4 text-[#fff] sm:p-6">
       <div className="mx-auto flex w-full max-w-xl flex-col items-center text-center">
         <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-amber-500/30 bg-amber-500/10 px-3 py-1 text-xs font-semibold text-amber-400 shadow-lg backdrop-blur-md">
           <span className="h-2 w-2 animate-pulse rounded-full bg-amber-400" />
@@ -456,13 +456,13 @@ function ActivationView({
         </div>
 
         <h1 className="text-2xl font-extrabold tracking-tight sm:text-3xl">Connect Attendance Station</h1>
-        <p className="mt-2 max-w-md text-xs leading-relaxed text-charcoal-300 sm:text-sm">
-          Generate a 6-digit code in the <strong className="text-white">Revive HR portal</strong>, enter it below,
+        <p className="mt-2 max-w-md text-xs leading-relaxed text-[#dee2e6] sm:text-sm">
+          Generate a 6-digit code in the <strong className="text-[#fff]">Revive HR portal</strong>, enter it below,
           and this terminal locks to that gym branch. The code expires 5 minutes after generation.
         </p>
 
         <form
-          className="relative mt-6 w-full overflow-hidden rounded-3xl border border-charcoal-700/80 bg-charcoal-900/90 p-6 shadow-2xl backdrop-blur-xl sm:p-8"
+          className="relative mt-6 w-full overflow-hidden rounded-3xl border border-[#495057]/80 bg-[#212529]/90 p-6 shadow-2xl backdrop-blur-xl sm:p-8"
           onSubmit={(event) => {
             event.preventDefault()
             onConnect(code.trim())
@@ -473,7 +473,7 @@ function ActivationView({
 
           <label
             htmlFor="station-code"
-            className="mb-2 block px-1 text-left text-[11px] font-bold tracking-wider text-charcoal-300 uppercase"
+            className="mb-2 block px-1 text-left text-[11px] font-bold tracking-wider text-[#dee2e6] uppercase"
           >
             Enter 6-digit code
           </label>
@@ -486,7 +486,7 @@ function ActivationView({
             value={code}
             onChange={(event) => onCodeChange(event.target.value.replace(/\D/g, '').slice(0, 6))}
             placeholder="• • • • • •"
-            className="h-16 w-full rounded-2xl border-2 border-brand-500/50 bg-charcoal-800/90 text-center font-mono text-3xl font-extrabold tracking-[0.35em] text-white transition-all outline-none placeholder:tracking-widest placeholder:text-charcoal-600 focus:border-brand-400 focus:ring-4 focus:ring-brand-500/20 sm:text-4xl"
+            className="h-16 w-full rounded-2xl border-2 border-brand-500/50 bg-[#343a40]/90 text-center font-mono text-3xl font-extrabold tracking-[0.35em] text-[#fff] transition-all outline-none placeholder:tracking-widest placeholder:text-[#6c757d] focus:border-brand-400 focus:ring-4 focus:ring-brand-500/20 sm:text-4xl"
           />
 
           {errorMessage && (
@@ -507,9 +507,9 @@ function ActivationView({
             ['2. Terminal enters code', 'This station redeems the code once for a gym-bound session.'],
             ['3. Locked to branch', 'Only staff assigned to this gym can check in at this terminal.'],
           ].map(([title, body]) => (
-            <div key={title} className="rounded-xl border border-charcoal-800 bg-charcoal-900/60 p-3 text-[11px]">
+            <div key={title} className="rounded-xl border border-[#343a40] bg-[#212529]/60 p-3 text-[11px]">
               <p className="mb-0.5 font-bold text-brand-400">{title}</p>
-              <p className="text-charcoal-400">{body}</p>
+              <p className="text-[#ced4da]">{body}</p>
             </div>
           ))}
         </div>

@@ -35,7 +35,7 @@ namespace Presentation.Controllers
         [HttpGet]
         public async Task<ActionResult<EmployeeListResponse>> GetEmployees([FromQuery] EmployeeListQuery query, CancellationToken cancellationToken)
         {
-            var result = await _service.GetEmployeesAsync(GetActorUserId(), query, cancellationToken);
+            var result = await _service.GetEmployeesAsync(GetActorUserId(), query, GetGymIdFromToken(), cancellationToken);
             return Ok(result);
         }
 
@@ -76,7 +76,7 @@ namespace Presentation.Controllers
         [HttpGet("{id:int}")]
         public async Task<ActionResult<EmployeeDataResponse>> GetEmployee(int id, CancellationToken cancellationToken)
         {
-            var result = await _service.GetEmployeeAsync(GetActorUserId(), id, cancellationToken);
+            var result = await _service.GetEmployeeAsync(GetActorUserId(), id, GetGymIdFromToken(), cancellationToken);
             return Ok(result);
         }
 

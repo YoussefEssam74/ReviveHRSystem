@@ -1,15 +1,497 @@
 @import "tailwindcss";
 
+/* Class-based dark mode (the .dark class lives on <html>). */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* Design tokens — copied 1:1 from Mock UI/Employee (tailwind.config + styles.css). */
 @theme {
   --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, sans-serif;
+
+  --color-brand-50: #f0fdf4;
+  --color-brand-100: #dcfce7;
+  --color-brand-200: #bbf7d0;
+  --color-brand-300: #86efac;
+  --color-brand-400: #4ade80;
+  --color-brand-500: #22c55e;
+  --color-brand-600: #16a34a;
+  --color-brand-700: #15803d;
+  --color-brand-800: #166534;
+  --color-brand-900: #14532d;
+
+  --color-charcoal-50: #f8f9fa;
+  --color-charcoal-100: #f1f3f5;
+  --color-charcoal-200: #e9ecef;
+  --color-charcoal-300: #dee2e6;
+  --color-charcoal-400: #ced4da;
+  --color-charcoal-500: #adb5bd;
+  --color-charcoal-600: #6c757d;
+  --color-charcoal-700: #495057;
+  --color-charcoal-800: #343a40;
+  --color-charcoal-900: #212529;
 }
+
+/* ==================== Dark mode tokens ====================
+   Tailwind v4 utilities compile to var(--color-*), so re-declaring the
+   scales under .dark flips every utility in the app at once. Three rules:
+   1. Neutrals get real elevation: near-black page, lighter cards, clearly
+      visible borders, and brighter "faint" text levels so nothing melts
+      together or disappears.
+   2. The brand (green) scale is shared except its pastel fills/text, which
+      get dark tints like every other hue.
+   3. Pastel utility backgrounds (50/100/200) and the text levels painted on
+      them (600/700/800) are remapped per hue — pairs stay together, so
+      tiles/chips/alerts remain readable instead of glaring white. */
+.dark {
+  /* Surfaces: white becomes the elevated surface, charcoal-50 the page. */
+  --color-white: #1a1f26;
+  --color-charcoal-50: #0e1115;
+  --color-charcoal-100: #161a1f;
+  --color-charcoal-200: #2d343c;
+  --color-charcoal-300: #414955;
+  --color-charcoal-400: #7c8591;
+  --color-charcoal-500: #949ba4;
+  --color-charcoal-600: #aab1ba;
+  --color-charcoal-700: #ccd1d7;
+  --color-charcoal-800: #e2e6ea;
+  --color-charcoal-900: #f4f6f8;
+
+  /* The kiosk shell uses bg-gray-50; flip it with the rest of the neutrals
+     (bg-gray-900 panels stay literal-dark by design). */
+  --color-gray-50: #0e1115;
+
+  /* Same inversion for the slate neutrals used by the public/admin pages. */
+  --color-slate-50: #0f1216;
+  --color-slate-100: #171b21;
+  --color-slate-200: #2f363f;
+  --color-slate-300: #434c58;
+  --color-slate-400: #737d89;
+  --color-slate-500: #979ea8;
+  --color-slate-600: #aeb5bf;
+  --color-slate-700: #cdd2d9;
+  --color-slate-800: #e3e7ec;
+  --color-slate-900: #f3f5f8;
+
+  /* Brand: pastel fills + text painted on them (buttons keep #16a34a). */
+  --color-brand-50: #0f2618;
+  --color-brand-100: #14351f;
+  --color-brand-200: #1e4a2e;
+  --color-brand-300: #2c6a44;
+  --color-brand-700: #4ade80;
+  --color-brand-800: #86efac;
+
+  /* Green */
+  --color-green-50: #0f2417;
+  --color-green-100: #14301f;
+  --color-green-200: #1d4530;
+  --color-green-600: #4ade80;
+  --color-green-700: #86efac;
+  --color-green-800: #bbf7d0;
+
+  /* Emerald (nav pills, chips — bg-emerald-600 buttons stay put) */
+  --color-emerald-50: #0c2a1d;
+  --color-emerald-100: #113625;
+  --color-emerald-200: #194a33;
+  --color-emerald-700: #6ee7a8;
+  --color-emerald-800: #a7f3cf;
+
+  /* Red */
+  --color-red-50: #2e1215;
+  --color-red-100: #3a161a;
+  --color-red-200: #4e1d22;
+  --color-red-600: #f87171;
+  --color-red-700: #fca5a5;
+  --color-red-800: #fecaca;
+
+  /* Yellow */
+  --color-yellow-50: #2a2308;
+  --color-yellow-100: #332b0c;
+  --color-yellow-200: #453b11;
+  --color-yellow-600: #facc15;
+  --color-yellow-700: #fde047;
+
+  /* Amber (50/100 only + text levels; amber-200 is text on amber-950 alerts) */
+  --color-amber-50: #2b2109;
+  --color-amber-100: #352a0d;
+  --color-amber-600: #fbbf24;
+  --color-amber-800: #fde68a;
+
+  /* Blue */
+  --color-blue-50: #0f2239;
+  --color-blue-100: #132c49;
+  --color-blue-200: #1b3a63;
+  --color-blue-600: #60a5fa;
+  --color-blue-700: #93c5fd;
+  --color-blue-800: #bfdbfe;
+
+  /* Orange */
+  --color-orange-50: #2e1a0c;
+  --color-orange-100: #3a2110;
+  --color-orange-200: #4e2c15;
+  --color-orange-600: #fb923c;
+  --color-orange-700: #fdba74;
+  --color-orange-800: #fed7aa;
+
+  /* Purple */
+  --color-purple-50: #211033;
+  --color-purple-100: #2a1440;
+  --color-purple-200: #3a1c57;
+  --color-purple-600: #a78bfa;
+  --color-purple-700: #c4b5fd;
+  --color-purple-800: #ddd6fe;
+}
+
+/* Elevation cues the light theme gets from white-on-off-white: a slightly
+   deeper shadow so cards lift off the near-black page. */
+.dark .card { box-shadow: 0 1px 3px rgba(0, 0, 0, 0.45); }
+.dark .card:hover, .dark .card-interactive:hover { box-shadow: 0 4px 14px rgba(0, 0, 0, 0.55); }
 
 html {
   font-family: var(--font-sans);
+  scroll-behavior: smooth;
 }
 
-/* Kiosk viewfinder: the scanning laser that sweeps while the camera watches.
-   Layout + gradient copied from the Mock UI so the beam renders the same way. */
+body {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--color-charcoal-300); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--color-charcoal-400); }
+
+/* ==================== Component classes (mock parity) ==================== */
+
+/* Sidebar nav rows (mock styles.css) — flex row so the icon never stacks
+   above the label (Tailwind preflight gives svg display:block). */
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  border-radius: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--color-charcoal-700);
+  transition: all 0.15s ease;
+}
+.nav-item:hover { background: var(--color-charcoal-50); color: var(--color-charcoal-900); }
+.nav-item.active {
+  background: var(--color-brand-50);
+  color: var(--color-brand-600);
+  font-weight: 600;
+}
+.nav-item.active svg { color: var(--color-brand-600); }
+
+/* Cards */
+.card {
+  background: var(--color-white);
+  border-radius: 0.75rem;
+  border: 1px solid var(--color-charcoal-200);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  transition: box-shadow 0.2s;
+}
+.card:hover { box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06); }
+.card-interactive { cursor: pointer; }
+.card-interactive:hover { box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08); }
+
+/* Status badges */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.125rem 0.625rem;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  line-height: 1.5;
+  white-space: nowrap;
+}
+.badge-green { background: #dcfce7; color: #166534; }
+.badge-yellow { background: #fef9c3; color: #854d0e; }
+.badge-red { background: #fee2e2; color: #991b1b; }
+.badge-blue { background: #dbeafe; color: #1e40af; }
+.badge-gray { background: var(--color-charcoal-100); color: var(--color-charcoal-700); }
+.badge-purple { background: #f3e8ff; color: #6b21a8; }
+.badge-orange { background: #fff7ed; color: #9a3412; }
+/* Dark variants: deep-tinted backgrounds with light text instead of pastel pills. */
+.dark .badge-green { background: #11301d; color: #8ce0a8; }
+.dark .badge-yellow { background: #332a0c; color: #e6c767; }
+.dark .badge-red { background: #3a1517; color: #f2a0a0; }
+.dark .badge-blue { background: #12233d; color: #93b7e8; }
+.dark .badge-purple { background: #28123d; color: #cea3f0; }
+.dark .badge-orange { background: #381a0c; color: #efa676; }
+
+/* Timeline */
+.timeline-line {
+  position: absolute;
+  left: 1.25rem;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: var(--color-charcoal-200);
+}
+.timeline-dot {
+  width: 0.625rem;
+  height: 0.625rem;
+  border-radius: 9999px;
+  background: #16a34a;
+  border: 2px solid #ffffff;
+  box-shadow: 0 0 0 2px #dcfce7;
+  position: relative;
+  z-index: 1;
+}
+.timeline-dot-gray { background: var(--color-charcoal-500); box-shadow: 0 0 0 2px var(--color-charcoal-200); }
+
+/* Skeleton loading */
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+.skeleton {
+  background: linear-gradient(90deg, var(--color-charcoal-100) 25%, var(--color-charcoal-200) 50%, var(--color-charcoal-100) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+  border-radius: 0.375rem;
+}
+
+/* Modal animation */
+@keyframes overlayFadeIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes scaleIn { from { transform: scale(0.985); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+.modal-backdrop { animation: overlayFadeIn 0.2s ease; }
+.modal-content { animation: scaleIn 0.2s ease; }
+
+/* Drawer animation */
+@keyframes slideInRight {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}
+.drawer-enter { animation: slideInRight 0.3s ease; }
+@media (prefers-reduced-motion: reduce) {
+  .drawer-enter { animation: none; }
+}
+
+/* Table styles */
+.data-table { width: 100%; border-collapse: separate; border-spacing: 0; }
+.data-table th {
+  text-align: left;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  color: var(--color-charcoal-600);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  background: var(--color-charcoal-50);
+  border-bottom: 1px solid var(--color-charcoal-200);
+  white-space: nowrap;
+}
+.data-table th:first-child { border-radius: 0.5rem 0 0 0; }
+.data-table th:last-child { border-radius: 0 0.5rem 0 0; }
+.data-table td {
+  padding: 0.5rem 0.75rem;
+  font-size: 0.8125rem;
+  border-bottom: 1px solid var(--color-charcoal-100);
+  color: var(--color-charcoal-800);
+}
+.data-table tr:last-child td { border-bottom: none; }
+.data-table tbody tr { transition: background 0.15s; }
+.data-table tbody tr:hover { background: var(--color-charcoal-50); }
+.table-responsive { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+
+/* Form styles */
+.form-input {
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--color-charcoal-300);
+  border-radius: 0.5rem;
+  font-size: 0.875rem;
+  color: var(--color-charcoal-900);
+  background: var(--color-white);
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.form-input:focus {
+  outline: none;
+  border-color: #16a34a;
+  box-shadow: 0 0 0 3px rgba(22, 163, 74, 0.1);
+}
+.form-input::placeholder { color: var(--color-charcoal-500); }
+.form-input:disabled { background: var(--color-charcoal-50); color: var(--color-charcoal-600); }
+.form-label {
+  display: block;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--color-charcoal-700);
+  margin-bottom: 0.375rem;
+}
+.form-select {
+  width: 100%;
+  padding: 0.5rem 2rem 0.5rem 0.75rem;
+  border: 1px solid var(--color-charcoal-300);
+  border-radius: 0.5rem;
+  font-size: 0.875rem;
+  color: var(--color-charcoal-900);
+  background-color: var(--color-white);
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236c757d' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e");
+  background-repeat: no-repeat;
+  background-position: right 0.5rem center;
+  background-size: 1.5em 1.5em;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.form-select:focus {
+  outline: none;
+  border-color: #16a34a;
+  box-shadow: 0 0 0 3px rgba(22, 163, 74, 0.1);
+}
+.form-textarea {
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--color-charcoal-300);
+  border-radius: 0.5rem;
+  font-size: 0.875rem;
+  color: var(--color-charcoal-900);
+  background: var(--color-white);
+  transition: border-color 0.15s, box-shadow 0.15s;
+  resize: vertical;
+}
+.form-textarea:focus {
+  outline: none;
+  border-color: #16a34a;
+  box-shadow: 0 0 0 3px rgba(22, 163, 74, 0.1);
+}
+.form-error { font-size: 0.75rem; color: #dc2626; margin-top: 0.25rem; }
+
+/* Buttons */
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 0.375rem; font-size: 0.8125rem; font-weight: 500; border-radius: 0.5rem; transition: all 0.15s; cursor: pointer; white-space: nowrap; line-height: 1; }
+.btn-sm { padding: 0.375rem 0.75rem; font-size: 0.75rem; }
+.btn-md { padding: 0.4375rem 0.875rem; }
+.btn-primary { background: #16a34a; color: white; border: 1px solid #16a34a; }
+.btn-primary:hover { background: #15803d; border-color: #15803d; }
+.btn-secondary { background: var(--color-white); color: var(--color-charcoal-700); border: 1px solid var(--color-charcoal-300); }
+.btn-secondary:hover { background: var(--color-charcoal-50); }
+.btn-danger { background: #dc2626; color: white; border: 1px solid #dc2626; }
+.btn-danger:hover { background: #b91c1c; }
+.btn-danger-outline { background: var(--color-white); color: #dc2626; border: 1px solid #fecaca; }
+.btn-danger-outline:hover { background: #fef2f2; }
+.btn-ghost { background: transparent; color: var(--color-charcoal-700); border: 1px solid transparent; }
+.btn-ghost:hover { background: var(--color-charcoal-50); }
+.btn-link { background: transparent; color: #16a34a; border: none; padding: 0; }
+.btn-link:hover { color: #15803d; text-decoration: underline; }
+.btn:disabled, .btn[disabled] { opacity: 0.4; cursor: not-allowed; pointer-events: none; }
+
+/* Tabs */
+.tab-btn {
+  padding: 0.375rem 0.75rem;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--color-charcoal-600);
+  border-bottom: 2px solid transparent;
+  transition: all 0.15s;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.tab-btn:hover { color: var(--color-charcoal-800); }
+.tab-btn.active { color: #16a34a; border-bottom-color: #16a34a; font-weight: 600; }
+
+/* Bento label */
+.bento-label { font-size: 0.6875rem; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: var(--color-charcoal-600); }
+
+/* Payslip rows */
+.payslip-row { display: flex; justify-content: space-between; align-items: center; padding: 0.5rem 1rem; font-size: 0.8125rem; }
+.payslip-row:nth-child(even) { background: var(--color-charcoal-50); }
+.payslip-row-sub { padding-left: 2rem; color: var(--color-charcoal-600); }
+.payslip-total { font-weight: 600; border-top: 2px solid var(--color-charcoal-200); background: var(--color-charcoal-50); }
+.payslip-grand-total { font-weight: 700; border-top: 2px solid var(--color-charcoal-300); background: #f0fdf4; font-size: 0.875rem; }
+.dark .payslip-grand-total { background: #11281a; }
+
+/* Schedule grid */
+.schedule-grid { display: grid; gap: 1px; background: var(--color-charcoal-200); border: 1px solid var(--color-charcoal-200); border-radius: 0.75rem; overflow: hidden; }
+.schedule-cell { background: var(--color-white); padding: 0.5rem; min-height: 2.5rem; display: flex; align-items: center; justify-content: center; }
+.schedule-cell-header { background: var(--color-charcoal-50); font-size: 0.6875rem; font-weight: 600; color: var(--color-charcoal-600); text-transform: uppercase; padding: 0.5rem; text-align: center; }
+.schedule-shift-badge { padding: 0.125rem 0.5rem; border-radius: 0.25rem; font-size: 0.6875rem; font-weight: 500; white-space: nowrap; }
+.schedule-shift-morning { background: #dbeafe; color: #1e40af; }
+.schedule-shift-evening { background: #dcfce7; color: #166534; }
+.schedule-shift-off { background: var(--color-charcoal-100); color: var(--color-charcoal-600); }
+.schedule-cell-today { background: #f0fdf4; }
+.dark .schedule-shift-morning { background: #12233d; color: #93b7e8; }
+.dark .schedule-shift-evening { background: #11301d; color: #8ce0a8; }
+.dark .schedule-cell-today { background: #12251a; }
+
+/* Upcoming schedule scroller */
+.schedule-scroll { display: flex; gap: 0.5rem; overflow-x: auto; padding-bottom: 0.5rem; scroll-snap-type: x mandatory; -ms-overflow-style: none; scrollbar-width: none; }
+.schedule-scroll::-webkit-scrollbar { display: none; }
+.schedule-scroll > .schedule-day-card { min-width: 104px; flex: 1; scroll-snap-align: start; }
+.schedule-day-card { padding: 0.75rem; border-radius: 0.5rem; border: 1px solid var(--color-charcoal-200); background: var(--color-white); transition: all 0.15s; }
+.schedule-day-card.is-today { background: #f0fdf4; border-color: #bbf7d0; }
+.schedule-day-card.is-off { opacity: 0.6; background: var(--color-charcoal-100); }
+.dark .schedule-day-card.is-today { background: #12251a; border-color: #245c37; }
+
+/* Day detail panel (schedule page) */
+.sched-detail-panel {
+  width: 280px;
+  flex-shrink: 0;
+  background: var(--color-white);
+  border: 1px solid var(--color-charcoal-200);
+  border-radius: 0.75rem;
+  padding: 1rem;
+  max-height: 100%;
+  overflow-y: auto;
+}
+@media (max-width: 1023px) {
+  .sched-detail-panel { width: 100%; max-height: none; }
+}
+
+/* Stat highlight */
+.stat-highlight { background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%); border: 1px solid #bbf7d0; }
+.dark .stat-highlight { background: linear-gradient(135deg, #12281b 0%, #17331f 100%); border-color: #215235; }
+
+/* Notification list item */
+.notif-item { display: flex; gap: 0.75rem; align-items: flex-start; padding: 0.375rem 0; }
+.notif-item + .notif-item { border-top: 1px solid var(--color-charcoal-100); }
+.notif-icon { width: 1.75rem; height: 1.75rem; border-radius: 9999px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; background: var(--color-charcoal-50); color: var(--color-charcoal-600); }
+
+/* Action required alert */
+.action-alert { border-radius: 0.75rem; padding: 0.75rem; }
+.action-alert-item { display: flex; align-items: flex-start; gap: 0.75rem; padding: 0.375rem; border-radius: 0.5rem; background: rgba(255, 255, 255, 0.5); }
+.action-alert-item + .action-alert-item { margin-top: 0.375rem; }
+
+/* Request pills */
+.req-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.375rem 0.875rem;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+  border: none;
+  white-space: nowrap;
+}
+.req-pill:hover { opacity: 0.85; }
+
+/* Request table row accent */
+.req-row-active td:first-child { box-shadow: inset 3px 0 0 0 #16a34a; }
+
+/* Shift palette buttons */
+.shift-palette-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  border-radius: 0.5rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+  border: 1px solid transparent;
+}
+.shift-palette-btn:hover { opacity: 0.85; transform: translateY(-1px); }
+.shift-palette-btn.ring-2 { transform: translateY(-1px); box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1); }
+
+/* Kiosk (existing) */
 .scanline {
   position: absolute;
   left: 0;
@@ -19,16 +501,33 @@ html {
   pointer-events: none;
   animation: kiosk-scan-sweep 1.4s linear infinite;
 }
-
 @keyframes kiosk-scan-sweep {
   0% { top: 6%; }
   100% { top: 94%; }
 }
-
 @media (prefers-reduced-motion: reduce) {
   .scanline { animation: none; opacity: 0.6; }
 }
-
-/* Kiosk cards: quick entrance for result/rejection overlays. */
 .fade-in { animation: fadeIn .25s ease; }
 @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+
+/* Portal backdrop — soft gradient art layered behind every /employee page.
+   Fixed so it stays in place while page content scrolls; PortalLayout's
+   <main> is positioned above it and cards remain opaque white on top. */
+.portal-backdrop {
+  position: fixed;
+  inset: 0;
+  background-image: url("./assets/background.svg");
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  pointer-events: none;
+}
+/* Keep only a faint glow of the artwork on dark surfaces. */
+.dark .portal-backdrop { opacity: 0.18; }
+
+/* Focus states */
+button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible {
+  outline: 2px solid #16a34a;
+  outline-offset: 2px;
+}

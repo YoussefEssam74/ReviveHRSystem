@@ -35,6 +35,13 @@ namespace ServiceAbstraction.Services
         Task<ExcusedHoursBudgetDto> GetExcusedHoursBudgetAsync(
             int actorUserId, int employeeId, int? activeGymId, CancellationToken cancellationToken = default);
 
+        /// <summary>
+        /// Active employees of the caller's own gym (id + name) for the shift-swap
+        /// colleague pickers. Self-service: only the swap requester needs it.
+        /// </summary>
+        Task<IReadOnlyList<EmployeeColleagueDto>> GetColleaguesAsync(
+            int actorUserId, int employeeId, CancellationToken cancellationToken = default);
+
         Task<IReadOnlyList<RequestTypeDto>> GetRequestTypesAsync(CancellationToken cancellationToken = default);
     }
 }

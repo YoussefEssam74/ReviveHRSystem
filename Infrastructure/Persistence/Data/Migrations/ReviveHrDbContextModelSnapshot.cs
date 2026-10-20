@@ -1165,7 +1165,7 @@ namespace Persistence.Data.Migrations
                     b.Property<int>("Severity")
                         .HasColumnType("integer");
 
-                    b.Property<int>("TeamId")
+                    b.Property<int?>("TeamId")
                         .HasColumnType("integer");
 
                     b.Property<DateTime?>("UpdatedAt")
@@ -1557,12 +1557,12 @@ namespace Persistence.Data.Migrations
                         .HasColumnType("boolean")
                         .HasDefaultValue(false);
 
+                    b.Property<string>("Notes")
+                        .HasColumnType("text");
+
                     b.Property<string>("OverallComment")
                         .HasMaxLength(1000)
                         .HasColumnType("character varying(1000)");
-
-                    b.Property<string>("Notes")
-                        .HasColumnType("text");
 
                     b.Property<string>("Period")
                         .HasColumnType("text");
@@ -3512,7 +3512,8 @@ namespace Persistence.Data.Migrations
                     b.HasIndex("ShiftTemplateId");
 
                     b.HasIndex("EmployeeId", "Date")
-                        .IsUnique();
+                        .IsUnique()
+                        .HasFilter("\"IsDeleted\" = false");
 
                     b.ToTable("ShiftAssignments", (string)null);
                 });
@@ -3733,11 +3734,6 @@ namespace Persistence.Data.Migrations
                     b.Property<int>("PermissionId")
                         .HasColumnType("integer");
 
-                    b.Property<int>("Level")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer")
-                        .HasDefaultValue(0);
-
                     b.HasKey("RoleId", "PermissionId");
 
                     b.HasIndex("PermissionId");
@@ -3766,6 +3762,9 @@ namespace Persistence.Data.Migrations
                         .HasMaxLength(256)
                         .HasColumnType("character varying(256)");
 
+                    b.Property<int>("FailedLoginAttempts")
+                        .HasColumnType("integer");
+
                     b.Property<bool>("IsActive")
                         .HasColumnType("boolean");
 
@@ -3775,6 +3774,9 @@ namespace Persistence.Data.Migrations
                         .HasDefaultValue(false);
 
                     b.Property<DateTime?>("LastLoginAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("LockoutEnd")
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("PasswordHash")
@@ -3824,36 +3826,6 @@ namespace Persistence.Data.Migrations
                     b.HasIndex("UserId");
 
                     b.ToTable("UserGymAccess", (string)null);
-                });
-
-            modelBuilder.Entity("DomainLayer.Models.UserModule.UserGymPermission", b =>
-                {
-                    b.Property<int>("UserId")
-                        .HasColumnType("integer");
-
-                    b.Property<int>("GymId")
-                        .HasColumnType("integer");
-
-                    b.Property<int>("PermissionId")
-                        .HasColumnType("integer");
-
-                    b.Property<DateTime>("AssignedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<int>("Level")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer")
-                        .HasDefaultValue(0);
-
-                    b.HasKey("UserId", "GymId", "PermissionId");
-
-                    b.HasIndex("GymId");
-
-                    b.HasIndex("PermissionId");
-
-                    b.HasIndex("UserId", "GymId");
-
-                    b.ToTable("UserGymPermissions", (string)null);
                 });
 
             modelBuilder.Entity("DomainLayer.Models.UserModule.UserGymRole", b =>
@@ -3941,11 +3913,6 @@ namespace Persistence.Data.Migrations
 
                     b.Property<int>("PermissionId")
                         .HasColumnType("integer");
-
-                    b.Property<int>("Level")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer")
-                        .HasDefaultValue(0);
 
                     b.HasKey("UserId", "PermissionId");
 
@@ -4300,8 +4267,7 @@ namespace Persistence.Data.Migrations
                     b.HasOne("DomainLayer.Models.OrganizationModule.Team", "Team")
                         .WithMany()
                         .HasForeignKey("TeamId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.Cascade);
 
                     b.Navigation("Employee");
 
@@ -5029,33 +4995,6 @@ namespace Persistence.Data.Migrations
                     b.Navigation("User");
                 });
 
-            modelBuilder.Entity("DomainLayer.Models.UserModule.UserGymPermission", b =>
-                {
-                    b.HasOne("DomainLayer.Models.OrganizationModule.Gym", "Gym")
-                        .WithMany("UserGymPermissions")
-                        .HasForeignKey("GymId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("DomainLayer.Models.UserModule.Permission", "Permission")
-                        .WithMany("UserGymPermissions")
-                        .HasForeignKey("PermissionId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("DomainLayer.Models.UserModule.User", "User")
-                        .WithMany("UserGymPermissions")
-                        .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Gym");
-
-                    b.Navigation("Permission");
-
-                    b.Navigation("User");
-                });
-
             modelBuilder.Entity("DomainLayer.Models.UserModule.UserGymRole", b =>
                 {
                     b.HasOne("DomainLayer.Models.OrganizationModule.Gym", "Gym")
@@ -5188,8 +5127,6 @@ namespace Persistence.Data.Migrations
 
                     b.Navigation("UserGymAccesses");
 
-                    b.Navigation("UserGymPermissions");
-
                     b.Navigation("UserGymRoles");
                 });
 
@@ -5243,8 +5180,6 @@ namespace Persistence.Data.Migrations
                 {
                     b.Navigation("RolePermissions");
 
-                    b.Navigation("UserGymPermissions");
-
                     b.Navigation("UserPermissions");
                 });
 
@@ -5266,8 +5201,6 @@ namespace Persistence.Data.Migrations
                     b.Navigation("Notifications");
 
                     b.Navigation("UserGymAccesses");
-
-                    b.Navigation("UserGymPermissions");
 
                     b.Navigation("UserGymRoles");
 

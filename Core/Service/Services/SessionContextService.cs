@@ -6,19 +6,20 @@ using DomainLayer.Models.OrganizationModule.Enums;
 using DomainLayer.Models.UserModule;
 using Service.Specifications;
 using ServiceAbstraction.Services;
+using Shared.Authorization;
 using Shared.DataTransferObject.Auth;
 
 namespace Service.Services
 {
     /// <summary>
-    /// Builds the session context (identity, gyms, per-gym role, effective feature
-    /// levels) and performs the in-session gym switch (ADR-002 Amendment 1).
+    /// Builds the session context (identity, gyms, per-gym role) and performs the
+    /// in-session gym switch (ADR-002 Amendment 1).
     /// </summary>
     public class SessionContextService(
         IUnitOfWork unitOfWork,
         IUserAccessRepository userAccess,
-        IPermissionService permissionService,
         ITeamScopeService teamScopeService,
+        IEmployeeAccessService employeeAccessService,
         ITokenService tokenService,
         IMapper mapper) : ISessionContextService
     {
@@ -66,7 +67,9 @@ namespace Service.Services
             var gymAccess = await userAccess.GetGymAccessAsync(user.Id, cancellationToken);
             var gyms = mapper.Map<GymOption[]>(gymAccess);
 
-            var permissionKeys = await userAccess.GetPermissionKeysAsync(user.Id, cancellationToken);
+            // The switched-to token carries the TARGET gym's keys: a Branch Manager
+            // in one gym who leads a team in another arrives there as a Team Leader.
+            var permissionKeys = await userAccess.GetPermissionKeysForGymAsync(user.Id, gymId, cancellationToken);
             var accessToken = tokenService.CreateAccessToken(user, permissionKeys, gymId);
 
             var me = await BuildMeAsync(user, gyms, new GymOption { GymId = gym.Id, GymName = gym.Name }, cancellationToken);
@@ -84,19 +87,16 @@ namespace Service.Services
         {
             string? roleInActiveGym = null;
             int? ledTeamId = null;
-            IReadOnlyDictionary<string, int> featureLevels = new Dictionary<string, int>();
+            int? employeeId = await employeeAccessService.GetOwnEmployeeIdAsync(user.Id, cancellationToken);
 
             if (activeGym is not null)
             {
                 var roleNames = await userAccess.GetGymRoleNamesAsync(user.Id, activeGym.GymId, cancellationToken);
-                roleInActiveGym = roleNames.Count > 0 ? roleNames[0] : null;
+                roleInActiveGym = PickPrimaryRole(roleNames);
 
                 // Only relevant for team-scoped sessions, but harmless to resolve always:
                 // null unless the user leads a team in the active gym.
                 ledTeamId = await teamScopeService.GetLedTeamIdAsync(user.Id, activeGym.GymId, cancellationToken);
-
-                var levels = await permissionService.GetEffectiveLevelsAsync(user.Id, activeGym.GymId, cancellationToken);
-                featureLevels = levels.ToDictionary(kv => kv.Key, kv => (int)kv.Value);
             }
 
             return new MeResponse
@@ -109,8 +109,41 @@ namespace Service.Services
                 Gyms = gyms,
                 RoleInActiveGym = roleInActiveGym,
                 LedTeamId = ledTeamId,
-                FeatureLevels = featureLevels
+                EmployeeId = employeeId
             };
+        }
+
+        /// <summary>
+        /// A user may hold several roles in one gym (assignments are managed on the
+        /// Roles &amp; Permissions page); the session label reports the most capable
+        /// one deterministically instead of depending on DB row order.
+        /// </summary>
+        private static string? PickPrimaryRole(IReadOnlyList<string> roleNames)
+        {
+            if (roleNames.Count == 0)
+            {
+                return null;
+            }
+
+            string[] precedence =
+            [
+                RoleNames.BranchManager,
+                RoleNames.TeamLeader,
+                RoleNames.HrManager,
+                RoleNames.Hr,
+                RoleNames.SuperAdmin,
+                RoleNames.Employee,
+            ];
+
+            foreach (var name in precedence)
+            {
+                if (roleNames.Contains(name, StringComparer.Ordinal))
+                {
+                    return name;
+                }
+            }
+
+            return roleNames[0];
         }
     }
 }

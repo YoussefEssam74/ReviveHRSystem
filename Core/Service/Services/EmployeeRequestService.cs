@@ -36,17 +36,48 @@ namespace Service.Services
     public class EmployeeRequestService(
         IUnitOfWork unitOfWork,
         IEmployeeAccessService employeeAccess,
+        IUserAccessRepository userAccess,
+        ITeamScopeService teamScope,
         IMapper mapper,
         IFileStorage fileStorage) : IEmployeeRequestService
     {
         /// <summary>Storage category of request attachments (e.g. the medical certificate).</summary>
         internal const string AttachmentCategory = "request-attachments";
 
+        /// <summary>
+        /// Loads an on-behalf target and enforces the row-32 manager gates:
+        /// Branch Manager = gym scope, Team Leader = the team he leads; anyone
+        /// else (or an out-of-scope target) silently learns the target is not there.
+        /// </summary>
+        private async Task<Employee> ResolveOnBehalfTargetAsync(int actorUserId, int employeeId, CancellationToken cancellationToken)
+        {
+            var employee = await unitOfWork.GetRepository<Employee, int>()
+                .GetByIdAsync(new EmployeeByIdSpec(employeeId), cancellationToken)
+                ?? throw new NotFoundException("Employee not found.");
+
+            var roleNames = await userAccess.GetGymRoleNamesAsync(actorUserId, employee.GymId, cancellationToken);
+            if (roleNames.Contains(Shared.Authorization.RoleNames.BranchManager, StringComparer.Ordinal))
+            {
+                return employee;
+            }
+
+            if (roleNames.Contains(Shared.Authorization.RoleNames.TeamLeader, StringComparer.Ordinal))
+            {
+                var ledTeamId = await teamScope.GetLedTeamIdAsync(actorUserId, employee.GymId, cancellationToken);
+                if (ledTeamId is not null && employee.TeamId == ledTeamId.Value)
+                {
+                    return employee;
+                }
+            }
+
+            throw new NotFoundException("Employee not found.");
+        }
+
         public async Task<IReadOnlyList<EmployeeRequestDto>> GetRequestsAsync(
             int actorUserId, int employeeId, string? status, int? activeGymId, CancellationToken cancellationToken = default)
         {
             await employeeAccess.EnsureCanAccessAsync(
-                actorUserId, employeeId, Features.Employees, AccessLevel.View, activeGymId, cancellationToken);
+                actorUserId, employeeId, activeGymId, cancellationToken);
 
             var requests = await unitOfWork.GetRepository<EmployeeRequest, int>()
                 .GetAllAsync(new RequestsByEmployeeSpec(employeeId), cancellationToken);
@@ -65,7 +96,7 @@ namespace Service.Services
                 ?? throw new NotFoundException("Request not found.");
 
             await employeeAccess.EnsureCanAccessAsync(
-                actorUserId, request.EmployeeId, Features.Employees, AccessLevel.View, activeGymId, cancellationToken);
+                actorUserId, request.EmployeeId, activeGymId, cancellationToken);
 
             return mapper.Map<EmployeeRequestDto>(request);
         }
@@ -74,14 +105,18 @@ namespace Service.Services
             int actorUserId, int employeeId, CreateEmployeeRequestDto request,
             AttachmentUpload? attachment = default, CancellationToken cancellationToken = default)
         {
-            var employee = await unitOfWork.GetRepository<Employee, int>()
+            // Self submissions always work; a route id pointing at another employee
+            // is the Branch Manager / Team Leader on-behalf flow (matrix row 32):
+            // TL(task) submits for a team member, BM for anyone in his gym, while
+            // employees cannot vouch for each other and cross-tenant targets
+            // stay invisible (404). The request is then created FOR the target.
+            var ownEmployee = await unitOfWork.GetRepository<Employee, int>()
                 .GetByIdAsync(new EmployeeByUserIdSpec(actorUserId), cancellationToken)
                 ?? throw new UnAuthorizedException("This account has no employee profile.");
 
-            if (employee.Id != employeeId)
-            {
-                throw new NotFoundException("Employee not found.");
-            }
+            var employee = employeeId == ownEmployee.Id
+                ? ownEmployee
+                : await ResolveOnBehalfTargetAsync(actorUserId, employeeId, cancellationToken);
 
             var type = RequestTypeCatalog.Find(request.Type)
                 ?? throw new BadRequestException($"Unknown request type '{request.Type}'.");
@@ -243,7 +278,7 @@ namespace Service.Services
             // The requester always gets his own file; anyone else needs employee-scoped
             // access in the request's gym, so a cross-scope caller learns nothing.
             await employeeAccess.EnsureCanAccessAsync(
-                actorUserId, request.EmployeeId, Features.Employees, AccessLevel.View, activeGymId, cancellationToken);
+                actorUserId, request.EmployeeId, activeGymId, cancellationToken);
 
             var content = string.IsNullOrWhiteSpace(request.AttachmentPath)
                 ? null
@@ -261,7 +296,7 @@ namespace Service.Services
             int actorUserId, int employeeId, int? activeGymId, CancellationToken cancellationToken = default)
         {
             await employeeAccess.EnsureCanAccessAsync(
-                actorUserId, employeeId, Features.Employees, AccessLevel.View, activeGymId, cancellationToken);
+                actorUserId, employeeId, activeGymId, cancellationToken);
 
             var employee = await unitOfWork.GetRepository<Employee, int>()
                 .GetByIdAsync(new EmployeeByIdSpec(employeeId), cancellationToken)
@@ -281,6 +316,56 @@ namespace Service.Services
                 RemainingHours = Math.Max(0, cap - used),
                 Month = $"{today.Year:D4}-{today.Month:D2}"
             };
+        }
+
+        public async Task<IReadOnlyList<EmployeeColleagueDto>> GetColleaguesAsync(
+            int actorUserId, int employeeId, CancellationToken cancellationToken = default)
+        {
+            var employee = await unitOfWork.GetRepository<Employee, int>()
+                .GetByIdAsync(new EmployeeByIdSpec(employeeId), cancellationToken)
+                ?? throw new NotFoundException("Employee not found.");
+
+            // Matrix row 36: the swap-picker belongs to the negotiators —
+            // Branch Manager (gym scope) and Team Leader (own team, F6's note
+            // says the leaderboard picks the swap partner), plus Top Management
+            // (unscoped). Employees do not list a colleague roster, and
+            // out-of-gym callers learn nothing.
+            var actor = await unitOfWork.GetRepository<DomainLayer.Models.UserModule.User, int>()
+                .GetByIdAsync(actorUserId, cancellationToken);
+            if (actor is not null && actor.UserType == DomainLayer.Models.UserModule.Enums.UserType.TopManagement)
+            {
+                return await ListColleaguesAsync(employee, cancellationToken);
+            }
+
+            var roleNames = await userAccess.GetGymRoleNamesAsync(actorUserId, employee.GymId, cancellationToken);
+            if (!roleNames.Contains(Shared.Authorization.RoleNames.BranchManager, StringComparer.Ordinal))
+            {
+                if (roleNames.Contains(Shared.Authorization.RoleNames.TeamLeader, StringComparer.Ordinal))
+                {
+                    var ledTeamId = await teamScope.GetLedTeamIdAsync(actorUserId, employee.GymId, cancellationToken);
+                    if (ledTeamId is null || employee.TeamId != ledTeamId.Value)
+                    {
+                        throw new NotFoundException("Employee not found.");
+                    }
+                }
+                else
+                {
+                    throw new NotFoundException("Employee not found.");
+                }
+            }
+
+            return await ListColleaguesAsync(employee, cancellationToken);
+        }
+
+        private async Task<IReadOnlyList<EmployeeColleagueDto>> ListColleaguesAsync(Employee employee, CancellationToken cancellationToken)
+        {
+            var colleagues = await unitOfWork.GetRepository<Employee, int>()
+                .GetAllAsync(new EmployeesByGymSpec(employee.GymId), cancellationToken);
+
+            return colleagues
+                .Where(e => e.Id != employee.Id && e.Status == EmployeeStatus.Active)
+                .Select(e => new EmployeeColleagueDto { Id = e.Id, FullName = e.FullName })
+                .ToList();
         }
 
         public Task<IReadOnlyList<RequestTypeDto>> GetRequestTypesAsync(CancellationToken cancellationToken = default) =>

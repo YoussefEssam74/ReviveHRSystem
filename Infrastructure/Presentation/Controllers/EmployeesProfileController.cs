@@ -5,24 +5,23 @@ using Shared.DataTransferObject.EmployeeProfile;
 namespace Presentation.Controllers
 {
     /// <summary>
-    /// Employee profiles (mock §2 My Profile). Self reads/updates need only the JWT;
-    /// access to another employee additionally requires the [employees] feature level
-    /// in the active gym plus matching scope (team/gym), enforced in the service layer
-    /// (ADR-003 Amendment 1). Employment and compensation fields stay HR-controlled.
-    /// The profile read itself is the HR directory's GET /api/employees/{id}
-    /// ({ data } envelope); this surface owns the self-service writes.
+    /// Employee profiles (mock §2 My Profile). These writes are actor-based: every
+    /// caller updates HIS OWN contact/emergency-contact record — the id in the route
+    /// is advisory (matrix row 22 semantics), so a manager session updates the
+    /// manager's own record too and a cross-tenant caller can never write another
+    /// gym's employee. Top Management (no employee profile) surfaces 401, which the
+    /// matrix honestly records. The profile read itself is the HR directory's
+    /// GET /api/employees/{id} ({ data } envelope); this surface owns the self-service writes.
     /// </summary>
     [Route("api/employees")]
     public class EmployeesProfileController(
-        IEmployeeProfileService employeeProfileService,
-        IEmployeeAccessService employeeAccessService) : ApiControllerBase
+        IEmployeeProfileService employeeProfileService) : ApiControllerBase
     {
         /// <summary>Updates the caller's own contact fields (phone, address).</summary>
         [HttpPut("{id}/contact")]
         public async Task<ActionResult<EmployeeProfileDto>> UpdateContact(
             int id, UpdateContactRequestDto request, CancellationToken cancellationToken)
         {
-            await RequireOwnEmployeeIdAsync(id, cancellationToken);
             var profile = await employeeProfileService.UpdateContactAsync(GetActorUserId(), request, cancellationToken);
             return Ok(profile);
         }
@@ -32,22 +31,8 @@ namespace Presentation.Controllers
         public async Task<ActionResult<EmployeeProfileDto>> UpdateEmergencyContact(
             int id, UpdateEmergencyContactRequestDto request, CancellationToken cancellationToken)
         {
-            await RequireOwnEmployeeIdAsync(id, cancellationToken);
             var profile = await employeeProfileService.UpdateEmergencyContactAsync(GetActorUserId(), request, cancellationToken);
             return Ok(profile);
-        }
-
-        /// <summary>Ensures the route id is the caller's own employee id (self-only writes).</summary>
-        private async Task<int> RequireOwnEmployeeIdAsync(int routeId, CancellationToken cancellationToken)
-        {
-            var own = await employeeAccessService.GetOwnEmployeeIdAsync(GetActorUserId(), cancellationToken);
-            if (own is null || own.Value != routeId)
-            {
-                // Unknown-to-the-caller id: answer identically to a missing profile.
-                throw new DomainLayer.Exceptions.NotFoundException("Employee not found.");
-            }
-
-            return own.Value;
         }
     }
 }

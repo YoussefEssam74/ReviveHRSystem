@@ -52,7 +52,7 @@ appsettings.*.json
 
 ## AI & Local Tooling
 .opencode/
-
+.schemathesis/
 ## Python
 __pycache__/
 *.py[cod]

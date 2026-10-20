@@ -13,14 +13,15 @@ using Shared.DataTransferObject.EmployeeProfile;
 namespace Service.Services
 {
     /// <summary>
-    /// Branch Actions queue (mock §20). Deductions ride on the attendance feature,
-    /// warnings and bonuses on the employees feature (enforced by the controller);
-    /// here the service validates the target is in scope (team for Team Leaders, gym
-    /// for Branch Managers) and always issues at the active gym with status Pending.
+    /// Branch Actions queue (mock §20). Deductions, warnings and bonus proposals are
+    /// raised by in-gym management only (Team Leader within his team, Branch Manager
+    /// gym-wise); the service validates that, the target lands inside that scope, and
+    /// every issue is recorded at the active gym with status Pending.
     /// </summary>
     public class BranchActionsService(
         IUnitOfWork unitOfWork,
-        ITeamScopeService teamScopeService) : IBranchActionsService
+        ITeamScopeService teamScopeService,
+        IUserAccessRepository userAccess) : IBranchActionsService
     {
         private static readonly string[] DeductionReasons =
         {
@@ -51,6 +52,8 @@ namespace Service.Services
             int actorUserId, int? activeGymId, CreateDeductionCandidateDto request, CancellationToken cancellationToken = default)
         {
             var gymId = RequireGym(activeGymId);
+
+            await EnsureManagementScopeAsync(actorUserId, gymId, cancellationToken);
 
             if (request.Amount <= 0)
             {
@@ -86,6 +89,8 @@ namespace Service.Services
         {
             var gymId = RequireGym(activeGymId);
 
+            await EnsureManagementScopeAsync(actorUserId, gymId, cancellationToken);
+
             if (!WarningTypes.Contains(request.Type, StringComparer.OrdinalIgnoreCase))
             {
                 throw new BadRequestException($"Unknown warning category '{request.Type}'.");
@@ -119,6 +124,8 @@ namespace Service.Services
             int actorUserId, int? activeGymId, CreateBonusProposalDto request, CancellationToken cancellationToken = default)
         {
             var gymId = RequireGym(activeGymId);
+
+            await EnsureManagementScopeAsync(actorUserId, gymId, cancellationToken);
 
             if (!BonusTypes.Contains(request.Type, StringComparer.OrdinalIgnoreCase))
             {
@@ -159,6 +166,7 @@ namespace Service.Services
             int actorUserId, int? activeGymId, CancellationToken cancellationToken = default)
         {
             var gymId = RequireGym(activeGymId);
+            await EnsureManagementScopeAsync(actorUserId, gymId, cancellationToken);
             var employeeIds = await ScopedEmployeeIdsAsync(actorUserId, gymId, cancellationToken);
 
             var items = new List<BranchQueueItemDto>();
@@ -206,6 +214,110 @@ namespace Service.Services
                 }));
 
             return items.OrderByDescending(i => i.Date).ToList();
+        }
+
+        /// <summary>
+        /// The branch/history reads only answer for an acting manager: a Team
+        /// Leader sees his led team, a Branch Manager the whole gym; anyone else
+        /// gets the same "not found" the raise endpoints answer with, so a plain
+        /// employee cannot page through the branch's discipline data.
+        /// </summary>
+        private static readonly string[] ManagementRoleNames =
+        [
+            Shared.Authorization.RoleNames.TeamLeader,
+            Shared.Authorization.RoleNames.BranchManager,
+            Shared.Authorization.RoleNames.SuperAdmin,
+        ];
+
+        private async Task EnsureManagementScopeAsync(int actorUserId, int gymId, CancellationToken cancellationToken)
+        {
+            var roleNames = await userAccess.GetGymRoleNamesAsync(actorUserId, gymId, cancellationToken);
+            if (!roleNames.Any(ManagementRoleNames.Contains))
+            {
+                throw new NotFoundException("Employee not found.");
+            }
+        }
+
+        public async Task<IReadOnlyList<DeductionCandidateDto>> GetDeductionsAsync(
+            int actorUserId, int? employeeId, int? activeGymId, CancellationToken cancellationToken = default)
+        {
+            var gymId = RequireGym(activeGymId);
+            await EnsureManagementScopeAsync(actorUserId, gymId, cancellationToken);
+            var employeeIds = await ScopedEmployeeIdsAsync(actorUserId, gymId, cancellationToken);
+
+            var candidates = await unitOfWork.GetRepository<DeductionCandidate, int>()
+                .GetAllAsync(new DeductionCandidatesByEmployeesSpec(employeeIds), cancellationToken);
+
+            return candidates
+                .Where(d => employeeId is null || d.EmployeeId == employeeId)
+                .Select(d => new DeductionCandidateDto
+                {
+                    Id = d.Id,
+                    EmployeeId = d.EmployeeId,
+                    Employee = d.Employee?.FullName ?? string.Empty,
+                    Amount = d.Amount,
+                    Reason = d.Reason,
+                    Note = d.Note,
+                    Status = d.Status.ToString(),
+                    IssuedAt = d.IssuedAt,
+                    IssuedBy = d.IssuedByUser?.UserName ?? string.Empty,
+                })
+                .ToList();
+        }
+
+        public async Task<IReadOnlyList<WarningNoticeDto>> GetWarningsAsync(
+            int actorUserId, int? employeeId, int? activeGymId, CancellationToken cancellationToken = default)
+        {
+            var gymId = RequireGym(activeGymId);
+            await EnsureManagementScopeAsync(actorUserId, gymId, cancellationToken);
+            var employeeIds = await ScopedEmployeeIdsAsync(actorUserId, gymId, cancellationToken);
+
+            var notices = await unitOfWork.GetRepository<WarningNotice, int>()
+                .GetAllAsync(new WarningNoticesByEmployeesSpec(employeeIds), cancellationToken);
+
+            return notices
+                .Where(w => employeeId is null || w.EmployeeId == employeeId)
+                .Select(w => new WarningNoticeDto
+                {
+                    Id = w.Id,
+                    EmployeeId = w.EmployeeId,
+                    Employee = w.Employee?.FullName ?? string.Empty,
+                    Type = w.Type,
+                    Reason = w.Reason,
+                    Note = w.Note,
+                    Status = w.Status.ToString(),
+                    IssuedAt = w.IssuedAt,
+                    IssuedBy = w.IssuedByUser?.UserName ?? string.Empty,
+                })
+                .ToList();
+        }
+
+        public async Task<IReadOnlyList<BonusProposalDto>> GetBonusesAsync(
+            int actorUserId, int? employeeId, int? activeGymId, CancellationToken cancellationToken = default)
+        {
+            var gymId = RequireGym(activeGymId);
+            await EnsureManagementScopeAsync(actorUserId, gymId, cancellationToken);
+            var employeeIds = await ScopedEmployeeIdsAsync(actorUserId, gymId, cancellationToken);
+
+            var proposals = await unitOfWork.GetRepository<BonusProposal, int>()
+                .GetAllAsync(new BonusProposalsByEmployeesSpec(employeeIds), cancellationToken);
+
+            return proposals
+                .Where(b => employeeId is null || b.EmployeeId == employeeId)
+                .Select(b => new BonusProposalDto
+                {
+                    Id = b.Id,
+                    EmployeeId = b.EmployeeId,
+                    Employee = b.Employee?.FullName ?? string.Empty,
+                    Type = b.Type,
+                    Amount = b.Amount,
+                    Reason = b.Reason,
+                    Note = b.Note,
+                    Status = b.Status.ToString(),
+                    IssuedAt = b.IssuedAt,
+                    IssuedBy = b.IssuedByUser?.UserName ?? string.Empty,
+                })
+                .ToList();
         }
 
         public async Task SendReportAsync(int actorUserId, int? activeGymId, CreateBranchReportDto request, CancellationToken cancellationToken = default)

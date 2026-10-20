@@ -6,7 +6,10 @@ public sealed class TeamFollowUpDto
     public int Id { get; init; }
     public int EmployeeId { get; init; }
     public string Employee { get; init; } = string.Empty;
-    public int TeamId { get; init; }
+
+    /// <summary>The team this item hangs off; null when a Branch Manager raised it
+    /// about an employee who is not assigned to any team yet.</summary>
+    public int? TeamId { get; init; }
 
     /// <summary>Action type: Reminder, Meeting, Escalation or Resolution.</summary>
     public string ActionType { get; init; } = string.Empty;

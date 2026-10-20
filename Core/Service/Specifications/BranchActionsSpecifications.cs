@@ -22,6 +22,7 @@ namespace Service.Specifications
         {
             Criteria = d => employeeIds.Contains(d.EmployeeId);
             AddInclude(d => d.Employee);
+            AddInclude(d => d.IssuedByUser);
             OrderByDescending = d => d.IssuedAt;
         }
     }
@@ -44,6 +45,7 @@ namespace Service.Specifications
         {
             Criteria = w => employeeIds.Contains(w.EmployeeId);
             AddInclude(w => w.Employee);
+            AddInclude(w => w.IssuedByUser);
             OrderByDescending = w => w.IssuedAt;
         }
     }
@@ -66,6 +68,7 @@ namespace Service.Specifications
         {
             Criteria = b => employeeIds.Contains(b.EmployeeId);
             AddInclude(b => b.Employee);
+            AddInclude(b => b.IssuedByUser);
             OrderByDescending = b => b.IssuedAt;
         }
     }

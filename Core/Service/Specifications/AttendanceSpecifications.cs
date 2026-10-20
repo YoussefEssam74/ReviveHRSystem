@@ -191,6 +191,16 @@ namespace Service.Specifications
         }
     }
 
+    /// <summary>Attendance records of one employee inside an inclusive date range.</summary>
+    public class AttendanceByEmployeeRangeSpec : BaseSpecification<AttendanceRecord, int>
+    {
+        public AttendanceByEmployeeRangeSpec(int employeeId, DateOnly from, DateOnly to)
+        {
+            Criteria = r => r.EmployeeId == employeeId && r.Date >= from && r.Date <= to;
+            OrderBy = r => r.Date;
+        }
+    }
+
     // ------------------------------------------------------------------
     // S4 — HR attendance management (A1/A3/A4/A7)
     // ------------------------------------------------------------------
@@ -205,6 +215,7 @@ namespace Service.Specifications
         {
             Criteria = e => e.Status != EmployeeStatus.Terminated
                 && (gymIds == null || gymIds.Contains(e.GymId));
+            AddInclude(e => e.Position);
             AddInclude(e => e.Gym);
             OrderBy = e => e.FullName;
         }

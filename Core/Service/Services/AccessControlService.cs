@@ -54,7 +54,12 @@ namespace Service.Services
                 return;
             }
 
-            var permissionKeys = await userAccess.GetPermissionKeysAsync(user.Id, cancellationToken);
+            // Keys follow the gym being acted on (ADR-003 Amendment 1): the
+            // per-gym role defines what you may do THERE. A Branch Manager in
+            // one gym who is a Team Leader in another cannot act there with the
+            // other gym's keys; global role keys apply only when the user holds
+            // no role in the gym at all.
+            var permissionKeys = await userAccess.GetPermissionKeysForGymAsync(user.Id, gymId, cancellationToken);
             if (!permissionKeys.Contains(permissionKey, StringComparer.Ordinal))
             {
                 throw new UnAuthorizedException("You do not have permission to perform this action.");

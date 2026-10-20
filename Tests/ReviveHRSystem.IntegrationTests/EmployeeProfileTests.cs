@@ -1,10 +1,12 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using DomainLayer.Models.UserModule.Enums;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Presistence.Data;
 using ReviveHRSystem.IntegrationTests.Fixtures;
+using ReviveHRSystem.IntegrationTests.Support;
 using Xunit;
 
 namespace ReviveHRSystem.IntegrationTests
@@ -54,13 +56,22 @@ namespace ReviveHRSystem.IntegrationTests
         }
 
         [Fact]
-        public async Task GetProfile_CrossGymEmployee_AsBranchManager_Returns401()
+        public async Task GetProfile_OtherGymEmployee_WithoutGymAccess_Returns401()
         {
-            // Sara works at gym2; Omar's Branch Manager scope is gym1.
-            var saraEmployeeId = await OwnEmployeeIdAsync("sara@revive.hr");
-            var token = await LoginSelectingGymAsync("omar@revive.hr", await GymIdByNameAsync("Revive Main Gym"));
+            // A principal holding employees.view but with no access to the employee's
+            // gym still cannot read it: the key grants the capability, the gym access
+            // row grants the reach (the seeded Branch Manager does hold both gyms, so
+            // this scenario is built explicitly).
+            var builder = new TestDataBuilder(_fixture.Services);
+            var ownGym = await builder.CreateGymWithStationAsync();
+            var otherGym = await builder.CreateGymWithStationAsync();
+            var outsider = await builder.CreateEmployeeAsync(otherGym);
+            var hr = await builder.CreateUserAsync(UserType.HR, new[] { ownGym });
+            await builder.GrantPermissionAsync(hr.UserId, "employees.view");
+            var token = await _fixture.LoginAsync(hr.Email, hr.Password);
 
-            var request = _fixture.AuthorizedRequest(HttpMethod.Get, $"/api/employees/{saraEmployeeId}", null, token);
+            var request = _fixture.AuthorizedRequest(
+                HttpMethod.Get, $"/api/employees/{outsider.EmployeeId}", null, token);
             var response = await _fixture.Client.SendAsync(request);
 
             Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
@@ -86,8 +97,19 @@ namespace ReviveHRSystem.IntegrationTests
         }
 
         [Fact]
-        public async Task UpdateContact_SomeoneElsesId_Returns404()
+        public async Task UpdateContact_SomeoneElsesId_ActsOnOwnRecord()
         {
+            // Matrix row 22 (converged, actor-based): the contact write updates the
+            // CALLER's own record — the route id is advisory. Karim addressing Sara's
+            // id must succeed and must never touch Sara's data.
+            var scopeText = "";
+            using (var scope = _fixture.Services.CreateScope())
+            {
+                var db = scope.ServiceProvider.GetRequiredService<ReviveHrDbContext>();
+                var saraId = await db.Employees.AsNoTracking().FirstAsync(e => e.User.Email == "sara@revive.hr");
+                scopeText = saraId.Phone ?? "";
+            }
+
             var saraEmployeeId = await OwnEmployeeIdAsync("sara@revive.hr");
             var token = await _fixture.LoginAsync("karim@revive.hr", "Revive!2026");
 
@@ -97,7 +119,16 @@ namespace ReviveHRSystem.IntegrationTests
             }, token);
             var response = await _fixture.Client.SendAsync(request);
 
-            Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+            using (var scope = _fixture.Services.CreateScope())
+            {
+                var db = scope.ServiceProvider.GetRequiredService<ReviveHrDbContext>();
+                var sara = await db.Employees.AsNoTracking().FirstAsync(e => e.User.Email == "sara@revive.hr");
+                Assert.Equal(scopeText, sara.Phone ?? "");
+                var karim = await db.Employees.AsNoTracking().FirstAsync(e => e.User.Email == "karim@revive.hr");
+                Assert.Equal("+201111111111", karim.Phone);
+            }
         }
 
         [Fact]

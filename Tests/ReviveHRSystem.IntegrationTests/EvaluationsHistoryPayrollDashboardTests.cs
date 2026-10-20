@@ -24,8 +24,10 @@ namespace ReviveHRSystem.IntegrationTests
 
 
         [Fact]
-        public async Task Dashboard_PlainEmployee_HasNoOverviewStrip()
+        public async Task Dashboard_PlainEmployee_ReturnsSelfAggregate()
         {
+            // The gym-wide overview strip is a manager view: plain employees get
+            // `overview: null`, Team Leaders a team strip, Branch Managers a gym strip.
             var token = await _fixture.LoginAsync("karim@revive.hr", "Revive!2026");
 
             var request = _fixture.AuthorizedRequest(HttpMethod.Get, "/api/dashboard/employee", null, token);
