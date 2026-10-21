@@ -22,6 +22,9 @@ namespace DomainLayer.Models.PayrollModule
 
         public DateTime? ApprovedAt { get; set; }
 
+        /// <summary>Set when the branch is published &amp; locked (the UI's "Paid" period state).</summary>
+        public DateOnly? PaidDate { get; set; }
+
         public virtual ICollection<PayrollEntry> Entries { get; set; } = new List<PayrollEntry>();
     }
 }

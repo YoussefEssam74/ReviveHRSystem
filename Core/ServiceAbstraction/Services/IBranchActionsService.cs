@@ -22,6 +22,22 @@ namespace ServiceAbstraction.Services
         Task<IReadOnlyList<BranchQueueItemDto>> GetPendingForHrAsync(
             int actorUserId, int? activeGymId, CancellationToken cancellationToken = default);
 
+        /// <summary>
+        /// Branch-raised deductions in the caller's management scope (team for a Team
+        /// Leader, gym for a Branch Manager), newest first, in every HR decision
+        /// state. The optional employee id narrows one employee's performance tab.
+        /// </summary>
+        Task<IReadOnlyList<DeductionCandidateDto>> GetDeductionsAsync(
+            int actorUserId, int? employeeId, int? activeGymId, CancellationToken cancellationToken = default);
+
+        /// <summary>Warning notices in the caller's management scope, newest first (<see cref="GetDeductionsAsync"/> semantics).</summary>
+        Task<IReadOnlyList<WarningNoticeDto>> GetWarningsAsync(
+            int actorUserId, int? employeeId, int? activeGymId, CancellationToken cancellationToken = default);
+
+        /// <summary>Bonus proposals in the caller's management scope, newest first (<see cref="GetDeductionsAsync"/> semantics).</summary>
+        Task<IReadOnlyList<BonusProposalDto>> GetBonusesAsync(
+            int actorUserId, int? employeeId, int? activeGymId, CancellationToken cancellationToken = default);
+
         /// <summary>Sends a free-form report to HR (any employee may report; lands in the HR queue).</summary>
         Task SendReportAsync(int actorUserId, int? activeGymId, CreateBranchReportDto request, CancellationToken cancellationToken = default);
     }

@@ -4,6 +4,7 @@ using DomainLayer.Exceptions;
 using DomainLayer.Models.EmployeeModule.Enums;
 using ServiceAbstraction.Services;
 using Shared.DataTransferObject.EmployeeProfile;
+using Shared.DataTransferObject.Payroll;
 
 namespace Presentation.Controllers
 {
@@ -17,28 +18,12 @@ namespace Presentation.Controllers
     public class EmployeeDocumentsController(
         IEmployeeDocumentService documentService) : ApiControllerBase
     {
-        [HttpGet]
-        public async Task<ActionResult<IReadOnlyList<EmployeeDocumentDto>>> GetDocuments(
-            int id, CancellationToken cancellationToken)
-        {
-            var documents = await documentService.GetDocumentsAsync(GetActorUserId(), id, GetGymIdFromToken(), cancellationToken);
-            return Ok(documents);
-        }
-
         [HttpGet("~/api/employees/{id}/required-documents")]
         public async Task<ActionResult<IReadOnlyList<RequiredDocumentDto>>> GetRequiredDocuments(
             int id, CancellationToken cancellationToken)
         {
             var documents = await documentService.GetRequiredDocumentsAsync(GetActorUserId(), id, GetGymIdFromToken(), cancellationToken);
             return Ok(documents);
-        }
-
-        [HttpPost]
-        public async Task<ActionResult<EmployeeDocumentDto>> Upload(
-            int id, UploadDocumentRequestDto request, CancellationToken cancellationToken)
-        {
-            var document = await documentService.UploadAsync(GetActorUserId(), id, request, cancellationToken);
-            return CreatedAtAction(nameof(GetDocuments), new { id }, document);
         }
 
         /// <summary>Official company documents published by HR for this employee (mock §3.3).</summary>
@@ -87,7 +72,7 @@ namespace Presentation.Controllers
         [HttpPut]
         [RequestSizeLimit(11 * 1024 * 1024)]
         public async Task<ActionResult<PhotoUploadResultDto>> Upload(
-            int id, [FromForm] IFormFile file, CancellationToken cancellationToken)
+            int id, IFormFile file, CancellationToken cancellationToken)
         {
             if (file is null || file.Length == 0)
             {
@@ -97,36 +82,6 @@ namespace Presentation.Controllers
             await using var content = file.OpenReadStream();
             var result = await documentService.UploadPhotoAsync(GetActorUserId(), id, file.FileName, content, cancellationToken);
             return Ok(result);
-        }
-    }
-
-    /// <summary>Attendance and leave balance for one employee (mock §6).</summary>
-    [Route("api/employees/{id}/attendance")]
-    public class EmployeeAttendanceController(
-        IAttendanceSelfService attendanceService) : ApiControllerBase
-    {
-        [HttpGet]
-        public async Task<ActionResult<AttendanceOverviewDto>> GetAttendance(
-            int id, [FromQuery] string? month, CancellationToken cancellationToken)
-        {
-            var overview = await attendanceService.GetAttendanceAsync(
-                GetActorUserId(), id, month, GetGymIdFromToken(), cancellationToken);
-            return Ok(overview);
-        }
-    }
-
-    /// <summary>Leave balance for one employee (mock §6 leave card).</summary>
-    [Route("api/employees/{id}/leave-balance")]
-    public class EmployeeLeaveBalanceController(
-        IAttendanceSelfService attendanceService) : ApiControllerBase
-    {
-        [HttpGet]
-        public async Task<ActionResult<LeaveBalanceOverviewDto>> GetLeaveBalance(
-            int id, CancellationToken cancellationToken)
-        {
-            var overview = await attendanceService.GetLeaveBalanceAsync(
-                GetActorUserId(), id, GetGymIdFromToken(), cancellationToken);
-            return Ok(overview);
         }
     }
 
@@ -145,20 +100,27 @@ namespace Presentation.Controllers
         }
     }
 
+    /// <summary>
+    /// Own evaluation details (mock §9): criteria, reviewer and the 5-point max.
+    /// Mounted beside the thin profile tab so the portal can render the score card
+    /// without a management permission; access is the usual employee scope.
+    /// </summary>
+    [Route("~/api/employees/{id}/evaluations/detail")]
+    public class EmployeeEvaluationDetailController(
+        IEvaluationSelfService evaluationService) : ApiControllerBase
+    {
+        [HttpGet]
+        public async Task<ActionResult<IReadOnlyList<EvaluationDto>>> GetDetails(
+            int id, CancellationToken cancellationToken)
+            => Ok(await evaluationService.GetEvaluationsAsync(
+                GetActorUserId(), id, GetGymIdFromToken(), cancellationToken));
+    }
+
     /// <summary>Self-service requests (mock §10) and the configurable request types.</summary>
     [Route("api/employees/{id}/requests")]
     public class EmployeeRequestsController(
         IEmployeeRequestService requestService) : ApiControllerBase
     {
-        [HttpGet]
-        public async Task<ActionResult<IReadOnlyList<EmployeeRequestDto>>> GetRequests(
-            int id, [FromQuery] string? status, CancellationToken cancellationToken)
-        {
-            var requests = await requestService.GetRequestsAsync(
-                GetActorUserId(), id, status, GetGymIdFromToken(), cancellationToken);
-            return Ok(requests);
-        }
-
         /// <summary>
         /// Submits a request. Multipart because a file can ride with it — the sick-leave
         /// medical certificate must be sent with the request, so it belongs to the same
@@ -169,7 +131,7 @@ namespace Presentation.Controllers
         public async Task<ActionResult<EmployeeRequestDto>> Create(
             int id,
             [FromForm] CreateEmployeeRequestDto request,
-            [FromForm] IFormFile? attachment,
+            IFormFile? attachment,
             CancellationToken cancellationToken)
         {
             AttachmentUpload? upload = null;
@@ -198,19 +160,67 @@ namespace Presentation.Controllers
         }
     }
 
+    /// <summary>
+    /// Deductions hanging on one employee — absence follow-ups and payroll candidates —
+    /// each joined with the Deduction Correction request filed against its date.
+    /// </summary>
+    [Route("api/employees/{id}/deductions")]
+    public class EmployeeDeductionsController(
+        IEmployeeRequestService requestService) : ApiControllerBase
+    {
+        [HttpGet]
+        public async Task<ActionResult<IReadOnlyList<EmployeeDeductionDto>>> GetDeductions(
+            int id, CancellationToken cancellationToken)
+        {
+            var deductions = await requestService.GetDeductionsAsync(
+                GetActorUserId(), id, GetGymIdFromToken(), cancellationToken);
+            return Ok(deductions);
+        }
+    }
+
+    /// <summary>Own payroll sheets (mock §8): visible period cards for the employee.</summary>
+    [Route("~/api/employees/{id}/payroll-sheets")]
+    public class EmployeePayrollSheetsController(IPayrollSelfService payroll) : ApiControllerBase
+    {
+        [HttpGet]
+        public async Task<ActionResult<IReadOnlyList<PayrollEntryDto>>> GetSheets(
+            int id, CancellationToken cancellationToken)
+            => Ok(await payroll.GetPayrollAsync(GetActorUserId(), id, GetGymIdFromToken(), cancellationToken));
+    }
+
+    /// <summary>One sheet's payslip card (mock §8 modal), addressed by the sheet's own id.</summary>
+    [Route("~/api/employees/{id}/payroll/{entryId:int}/payslip")]
+    public class EmployeePayrollSlipController(IPayrollSelfService payroll) : ApiControllerBase
+    {
+        [HttpGet]
+        public async Task<ActionResult<PayslipResponse>> GetPayslip(
+            int id, int entryId, CancellationToken cancellationToken)
+            => Ok(await payroll.GetPayslipAsync(GetActorUserId(), id, entryId, cancellationToken));
+    }
+
+    /// <summary>
+    /// Active colleagues of the caller's own gym — the shift-swap pickers' data
+    /// source (id + name only). Plain-directory listing would need employees.view
+    /// which the swap requester never holds; this surface is self-only.
+    /// </summary>
+    [Route("~/api/employees/{id}/colleagues")]
+    public class EmployeeColleaguesController(
+        IEmployeeRequestService requestService) : ApiControllerBase
+    {
+        [HttpGet]
+        public async Task<ActionResult<IReadOnlyList<EmployeeColleagueDto>>> GetColleagues(
+            int id, CancellationToken cancellationToken)
+        {
+            var colleagues = await requestService.GetColleaguesAsync(GetActorUserId(), id, cancellationToken);
+            return Ok(colleagues);
+        }
+    }
+
     /// <summary>Single request operations: detail, cancel; plus the request-type catalog.</summary>
     [Route("api/requests")]
     public class EmployeeRequestDetailController(
         IEmployeeRequestService requestService) : ApiControllerBase
     {
-        [HttpGet("~/api/requests/{id}")]
-        public async Task<ActionResult<EmployeeRequestDto>> GetRequest(
-            int id, CancellationToken cancellationToken)
-        {
-            var request = await requestService.GetRequestAsync(GetActorUserId(), id, GetGymIdFromToken(), cancellationToken);
-            return Ok(request);
-        }
-
         /// <summary>
         /// Streams the file riding with a request (the sick-leave medical certificate).
         /// The requester gets his own file; anyone else needs employee-scoped access.

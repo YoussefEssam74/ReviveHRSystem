@@ -16,18 +16,22 @@ namespace Service.Services
     /// Management-side request workflow (mock §17 Team/Requests Management): the
     /// scoped inbox and the two-stage approval. Stage 1 (BranchManager) is the
     /// TL/BM decision that moves a request to HR review; HR's final decision lives
-    /// in the HR portal. Every write requires the requests feature at Edit level in
-    /// the active gym; the inbox is team-scoped for team leaders (ADR-003 Amendment 1).
+    /// in the HR portal. The desk belongs to the manager roles of the active gym
+    /// (Team Leader / Branch Manager / Super Admin): data scope comes from the
+    /// per-gym role — team for Team Leaders, the whole gym for Branch Managers —
+    /// and plain employees hold no desk at all (ADR-003 Amendment 1).
     /// </summary>
     public class RequestManagementService(
         IUnitOfWork unitOfWork,
         ITeamScopeService teamScopeService,
+        IUserAccessRepository userAccess,
         IMapper mapper) : IRequestManagementService
     {
         public async Task<PaginationResult<EmployeeRequestDto>> GetInboxAsync(
             int actorUserId, int? activeGymId, RequestQueryParams query, CancellationToken cancellationToken = default)
         {
             var gymId = RequireGym(activeGymId);
+            await EnsureDeskRoleAsync(actorUserId, gymId, cancellationToken);
             var employeeIds = await ScopedEmployeeIdsAsync(actorUserId, gymId, cancellationToken);
 
             var requests = await unitOfWork.GetRepository<EmployeeRequest, int>()
@@ -56,27 +60,52 @@ namespace Service.Services
             int actorUserId, int requestId, int? activeGymId, RequestDecisionDto decision, CancellationToken cancellationToken = default)
         {
             var gymId = RequireGym(activeGymId);
+            await EnsureDeskRoleAsync(actorUserId, gymId, cancellationToken);
             var request = await LoadInScopeAsync(actorUserId, requestId, gymId, cancellationToken);
 
-            if (request.Status != RequestStatus.Pending)
+            if (request.Status is not (RequestStatus.Pending or RequestStatus.PendingHRReview))
             {
                 throw new BadRequestException("Only pending requests can be decided at this stage.");
             }
 
             var outcome = ParseDecision(decision.Decision);
-            var stage = ParseStage(decision.Stage);            request.Status = outcome == DecisionOutcome.Approved
+            var stage = ParseStage(decision.Stage);
+
+            // A request already forwarded to HR can no longer be approved again at
+            // the desk — but the desk can still pull it back with a rejection.
+            if (request.Status == RequestStatus.PendingHRReview && outcome != DecisionOutcome.Rejected)
+            {
+                throw new BadRequestException("This request is already approved to HR — you can only reject it from here.");
+            }
+
+            request.Status = outcome == DecisionOutcome.Approved
                 ? RequestStatus.PendingHRReview
                 : RequestStatus.Rejected;
 
-            request.Decisions.Add(new RequestDecision
+            // The desk may re-decide his own stage — most commonly reject after an
+            // earlier acceptance. (RequestId, Stage) is unique, so a second insert
+            // used to blow up as the misleading "concurrent update" error: rewrite
+            // the existing stage row in place instead.
+            var stageDecision = request.Decisions.FirstOrDefault(d => d.Stage == stage);
+            if (stageDecision is null)
             {
-                RequestId = request.Id,
-                Stage = stage,
-                Decision = outcome,
-                Comment = string.IsNullOrWhiteSpace(decision.Comment) ? null : decision.Comment.Trim(),
-                DecidedBy = actorUserId,
-                DecidedAt = DateTime.UtcNow
-            });
+                request.Decisions.Add(new RequestDecision
+                {
+                    RequestId = request.Id,
+                    Stage = stage,
+                    Decision = outcome,
+                    Comment = string.IsNullOrWhiteSpace(decision.Comment) ? null : decision.Comment.Trim(),
+                    DecidedBy = actorUserId,
+                    DecidedAt = DateTime.UtcNow
+                });
+            }
+            else
+            {
+                stageDecision.Decision = outcome;
+                stageDecision.Comment = string.IsNullOrWhiteSpace(decision.Comment) ? null : decision.Comment.Trim();
+                stageDecision.DecidedBy = actorUserId;
+                stageDecision.DecidedAt = DateTime.UtcNow;
+            }
 
             unitOfWork.GetRepository<EmployeeRequest, int>().Update(request);
 
@@ -96,6 +125,7 @@ namespace Service.Services
             int actorUserId, int requestId, int? activeGymId, UpdateRequestDto update, CancellationToken cancellationToken = default)
         {
             var gymId = RequireGym(activeGymId);
+            await EnsureDeskRoleAsync(actorUserId, gymId, cancellationToken);
             var request = await LoadInScopeAsync(actorUserId, requestId, gymId, cancellationToken);
 
             if (request.Status is not (RequestStatus.Pending or RequestStatus.PendingHRReview))
@@ -136,6 +166,7 @@ namespace Service.Services
             int actorUserId, int requestId, int? activeGymId, CreateRequestCommentDto request, CancellationToken cancellationToken = default)
         {
             var gymId = RequireGym(activeGymId);
+            await EnsureDeskRoleAsync(actorUserId, gymId, cancellationToken);
 
             if (string.IsNullOrWhiteSpace(request.Comment))
             {
@@ -212,10 +243,19 @@ namespace Service.Services
             return request;
         }
 
-        private static DecisionOutcome ParseDecision(string decision) =>
-            Enum.TryParse<DecisionOutcome>(decision, ignoreCase: true, out var parsed) && Enum.IsDefined(parsed)
-                ? parsed
-                : throw new BadRequestException($"Unknown decision '{decision}'.");
+        private static DecisionOutcome ParseDecision(string decision)
+        {
+            // The portals send "approve"/"reject"; the HR vocabulary is
+            // "Approved"/"Rejected" — both are accepted so the desk and the HR
+            // portal speak one contract.
+            var normalized = decision.Trim().ToLowerInvariant();
+            return normalized switch
+            {
+                "approve" or "approved" or "accept" or "accepted" => DecisionOutcome.Approved,
+                "reject" or "rejected" => DecisionOutcome.Rejected,
+                _ => throw new BadRequestException($"Unknown decision '{decision}'."),
+            };
+        }
 
         /// <summary>
         /// Stage carried by the decision. Omitted means stage 1 (BranchManager), which
@@ -243,6 +283,27 @@ namespace Service.Services
             }
 
             return parsed;
+        }
+
+        /// <summary>
+        /// The stage-1 desk belongs to the manager roles of the active gym
+        /// (Team Leader / Branch Manager / Super Admin). A plain employee answers
+        /// NotFound so the surface does not exist for him.
+        /// </summary>
+        private static readonly string[] DeskRoleNames =
+        [
+            Shared.Authorization.RoleNames.TeamLeader,
+            Shared.Authorization.RoleNames.BranchManager,
+            Shared.Authorization.RoleNames.SuperAdmin,
+        ];
+
+        private async Task EnsureDeskRoleAsync(int actorUserId, int gymId, CancellationToken cancellationToken)
+        {
+            var roleNames = await userAccess.GetGymRoleNamesAsync(actorUserId, gymId, cancellationToken);
+            if (!roleNames.Any(DeskRoleNames.Contains))
+            {
+                throw new NotFoundException("Request not found.");
+            }
         }
 
         private static int RequireGym(int? activeGymId) =>

@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { clearSession, loadStoredSession, saveSession, SESSION_CHANGED_EVENT, type StoredSession } from '../lib/session-store'
 
 interface AuthSessionContextValue {
@@ -11,6 +12,7 @@ const AuthSessionContext = createContext<AuthSessionContextValue | null>(null)
 
 export function AuthSessionProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<StoredSession | null>(() => loadStoredSession())
+  const queryClient = useQueryClient()
 
   // The API client clears storage on 401 from anywhere (including other tabs);
   // listening here keeps the in-memory session in sync with storage.
@@ -27,12 +29,17 @@ export function AuthSessionProvider({ children }: { children: ReactNode }) {
   const signIn = useCallback((next: StoredSession) => {
     saveSession(next)
     setSession(next)
-  }, [])
+    // The portal cache is per account + per gym (roles, dashboard, inbox…).
+    // A previous login's fresh entries would otherwise be served to the new
+    // account (BM/TL sections computed from stale "me" data) — drop them all.
+    queryClient.removeQueries({ queryKey: ['portal'] })
+  }, [queryClient])
 
   const signOut = useCallback(() => {
     clearSession()
     setSession(null)
-  }, [])
+    queryClient.removeQueries({ queryKey: ['portal'] })
+  }, [queryClient])
 
   const value = useMemo<AuthSessionContextValue>(() => ({ session, signIn, signOut }), [session, signIn, signOut])
 

@@ -24,7 +24,7 @@ namespace Service.Services
             int actorUserId, int employeeId, string? month, int? activeGymId, CancellationToken cancellationToken = default)
         {
             await employeeAccess.EnsureCanAccessAsync(
-                actorUserId, employeeId, Features.Employees, AccessLevel.View, activeGymId, cancellationToken);
+                actorUserId, employeeId, activeGymId, cancellationToken);
 
             var employee = await unitOfWork.GetRepository<DomainLayer.Models.EmployeeModule.Employee, int>()
                 .GetByIdAsync(new EmployeeByIdSpec(employeeId), cancellationToken)

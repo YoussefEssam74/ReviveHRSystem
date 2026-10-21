@@ -1,6 +1,10 @@
-﻿using DomainLayer.Contracts;
+using System.Linq;
+using DomainLayer.Contracts;
 using DomainLayer.Models.AttendanceModule;
 using DomainLayer.Models.EmployeeModule;
+using DomainLayer.Models.EmployeeModule.Enums;
+using DomainLayer.Models.RequestModule;
+using DomainLayer.Models.RequestModule.Enums;
 using DomainLayer.Models.SchedulingModule;
 
 namespace Service.Specifications
@@ -173,7 +177,7 @@ namespace Service.Specifications
         {
             var monthEnd = monthStart.AddMonths(1);
             Criteria = r => r.EmployeeId == employeeId && r.Date >= monthStart && r.Date < monthEnd;
-            AddInclude(r => r.ScheduledShiftTemplate);
+            AddInclude(r => r.ScheduledShiftTemplate!);
             OrderByDescending = r => r.Date;
         }
     }
@@ -184,6 +188,143 @@ namespace Service.Specifications
         public AttendanceByEmployeeDateSpec(int employeeId, DateOnly date)
         {
             Criteria = r => r.EmployeeId == employeeId && r.Date == date;
+        }
+    }
+
+    /// <summary>Attendance records of one employee inside an inclusive date range.</summary>
+    public class AttendanceByEmployeeRangeSpec : BaseSpecification<AttendanceRecord, int>
+    {
+        public AttendanceByEmployeeRangeSpec(int employeeId, DateOnly from, DateOnly to)
+        {
+            Criteria = r => r.EmployeeId == employeeId && r.Date >= from && r.Date <= to;
+            OrderBy = r => r.Date;
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // S4 — HR attendance management (A1/A3/A4/A7)
+    // ------------------------------------------------------------------
+
+    /// <summary>
+    /// Roster employees for the attendance directory: everyone except terminated,
+    /// scoped to the caller's gyms (null = all gyms, Top Management).
+    /// </summary>
+    public class EmployeesForRosterSpec : BaseSpecification<Employee, int>
+    {
+        public EmployeesForRosterSpec(int[]? gymIds)
+        {
+            Criteria = e => e.Status != EmployeeStatus.Terminated
+                && (gymIds == null || gymIds.Contains(e.GymId));
+            AddInclude(e => e.Position);
+            AddInclude(e => e.Gym);
+            OrderBy = e => e.FullName;
+        }
+    }
+
+    /// <summary>
+    /// Attendance records across a date range for the given employees (A1/A7
+    /// compose). Employees are pre-scoped by the caller, so this filters by the
+    /// id set; shift labels come from the assignment index and corrections are
+    /// loaded separately (collection-then-include is not supported by the
+    /// specification evaluator).
+    /// </summary>
+    public class AttendanceRecordsByEmployeeIdsRangeSpec : BaseSpecification<AttendanceRecord, int>
+    {
+        public AttendanceRecordsByEmployeeIdsRangeSpec(int[] employeeIds, DateOnly from, DateOnly to)
+        {
+            Criteria = ar => employeeIds.Contains(ar.EmployeeId)
+                && ar.Date >= from && ar.Date <= to;
+        }
+    }
+
+    /// <summary>Shift assignments across a date range (shift labels + off days for the roster compose).</summary>
+    public class ShiftAssignmentsByEmployeeIdsRangeSpec : BaseSpecification<ShiftAssignment, int>
+    {
+        public ShiftAssignmentsByEmployeeIdsRangeSpec(int[] employeeIds, DateOnly from, DateOnly to)
+        {
+            Criteria = sa => employeeIds.Contains(sa.EmployeeId)
+                && sa.Date >= from && sa.Date <= to;
+            AddInclude(sa => sa.ShiftTemplate!);
+        }
+    }
+
+    /// <summary>Approved Day Off requests whose effective span overlaps the range (roster "Off — Day Off approved").</summary>
+    public class ApprovedDayOffRequestsByEmployeeIdsSpec : BaseSpecification<EmployeeRequest, int>
+    {
+        public ApprovedDayOffRequestsByEmployeeIdsSpec(int[] employeeIds, DateOnly from, DateOnly to)
+        {
+            Criteria = r => r.Type == "Day Off"
+                && r.Status == RequestStatus.Approved
+                && employeeIds.Contains(r.EmployeeId)
+                && (r.TargetStartDate ?? r.RequestDate) <= to
+                && (r.TargetEndDate ?? r.RequestDate) >= from;
+        }
+    }
+
+    /// <summary>Audit corrections for the given records, with editor profile (correctedBy display).</summary>
+    public class AttendanceCorrectionsByRecordIdsSpec : BaseSpecification<AttendanceCorrection, int>
+    {
+        public AttendanceCorrectionsByRecordIdsSpec(int[] recordIds)
+        {
+            Criteria = c => recordIds.Contains(c.AttendanceRecordId);
+            AddInclude(c => c.CorrectedByUser);
+            AddInclude(c => c.CorrectedByUser.EmployeeProfile!);
+        }
+    }
+
+    /// <summary>One employee with their gym (attendance history + manual-entry target lookup).</summary>
+    public class EmployeeForAttendanceSpec : BaseSpecification<Employee, int>
+    {
+        public EmployeeForAttendanceSpec(int employeeId)
+        {
+            Criteria = e => e.Id == employeeId;
+            AddInclude(e => e.Gym);
+        }
+    }
+
+    /// <summary>
+    /// Resolves an employee by numeric id or employee number ("EMP-1042") with
+    /// their gym — the manual-entry target lookup (A3 needs Gym.Name for the response).
+    /// </summary>
+    public class EmployeeWithGymByReferenceSpec : BaseSpecification<Employee, int>
+    {
+        public EmployeeWithGymByReferenceSpec(string employeeReference)
+        {
+            var reference = employeeReference.Trim();
+            int? numericId = int.TryParse(reference, out int parsed) ? parsed : null;
+            Criteria = e => (numericId.HasValue && e.Id == numericId.Value) || e.EmployeeNumber == reference;
+            AddInclude(e => e.Gym);
+        }
+    }
+
+    /// <summary>One attendance record by id with employee/gym and shift template (A4 correction source).</summary>
+    public class AttendanceRecordByIdWithDetailsSpec : BaseSpecification<AttendanceRecord, int>
+    {
+        public AttendanceRecordByIdWithDetailsSpec(int recordId)
+        {
+            Criteria = ar => ar.Id == recordId;
+            AddInclude(ar => ar.Employee);
+            AddInclude(ar => ar.Employee.Gym);
+            AddInclude(ar => ar.ScheduledShiftTemplate!);
+        }
+    }
+
+    /// <summary>The stored record for one employee on one date, with its shift template (manual-entry upsert, A3).</summary>
+    public class AttendanceRecordByEmployeeDateSpec : BaseSpecification<AttendanceRecord, int>
+    {
+        public AttendanceRecordByEmployeeDateSpec(int employeeId, DateOnly date)
+        {
+            Criteria = ar => ar.EmployeeId == employeeId && ar.Date == date;
+            AddInclude(ar => ar.ScheduledShiftTemplate!);
+        }
+    }
+
+    /// <summary>Today's assignment for one employee (pins the manual entry's shift template).</summary>
+    public class ShiftAssignmentByEmployeeDateSpec : BaseSpecification<ShiftAssignment, int>
+    {
+        public ShiftAssignmentByEmployeeDateSpec(int employeeId, DateOnly date)
+        {
+            Criteria = sa => sa.EmployeeId == employeeId && sa.Date == date;
         }
     }
 }

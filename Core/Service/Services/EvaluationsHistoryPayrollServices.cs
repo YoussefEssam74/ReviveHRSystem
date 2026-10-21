@@ -10,6 +10,7 @@ using DomainLayer.Models.NotificationModule.Enums;
 using DomainLayer.Models.PayrollModule;
 using DomainLayer.Models.PayrollModule.Enums;
 using Service.Specifications;
+using Shared.DataTransferObject.Payroll;
 using ServiceAbstraction.Services;
 using Shared.Authorization;
 using Shared.DataTransferObject.EmployeeProfile;
@@ -30,7 +31,7 @@ namespace Service.Services
             int actorUserId, int employeeId, int? activeGymId, CancellationToken cancellationToken = default)
         {
             await employeeAccess.EnsureCanAccessAsync(
-                actorUserId, employeeId, Features.Employees, AccessLevel.View, activeGymId, cancellationToken);
+                actorUserId, employeeId, activeGymId, cancellationToken);
 
             var answers = await unitOfWork.GetRepository<EvaluationAnswer, int>()
                 .GetAllAsync(new EvaluationAnswersByEmployeeSpec(employeeId), cancellationToken);
@@ -51,6 +52,8 @@ namespace Service.Services
                     return new EvaluationDto
                     {
                         Id = response.Id,
+                        EmployeeId = response.EmployeeId,
+                        EmployeeName = response.Employee?.FullName ?? string.Empty,
                         Period = PeriodLabel(response.SubmittedAt),
                         Score = scores.Count == 0 ? 0 : Math.Round(scores.Average(), 1),
                         MaxScore = 5,
@@ -72,12 +75,32 @@ namespace Service.Services
     /// Evaluation authoring (mock 14.6/14.7/18.1). Forms are gym-scoped or global;
     /// the employee must be in the caller's scope, which the API resolves per
     /// ADR-003 Amendment 1 (team for leaders, gym for Branch Managers). Score is the
-    /// mean of the numeric answers, mirroring the read side.
+    /// mean of the numeric answers, mirroring the read side. Authoring itself stays
+    /// with the gym's reviewers — Branch Manager and the HR roles; Team Leaders hold
+    /// evaluations.view only and read through the team surfaces.
     /// </summary>
     public class EvaluationManagementService(
         IUnitOfWork unitOfWork,
+        IUserAccessRepository userAccess,
         IEmployeeAccessService employeeAccess) : IEvaluationManagementService
     {
+        private static readonly string[] ReviewerRoleNames =
+        [
+            Shared.Authorization.RoleNames.BranchManager,
+            Shared.Authorization.RoleNames.Hr,
+            Shared.Authorization.RoleNames.HrManager,
+            Shared.Authorization.RoleNames.SuperAdmin,
+        ];
+
+        private async Task EnsureReviewerRoleAsync(int actorUserId, int gymId, CancellationToken cancellationToken)
+        {
+            var roleNames = await userAccess.GetGymRoleNamesAsync(actorUserId, gymId, cancellationToken);
+            if (!roleNames.Any(ReviewerRoleNames.Contains))
+            {
+                throw new NotFoundException("Evaluation not found.");
+            }
+        }
+
         public async Task<IReadOnlyList<EvaluationFormDto>> GetFormsAsync(
             int actorUserId, int? activeGymId, CancellationToken cancellationToken = default)
         {
@@ -108,9 +131,11 @@ namespace Service.Services
         {
             var gymId = activeGymId ?? throw new UnAuthorizedException("This operation requires an active gym context.");
 
-            // Same scope guard the self-service reads use, at Edit level.
+            await EnsureReviewerRoleAsync(actorUserId, gymId, cancellationToken);
+
+            // The reader's scope guard: self, in-scope managers and gym staff only.
             await employeeAccess.EnsureCanAccessAsync(
-                actorUserId, employeeId, Features.Evaluations, AccessLevel.Edit, gymId, cancellationToken);
+                actorUserId, employeeId, gymId, cancellationToken);
 
             var form = await unitOfWork.GetRepository<EvaluationForm, int>()
                 .GetByIdAsync(new EvaluationFormByIdSpec(request.EvaluationFormId), cancellationToken)
@@ -173,6 +198,8 @@ namespace Service.Services
         {
             var gymId = activeGymId ?? throw new UnAuthorizedException("This operation requires an active gym context.");
 
+            await EnsureReviewerRoleAsync(actorUserId, gymId, cancellationToken);
+
             var existing = await unitOfWork.GetRepository<EvaluationResponse, int>()
                 .GetByIdAsync(new EvaluationResponseByIdSpec(evaluationId), cancellationToken)
                 ?? throw new NotFoundException("Evaluation not found.");
@@ -193,7 +220,7 @@ namespace Service.Services
             }
 
             await employeeAccess.EnsureCanAccessAsync(
-                actorUserId, existing.Employee.Id, Features.Evaluations, AccessLevel.Edit, gymId, cancellationToken);
+                actorUserId, existing.Employee.Id, gymId, cancellationToken);
 
             if (request.Answers.Count == 0)
             {
@@ -266,12 +293,14 @@ namespace Service.Services
         private async Task<List<DomainLayer.Models.OrganizationModule.Team>> MyTeamsAsync(
             int actorUserId, int gymId, CancellationToken cancellationToken)
         {
+            // Leader-only: the team reviews list serves the caller's led teams; a
+            // member (or anyone not leading the requested team) answers NotFound.
             var employee = await unitOfWork.GetRepository<Employee, int>()
                 .GetByIdAsync(new EmployeeByUserIdSpec(actorUserId), cancellationToken)
                 ?? throw new UnAuthorizedException("This account has no employee profile.");
 
             var teams = await unitOfWork.GetRepository<DomainLayer.Models.OrganizationModule.Team, int>()
-                .GetAllAsync(new TeamsByMemberOrLeaderSpec(employee.Id, gymId), cancellationToken);
+                .GetAllAsync(new TeamsLedByUserSpec(employee.Id, gymId), cancellationToken);
 
             return teams.ToList();
         }
@@ -316,6 +345,8 @@ namespace Service.Services
                     return new EvaluationDto
                     {
                         Id = response.Id,
+                        EmployeeId = response.EmployeeId,
+                        EmployeeName = response.Employee?.FullName ?? string.Empty,
                         Period = PeriodLabel(response.SubmittedAt),
                         Score = scores.Count == 0 ? 0 : Math.Round(scores.Average(), 1),
                         MaxScore = 5,
@@ -481,7 +512,7 @@ namespace Service.Services
             int actorUserId, int employeeId, int? activeGymId, CancellationToken cancellationToken = default)
         {
             await employeeAccess.EnsureCanAccessAsync(
-                actorUserId, employeeId, Features.Employees, AccessLevel.View, activeGymId, cancellationToken);
+                actorUserId, employeeId, activeGymId, cancellationToken);
 
             var entries = await unitOfWork.GetRepository<EmploymentHistory, int>()
                 .GetAllAsync(new EmploymentHistoryByEmployeeSpec(employeeId), cancellationToken);
@@ -532,9 +563,9 @@ namespace Service.Services
     }
 
     /// <summary>
-    /// Own payroll (mock Â§8): periods of the employee's gym with the employee's entry.
+    /// Own payroll (mock §8): periods of the employee's gym with the employee's entry.
     /// Entries of still-open periods are visible=false (not yet paid); bonuses and
-    /// deductions are line items. Payslip PDF streaming is deferred to file storage.
+    /// deductions are line items. Payslip content mirrors the HR preview card.
     /// </summary>
     public class PayrollSelfService(
         IUnitOfWork unitOfWork,
@@ -545,14 +576,16 @@ namespace Service.Services
             int actorUserId, int employeeId, int? activeGymId, CancellationToken cancellationToken = default)
         {
             await employeeAccess.EnsureCanAccessAsync(
-                actorUserId, employeeId, Features.Employees, AccessLevel.View, activeGymId, cancellationToken);
+                actorUserId, employeeId, activeGymId, cancellationToken);
 
             var employee = await unitOfWork.GetRepository<Employee, int>()
                 .GetByIdAsync(new EmployeeByIdSpec(employeeId), cancellationToken)
                 ?? throw new NotFoundException("Employee not found.");
 
+            // Open periods are included on purpose: the mapping marks their entry
+            // visible=false so the UI can render it as the current, still-processing sheet.
             var periods = await unitOfWork.GetRepository<PayrollPeriod, int>()
-                .GetAllAsync(new PayrollPeriodsByGymSpec(employee.GymId), cancellationToken);
+                .GetAllAsync(new PayrollPeriodsByGymIncludingOpenSpec(employee.GymId), cancellationToken);
 
             var periodIds = periods.Select(p => p.Id).ToList();
             var entries = await unitOfWork.GetRepository<PayrollEntry, int>()
@@ -562,6 +595,32 @@ namespace Service.Services
                 .OrderByDescending(e => e.PayrollPeriod.EndDate)
                 .Select(e => mapper.Map<PayrollEntryDto>(e))
                 .ToList();
+        }
+
+        /// <summary>
+        /// One sheet's payslip card (mock §8): the owner reads it like the HR preview;
+        /// scope-based readers (managers) use the HR portal's route instead.
+        /// </summary>
+        public async Task<PayslipResponse> GetPayslipAsync(
+            int actorUserId, int employeeId, int entryId, CancellationToken cancellationToken = default)
+        {
+            await employeeAccess.EnsureCanAccessAsync(
+                actorUserId, employeeId, null, cancellationToken);
+
+            _ = await unitOfWork.GetRepository<Employee, int>()
+                .GetByIdAsync(new EmployeeByIdSpec(employeeId), cancellationToken)
+                ?? throw new NotFoundException("Employee not found.");
+
+            var entry = await unitOfWork.GetRepository<PayrollEntry, int>()
+                .GetByIdAsync(new PayrollEntryByIdSpec(entryId), cancellationToken)
+                ?? throw new NotFoundException("Payroll sheet not found.");
+
+            if (entry.EmployeeId != employeeId)
+            {
+                throw new NotFoundException("Payroll sheet not found.");
+            }
+
+            return new PayslipResponse { Data = PayrollService.BuildPayslip(entry) };
         }
     }
 }

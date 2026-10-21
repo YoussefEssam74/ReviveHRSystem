@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using ServiceAbstraction.Services;
+using Shared.DataTransferObject.Attendance;
 using Shared.DataTransferObject.Gym;
 
 namespace Presentation.Controllers
@@ -37,6 +38,27 @@ namespace Presentation.Controllers
         {
             var response = await _stationCodeService.RotateAsync(gymId, GetActorUserId(), cancellationToken);
             return Ok(response);
+        }
+
+        /// <summary>
+        /// Pair Kiosk modal (A10): rotates the gym's 6-digit enrollment code and echoes
+        /// the station label HR typed. Same code the kiosk redeems at POST
+        /// /api/kiosk/login to bind the device (valid 10 min).
+        /// </summary>
+        /// <response code="200">The newly issued pairing code.</response>
+        [HttpPost("biometric-devices/pairing-codes")]
+        public async Task<ActionResult<BiometricPairingCodeResponse>> GeneratePairingCode(int gymId, [FromBody] BiometricPairingCodeRequest request, CancellationToken cancellationToken)
+        {
+            var rotated = await _stationCodeService.RotateAsync(gymId, GetActorUserId(), cancellationToken);
+            return Ok(new BiometricPairingCodeResponse
+            {
+                Code = rotated.Code,
+                GymId = rotated.GymId,
+                GymName = rotated.GymName,
+                StationLabel = request.StationLabel,
+                GeneratedAt = rotated.GeneratedAt,
+                ExpiresAt = rotated.ExpiresAtUtc,
+            });
         }
 
         #endregion

@@ -16,12 +16,12 @@ using Shared.DataTransferObject.QueryParams;
 namespace Service.Services
 {
     /// <summary>
-    /// Team overview (mock §13 My Team): the teams the caller leads or belongs to in
-    /// the active gym, and a team-day view with per-member status and shift.
+    /// Team overview (mock §13 My Team): the teams the caller leads in the active
+    /// gym — a leader-only surface; a member without a led team answers NotFound —
+    /// and a team-day view with per-member status and shift.
     /// </summary>
     public class TeamOverviewService(
         IUnitOfWork unitOfWork,
-        ITeamScopeService teamScopeService,
         IMapper mapper) : ITeamOverviewService
     {
         public async Task<IReadOnlyList<TeamDto>> GetMyTeamsAsync(
@@ -31,7 +31,7 @@ namespace Service.Services
             var employee = await OwnEmployeeAsync(actorUserId, cancellationToken);
 
             var teams = await unitOfWork.GetRepository<Team, int>()
-                .GetAllAsync(new TeamsByMemberOrLeaderSpec(employee.Id, gymId), cancellationToken);
+                .GetAllAsync(new TeamsLedByUserSpec(employee.Id, gymId), cancellationToken);
 
             return teams
                 .Select(t => mapper.Map<TeamDto>(t, opts => opts.Items["selfEmployeeId"] = employee.Id))
@@ -52,7 +52,8 @@ namespace Service.Services
                 throw new NotFoundException("Team not found.");
             }
 
-            // The caller must lead the team or belong to it in this gym.
+            // Leader-only surface: the caller must lead the team in this gym; a
+            // member (or anyone not leading it) gets the same missing-team answer.
             var myTeams = await GetMyTeamsAsync(actorUserId, activeGymId, cancellationToken);
             if (!myTeams.Any(t => t.Id == teamId))
             {
@@ -124,8 +125,8 @@ namespace Service.Services
 
         /// <summary>
         /// Counts team members with no published assignment: either no assignment row at
-        /// all, or only Off-day (null template) rows. Members are the team's own roster,
-        /// so the count is team-scoped by construction.
+        /// all, or only Off-day (null template) rows. Leader-only surface: only the team's
+        /// leader reaches this count; members answer NotFound.
         /// </summary>
         public async Task<int> GetUnscheduledCountAsync(
             int actorUserId, int teamId, int? activeGymId, CancellationToken cancellationToken = default)
@@ -270,17 +271,42 @@ namespace Service.Services
     /// <summary>
     /// Employee leaving / offboarding (mock §24). Cases are gym-scoped; initiation
     /// targets an in-scope employee and records the case plus an employment-history
-    /// event so the timeline preserves the change.
+    /// event so the timeline preserves the change. Callers must be acting managers
+    /// in the gym (Team Leader within his team, Branch Manager gym-wide).
     /// </summary>
     public class OffboardingService(
         IUnitOfWork unitOfWork,
         ITeamScopeService teamScopeService,
+        IUserAccessRepository userAccess,
         IMapper mapper) : IOffboardingService
     {
+        /// <summary>
+        /// Leaving processes are a management surface (Branch Leaving page): the
+        /// Team Leader acts within his led team, the Branch Manager within his
+        /// gym. A plain employee answers the same NotFound the scope resolution
+        /// produces for out-of-scope targets.
+        /// </summary>
+        private static readonly string[] ManagementRoleNames =
+        [
+            Shared.Authorization.RoleNames.TeamLeader,
+            Shared.Authorization.RoleNames.BranchManager,
+            Shared.Authorization.RoleNames.SuperAdmin,
+        ];
+
+        private async Task EnsureManagementScopeAsync(int actorUserId, int gymId, CancellationToken cancellationToken)
+        {
+            var roleNames = await userAccess.GetGymRoleNamesAsync(actorUserId, gymId, cancellationToken);
+            if (!roleNames.Any(ManagementRoleNames.Contains))
+            {
+                throw new NotFoundException("Leaving process not found.");
+            }
+        }
+
         public async Task<PaginationResult<OffboardingCaseDto>> GetCasesAsync(
             int actorUserId, int? activeGymId, OffboardingQueryParams query, CancellationToken cancellationToken = default)
         {
             var gymId = activeGymId ?? throw new UnAuthorizedException("This operation requires an active gym context.");
+            await EnsureManagementScopeAsync(actorUserId, gymId, cancellationToken);
             var ids = await ScopedEmployeeIdsAsync(actorUserId, gymId, cancellationToken);
 
             var cases = await unitOfWork.GetRepository<DomainLayer.Models.EmployeeModule.OffboardingCase, int>()
@@ -313,6 +339,7 @@ namespace Service.Services
                 throw new BadRequestException("A reason is required.");
             }
 
+            await EnsureManagementScopeAsync(actorUserId, gymId, cancellationToken);
             var ids = await ScopedEmployeeIdsAsync(actorUserId, gymId, cancellationToken);
             if (!ids.Contains(request.EmployeeId))
             {
@@ -361,6 +388,95 @@ namespace Service.Services
             {
                 Id = offboardingCase.Id,
                 EmployeeId = request.EmployeeId,
+                Employee = employee?.FullName ?? string.Empty,
+                Position = employee?.Position?.Title ?? string.Empty,
+                LastWorkingDate = offboardingCase.LastWorkingDate,
+                Status = offboardingCase.Status,
+                Reason = offboardingCase.Reason
+            };
+        }
+
+        public async Task<OffboardingCaseDto> UpdateLastDayAsync(
+            int actorUserId, int? activeGymId, int caseId, UpdateOffboardingLastDayDto request, CancellationToken cancellationToken = default)
+        {
+            var offboardingCase = await ScopedOpenCaseAsync(
+                actorUserId, activeGymId, caseId, "rescheduled", cancellationToken);
+
+            if (request.LastWorkingDate == default)
+            {
+                throw new BadRequestException("A last working day is required.");
+            }
+
+            offboardingCase.LastWorkingDate = request.LastWorkingDate;
+            await unitOfWork.SaveChangesAsync(cancellationToken);
+
+            return await MapCaseAsync(offboardingCase, cancellationToken);
+        }
+
+        public async Task<OffboardingCaseDto> CloseAsync(
+            int actorUserId, int? activeGymId, int caseId, CancellationToken cancellationToken = default)
+        {
+            var offboardingCase = await ScopedOpenCaseAsync(
+                actorUserId, activeGymId, caseId, "closed", cancellationToken);
+
+            offboardingCase.Status = "Cancelled";
+
+            // When the employment standing had been parked in Notice Period
+            // (HR-initiated path) it returns to Active — the person stays
+            // employed, mirroring how the parking was recorded on the timeline.
+            var employee = await unitOfWork.GetRepository<Employee, int>()
+                .GetByIdAsync(new EmployeeProfileByIdSpec(offboardingCase.EmployeeId), cancellationToken);
+            if (employee is not null && employee.Status == DomainLayer.Models.EmployeeModule.Enums.EmployeeStatus.NoticePeriod)
+            {
+                employee.Status = DomainLayer.Models.EmployeeModule.Enums.EmployeeStatus.Active;
+                await unitOfWork.GetRepository<EmploymentHistory, int>().AddAsync(new EmploymentHistory
+                {
+                    EmployeeId = employee.Id,
+                    ChangeType = DomainLayer.Models.EmployeeModule.Enums.EmploymentChangeType.StatusChange,
+                    OldValueJson = System.Text.Json.JsonSerializer.Serialize("Notice Period"),
+                    NewValueJson = System.Text.Json.JsonSerializer.Serialize("Active"),
+                    EffectiveDate = DateOnly.FromDateTime(DateTime.UtcNow),
+                    ChangedBy = actorUserId,
+                    Reason = "Leaving process closed — employment continues."
+                }, cancellationToken);
+            }
+
+            await unitOfWork.SaveChangesAsync(cancellationToken);
+
+            return await MapCaseAsync(offboardingCase, cancellationToken);
+        }
+
+        /// <summary>Loads one leaving process within the caller's scope and asserts it is still in flight.</summary>
+        private async Task<DomainLayer.Models.EmployeeModule.OffboardingCase> ScopedOpenCaseAsync(
+            int actorUserId, int? activeGymId, int caseId, string action, CancellationToken cancellationToken)
+        {
+            var gymId = activeGymId ?? throw new UnAuthorizedException("This operation requires an active gym context.");
+
+            await EnsureManagementScopeAsync(actorUserId, gymId, cancellationToken);
+            var ids = await ScopedEmployeeIdsAsync(actorUserId, gymId, cancellationToken);
+            var cases = await unitOfWork.GetRepository<DomainLayer.Models.EmployeeModule.OffboardingCase, int>()
+                .GetAllAsync(new OffboardingCasesByEmployeesSpec(ids), cancellationToken);
+            var offboardingCase = cases.FirstOrDefault(c => c.Id == caseId)
+                ?? throw new NotFoundException("Leaving process not found.");
+
+            if (offboardingCase.Status is not ("Open" or "Notice Period"))
+            {
+                throw new BadRequestException($"A {offboardingCase.Status.ToLowerInvariant()} leaving process can no longer be {action}.");
+            }
+
+            return offboardingCase;
+        }
+
+        private async Task<OffboardingCaseDto> MapCaseAsync(
+            DomainLayer.Models.EmployeeModule.OffboardingCase offboardingCase, CancellationToken cancellationToken)
+        {
+            var employee = await unitOfWork.GetRepository<Employee, int>()
+                .GetByIdAsync(new EmployeeProfileByIdSpec(offboardingCase.EmployeeId), cancellationToken);
+
+            return new OffboardingCaseDto
+            {
+                Id = offboardingCase.Id,
+                EmployeeId = offboardingCase.EmployeeId,
                 Employee = employee?.FullName ?? string.Empty,
                 Position = employee?.Position?.Title ?? string.Empty,
                 LastWorkingDate = offboardingCase.LastWorkingDate,

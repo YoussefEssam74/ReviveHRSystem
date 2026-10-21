@@ -33,7 +33,6 @@ namespace Presistence.Data
         public DbSet<UserPermission> UserPermissions => Set<UserPermission>();
         public DbSet<UserGymAccess> UserGymAccesses => Set<UserGymAccess>();
         public DbSet<UserGymRole> UserGymRoles => Set<UserGymRole>();
-        public DbSet<UserGymPermission> UserGymPermissions => Set<UserGymPermission>();
         public DbSet<UserNotificationPreference> UserNotificationPreferences => Set<UserNotificationPreference>();
 
         // Organization
@@ -50,6 +49,8 @@ namespace Presistence.Data
         public DbSet<Application> Applications => Set<Application>();
         public DbSet<PipelineStage> PipelineStages => Set<PipelineStage>();
         public DbSet<Interview> Interviews => Set<Interview>();
+        public DbSet<HiringForm> HiringForms => Set<HiringForm>();
+        public DbSet<HiringFormApplication> HiringFormApplications => Set<HiringFormApplication>();
 
         // Employee
         public DbSet<Employee> Employees => Set<Employee>();
@@ -63,6 +64,7 @@ namespace Presistence.Data
         public DbSet<OffboardingChecklistItem> OffboardingChecklistItems => Set<OffboardingChecklistItem>();
         public DbSet<TeamFollowUp> TeamFollowUps => Set<TeamFollowUp>();
         public DbSet<TeamMessage> TeamMessages => Set<TeamMessage>();
+        public DbSet<ActionRequest> ActionRequests => Set<ActionRequest>();
 
         // Scheduling
         public DbSet<ShiftTemplate> ShiftTemplates => Set<ShiftTemplate>();
@@ -101,6 +103,8 @@ namespace Presistence.Data
         public DbSet<EvaluationResponse> EvaluationResponses => Set<EvaluationResponse>();
         public DbSet<EvaluationAnswer> EvaluationAnswers => Set<EvaluationAnswer>();
         public DbSet<EvaluationAssignment> EvaluationAssignments => Set<EvaluationAssignment>();
+        public DbSet<PerformanceCycle> PerformanceCycles => Set<PerformanceCycle>();
+        public DbSet<Goal> Goals => Set<Goal>();
 
         // Auditing
         public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
@@ -151,8 +155,6 @@ namespace Presistence.Data
                 !EF.Property<bool>(x.User, "IsDeleted") && !EF.Property<bool>(x.Gym, "IsDeleted"));
             modelBuilder.Entity<UserGymRole>().HasQueryFilter(x =>
                 !EF.Property<bool>(x.User, "IsDeleted") && !EF.Property<bool>(x.Gym, "IsDeleted") && !EF.Property<bool>(x.Role, "IsDeleted"));
-            modelBuilder.Entity<UserGymPermission>().HasQueryFilter(x =>
-                !EF.Property<bool>(x.User, "IsDeleted") && !EF.Property<bool>(x.Gym, "IsDeleted") && !EF.Property<bool>(x.Permission, "IsDeleted"));
         }
 
         public override Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)

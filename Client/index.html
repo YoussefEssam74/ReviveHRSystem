@@ -11,6 +11,20 @@
       rel="stylesheet"
     />
     <title>Revive HR</title>
+    <script>
+      // Pre-paint theme: apply the stored (or system) theme before React loads
+      // so the first paint never flashes the wrong colors. Keep in sync with
+      // src/contexts/ThemeContext.tsx (same storage key).
+      (function () {
+        try {
+          var stored = localStorage.getItem('revivehr-theme')
+          var dark = stored ? stored === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches
+          if (dark) document.documentElement.classList.add('dark')
+        } catch (e) {
+          /* storage unavailable — keep the light default */
+        }
+      })()
+    </script>
   </head>
   <body>
     <div id="root"></div>

@@ -137,8 +137,19 @@ export function describeApiError(error: unknown): string {
   return 'Something went wrong. Please try again.'
 }
 
-export async function apiRequest<T>(path: string, options: RequestOptions = {}): Promise<T> {
-  const { method = 'GET', body, signal, accessToken, stationToken, stationAuth } = options
+/**
+ * True when the API's bearer middleware rejected the token itself (invalid or
+ * expired session) — its auth failures always carry the standard bearer
+ * challenge. A permission denial (a key gate refusing a live session) is a
+ * plain 401 with a ProblemDetails body and no challenge (M4): the user stays
+ * signed in and the page surfaces it as an access message.
+ */
+function isAuthChallenge(response: Response): boolean {
+  return response.headers.has('WWW-Authenticate')
+}
+
+export async function apiRequest<T>(path: string, options: RequestOptions & { form?: FormData } = {}): Promise<T> {
+  const { method = 'GET', body, form, signal, accessToken, stationToken, stationAuth } = options
   const session = loadStoredSession()
   // Station requests authenticate with their own header or session cookie; a kiosk
   // browser may also hold a stale web session, which must never be sent from a
@@ -159,17 +170,22 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
     else signal.addEventListener('abort', onExternalAbort, { once: true })
   }
 
+  // Multipart: the browser sets the Content-Type with the boundary; JSON gets it
+  // explicitly. Only one of the two applies to a request.
+  const headers: Record<string, string> = {
+    Accept: 'application/json',
+    ...(form === undefined && body !== undefined ? { 'Content-Type': 'application/json' } : {}),
+    ...(bearerToken ? { Authorization: 'Bearer ' + bearerToken } : {}),
+    ...(stationToken ? { 'X-Station-Token': stationToken } : {}),
+  }
+  const payload: BodyInit | undefined = form ?? (body === undefined ? undefined : JSON.stringify(body))
+
   let response: Response
   try {
     response = await fetch(BASE_URL + path, {
       method,
-      headers: {
-        Accept: 'application/json',
-        ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}),
-        ...(bearerToken ? { Authorization: 'Bearer ' + bearerToken } : {}),
-        ...(stationToken ? { 'X-Station-Token': stationToken } : {}),
-      },
-      body: body === undefined ? undefined : JSON.stringify(body),
+      headers,
+      body: payload,
       // Cookie-authenticated station requests must carry the HttpOnly session
       // cookie (and accept Set-Cookie on login) even when the API is on another
       // origin; same-origin requests already behave this way by default.
@@ -192,13 +208,62 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
   const json: unknown = text ? safeJsonParse(text) : null
 
   if (!response.ok) {
-    // The API issues short-lived access tokens with no refresh endpoint, so a
-    // 401 always means the session is over --- clear it and let the UI react.
-    // Only session-signed requests are allowed to do that: an expired or
-    // rotated station token must leave the HR user's session alone.
-    if (response.status === 401 && !accessToken && !stationToken && !stationAuth && session) clearSession()
+    // Two different 401s live here: the authentication middleware rejecting an
+    // invalid or expired token (bearer challenge) and a key gate refusing a live
+    // session (plain 401 — M4). Only the former ends the session; a missing
+    // permission keeps the user online and surfaces as an access message. Only
+    // session-signed requests may clear: a station token must leave the HR
+    // user's session alone.
+    if (response.status === 401 && !accessToken && !stationToken && !stationAuth
+        && session && isAuthChallenge(response)) clearSession()
     throw toApiError(response.status, json)
   }
 
   return json as T
+}
+
+/** Downloads a binary endpoint (payslip PDF, request attachment) with session auth. */
+export async function apiDownload(path: string, signal?: AbortSignal): Promise<{ blob: Blob; fileName: string | null }> {
+  const session = loadStoredSession()
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS * 4)
+  if (signal) {
+    if (signal.aborted) controller.abort()
+    else signal.addEventListener('abort', () => controller.abort(), { once: true })
+  }
+
+  let response: Response
+  try {
+    response = await fetch(BASE_URL + path, {
+      headers: {
+        ...(session?.accessToken ? { Authorization: 'Bearer ' + session.accessToken } : {}),
+      },
+      signal: controller.signal,
+    })
+  } catch (error) {
+    // A caller-initiated cancellation (navigation, unmount) is not an app error.
+    if (signal?.aborted) throw error
+    throw new ApiError(0, 'NETWORK_ERROR', 'Could not reach the server. Check your connection and try again.')
+  } finally {
+    clearTimeout(timer)
+  }
+
+  if (!response.ok) {
+    // Same 401 split as apiRequest (M4): only a bearer-challenge auth failure
+    // signs the user out; a permission-denial 401 keeps the session.
+    if (response.status === 401 && isAuthChallenge(response) && session) clearSession()
+    let message = fallbackMessage(response.status)
+    try {
+      const text = await response.text()
+      const json = text ? safeJsonParse(text) : null
+      if (json) message = toApiError(response.status, json).message
+    } catch {
+      /* body was binary — keep the fallback */
+    }
+    throw new ApiError(response.status, 'HTTP_' + response.status, message)
+  }
+
+  const contentDisposition = response.headers.get('Content-Disposition')
+  const fileName = contentDisposition?.match(/filename\*?=(?:UTF-8'')?"?([^";]+)"?/i)?.[1] ?? null
+  return { blob: await response.blob(), fileName }
 }

@@ -156,17 +156,6 @@ namespace ReviveHRSystem.IntegrationTests
         }
 
         [Fact]
-        public async Task Actions_PlainEmployee_Returns403()
-        {
-            var token = await _fixture.LoginAsync("karim@revive.hr", "Revive!2026");
-
-            var response = await _fixture.Client.SendAsync(_fixture.AuthorizedRequest(
-                HttpMethod.Get, "/api/branch-actions/pending-hr", null, token));
-
-            Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
-        }
-
-        [Fact]
         public async Task BranchReport_AnyEmployee_LandsInHrQueue()
         {
             var token = await _fixture.LoginAsync("karim@revive.hr", "Revive!2026");

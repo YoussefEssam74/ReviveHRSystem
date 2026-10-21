@@ -1,36 +1,33 @@
 using Microsoft.AspNetCore.Mvc;
-using Presentation.Authorization;
 using ServiceAbstraction.Services;
 using Shared;
-using Shared.Authorization;
 using Shared.DataTransferObject.EmployeeProfile;
 using Shared.DataTransferObject.QueryParams;
-using DomainLayer.Models.UserModule.Enums;
 
 namespace Presentation.Controllers
 {
     /// <summary>
-    /// Management request inbox and the stage-1 (BranchManager) decision
-    /// (mock §17 Team / Requests Management). Gated by the `requests` feature;
-    /// the service resolves team scope for Team Leaders and gym scope for BMs.
-    /// HR's final decision lives in the HR portal.
+    /// Management-side request desk (mock §17 Team/Requests Management): the
+    /// scoped inbox (team for Team Leaders, gym for Branch Managers), stage-1
+    /// decisions that move a pending request to HR review, and editing/commenting.
+    /// The HR decision stage lives in the HR portal's RequestsController. Scope is
+    /// enforced inside the service — no permission key involved.
     /// </summary>
     [Route("api/requests")]
     public class RequestManagementController(IRequestManagementService requestManagementService) : ApiControllerBase
     {
-        /// <summary>Inbox of in-scope requests, filterable by status.</summary>
-        [HttpGet]
-        [HasFeatureAccess(Features.Requests, AccessLevel.View)]
-        public async Task<ActionResult<PaginationResult<EmployeeRequestDto>>> GetInbox(
-            [FromQuery] RequestQueryParams query, CancellationToken cancellationToken)        {
-            var requests = await requestManagementService.GetInboxAsync(
+        /// <summary>GET /api/requests/inbox — in-scope requests, newest first (stage-1 desk).</summary>
+        [HttpGet("inbox")]
+        public async Task<ActionResult<PaginationResult<EmployeeRequestDto>>> Inbox(
+            [FromQuery] RequestQueryParams query, CancellationToken cancellationToken)
+        {
+            var inbox = await requestManagementService.GetInboxAsync(
                 GetActorUserId(), GetGymIdFromToken(), query, cancellationToken);
-            return Ok(requests);
+            return Ok(inbox);
         }
 
-        /// <summary>Stage-1 decision: Approved moves the request to HR review, Rejected closes it.</summary>
-        [HttpPost("{id}/decide")]
-        [HasFeatureAccess(Features.Requests, AccessLevel.Edit)]
+        /// <summary>POST /api/requests/{id}/decisions — stage-1 approve/reject (moves to HR review).</summary>
+        [HttpPost("{id}/decisions")]
         public async Task<IActionResult> Decide(int id, RequestDecisionDto decision, CancellationToken cancellationToken)
         {
             await requestManagementService.DecideAsync(
@@ -40,7 +37,6 @@ namespace Presentation.Controllers
 
         /// <summary>Edits a pending request of an in-scope employee.</summary>
         [HttpPut("{id}")]
-        [HasFeatureAccess(Features.Requests, AccessLevel.Edit)]
         public async Task<IActionResult> Edit(int id, UpdateRequestDto update, CancellationToken cancellationToken)
         {
             await requestManagementService.EditAsync(
@@ -50,7 +46,6 @@ namespace Presentation.Controllers
 
         /// <summary>Posts a comment on an in-scope request.</summary>
         [HttpPost("{id}/comments")]
-        [HasFeatureAccess(Features.Requests, AccessLevel.View)]
         public async Task<ActionResult<RequestCommentDto>> Comment(
             int id, CreateRequestCommentDto request, CancellationToken cancellationToken)
         {
