@@ -3,6 +3,7 @@ using DomainLayer.Contracts;
 using DomainLayer.Models.AttendanceModule;
 using DomainLayer.Models.AttendanceModule.Enums;
 using DomainLayer.Models.EmployeeModule;
+using DomainLayer.Models.EmployeeModule.Enums;
 using DomainLayer.Models.NotificationModule;
 using DomainLayer.Models.PayrollModule;
 using DomainLayer.Models.PayrollModule.Enums;
@@ -26,7 +27,9 @@ namespace Service.Services
         IUnitOfWork unitOfWork,
         ITeamScopeService teamScopeService,
         IUserAccessRepository userAccess,
-        IMapper mapper) : IDashboardService
+        IMapper mapper,
+        TimeZoneInfo attendanceTimeZone,
+        ITeamActionsService teamActions) : IDashboardService
     {
         public async Task<EmployeeDashboardDto> GetDashboardAsync(int userId, int? activeGymId, CancellationToken cancellationToken = default)
         {
@@ -50,7 +53,7 @@ namespace Service.Services
                 return Empty(greeting, userDto);
             }
 
-            var today = DateOnly.FromDateTime(DateTime.UtcNow);
+            var today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, attendanceTimeZone));
             var parts = await LoadEmployeePartsAsync(employee, today, cancellationToken);
 
             return new EmployeeDashboardDto
@@ -212,11 +215,44 @@ namespace Service.Services
                 scope = "branch";
             }
 
-            var scopedIds = scoped.Select(e => e.Id).ToList();
-            var attendance = await unitOfWork.GetRepository<AttendanceRecord, int>()
-                .GetAllAsync(new AttendanceByEmployeesDateSpec(scopedIds, today), cancellationToken);
+            var scopedIds = scoped.Select(e => e.Id).ToArray();
+            var attendance = (await unitOfWork.GetRepository<AttendanceRecord, int>()
+                .GetAllAsync(new AttendanceByEmployeesDateSpec(scopedIds, today), cancellationToken)).ToList();
             var requests = await unitOfWork.GetRepository<EmployeeRequest, int>()
                 .GetAllAsync(new RequestsByEmployeesSpec(scopedIds), cancellationToken);
+
+            // Stored records only cover employees who actually punched. A scheduled
+            // employee with no record is absent, exactly like the attendance grid's
+            // DeriveRow: exempt suspended employees, approved day-offs and on-leave.
+            var assignments = await unitOfWork.GetRepository<ShiftAssignment, int>()
+                .GetAllAsync(new AssignmentsByEmployeesDateSpec(scopedIds, today), cancellationToken);
+            var scheduledToday = assignments
+                .Where(a => a.ShiftTemplateId is not null)
+                .Select(a => a.EmployeeId)
+                .Distinct()
+                .ToHashSet();
+            var recordedIds = attendance.Select(a => a.EmployeeId).ToHashSet();
+            var dayOffIds = (await unitOfWork.GetRepository<EmployeeRequest, int>()
+                .GetAllAsync(new ApprovedDayOffRequestsByEmployeeIdsSpec(scopedIds, today, today), cancellationToken))
+                .Select(r => r.EmployeeId)
+                .ToHashSet();
+            var derivedAbsentEmployees = scoped
+                .Where(e =>
+                    scheduledToday.Contains(e.Id)
+                    && !recordedIds.Contains(e.Id)
+                    && !dayOffIds.Contains(e.Id)
+                    && e.Status is not EmployeeStatus.OnLeave
+                    && e.Status is not EmployeeStatus.Suspended)
+                .ToList();
+
+            var derivedAbsent = derivedAbsentEmployees.Count;
+
+            // Auto-deduction sweep: scheduled-but-unpunched employees without an
+            // approved day off get a pending 3-day deduction raised by the system.
+            if (derivedAbsentEmployees.Count > 0)
+            {
+                await teamActions.SweepAbsenceDeductionsAsync(derivedAbsentEmployees, today, cancellationToken);
+            }
 
             return new DashboardOverviewDto
             {
@@ -224,7 +260,7 @@ namespace Service.Services
                 MemberCount = scoped.Count,
                 PresentToday = attendance.Count(a => a.Status == AttendanceStatus.OnTime || a.Status == AttendanceStatus.Late),
                 PendingRequests = requests.Count(r => r.Status == RequestStatus.Pending || r.Status == RequestStatus.PendingHRReview),
-                Absent = attendance.Count(a => a.Status == AttendanceStatus.Absent)
+                Absent = attendance.Count(a => a.Status == AttendanceStatus.Absent) + derivedAbsent
             };
         }
 

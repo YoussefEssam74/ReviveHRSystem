@@ -1,3 +1,4 @@
+using DomainLayer.Models.EmployeeModule;
 using Shared.DataTransferObject.EmployeeProfile;
 
 namespace ServiceAbstraction.Services
@@ -29,5 +30,14 @@ namespace ServiceAbstraction.Services
         /// <summary>Sends a one-to-one message to an in-scope team member.</summary>
         Task SendMessageAsync(
             int actorUserId, int employeeId, int? activeGymId, SendTeamMessageDto request, CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// Runs the attendance sweep: for every employee flagged as absent without
+        /// permission for a past date it auto-raises a pending 3-day deduction
+        /// follow-up, unless one already exists for that employee/date. The item
+        /// stays open for the manager / HR to review and confirm.
+        /// </summary>
+        Task<int> SweepAbsenceDeductionsAsync(
+            IReadOnlyList<Employee> employees, DateOnly date, CancellationToken cancellationToken = default);
     }
 }

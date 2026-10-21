@@ -198,6 +198,98 @@ namespace Service.Services
 
         // ---------- helpers ----------
 
+        /// <summary>
+        /// Deduction a no-permission absence starts from, pending manager / HR
+        /// confirmation — it must not silently land on the payroll as-is.
+        /// </summary>
+        public const string UnauthorizedAbsenceDeduction = "3 Days";
+
+        /// <summary>
+        /// The attendance sweep's write-side: employees the dashboard (or any caller)
+        /// already proved scheduled-but-unpunched for <paramref name="date"/> get one
+        /// pending <see cref="FollowUpActionType.Deduction"/> follow-up each, raised by
+        /// the System account. Idempotent per (EmployeeId, date) via the note marker,
+        /// so the sweep running on every dashboard load never duplicates rows. The
+        /// item is left open — approval is still a human decision.
+        /// </summary>
+        public async Task<int> SweepAbsenceDeductionsAsync(
+            IReadOnlyList<Employee> employees, DateOnly date, CancellationToken cancellationToken = default)
+        {
+            if (employees.Count == 0)
+            {
+                return 0;
+            }
+
+            var employeeIds = employees.Select(e => e.Id).ToArray();
+
+            // One marker per (employee, date). Any pre-existing deduction for the
+            // pair — manual or sweeps from earlier days in the loop — counts as the
+            // dedupe so a corrected record that erases the absence never re-queues it.
+            var existing = (await unitOfWork.GetRepository<TeamFollowUp, int>()
+                .GetAllAsync(new TeamFollowUpsDeductionForEmployeesSpec(employeeIds), cancellationToken))
+                .Where(f => f.Note is not null && f.Note.Contains(Marker(date)))
+                .Select(f => f.EmployeeId)
+                .ToHashSet();
+
+            var systemUserId = await GetSystemUserIdAsync(cancellationToken);
+            if (systemUserId is null)
+            {
+                // No system account to attribute the rows to — skip quietly rather
+                // than failing the dashboard load; the next run can pick it up.
+                return 0;
+            }
+
+            var created = 0;
+            foreach (var employee in employees)
+            {
+                if (existing.Contains(employee.Id))
+                {
+                    continue;
+                }
+
+                var followUp = new TeamFollowUp
+                {
+                    EmployeeId = employee.Id,
+                    TeamId = employee.TeamId,
+                    ActionType = FollowUpActionType.Deduction,
+                    Severity = FollowUpSeverity.High,
+                    Description = $"Deduction — {UnauthorizedAbsenceDeduction}",
+                    LastAction = "Auto-raised",
+                    Note = Marker(date),
+                    IsResolved = false,
+                    RaisedByUserId = systemUserId.Value
+                };
+                await unitOfWork.GetRepository<TeamFollowUp, int>().AddAsync(followUp, cancellationToken);
+                existing.Add(employee.Id);
+                created++;
+
+                if (employee.UserId > 0)
+                {
+                    await NotifyAsync(employee, "Absence recorded",
+                        "You were marked absent without permission for " +
+                        $"{date:yyyy-MM-dd}. A {UnauthorizedAbsenceDeduction} deduction was raised for review.",
+                        cancellationToken);
+                }
+            }
+
+            if (created > 0)
+            {
+                await unitOfWork.SaveChangesAsync(cancellationToken);
+            }
+
+            return created;
+        }
+
+        /// <summary>The marker stamped into the note for one absence day.</summary>
+        private static string Marker(DateOnly date) => $"auto-absence:{date:yyyy-MM-dd}";
+
+        private async Task<int?> GetSystemUserIdAsync(CancellationToken cancellationToken)
+        {
+            var admin = await unitOfWork.GetRepository<DomainLayer.Models.UserModule.User, int>()
+                .GetAllAsync(new UserByEmailSpec("admin@revive.hr"), cancellationToken);
+            return admin.Select(u => u.Id).Cast<int?>().FirstOrDefault();
+        }
+
         private async Task NotifyAsync(Employee employee, string title, string body, CancellationToken cancellationToken)
         {
             await unitOfWork.GetRepository<Notification, int>().AddAsync(new Notification

@@ -209,7 +209,8 @@ function FollowUpRow({ item }: { item: TeamFollowUp }) {
           <div className="min-w-0">
             <p className="text-xs font-semibold text-charcoal-900">{item.employee}</p>
             <p className="text-[10px] text-charcoal-500">{item.description}</p>
-            {item.note && <p className="mt-1 text-xs text-charcoal-600">{item.note}</p>}
+            {item.note && !item.note.startsWith('auto-absence:') &&
+              <p className="mt-1 text-xs text-charcoal-600">{item.note}</p>}
             {item.lastAction && (
               <p className="mt-0.5 text-[10px] text-charcoal-400">Last action: {item.lastAction}</p>
             )}

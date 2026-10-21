@@ -541,7 +541,6 @@ function CycleDetailPanel({
   const monthCols = monthColsOf(detail, selMonth)
   const cols = view === 'week' ? weekCols : monthCols
   const cycleDays = isoRange(detail.startDate, detail.endDate).length
-  const weekdaysOfView = [...new Set(cols.map((col) => weekdayIndex(col.date)))]
 
   // Visible non-Off cells.
   const assignedCount = detail.assignments.reduce(

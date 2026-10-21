@@ -131,6 +131,18 @@ namespace Service.Specifications
         }
     }
 
+    /// <summary>
+    /// Auto-absence deductions raised by the system for a set of employees, used by
+    /// the sweep's idempotency check before it creates new rows.
+    /// </summary>
+    public class TeamFollowUpsDeductionForEmployeesSpec : BaseSpecification<TeamFollowUp, int>
+    {
+        public TeamFollowUpsDeductionForEmployeesSpec(IReadOnlyCollection<int> employeeIds)
+        {
+            Criteria = f => employeeIds.Contains(f.EmployeeId);
+        }
+    }
+
     /// <summary>Offboarding cases of one gym through their employees.</summary>
     public class OffboardingCasesByGymSpec : BaseSpecification<OffboardingCase, int>
     {
