@@ -582,8 +582,10 @@ namespace Service.Services
                 .GetByIdAsync(new EmployeeByIdSpec(employeeId), cancellationToken)
                 ?? throw new NotFoundException("Employee not found.");
 
+            // Open periods are included on purpose: the mapping marks their entry
+            // visible=false so the UI can render it as the current, still-processing sheet.
             var periods = await unitOfWork.GetRepository<PayrollPeriod, int>()
-                .GetAllAsync(new PayrollPeriodsByGymSpec(employee.GymId), cancellationToken);
+                .GetAllAsync(new PayrollPeriodsByGymIncludingOpenSpec(employee.GymId), cancellationToken);
 
             var periodIds = periods.Select(p => p.Id).ToList();
             var entries = await unitOfWork.GetRepository<PayrollEntry, int>()

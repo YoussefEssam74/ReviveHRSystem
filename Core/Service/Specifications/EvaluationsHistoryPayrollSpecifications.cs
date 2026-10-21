@@ -123,6 +123,21 @@ namespace Service.Specifications
         }
     }
 
+    /// <summary>
+    /// Payroll periods of a gym including the still-Open one, for the employee's own
+    /// payroll view (mock §8). <see cref="PayrollPeriodsByGymSpec"/> hides Open periods
+    /// for reporting; the self view must surface them so the mapping can flag the entry
+    /// visible=false ("Processing" / "Payout pending") instead of omitting the month.
+    /// </summary>
+    public class PayrollPeriodsByGymIncludingOpenSpec : BaseSpecification<PayrollPeriod, int>
+    {
+        public PayrollPeriodsByGymIncludingOpenSpec(int gymId)
+        {
+            Criteria = p => p.GymId == gymId;
+            OrderByDescending = p => p.EndDate;
+        }
+    }
+
     /// <summary>Shift assignments of one employee inside an inclusive date range.</summary>
     public class AssignmentsByEmployeeRangeSpec : BaseSpecification<DomainLayer.Models.SchedulingModule.ShiftAssignment, int>
     {

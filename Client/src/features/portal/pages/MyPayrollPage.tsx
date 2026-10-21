@@ -57,14 +57,17 @@ export default function MyPayrollPage() {
     return <ErrorState message={describeApiError(sheetsQuery.error)} onRetry={() => sheetsQuery.refetch()} />
   }
 
-  // Open periods (visible=false) cannot render money yet — they render once as
-  // the "Current Period" card; closed sheets are the payslip history shown in
-  // the Monthly Breakdown (newest paid month first, mock ordering).
+  // Open periods (visible=false) cannot show money yet — they render as the
+  // "Current Period" card and as the still-open last row of the Monthly Breakdown;
+  // closed sheets are the payslip history (newest paid month first, mock ordering).
   const allSheets = sheetsQuery.data ?? []
   const paid = [...allSheets]
     .filter((sheet) => sheet.visible)
     .sort((a, b) => (b.paidDate ?? '').localeCompare(a.paidDate ?? ''))
   const openSheet = allSheets.find((sheet) => !sheet.visible) ?? null
+  // Monthly Breakdown lists every sheet, with the still-open month last (mock §8);
+  // `paid` above stays closed-months-only so summary totals exclude it.
+  const months = openSheet ? [...paid, openSheet] : paid
   const ref = paid[0] ?? null
 
   const totalNet = paid.reduce((sum, sheet) => sum + sheet.netSalary, 0)
@@ -124,7 +127,7 @@ export default function MyPayrollPage() {
       <div>
         <h2 className="mb-2 text-base font-bold text-charcoal-900">Monthly Breakdown</h2>
         <div className="space-y-2.5">
-          {paid.map((sheet) => (
+          {months.map((sheet) => (
             <SheetCard
               key={sheet.id}
               sheet={sheet}
