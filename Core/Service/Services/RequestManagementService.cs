@@ -82,15 +82,30 @@ namespace Service.Services
                 ? RequestStatus.PendingHRReview
                 : RequestStatus.Rejected;
 
-            request.Decisions.Add(new RequestDecision
+            // The desk may re-decide his own stage — most commonly reject after an
+            // earlier acceptance. (RequestId, Stage) is unique, so a second insert
+            // used to blow up as the misleading "concurrent update" error: rewrite
+            // the existing stage row in place instead.
+            var stageDecision = request.Decisions.FirstOrDefault(d => d.Stage == stage);
+            if (stageDecision is null)
             {
-                RequestId = request.Id,
-                Stage = stage,
-                Decision = outcome,
-                Comment = string.IsNullOrWhiteSpace(decision.Comment) ? null : decision.Comment.Trim(),
-                DecidedBy = actorUserId,
-                DecidedAt = DateTime.UtcNow
-            });
+                request.Decisions.Add(new RequestDecision
+                {
+                    RequestId = request.Id,
+                    Stage = stage,
+                    Decision = outcome,
+                    Comment = string.IsNullOrWhiteSpace(decision.Comment) ? null : decision.Comment.Trim(),
+                    DecidedBy = actorUserId,
+                    DecidedAt = DateTime.UtcNow
+                });
+            }
+            else
+            {
+                stageDecision.Decision = outcome;
+                stageDecision.Comment = string.IsNullOrWhiteSpace(decision.Comment) ? null : decision.Comment.Trim();
+                stageDecision.DecidedBy = actorUserId;
+                stageDecision.DecidedAt = DateTime.UtcNow;
+            }
 
             unitOfWork.GetRepository<EmployeeRequest, int>().Update(request);
 

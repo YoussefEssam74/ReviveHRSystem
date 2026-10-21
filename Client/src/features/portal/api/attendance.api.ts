@@ -136,6 +136,31 @@ export function getOwnLeaveBalance(employeeId: number, signal?: AbortSignal): Pr
   return apiRequest<LeaveBalanceResponse>(`/api/employees/${employeeId}/leave-balance`, { signal })
 }
 
+/**
+ * One deduction on the employee (GET /api/employees/{id}/deductions): an absence
+ * follow-up or a payroll candidate, joined with the correction request he filed.
+ */
+export interface EmployeeDeduction {
+  /** "followup-{id}" | "candidate-{id}" — separate id spaces, prefixed. */
+  id: string
+  source: 'absence' | 'candidate'
+  /** "yyyy-MM-dd"; null when a hand-raised follow-up never carried the marker. */
+  date: string | null
+  description: string
+  /** Money deductions only (day-based follow-ups leave it null). */
+  amount: number | null
+  /** Human status: In review | Resolved | Applied | Rejected. */
+  status: string
+  detail: string | null
+  correctionRequestId: number | null
+  /** Raw RequestStatus of the correction (Pending, PendingHRReview, ...). */
+  correctionStatus: string | null
+}
+
+export function getEmployeeDeductions(employeeId: number, signal?: AbortSignal): Promise<EmployeeDeduction[]> {
+  return apiRequest<EmployeeDeduction[]>(`/api/employees/${employeeId}/deductions`, { signal })
+}
+
 export function getOwnSchedule(employeeId: number, month?: string, signal?: AbortSignal): Promise<EmployeeScheduleDto> {
   const monthQuery = month ? `?month=${month}` : ''
   return apiRequest<EmployeeScheduleDto>(`/api/employees/${employeeId}/schedule${monthQuery}`, { signal })

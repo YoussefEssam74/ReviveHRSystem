@@ -160,6 +160,24 @@ namespace Presentation.Controllers
         }
     }
 
+    /// <summary>
+    /// Deductions hanging on one employee — absence follow-ups and payroll candidates —
+    /// each joined with the Deduction Correction request filed against its date.
+    /// </summary>
+    [Route("api/employees/{id}/deductions")]
+    public class EmployeeDeductionsController(
+        IEmployeeRequestService requestService) : ApiControllerBase
+    {
+        [HttpGet]
+        public async Task<ActionResult<IReadOnlyList<EmployeeDeductionDto>>> GetDeductions(
+            int id, CancellationToken cancellationToken)
+        {
+            var deductions = await requestService.GetDeductionsAsync(
+                GetActorUserId(), id, GetGymIdFromToken(), cancellationToken);
+            return Ok(deductions);
+        }
+    }
+
     /// <summary>Own payroll sheets (mock §8): visible period cards for the employee.</summary>
     [Route("~/api/employees/{id}/payroll-sheets")]
     public class EmployeePayrollSheetsController(IPayrollSelfService payroll) : ApiControllerBase

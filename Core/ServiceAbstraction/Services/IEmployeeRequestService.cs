@@ -6,7 +6,7 @@ namespace ServiceAbstraction.Services
     /// <summary>
     /// Self-service requests (mock §10 My Requests): create, list, detail, cancel.
     ///
-    /// Submission rules live per request type (the 9-type catalog): annual/sick leave
+    /// Submission rules live per request type (the agreed catalog): annual/sick leave
     /// draw from the leave balance and refuse to exceed it; late attendance/early leave
     /// are capped by the gym's monthly excused-hours budget (shared) with the hours derived
     /// from the employee's published schedule; sick leave carries its medical certificate
@@ -33,6 +33,13 @@ namespace ServiceAbstraction.Services
 
         /// <summary>Monthly excused-hours budget (late attendance / early leave) of one employee.</summary>
         Task<ExcusedHoursBudgetDto> GetExcusedHoursBudgetAsync(
+            int actorUserId, int employeeId, int? activeGymId, CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// Deductions hanging on one employee (absence follow-ups + payroll candidates),
+        /// each joined with the Deduction Correction request filed against its date.
+        /// </summary>
+        Task<IReadOnlyList<EmployeeDeductionDto>> GetDeductionsAsync(
             int actorUserId, int employeeId, int? activeGymId, CancellationToken cancellationToken = default);
 
         /// <summary>

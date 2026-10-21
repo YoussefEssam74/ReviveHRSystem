@@ -4,9 +4,11 @@ import { useQuery } from '@tanstack/react-query'
 import { ChevronRight, Plus, SquarePen } from 'lucide-react'
 import { getEmployeeDashboard } from '../api/dashboard.api'
 import {
+  getEmployeeDeductions,
   getOwnAttendance,
   getOwnLeaveBalance,
   type EmployeeAttendanceItem,
+  type EmployeeDeduction,
 } from '../api/attendance.api'
 import { getExcusedHoursBudget, getOwnRequests, getRequestTypes } from '../api/requests.api'
 import { NewRequestModal } from '../components/NewRequestModal'
@@ -14,9 +16,10 @@ import { EmptyState } from '../../../components/ui/primitives'
 import { ErrorState, LoadingState } from '../../../components/async-state'
 import { Drawer } from '../../../components/ui/drawer'
 import { StatusBadge } from '../../../components/ui/badge'
+import { Badge, type BadgeColor } from '../../../components/ui/badge'
 import { usePortalSession } from '../../../contexts/PortalSessionContext'
 import { describeApiError } from '../../../lib/api-client'
-import { formatDate, formatDateWithYear } from '../../../lib/format'
+import { formatDate, formatDateWithYear, formatMoney } from '../../../lib/format'
 import { PAGE_PATHS } from '../portal-nav'
 import { cn } from '../../../lib/utils'
 
@@ -67,6 +70,23 @@ function previousMonthIso(): string {
 
 /** RequestTypeCatalog id for attendance corrections (backend `RequestTypeCatalog`). */
 const CHECK_IN_CORRECTION_ID = 'check-in-correction'
+
+/** RequestTypeCatalog id for disputing a raised deduction (backend `RequestTypeCatalog`). */
+const DEDUCTION_CORRECTION_ID = 'deduction-correction'
+
+/** Badge color per deduction status — from the employee's seat: applied = money gone. */
+const DEDUCTION_COLORS: Record<string, BadgeColor> = {
+  'In review': 'yellow',
+  Applied: 'red',
+  Rejected: 'green',
+  Resolved: 'green',
+}
+
+/** Raw RequestStatus enum → the label the badge vocabulary understands. */
+function requestStatusLabel(status: string | null): string {
+  if (!status) return '—'
+  return status === 'PendingHRReview' ? 'Pending HR Review' : status
+}
 
 /** Draft of a request being launched: optional type + date to prefill in the modal. */
 interface RequestDraft {
@@ -131,6 +151,11 @@ export default function MyAttendancePage() {
     queryFn: ({ signal }) => getOwnRequests(employeeId!, signal),
     enabled: employeeId != null,
   })
+  const deductionsQuery = useQuery({
+    queryKey: ['portal', 'deductions', employeeId],
+    queryFn: ({ signal }) => getEmployeeDeductions(employeeId!, signal),
+    enabled: employeeId != null,
+  })
 
   if (employeeId == null) {
     return (
@@ -150,6 +175,7 @@ export default function MyAttendancePage() {
   const balance = balanceQuery.data ?? null
   const budget = budgetQuery.data ?? null
   const requests = requestsQuery.data ?? []
+  const deductions = deductionsQuery.data ?? []
 
   // Off days (no shift planned) are omitted from the history like in the mock.
   const history = (attendance?.items ?? []).filter((item) => {
@@ -304,6 +330,53 @@ export default function MyAttendancePage() {
             </div>
           )}
         </div>
+      </div>
+
+      {/* Deductions raised on me — each one disputable via a correction request */}
+      <div className="card px-3 py-2">
+        <div className="mb-1.5 flex items-center justify-between">
+          <p className="bento-label">MY DEDUCTIONS</p>
+          <span className="text-[10px] text-charcoal-500">
+            {deductions.length === 0 ? 'nothing raised' : `${deductions.length} on record`}
+          </span>
+        </div>
+        {deductionsQuery.isError ? (
+          <p className="text-[11px] text-red-600">{describeApiError(deductionsQuery.error)}</p>
+        ) : deductions.length === 0 ? (
+          <p className="text-[11px] text-charcoal-500">No deductions have been raised on your record.</p>
+        ) : (
+          <div className="divide-y divide-charcoal-100">
+            {deductions.map((row: EmployeeDeduction) => (
+              <div key={row.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 py-1.5">
+                <span className="w-24 text-[11px] font-semibold text-charcoal-700">
+                  {row.date ? formatDate(row.date) : '—'}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-[11px] font-medium text-charcoal-900">{row.description}</p>
+                  {row.detail && <p className="truncate text-[10px] text-charcoal-500">{row.detail}</p>}
+                </div>
+                <span className="w-20 text-right text-[11px] font-semibold text-charcoal-900">
+                  {row.amount != null ? formatMoney(row.amount) : '—'}
+                </span>
+                <Badge color={DEDUCTION_COLORS[row.status] ?? 'gray'}>{row.status}</Badge>
+                {row.correctionRequestId != null ? (
+                  <span className="inline-flex items-center gap-1.5 text-[10px] text-charcoal-500">
+                    Correction
+                    <StatusBadge status={requestStatusLabel(row.correctionStatus)} />
+                  </span>
+                ) : row.date != null ? (
+                  <button
+                    type="button"
+                    onClick={() => setRequestDraft({ typeId: DEDUCTION_CORRECTION_ID, date: row.date! })}
+                    className="rounded-lg border border-charcoal-200 px-2 py-1 text-[10px] font-semibold text-charcoal-700 transition-colors hover:border-brand-300 hover:bg-brand-50"
+                  >
+                    Request correction
+                  </button>
+                ) : null}
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Attendance history */}

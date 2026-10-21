@@ -141,9 +141,9 @@ namespace ReviveHRSystem.IntegrationTests
             authedResponse.EnsureSuccessStatusCode();
             var body = await authedResponse.Content.ReadFromJsonAsync<JsonElement>();
 
-            // The final 9-type catalog agreed with the product owner.
+            // The catalog agreed with the product owner (absence disputes added later).
             var ids = body.EnumerateArray().Select(t => t.GetProperty("id").GetString()).ToList();
-            Assert.Equal(9, ids.Count);
+            Assert.Equal(10, ids.Count);
             Assert.Contains("annual-leave", ids);
             Assert.Contains("sick-leave", ids);
             Assert.Contains("late-attendance", ids);
@@ -153,6 +153,7 @@ namespace ReviveHRSystem.IntegrationTests
             Assert.Contains("check-in-correction", ids);
             Assert.Contains("salary-advance", ids);
             Assert.Contains("paid-holiday", ids);
+            Assert.Contains("deduction-correction", ids);
 
             var sick = body.EnumerateArray().First(t => t.GetProperty("id").GetString() == "sick-leave");
             Assert.True(sick.GetProperty("requiresAttachment").GetBoolean());

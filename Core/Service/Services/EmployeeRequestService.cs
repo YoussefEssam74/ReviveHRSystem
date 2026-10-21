@@ -4,6 +4,8 @@ using DomainLayer.Exceptions;
 using DomainLayer.Models.EmployeeModule;
 using DomainLayer.Models.EmployeeModule.Enums;
 using DomainLayer.Models.OrganizationModule;
+using DomainLayer.Models.PayrollModule;
+using DomainLayer.Models.PayrollModule.Enums;
 using DomainLayer.Models.RequestModule;
 using DomainLayer.Models.RequestModule.Enums;
 using DomainLayer.Models.SchedulingModule;
@@ -18,7 +20,7 @@ using Shared.DataTransferObject.EmployeeProfile;
 namespace Service.Services
 {
     /// <summary>
-    /// Self-service requests (mock §10). The catalog is the final 9-type list agreed with
+    /// Self-service requests (mock §10). The catalog is the final list agreed with
     /// the product owner:
     ///
     /// - **Annual Leave / Sick Leave** draw from the leave balance (21 / 10 default days):
@@ -29,6 +31,8 @@ namespace Service.Services
     /// - **Shift Swap / Weekly Off Swap** name a colleague of the same gym.
     /// - **Check-in Correction**, **Salary Advance** (amount) and **Paid Holiday** (working
     ///   a paid holiday for double day pay) carry no automatic limit — approval is the gate.
+    /// - **Deduction Correction** disputes an already-raised deduction; the amount itself
+    ///   stays with the managers — this is the employee's paper trail into their queue.
     ///
     /// Every type then follows the two-stage workflow: TL/BM stage 1 → HR final
     /// (management side). Approval consumes reserved leave days, rejection releases them.
@@ -99,6 +103,126 @@ namespace Service.Services
                 actorUserId, request.EmployeeId, activeGymId, cancellationToken);
 
             return mapper.Map<EmployeeRequestDto>(request);
+        }
+
+        /// <summary>
+        /// Every deduction hanging on one employee, as he sees it: the absence follow-ups
+        /// the sweep (or a manager) raised and the payroll deduction candidates issued for
+        /// him — each joined with the Deduction Correction request he filed against that
+        /// date, so the card shows the whole trail in one row.
+        /// </summary>
+        public async Task<IReadOnlyList<EmployeeDeductionDto>> GetDeductionsAsync(
+            int actorUserId, int employeeId, int? activeGymId, CancellationToken cancellationToken = default)
+        {
+            await employeeAccess.EnsureCanAccessAsync(actorUserId, employeeId, activeGymId, cancellationToken);
+
+            var employeeIds = new[] { employeeId };
+
+            var followUps = (await unitOfWork.GetRepository<TeamFollowUp, int>()
+                .GetAllAsync(new TeamFollowUpsDeductionForEmployeesSpec(employeeIds), cancellationToken))
+                .Where(f => f.ActionType == FollowUpActionType.Deduction)
+                .ToList();
+
+            var candidates = await unitOfWork.GetRepository<DeductionCandidate, int>()
+                .GetAllAsync(new DeductionCandidatesByEmployeesSpec(employeeIds), cancellationToken);
+
+            // His correction requests keyed by the day they target, so a deduction row can
+            // show the dispute sitting on it (newest submission wins a shared date).
+            var correctionsByDate = (await unitOfWork.GetRepository<EmployeeRequest, int>()
+                .GetAllAsync(new RequestsByEmployeeSpec(employeeId), cancellationToken))
+                .Where(r => r.Type.Equals(RequestTypeCatalog.DeductionCorrectionLabel, StringComparison.OrdinalIgnoreCase))
+                .OrderByDescending(r => r.SubmittedAt)
+                .GroupBy(r => r.RequestDate)
+                .ToDictionary(g => g.Key, g => g.First());
+
+            var rows = new List<EmployeeDeductionDto>(followUps.Count + candidates.Count());
+
+            foreach (var followUp in followUps)
+            {
+                var date = ParseAbsenceMarker(followUp.Note);
+                int? correctionId = null;
+                string? correctionStatus = null;
+                if (date is not null && correctionsByDate.TryGetValue(date.Value, out var followUpCorrection))
+                {
+                    correctionId = followUpCorrection.Id;
+                    correctionStatus = followUpCorrection.Status.ToString();
+                }
+
+                rows.Add(new EmployeeDeductionDto(
+                    $"followup-{followUp.Id}",
+                    "absence",
+                    date,
+                    followUp.Description,
+                    Amount: null,
+                    followUp.IsResolved ? "Resolved" : "In review",
+                    followUp.LastAction,
+                    correctionId,
+                    correctionStatus));
+            }
+
+            foreach (var candidate in candidates)
+            {
+                var date = DateOnly.FromDateTime(candidate.IssuedAt);
+                int? correctionId = null;
+                string? correctionStatus = null;
+                if (correctionsByDate.TryGetValue(date, out var candidateCorrection))
+                {
+                    correctionId = candidateCorrection.Id;
+                    correctionStatus = candidateCorrection.Status.ToString();
+                }
+
+                rows.Add(new EmployeeDeductionDto(
+                    $"candidate-{candidate.Id}",
+                    "candidate",
+                    date,
+                    candidate.Reason,
+                    candidate.Amount,
+                    candidate.Status switch
+                    {
+                        DeductionStatus.Pending => "In review",
+                        DeductionStatus.Approved => "Applied",
+                        _ => "Rejected"
+                    },
+                    candidate.Note,
+                    correctionId,
+                    correctionStatus));
+            }
+
+            return rows
+                .OrderByDescending(r => r.Date)
+                .ThenBy(r => r.Id, StringComparer.Ordinal)
+                .ToList();
+        }
+
+        /// <summary>
+        /// The absence day stamped into a follow-up's note (<c>auto-absence:yyyy-MM-dd</c>),
+        /// or null for manually raised deductions that never carried the marker.
+        /// </summary>
+        private static DateOnly? ParseAbsenceMarker(string? note)
+        {
+            const string prefix = "auto-absence:";
+            if (string.IsNullOrEmpty(note))
+            {
+                return null;
+            }
+
+            var start = note.IndexOf(prefix, StringComparison.Ordinal);
+            if (start < 0)
+            {
+                return null;
+            }
+
+            var value = note[(start + prefix.Length)..];
+            if (value.Length < 10)
+            {
+                return null;
+            }
+
+            return DateOnly.TryParseExact(
+                value[..10], "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture,
+                System.Globalization.DateTimeStyles.None, out var date)
+                ? date
+                : null;
         }
 
         public async Task<EmployeeRequestDto> CreateAsync(
@@ -211,6 +335,12 @@ namespace Service.Services
                     // Working a paid holiday is approved by HR; nothing else to validate.
                     break;
 
+                case RequestTypeCatalog.DeductionCorrectionId:
+                    // Disputing an already-raised deduction: the date names the day the
+                    // deduction landed on and the reason carries the employee's case —
+                    // reviewers still own the actual amount, so nothing else to validate.
+                    break;
+
                 default:
                     throw new BadRequestException($"Unknown request type '{request.Type}'.");
             }
@@ -250,9 +380,12 @@ namespace Service.Services
                 throw new NotFoundException("Request not found.");
             }
 
-            if (request.Status != RequestStatus.Pending)
+            // The employee may pull his request back until HR gives the final word:
+            // still at the desk (Pending) or forwarded to HR (PendingHRReview) after
+            // a Branch Manager approval. Final decisions (Approved/Rejected) stand.
+            if (request.Status is not (RequestStatus.Pending or RequestStatus.PendingHRReview))
             {
-                throw new BadRequestException("Only pending requests can be cancelled.");
+                throw new BadRequestException("Only requests still awaiting approval can be cancelled.");
             }
 
             request.Status = RequestStatus.Cancelled;

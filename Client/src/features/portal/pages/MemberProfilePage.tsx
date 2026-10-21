@@ -1,10 +1,10 @@
-import { useState, type ReactNode } from 'react'
+import { useMemo, useState, type ReactNode } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useLocation, useNavigate, useParams } from 'react-router-dom'
-import { ArrowLeft, BadgeCheck, Briefcase, CalendarDays, ChevronsLeft, CreditCard, Lock, MapPin } from 'lucide-react'
-import { getTeamToday, type TeamMemberDay } from '../api/team.api'
+import { AlertTriangle, ArrowLeft, BadgeCheck, Briefcase, CalendarDays, Check, ChevronsLeft, CreditCard, Lock, MapPin, Pencil, X } from 'lucide-react'
+import { getShiftCycle, getTeamToday, setShiftAssignments, type SetAssignmentInput, type TeamMemberDay } from '../api/team.api'
 import { getOwnAttendance, getOwnLeaveBalance, getOwnSchedule, manualAttendance, type EmployeeScheduleDto, type EmployeeAttendanceResponse } from '../api/attendance.api'
-import { getOwnRequests, type EmployeeRequestItem } from '../api/requests.api'
+import { decideRequest, getOwnRequests, type EmployeeRequestItem } from '../api/requests.api'
 import { getOwnEvaluationDetails, downloadDocument, downloadHrDocument, getHrDocuments, getOwnDocuments, getOwnHistory, getOwnProfile, type EmployeeDocument, type EmployeeHistoryItem, type EvaluationDetail, type HrDocument } from '../api/employee-file.api'
 import { getOwnPayrollSheets } from '../api/payroll.api'
 import { getAttendanceGrid } from '../api/branch.api'
@@ -41,6 +41,28 @@ function todayIso(): string {
   const now = new Date()
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
 }
+
+/** Monday..Sunday dates of the week containing today (mock's "CURRENT WEEK"). */
+function currentWeekDates(): { label: string; date: string }[] {
+  const anchor = new Date(`${todayIso()}T00:00:00`)
+  const weekdayIndex = (anchor.getDay() + 6) % 7
+  const monday = new Date(anchor)
+  monday.setDate(anchor.getDate() - weekdayIndex)
+  return Array.from({ length: 7 }, (_, index) => {
+    const cursor = new Date(monday)
+    cursor.setDate(monday.getDate() + index)
+    return {
+      label: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'][index],
+      date: `${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, '0')}-${String(cursor.getDate()).padStart(2, '0')}`,
+    }
+  })
+}
+
+const WEEKDAY_LABELS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+/** Edit-shift sentinel: leave the weekday untouched (the PUT upserts only sent cells). */
+const SHIFT_KEEP = '__keep'
+/** Edit-shift sentinel: book an explicit rest day (null templateId). */
+const SHIFT_OFF = '__off'
 
 function initialsOf(name: string): string {
   return name
@@ -430,6 +452,7 @@ function UpcomingSchedule({ memberId }: { memberId: number }) {
 }
 
 function MemberRequests({ memberId }: { memberId: number }) {
+  const { can } = usePortalSession()
   const requestsQuery = useQuery({
     queryKey: ['portal', 'member', 'requests', memberId],
     queryFn: ({ signal }) => getOwnRequests(memberId, signal),
@@ -444,6 +467,7 @@ function MemberRequests({ memberId }: { memberId: number }) {
     )
 
   const requests: EmployeeRequestItem[] = requestsQuery.data ?? []
+  const canDecide = can('requests.view')
   return (
     <SectionCard title={`Requests (${requests.length})`}>
       {requests.length === 0 ? (
@@ -451,16 +475,7 @@ function MemberRequests({ memberId }: { memberId: number }) {
       ) : (
         <ul className="divide-y divide-charcoal-50">
           {requests.slice(0, 6).map((r) => (
-            <li key={r.id} className="flex items-center justify-between gap-2 py-2.5">
-              <div className="min-w-0">
-                <p className="text-xs font-medium text-charcoal-900">{r.type}</p>
-                <p className="text-[10px] text-charcoal-500">
-                  {formatDateWithYear(r.requestedDate)} · Submitted {formatDateWithYear(r.submittedDate)}
-                </p>
-                {r.reason && <p className="text-[10px] text-charcoal-400">{r.reason}</p>}
-              </div>
-              <StatusBadge status={r.status} />
-            </li>
+            <MemberRequestRow key={r.id} memberId={memberId} request={r} canDecide={canDecide} />
           ))}
         </ul>
       )}
@@ -468,6 +483,99 @@ function MemberRequests({ memberId }: { memberId: number }) {
         <p className="mt-1 text-[10px] text-charcoal-400">Showing the 6 most recent of {requests.length}.</p>
       )}
     </SectionCard>
+  )
+}
+
+/** One request row in the member's Requests tab; a manager (requests.view) can
+ *  approve-to-HR / reject inline here — same semantics as the team requests desk. */
+function MemberRequestRow({
+  memberId,
+  request,
+  canDecide,
+}: {
+  memberId: number
+  request: EmployeeRequestItem
+  canDecide: boolean
+}) {
+  const { toast } = useToast()
+  const queryClient = useQueryClient()
+  const [decision, setDecision] = useState<'Approve' | 'Reject' | null>(null)
+
+  const decideMutation = useMutation({
+    mutationFn: (input: { decision: 'Approve' | 'Reject' }) => decideRequest(request.id, input.decision, null),
+    onSuccess: (_data, variables) => {
+      void queryClient.invalidateQueries({ queryKey: ['portal', 'member', 'requests', memberId] })
+      void queryClient.invalidateQueries({ queryKey: ['portal', 'requests'] })
+      toast(`Request #${request.id} ${variables.decision === 'Approve' ? 'approved to HR review' : 'rejected'}.`)
+      setDecision(null)
+    },
+    onError: (error) => toast(describeApiError(error), 'error'),
+  })
+
+  // BM acts on Pending; once it reaches HR it is HR's call (same as the team desk).
+  const canApprove = canDecide && request.status === 'Pending'
+  const canReject = canDecide && (request.status === 'Pending' || request.status === 'PendingHRReview')
+
+  return (
+    <li className="flex items-center justify-between gap-2 py-2.5">
+      <div className="min-w-0">
+        <p className="text-xs font-medium text-charcoal-900">{request.type}</p>
+        <p className="text-[10px] text-charcoal-500">
+          {formatDateWithYear(request.requestedDate)} · Submitted {formatDateWithYear(request.submittedDate)}
+        </p>
+        {request.reason && <p className="text-[10px] text-charcoal-400">{request.reason}</p>}
+      </div>
+      <div className="flex flex-shrink-0 flex-col items-end gap-1.5">
+        <StatusBadge status={request.status} />
+        {(canApprove || canReject) && (
+          <div className="flex gap-1.5">
+            {canApprove && (
+              <Button size="sm" variant="primary" onClick={() => setDecision('Approve')}>
+                <Check className="h-3.5 w-3.5" aria-hidden="true" /> Approve
+              </Button>
+            )}
+            {canReject && (
+              <Button size="sm" variant="dangerOutline" onClick={() => setDecision('Reject')}>
+                <X className="h-3.5 w-3.5" aria-hidden="true" /> Reject
+              </Button>
+            )}
+          </div>
+        )}
+      </div>
+
+      {decision && (
+        <Modal
+          open
+          title={`${decision} request #${request.id}`}
+          subtitle={
+            decision === 'Approve'
+              ? 'Approves to HR review — HR gives the final sign-off.'
+              : 'Rejects the request; reserved leave days are released.'
+          }
+          onClose={() => setDecision(null)}
+          footer={
+            <div className="flex justify-end gap-2">
+              <Button variant="secondary" onClick={() => setDecision(null)}>
+                Cancel
+              </Button>
+              <Button
+                variant={decision === 'Reject' ? 'danger' : 'primary'}
+                loading={decideMutation.isPending}
+                onClick={() => decideMutation.mutate({ decision })}
+              >
+                {decision === 'Approve' ? 'Confirm approve' : 'Confirm reject'}
+              </Button>
+            </div>
+          }
+        >
+          <p className="text-sm text-charcoal-600">
+            {decision === 'Approve'
+              ? 'The request moves to HR review for the final sign-off.'
+              : 'Reject this request? Reserved leave days are released.'}
+          </p>
+        </Modal>
+      )}
+    </li>
   )
 }
 
@@ -542,6 +650,24 @@ function BMProfile({ memberId, member }: { memberId: number; member: MemberHeade
   const { can } = usePortalSession()
   const [tab, setTab] = useState<BmTabId>('personal')
 
+  // Shares the ShiftTab cache entry (same query key) — no extra network call.
+  const scheduleQuery = useQuery({
+    queryKey: ['portal', 'member', 'schedule', memberId],
+    queryFn: ({ signal }) => getOwnSchedule(memberId, undefined, signal),
+  })
+
+  // Week days that fall inside a published cycle but have no assignment row —
+  // surfaced on every tab so an unassigned day is never silent.
+  const missingDays = useMemo(() => {
+    const schedule = scheduleQuery.data
+    if (!schedule) return []
+    const byDate = new Map((schedule.days ?? []).map((day) => [day.date, day]))
+    return currentWeekDates()
+      .filter(({ date }) => !byDate.has(date))
+      .filter(({ date }) => schedule.cycles.some((cycle) => cycle.start <= date && date <= cycle.end))
+      .map(({ label, date }) => `${label} ${date.slice(5)}`)
+  }, [scheduleQuery.data])
+
   // Salary data is HR-controlled: the payroll tab stays hidden until the viewer
   // holds payroll.view (a seeded Branch Manager does not).
   const tabs = BM_TABS.filter((option) => option.id !== 'payroll' || can('payroll.view'))
@@ -565,6 +691,18 @@ function BMProfile({ memberId, member }: { memberId: number; member: MemberHeade
           </button>
         ))}
       </div>
+      {missingDays.length > 0 && (
+        <div className="flex items-start gap-2 border-b border-amber-200 bg-amber-50 px-4 py-2.5 text-[11px] text-amber-800">
+          <AlertTriangle className="mt-px h-3.5 w-3.5 flex-shrink-0" aria-hidden="true" />
+          <p>
+            <span className="font-semibold">
+              {missingDays.length} {missingDays.length === 1 ? 'day' : 'days'} of this week{' '}
+              {missingDays.length === 1 ? 'has' : 'have'} no assigned shift.
+            </span>{' '}
+            {missingDays.join(', ')} — open the Shift tab to assign {missingDays.length === 1 ? 'it' : 'them'}.
+          </p>
+        </div>
+      )}
       <div className="p-4">
         {tab === 'personal' && <PersonalTab memberId={memberId} member={member} />}
         {tab === 'documents' && <DocumentsTab memberId={memberId} />}
@@ -988,6 +1126,9 @@ function AttendanceTab({ memberId }: { memberId: number }) {
 /* ==================== shift ==================== */
 
 function ShiftTab({ memberId }: { memberId: number }) {
+  const { can } = usePortalSession()
+  const [editCycleId, setEditCycleId] = useState<number | null>(null)
+
   const scheduleQuery = useQuery({
     queryKey: ['portal', 'member', 'schedule', memberId],
     queryFn: ({ signal }) => getOwnSchedule(memberId, undefined, signal),
@@ -1000,22 +1141,30 @@ function ShiftTab({ memberId }: { memberId: number }) {
   const schedule = scheduleQuery.data
   const byDate = new Map((schedule?.days ?? []).map((day) => [day.date, day]))
 
-  // Monday..Sunday strip of the week containing today (mock's "CURRENT WEEK").
-  const anchor = new Date(`${todayIso()}T00:00:00`)
-  const weekdayIndex = (anchor.getDay() + 6) % 7
-  const monday = new Date(anchor)
-  monday.setDate(anchor.getDate() - weekdayIndex)
+  // A date inside a cycle with no assignment row is a scheduling hole; a row
+  // with isOff is an explicit rest day. Dates outside every cycle stay neutral.
+  const inCycle = (date: string) =>
+    (schedule?.cycles ?? []).some((cycle) => cycle.start <= date && date <= cycle.end)
 
-  const week = Array.from({ length: 7 }, (_, index) => {
-    const cursor = new Date(monday)
-    cursor.setDate(monday.getDate() + index)
-    const date = `${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, '0')}-${String(cursor.getDate()).padStart(2, '0')}`
-    return { fallbackLabel: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'][index], date, day: byDate.get(date) }
-  })
+  const week = currentWeekDates().map((entry) => ({ ...entry, day: byDate.get(entry.date) }))
+  const missingCount = week.filter((entry) => !entry.day && inCycle(entry.date)).length
+
+  // The assignments PUT upserts a Draft cycle's weekly pattern only, so the
+  // edit action is offered solely while today sits inside a Draft cycle.
+  const draftCycle = (schedule?.cycles ?? []).find(
+    (cycle) => cycle.status === 'Draft' && cycle.start <= todayIso() && todayIso() <= cycle.end,
+  )
 
   return (
     <div>
-      <p className="bento-label mb-1.5 text-charcoal-400">CURRENT WEEK</p>
+      <div className="mb-1.5 flex items-center justify-between gap-2">
+        <p className="bento-label text-charcoal-400">CURRENT WEEK</p>
+        {can('schedule.manage') && draftCycle && (
+          <Button size="sm" variant="secondary" onClick={() => setEditCycleId(draftCycle.id)}>
+            <Pencil className="h-3.5 w-3.5" aria-hidden="true" /> Edit shift
+          </Button>
+        )}
+      </div>
       {(schedule?.cycles?.length ?? 0) === 0 && (
         <p className="mb-2 text-[10px] text-charcoal-400">
           No published cycles — days below stay unscheduled until HR publishes one.
@@ -1026,15 +1175,25 @@ function ShiftTab({ memberId }: { memberId: number }) {
           const isToday = entry.date === todayIso()
           const day = entry.day
           const worked = day && !day.isOff && day.shiftName
+          const missing = !day && inCycle(entry.date)
           return (
             <div
               key={entry.date}
-              className={cn('rounded-lg border p-2 text-center', isToday ? 'border-brand-300 bg-brand-50/60' : 'border-charcoal-100 bg-charcoal-50')}
+              className={cn(
+                'rounded-lg border p-2 text-center',
+                missing
+                  ? 'border-amber-300 bg-amber-50'
+                  : isToday
+                    ? 'border-brand-300 bg-brand-50/60'
+                    : 'border-charcoal-100 bg-charcoal-50',
+              )}
             >
               <p className={cn('text-[10px] font-semibold', isToday ? 'text-brand-700' : 'text-charcoal-500')}>
-                {(day?.dayName ?? entry.fallbackLabel).slice(0, 3)} {entry.date.slice(8)}
+                {(day?.dayName ?? entry.label).slice(0, 3)} {entry.date.slice(8)}
               </p>
-              <p className="mt-1 text-[11px] font-bold text-charcoal-900">{worked ? day?.shiftName : 'OFF'}</p>
+              <p className={cn('mt-1 text-[11px] font-bold', missing ? 'text-amber-600' : 'text-charcoal-900')}>
+                {worked ? day?.shiftName : missing ? 'NO SHIFT' : day ? 'OFF' : '—'}
+              </p>
               <p className="text-[9px] text-charcoal-500">
                 {worked && day?.start ? `${time12(day.start)} – ${time12(day.end)}` : '—'}
               </p>
@@ -1047,7 +1206,136 @@ function ShiftTab({ memberId }: { memberId: number }) {
           {schedule.cycles.map((cycle) => `${formatDateWithYear(cycle.start)} – ${formatDateWithYear(cycle.end)} (${cycle.status})`).join(', ')}
         </p>
       ) : null}
+      {missingCount > 0 && (
+        <p className="mt-2 flex items-start gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-2 text-[11px] font-medium text-amber-800">
+          <AlertTriangle className="mt-px h-3.5 w-3.5 flex-shrink-0" aria-hidden="true" />
+          <span>
+            {missingCount} {missingCount === 1 ? 'day' : 'days'} of this week{' '}
+            {missingCount === 1 ? 'has' : 'have'} no assigned shift —{' '}
+            {week
+              .filter((entry) => !entry.day && inCycle(entry.date))
+              .map((entry) => `${entry.label} ${entry.date.slice(5)}`)
+              .join(', ')}
+            .
+          </span>
+        </p>
+      )}
+      {editCycleId != null && (
+        <EditShiftModal memberId={memberId} cycleId={editCycleId} onClose={() => setEditCycleId(null)} />
+      )}
     </div>
+  )
+}
+
+/** Weekly-pattern editor for one member inside the Draft shift cycle (mirrors the Assign Shift modal). */
+function EditShiftModal({
+  memberId,
+  cycleId,
+  onClose,
+}: {
+  memberId: number
+  cycleId: number
+  onClose: () => void
+}) {
+  const { toast } = useToast()
+  const queryClient = useQueryClient()
+  const detailQuery = useQuery({
+    queryKey: ['portal', 'shift-cycle', cycleId],
+    queryFn: ({ signal }) => getShiftCycle(cycleId, signal),
+  })
+  const [selected, setSelected] = useState<Record<number, string> | null>(null)
+
+  const detail = detailQuery.data
+  const templates = (detail?.shiftTemplates ?? []).filter((template) => !template.isOff)
+  const row = detail?.assignments.find((assignment) => assignment.employeeId === memberId)
+
+  // Existing template id for a weekday; null = the day was never assigned.
+  const initialFor = (day: number): string | null => {
+    const id = row?.days[day]
+    return id == null ? null : String(id)
+  }
+
+  const values: Record<number, string> =
+    selected ??
+    Object.fromEntries(Array.from({ length: 7 }, (_, day): [number, string] => [day, initialFor(day) ?? SHIFT_KEEP]))
+
+  const saveMutation = useMutation({
+    mutationFn: (payload: SetAssignmentInput[]) => setShiftAssignments(cycleId, payload),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['portal', 'member', 'schedule', memberId] })
+      void queryClient.invalidateQueries({ queryKey: ['portal', 'shift-cycle', cycleId] })
+      toast('Weekly shift pattern saved.')
+      onClose()
+    },
+    onError: (error) => toast(describeApiError(error), 'error'),
+  })
+
+  const hasChanges = Array.from({ length: 7 }, (_, day) => values[day]).some(
+    (value, day) => value !== (initialFor(day) ?? SHIFT_KEEP),
+  )
+
+  return (
+    <Modal
+      open
+      title="Edit shift"
+      subtitle={`${detail?.label ?? 'Current cycle'} — Mondays to Sundays.`}
+      onClose={onClose}
+      footer={
+        <div className="flex justify-end gap-2">
+          <Button variant="secondary" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button
+            variant="primary"
+            disabled={!hasChanges}
+            loading={saveMutation.isPending}
+            onClick={() =>
+              saveMutation.mutate(
+                Array.from({ length: 7 }, (_, day): SetAssignmentInput | null => {
+                  const value = values[day]
+                  if (value === (initialFor(day) ?? SHIFT_KEEP)) return null
+                  return { employeeId: memberId, day, shiftTemplateId: value === SHIFT_OFF ? null : Number(value) }
+                }).filter((input): input is SetAssignmentInput => input !== null),
+              )
+            }
+          >
+            Save
+          </Button>
+        </div>
+      }
+    >
+      {detailQuery.isLoading && <LoadingState label="Loading cycle…" />}
+      {detailQuery.error && (
+        <ErrorState message={describeApiError(detailQuery.error)} onRetry={() => detailQuery.refetch()} />
+      )}
+      {!detailQuery.isLoading && !detailQuery.error && (
+        <>
+          <p className="mb-3 text-[11px] text-charcoal-600">
+            &ldquo;Not assigned&rdquo; leaves the day untouched; &ldquo;Off&rdquo; books an explicit rest day.
+          </p>
+          <div className="space-y-2">
+            {Array.from({ length: 7 }, (_, day) => (
+              <div key={WEEKDAY_LABELS[day]} className="flex items-center gap-3">
+                <p className="w-24 text-[11px] font-semibold text-charcoal-900">{WEEKDAY_LABELS[day]}</p>
+                <select
+                  className="field-input h-9 flex-1 !px-2.5 text-xs"
+                  value={values[day]}
+                  onChange={(event) => setSelected({ ...values, [day]: event.target.value })}
+                >
+                  {initialFor(day) == null && <option value={SHIFT_KEEP}>Not assigned</option>}
+                  {templates.map((template) => (
+                    <option key={template.id} value={String(template.id)}>
+                      {template.name} ({template.start.slice(0, 5)}–{template.end.slice(0, 5)})
+                    </option>
+                  ))}
+                  <option value={SHIFT_OFF}>Off</option>
+                </select>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+    </Modal>
   )
 }
 

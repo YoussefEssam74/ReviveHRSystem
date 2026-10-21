@@ -12,7 +12,7 @@ using Xunit;
 namespace ReviveHRSystem.IntegrationTests
 {
     /// <summary>
-    /// The 9-type employee request catalog and its submission rules: annual/sick leave
+    /// The employee request catalog and its submission rules: annual/sick leave
     /// balance limits, the sick-leave medical certificate, the shared monthly excused-hours
     /// budget of late attendance / early leave, colleague validation for the swaps, the
     /// salary-advance amount, the attachment stream and the HR-set gym attendance policy.

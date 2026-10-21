@@ -134,6 +134,7 @@ export function NewRequestModal({
       await queryClient.invalidateQueries({ queryKey: ['portal', 'leave-balance'] })
       await queryClient.invalidateQueries({ queryKey: ['portal', 'excused-hours'] })
       await queryClient.invalidateQueries({ queryKey: ['portal', 'dashboard'] })
+      await queryClient.invalidateQueries({ queryKey: ['portal', 'deductions'] })
       onClose()
     },
     onError: (error) => setFormError(describeApiError(error)),
