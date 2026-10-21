@@ -530,7 +530,6 @@ const BM_TABS = [
   { id: 'attendance', label: 'Attendance' },
   { id: 'shift', label: 'Shift' },
   { id: 'requests', label: 'Requests' },
-  { id: 'leave', label: 'Leave Balance' },
   { id: 'evals', label: 'Evaluations' },
   { id: 'payroll', label: 'Payroll' },
 ] as const
@@ -573,7 +572,6 @@ function BMProfile({ memberId, member }: { memberId: number; member: MemberHeade
         {tab === 'attendance' && <AttendanceTab memberId={memberId} />}
         {tab === 'shift' && <ShiftTab memberId={memberId} />}
         {tab === 'requests' && <MemberRequests memberId={memberId} />}
-        {tab === 'leave' && <LeaveTab memberId={memberId} />}
         {tab === 'evals' && <MemberEvaluations memberId={memberId} />}
         {tab === 'payroll' && <PayrollTab memberId={memberId} member={member} />}
       </div>
@@ -930,7 +928,7 @@ function AttendanceTab({ memberId }: { memberId: number }) {
             </span>
           ))}
         </div>
-        <div className="mt-2 grid grid-cols-2 gap-2 text-center sm:grid-cols-5">
+        <div className="mt-2 grid grid-cols-2 gap-2 text-center sm:grid-cols-6">
           <div className="rounded-lg bg-charcoal-50 p-2">
             <p className="text-base font-bold text-brand-700">{onTime} days</p>
             <p className="text-[10px] text-charcoal-500">On time</p>
@@ -950,6 +948,10 @@ function AttendanceTab({ memberId }: { memberId: number }) {
           <div className="rounded-lg bg-charcoal-50 p-2">
             <p className="text-base font-bold text-red-600">{absent} days</p>
             <p className="text-[10px] text-charcoal-500">Absent</p>
+          </div>
+          <div className="rounded-lg bg-charcoal-50 p-2">
+            <p className="text-base font-bold text-charcoal-600">{balance?.unpaid?.used ?? 0} days</p>
+            <p className="text-[10px] text-charcoal-500">Unpaid Leave</p>
           </div>
         </div>
         {totals && <p className="mt-1 text-[10px] text-charcoal-400">{totals.hours.toFixed(0)}h — {early} early leaving {early === 1 ? 'day' : 'days'} this month.</p>}
@@ -1045,50 +1047,6 @@ function ShiftTab({ memberId }: { memberId: number }) {
           {schedule.cycles.map((cycle) => `${formatDateWithYear(cycle.start)} – ${formatDateWithYear(cycle.end)} (${cycle.status})`).join(', ')}
         </p>
       ) : null}
-    </div>
-  )
-}
-
-/* ==================== leave balance ==================== */
-
-function LeaveTab({ memberId }: { memberId: number }) {
-  const balanceQuery = useQuery({
-    queryKey: ['portal', 'member', 'leave-balance', memberId],
-    queryFn: ({ signal }) => getOwnLeaveBalance(memberId, signal),
-  })
-
-  if (balanceQuery.isLoading) return <LoadingState label="Loading leave balance…" />
-  if (balanceQuery.error)
-    return <ErrorState message={describeApiError(balanceQuery.error)} onRetry={() => balanceQuery.refetch()} />
-
-  const balance = balanceQuery.data
-  const buckets = [
-    { label: 'Annual', bucket: balance?.dayOff, color: 'bg-brand-500' },
-    { label: 'Sick', bucket: balance?.sick, color: 'bg-blue-500' },
-    { label: 'Unpaid', bucket: balance?.unpaid, color: 'bg-charcoal-400' },
-  ]
-
-  return (
-    <div className="space-y-2">
-      {buckets.map((row) => {
-        const total = row.bucket?.total ?? 0
-        const used = row.bucket?.used ?? 0
-        const pct = total ? Math.min(100, Math.round((used / total) * 100)) : 0
-        return (
-          <div key={row.label} className="rounded-lg bg-charcoal-50 p-2.5">
-            <div className="flex items-center justify-between text-xs">
-              <p className="font-semibold text-charcoal-900">{row.label}</p>
-              <p className="text-[11px] text-charcoal-500">
-                {used} used / {total || '—'} allowed
-              </p>
-            </div>
-            <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-charcoal-100">
-              <div className={cn('h-full rounded-l-full transition-all', row.color)} style={{ width: `${pct}%` }} />
-            </div>
-          </div>
-        )
-      })}
-      <p className="text-[10px] text-charcoal-400">Balances are view-only here — adjustments are made by HR.</p>
     </div>
   )
 }
