@@ -160,7 +160,7 @@ namespace Presentation.Controllers
         [ProducesResponseType(typeof(AttendanceListResponse), StatusCodes.Status200OK)]
         public async Task<ActionResult<AttendanceListResponse>> GetAttendance([FromQuery] AttendanceListQuery query, CancellationToken cancellationToken)
         {
-            var response = await _attendanceManagement.GetAttendanceAsync(GetActorUserId(), query, cancellationToken);
+            var response = await _attendanceManagement.GetAttendanceAsync(GetActorUserId(), query, GetGymIdFromToken(), cancellationToken);
             return Ok(response);
         }
 

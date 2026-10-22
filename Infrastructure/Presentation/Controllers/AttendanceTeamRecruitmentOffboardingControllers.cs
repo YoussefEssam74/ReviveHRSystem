@@ -1,11 +1,8 @@
 using Microsoft.AspNetCore.Mvc;
-using Presentation.Authorization;
 using ServiceAbstraction.Services;
 using Shared;
-using Shared.Authorization;
 using Shared.DataTransferObject.EmployeeProfile;
 using Shared.DataTransferObject.QueryParams;
-using DomainLayer.Models.UserModule.Enums;
 namespace Presentation.Controllers
 {
     /// <summary>Team overview for the signed-in user (mock §13 My Team).</summary>
@@ -14,7 +11,6 @@ namespace Presentation.Controllers
     {
         /// <summary>The teams the caller leads or belongs to in the active gym.</summary>
         [HttpGet("my-teams")]
-        [HasFeatureAccess(Features.Employees, AccessLevel.View)]
         public async Task<ActionResult<IReadOnlyList<TeamDto>>> GetMyTeams(CancellationToken cancellationToken)
         {
             var teams = await teamOverviewService.GetMyTeamsAsync(
@@ -24,7 +20,6 @@ namespace Presentation.Controllers
 
         /// <summary>Team-day overview: members, shifts, live status and pending requests.</summary>
         [HttpGet("{teamId}/today")]
-        [HasFeatureAccess(Features.Employees, AccessLevel.View)]
         public async Task<ActionResult<TeamTodayDto>> GetTeamToday(
             int teamId, [FromQuery] DateOnly? date, CancellationToken cancellationToken)
         {
@@ -38,7 +33,6 @@ namespace Presentation.Controllers
         /// Team Schedule sidebar's "unscheduled" badge.
         /// </summary>
         [HttpGet("{teamId}/unscheduled-count")]
-        [HasFeatureAccess(Features.Employees, AccessLevel.View)]
         public async Task<ActionResult<object>> GetUnscheduledCount(
             int teamId, CancellationToken cancellationToken)
         {
@@ -53,7 +47,6 @@ namespace Presentation.Controllers
     public class OffboardingController(IOffboardingService offboardingService) : ApiControllerBase
     {
         [HttpGet]
-        [HasFeatureAccess(Features.Offboarding, AccessLevel.View)]
         public async Task<ActionResult<PaginationResult<OffboardingCaseDto>>> GetCases(
             [FromQuery] OffboardingQueryParams query, CancellationToken cancellationToken)
         {
@@ -64,13 +57,37 @@ namespace Presentation.Controllers
 
         /// <summary>Initiates a leaving process for an in-scope employee.</summary>
         [HttpPost]
-        [HasFeatureAccess(Features.Offboarding, AccessLevel.Edit)]
         public async Task<ActionResult<OffboardingCaseDto>> Initiate(
             InitiateOffboardingDto request, CancellationToken cancellationToken)
         {
             var created = await offboardingService.InitiateAsync(
                 GetActorUserId(), GetGymIdFromToken(), request, cancellationToken);
             return Created($"/api/offboarding-requests/{created.Id}", created);
+        }
+
+        /// <summary>Moves the last working day of an in-flight leaving process.</summary>
+        /// <response code="200">The rescheduled case.</response>
+        /// <response code="400">The case is no longer in flight (Completed/Cancelled).</response>
+        /// <response code="404">The case is outside the caller's scope.</response>
+        [HttpPut("{id:int}/last-day")]
+        public async Task<ActionResult<OffboardingCaseDto>> UpdateLastDay(
+            int id, [FromBody] UpdateOffboardingLastDayDto request, CancellationToken cancellationToken)
+        {
+            var updated = await offboardingService.UpdateLastDayAsync(
+                GetActorUserId(), GetGymIdFromToken(), id, request, cancellationToken);
+            return Ok(updated);
+        }
+
+        /// <summary>Closes an in-flight leaving process — employment continues and a new process may start later.</summary>
+        /// <response code="200">The closed case.</response>
+        /// <response code="400">The case is no longer in flight (Completed/Cancelled).</response>
+        /// <response code="404">The case is outside the caller's scope.</response>
+        [HttpPost("{id:int}/close")]
+        public async Task<ActionResult<OffboardingCaseDto>> Close(int id, CancellationToken cancellationToken)
+        {
+            var closed = await offboardingService.CloseAsync(
+                GetActorUserId(), GetGymIdFromToken(), id, cancellationToken);
+            return Ok(closed);
         }
     }
 }

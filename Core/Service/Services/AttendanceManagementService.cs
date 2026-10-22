@@ -39,17 +39,20 @@ namespace Service.Services
         private readonly IUnitOfWork _unitOfWork;
         private readonly IAccessControlService _accessControl;
         private readonly IUserAccessRepository _userAccess;
+        private readonly ITeamScopeService _teamScope;
         private readonly TimeZoneInfo _attendanceTimeZone;
 
         public AttendanceManagementService(
             IUnitOfWork unitOfWork,
             IAccessControlService accessControl,
             IUserAccessRepository userAccess,
+            ITeamScopeService teamScope,
             TimeZoneInfo attendanceTimeZone)
         {
             _unitOfWork = unitOfWork;
             _accessControl = accessControl;
             _userAccess = userAccess;
+            _teamScope = teamScope;
             _attendanceTimeZone = attendanceTimeZone;
         }
 
@@ -58,10 +61,10 @@ namespace Service.Services
         // ------------------------------------------------------------------
 
         public async Task<AttendanceListResponse> GetAttendanceAsync(
-            int? actorUserId, AttendanceListQuery query, CancellationToken cancellationToken = default)
+            int? actorUserId, AttendanceListQuery query, int? activeGymId = null, CancellationToken cancellationToken = default)
         {
             var actor = await ResolveActorAsync(actorUserId, cancellationToken);
-            var requestedGym = query.Gym ?? query.GymId;
+            var requestedGym = query.Gym ?? query.GymId ?? (actor.UserType == UserType.TopManagement ? null : activeGymId);
             await _accessControl.EnsurePermissionForGymAsync(actor.Id, "attendance.view", requestedGym, cancellationToken);
             var gymFilter = await ResolveGymFilterAsync(actor, requestedGym, cancellationToken);
 
@@ -81,7 +84,17 @@ namespace Service.Services
             }
             else
             {
-                employees = (await employeeRepo.GetAllAsync(new EmployeesForRosterSpec(gymFilter), cancellationToken)).ToList();
+                if (gymFilter is { Length: 1 } && await _teamScope.IsTeamScopedAsync(actor.Id, gymFilter[0], cancellationToken))
+                {
+                    var ledTeamId = await _teamScope.GetLedTeamIdAsync(actor.Id, gymFilter[0], cancellationToken);
+                    employees = ledTeamId.HasValue
+                        ? (await employeeRepo.GetAllAsync(new EmployeesByTeamSpec(ledTeamId.Value), cancellationToken)).ToList()
+                        : [];
+                }
+                else
+                {
+                    employees = (await employeeRepo.GetAllAsync(new EmployeesForRosterSpec(gymFilter), cancellationToken)).ToList();
+                }
             }
 
             var rows = await ComposeRowsAsync(employees, from, to, cancellationToken);
@@ -243,7 +256,14 @@ namespace Service.Services
                 .GetByIdAsync(new EmployeeForAttendanceSpec(employeeId), cancellationToken)
                 ?? throw new NotFoundException("Employee not found.");
 
-            await _accessControl.EnsurePermissionForGymAsync(actor.Id, "attendance.view", employee.GymId, cancellationToken);
+            // Own attendance history is self-service; other readers need
+            // attendance.view on the employee's gym, and a team-scoped Team
+            // Leader only ever sees his team members (F2).
+            if (!await IsOwnEmployeeAsync(actor.Id, employeeId, cancellationToken))
+            {
+                await _accessControl.EnsurePermissionForGymAsync(actor.Id, "attendance.view", employee.GymId, cancellationToken);
+                await EnsureTeamScopeAsync(actor.Id, employee, cancellationToken);
+            }
 
             var page = Math.Max(query.Page, 1);
             var pageSize = query.PageSize <= 0 ? 31 : Math.Min(query.PageSize, MaxPageSize);
@@ -283,6 +303,32 @@ namespace Service.Services
                 Total = total,
                 TotalPages = total == 0 ? 0 : (int)Math.Ceiling(total / (double)pageSize),
             };
+        }
+
+        /// <summary>True when the employee row belongs to the caller's own login.</summary>
+        private async Task<bool> IsOwnEmployeeAsync(int actorUserId, int employeeId, CancellationToken cancellationToken)
+        {
+            var own = await _unitOfWork.GetRepository<Employee, int>()
+                .GetByIdAsync(new EmployeeByUserIdSpec(actorUserId), cancellationToken);
+            return own is not null && own.Id == employeeId;
+        }
+
+        /// <summary>
+        /// Team-scoped Team Leaders see only the members of the team they lead in
+        /// the employee's gym (F2); every other role is gym-wide already.
+        /// </summary>
+        private async Task EnsureTeamScopeAsync(int actorUserId, Employee employee, CancellationToken cancellationToken)
+        {
+            if (!await _teamScope.IsTeamScopedAsync(actorUserId, employee.GymId, cancellationToken))
+            {
+                return;
+            }
+
+            var ledTeamId = await _teamScope.GetLedTeamIdAsync(actorUserId, employee.GymId, cancellationToken);
+            if (ledTeamId is null || employee.TeamId != ledTeamId.Value)
+            {
+                throw new NotFoundException("Employee not found.");
+            }
         }
 
         // ------------------------------------------------------------------
@@ -454,6 +500,11 @@ namespace Service.Services
                     totals.Late++;
                 }
 
+                if (row.Status == "Early Checkout")
+                {
+                    totals.Early++;
+                }
+
                 totals.Hours += WorkedHours(row);
                 totals.Expected += ExpectedHours(row.Shift);
             }
@@ -463,6 +514,7 @@ namespace Service.Services
                 Total = totals.Total,
                 Present = totals.Present,
                 Late = totals.Late,
+                Early = totals.Early,
                 Absent = totals.Absent,
                 Off = totals.Off,
                 Hours = (decimal)Math.Round(totals.Hours, 2),
@@ -475,6 +527,7 @@ namespace Service.Services
             public int Total;
             public int Present;
             public int Late;
+            public int Early;
             public int Absent;
             public int Off;
             public double Hours;

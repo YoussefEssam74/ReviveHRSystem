@@ -4,6 +4,8 @@ using DomainLayer.Exceptions;
 using DomainLayer.Models.EmployeeModule;
 using DomainLayer.Models.EmployeeModule.Enums;
 using DomainLayer.Models.OrganizationModule;
+using DomainLayer.Models.PayrollModule;
+using DomainLayer.Models.PayrollModule.Enums;
 using DomainLayer.Models.RequestModule;
 using DomainLayer.Models.RequestModule.Enums;
 using DomainLayer.Models.SchedulingModule;
@@ -18,7 +20,7 @@ using Shared.DataTransferObject.EmployeeProfile;
 namespace Service.Services
 {
     /// <summary>
-    /// Self-service requests (mock §10). The catalog is the final 9-type list agreed with
+    /// Self-service requests (mock §10). The catalog is the final list agreed with
     /// the product owner:
     ///
     /// - **Annual Leave / Sick Leave** draw from the leave balance (21 / 10 default days):
@@ -29,6 +31,8 @@ namespace Service.Services
     /// - **Shift Swap / Weekly Off Swap** name a colleague of the same gym.
     /// - **Check-in Correction**, **Salary Advance** (amount) and **Paid Holiday** (working
     ///   a paid holiday for double day pay) carry no automatic limit — approval is the gate.
+    /// - **Deduction Correction** disputes an already-raised deduction; the amount itself
+    ///   stays with the managers — this is the employee's paper trail into their queue.
     ///
     /// Every type then follows the two-stage workflow: TL/BM stage 1 → HR final
     /// (management side). Approval consumes reserved leave days, rejection releases them.
@@ -36,17 +40,48 @@ namespace Service.Services
     public class EmployeeRequestService(
         IUnitOfWork unitOfWork,
         IEmployeeAccessService employeeAccess,
+        IUserAccessRepository userAccess,
+        ITeamScopeService teamScope,
         IMapper mapper,
         IFileStorage fileStorage) : IEmployeeRequestService
     {
         /// <summary>Storage category of request attachments (e.g. the medical certificate).</summary>
         internal const string AttachmentCategory = "request-attachments";
 
+        /// <summary>
+        /// Loads an on-behalf target and enforces the row-32 manager gates:
+        /// Branch Manager = gym scope, Team Leader = the team he leads; anyone
+        /// else (or an out-of-scope target) silently learns the target is not there.
+        /// </summary>
+        private async Task<Employee> ResolveOnBehalfTargetAsync(int actorUserId, int employeeId, CancellationToken cancellationToken)
+        {
+            var employee = await unitOfWork.GetRepository<Employee, int>()
+                .GetByIdAsync(new EmployeeByIdSpec(employeeId), cancellationToken)
+                ?? throw new NotFoundException("Employee not found.");
+
+            var roleNames = await userAccess.GetGymRoleNamesAsync(actorUserId, employee.GymId, cancellationToken);
+            if (roleNames.Contains(Shared.Authorization.RoleNames.BranchManager, StringComparer.Ordinal))
+            {
+                return employee;
+            }
+
+            if (roleNames.Contains(Shared.Authorization.RoleNames.TeamLeader, StringComparer.Ordinal))
+            {
+                var ledTeamId = await teamScope.GetLedTeamIdAsync(actorUserId, employee.GymId, cancellationToken);
+                if (ledTeamId is not null && employee.TeamId == ledTeamId.Value)
+                {
+                    return employee;
+                }
+            }
+
+            throw new NotFoundException("Employee not found.");
+        }
+
         public async Task<IReadOnlyList<EmployeeRequestDto>> GetRequestsAsync(
             int actorUserId, int employeeId, string? status, int? activeGymId, CancellationToken cancellationToken = default)
         {
             await employeeAccess.EnsureCanAccessAsync(
-                actorUserId, employeeId, Features.Employees, AccessLevel.View, activeGymId, cancellationToken);
+                actorUserId, employeeId, activeGymId, cancellationToken);
 
             var requests = await unitOfWork.GetRepository<EmployeeRequest, int>()
                 .GetAllAsync(new RequestsByEmployeeSpec(employeeId), cancellationToken);
@@ -65,23 +100,147 @@ namespace Service.Services
                 ?? throw new NotFoundException("Request not found.");
 
             await employeeAccess.EnsureCanAccessAsync(
-                actorUserId, request.EmployeeId, Features.Employees, AccessLevel.View, activeGymId, cancellationToken);
+                actorUserId, request.EmployeeId, activeGymId, cancellationToken);
 
             return mapper.Map<EmployeeRequestDto>(request);
+        }
+
+        /// <summary>
+        /// Every deduction hanging on one employee, as he sees it: the absence follow-ups
+        /// the sweep (or a manager) raised and the payroll deduction candidates issued for
+        /// him — each joined with the Deduction Correction request he filed against that
+        /// date, so the card shows the whole trail in one row.
+        /// </summary>
+        public async Task<IReadOnlyList<EmployeeDeductionDto>> GetDeductionsAsync(
+            int actorUserId, int employeeId, int? activeGymId, CancellationToken cancellationToken = default)
+        {
+            await employeeAccess.EnsureCanAccessAsync(actorUserId, employeeId, activeGymId, cancellationToken);
+
+            var employeeIds = new[] { employeeId };
+
+            var followUps = (await unitOfWork.GetRepository<TeamFollowUp, int>()
+                .GetAllAsync(new TeamFollowUpsDeductionForEmployeesSpec(employeeIds), cancellationToken))
+                .Where(f => f.ActionType == FollowUpActionType.Deduction)
+                .ToList();
+
+            var candidates = await unitOfWork.GetRepository<DeductionCandidate, int>()
+                .GetAllAsync(new DeductionCandidatesByEmployeesSpec(employeeIds), cancellationToken);
+
+            // His correction requests keyed by the day they target, so a deduction row can
+            // show the dispute sitting on it (newest submission wins a shared date).
+            var correctionsByDate = (await unitOfWork.GetRepository<EmployeeRequest, int>()
+                .GetAllAsync(new RequestsByEmployeeSpec(employeeId), cancellationToken))
+                .Where(r => r.Type.Equals(RequestTypeCatalog.DeductionCorrectionLabel, StringComparison.OrdinalIgnoreCase))
+                .OrderByDescending(r => r.SubmittedAt)
+                .GroupBy(r => r.RequestDate)
+                .ToDictionary(g => g.Key, g => g.First());
+
+            var rows = new List<EmployeeDeductionDto>(followUps.Count + candidates.Count());
+
+            foreach (var followUp in followUps)
+            {
+                var date = ParseAbsenceMarker(followUp.Note);
+                int? correctionId = null;
+                string? correctionStatus = null;
+                if (date is not null && correctionsByDate.TryGetValue(date.Value, out var followUpCorrection))
+                {
+                    correctionId = followUpCorrection.Id;
+                    correctionStatus = followUpCorrection.Status.ToString();
+                }
+
+                rows.Add(new EmployeeDeductionDto(
+                    $"followup-{followUp.Id}",
+                    "absence",
+                    date,
+                    followUp.Description,
+                    Amount: null,
+                    followUp.IsResolved ? "Resolved" : "In review",
+                    followUp.LastAction,
+                    correctionId,
+                    correctionStatus));
+            }
+
+            foreach (var candidate in candidates)
+            {
+                var date = DateOnly.FromDateTime(candidate.IssuedAt);
+                int? correctionId = null;
+                string? correctionStatus = null;
+                if (correctionsByDate.TryGetValue(date, out var candidateCorrection))
+                {
+                    correctionId = candidateCorrection.Id;
+                    correctionStatus = candidateCorrection.Status.ToString();
+                }
+
+                rows.Add(new EmployeeDeductionDto(
+                    $"candidate-{candidate.Id}",
+                    "candidate",
+                    date,
+                    candidate.Reason,
+                    candidate.Amount,
+                    candidate.Status switch
+                    {
+                        DeductionStatus.Pending => "In review",
+                        DeductionStatus.Approved => "Applied",
+                        _ => "Rejected"
+                    },
+                    candidate.Note,
+                    correctionId,
+                    correctionStatus));
+            }
+
+            return rows
+                .OrderByDescending(r => r.Date)
+                .ThenBy(r => r.Id, StringComparer.Ordinal)
+                .ToList();
+        }
+
+        /// <summary>
+        /// The absence day stamped into a follow-up's note (<c>auto-absence:yyyy-MM-dd</c>),
+        /// or null for manually raised deductions that never carried the marker.
+        /// </summary>
+        private static DateOnly? ParseAbsenceMarker(string? note)
+        {
+            const string prefix = "auto-absence:";
+            if (string.IsNullOrEmpty(note))
+            {
+                return null;
+            }
+
+            var start = note.IndexOf(prefix, StringComparison.Ordinal);
+            if (start < 0)
+            {
+                return null;
+            }
+
+            var value = note[(start + prefix.Length)..];
+            if (value.Length < 10)
+            {
+                return null;
+            }
+
+            return DateOnly.TryParseExact(
+                value[..10], "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture,
+                System.Globalization.DateTimeStyles.None, out var date)
+                ? date
+                : null;
         }
 
         public async Task<EmployeeRequestDto> CreateAsync(
             int actorUserId, int employeeId, CreateEmployeeRequestDto request,
             AttachmentUpload? attachment = default, CancellationToken cancellationToken = default)
         {
-            var employee = await unitOfWork.GetRepository<Employee, int>()
+            // Self submissions always work; a route id pointing at another employee
+            // is the Branch Manager / Team Leader on-behalf flow (matrix row 32):
+            // TL(task) submits for a team member, BM for anyone in his gym, while
+            // employees cannot vouch for each other and cross-tenant targets
+            // stay invisible (404). The request is then created FOR the target.
+            var ownEmployee = await unitOfWork.GetRepository<Employee, int>()
                 .GetByIdAsync(new EmployeeByUserIdSpec(actorUserId), cancellationToken)
                 ?? throw new UnAuthorizedException("This account has no employee profile.");
 
-            if (employee.Id != employeeId)
-            {
-                throw new NotFoundException("Employee not found.");
-            }
+            var employee = employeeId == ownEmployee.Id
+                ? ownEmployee
+                : await ResolveOnBehalfTargetAsync(actorUserId, employeeId, cancellationToken);
 
             var type = RequestTypeCatalog.Find(request.Type)
                 ?? throw new BadRequestException($"Unknown request type '{request.Type}'.");
@@ -176,6 +335,12 @@ namespace Service.Services
                     // Working a paid holiday is approved by HR; nothing else to validate.
                     break;
 
+                case RequestTypeCatalog.DeductionCorrectionId:
+                    // Disputing an already-raised deduction: the date names the day the
+                    // deduction landed on and the reason carries the employee's case —
+                    // reviewers still own the actual amount, so nothing else to validate.
+                    break;
+
                 default:
                     throw new BadRequestException($"Unknown request type '{request.Type}'.");
             }
@@ -215,9 +380,12 @@ namespace Service.Services
                 throw new NotFoundException("Request not found.");
             }
 
-            if (request.Status != RequestStatus.Pending)
+            // The employee may pull his request back until HR gives the final word:
+            // still at the desk (Pending) or forwarded to HR (PendingHRReview) after
+            // a Branch Manager approval. Final decisions (Approved/Rejected) stand.
+            if (request.Status is not (RequestStatus.Pending or RequestStatus.PendingHRReview))
             {
-                throw new BadRequestException("Only pending requests can be cancelled.");
+                throw new BadRequestException("Only requests still awaiting approval can be cancelled.");
             }
 
             request.Status = RequestStatus.Cancelled;
@@ -243,7 +411,7 @@ namespace Service.Services
             // The requester always gets his own file; anyone else needs employee-scoped
             // access in the request's gym, so a cross-scope caller learns nothing.
             await employeeAccess.EnsureCanAccessAsync(
-                actorUserId, request.EmployeeId, Features.Employees, AccessLevel.View, activeGymId, cancellationToken);
+                actorUserId, request.EmployeeId, activeGymId, cancellationToken);
 
             var content = string.IsNullOrWhiteSpace(request.AttachmentPath)
                 ? null
@@ -261,7 +429,7 @@ namespace Service.Services
             int actorUserId, int employeeId, int? activeGymId, CancellationToken cancellationToken = default)
         {
             await employeeAccess.EnsureCanAccessAsync(
-                actorUserId, employeeId, Features.Employees, AccessLevel.View, activeGymId, cancellationToken);
+                actorUserId, employeeId, activeGymId, cancellationToken);
 
             var employee = await unitOfWork.GetRepository<Employee, int>()
                 .GetByIdAsync(new EmployeeByIdSpec(employeeId), cancellationToken)
@@ -281,6 +449,56 @@ namespace Service.Services
                 RemainingHours = Math.Max(0, cap - used),
                 Month = $"{today.Year:D4}-{today.Month:D2}"
             };
+        }
+
+        public async Task<IReadOnlyList<EmployeeColleagueDto>> GetColleaguesAsync(
+            int actorUserId, int employeeId, CancellationToken cancellationToken = default)
+        {
+            var employee = await unitOfWork.GetRepository<Employee, int>()
+                .GetByIdAsync(new EmployeeByIdSpec(employeeId), cancellationToken)
+                ?? throw new NotFoundException("Employee not found.");
+
+            // Matrix row 36: the swap-picker belongs to the negotiators —
+            // Branch Manager (gym scope) and Team Leader (own team, F6's note
+            // says the leaderboard picks the swap partner), plus Top Management
+            // (unscoped). Employees do not list a colleague roster, and
+            // out-of-gym callers learn nothing.
+            var actor = await unitOfWork.GetRepository<DomainLayer.Models.UserModule.User, int>()
+                .GetByIdAsync(actorUserId, cancellationToken);
+            if (actor is not null && actor.UserType == DomainLayer.Models.UserModule.Enums.UserType.TopManagement)
+            {
+                return await ListColleaguesAsync(employee, cancellationToken);
+            }
+
+            var roleNames = await userAccess.GetGymRoleNamesAsync(actorUserId, employee.GymId, cancellationToken);
+            if (!roleNames.Contains(Shared.Authorization.RoleNames.BranchManager, StringComparer.Ordinal))
+            {
+                if (roleNames.Contains(Shared.Authorization.RoleNames.TeamLeader, StringComparer.Ordinal))
+                {
+                    var ledTeamId = await teamScope.GetLedTeamIdAsync(actorUserId, employee.GymId, cancellationToken);
+                    if (ledTeamId is null || employee.TeamId != ledTeamId.Value)
+                    {
+                        throw new NotFoundException("Employee not found.");
+                    }
+                }
+                else
+                {
+                    throw new NotFoundException("Employee not found.");
+                }
+            }
+
+            return await ListColleaguesAsync(employee, cancellationToken);
+        }
+
+        private async Task<IReadOnlyList<EmployeeColleagueDto>> ListColleaguesAsync(Employee employee, CancellationToken cancellationToken)
+        {
+            var colleagues = await unitOfWork.GetRepository<Employee, int>()
+                .GetAllAsync(new EmployeesByGymSpec(employee.GymId), cancellationToken);
+
+            return colleagues
+                .Where(e => e.Id != employee.Id && e.Status == EmployeeStatus.Active)
+                .Select(e => new EmployeeColleagueDto { Id = e.Id, FullName = e.FullName })
+                .ToList();
         }
 
         public Task<IReadOnlyList<RequestTypeDto>> GetRequestTypesAsync(CancellationToken cancellationToken = default) =>

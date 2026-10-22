@@ -1,6 +1,7 @@
 namespace Shared.DataTransferObject.Schedule
 {
-    /// <summary>S1 — one cycle selector chip: id, label, status.</summary>
+    /// <summary>S1 — one cycle selector chip: id, label, status and the covered
+    /// date range (the client needs the range for the month/30-day views).</summary>
     public class ShiftCycleListItem
     {
         public int Id { get; init; }
@@ -9,6 +10,12 @@ namespace Shared.DataTransferObject.Schedule
 
         /// <summary>'Draft' | 'Published' | 'Archived'.</summary>
         public required string Status { get; init; }
+
+        /// <summary>Cycle start, yyyy-MM-dd.</summary>
+        public required string StartDate { get; init; }
+
+        /// <summary>Cycle end (inclusive), yyyy-MM-dd.</summary>
+        public required string EndDate { get; init; }
     }
 
     /// <summary>S3 — the { data } envelope returned by create.</summary>
@@ -103,6 +110,12 @@ namespace Shared.DataTransferObject.Schedule
         public required string Label { get; init; }
 
         public required string Status { get; init; }
+
+        /// <summary>Cycle start, yyyy-MM-dd (anchors the weekly pattern).</summary>
+        public required string StartDate { get; init; }
+
+        /// <summary>Cycle end (inclusive), yyyy-MM-dd.</summary>
+        public required string EndDate { get; init; }
 
         public List<ShiftTemplateItem> ShiftTemplates { get; init; } = [];
 

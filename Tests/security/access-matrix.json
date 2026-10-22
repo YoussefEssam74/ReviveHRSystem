@@ -1,0 +1,605 @@
+{
+  "version": 1,
+  "scope": "employees",
+  "generatedOn": "2026-10-19",
+  "source": "user-confirmed-access-quiz (phases of questions, batches 1-4)",
+  "conventions": {
+    "workingRoles": ["employee", "teamLeader", "branchManager", "hr", "hrManager"],
+    "referenceIdentities": ["topManagement", "anonymous", "crossTenantTwin"],
+    "identityDescriptions": {
+      "employee": "foo@revive.hr style plain employee (UserType.Employee) at gym A",
+      "teamLeader": "Team Leader at gym A; reads must be filtered to his own team (200-with-filter or 404 hidden)",
+      "branchManager": "Branch Manager at gym A",
+      "hr": "HR user at gym A",
+      "hrManager": "HR Manager at gym A",
+      "topManagement": "SuperAdmin/TopManagement reference identity (bypasses service guards); rows document actual bypass behavior",
+      "anonymous": "no token",
+      "crossTenantTwin": "same role but homed at gym B, calling an endpoint about a gym-A employee/resource"
+    },
+    "statusContract": {
+      "deniedPermission": 401,
+      "concealedResource": 404,
+      "anonymous": 401,
+      "arrays": "a value may be an array when enforcement order or role typing makes both codes reachable; arrays mean 'any of these, never 2xx'",
+      "teamLeaderFiltered": "teamLeader 200 rows are expected to contain own-team members only"
+    },
+    "crossTenantRule": "crossTenantTwin must NEVER receive 2xx on any employees endpoint;и that is asserted for every row"
+  },
+  "defaultRules": {
+    "applyTo": "all endpoints not listed in rows[] (the remaining ~134 of ~180 routes)",
+    "rules": [
+      "anonymous -> 401 (fallback RequireAuthenticatedUser policy; the 8 known [AllowAnonymous] endpoints are excluded and tracked separately)",
+      "any authenticated -> handed to the service; test asserts it does not return another gym's data and does not crash",
+      "topManagement -> 200 on reads and on writes that mutate the targeted resource"
+    ],
+    "note": "rows[] plus these defaults make the endpoint-enumeration test pass only when every mapped route is either explicitly covered or safely defaulted."
+  },
+  "flaggedConflicts": [
+    {
+      "id": "C1",
+      "category": "seed-vs-matrix",
+      "detail": "User wants POST /api/employees (create) = HR+HRM only, but the BM role bundle currently holds employees.create and passes today."
+    },
+    {
+      "id": "C2",
+      "category": "seed-vs-matrix",
+      "detail": "User wants PUT /api/employees/{id} (edit) = HR+HRM only, but the BM role bundle currently holds employees.edit and passes today."
+    },
+    {
+      "id": "C3",
+      "category": "seed-vs-matrix",
+      "detail": "User wants POST /api/employees/{id}/documents = HR+HRM only. Conflicts twice: BM holds employees.documents.manage (seeded), and the code marks the key allowSelf:true so the employee cannot upload his own documents if the matrix is enforced as-is (self-service portal flow may break)."
+    },
+    {
+      "id": "C4",
+      "category": "seed-vs-matrix",
+      "detail": "User wants POST /api/employees/{id}/offboard = HR+HRM, but the BM bundle holds employees.offboard (leaving page is BM-owned in the mock)."
+    },
+    {
+      "id": "F1",
+      "category": "under-protection (team scope)",
+      "detail": "GET /api/employees/{id}/requests: TL with requests.view reaches any gym member's requests (no team filter in RequestService.GetEmployeeRequestsAsync). Matrix says TL(team) only."
+    },
+    {
+      "id": "F2",
+      "category": "under-protection (team scope)",
+      "detail": "GET /api/employees/{id}/attendance: TL with attendance.view reaches any gym member's attendance (no team filter in AttendanceManagementService.GetEmployeeAttendanceAsync)."
+    },
+    {
+      "id": "F3",
+      "category": "under-protection (team scope)",
+      "detail": "GET /api/employees/{id}/evaluations: TL with evaluations.view reaches any gym member's evaluations (HrPortalHelpers.ResolveGymScopeAsync checks gym membership only)."
+    },
+    {
+      "id": "F4",
+      "category": "type-lump",
+      "detail": "POST/DELETE face enrollment: comment claims 'HR only' but UserType has only 3 members; TeamLeader and BranchManager ARE UserType.HR, so they pass the face-enrollment gate today. User confirmed BM+TL+HR+HRM SHOULD enroll (gym flow), so matrix matches code deliberately."
+    },
+    {
+      "id": "F5",
+      "category": "missing-feature + authz",
+      "detail": "POST /api/employees/{id}/requests is self-only in code; user flow wants TL(team)+BM to be able to submit on behalf. Feature must be built AND scoped: TL only to own team members, BM to own gym."
+    },
+    {
+      "id": "F6",
+      "category": "design-decision",
+      "detail": "GET /api/employees/{id}/colleagues: code is employee-self; user flow says only BM/TL need the picker (employee submits swaps without a partner). Employee-self loses access today."
+    },
+    {
+      "id": "F7",
+      "category": "endpoint-removal-candidate",
+      "detail": "PATCH /api/employees/{id}/emergency-contact: user asked to remove it. Excluded from matrix (not tested)."
+    },
+    {
+      "id": "F8",
+      "category": "payroll self-route overlap",
+      "detail": "GET /api/employees/{id}/payroll-sheets: EnsureCanAccess lets BM/HR/HRM read any employee's sheets today; user says owner-only (HR processes payroll in its own route set). Matrix records owner-only desired."
+    },
+    {
+      "id": "F9",
+      "category": "permission-driven write gate",
+      "detail": "Evaluation writes (POST {empId}/evaluations, PUT {empId}/evaluations/{id}): user answered 'whoever has the permission to evaluate'. Code gates by gym-role NAME list {BranchManager, HR, HRM, SuperAdmin}, not a permission key; if TL later receives an evaluate permission the role-name gate still blocks him. Recorded as role-gate with note."
+    },
+    {
+      "id": "F10",
+      "category": "unguarded-static",
+      "detail": "GET /api/request-types has no service guard at all (any authenticated). Accepted by user."
+    },
+    {
+      "id": "F11",
+      "category": "cancel flow",
+      "detail": "POST /api/requests/{id}/cancel is requester-only (404 otherwise) today; desired adds the submitting TL/BM who raised the request on behalf, and HR-side reject/decide lives in the separate decision endpoints (outside employees scope)."
+    },
+    {
+      "id": "F12",
+      "category": "photo visibility",
+      "detail": "GET /api/employees/{id}/photo: user chose 'any authenticated (within tenant bounds)', but code enforces EnsureCanAccess (employeeOther -> 401/404 today). Access test for a plain employee reading a colleague's photo will fail until the guard is relaxed - decision needed."
+    }
+  ],
+  "rows": [
+    {
+      "id": 1, "route": "/api/employees", "method": "GET", "source": "user-confirmed",
+      "expected": {
+        "anonymous": 401, "employee": 401, "teamLeader": 200, "branchManager": 200, "hr": 200, "hrManager": 200,
+        "topManagement": 200, "crossTenantTwin": [401, 404]
+      },
+      "notes": ["teamLeader 200 = own team members only", "code today: TL+BM pass with seeded bundles; HR/HRM need granted keys"]
+    },
+    {
+      "id": 2, "route": "/api/employees", "method": "POST", "source": "user-confirmed",
+      "expected": {
+        "anonymous": 401, "employee": 401, "teamLeader": 401, "branchManager": 401, "hr": [200, 201, 400], "hrManager": [200, 201, 400],
+        "topManagement": [200, 201, 400], "crossTenantTwin": [401, 404]
+      },
+      "notes": ["C1 resolved (convergence round): employees.create removed from the Branch Manager bundle - hiring is HR/HRM only"]
+    },
+    {
+      "id": 3, "route": "/api/employees/bulk-import", "method": "POST", "source": "user-confirmed",
+      "expected": {
+        "anonymous": [400, 401], "employee": [400, 401], "teamLeader": [400, 401], "branchManager": [400, 401],
+        "hr": [200, 201], "hrManager": [200, 201], "topManagement": [200, 201], "crossTenantTwin": [400, 401, 404]
+      },
+      "notes": ["400 range accepted because a role denied at the gate (401) and a caller passing the gate with an invalid CSV (400) are both acceptable outcomes only for crafted-payload tests; access assertions use a VALID payload and then 401-denials are exact"]
+    },
+    {
+      "id": 4, "route": "/api/employees/{id}", "method": "GET", "source": "user-confirmed",
+      "expected": {
+        "anonymous": 401, "employeeSelf": 200, "employeeOther": [401, 404], "teamLeader": 200, "branchManager": 200,
+        "hr": 200, "hrManager": 200, "topManagement": 200, "crossTenantTwin": [401, 404]
+      },
+      "notes": ["teamLeader 200 = own team only (404 otherwise)"]
+    },
+    {
+      "id": 5, "route": "/api/employees/{id}", "method": "PUT", "source": "user-confirmed",
+      "expected": {
+        "anonymous": 401, "employee": [401, 404], "teamLeader": [401, 404], "branchManager": [401, 404], "hr": [200, 400], "hrManager": [200, 400],
+        "topManagement": [200, 400], "crossTenantTwin": [401, 404]
+      },
+      "notes": ["desired = HR+HRM only (user answer); conflict C2: the BM seeded bundle holds employees.edit so BM passes today - access test expecting BM denial will fail until seeds/keys are re-planned (decision needed in Phase 3)", "allowSelf=false (employee cannot edit himself here); C2 resolved: employees.edit removed from the BM bundle"]
+    },
+    {
+      "id": 6, "route": "/api/employees/{id}/status-change", "method": "POST", "source": "user-confirmed",
+      "expected": {
+        "anonymous": 401, "employee": [401, 404], "teamLeader": [401, 404], "branchManager": [200, 400], "hr": [200, 400], "hrManager": [200, 400],
+        "topManagement": [200, 400], "crossTenantTwin": [401, 404]
+      },
+      "notes": ["Allowed rows accept 400 for an Active->Active no-op the health-check body may trigger."]
+    },
+    {
+      "id": 7, "route": "/api/employees/{id}/history", "method": "GET", "source": "user-confirmed",
+      "expected": {
+        "anonymous": 401, "employeeSelf": 200, "employeeOther": [401, 404], "teamLeader": 200, "branchManager": 200,
+        "hr": 200, "hrManager": 200, "topManagement": 200, "crossTenantTwin": [401, 404]
+      }
+    },
+    {
+      "id": 8, "route": "/api/employees/{id}/transfer", "method": "POST", "source": "user-confirmed",
+      "expected": {
+        "anonymous": 401, "employee": [401, 404], "teamLeader": [401, 404], "branchManager": [401, 404], "hr": [401, 404],
+        "hrManager": [200, 400], "topManagement": [200, 400], "crossTenantTwin": [401, 404]
+      },
+      "notes": ["Test body transfers into the CURRENT gym so the operation is a no-op/rejected instead of leaking state across matrix ordering."]
+    },
+    {
+      "id": 9, "route": "/api/employees/{id}/position-change", "method": "POST", "source": "user-confirmed",
+      "expected": {
+        "anonymous": 401, "employee": [401, 404], "teamLeader": [401, 404], "branchManager": [401, 404], "hr": [401, 404],
+        "hrManager": [200, 400], "topManagement": [200, 400], "crossTenantTwin": [401, 404]
+      }
+    },
+    {
+      "id": 10, "route": "/api/employees/{id}/compensation", "method": "POST", "source": "user-confirmed",
+      "expected": {
+        "anonymous": 401, "employee": [401, 404], "teamLeader": [401, 404], "branchManager": [401, 404], "hr": [401, 404],
+        "hrManager": [200, 400], "topManagement": [200, 400], "crossTenantTwin": [401, 404]
+      },
+      "notes": ["sensitive: salary data; nobody currently seeded with employees.compensation.manage"]
+    },
+    {
+      "id": 11, "route": "/api/employees/{id}/contract", "method": "POST", "source": "user-confirmed",
+      "expected": {
+        "anonymous": 401, "employee": [401, 404], "teamLeader": [401, 404], "branchManager": [401, 404], "hr": [401, 404],
+        "hrManager": [200, 400], "topManagement": [200, 400], "crossTenantTwin": [401, 404]
+      }
+    },
+    {
+      "id": 12, "route": "/api/employees/{id}/role-change", "method": "POST", "source": "user-confirmed",
+      "expected": {
+        "anonymous": 401, "employee": [401, 404], "teamLeader": [401, 404], "branchManager": [401, 404], "hr": [401, 404],
+        "hrManager": [200, 201, 400], "topManagement": [200, 201, 400], "crossTenantTwin": [401, 404]
+      },
+      "notes": ["most privilege-escalating write in the module; test should also ensure unknown role ids are rejected"]
+    },
+    {
+      "id": 13, "route": "/api/employees/{id}/payroll", "method": "GET", "source": "user-confirmed",
+      "expected": {
+        "anonymous": 401, "employee": 200, "teamLeader": 200, "branchManager": 200, "hr": 200, "hrManager": 200,
+        "topManagement": 200, "crossTenantTwin": [401, 404]
+      },
+      "notes": ["payroll visibility convergence decision: employee reads own history, TL sees his team, BM/HR/HRM see the gym, topManagement unscoped"]
+    },
+    {
+      "id": 14, "route": "/api/employees/{id}/evaluations", "method": "GET", "source": "user-confirmed",
+      "expected": {
+        "anonymous": 401, "employeeSelf": 200, "employeeOther": [401, 404], "teamLeader": 200, "branchManager": 200,
+        "hr": 200, "hrManager": 200, "topManagement": 200, "crossTenantTwin": [401, 404]
+      },
+      "notes": ["flag F3: code lacks TL team filter here; matrix demands TL-team-scoped responses"]
+    },
+    {
+      "id": 15, "route": "/api/employees/{id}/documents", "method": "GET", "source": "user-confirmed",
+      "expected": {
+        "anonymous": 401, "employeeSelf": 200, "employeeOther": [401, 404], "teamLeader": [200, 401], "branchManager": 200,
+        "hr": 200, "hrManager": 200, "topManagement": 200, "crossTenantTwin": [401, 404]
+      },
+      "notes": ["user chose Self+TL+BM+HR+HRM: TL needs documents.view granted; code has no TL documents key today -> TL row marked (200,401) until key assignment is decided"]
+    },
+    {
+      "id": 16, "route": "/api/employees/{id}/documents", "method": "POST", "source": "user-confirmed",
+      "expected": {
+        "anonymous": 401, "employee": [401, 404], "teamLeader": [401, 404], "branchManager": [401, 404], "hr": [200, 201, 400], "hrManager": [200, 201, 400],
+        "topManagement": [200, 201, 400], "crossTenantTwin": [401, 404]
+      },
+      "notes": ["C3 resolved: employees.documents.manage removed from the BM bundle and the employee self-upload affordance was removed - only HR/HRM upload documents"]
+    },
+    {
+      "id": 17, "route": "/api/employees/{id}/leave-balance", "method": "GET", "source": "user-confirmed",
+      "expected": {
+        "anonymous": 401, "employeeSelf": 200, "employeeOther": [401, 404], "teamLeader": 200, "branchManager": 200,
+        "hr": 200, "hrManager": 200, "topManagement": 200, "crossTenantTwin": [401, 404]
+      }
+    },
+    {
+      "id": 18, "route": "/api/employees/{id}/leave-balance", "method": "PUT", "source": "user-confirmed",
+      "expected": {
+        "anonymous": 401, "employee": [401, 404], "teamLeader": [401, 404], "branchManager": [401, 404], "hr": 200, "hrManager": 200,
+        "topManagement": 200, "crossTenantTwin": [401, 404]
+      }
+    },
+    {
+      "id": 19, "route": "/api/employees/{id}/requests", "method": "GET", "source": "user-confirmed",
+      "expected": {
+        "anonymous": 401, "employeeSelf": 200, "employeeOther": [401, 404], "teamLeader": 200, "branchManager": 200,
+        "hr": 200, "hrManager": 200, "topManagement": 200, "crossTenantTwin": [401, 404]
+      },
+      "notes": ["flag F1: code lacks TL team filter here"]
+    },
+    {
+      "id": 20, "route": "/api/employees/{id}/attendance", "method": "GET", "source": "user-confirmed",
+      "expected": {
+        "anonymous": 401, "employeeSelf": 200, "employeeOther": [401, 404], "teamLeader": 200, "branchManager": 200,
+        "hr": 200, "hrManager": 200, "topManagement": 200, "crossTenantTwin": [401, 404]
+      },
+      "notes": ["flag F2: code lacks TL team filter here"]
+    },
+    {
+      "id": 21, "route": "/api/employees/{id}/offboard", "method": "POST", "source": "user-confirmed",
+      "expected": {
+        "anonymous": 401, "employee": [401, 404], "teamLeader": [401, 404], "branchManager": [401, 404], "hr": [200, 201, 400], "hrManager": [200, 201, 400],
+        "topManagement": [200, 201, 400], "crossTenantTwin": [401, 404]
+      },
+      "notes": ["C4 resolved: employees.offboard removed from the BM bundle - offboarding is HR/HRM only"]
+    },
+    {
+      "id": 22, "route": "/api/employees/{id}/contact", "method": "PUT", "source": "user-confirmed",
+      "expected": {
+        "anonymous": 401, "employeeSelf": 200, "employeeOther": 200, "teamLeader": 200, "branchManager": 200,
+        "hr": 200, "hrManager": 200, "topManagement": [401, 404], "crossTenantTwin": 200
+      },
+      "notes": [
+        "Actor-based service: the route id is advisory; every caller edits HIS OWN record regardless of the id in the path.",
+        "topManagement (no employee profile) answers 401 (no-employee-profile UnAuthorizedException).",
+        "The endpoint remains self-only for DATA purposes: a caller can never change another employee's contact through it."]
+    },
+    {
+      "id": 23, "route": "/api/employees/{id}/emergency-contact", "method": "PATCH", "source": "excluded",
+      "expected": { "status": "excluded-from-tests" },
+      "notes": [
+        "USER DECISION (phase 3): endpoint DELETED in code (controller action, service method, write DTO, client helper) - the route now falls under the default rules; the emergency-contact DATA fields remain (the profile read keeps displaying them). Flag F7 resolved by removal."
+      ]
+    },
+    {
+      "id": 24, "route": "/api/employees/{id}/required-documents", "method": "GET", "source": "user-confirmed",
+      "expected": {
+        "anonymous": 401, "employeeSelf": 200, "employeeOther": [401, 404], "teamLeader": 200, "branchManager": 200,
+        "hr": 200, "hrManager": 200, "topManagement": 200, "crossTenantTwin": 404
+      }
+    },
+    {
+      "id": 25, "route": "/api/employees/{id}/hr-documents", "method": "GET", "source": "user-confirmed",
+      "expected": {
+        "anonymous": 401, "employeeSelf": 200, "employeeOther": [401, 404], "teamLeader": 200, "branchManager": 200,
+        "hr": 200, "hrManager": 200, "topManagement": 200, "crossTenantTwin": 404
+      }
+    },
+    {
+      "id": 26, "route": "/api/employees/{id}/documents/{docId}/download", "method": "GET", "source": "user-confirmed",
+      "expected": {
+        "anonymous": 401, "employeeSelf": 200, "employeeOther": [401, 404], "teamLeader": 200, "branchManager": 200,
+        "hr": 200, "hrManager": 200, "topManagement": 200, "crossTenantTwin": 404
+      }
+    },
+    {
+      "id": 27, "route": "/api/employees/{id}/hr-documents/{docId}/download", "method": "GET", "source": "user-confirmed",
+      "expected": {
+        "anonymous": 401, "employeeSelf": 200, "employeeOther": [401, 404], "teamLeader": 200, "branchManager": 200,
+        "hr": 200, "hrManager": 200, "topManagement": 200, "crossTenantTwin": 404
+      }
+    },
+    {
+      "id": 28, "route": "/api/employees/{id}/photo", "method": "GET", "source": "user-confirmed",
+      "expected": {
+        "anonymous": 401, "employeeSelf": 200, "employeeOther": 200, "teamLeader": 200, "branchManager": 200,
+        "hr": 200, "hrManager": 200, "topManagement": 200, "crossTenantTwin": [401, 404]
+      },
+      "notes": ["user chose any-authenticated WITHIN tenant bounds; code today is EnsureCanAccess (stricter) - mismatch tracked in report"]
+    },
+    {
+      "id": 29, "route": "/api/employees/{id}/photo", "method": "PUT", "source": "user-confirmed",
+      "expected": {
+        "anonymous": 401, "employeeSelf": 200, "employeeOther": 404, "teamLeader": 404, "branchManager": 404,
+        "hr": [401, 404], "hrManager": [401, 404], "topManagement": [401, 404], "crossTenantTwin": 404
+      },
+      "notes": ["Photo upload is write-your-own-avatar only; every other caller denied (convention 401|404 - code answers 401 for profile-less accounts, 404 for employees)."]
+    },
+    {
+      "id": 30, "route": "/api/employees/{id}/schedule", "method": "GET", "source": "user-confirmed",
+      "expected": {
+        "anonymous": 401, "employeeSelf": 200, "employeeOther": [401, 404], "teamLeader": 200, "branchManager": 200,
+        "hr": 200, "hrManager": 200, "topManagement": 200, "crossTenantTwin": 404
+      }
+    },
+    {
+      "id": 31, "route": "/api/employees/{id}/evaluations/detail", "method": "GET", "source": "user-confirmed",
+      "expected": {
+        "anonymous": 401, "employeeSelf": 200, "employeeOther": [401, 404], "teamLeader": 200, "branchManager": 200,
+        "hr": 200, "hrManager": 200, "topManagement": 200, "crossTenantTwin": 404
+      }
+    },
+    {
+      "id": 32, "route": "/api/employees/{id}/requests", "method": "POST", "source": "user-confirmed",
+      "expected": {
+        "anonymous": 401, "employeeSelf": [200, 201, 400], "employeeOther": 404, "teamLeader": [200, 201, 400], "branchManager": [200, 201, 400],
+        "hr": [401, 404], "hrManager": [401, 404], "topManagement": [401, 404], "crossTenantTwin": 404
+      },
+      "notes": ["flag F5: on-behalf submission not implemented in code; TL scope = TL(team)+BM(gym) strictly demanded when implemented", "HR/HRM/TM: no employee profile in today's code -> UnAuthorized 401 (documented honestly, not bypass rows)"]
+    },
+    {
+      "id": 33, "route": "/api/employees/{id}/excused-hours", "method": "GET", "source": "user-confirmed",
+      "expected": {
+        "anonymous": 401, "employeeSelf": 200, "employeeOther": [401, 404], "teamLeader": 200, "branchManager": 200,
+        "hr": 200, "hrManager": 200, "topManagement": 200, "crossTenantTwin": 404
+      }
+    },
+    {
+      "id": 34, "route": "/api/employees/{id}/payroll-sheets", "method": "GET", "source": "user-confirmed",
+      "expected": {
+        "anonymous": 401, "employeeSelf": 200, "employeeOther": [401, 404], "teamLeader": 200, "branchManager": 200,
+        "hr": 200, "hrManager": 200, "topManagement": 200, "crossTenantTwin": 404
+      },
+      "notes": ["payroll visibility convergence decision (supersedes flag F8): within-scope TL/BM/HR/HRM read the sheets; owner sees own; out-of-gym stays 404", "original flag F8 note: code lets managers read via EnsureCanAccess today; owner-only desired"]
+    },
+    {
+      "id": 35, "route": "/api/employees/{id}/payroll/{entryId}/payslip", "method": "GET", "source": "user-confirmed",
+      "expected": {
+        "anonymous": 401, "employeeSelf": 200, "employeeOther": [401, 404], "teamLeader": [401, 404], "branchManager": [401, 404],
+        "hr": [401, 404], "hrManager": [401, 404], "topManagement": [401, 404], "crossTenantTwin": 404
+      },
+      "notes": ["self-only in code already (null gym in guard)"]
+    },
+    {
+      "id": 36, "route": "/api/employees/{id}/colleagues", "method": "GET", "source": "user-confirmed",
+      "expected": {
+        "anonymous": 401, "employeeSelf": [401, 404], "employeeOther": [401, 404], "teamLeader": 200, "branchManager": 200,
+        "hr": [401, 404], "hrManager": [401, 404], "topManagement": 200, "crossTenantTwin": 404
+      },
+      "notes": ["flag F6: user says only BM/TL need the picker (they choose swap partner); code is self-only; TL row must be team-scoped"]
+    },
+    {
+      "id": 37, "route": "/api/requests/{requestId}/attachment", "method": "GET", "source": "user-confirmed",
+      "expected": {
+        "anonymous": 401, "employeeSelf": 200, "employeeOther": [401, 404], "teamLeader": 200, "branchManager": 200,
+        "hr": 200, "hrManager": 200, "topManagement": 200, "crossTenantTwin": 404
+      }
+    },
+    {
+      "id": 38, "route": "/api/requests/{requestId}/cancel", "method": "POST", "source": "user-confirmed",
+      "expected": {
+        "anonymous": 401, "employeeSelf": [200, 204], "employeeOther": 404, "teamLeader": [200, 404], "branchManager": [200, 404],
+        "hr": [401, 404], "hrManager": [401, 404], "topManagement": [401, 404], "crossTenantTwin": [401, 404]
+      },
+      "notes": ["flag F11: desired adds the submitting TL/BM (cancel their own on-behalf submission); reject/decide stays in decision endpoints (outside employees scope); non-pending cancels also 400", "HR/HRM/TM: no employee profile -> 401 honestly documented", "crossTenantTwin widened to [401,404]: code answers 401 (UnAuthorizedException on the ownership check), matrix convention accepts either deny code."]
+    },
+    {
+      "id": 39, "route": "/api/request-types", "method": "GET", "source": "user-confirmed",
+      "expected": {
+        "anonymous": 401, "employee": 200, "teamLeader": 200, "branchManager": 200, "hr": 200, "hrManager": 200,
+        "topManagement": 200, "crossTenantTwin": 200
+      },
+      "notes": ["static catalog, no guard (flag F10); crossTenantTwin 200 is intentional - no tenant data"]
+    },
+    {
+      "id": 40, "route": "/api/employees/face/enroll", "method": "POST", "source": "user-confirmed",
+      "expected": {
+        "anonymous": 401, "employee": 401, "teamLeader": [200, 201, 400], "branchManager": [200, 201, 400], "hr": [200, 201, 400], "hrManager": [200, 201, 400],
+        "topManagement": [200, 201, 400], "crossTenantTwin": 401
+      },
+      "notes": ["user flow: BM enrolls faces for his gym staff; matches code reality (flag F4); 400 accepted for invalid image payload"]
+    },
+    {
+      "id": 41, "route": "/api/employees/face/{employeeReference}", "method": "DELETE", "source": "user-confirmed",
+      "expected": {
+        "anonymous": 401, "employee": 401, "teamLeader": [204, 404], "branchManager": [204, 404], "hr": [204, 404], "hrManager": [204, 404],
+        "topManagement": [204, 404], "crossTenantTwin": 401
+      },
+      "notes": ["204 on success, 404 when the employee reference is unknown"]
+    },
+    {
+      "id": 42, "route": "/api/employees/{empId}/evaluations", "method": "POST", "source": "user-confirmed",
+      "expected": {
+        "anonymous": 401, "employee": [401, 404], "teamLeader": [401, 404], "branchManager": [200, 201, 400], "hr": [200, 201, 400], "hrManager": [200, 201, 400],
+        "topManagement": [200, 201, 400], "crossTenantTwin": [401, 404]
+      },
+      "notes": ["flag F9: 'whoever has the permission to evaluate' -> reviewer role-name gate {BM, HR, HRM, SuperAdmin} at the gym + employee-file scope; permission-driven rework noted"]
+    },
+    {
+      "id": 43, "route": "/api/employees/{empId}/evaluations/{evaluationId}", "method": "PUT", "source": "user-confirmed",
+      "expected": {
+        "anonymous": 401, "employee": [401, 404], "teamLeader": [401, 404], "branchManager": [200, 400, 404], "hr": [200, 400, 404], "hrManager": [200, 400, 404],
+        "topManagement": [200, 400, 404], "crossTenantTwin": [401, 404]
+      },
+      "notes": ["same reviewer gate as id 42; 404 when evaluation not found for that employee"]
+    },
+    {
+      "id": 44, "route": "/api/employees/new-comers", "method": "GET", "source": "user-confirmed",
+      "expected": {
+        "anonymous": 401, "employee": 401, "teamLeader": 401, "branchManager": 200, "hr": 200, "hrManager": 200,
+        "topManagement": 200, "crossTenantTwin": [401, 404]
+      }
+    },
+    {
+      "id": 45, "route": "/api/employees/{id}/onboarding-checklist", "method": "PUT", "source": "user-confirmed",
+      "expected": {
+        "anonymous": 401, "employee": [401, 404], "teamLeader": [401, 404], "branchManager": [401, 404], "hr": [200, 400], "hrManager": [200, 400],
+        "topManagement": [200, 400], "crossTenantTwin": [401, 404]
+      }
+    },
+    {
+      "id": 46, "route": "/api/requests/inbox", "method": "GET", "source": "user-confirmed",
+      "expected": {
+        "anonymous": 401, "employeeSelf": 404, "employeeOther": 404, "teamLeader": 200, "branchManager": 200,
+        "hr": 404, "hrManager": 404, "topManagement": 200, "crossTenantTwin": 404
+      },
+      "notes": [
+        "USER DECISION (phase 3): manager desk, stage-1. Guarded by GYM ROLE NAMES (Team Leader / Branch Manager / Super Admin), no permission key; other roles are concealed with 404.",
+        "teamLeader 200 rows contain own-team members only; branchManager sees the whole gym; Super Admin (Top Management) holds a SuperAdmin gym role so the desk answers for him."
+      ]
+    },
+    {
+      "id": 47, "route": "/api/requests/{id}/decisions", "method": "POST", "source": "user-confirmed",
+      "expected": {
+        "anonymous": 401, "employeeSelf": 404, "employeeOther": 404, "teamLeader": 204, "branchManager": 204,
+        "hr": 404, "hrManager": 404, "topManagement": 204, "crossTenantTwin": 404
+      },
+      "notes": [
+        "USER DECISION (phase 3): stage-1 approve moves the request to HR review - EXCEPT SICK LEAVE by the Branch Manager, which is branch-FINAL (status Approved straight away; payment auto-resolves: paid while days remain, else unpaid). A Team Leader approval always routes to HR review.",
+        "Targets are per-identity provisioned pending sick-leave requests so mutations stay isolated across identity variants; out-of-scope ids answer 404."
+      ]
+    },
+    {
+      "id": 48, "route": "/api/requests/{id}", "method": "PUT", "source": "user-confirmed",
+      "expected": {
+        "anonymous": 401, "employeeSelf": 404, "employeeOther": 404, "teamLeader": 204, "branchManager": 204,
+        "hr": 404, "hrManager": 404, "topManagement": 204, "crossTenantTwin": 404
+      },
+      "notes": [
+        "USER DECISION (phase 3): desk edit of an in-scope pending request (type/date validation applies; the payload updates only the reason). Each desk-capable identity edits its own provisioned request."
+      ]
+    },
+    {
+      "id": 49, "route": "/api/requests/{id}/comments", "method": "POST", "source": "user-confirmed",
+      "expected": {
+        "anonymous": 401, "employeeSelf": 404, "employeeOther": 404, "teamLeader": 201, "branchManager": 201,
+        "hr": 404, "hrManager": 404, "topManagement": 201, "crossTenantTwin": 404
+      },
+      "notes": [
+        "USER DECISION (phase 3): desk collaboration trail - desk roles comment on in-scope requests, others are concealed (404). Per-identity targets keep the trail isolated."
+      ]
+    },
+    {
+      "id": 50, "route": "/api/requests", "method": "GET", "source": "user-confirmed",
+      "expected": {
+        "anonymous": 401, "employeeSelf": 401, "employeeOther": 401, "teamLeader": 200, "branchManager": 200,
+        "hr": 200, "hrManager": 200, "topManagement": 200, "crossTenantTwin": 401
+      },
+      "notes": [
+        "USER DECISION (phase 3): HR requests inbox (requests.view at the caller's gyms - per-gym role keys or direct grants). Plain employees hold no key here: their self-service path is /api/employees/{id}/requests (row 19).",
+        "PAYLOAD SHAPE: the suite calls ?gym=<karim's gym> like the UI does (the page opens per active gym); the on-behalf targets resolve as Team-Scoped rows; ungranted twins answer 401."
+      ]
+    },
+    {
+      "id": 51, "route": "/api/requests/{id}", "method": "GET", "source": "user-confirmed",
+      "expected": {
+        "anonymous": 401, "employeeSelf": 200, "employeeOther": 401, "teamLeader": 200, "branchManager": 200,
+        "hr": 200, "hrManager": 200, "topManagement": 200, "crossTenantTwin": 401
+      },
+      "notes": [
+        "USER DECISION (phase 3) + code-coherent exception: the request detail is OPEN TO ITS OWNER (the requester follows his own request's progress; mock A10.4 timeline) - employeeSelf answers 200 without requests.view. Other readers need requests.view at the request's gym + Team Leader team scoping. Target: karim's attached sick-leave request."
+      ]
+    },
+    {
+      "id": 52, "route": "/api/requests", "method": "POST", "source": "user-confirmed",
+      "expected": {
+        "anonymous": 401, "employeeSelf": 401, "employeeOther": 401, "teamLeader": 401, "branchManager": 401,
+        "hr": 201, "hrManager": 201, "topManagement": 201, "crossTenantTwin": 401
+      },
+      "notes": [
+        "USER DECISION (phase 3): R7 on-behalf creation. The guard is the GLOBAL requests.view grant (direct keys, not per-gym role keys), so only HR/HR Manager (+ Top Management bypass) create here; the manager-side on-behalf path lives at /api/employees/{id}/requests (row 32).",
+        "PAYLOAD SHAPE: each key-holding identity creates on its OWN provisioned, uniquely named subject employee so the name resolver finds exactly one match across every gym filter (the HR Manager spans gym1+gym2). Targets stay Pending HR Review, which rows 47/53/55 never touch."
+      ]
+    },
+    {
+      "id": 53, "route": "/api/requests/{id}/decide", "method": "POST", "source": "user-confirmed",
+      "expected": {
+        "anonymous": 401, "employeeSelf": 401, "employeeOther": 401, "teamLeader": 401, "branchManager": 200,
+        "hr": 200, "hrManager": 200, "topManagement": 200, "crossTenantTwin": 401
+      },
+      "notes": [
+        "USER DECISION (phase 3): R3 final decision (requests.approve). Branch-final SICK-LEAVE exception: the Branch Manager approves sick leave at this stage too, no key needed. The payload approves with payment=unpaid so balances stay neutral.",
+        "USER NOTE (phase 3): the two-stage flow is Branch Manager then HR; some request types end at the Branch Manager - for now that is SICK LEAVE only (rows 47/53). The per-type rule is expected to grow."
+      ]
+    },
+    {
+      "id": 54, "route": "/api/requests/{id}/undo-decision", "method": "POST", "source": "user-confirmed",
+      "expected": {
+        "anonymous": 401, "employeeSelf": 401, "employeeOther": 401, "teamLeader": 401, "branchManager": 200,
+        "hr": 200, "hrManager": 200, "topManagement": 200, "crossTenantTwin": 401
+      },
+      "notes": [
+        "USER DECISION (phase 3): R4 reverts the decision while the request date is ahead. Targets are per-identity Approved sick-leave requests; the Branch Manager may undo his branch-final sick-leave decisions."
+      ]
+    },
+    {
+      "id": 55, "route": "/api/requests/bulk-decide", "method": "POST", "source": "user-confirmed",
+      "expected": {
+        "anonymous": 401, "employeeSelf": 401, "employeeOther": 401, "teamLeader": 401, "branchManager": 200,
+        "hr": 200, "hrManager": 200, "topManagement": 200, "crossTenantTwin": 404
+      },
+      "notes": [
+        "USER DECISION (phase 3): R5 bulk approve. Explicit sick-leave ids per identity (HR/HRM/Top Management exercise the key path; the Branch Manager exercises the branch-final exception). The branch path refuses non-sick-leave targets and the no-ids sweep stays HR-only (guard enforced in code).",
+        "Ungranted same-gym roles (employees/Team Leader) fail on the sick-leave scope guard with an in-gym id -> 401; the cross-tenant twin's gyms cannot load the fallback id -> 404 (concealment either way)."
+      ]
+    },
+    {
+      "id": 56, "route": "/api/requests/{id}/archive", "method": "POST", "source": "user-confirmed",
+      "expected": {
+        "anonymous": 401, "employeeSelf": 401, "employeeOther": 401, "teamLeader": 200, "branchManager": 200,
+        "hr": 200, "hrManager": 200, "topManagement": 200, "crossTenantTwin": 401
+      },
+      "notes": [
+        "USER DECISION (phase 3): R6 archive under requests.view; each view-capable identity archives its OWN provisioned request so row 57 can restore the same one."
+      ]
+    },
+    {
+      "id": 57, "route": "/api/requests/{id}/restore", "method": "POST", "source": "user-confirmed",
+      "expected": {
+        "anonymous": 401, "employeeSelf": 401, "employeeOther": 401, "teamLeader": 200, "branchManager": 200,
+        "hr": 200, "hrManager": 200, "topManagement": 200, "crossTenantTwin": 401
+      },
+      "notes": [
+        "USER DECISION (phase 3): R6 restore under requests.view; targets are per-identity requests provisioned AS ARCHIVED (row 56's archive target is separate: the suite's cases run in parallel, so archive and restore must never share one request id)."
+      ]
+    },
+    {
+      "id": 58, "route": "/api/employees/{employeeId}/messages", "method": "POST", "source": "user-confirmed",
+      "expected": {
+        "anonymous": 401, "employeeSelf": 404, "employeeOther": 404, "teamLeader": 204, "branchManager": 404,
+        "hr": 404, "hrManager": 404, "topManagement": 404, "crossTenantTwin": 404
+      },
+      "notes": [
+        "USER DECISION (phase 3): one-to-one team message (TeamActionsController message action; the integration Vector Message_Persists_AndNotifiesMember proves this canonical path answers 204 for the team's leader).",
+        "TEAM MEMBERSHIP ONLY (ResolveTeamMemberAsync): only the Team Leader whose led team contains the employee answers 204; Branch Managers and Top Management lead no team, so they are concealed with 404 (the payload targets the suite team's member - the probe employee)."
+      ]
+    }
+  ]
+}

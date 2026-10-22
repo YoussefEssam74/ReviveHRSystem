@@ -7,6 +7,7 @@ using DomainLayer.Models.OrganizationModule;
 using DomainLayer.Models.OrganizationModule.Enums;
 using Service.Specifications;
 using ServiceAbstraction.Services;
+using Shared.Configuration;
 using Shared.DataTransferObject.Auth;
 using Shared.DataTransferObject.Gym;
 
@@ -22,6 +23,7 @@ namespace Service.Services
         IUserAccessRepository userAccess,
         IPasswordHasher passwordHasher,
         ITokenService tokenService,
+        SecurityLockoutOptions lockoutOptions,
         IMapper mapper) : IAuthService
     {
 
@@ -30,9 +32,29 @@ namespace Service.Services
             var userRepository = unitOfWork.GetRepository<User, int>();
             var user = await userRepository.GetByIdAsync(new UserByEmailSpec(request.Email ?? string.Empty), cancellationToken);
 
+            // Brute-force lockout: once the account is locked, EVERY sign-in attempt
+            // — including the correct password — is refused until the window elapses.
+            // (Matrix RateLimitAndLockout spec; "Password_Guessing_Locks_The_Account".)
+            if (user is not null && user.LockoutEnd is { } lockoutEnd && lockoutEnd > DateTime.UtcNow)
+            {
+                throw new UnAuthorizedException(
+                    "This account is temporarily locked after repeated failed sign-in attempts. Try again later.");
+            }
+
             // Identical failure for unknown email and wrong password — no user enumeration.
             if (user is null || !passwordHasher.Verify(request.Password ?? string.Empty, user.PasswordHash))
             {
+                if (user is not null)
+                {
+                    user.FailedLoginAttempts++;
+                    if (user.FailedLoginAttempts >= lockoutOptions.MaxFailedLogins)
+                    {
+                        user.LockoutEnd = DateTime.UtcNow.AddMinutes(lockoutOptions.LockoutWindowMinutes);
+                    }
+
+                    await unitOfWork.SaveChangesAsync(cancellationToken);
+                }
+
                 throw new UnAuthorizedException("Invalid email or password.");
             }
 
@@ -40,6 +62,10 @@ namespace Service.Services
             {
                 throw new UnAuthorizedException("Invalid email or password.");
             }
+
+            // Successful password verification resets the brute-force counters.
+            user.FailedLoginAttempts = 0;
+            user.LockoutEnd = null;
 
             var gymAccess = await userAccess.GetGymAccessAsync(user.Id, cancellationToken);
 
@@ -116,7 +142,10 @@ namespace Service.Services
             var (firstName, lastName) = SplitName(fullName);
 
             var gymAccess = await userAccess.GetGymAccessAsync(user.Id, cancellationToken);
-            var permissions = await userAccess.GetPermissionKeysAsync(user.Id, cancellationToken);
+            // Keys follow the ACTIVE gym's role (per-gym authorization): a Branch
+            // Manager in one gym who is a Team Leader in another reports (and
+            // carries) that gym's keys, not the union of every global role.
+            var permissions = await userAccess.GetPermissionKeysForGymAsync(user.Id, selectedGymId, cancellationToken);
 
             return new CurrentUserResponse
             {
@@ -163,8 +192,6 @@ namespace Service.Services
             int? forcedGymId,
             CancellationToken cancellationToken)
         {
-            var permissions = await userAccess.GetPermissionKeysAsync(user.Id, cancellationToken);
-
             int? scopedGymId = forcedGymId;
             if (scopedGymId is null && gymAccess.Count == 1)
             {
@@ -172,6 +199,11 @@ namespace Service.Services
                 // more than one gym select one via select-gym or switch-gym.
                 scopedGymId = gymAccess[0].GymId;
             }
+
+            // The token's keys follow its gym: single-gym users and select-gym
+            // requests mint a scoped token, so its keys come from the per-gym
+            // role (the pre-selection no-gym token keeps the global key set).
+            var permissions = await userAccess.GetPermissionKeysForGymAsync(user.Id, scopedGymId, cancellationToken);
 
             var scopedGym = scopedGymId.HasValue
                 ? gymAccess.FirstOrDefault(g => g.GymId == scopedGymId.Value)

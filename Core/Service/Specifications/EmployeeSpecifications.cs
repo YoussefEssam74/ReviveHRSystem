@@ -59,6 +59,7 @@ namespace Service.Specifications
     {
         public EmployeeDirectorySpec(
             int[]? gymIds,
+            int? teamId,
             string? search,
             EmployeeStatus? status,
             int skip,
@@ -71,6 +72,12 @@ namespace Service.Specifications
             {
                 var scopedGyms = gymIds;
                 predicate = And(predicate, e => scopedGyms.Contains(e.GymId));
+            }
+
+            if (teamId.HasValue)
+            {
+                var scopedTeam = teamId.Value;
+                predicate = And(predicate, e => e.TeamId == scopedTeam);
             }
 
             if (!string.IsNullOrWhiteSpace(search))
@@ -113,6 +120,18 @@ namespace Service.Specifications
             {
                 ApplyPaging(Math.Max(skip, 0), take);
             }
+        }
+
+        public EmployeeDirectorySpec(
+            int[]? gymIds,
+            string? search,
+            EmployeeStatus? status,
+            int skip,
+            int take,
+            string sortBy,
+            bool sortDescending)
+            : this(gymIds, null, search, status, skip, take, sortBy, sortDescending)
+        {
         }
 
         /// <summary>ANDs two predicates over the same parameter without Invoke nodes.</summary>

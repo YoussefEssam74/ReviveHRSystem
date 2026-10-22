@@ -8,15 +8,18 @@ namespace DomainLayer.Models.EmployeeModule
     /// team members (mock 13.5 / 19 Team Actions): a reminder, a scheduled meeting, an
     /// escalation, or the resolution that closes the item. The trail is preserved
     /// (never overwritten), so the most recent action drives <see cref="LastAction"/>.
-    /// Scoped to the team it was raised in, which is how scope isolation is enforced.
+    /// Scoped to the team it was raised in, which is how scope isolation is enforced —
+    /// except for a Branch Manager acting on an employee nobody has assigned to a team
+    /// yet: his scope is the whole gym roster, so that row hangs off no team
+    /// (<see cref="TeamId"/> is null) and stays visible to him alone.
     /// </summary>
     public class TeamFollowUp : BaseEntity<int>
     {
         public int EmployeeId { get; set; }
         public virtual Employee Employee { get; set; } = null!;
 
-        public int TeamId { get; set; }
-        public virtual DomainLayer.Models.OrganizationModule.Team Team { get; set; } = null!;
+        public int? TeamId { get; set; }
+        public virtual DomainLayer.Models.OrganizationModule.Team? Team { get; set; }
 
         public FollowUpActionType ActionType { get; set; }
 

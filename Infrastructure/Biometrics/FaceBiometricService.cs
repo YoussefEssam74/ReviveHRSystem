@@ -22,6 +22,7 @@ namespace Biometrics
     public sealed class FaceBiometricService(
         IUnitOfWork unitOfWork,
         IUserAccessRepository userAccess,
+        ITeamScopeService teamScope,
         IAttendanceService attendanceService,
         FaceRecognitionEngine engine,
         IOptions<BiometricsOptions> options) : IFaceBiometricService
@@ -184,6 +185,7 @@ namespace Biometrics
                 ?? throw new NotFoundException("Employee not found.");
 
             await EnsureGymAccessAsync(actor, employee.GymId, cancellationToken);
+            await EnsureFaceScopeAsync(actor, employee, cancellationToken);
 
             var imageBytes = DecodeImage(request.Image);
             var outcome = await Task.Run(() => engine.ProcessFrame(imageBytes), cancellationToken);
@@ -235,6 +237,7 @@ namespace Biometrics
                 ?? throw new NotFoundException("Employee not found.");
 
             await EnsureGymAccessAsync(actor, employee.GymId, cancellationToken);
+            await EnsureFaceScopeAsync(actor, employee, cancellationToken);
 
             var embeddingRepository = unitOfWork.GetRepository<FaceEmbedding, int>();
             var existing = await embeddingRepository.GetByIdAsync(new FaceEmbeddingByEmployeeSpec(employee.Id), cancellationToken)
@@ -246,9 +249,10 @@ namespace Biometrics
 
         /// <summary>
         /// Face management is HR-side administration. The acting principal must be a real,
-        /// active user account of an HR-capable type before any employee data is touched —
-        /// this rejects station tokens (non-numeric sub claim) and employee sessions up
-        /// front, so they cannot probe employee existence through 404-versus-401 differences.
+        /// active user account before any employee data is touched — this rejects station
+        /// tokens (non-numeric sub claim) and inactive sessions up front, so they cannot
+        /// probe employee existence through 404-versus-401 differences. Role eligibility
+        /// is decided per gym in <see cref="EnsureGymAccessAsync"/>.
         /// </summary>
         private async Task<User> ResolveFaceManagerAsync(int? actorUserId, CancellationToken cancellationToken)
         {
@@ -266,17 +270,16 @@ namespace Biometrics
                 throw new UnAuthorizedException("Your session is invalid. Please sign in again.");
             }
 
-            if (actor.UserType == UserType.Employee)
-            {
-                throw new UnAuthorizedException("You are not allowed to manage face enrollments.");
-            }
-
             return actor;
         }
 
         /// <summary>
-        /// TopManagement may manage faces at any gym; every other type needs
-        /// UserGymAccess to the employee's gym, and must be HR to do it at all.
+        /// TopManagement may manage faces at any gym. Otherwise the actor needs
+        /// UserGymAccess to the employee's gym and a management capability there:
+        /// HR-capable user types or the Branch Manager/Team Leader per-gym roles
+        /// (the BM enrolls faces for his gym staff, the TL for his team members,
+        /// which the matrix rows 40/41 encode). A face manager without a manager
+        /// role in the target gym is denied.
         /// </summary>
         private async Task EnsureGymAccessAsync(User actor, int gymId, CancellationToken cancellationToken)
         {
@@ -290,9 +293,47 @@ namespace Biometrics
                 throw new UnAuthorizedException("You do not have access to this gym.");
             }
 
-            if (actor.UserType != UserType.HR)
+            if (actor.UserType == UserType.HR)
             {
-                throw new UnAuthorizedException("You are not allowed to manage face enrollments.");
+                return;
+            }
+
+            var roleNames = await userAccess.GetGymRoleNamesAsync(actor.Id, gymId, cancellationToken);
+            if (roleNames.Any(name => name is Shared.Authorization.RoleNames.TeamLeader or Shared.Authorization.RoleNames.BranchManager))
+            {
+                return;
+            }
+
+            throw new UnAuthorizedException("You are not allowed to manage face enrollments.");
+        }
+
+        /// <summary>
+        /// Team-scoped face managers (Team Leader without a Branch Manager role) may
+        /// only enroll faces of the members of the team they lead; gym-wide roles act
+        /// without that restriction. Out-of-scope targets are concealed (404).
+        /// </summary>
+        private async Task EnsureFaceScopeAsync(User actor, DomainLayer.Models.EmployeeModule.Employee employee, CancellationToken cancellationToken)
+        {
+            if (actor.UserType is UserType.TopManagement or UserType.HR)
+            {
+                return;
+            }
+
+            var roleNames = await userAccess.GetGymRoleNamesAsync(actor.Id, employee.GymId, cancellationToken);
+            if (roleNames.Contains(Shared.Authorization.RoleNames.BranchManager, StringComparer.Ordinal))
+            {
+                return;
+            }
+
+            if (!roleNames.Contains(Shared.Authorization.RoleNames.TeamLeader, StringComparer.Ordinal))
+            {
+                return;
+            }
+
+            var ledTeamId = await teamScope.GetLedTeamIdAsync(actor.Id, employee.GymId, cancellationToken);
+            if (ledTeamId is null || employee.TeamId != ledTeamId.Value)
+            {
+                throw new NotFoundException("Employee not found.");
             }
         }
 

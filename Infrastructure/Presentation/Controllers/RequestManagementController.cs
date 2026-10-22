@@ -1,26 +1,42 @@
 using Microsoft.AspNetCore.Mvc;
-using Presentation.Authorization;
 using ServiceAbstraction.Services;
 using Shared;
-using Shared.Authorization;
 using Shared.DataTransferObject.EmployeeProfile;
 using Shared.DataTransferObject.QueryParams;
-using DomainLayer.Models.UserModule.Enums;
 
 namespace Presentation.Controllers
 {
     /// <summary>
-    /// Branch-manager request actions (mock §17 Team / Requests Management) that the
-    /// HR portal does not own: editing a pending request and posting a comment.
-    /// The directory inbox and both decision endpoints live in the HR portal's
-    /// RequestsController.
+    /// Management-side request desk (mock §17 Team/Requests Management): the
+    /// scoped inbox (team for Team Leaders, gym for Branch Managers), stage-1
+    /// decisions that move a pending request to HR review, and editing/commenting.
+    /// The HR decision stage lives in the HR portal's RequestsController. Scope is
+    /// enforced inside the service — no permission key involved.
     /// </summary>
     [Route("api/requests")]
     public class RequestManagementController(IRequestManagementService requestManagementService) : ApiControllerBase
     {
+        /// <summary>GET /api/requests/inbox — in-scope requests, newest first (stage-1 desk).</summary>
+        [HttpGet("inbox")]
+        public async Task<ActionResult<PaginationResult<EmployeeRequestDto>>> Inbox(
+            [FromQuery] RequestQueryParams query, CancellationToken cancellationToken)
+        {
+            var inbox = await requestManagementService.GetInboxAsync(
+                GetActorUserId(), GetGymIdFromToken(), query, cancellationToken);
+            return Ok(inbox);
+        }
+
+        /// <summary>POST /api/requests/{id}/decisions — stage-1 approve/reject (moves to HR review).</summary>
+        [HttpPost("{id}/decisions")]
+        public async Task<IActionResult> Decide(int id, RequestDecisionDto decision, CancellationToken cancellationToken)
+        {
+            await requestManagementService.DecideAsync(
+                GetActorUserId(), id, GetGymIdFromToken(), decision, cancellationToken);
+            return NoContent();
+        }
+
         /// <summary>Edits a pending request of an in-scope employee.</summary>
         [HttpPut("{id}")]
-        [HasFeatureAccess(Features.Requests, AccessLevel.Edit)]
         public async Task<IActionResult> Edit(int id, UpdateRequestDto update, CancellationToken cancellationToken)
         {
             await requestManagementService.EditAsync(
@@ -30,7 +46,6 @@ namespace Presentation.Controllers
 
         /// <summary>Posts a comment on an in-scope request.</summary>
         [HttpPost("{id}/comments")]
-        [HasFeatureAccess(Features.Requests, AccessLevel.View)]
         public async Task<ActionResult<RequestCommentDto>> Comment(
             int id, CreateRequestCommentDto request, CancellationToken cancellationToken)
         {

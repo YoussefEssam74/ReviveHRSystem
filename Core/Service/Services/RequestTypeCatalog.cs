@@ -3,9 +3,10 @@ using DomainLayer.Models.EmployeeModule.Enums;
 namespace Service.Services
 {
     /// <summary>
-    /// One request type the employee can submit (product spec: the final 9-item
-    /// catalog). The flags carry the submission rules so both the service (validation)
-    /// and the client (form rendering and inline warnings) read the same definition.
+    /// One request type the employee can submit (product spec: the catalog agreed
+    /// with the product owner). The flags carry the submission rules so both the
+    /// service (validation) and the client (form rendering and inline warnings)
+    /// read the same definition.
     /// </summary>
     public sealed record RequestTypeDefinition(
         string Id,
@@ -34,6 +35,10 @@ namespace Service.Services
         public const string CheckInCorrectionId = "check-in-correction";
         public const string SalaryAdvanceId = "salary-advance";
         public const string PaidHolidayId = "paid-holiday";
+        public const string DeductionCorrectionId = "deduction-correction";
+
+        /// <summary>Stored request rows carry the label, not the id — this one is matched by label.</summary>
+        public const string DeductionCorrectionLabel = "Deduction Correction";
 
         private static readonly IReadOnlyList<RequestTypeDefinition> Types = new[]
         {
@@ -71,6 +76,10 @@ namespace Service.Services
                 null, false, false, true, false, false),
             new RequestTypeDefinition(
                 PaidHolidayId, "Paid Holiday",
+                new[] { "date", "reason" },
+                null, false, false, false, false, false),
+            new RequestTypeDefinition(
+                DeductionCorrectionId, DeductionCorrectionLabel,
                 new[] { "date", "reason" },
                 null, false, false, false, false, false)
         };

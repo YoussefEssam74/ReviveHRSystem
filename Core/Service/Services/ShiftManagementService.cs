@@ -15,14 +15,53 @@ namespace Service.Services
     /// roster. Assignments are upserted per (employee, date) — the domain enforces
     /// one shift per employee per date.
     /// </summary>
+    /// <summary>
+    /// Shift management (mock §§15-16). Schedules and templates are management
+    /// artifacts: a Team Leader manages his team's members inside the gym's
+    /// cycles, a Branch Manager the gym's roster; a plain employee answers the
+    /// same NotFound the missing-cycle path does. Assignments are upserted per
+    /// (employee, date) — the domain enforces one shift per employee per date.
+    /// </summary>
     public class ShiftManagementService(
         IUnitOfWork unitOfWork,
         ITeamScopeService teamScopeService,
+        IUserAccessRepository userAccess,
         IMapper mapper) : IShiftManagementService
     {
+        private static readonly string[] ManagementRoleNames =
+        [
+            Shared.Authorization.RoleNames.TeamLeader,
+            Shared.Authorization.RoleNames.BranchManager,
+            Shared.Authorization.RoleNames.SuperAdmin,
+        ];
+
+        private async Task EnsureManagementScopeAsync(int actorUserId, int gymId, CancellationToken cancellationToken)
+        {
+            var roleNames = await userAccess.GetGymRoleNamesAsync(actorUserId, gymId, cancellationToken);
+            if (roleNames.Any(ManagementRoleNames.Contains))
+            {
+                return;
+            }
+
+            // Same key the rest of the schedule surface (ShiftCycleService) and the
+            // portal's `can('schedule.manage')` gate on — per-gym role keys, with the
+            // global-role fallback for users who hold no role in this gym. Without it
+            // a user the UI shows "New Template" / "Create Schedule" to was rejected
+            // here with a misleading "Shift cycle not found."
+            var permissionKeys = await userAccess.GetPermissionKeysForGymAsync(actorUserId, gymId, cancellationToken);
+            if (permissionKeys.Contains("schedule.manage", StringComparer.Ordinal))
+            {
+                return;
+            }
+
+            throw new NotFoundException("Shift cycle not found.");
+        }
+
         public async Task<IReadOnlyList<ShiftCycleDto>> GetCyclesAsync(
             int actorUserId, int gymId, string? month, CancellationToken cancellationToken = default)
         {
+            await EnsureManagementScopeAsync(actorUserId, gymId, cancellationToken);
+
             var cycles = await unitOfWork.GetRepository<ShiftCycle, int>()
                 .GetAllAsync(new ShiftCyclesByGymSpec(gymId, ParseMonth(month)), cancellationToken);
 
@@ -32,6 +71,8 @@ namespace Service.Services
         public async Task<ShiftCycleDetailDto> GetCycleAsync(
             int actorUserId, int gymId, int cycleId, CancellationToken cancellationToken = default)
         {
+            await EnsureManagementScopeAsync(actorUserId, gymId, cancellationToken);
+
             var cycle = await LoadCycleAsync(gymId, cycleId, cancellationToken);
             var days = DaysOf(cycle);
             var employeeIds = await ScopedEmployeeIdsAsync(actorUserId, gymId, cancellationToken);
@@ -68,6 +109,8 @@ namespace Service.Services
         public async Task<ShiftCycleDto> CreateCycleAsync(
             int actorUserId, int gymId, CreateShiftCycleDto request, CancellationToken cancellationToken = default)
         {
+            await EnsureManagementScopeAsync(actorUserId, gymId, cancellationToken);
+
             if (request.EndDate < request.StartDate)
             {
                 throw new BadRequestException("The cycle end date must be on or after the start date.");
@@ -90,6 +133,8 @@ namespace Service.Services
         public async Task UpdateAssignmentsAsync(
             int actorUserId, int gymId, int cycleId, UpdateAssignmentsDto request, CancellationToken cancellationToken = default)
         {
+            await EnsureManagementScopeAsync(actorUserId, gymId, cancellationToken);
+
             var cycle = await LoadCycleAsync(gymId, cycleId, cancellationToken);
             if (cycle.Status == ShiftCycleStatus.Archived)
             {
@@ -135,6 +180,8 @@ namespace Service.Services
 
         public async Task PublishAsync(int actorUserId, int gymId, int cycleId, CancellationToken cancellationToken = default)
         {
+            await EnsureManagementScopeAsync(actorUserId, gymId, cancellationToken);
+
             var cycle = await LoadCycleAsync(gymId, cycleId, cancellationToken);
             if (cycle.Status == ShiftCycleStatus.Published)
             {
@@ -150,6 +197,8 @@ namespace Service.Services
 
         public async Task DeleteAsync(int actorUserId, int gymId, int cycleId, CancellationToken cancellationToken = default)
         {
+            await EnsureManagementScopeAsync(actorUserId, gymId, cancellationToken);
+
             var cycle = await LoadCycleAsync(gymId, cycleId, cancellationToken);
 
             var assignments = (await unitOfWork.GetRepository<DomainLayer.Models.SchedulingModule.ShiftAssignment, int>()
@@ -167,6 +216,8 @@ namespace Service.Services
         public async Task<IReadOnlyList<ShiftTemplateDto>> GetTemplatesAsync(
             int actorUserId, int gymId, CancellationToken cancellationToken = default)
         {
+            await EnsureManagementScopeAsync(actorUserId, gymId, cancellationToken);
+
             var templates = await unitOfWork.GetRepository<DomainLayer.Models.SchedulingModule.ShiftTemplate, int>()
                 .GetAllAsync(new ShiftTemplatesByGymSpec(gymId), cancellationToken);
 
@@ -176,6 +227,8 @@ namespace Service.Services
         public async Task<ShiftTemplateDto> CreateTemplateAsync(
             int actorUserId, int gymId, CreateShiftTemplateDto request, CancellationToken cancellationToken = default)
         {
+            await EnsureManagementScopeAsync(actorUserId, gymId, cancellationToken);
+
             var template = await SaveTemplateAsync(gymId, null, request.Name, request.Start, request.End, cancellationToken);
             return mapper.Map<ShiftTemplateDto>(template);
         }
@@ -183,12 +236,16 @@ namespace Service.Services
         public async Task<ShiftTemplateDto> UpdateTemplateAsync(
             int actorUserId, int gymId, int templateId, UpdateShiftTemplateDto request, CancellationToken cancellationToken = default)
         {
+            await EnsureManagementScopeAsync(actorUserId, gymId, cancellationToken);
+
             var template = await SaveTemplateAsync(gymId, templateId, request.Name, request.Start, request.End, cancellationToken);
             return mapper.Map<ShiftTemplateDto>(template);
         }
 
         public async Task DeleteTemplateAsync(int actorUserId, int gymId, int templateId, CancellationToken cancellationToken = default)
         {
+            await EnsureManagementScopeAsync(actorUserId, gymId, cancellationToken);
+
             var template = await unitOfWork.GetRepository<DomainLayer.Models.SchedulingModule.ShiftTemplate, int>()
                 .GetByIdAsync(templateId, cancellationToken)
                 ?? throw new NotFoundException("Shift template not found.");

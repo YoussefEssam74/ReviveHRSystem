@@ -4,6 +4,8 @@ namespace Shared.DataTransferObject.EmployeeProfile;
 public sealed class EvaluationDto
 {
     public int Id { get; init; }
+    public int EmployeeId { get; init; }
+    public string EmployeeName { get; init; } = string.Empty;
     public string Period { get; init; } = string.Empty;
     public decimal Score { get; init; }
     public decimal MaxScore { get; init; }

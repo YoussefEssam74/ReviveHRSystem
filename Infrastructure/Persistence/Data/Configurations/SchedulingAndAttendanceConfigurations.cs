@@ -66,7 +66,10 @@ namespace Presistence.Data.Configurations
                    .HasForeignKey(sa => sa.ShiftTemplateId)
                    .OnDelete(DeleteBehavior.SetNull);
 
-            builder.HasIndex(sa => new { sa.EmployeeId, sa.Date }).IsUnique();
+            // One ACTIVE shift per (employee, date): the filter keeps soft-deleted
+            // rows (schedule deletions) out of the index, so a deleted schedule's
+            // dates are assignable again.
+            builder.HasIndex(sa => new { sa.EmployeeId, sa.Date }).IsUnique().HasFilter("\"IsDeleted\" = false");
             builder.HasIndex(sa => sa.ShiftCycleId);
         }
     }

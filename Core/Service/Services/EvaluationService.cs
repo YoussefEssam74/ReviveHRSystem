@@ -28,7 +28,8 @@ namespace Service.Services
     public sealed class EvaluationService(
         IUnitOfWork _unitOfWork,
         IAccessControlService _accessControl,
-        IUserAccessRepository _userAccess) : IEvaluationService
+        IUserAccessRepository _userAccess,
+        ITeamScopeService _teamScope) : IEvaluationService
     {
         /// <summary>Keys that make a user an eligible evaluator / inbox holder.</summary>
         private static readonly string[] EvaluatorKeys =
@@ -814,7 +815,6 @@ namespace Service.Services
         public async Task<EmployeeEvaluationResponse> GetEmployeeEvaluationsAsync(int? actorUserId, int employeeId, CancellationToken cancellationToken = default)
         {
             var actor = await HrPortalHelpers.ResolveActorAsync(_unitOfWork, actorUserId, cancellationToken);
-            await _accessControl.EnsurePermissionAsync(actor.Id, "evaluations.view", cancellationToken);
 
             var employee = await _unitOfWork.GetRepository<Employee, int>()
                 .GetByIdAsync(new EmployeeProfileByIdSpec(employeeId), cancellationToken);
@@ -823,7 +823,16 @@ namespace Service.Services
                 throw new NotFoundException("Employee not found.");
             }
 
-            await HrPortalHelpers.ResolveGymScopeAsync(_unitOfWork, _userAccess, actor, employee.GymId, cancellationToken);
+            // Own evaluations are self-service (mock §11); other readers need
+            // evaluations.view for the employee's gym — the security matrix grants
+            // HR/HRM user keys and TL/BM carry it in their per-gym role bundles —
+            // and a team-scoped Team Leader only ever sees his team members (F3).
+            if (!await IsOwnEmployeeAsync(actor.Id, employeeId, cancellationToken))
+            {
+                await _accessControl.EnsurePermissionForGymAsync(actor.Id, "evaluations.view", employee.GymId, cancellationToken);
+                await HrPortalHelpers.ResolveGymScopeAsync(_unitOfWork, _userAccess, actor, employee.GymId, cancellationToken);
+                await EnsureTeamScopeAsync(actor.Id, employee, cancellationToken);
+            }
 
             var rows = await _unitOfWork.GetRepository<EvaluationResponse, int>()
                 .GetAllAsync(new EmployeeResponsesSpec(employeeId), cancellationToken);
@@ -844,6 +853,32 @@ namespace Service.Services
                     FormId = r.EvaluationFormId,
                 }).ToList(),
             };
+        }
+
+        /// <summary>True when the employee row belongs to the caller's own login.</summary>
+        private async Task<bool> IsOwnEmployeeAsync(int actorUserId, int employeeId, CancellationToken cancellationToken)
+        {
+            var own = await _unitOfWork.GetRepository<Employee, int>()
+                .GetByIdAsync(new EmployeeByUserIdSpec(actorUserId), cancellationToken);
+            return own is not null && own.Id == employeeId;
+        }
+
+        /// <summary>
+        /// Team-scoped Team Leaders see only the members of the team they lead in
+        /// the employee's gym (F3); other roles are gym-wide already.
+        /// </summary>
+        private async Task EnsureTeamScopeAsync(int actorUserId, Employee employee, CancellationToken cancellationToken)
+        {
+            if (!await _teamScope.IsTeamScopedAsync(actorUserId, employee.GymId, cancellationToken))
+            {
+                return;
+            }
+
+            var ledTeamId = await _teamScope.GetLedTeamIdAsync(actorUserId, employee.GymId, cancellationToken);
+            if (ledTeamId is null || employee.TeamId != ledTeamId.Value)
+            {
+                throw new NotFoundException("Employee not found.");
+            }
         }
 
         public async Task<PerformanceCycleResponse> GetPerformanceCyclesAsync(int? actorUserId, CancellationToken cancellationToken = default)

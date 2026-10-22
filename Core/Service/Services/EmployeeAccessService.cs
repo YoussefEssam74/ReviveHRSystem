@@ -1,25 +1,35 @@
 using DomainLayer.Contracts;
 using DomainLayer.Exceptions;
 using DomainLayer.Models.EmployeeModule;
-using DomainLayer.Models.UserModule.Enums;
 using Service.Specifications;
 using ServiceAbstraction.Services;
-using Shared.Authorization;
 
 namespace Service.Services
 {
     /// <summary>
-    /// Scope guard for employee-scoped endpoints (ADR-003 Amendment 1):
+    /// Scope guard for employee-scoped endpoints:
     ///   self → always;
-    ///   others → feature level in the active gym + resolved scope
-    ///     (Team Leader ⇒ member of his team in that gym; Branch Manager ⇒ the gym).
+    ///   others → the target's gym membership plus an acting role in that gym:
+    ///     a team-scoped Team Leader sees only his team, while Branch Manager,
+    ///     HR, HR Manager and Super Admin cover the gym. A plain employee (the
+    ///     Employee role) never reaches another employee's file — these routes
+    ///     are self-service for him.
     /// Failures surface as NotFound so the API never confirms another gym's data exists.
     /// </summary>
     public class EmployeeAccessService(
         IUnitOfWork unitOfWork,
-        IPermissionService permissionService,
-        ITeamScopeService teamScopeService) : IEmployeeAccessService
+        ITeamScopeService teamScopeService,
+        IUserAccessRepository userAccess) : IEmployeeAccessService
     {
+        private static readonly string[] ManagerRoleNames =
+        [
+            Shared.Authorization.RoleNames.TeamLeader,
+            Shared.Authorization.RoleNames.BranchManager,
+            Shared.Authorization.RoleNames.Hr,
+            Shared.Authorization.RoleNames.HrManager,
+            Shared.Authorization.RoleNames.SuperAdmin,
+        ];
+
         public async Task<int?> GetOwnEmployeeIdAsync(int actorUserId, CancellationToken cancellationToken = default)
         {
             var user = await unitOfWork.GetRepository<DomainLayer.Models.UserModule.User, int>()
@@ -35,7 +45,7 @@ namespace Service.Services
         }
 
         public async Task<int> EnsureCanAccessAsync(
-            int actorUserId, int employeeId, string feature, AccessLevel requiredLevel,
+            int actorUserId, int employeeId,
             int? activeGymId, CancellationToken cancellationToken = default)
         {
             // Sequential: a scoped DbContext serves these, and EF Core does not allow
@@ -60,13 +70,6 @@ namespace Service.Services
                 throw new NotFoundException("Employee not found.");
             }
 
-            var hasLevel = await permissionService.HasAccessAsync(
-                actorUserId, activeGymId.Value, feature, requiredLevel, cancellationToken);
-            if (!hasLevel)
-            {
-                throw new NotFoundException("Employee not found.");
-            }
-
             // Gym scope: the employee must belong to the active gym.
             if (employee.GymId != activeGymId.Value)
             {
@@ -82,6 +85,17 @@ namespace Service.Services
                 {
                     throw new NotFoundException("Employee not found.");
                 }
+
+                return employee.Id;
+            }
+
+            // Acting-manager check for every other caller: without a management role
+            // in this (already matching) gym the employee's file does not exist for
+            // the query — a plain employee may only read his own record.
+            var roleNames = await userAccess.GetGymRoleNamesAsync(actorUserId, activeGymId.Value, cancellationToken);
+            if (!roleNames.Any(ManagerRoleNames.Contains))
+            {
+                throw new NotFoundException("Employee not found.");
             }
 
             return employee.Id;

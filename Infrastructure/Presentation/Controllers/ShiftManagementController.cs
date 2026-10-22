@@ -1,9 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
-using Presentation.Authorization;
 using ServiceAbstraction.Services;
-using Shared.Authorization;
 using Shared.DataTransferObject.EmployeeProfile;
-using DomainLayer.Models.UserModule.Enums;
 
 namespace Presentation.Controllers
 {
@@ -20,7 +17,6 @@ namespace Presentation.Controllers
     public class ShiftCycleManagementController(IShiftManagementService shiftManagementService) : ApiControllerBase
     {
         [HttpGet("~/api/gyms/{gymId}/shift-cycles/{cycleId}")]
-        [HasFeatureAccess(Features.Schedule, AccessLevel.View)]
         public async Task<ActionResult<ShiftCycleDetailDto>> GetCycle(
             int gymId, int cycleId, CancellationToken cancellationToken)
         {
@@ -31,7 +27,6 @@ namespace Presentation.Controllers
         }
 
         [HttpPut("~/api/gyms/{gymId}/shift-cycles/{cycleId}/assignments")]
-        [HasFeatureAccess(Features.Schedule, AccessLevel.Edit)]
         public async Task<IActionResult> UpdateAssignments(
             int gymId, int cycleId, UpdateAssignmentsDto request, CancellationToken cancellationToken)
         {
@@ -42,7 +37,6 @@ namespace Presentation.Controllers
         }
 
         [HttpPost("~/api/gyms/{gymId}/shift-cycles/{cycleId}/publish")]
-        [HasFeatureAccess(Features.Schedule, AccessLevel.Edit)]
         public async Task<IActionResult> Publish(int gymId, int cycleId, CancellationToken cancellationToken)
         {
             EnsureGymScope(gymId);
@@ -51,7 +45,6 @@ namespace Presentation.Controllers
         }
 
         [HttpDelete("~/api/gyms/{gymId}/shift-cycles/{cycleId}")]
-        [HasFeatureAccess(Features.Schedule, AccessLevel.Edit)]
         public async Task<IActionResult> Delete(int gymId, int cycleId, CancellationToken cancellationToken)
         {
             EnsureGymScope(gymId);
@@ -65,7 +58,6 @@ namespace Presentation.Controllers
     public class ShiftTemplateManagementController(IShiftManagementService shiftManagementService) : ApiControllerBase
     {
         [HttpPost]
-        [HasFeatureAccess(Features.Schedule, AccessLevel.Edit)]
         public async Task<ActionResult<ShiftTemplateDto>> Create(
             int gymId, CreateShiftTemplateDto request, CancellationToken cancellationToken)
         {
@@ -76,7 +68,6 @@ namespace Presentation.Controllers
         }
 
         [HttpPut("{templateId}")]
-        [HasFeatureAccess(Features.Schedule, AccessLevel.Edit)]
         public async Task<ActionResult<ShiftTemplateDto>> Update(
             int gymId, int templateId, UpdateShiftTemplateDto request, CancellationToken cancellationToken)
         {
@@ -87,7 +78,6 @@ namespace Presentation.Controllers
         }
 
         [HttpDelete("{templateId}")]
-        [HasFeatureAccess(Features.Schedule, AccessLevel.Edit)]
         public async Task<IActionResult> Delete(int gymId, int templateId, CancellationToken cancellationToken)
         {
             EnsureGymScope(gymId);

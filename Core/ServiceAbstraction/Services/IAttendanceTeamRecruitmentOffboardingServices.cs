@@ -40,5 +40,16 @@ namespace ServiceAbstraction.Services
 
         Task<OffboardingCaseDto> InitiateAsync(
             int actorUserId, int? activeGymId, InitiateOffboardingDto request, CancellationToken cancellationToken = default);
+
+        /// <summary>Moves the last working day of an in-flight leaving process (BM reschedule).</summary>
+        Task<OffboardingCaseDto> UpdateLastDayAsync(
+            int actorUserId, int? activeGymId, int caseId, UpdateOffboardingLastDayDto request, CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// Closes an in-flight leaving process without completing the separation:
+        /// the person stays employed and a new process may be initiated later.
+        /// </summary>
+        Task<OffboardingCaseDto> CloseAsync(
+            int actorUserId, int? activeGymId, int caseId, CancellationToken cancellationToken = default);
     }
 }
