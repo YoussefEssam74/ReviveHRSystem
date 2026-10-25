@@ -189,6 +189,62 @@ namespace Service.Services
             var actor = await HrPortalHelpers.ResolveActorAsync(_unitOfWork, actorUserId, cancellationToken);
             await _accessControl.EnsurePermissionAsync(actor.Id, "payroll.edit", cancellationToken);
             var (_, entry) = await LoadEntryAsync(actor, periodId, employeeId, requireOpen: true, cancellationToken);
+            var period = await _unitOfWork.GetRepository<PayrollPeriod, int>().GetByIdAsync(periodId, cancellationToken)
+                ?? throw new NotFoundException("Payroll period not found.");
+
+            // Month-end: price any attendance exception that never got its candidate,
+            // then finalize every open candidate into a real deduction line
+            // (features.md §10's "finalized in payroll"). Rejected candidates are
+            // waived; already-applied ones are skipped, so a reopen→close stays
+            // idempotent. The branch can approve / re-price candidates until here.
+            var records = (await _unitOfWork.GetRepository<AttendanceRecord, int>()
+                    .GetAllAsync(new AttendanceRecordsWithShiftByEmployeeIdsRangeSpec(
+                        [entry.EmployeeId], period.StartDate, period.EndDate), cancellationToken))
+                .ToList();
+            var candidates = (await _unitOfWork.GetRepository<DeductionCandidate, int>()
+                    .GetAllAsync(new DeductionCandidatesByEmployeesSpec([entry.EmployeeId]), cancellationToken))
+                .Where(c => CandidateDayOf(c) >= period.StartDate && CandidateDayOf(c) <= period.EndDate)
+                .ToList();
+
+            foreach (var candidate in EnsureAttendanceCandidates(
+                entry.EmployeeId, actor.Id, period, entry.BaseSalary, records, candidates))
+            {
+                await _unitOfWork.GetRepository<DeductionCandidate, int>().AddAsync(candidate, cancellationToken);
+                candidates.Add(candidate);
+            }
+
+            foreach (var candidate in candidates)
+            {
+                if (candidate.Status is DeductionStatus.Rejected or DeductionStatus.Approved)
+                {
+                    continue;
+                }
+
+                await _unitOfWork.GetRepository<PayrollEntryLineItem, int>().AddAsync(new PayrollEntryLineItem
+                {
+                    PayrollEntryId = entry.Id,
+                    Type = "Deduction",
+                    Label = candidate.Reason,
+                    EffectiveDate = CandidateDayOf(candidate),
+                    // Deduction lines carry a positive amount (see AddDeductionAsync) —
+                    // the totals subtract them.
+                    Amount = candidate.Amount,
+                    // The sweep's dedupe marker is bookkeeping — never payslip text.
+                    Reason = StripAbsenceMarker(candidate.Note) ?? candidate.Reason,
+                    Source = candidate.AttendanceRecordId is not null ? "biometric" : "manager",
+                    AttendanceRecordId = candidate.AttendanceRecordId,
+                    Status = "Accepted",
+                    ReviewedBy = actor.Id,
+                    ReviewedAt = DateTime.UtcNow,
+                }, cancellationToken);
+
+                candidate.Status = DeductionStatus.Approved;
+                candidate.ReviewedBy = actor.Id;
+                candidate.ReviewedAt = DateTime.UtcNow;
+                // Loaded candidates are tracked and freshly-created ones are already
+                // Added — SaveChanges persists both, and Update() would choke on a
+                // candidate that still carries a temporary key.
+            }
 
             var pending = entry.LineItems.Count(l => l.Status == "Pending");
             if (pending > 0)
@@ -393,6 +449,20 @@ namespace Service.Services
                 "rejected" => "Rejected",
                 _ => throw new BadRequestException("Decision must be \"Accepted\" or \"Rejected\"."),
             };
+
+            // HR's end-of-month re-price: the review may carry the amount the sheet
+            // should actually charge, in which case the line and the candidate it
+            // materialized from both move to it before the totals recompute.
+            if (request.Amount is { } revised)
+            {
+                if (revised <= 0)
+                {
+                    throw new BadRequestException("The deduction amount must be greater than zero.");
+                }
+
+                await RepriceDeductionAsync(line, revised, cancellationToken);
+            }
+
             line.ReviewedBy = actor.Id;
             line.ReviewedAt = DateTime.UtcNow;
 
@@ -419,6 +489,33 @@ namespace Service.Services
                     },
                 },
             };
+        }
+
+        /// <summary>
+        /// HR's end-of-month re-price: the line moves to the new amount and so does the
+        /// candidate it materialized from — matched on the punished day, the linked
+        /// attendance record and the amount it used to carry — so the sheet, the
+        /// branch's tab and the employee's trail never disagree about what is owed.
+        /// </summary>
+        private async Task RepriceDeductionAsync(PayrollEntryLineItem line, decimal revised, CancellationToken cancellationToken)
+        {
+            var previous = line.Amount;
+            line.Amount = revised;
+
+            var candidates = await _unitOfWork.GetRepository<DeductionCandidate, int>()
+                .GetAllAsync(new DeductionCandidatesByEmployeesSpec([line.PayrollEntry.EmployeeId]), cancellationToken);
+
+            var source = candidates.FirstOrDefault(c => CandidateDayOf(c) == line.EffectiveDate
+                    && c.Amount == previous
+                    && (line.AttendanceRecordId is null || c.AttendanceRecordId == line.AttendanceRecordId))
+                ?? candidates.FirstOrDefault(c => CandidateDayOf(c) == line.EffectiveDate
+                    && (line.AttendanceRecordId is null || c.AttendanceRecordId == line.AttendanceRecordId));
+
+            if (source is not null && source.Amount != revised)
+            {
+                source.Amount = revised;
+                _unitOfWork.GetRepository<DeductionCandidate, int>().Update(source);
+            }
         }
 
         // ==================================================================
@@ -457,11 +554,18 @@ namespace Service.Services
         {
             var gross = GrossOf(entry);
             var approved = ApprovedDeductionsOf(entry);
+            // Mock §8's "Annual Increase (10%)" card — the gym policy's raise slice
+            // displayed alongside base salary (display info; net stays gross − lines).
+            var annualPercent = entry.PayrollPeriod.Gym.AnnualIncreasePercent;
 
             return new PayslipData
             {
                 Period = PeriodLabel(entry.PayrollPeriod),
                 Gym = entry.PayrollPeriod.Gym.Name,
+                AnnualIncreasePercent = annualPercent,
+                AnnualIncrease = annualPercent is > 0 && entry.BaseSalary > 0
+                    ? Math.Round(entry.BaseSalary * annualPercent.Value / 100m, 2)
+                    : 0m,
                 Employee = new PayslipEmployeeData
                 {
                     EmployeeId = entry.EmployeeId,
@@ -474,6 +578,7 @@ namespace Service.Services
                 Bonus = entry.TotalBonuses,
                 Gross = gross,
                 Deductions = entry.LineItems
+                    .Where(l => l.Type.Equals("Deduction", StringComparison.OrdinalIgnoreCase))
                     .OrderBy(l => l.EffectiveDate)
                     .ThenBy(l => l.Id)
                     .Select(l => new PayslipDeductionLine
@@ -857,13 +962,27 @@ namespace Service.Services
         };
 
         /// <summary>OT pay = (base/176)×1.5×hours — the UI's derivation.</summary>
-        private static decimal OvertimePay(PayrollEntry entry) =>
+        internal static decimal OvertimePay(PayrollEntry entry) =>
             entry.BaseSalary <= 0 || entry.OvertimeHours <= 0
                 ? 0m
                 : Math.Round(entry.BaseSalary / 176m * 1.5m * entry.OvertimeHours, 2);
 
+        /// <summary>
+        /// Gross = base + the annual-increase raise slice + bonuses + overtime. Folding
+        /// the raise into gross keeps Net = Gross − deductions, so the sheet's net bar
+        /// always reconciles with its Earnings header minus its Deductions header.
+        /// </summary>
         internal static decimal GrossOf(PayrollEntry entry) =>
-            entry.BaseSalary + entry.TotalBonuses + OvertimePay(entry);
+            entry.BaseSalary + AnnualIncreaseOf(entry) + entry.TotalBonuses + OvertimePay(entry);
+
+        /// <summary>This period's raise slice from the gym's annual-increase policy.</summary>
+        private static decimal AnnualIncreaseOf(PayrollEntry entry)
+        {
+            var percent = entry.PayrollPeriod?.Gym?.AnnualIncreasePercent;
+            return percent is > 0 && entry.BaseSalary > 0
+                ? Math.Round(entry.BaseSalary * percent.Value / 100m, 2)
+                : 0m;
+        }
 
         private static decimal ApprovedDeductionsOf(PayrollEntry entry) =>
             entry.LineItems.Where(l => l.Status is "Accepted" or "Approved").Sum(l => l.Amount);
@@ -879,6 +998,155 @@ namespace Service.Services
             entry.TotalDeductions = ApprovedDeductionsOf(entry);
             entry.NetPay = NetOf(entry);
         }
+
+        /// <summary>Weekly days the schedule assumes (one off-day a week → ~26 a month).</summary>
+        internal const int WeeklyWorkDays = 6;
+
+        /// <summary>
+        /// Attendance-exception pricing (mock §8 + the gym's review flow): scheduled
+        /// workdays = period days × weekly days ÷ 7 (26 for a 31-day, 6-day month), a
+        /// late arrival costs a quarter of a day and an unapproved absence
+        /// <see cref="AbsenceDayMultiplier"/> days of the base salary.
+        /// </summary>
+        internal static (int ScheduledDays, decimal Daily, decimal Late, decimal Absent) AttendanceRates(
+            decimal baseSalary, PayrollPeriod period)
+            => AttendanceRates(baseSalary, period.StartDate, period.EndDate);
+
+        /// <summary>
+        /// Same pricing without a period row — the absence sweep prices a day from
+        /// the payroll sheet covering it, else from the calendar month of the day.
+        /// </summary>
+        internal static (int ScheduledDays, decimal Daily, decimal Late, decimal Absent) AttendanceRates(
+            decimal baseSalary, DateOnly start, DateOnly end)
+        {
+            var days = end.DayNumber - start.DayNumber + 1;
+            var scheduled = Math.Max(1, (int)Math.Floor(days * WeeklyWorkDays / 7.0));
+            var daily = baseSalary > 0 ? Math.Round(baseSalary / scheduled, 2) : 0m;
+            return (scheduled, daily,
+                daily > 0 ? Math.Round(daily / 4m, 2) : 0m,
+                daily > 0 ? Math.Round(daily * AbsenceDayMultiplier, 2) : 0m);
+        }
+
+        /// <summary>Workdays an unapproved absence levies (the sweep, payroll close and the manager's view all price it the same).</summary>
+        internal const int AbsenceDayMultiplier = 3;
+
+        /// <summary>The marker the absence sweep stamps into a candidate's note so a derived-absent day stays identifiable.</summary>
+        internal const string AbsenceMarkerPrefix = "auto-absence:";
+
+        internal static string AbsenceMarker(DateOnly date) =>
+            $"{AbsenceMarkerPrefix}{date.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture)}";
+
+        /// <summary>The absence day a marker note carries (<c>auto-absence:yyyy-MM-dd</c>), else null.</summary>
+        internal static DateOnly? ParseAbsenceMarker(string? note)
+        {
+            if (string.IsNullOrEmpty(note))
+            {
+                return null;
+            }
+
+            var start = note.IndexOf(AbsenceMarkerPrefix, StringComparison.Ordinal);
+            if (start < 0)
+            {
+                return null;
+            }
+
+            var value = note[(start + AbsenceMarkerPrefix.Length)..];
+            if (value.Length < 10)
+            {
+                return null;
+            }
+
+            return DateOnly.TryParseExact(
+                value[..10], "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture,
+                System.Globalization.DateTimeStyles.None, out var date)
+                ? date
+                : null;
+        }
+
+        /// <summary>The note as payroll shows it — the internal dedupe marker stripped out.</summary>
+        internal static string? StripAbsenceMarker(string? note)
+        {
+            if (string.IsNullOrEmpty(note))
+            {
+                return note;
+            }
+
+            var start = note.IndexOf(AbsenceMarkerPrefix, StringComparison.Ordinal);
+            if (start < 0)
+            {
+                return note;
+            }
+
+            var end = start + AbsenceMarkerPrefix.Length + 10;
+            var stripped = (note[..start] + note[Math.Min(end, note.Length)..]).Trim().Trim('·', ' ').Trim();
+            return stripped.Length == 0 ? null : stripped;
+        }
+
+        /// <summary>
+        /// features.md §10's auto-generation: every late / unapproved-absent day of the
+        /// period that carries no deduction yet becomes a pending candidate priced at
+        /// the rates above, so the branch can approve (or re-price) it before HR closes
+        /// the sheet. Idempotent per attendance day — including the sweep's derived-absent
+        /// days, which carry the marker instead of a record.
+        /// </summary>
+        internal static List<DeductionCandidate> EnsureAttendanceCandidates(
+            int employeeId,
+            int issuerId,
+            PayrollPeriod period,
+            decimal baseSalary,
+            IReadOnlyList<AttendanceRecord> records,
+            IReadOnlyList<DeductionCandidate> existing)
+        {
+            var (scheduled, _, late, absent) = AttendanceRates(baseSalary, period);
+            if (late <= 0)
+            {
+                return [];
+            }
+
+            var created = new List<DeductionCandidate>();
+            foreach (var record in records)
+            {
+                if (record.Date < period.StartDate || record.Date > period.EndDate
+                    || record.Status is not (AttendanceStatus.Late or AttendanceStatus.Absent))
+                {
+                    continue;
+                }
+
+                if (existing.Any(c => c.AttendanceRecordId == record.Id
+                    || (c.AttendanceRecordId is null && CandidateDayOf(c) == record.Date)))
+                {
+                    continue;
+                }
+
+                var isLate = record.Status == AttendanceStatus.Late;
+                created.Add(new DeductionCandidate
+                {
+                    EmployeeId = employeeId,
+                    AttendanceRecordId = record.Id,
+                    AttendanceRecord = record,
+                    Amount = isLate ? late : absent,
+                    Reason = isLate ? "Late arrival" : "Unapproved absence",
+                    Note = isLate
+                        ? $"Auto-priced: quarter day (base ÷ {scheduled} scheduled workdays ÷ 4)."
+                        : $"Auto-priced: {AbsenceDayMultiplier} days (base ÷ {scheduled} scheduled workdays × {AbsenceDayMultiplier}).",
+                    IssuedBy = issuerId,
+                    IssuedAt = DateTime.UtcNow,
+                    Status = DeductionStatus.Pending,
+                });
+            }
+
+            return created;
+        }
+
+        /// <summary>
+        /// The day a candidate punishes: its attendance day, else the absence marker
+        /// the sweep stamped into its note (a derived-absent day has no record and is
+        /// issued in UTC, which can lag the local day), else its issue day.
+        /// </summary>
+        internal static DateOnly CandidateDayOf(DeductionCandidate candidate) =>
+            candidate.AttendanceRecord?.Date
+            ?? ParseAbsenceMarker(candidate.Note)
+            ?? DateOnly.FromDateTime(candidate.IssuedAt);
 
         internal static string PeriodLabel(PayrollPeriod period) =>
             period.StartDate.ToString("MMMM yyyy", CultureInfo.InvariantCulture);

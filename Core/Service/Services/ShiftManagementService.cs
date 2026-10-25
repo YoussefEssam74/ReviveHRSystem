@@ -340,7 +340,15 @@ namespace Service.Services
                 : await unitOfWork.GetRepository<DomainLayer.Models.EmployeeModule.Employee, int>()
                     .GetAllAsync(new EmployeesByGymSpec(gymId), cancellationToken);
 
-            return employees.Select(e => e.Id).ToList();
+            // Exclude the actor's own employee record — a BM or TL must not appear
+            // in the schedule roster they manage.
+            var ownEmployee = await unitOfWork.GetRepository<DomainLayer.Models.EmployeeModule.Employee, int>()
+                .GetByIdAsync(new EmployeeByUserIdSpec(actorUserId), cancellationToken);
+
+            return employees
+                .Where(e => ownEmployee is null || e.Id != ownEmployee.Id)
+                .Select(e => e.Id)
+                .ToList();
         }
 
         private static List<DateOnly> DaysOf(ShiftCycle cycle)

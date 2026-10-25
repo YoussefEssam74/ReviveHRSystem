@@ -75,13 +75,19 @@ export function ResultOverlay({
 
   return (
     <div className="absolute inset-0 z-20 flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm fade-in">
+      {/* Always-dark panel: bg-*-950 never flips with the theme, while dark
+          mode remaps text-*-50/100/200 to dark tints (they pair with pastel
+          backgrounds there). Literal light hexes keep this copy readable in
+          both modes — the same convention the rest of the kiosk uses. */}
       <div
         role="alertdialog"
         aria-modal="true"
         aria-label={isError ? 'Attendance rejected' : 'Attendance recorded'}
         className={
           'w-full max-w-md rounded-2xl border p-6 shadow-2xl ' +
-          (isError ? 'border-red-500/30 bg-red-950/95 text-red-50' : 'border-emerald-500/30 bg-emerald-950/95 text-emerald-50')
+          (isError
+            ? 'border-red-500/30 bg-red-950/95 text-[#fef2f2]'
+            : 'border-emerald-500/30 bg-emerald-950/95 text-[#ecfdf5]')
         }
       >
         {isError ? (
@@ -90,7 +96,7 @@ export function ResultOverlay({
               <XCircle className="h-8 w-8 text-red-400" aria-hidden="true" />
               <h2 className="text-lg font-bold">Attendance rejected</h2>
             </div>
-            <p className="mt-3 text-sm text-red-200">{rejection}</p>
+            <p className="mt-3 text-sm text-[#fecaca]">{rejection}</p>
           </>
         ) : (
           result && (
@@ -102,7 +108,7 @@ export function ResultOverlay({
                 </h2>
               </div>
               <p className="mt-3 text-base font-semibold">{result.employeeName ?? result.employeeId}</p>
-              <dl className="mt-2 space-y-1 text-sm text-emerald-200">
+              <dl className="mt-2 space-y-1 text-sm text-[#a7f3d0]">
                 <div className="flex justify-between gap-3">
                   <dt>Employee</dt>
                   <dd className="font-mono">{result.employeeId}</dd>
@@ -166,14 +172,14 @@ export function CheckoutConfirmCard({
         role="alertdialog"
         aria-modal="true"
         aria-label="Confirm check-out"
-        className="w-full max-w-md rounded-2xl border border-amber-500/30 bg-amber-950/95 p-6 text-amber-50 shadow-2xl"
+        className="w-full max-w-md rounded-2xl border border-amber-500/30 bg-amber-950/95 p-6 text-[#fffbeb] shadow-2xl"
       >
         <div className="flex items-center gap-3">
           <LogOut className="h-8 w-8 text-amber-400" aria-hidden="true" />
           <h2 className="text-lg font-bold">Check out now?</h2>
         </div>
         <p className="mt-3 text-base font-semibold">{employeeName ?? employeeId ?? 'This employee'}</p>
-        <p className="mt-1 text-sm text-amber-200">
+        <p className="mt-1 text-sm text-[#fde68a]">
           You are checked in for today. Confirming records your check-out with the current time.
         </p>
         <div className="mt-5 flex gap-2">

@@ -50,6 +50,20 @@ namespace Service.Specifications
     }
 
     /// <summary>
+    /// A fixed set of employees for the absence/late deduction sweep: the salary
+    /// history prices the deduction, the status decides whether the day is exempt
+    /// (On Leave / Suspended), and UserId carries the notification.
+    /// </summary>
+    public class EmployeesForDeductionSweepSpec : BaseSpecification<Employee, int>
+    {
+        public EmployeesForDeductionSweepSpec(int[] ids)
+        {
+            Criteria = e => ids.Contains(e.Id);
+            AddInclude(e => e.Compensations);
+        }
+    }
+
+    /// <summary>
     /// The employee directory query: optional gym scope (the caller's assigned gyms,
     /// or a single requested gym), optional name search and status filter, sorting,
     /// and paging. Includes the display dependencies (position, gym, compensations).
@@ -65,7 +79,8 @@ namespace Service.Specifications
             int skip,
             int take,
             string sortBy,
-            bool sortDescending)
+            bool sortDescending,
+            int? excludeEmployeeId = null)
         {
             Expression<Func<Employee, bool>> predicate = _ => true;
             if (gymIds is not null)
@@ -90,6 +105,14 @@ namespace Service.Specifications
             {
                 var standing = status.Value;
                 predicate = And(predicate, e => e.Status == standing);
+            }
+
+            // A manager must never see or act on their own employee row in the
+            // directory; exclude the actor's employee record when provided.
+            if (excludeEmployeeId.HasValue)
+            {
+                var excludedId = excludeEmployeeId.Value;
+                predicate = And(predicate, e => e.Id != excludedId);
             }
 
             Criteria = predicate;
@@ -129,8 +152,9 @@ namespace Service.Specifications
             int skip,
             int take,
             string sortBy,
-            bool sortDescending)
-            : this(gymIds, null, search, status, skip, take, sortBy, sortDescending)
+            bool sortDescending,
+            int? excludeEmployeeId = null)
+            : this(gymIds, null, search, status, skip, take, sortBy, sortDescending, excludeEmployeeId)
         {
         }
 

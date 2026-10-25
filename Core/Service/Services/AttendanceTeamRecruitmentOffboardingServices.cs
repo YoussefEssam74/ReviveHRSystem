@@ -493,7 +493,15 @@ namespace Service.Services
                 ? await unitOfWork.GetRepository<Employee, int>().GetAllAsync(new EmployeesByTeamSpec(ledTeamId.Value), cancellationToken)
                 : await unitOfWork.GetRepository<Employee, int>().GetAllAsync(new EmployeesByGymSpec(gymId), cancellationToken);
 
-            return employees.Select(e => e.Id).ToList();
+            // Exclude the actor's own employee record — a BM or TL must not appear
+            // in lists they manage (offboarding, attendance, team operations).
+            var ownEmployee = await unitOfWork.GetRepository<Employee, int>()
+                .GetByIdAsync(new EmployeeByUserIdSpec(actorUserId), cancellationToken);
+
+            return employees
+                .Where(e => ownEmployee is null || e.Id != ownEmployee.Id)
+                .Select(e => e.Id)
+                .ToList();
         }
     }
 }

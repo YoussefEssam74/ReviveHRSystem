@@ -62,6 +62,9 @@ namespace ReviveHRSystem.SecurityTests.Support
         public int KarimHrDocumentId { get; init; }         // Source=Hr
         public int KarimPendingRequestId { get; init; }     // cancel row
         public int KarimAttachedRequestId { get; init; }    // attachment download row
+        public int KarimStage1DecidedTlRequestId { get; init; }   // undo row: TL's own decided target
+        public int KarimStage1DecidedBmRequestId { get; init; }   // undo row: BM's own decided target
+        public int KarimStage1DecidedTopRequestId { get; init; }  // undo row: Top Management's target
         public int KarimEvaluationId { get; init; }         // evaluation edit row
         public int EvaluationFormId { get; init; }
         public int EvaluationQuestionId { get; init; }
@@ -194,6 +197,38 @@ namespace ReviveHRSystem.SecurityTests.Support
             db.EmployeeRequests.Add(pendingRequest);
             await db.SaveChangesAsync();
 
+            // Stage-1 decided annual-leave requests for the undo row. One decided
+            // BranchManager-stage target per allowed identity (Team Leader, Branch
+            // Manager, Top Management): an undo flips its target back to Pending, so
+            // parallel-success must never share one request id.
+            var undoTargets = new List<EmployeeRequest>();
+            foreach (var targetKey in new[] { "teamLeader", "branchManager", "topManagement" })
+            {
+                undoTargets.Add(new EmployeeRequest
+                {
+                    EmployeeId = karimId,
+                    Type = "annual-leave",
+                    RequestDate = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(21)),
+                    TargetStartDate = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(21)),
+                    Details = $"Security provisioning: stage-1 decided (undo target {targetKey})",
+                    Status = RequestStatus.PendingHRReview
+                });
+            }
+            db.EmployeeRequests.AddRange(undoTargets);
+            await db.SaveChangesAsync();
+            foreach (var decidedRequest in undoTargets)
+            {
+                db.RequestDecisions.Add(new RequestDecision
+                {
+                    RequestId = decidedRequest.Id,
+                    Stage = ApprovalStage.BranchManager,
+                    Decision = DecisionOutcome.Approved,
+                    DecidedBy = bmMain.UserId,
+                    Comment = "Security provisioning stage-1 approve"
+                });
+            }
+            await db.SaveChangesAsync();
+
             // Sick-leave request WITH a real stored attachment, created through the
             // API so the download row exercises the real storage service.
             var karimToken = await LoginAsync(client, KarimEmail);
@@ -276,6 +311,9 @@ namespace ReviveHRSystem.SecurityTests.Support
                 KarimHrDocumentId = karimHrDoc,
                 KarimPendingRequestId = pendingRequest.Id,
                 KarimAttachedRequestId = attachedRequestId,
+                KarimStage1DecidedTlRequestId = undoTargets[0].Id,
+                KarimStage1DecidedBmRequestId = undoTargets[1].Id,
+                KarimStage1DecidedTopRequestId = undoTargets[2].Id,
                 KarimEvaluationId = karimEvaluationId,
                 EvaluationFormId = form.Id,
                 EvaluationQuestionId = question.Id,

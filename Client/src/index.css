@@ -42,6 +42,11 @@
       them (600/700/800) are remapped per hue — pairs stay together, so
       tiles/chips/alerts remain readable instead of glaring white. */
 .dark {
+  /* Native controls (select popups, date/time pickers, scrollbars, input
+     field backgrounds) follow the OS color scheme. Without this they render
+     with the light scheme — black text on the dark theme. */
+  color-scheme: dark;
+
   /* Surfaces: white becomes the elevated surface, charcoal-50 the page. */
   --color-white: #1a1f26;
   --color-charcoal-50: #0e1115;
@@ -153,6 +158,12 @@ html {
 body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  /* Default text color. Without it, any element that has no text-* utility
+     (and no ancestor that sets one) falls back to the browser default —
+     black — which is invisible on the near-black dark surfaces. charcoal-900
+     flips with the theme (#212529 light / #f4f6f8 dark), so the fallback
+     stays readable in both modes while explicit utilities still win. */
+  color: var(--color-charcoal-900);
 }
 
 /* Scrollbar */

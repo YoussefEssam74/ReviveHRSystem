@@ -30,6 +30,8 @@ const STATUS_COLORS: Record<string, BadgeColor> = {
   scheduled: 'blue',
   'partially published': 'yellow',
   'under review': 'yellow',
+  // Branch approval stage on deductions (BM accepted, HR applies next)
+  'branch approved': 'yellow',
   // Danger
   absent: 'red',
   rejected: 'red',

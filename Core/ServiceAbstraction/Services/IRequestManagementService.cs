@@ -15,6 +15,10 @@ namespace ServiceAbstraction.Services
         Task DecideAsync(
             int actorUserId, int requestId, int? activeGymId, RequestDecisionDto decision, CancellationToken cancellationToken = default);
 
+        /// <summary>Undo a stage-1 decision while the request date is still ahead.</summary>
+        Task UndoAsync(
+            int actorUserId, int requestId, int? activeGymId, CancellationToken cancellationToken = default);
+
         /// <summary>Edits a pending request on behalf of an in-scope employee.</summary>
         Task EditAsync(
             int actorUserId, int requestId, int? activeGymId, UpdateRequestDto update, CancellationToken cancellationToken = default);

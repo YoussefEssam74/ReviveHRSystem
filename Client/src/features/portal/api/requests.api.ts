@@ -160,6 +160,19 @@ export function decideRequest(requestId: number, decision: string, comment: stri
   })
 }
 
+/** POST /api/requests/{id}/undo-decision — reverts an HR decision while the date is ahead. */
+export function undoDecision(requestId: number): Promise<void> {
+  return apiRequest<void>(`/api/requests/${requestId}/undo-decision`, {
+    method: 'POST',
+    body: {},
+  })
+}
+
+/** POST /api/requests/{id}/undo — reverts a stage-1 (branch) decision. */
+export function undoManagedDecision(requestId: number): Promise<void> {
+  return apiRequest<void>(`/api/requests/${requestId}/undo`, { method: 'POST' })
+}
+
 /** PUT /api/requests/{id} — manager edit of a pending request. */
 export function editManagedRequest(
   requestId: number,

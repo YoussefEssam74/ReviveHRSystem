@@ -140,6 +140,7 @@ namespace Service.Specifications
         public TeamFollowUpsDeductionForEmployeesSpec(IReadOnlyCollection<int> employeeIds)
         {
             Criteria = f => employeeIds.Contains(f.EmployeeId);
+            AddInclude(f => f.RaisedByUser);
         }
     }
 

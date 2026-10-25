@@ -234,6 +234,24 @@ namespace Service.Specifications
         {
             Criteria = ar => employeeIds.Contains(ar.EmployeeId)
                 && ar.Date >= from && ar.Date <= to;
+            // The compose shows a record's own pinned shift when no assignment
+            // covers the day, and lazy loading is off.
+            AddInclude(ar => ar.ScheduledShiftTemplate);
+        }
+    }
+
+    /// <summary>
+    /// Same window as <see cref="AttendanceRecordsByEmployeeIdsRangeSpec"/> but with the
+    /// scheduled shift template loaded, so the payroll breakdown can date a late
+    /// check-in against its shift start.
+    /// </summary>
+    public class AttendanceRecordsWithShiftByEmployeeIdsRangeSpec : BaseSpecification<AttendanceRecord, int>
+    {
+        public AttendanceRecordsWithShiftByEmployeeIdsRangeSpec(int[] employeeIds, DateOnly from, DateOnly to)
+        {
+            Criteria = ar => employeeIds.Contains(ar.EmployeeId)
+                && ar.Date >= from && ar.Date <= to;
+            AddInclude(ar => ar.ScheduledShiftTemplate);
         }
     }
 

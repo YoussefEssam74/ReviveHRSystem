@@ -121,6 +121,51 @@ namespace Service.Services
             await unitOfWork.SaveChangesAsync(cancellationToken);
         }
 
+        public async Task UndoAsync(
+            int actorUserId, int requestId, int? activeGymId, CancellationToken cancellationToken = default)
+        {
+            var gymId = RequireGym(activeGymId);
+            await EnsureDeskRoleAsync(actorUserId, gymId, cancellationToken);
+            var request = await LoadInScopeAsync(actorUserId, requestId, gymId, cancellationToken);
+
+            if (request.Status is not (RequestStatus.PendingHRReview or RequestStatus.Rejected))
+            {
+                throw new BadRequestException("Only decided requests can be undone at this stage.");
+            }
+
+            // An HR decision on record is final here: HR-managed requests go through the
+            // HR undo-decision route. Status "Rejected" alone does not prove a stage-1
+            // rejection — HR's final rejection also lands in that status, so the decision
+            // record (not the status) is what separates the two.
+            if (request.Decisions.Any(d => d.Stage == ApprovalStage.HR))
+            {
+                throw new BadRequestException("An HR decision is recorded for this request — only unfinalized branch-stage decisions can be undone.");
+            }
+
+            var lastDate = request.TargetEndDate ?? request.RequestDate;
+            if (lastDate < DateOnly.FromDateTime(DateTime.UtcNow.Date))
+            {
+                throw new BadRequestException("The requested date has passed — the decision can no longer be changed.");
+            }
+
+            var leaveType = LeaveBalanceReservation.LeaveTypeFor(request);
+            if (request.Status == RequestStatus.Rejected && leaveType is not null)
+            {
+                await LeaveBalanceReservation.AdjustPendingDaysAsync(
+                    unitOfWork, request.EmployeeId, leaveType.Value, +LeaveBalanceReservation.DaysRequested(request), cancellationToken);
+            }
+
+            foreach (var stageDecision in request.Decisions.Where(d => d.Stage == ApprovalStage.BranchManager).ToList())
+            {
+                request.Decisions.Remove(stageDecision);
+                unitOfWork.GetRepository<RequestDecision, int>().Remove(stageDecision);
+            }
+
+            request.Status = RequestStatus.Pending;
+            unitOfWork.GetRepository<EmployeeRequest, int>().Update(request);
+            await unitOfWork.SaveChangesAsync(cancellationToken);
+        }
+
         public async Task EditAsync(
             int actorUserId, int requestId, int? activeGymId, UpdateRequestDto update, CancellationToken cancellationToken = default)
         {
@@ -217,7 +262,15 @@ namespace Service.Services
                 : await unitOfWork.GetRepository<DomainLayer.Models.EmployeeModule.Employee, int>()
                     .GetAllAsync(new EmployeesByGymSpec(gymId), cancellationToken);
 
-            return employees.Select(e => e.Id).ToList();
+            // Exclude the actor's own employee record — a BM or TL must not appear
+            // in request management lists they oversee.
+            var ownEmployee = await unitOfWork.GetRepository<DomainLayer.Models.EmployeeModule.Employee, int>()
+                .GetByIdAsync(new EmployeeByUserIdSpec(actorUserId), cancellationToken);
+
+            return employees
+                .Where(e => ownEmployee is null || e.Id != ownEmployee.Id)
+                .Select(e => e.Id)
+                .ToList();
         }
 
         private async Task<EmployeeRequest> LoadInScopeAsync(

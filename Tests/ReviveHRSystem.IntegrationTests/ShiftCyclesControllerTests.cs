@@ -245,8 +245,10 @@ namespace ReviveHRSystem.IntegrationTests
         // S7 — PUT /api/shift-cycles/{id}/assignments
         // ------------------------------------------------------------------
 
+        // Published cycles are editable since the BM Edit-shift rework — only
+        // archived cycles are read-only now.
         [Fact]
-        public async Task SetAssignments_PublishedCycle_Returns400()
+        public async Task SetAssignments_PublishedCycle_IsEditable()
         {
             var builder = new TestDataBuilder(_fixture.Services);
             var gym = await builder.CreateGymWithStationAsync();
@@ -256,7 +258,7 @@ namespace ReviveHRSystem.IntegrationTests
 
             var response = await SetAssignmentsAsyncResponse(token, cycleId, Array.Empty<object>());
 
-            Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         }
 
         [Fact]

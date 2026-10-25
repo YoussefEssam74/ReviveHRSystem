@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { ChevronRight, Plus, SquarePen } from 'lucide-react'
+import { Plus, SquarePen } from 'lucide-react'
 import { getEmployeeDashboard } from '../api/dashboard.api'
 import {
   getEmployeeDeductions,
@@ -11,6 +11,7 @@ import {
   type EmployeeDeduction,
 } from '../api/attendance.api'
 import { getExcusedHoursBudget, getOwnRequests, getRequestTypes } from '../api/requests.api'
+import { listWarningNotices, type WarningNoticeRow } from '../api/branch.api'
 import { NewRequestModal } from '../components/NewRequestModal'
 import { EmptyState } from '../../../components/ui/primitives'
 import { ErrorState, LoadingState } from '../../../components/async-state'
@@ -77,6 +78,7 @@ const DEDUCTION_CORRECTION_ID = 'deduction-correction'
 /** Badge color per deduction status — from the employee's seat: applied = money gone. */
 const DEDUCTION_COLORS: Record<string, BadgeColor> = {
   'In review': 'yellow',
+  'Branch approved': 'yellow',
   Applied: 'red',
   Rejected: 'green',
   Resolved: 'green',
@@ -111,12 +113,107 @@ function RequestChip({ type, status }: DayRequestChipProps) {
   )
 }
 
+/** Per-status warning framing shown in the Warnings & Deductions column/drawer. */
+const DAY_WARNING_META: Record<string, { label: string; color: BadgeColor; title: string }> = {
+  Late: {
+    label: 'Late arrival',
+    color: 'yellow',
+    title: 'Late arrival — deducted as a ¼ day once approved.',
+  },
+  Absent: {
+    label: 'Absent',
+    color: 'red',
+    title: 'Absent without permission — deducted as a full day once approved.',
+  },
+  EarlyCheckout: {
+    label: 'Early checkout',
+    color: 'blue',
+    title: 'Checked out before the scheduled shift ended.',
+  },
+}
+
+/**
+ * Box-2 content for a history row: the day's warning chips (late/absent/…, plus
+ * any issued notice) and each priced deduction amount — all opening the day drawer.
+ */
+function DayWarningChips({
+  item,
+  warning,
+  deductions,
+  onOpen,
+}: {
+  item: EmployeeAttendanceItem
+  warning: WarningNoticeRow | null
+  deductions: EmployeeDeduction[]
+  onOpen: (warning: WarningNoticeRow | null) => void
+}) {
+  const meta = DAY_WARNING_META[item.status]
+  return (
+    <div className="flex flex-wrap gap-1">
+      {meta && (
+        <button
+          type="button"
+          onClick={(event) => {
+            event.stopPropagation()
+            onOpen(warning)
+          }}
+          className="inline-flex"
+          title={meta.title}
+        >
+          <Badge color={meta.color}>{meta.label}</Badge>
+        </button>
+      )}
+      {warning && (
+        <button
+          type="button"
+          onClick={(event) => {
+            event.stopPropagation()
+            onOpen(warning)
+          }}
+          className="inline-flex"
+          title={warning.reason}
+        >
+          <Badge color="orange">{warning.type || 'Warning'}</Badge>
+        </button>
+      )}
+      {deductions.map((deduction) => (
+        <button
+          key={deduction.id}
+          type="button"
+          onClick={(event) => {
+            event.stopPropagation()
+            onOpen(warning)
+          }}
+          className="inline-flex"
+          title={`${deduction.description}${deduction.detail ? ` — ${deduction.detail}` : ''}`}
+        >
+          <Badge color={DEDUCTION_COLORS[deduction.status] ?? 'gray'}>
+            {deduction.amount != null ? formatMoney(deduction.amount) : 'Amount pending'}
+          </Badge>
+        </button>
+      ))}
+      {!meta && !warning && deductions.length === 0 && <span className="text-charcoal-400">—</span>}
+    </div>
+  )
+}
+
+/**
+ * An off/empty row that carries a deduction still reads as the day that
+ * deduction punishes — Late when one names lateness, Absent otherwise.
+ */
+function dayDisplayStatus(item: EmployeeAttendanceItem, deductions: EmployeeDeduction[]) {
+  if ((item.status !== 'Off' && item.status !== '') || deductions.length === 0) return item.status
+  return deductions.some((row) => /late/i.test(row.description)) ? 'Late' : 'Absent'
+}
+
 export default function MyAttendancePage() {
   const { me } = usePortalSession()
   const employeeId = me?.employeeId ?? null
 
   const [month, setMonth] = useState<string>(currentMonthIso())
   const [detailDate, setDetailDate] = useState<string | null>(null)
+  /** The warning whose badge opened the detail drawer — its reason shows there. */
+  const [detailWarning, setDetailWarning] = useState<WarningNoticeRow | null>(null)
   const [requestDraft, setRequestDraft] = useState<RequestDraft | null>(null)
 
   const dashboardQuery = useQuery({
@@ -156,6 +253,11 @@ export default function MyAttendancePage() {
     queryFn: ({ signal }) => getEmployeeDeductions(employeeId!, signal),
     enabled: employeeId != null,
   })
+  const warningsQuery = useQuery({
+    queryKey: ['portal', 'warnings', employeeId],
+    queryFn: ({ signal }) => listWarningNotices(employeeId!, signal),
+    enabled: employeeId != null,
+  })
 
   if (employeeId == null) {
     return (
@@ -176,11 +278,31 @@ export default function MyAttendancePage() {
   const budget = budgetQuery.data ?? null
   const requests = requestsQuery.data ?? []
   const deductions = deductionsQuery.data ?? []
-
-  // Off days (no shift planned) are omitted from the history like in the mock.
+  // Deductions grouped by their date — several can share one day, and every one
+  // of them stays addressable through its own badge/details action.
+  const deductionsByDate = new Map<string, EmployeeDeduction[]>()
+  for (const row of deductions) {
+    if (!row.date) continue
+    const group = deductionsByDate.get(row.date)
+    if (group) group.push(row)
+    else deductionsByDate.set(row.date, [row])
+  }
+  const warnings = warningsQuery.data ?? []
+  const warningsByDate = new Map(
+    warnings
+      .map((row) => {
+        const date = row.issuedAt ? row.issuedAt.slice(0, 10) : null
+        return date ? [date, row] as const : null
+      })
+      .filter((entry): entry is readonly [string, WarningNoticeRow] => entry !== null),
+  )
+  // Off days (no shift planned) are omitted from the history like in the mock —
+  // unless the day carries a warning or a deduction, which must stay reachable
+  // on the day it happened.
   const history = (attendance?.items ?? []).filter((item) => {
     const shift = item.shift.trim().toLowerCase()
-    return shift !== '' && shift !== 'off'
+    if (shift !== '' && shift !== 'off') return true
+    return warningsByDate.has(item.date) || deductionsByDate.has(item.date)
   })
   const now = new Date()
   const todayIso = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
@@ -196,12 +318,20 @@ export default function MyAttendancePage() {
       return start <= isoDate && isoDate <= end
     })
   }
+  /** Opens the day drawer, carrying the warning whose badge was clicked (or none). */
+  function openDetail(date: string, warning: WarningNoticeRow | null) {
+    setDetailDate(date)
+    setDetailWarning(warning)
+  }
   const LEAVE_TYPES = new Set(['Annual Leave', 'Sick Leave', 'Paid Holiday'])
   function leaveOn(isoDate: string) {
     return requestsOn(isoDate).find((request) => LEAVE_TYPES.has(request.type) && request.status === 'Approved') ?? null
   }
 
-  const detail = detailDate ? attendance?.items.find((item) => item.date === detailDate) ?? null : null
+  const detailBase = detailDate ? attendance?.items.find((item) => item.date === detailDate) ?? null : null
+  const detailDeductions = detailDate ? deductionsByDate.get(detailDate) ?? [] : []
+  // An off row carrying a deduction reads as the day that deduction punishes.
+  const detail = detailBase ? { ...detailBase, status: dayDisplayStatus(detailBase, detailDeductions) } : null
   const today = dashboard?.todayAttendance ?? null
   const workedToday = (() => {
     const inMinutes = minutesOf(today?.checkIn ?? null)
@@ -332,53 +462,6 @@ export default function MyAttendancePage() {
         </div>
       </div>
 
-      {/* Deductions raised on me — each one disputable via a correction request */}
-      <div className="card px-3 py-2">
-        <div className="mb-1.5 flex items-center justify-between">
-          <p className="bento-label">MY DEDUCTIONS</p>
-          <span className="text-[10px] text-charcoal-500">
-            {deductions.length === 0 ? 'nothing raised' : `${deductions.length} on record`}
-          </span>
-        </div>
-        {deductionsQuery.isError ? (
-          <p className="text-[11px] text-red-600">{describeApiError(deductionsQuery.error)}</p>
-        ) : deductions.length === 0 ? (
-          <p className="text-[11px] text-charcoal-500">No deductions have been raised on your record.</p>
-        ) : (
-          <div className="divide-y divide-charcoal-100">
-            {deductions.map((row: EmployeeDeduction) => (
-              <div key={row.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 py-1.5">
-                <span className="w-24 text-[11px] font-semibold text-charcoal-700">
-                  {row.date ? formatDate(row.date) : '—'}
-                </span>
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-[11px] font-medium text-charcoal-900">{row.description}</p>
-                  {row.detail && <p className="truncate text-[10px] text-charcoal-500">{row.detail}</p>}
-                </div>
-                <span className="w-20 text-right text-[11px] font-semibold text-charcoal-900">
-                  {row.amount != null ? formatMoney(row.amount) : '—'}
-                </span>
-                <Badge color={DEDUCTION_COLORS[row.status] ?? 'gray'}>{row.status}</Badge>
-                {row.correctionRequestId != null ? (
-                  <span className="inline-flex items-center gap-1.5 text-[10px] text-charcoal-500">
-                    Correction
-                    <StatusBadge status={requestStatusLabel(row.correctionStatus)} />
-                  </span>
-                ) : row.date != null ? (
-                  <button
-                    type="button"
-                    onClick={() => setRequestDraft({ typeId: DEDUCTION_CORRECTION_ID, date: row.date! })}
-                    className="rounded-lg border border-charcoal-200 px-2 py-1 text-[10px] font-semibold text-charcoal-700 transition-colors hover:border-brand-300 hover:bg-brand-50"
-                  >
-                    Request correction
-                  </button>
-                ) : null}
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
       {/* Attendance history */}
       <div className="flex items-center justify-between pt-1">
         <p className="text-xs font-bold text-charcoal-900">Attendance History</p>
@@ -403,42 +486,48 @@ export default function MyAttendancePage() {
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs">
               <thead>
-                <tr className="border-b border-charcoal-100 text-charcoal-500">
+                <tr className="border-b border-charcoal-100 text-charcoal-500 dark:text-charcoal-700">
                   <th className="px-4 py-2.5 font-medium">Date</th>
                   <th className="px-4 py-2.5 font-medium">Shift</th>
                   <th className="px-4 py-2.5 font-medium">Check In</th>
                   <th className="px-4 py-2.5 font-medium">Check Out</th>
                   <th className="px-4 py-2.5 font-medium">Status</th>
+                  <th className="px-4 py-2.5 font-medium">Warnings & Deductions</th>
                   <th className="px-4 py-2.5 font-medium">Requests</th>
-                  <th className="w-8" />
                 </tr>
               </thead>
               <tbody>
                 {history.map((item) => {
                   const leave = leaveOn(item.date)
                   const others = requestsOn(item.date).filter((r) => r !== leave)
+                  const dayDeductions = deductionsByDate.get(item.date) ?? []
+                  const warning = warningsByDate.get(item.date) ?? null
                   return (
                     <tr
                       key={item.date}
                       className="cursor-pointer border-b border-charcoal-50 transition-colors last:border-0 hover:bg-charcoal-50"
-                      onClick={() => setDetailDate(item.date)}
+                      onClick={() => openDetail(item.date, null)}
                     >
                       <td className="px-4 py-2.5 font-medium">{formatDate(item.date)}</td>
                       <td className="px-4 py-2.5">{item.shift}</td>
                       <td className="px-4 py-2.5">{time12(item.checkIn)}</td>
                       <td className="px-4 py-2.5">{time12(item.checkOut)}</td>
                       <td className="px-4 py-2.5">
-                        {leave ? <StatusBadge status={leave.status} /> : <StatusBadge status={item.status} />}
+                        {leave ? <StatusBadge status={leave.status} /> : <StatusBadge status={dayDisplayStatus(item, dayDeductions)} />}
                       </td>
                       <td className="px-4 py-2.5">
-                        <div className="flex flex-wrap gap-1">
-                          {others.map((request) => (
-                            <RequestChip key={request.id} type={request.type} status={request.status} />
-                          ))}
-                        </div>
+                        <DayWarningChips item={item} warning={warning} deductions={dayDeductions} onOpen={(w) => openDetail(item.date, w)} />
                       </td>
-                      <td className="px-2">
-                        <ChevronRight className="h-3.5 w-3.5 text-charcoal-400" aria-hidden="true" />
+                      <td className="px-4 py-2.5">
+                        {others.length > 0 ? (
+                          <div className="flex flex-wrap gap-1">
+                            {others.map((request) => (
+                              <RequestChip key={request.id} type={request.type} status={request.status} />
+                            ))}
+                          </div>
+                        ) : (
+                          <span className="text-charcoal-400">—</span>
+                        )}
                       </td>
                     </tr>
                   )
@@ -454,14 +543,19 @@ export default function MyAttendancePage() {
         {history.map((item) => {
           const leave = leaveOn(item.date)
           const others = requestsOn(item.date).filter((r) => r !== leave)
+          const dayDeductions = deductionsByDate.get(item.date) ?? []
+          const warning = warningsByDate.get(item.date) ?? null
           return (
-            <div key={item.date} className="card card-interactive cursor-pointer p-3" onClick={() => setDetailDate(item.date)}>
+            <div key={item.date} className="card card-interactive cursor-pointer p-3" onClick={() => openDetail(item.date, null)}>
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-xs font-medium text-charcoal-900">{formatDate(item.date)}</p>
                   <p className="text-[10px] text-charcoal-500">{item.shift}</p>
                 </div>
-                {leave ? <StatusBadge status={leave.status} /> : <StatusBadge status={item.status} />}
+                {leave ? <StatusBadge status={leave.status} /> : <StatusBadge status={dayDisplayStatus(item, dayDeductions)} />}
+              </div>
+              <div className="mt-1.5">
+                <DayWarningChips item={item} warning={warning} deductions={dayDeductions} onOpen={(w) => openDetail(item.date, w)} />
               </div>
               <div className="mt-2 flex gap-4 text-[10px] text-charcoal-500">
                 <span>In: {time12(item.checkIn)}</span>
@@ -479,19 +573,36 @@ export default function MyAttendancePage() {
         })}
       </div>
 
+      {/* A failed deductions load would silently hide the day chips, so it surfaces. */}
+      {deductionsQuery.isError && (
+        <ErrorState message={describeApiError(deductionsQuery.error)} onRetry={() => deductionsQuery.refetch()} />
+      )}
+
       <AttendanceDetailDrawer
         detailDate={detailDate}
         detail={detail}
         leave={detailLeave}
         others={detailOthers}
-        onClose={() => setDetailDate(null)}
+        warning={detailWarning}
+        deductions={detailDate ? deductionsByDate.get(detailDate) ?? [] : []}
+        onClose={() => {
+          setDetailDate(null)
+          setDetailWarning(null)
+        }}
         onCorrect={() => {
           const date = detailDate ?? undefined
           setDetailDate(null)
+          setDetailWarning(null)
           setRequestDraft({ typeId: CHECK_IN_CORRECTION_ID, date })
+        }}
+        onCorrectDeduction={(row) => {
+          setDetailDate(null)
+          setDetailWarning(null)
+          if (row.date) setRequestDraft({ typeId: DEDUCTION_CORRECTION_ID, date: row.date })
         }}
         onNewRequest={() => {
           setDetailDate(null)
+          setDetailWarning(null)
           setRequestDraft({})
         }}
       />
@@ -562,23 +673,36 @@ function BalanceRow({
   )
 }
 
-/** The mock's day-detail drawer: day facts + the requests riding on the day. */
+/**
+ * The mock's day-detail drawer, in two sections: the day's ATTENDANCE facts
+ * (with its own correction action) and its WARNINGS & DEDUCTIONS (each row
+ * disputable on its own).
+ */
 function AttendanceDetailDrawer({
   detailDate,
   detail,
   leave,
   others,
+  warning,
+  deductions,
   onClose,
   onCorrect,
+  onCorrectDeduction,
   onNewRequest,
 }: {
   detailDate: string | null
   detail: EmployeeAttendanceItem | null
   leave: { type: string; status: string } | null
   others: Array<{ id: number; type: string; status: string }>
+  /** The warning badge that opened the drawer, if opened through one. */
+  warning: WarningNoticeRow | null
+  /** Every deduction raised on this day (several can share it). */
+  deductions: EmployeeDeduction[]
   onClose: () => void
   /** Opens the New Request modal directly on the Check-in Correction type for this day. */
   onCorrect: () => void
+  /** Opens the New Request modal for disputing a deduction raised on this day. */
+  onCorrectDeduction: (deduction: EmployeeDeduction) => void
   /** Opens the New Request modal with no type pre-picked. */
   onNewRequest: () => void
 }) {
@@ -593,22 +717,23 @@ function AttendanceDetailDrawer({
             </div>
           </div>
 
-          <div className="space-y-2">
-            <DayRow label="Scheduled Shift" value={detail.shift} />
-            <DayRow label="Check In" value={time12(detail.checkIn)} valueClass={detail.checkIn ? 'text-brand-600' : 'text-charcoal-400'} bold />
-            <DayRow label="Check Out" value={time12(detail.checkOut)} bold />
-            {detail.notes ? (
-              <div className="py-1.5 text-xs">
-                <span className="mb-1 flex items-center gap-1.5 text-charcoal-500">Notes</span>
-                <p className="rounded-lg bg-charcoal-50 p-2.5 text-charcoal-700">{detail.notes}</p>
-              </div>
-            ) : null}
-          </div>
+          {/* Section 1 — the day's attendance facts, with its own correction action */}
+          <div>
+            <p className="bento-label mb-1.5 text-charcoal-500">ATTENDANCE</p>
+            <div className="space-y-2">
+              <DayRow label="Scheduled Shift" value={detail.shift} />
+              <DayRow label="Check In" value={time12(detail.checkIn)} valueClass={detail.checkIn ? 'text-brand-600' : 'text-charcoal-400'} bold />
+              <DayRow label="Check Out" value={time12(detail.checkOut)} bold />
+              {detail.notes ? (
+                <div className="py-1.5 text-xs">
+                  <span className="mb-1 flex items-center gap-1.5 text-charcoal-500">Notes</span>
+                  <p className="rounded-lg bg-charcoal-50 p-2.5 text-charcoal-700">{detail.notes}</p>
+                </div>
+              ) : null}
+            </div>
 
-          {(leave || others.length > 0) && (
-            <div>
-              <p className="bento-label mb-1.5 text-charcoal-500">LEAVE & REQUESTS</p>
-              <div className="flex flex-wrap gap-1.5">
+            {(leave || others.length > 0) && (
+              <div className="mt-2 flex flex-wrap gap-1.5">
                 {leave && (
                   <span className="inline-flex items-center gap-1.5 rounded-lg border border-charcoal-200 bg-white px-2 py-1 text-[10px] font-semibold text-charcoal-700">
                     {leave.type}
@@ -620,29 +745,85 @@ function AttendanceDetailDrawer({
                   <RequestChip key={request.id} type={request.type} status={request.status} />
                 ))}
               </div>
-            </div>
-          )}
+            )}
 
-          <div className="space-y-2">
             {detail.status !== 'Off' && (
               <button
                 type="button"
                 onClick={onCorrect}
-                className="btn btn-md btn-primary flex w-full items-center justify-center gap-2"
+                className="btn btn-md btn-primary mt-3 flex w-full items-center justify-center gap-2"
               >
                 <SquarePen className="h-3.5 w-3.5" aria-hidden="true" />
                 Request Correction
               </button>
             )}
-            <button
-              type="button"
-              onClick={onNewRequest}
-              className="btn btn-md btn-secondary flex w-full items-center justify-center gap-2"
-            >
-              <Plus className="h-3.5 w-3.5" aria-hidden="true" />
-              Create Another Request
-            </button>
           </div>
+
+          {/* Section 2 — warnings & deductions raised on the day, each disputable on its own */}
+          <div>
+            <p className="bento-label mb-1.5 text-charcoal-500">WARNINGS & DEDUCTIONS</p>
+            <div className="space-y-2">
+              {DAY_WARNING_META[detail.status] && (
+                <div
+                  className={cn(
+                    'rounded-lg border p-2.5',
+                    DAY_WARNING_META[detail.status].color === 'red'
+                      ? 'border-red-200 bg-red-50'
+                      : DAY_WARNING_META[detail.status].color === 'yellow'
+                        ? 'border-yellow-200 bg-yellow-50'
+                        : 'border-blue-200 bg-blue-50',
+                  )}
+                >
+                  <p className="text-xs font-semibold text-charcoal-900">{DAY_WARNING_META[detail.status].label}</p>
+                  <p className="mt-1 text-[11px] leading-relaxed text-charcoal-700">{DAY_WARNING_META[detail.status].title}</p>
+                </div>
+              )}
+              {warning && (
+                <div className="rounded-lg border border-orange-200 bg-orange-50 p-2.5">
+                  <p className="text-xs font-semibold text-orange-800">{warning.type || 'Warning'}</p>
+                  <p className="mt-1 text-[11px] leading-relaxed text-charcoal-700">{warning.reason}</p>
+                </div>
+              )}
+              {deductions.map((deduction) => (
+                <div key={deduction.id} className="rounded-lg border border-charcoal-200 bg-white p-2.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-xs font-medium text-charcoal-900">{deduction.description}</p>
+                    <Badge color={DEDUCTION_COLORS[deduction.status] ?? 'gray'}>{deduction.status}</Badge>
+                  </div>
+                  {deduction.detail && <p className="mt-1 text-[10px] text-charcoal-500">{deduction.detail}</p>}
+                  <p className="mt-1 text-[11px] font-semibold text-charcoal-900">
+                    {deduction.amount != null ? formatMoney(deduction.amount) : 'Amount pending — your manager will price it'}
+                  </p>
+                  {deduction.correctionRequestId != null ? (
+                    <div className="mt-1.5 flex items-center gap-1.5 text-[10px] text-charcoal-500">
+                      Correction
+                      <StatusBadge status={requestStatusLabel(deduction.correctionStatus)} />
+                    </div>
+                  ) : deduction.date ? (
+                    <button
+                      type="button"
+                      onClick={() => onCorrectDeduction(deduction)}
+                      className="mt-2 rounded-lg border border-charcoal-200 px-2 py-1 text-[10px] font-semibold text-charcoal-700 transition-colors hover:border-brand-300 hover:bg-brand-50"
+                    >
+                      Request correction
+                    </button>
+                  ) : null}
+                </div>
+              ))}
+              {!DAY_WARNING_META[detail.status] && !warning && deductions.length === 0 && (
+                <p className="text-[11px] text-charcoal-400">No warnings or deductions on this day.</p>
+              )}
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={onNewRequest}
+            className="btn btn-md btn-secondary flex w-full items-center justify-center gap-2"
+          >
+            <Plus className="h-3.5 w-3.5" aria-hidden="true" />
+            Create Another Request
+          </button>
         </div>
       )}
     </Drawer>

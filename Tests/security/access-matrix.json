@@ -600,6 +600,28 @@
         "USER DECISION (phase 3): one-to-one team message (TeamActionsController message action; the integration Vector Message_Persists_AndNotifiesMember proves this canonical path answers 204 for the team's leader).",
         "TEAM MEMBERSHIP ONLY (ResolveTeamMemberAsync): only the Team Leader whose led team contains the employee answers 204; Branch Managers and Top Management lead no team, so they are concealed with 404 (the payload targets the suite team's member - the probe employee)."
       ]
+    },
+    {
+      "id": 59, "route": "/api/employees/{id}/deductions", "method": "GET", "source": "user-confirmed",
+      "expected": {
+        "anonymous": 401, "employeeSelf": 200, "employeeOther": [401, 404], "teamLeader": 200, "branchManager": 200,
+        "hr": 200, "hrManager": 200, "topManagement": 200, "crossTenantTwin": 404
+      },
+      "notes": [
+        "Row 34's visibility semantics (payroll-sheets convergence) clone onto the employee-session deductions trail: EnsureCanAccess reads — owner sees own; same-gym TL/BM/HR/HRM read; out-of-gym concealed with 404.",
+        "GET needs no payload; {id} substitutes karim's employee id, the deductions trail's target employee."
+      ]
+    },
+    {
+      "id": 60, "route": "/api/requests/{id}/undo", "method": "POST", "source": "user-confirmed",
+      "expected": {
+        "anonymous": 401, "employeeSelf": 404, "employeeOther": 404, "teamLeader": 204, "branchManager": 204,
+        "hr": 404, "hrManager": 404, "topManagement": 204, "crossTenantTwin": 404
+      },
+      "notes": [
+        "Stage-1 undo of a BranchManager-stage decision (RequestManagementController /undo): TL + BM + Top Management are the management desk roles expected to answer 204; HR and HR Manager act at the HR stage and are out of scope here (404), a plain employee is outside the desk (404), anonymous 401, cross-tenant twin concealed with 404.",
+        "Per-identity decided targets are provisioned in SecurityProvisioning (teamLeader / branchManager / topManagement own a decided request) so a parallel theory run can never flip a shared request back to Pending before another identity flips it."
+      ]
     }
   ]
 }

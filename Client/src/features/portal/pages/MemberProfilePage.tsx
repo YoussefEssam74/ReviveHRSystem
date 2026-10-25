@@ -4,10 +4,10 @@ import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import { AlertTriangle, ArrowLeft, BadgeCheck, Briefcase, CalendarDays, Check, ChevronsLeft, CreditCard, Lock, MapPin, Pencil, X } from 'lucide-react'
 import { getShiftCycle, getTeamToday, setShiftAssignments, type SetAssignmentInput, type TeamMemberDay } from '../api/team.api'
 import { getOwnAttendance, getOwnLeaveBalance, getOwnSchedule, manualAttendance, type EmployeeScheduleDto, type EmployeeAttendanceResponse } from '../api/attendance.api'
-import { decideRequest, getOwnRequests, type EmployeeRequestItem } from '../api/requests.api'
+import { decideRequest, getOwnRequests, undoManagedDecision, type EmployeeRequestItem } from '../api/requests.api'
 import { getOwnEvaluationDetails, downloadDocument, downloadHrDocument, getHrDocuments, getOwnDocuments, getOwnHistory, getOwnProfile, type EmployeeDocument, type EmployeeHistoryItem, type EvaluationDetail, type HrDocument } from '../api/employee-file.api'
 import { getOwnPayrollSheets } from '../api/payroll.api'
-import { getAttendanceGrid } from '../api/branch.api'
+import { getAttendanceGrid, listBranchDeductions, branchReviewDeduction, type DeductionCandidateRow } from '../api/branch.api'
 import { EmptyState, SectionCard } from '../../../components/ui/primitives'
 import { ErrorState, LoadingState } from '../../../components/async-state'
 import { Modal } from '../../../components/ui/modal'
@@ -467,7 +467,7 @@ function MemberRequests({ memberId }: { memberId: number }) {
     )
 
   const requests: EmployeeRequestItem[] = requestsQuery.data ?? []
-  const canDecide = can('requests.view')
+  const canDecide = can('requests.view') || can('employees.view')
   return (
     <SectionCard title={`Requests (${requests.length})`}>
       {requests.length === 0 ? (
@@ -512,9 +512,24 @@ function MemberRequestRow({
     onError: (error) => toast(describeApiError(error), 'error'),
   })
 
+  const undoMutation = useMutation({
+    mutationFn: () => undoManagedDecision(request.id),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['portal', 'member', 'requests', memberId] })
+      void queryClient.invalidateQueries({ queryKey: ['portal', 'requests'] })
+      toast(`Request #${request.id} decision undone.`)
+    },
+    onError: (error) => toast(describeApiError(error), 'error'),
+  })
+
   // BM acts on Pending; once it reaches HR it is HR's call (same as the team desk).
   const canApprove = canDecide && request.status === 'Pending'
   const canReject = canDecide && (request.status === 'Pending' || request.status === 'PendingHRReview')
+  // Mirror the service's undo rule (RequestManagementService.UndoAsync): the
+  // request's last date must not have passed — the range's end date counts
+  // (inclusive), so only `lastDate < today` closes the undo window.
+  const undoDeadlinePassed =
+    (request.endDate ?? request.requestedDate) < todayIso()
 
   return (
     <li className="flex items-center justify-between gap-2 py-2.5">
@@ -540,6 +555,11 @@ function MemberRequestRow({
               </Button>
             )}
           </div>
+        )}
+        {canDecide && (request.status === 'PendingHRReview' || request.status === 'Rejected') && !undoDeadlinePassed && (
+          <Button size="sm" variant="secondary" loading={undoMutation.isPending} onClick={() => undoMutation.mutate()}>
+            Undo
+          </Button>
         )}
       </div>
 
@@ -1119,6 +1139,158 @@ function AttendanceTab({ memberId }: { memberId: number }) {
       {items.length > 12 && (
         <p className="mt-1 text-[10px] text-charcoal-400">Showing the 12 latest rows of {items.length}.</p>
       )}
+
+      {/* Deductions raised on this employee — full trail with branch actions */}
+      <div className="mt-3">
+        <p className="bento-label mb-1.5 text-charcoal-400">DEDUCTIONS</p>
+        <MemberDeductions memberId={memberId} />
+      </div>
+    </div>
+  )
+}
+
+/**
+ * One employee's deductions as the manager sees them (mock §20 performance tab):
+ * every raised deduction with its reason/note/issuer, plus the branch's own
+ * decisions — approve (goes to HR), reject (final) or re-price the amount — while
+ * the line is still open.
+ */
+function MemberDeductions({ memberId }: { memberId: number }) {
+  const { toast } = useToast()
+  const queryClient = useQueryClient()
+  const [editingId, setEditingId] = useState<number | null>(null)
+  const [amount, setAmount] = useState('')
+
+  const deductionsQuery = useQuery({
+    queryKey: ['portal', 'member', 'deductions', memberId],
+    queryFn: ({ signal }) => listBranchDeductions(memberId, signal),
+  })
+
+  const reviewMutation = useMutation({
+    mutationFn: ({ row, decision, amount: revised }: { row: DeductionCandidateRow; decision: 'approve' | 'reject' | 'edit'; amount?: number }) =>
+      branchReviewDeduction(row.id, { decision, amount: revised }),
+    onSuccess: (_data, variables) => {
+      toast(
+        variables.decision === 'approve'
+          ? 'Deduction approved — it goes to HR for the payroll run.'
+          : variables.decision === 'reject'
+            ? 'Deduction rejected.'
+            : 'Deduction amount updated.',
+      )
+      setEditingId(null)
+      void queryClient.invalidateQueries({ queryKey: ['portal', 'member', 'deductions', memberId] })
+    },
+    onError: (error) => toast(describeApiError(error), 'error'),
+  })
+
+  if (deductionsQuery.isLoading) {
+    return <LoadingState label="Loading deductions…" />
+  }
+  if (deductionsQuery.isError) {
+    return <ErrorState message={describeApiError(deductionsQuery.error)} onRetry={() => deductionsQuery.refetch()} />
+  }
+
+  const rows = deductionsQuery.data ?? []
+  if (rows.length === 0) {
+    return <p className="text-xs text-charcoal-500">No deductions raised on this employee.</p>
+  }
+
+  // Open rows get the whole decision (approve / re-price / reject); a branch-approved
+  // one is on its way to HR but can still be re-priced or rejected until HR applies it.
+  const isOpen = (row: DeductionCandidateRow) => row.status === 'Pending'
+  const canRevise = (row: DeductionCandidateRow) => row.status === 'Pending' || row.status === 'BranchApproved'
+  const pending = reviewMutation.isPending
+
+  const submitReprice = (row: DeductionCandidateRow, decision: 'approve' | 'edit') => {
+    const value = Number(amount)
+    if (amount === '' || !Number.isFinite(value) || value <= 0) {
+      toast('Enter an amount greater than zero.', 'error')
+      return
+    }
+    reviewMutation.mutate({ row, decision, amount: value })
+  }
+
+  return (
+    <div className="divide-y divide-charcoal-50 rounded-lg border border-charcoal-200">
+      {rows.map((row: DeductionCandidateRow) => (
+        <div key={row.id} className="p-2.5">
+          <div className="flex items-center justify-between gap-2">
+            <div className="min-w-0">
+              <p className="text-xs font-medium text-charcoal-900">{row.reason}</p>
+              <p className="truncate text-[10px] text-charcoal-500">
+                {formatDateWithYear(row.issuedAt?.slice(0, 10) ?? '')}
+                {row.issuedBy ? ` · by ${row.issuedBy}` : ''}
+                {row.note ? ` · ${row.note}` : ''}
+              </p>
+            </div>
+            <div className="flex flex-shrink-0 items-center gap-2">
+              <span className="text-[11px] font-semibold text-charcoal-900">{formatMoney(row.amount)}</span>
+              <StatusBadge status={row.status === 'BranchApproved' ? 'Branch approved' : row.status} />
+            </div>
+          </div>
+          {canRevise(row) && (
+            <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+              {isOpen(row) && (
+                <button
+                  type="button"
+                  disabled={pending}
+                  onClick={() => reviewMutation.mutate({ row, decision: 'approve' })}
+                  className="rounded-md border border-green-200 px-2 py-1 text-[10px] font-semibold text-green-700 transition-colors hover:bg-green-50 disabled:opacity-50"
+                >
+                  Approve
+                </button>
+              )}
+              <button
+                type="button"
+                disabled={pending}
+                onClick={() => {
+                  setEditingId(editingId === row.id ? null : row.id)
+                  setAmount(String(row.amount))
+                }}
+                className="rounded-md border border-charcoal-200 px-2 py-1 text-[10px] font-semibold text-charcoal-600 transition-colors hover:bg-charcoal-50 disabled:opacity-50"
+              >
+                Edit amount
+              </button>
+              <button
+                type="button"
+                disabled={pending}
+                onClick={() => reviewMutation.mutate({ row, decision: 'reject' })}
+                className="rounded-md border border-red-200 px-2 py-1 text-[10px] font-semibold text-red-600 transition-colors hover:bg-red-50 disabled:opacity-50"
+              >
+                Reject
+              </button>
+            </div>
+          )}
+          {editingId === row.id && (
+            <div className="mt-1.5 flex items-center gap-1.5">
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={amount}
+                onChange={(event) => setAmount(event.target.value)}
+                placeholder="New amount (EGP)"
+                className="w-28 rounded-md border border-charcoal-200 px-2 py-1 text-[11px] text-charcoal-800 focus:border-brand-400 focus:outline-none"
+              />
+              <button
+                type="button"
+                disabled={pending}
+                onClick={() => submitReprice(row, 'edit')}
+                className="rounded-md bg-brand-600 px-2 py-1 text-[10px] font-semibold text-white transition-colors hover:bg-brand-700 disabled:opacity-50"
+              >
+                Save
+              </button>
+              <button
+                type="button"
+                onClick={() => setEditingId(null)}
+                className="rounded-md px-2 py-1 text-[10px] font-semibold text-charcoal-500 hover:text-charcoal-800"
+              >
+                Cancel
+              </button>
+            </div>
+          )}
+        </div>
+      ))}
     </div>
   )
 }
@@ -1149,18 +1321,19 @@ function ShiftTab({ memberId }: { memberId: number }) {
   const week = currentWeekDates().map((entry) => ({ ...entry, day: byDate.get(entry.date) }))
   const missingCount = week.filter((entry) => !entry.day && inCycle(entry.date)).length
 
-  // The assignments PUT upserts a Draft cycle's weekly pattern only, so the
-  // edit action is offered solely while today sits inside a Draft cycle.
-  const draftCycle = (schedule?.cycles ?? []).find(
-    (cycle) => cycle.status === 'Draft' && cycle.start <= todayIso() && todayIso() <= cycle.end,
+  // Allow editing any non-archived cycle covering today (Draft or Published),
+  // so a manager can fix a published week's assignments too.
+  const editableCycle = (schedule?.cycles ?? []).find(
+    (cycle) =>
+      cycle.status !== 'Archived' && cycle.start <= todayIso() && todayIso() <= cycle.end,
   )
 
   return (
     <div>
       <div className="mb-1.5 flex items-center justify-between gap-2">
         <p className="bento-label text-charcoal-400">CURRENT WEEK</p>
-        {can('schedule.manage') && draftCycle && (
-          <Button size="sm" variant="secondary" onClick={() => setEditCycleId(draftCycle.id)}>
+        {can('schedule.manage') && editableCycle && (
+          <Button size="sm" variant="secondary" onClick={() => setEditCycleId(editableCycle.id)}>
             <Pencil className="h-3.5 w-3.5" aria-hidden="true" /> Edit shift
           </Button>
         )}

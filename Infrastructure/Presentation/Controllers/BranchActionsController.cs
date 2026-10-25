@@ -24,6 +24,17 @@ namespace Presentation.Controllers
         }
 
         /// <summary>
+        /// POST /api/deduction-candidates/{id}/branch-review — the branch's own decision
+        /// on a deduction (employees performance tab): approve (BranchApproved — goes to
+        /// HR), reject (final) or re-price the amount, before HR applies it to payroll.
+        /// </summary>
+        [HttpPost("{id}/branch-review")]
+        public async Task<ActionResult<DeductionCandidateDto>> BranchReview(
+            int id, BranchDeductionReviewRequest request, CancellationToken cancellationToken)
+            => Ok(await branchActionsService.BranchReviewDeductionAsync(
+                GetActorUserId(), id, request, GetGymIdFromToken(), cancellationToken));
+
+        /// <summary>
         /// GET /api/deduction-candidates/branch - the branch-facings list behind the
         /// Employees Performance deductions tab and the Actions palette history:
         /// the caller's team (Team Leader) or gym (Branch Manager), newest first,

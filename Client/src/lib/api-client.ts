@@ -1,4 +1,5 @@
-import { clearSession, loadStoredSession } from './session-store'
+import { clearSession, loadStoredSession, saveSession } from './session-store'
+import type { StoredSession } from './session-store'
 
 /**
  * Same-origin by default: the Vite dev proxy forwards /api to the API host.
@@ -148,6 +149,61 @@ function isAuthChallenge(response: Response): boolean {
   return response.headers.has('WWW-Authenticate')
 }
 
+let refreshPromise: Promise<StoredSession | null> | null = null
+
+/** Attempts a single refresh using the stored refresh token; dedupes concurrent calls. */
+async function tryRefreshSession(session: StoredSession, signal?: AbortSignal): Promise<StoredSession | null> {
+  if (!session.refreshToken) return null
+  if (refreshPromise) return refreshPromise
+  // Bound the refresh like every other request: a stalled refresh must settle
+  // (releasing the waiters joined on this promise) instead of leaving them and
+  // their queued requests pending forever.
+  refreshPromise = (async () => {
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
+    const onExternalAbort = () => controller.abort()
+    if (signal) {
+      if (signal.aborted) controller.abort()
+      else signal.addEventListener('abort', onExternalAbort, { once: true })
+    }
+    try {
+      const response = await fetch(BASE_URL + '/api/auth/refresh', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify({ refreshToken: session.refreshToken }),
+        signal: controller.signal,
+      })
+      if (!response.ok) return null
+      const json = (await response.json()) as {
+        accessToken?: string
+        expiresInSeconds?: number
+        refreshExpiresInSeconds?: number
+        refreshToken?: string
+        user?: StoredSession['user']
+      }
+      if (!json.accessToken) return null
+      const next: StoredSession = {
+        accessToken: json.accessToken,
+        refreshToken: json.refreshToken ?? session.refreshToken,
+        expiresAt: Date.now() + (json.expiresInSeconds ?? 3600) * 1000,
+        refreshExpiresAt: json.refreshExpiresInSeconds
+          ? Date.now() + json.refreshExpiresInSeconds * 1000
+          : undefined,
+        user: json.user ?? session.user,
+      }
+      saveSession(next)
+      return next
+    } catch {
+      return null
+    } finally {
+      clearTimeout(timer)
+      signal?.removeEventListener('abort', onExternalAbort)
+      refreshPromise = null
+    }
+  })()
+  return refreshPromise
+}
+
 export async function apiRequest<T>(path: string, options: RequestOptions & { form?: FormData } = {}): Promise<T> {
   const { method = 'GET', body, form, signal, accessToken, stationToken, stationAuth } = options
   const session = loadStoredSession()
@@ -208,12 +264,31 @@ export async function apiRequest<T>(path: string, options: RequestOptions & { fo
   const json: unknown = text ? safeJsonParse(text) : null
 
   if (!response.ok) {
-    // Two different 401s live here: the authentication middleware rejecting an
-    // invalid or expired token (bearer challenge) and a key gate refusing a live
-    // session (plain 401 — M4). Only the former ends the session; a missing
-    // permission keeps the user online and surfaces as an access message. Only
-    // session-signed requests may clear: a station token must leave the HR
-    // user's session alone.
+    // Access-token expired? Try a silent refresh once, then retry the original request.
+    if (response.status === 401 && !accessToken && !stationToken && !stationAuth
+        && session && isAuthChallenge(response)
+        && path !== '/api/auth/refresh' && path !== '/api/auth/login' && path !== '/api/auth/login/select-gym') {
+      // Another tab may have rotated the session meanwhile: the captured session's
+      // refresh token is then stale (refreshing with it would trip the server's
+      // reuse detection), so prefer the newer credentials already in storage.
+      const storedNow = loadStoredSession()
+      if (storedNow && storedNow.accessToken !== session.accessToken) {
+        if (storedNow.expiresAt > Date.now()) {
+          // The newer bearer is usable — retry with it instead of spinning a refresh.
+          return apiRequest<T>(path, { ...options, accessToken: storedNow.accessToken })
+        }
+        const refreshed = await tryRefreshSession(storedNow, signal)
+        if (refreshed) {
+          return apiRequest<T>(path, { ...options, accessToken: refreshed.accessToken })
+        }
+      } else {
+        const refreshed = await tryRefreshSession(session, signal)
+        if (refreshed) {
+          return apiRequest<T>(path, { ...options, accessToken: refreshed.accessToken })
+        }
+      }
+    }
+
     if (response.status === 401 && !accessToken && !stationToken && !stationAuth
         && session && isAuthChallenge(response)) clearSession()
     throw toApiError(response.status, json)

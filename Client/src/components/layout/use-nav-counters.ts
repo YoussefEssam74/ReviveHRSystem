@@ -14,13 +14,16 @@ import {
   getAttendanceGrid,
   getOffboardingCases,
   getVacancyRequests,
+  listBranchDeductions,
 } from '../../features/portal/api/branch.api'
-import type { PortalPageId } from '../../features/portal/portal-nav'
+import { PAGE_PATHS, type PortalPageId } from '../../features/portal/portal-nav'
 
 /** Number-only pill data (mock badgeHtml). count <= 0 removes the pill. */
 export interface NavBadge {
   count: number
   label: string
+  /** Deep link straight to the row the count points at, when there is one. */
+  href?: string
 }
 
 /** Count queries are cheap; refetching more often than this just burns calls. */
@@ -107,6 +110,16 @@ export function useNavCounters(): Partial<Record<PortalPageId, NavBadge>> {
     staleTime: FRESH_MS,
   })
 
+  // Employees Performance — deduction candidates still awaiting the branch's own
+  // decision (Pending). Shares the performance page's cache key, so the badge, the
+  // roster column and the Deductions tab all count the same rows.
+  const pendingDeductions = useQuery({
+    queryKey: ['portal', 'perf', 'deductions'],
+    queryFn: ({ signal }) => listBranchDeductions(undefined, signal),
+    enabled: isManager && portal.can('employees.view'),
+    staleTime: FRESH_MS,
+  })
+
   // Recruitment (BM) — pending vacancy requests awaiting the decision.
   const vacancies = useQuery({
     queryKey: ['portal', 'nav-counts', 'vacancies', 'Pending', gymId],
@@ -143,8 +156,8 @@ export function useNavCounters(): Partial<Record<PortalPageId, NavBadge>> {
 
   return useMemo(() => {
     const badges: Partial<Record<PortalPageId, NavBadge>> = {}
-    const put = (id: PortalPageId, count: number, label: string) => {
-      if (count > 0) badges[id] = { count, label }
+    const put = (id: PortalPageId, count: number, label: string, href?: string) => {
+      if (count > 0) badges[id] = { count, label, href }
     }
 
     put('requests', dashboard.data?.pendingRequestCount ?? 0, 'pending')
@@ -165,12 +178,37 @@ export function useNavCounters(): Partial<Record<PortalPageId, NavBadge>> {
         'today to follow up',
       )
     }
+
+    // Employees Performance: everything the manager still owes a decision on —
+    // stage-1 requests and deduction candidates nobody has approved or rejected —
+    // plus the leaving cases already in flight (BM). The pill links straight to the
+    // employee that owes it, opened on the tab holding the missing action.
+    const openDeductions = (pendingDeductions.data ?? []).filter((row) => row.status === 'Pending')
+    const openRequests = inbox.data?.totalCount ?? 0
+    const openActions = openRequests + openDeductions.length
+    const leavingCases = (leavingsDraft.data?.totalCount ?? 0) + (leavingsNotice.data?.totalCount ?? 0)
+    const perfLabel = [
+      openActions > 0 ? `${openActions} waiting for your decision` : null,
+      leavingCases > 0
+        ? `${leavingCases} leaving ${leavingCases === 1 ? 'case' : 'cases'} in progress`
+        : null,
+    ]
+      .filter((part): part is string => part != null)
+      .join(' · ')
+    const perfTarget =
+      openDeductions[0] != null
+        ? `?employee=${openDeductions[0].employeeId}&tab=deductions`
+        : inbox.data?.items[0] != null
+          ? `?employee=${inbox.data.items[0].employeeId}&tab=requests`
+          : ''
+    put(
+      'employees-performance',
+      openActions + leavingCases,
+      perfLabel,
+      `${PAGE_PATHS['employees-performance']}${perfTarget}`,
+    )
+
     if (isBranchManager) {
-      put(
-        'employees-performance',
-        (leavingsDraft.data?.totalCount ?? 0) + (leavingsNotice.data?.totalCount ?? 0),
-        'leaving cases in progress',
-      )
       put('recruitment', vacancies.data?.total ?? 0, 'pending vacancy requests')
     }
     put('team-schedule', unscheduled, 'not fully scheduled yet')
@@ -184,6 +222,7 @@ export function useNavCounters(): Partial<Record<PortalPageId, NavBadge>> {
     absentToday.data,
     leavingsDraft.data,
     leavingsNotice.data,
+    pendingDeductions.data,
     vacancies.data,
     unscheduled,
   ])

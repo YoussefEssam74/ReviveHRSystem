@@ -93,6 +93,20 @@ namespace Service.Specifications
         }
     }
 
+    /// <summary>
+    /// Sheets of a whole employee set with their periods — the absence sweep prices a
+    /// day against the sheet covering it (else against the salary history), so it needs
+    /// every candidate sheet of the scoped roster in one read.
+    /// </summary>
+    public sealed class PayrollEntriesByEmployeeIdsSpec : BaseSpecification<PayrollEntry, int>
+    {
+        public PayrollEntriesByEmployeeIdsSpec(int[] employeeIds)
+        {
+            Criteria = e => employeeIds.Contains(e.EmployeeId);
+            AddInclude(e => e.PayrollPeriod);
+        }
+    }
+
     /// <summary>One deduction line with its entry/period/employee for review + list rows.</summary>
     public sealed class DeductionLineByIdSpec : BaseSpecification<PayrollEntryLineItem, int>
     {

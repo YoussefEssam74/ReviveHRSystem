@@ -132,9 +132,10 @@ namespace ReviveHRSystem.IntegrationTests
                 .Select(e => e.GetProperty("name").GetString()!)
                 .ToList();
 
-            // BM in Gym 1 sees Gym 1 employees, but NOT Gym 2 employees
+            // BM in Gym 1 sees Gym 1 employees, but NOT Gym 2 employees — and never
+            // himself (the directory deliberately drops the actor's own row).
             Assert.Contains("Karim Hassan", names1);
-            Assert.Contains("Omar Youssef", names1);
+            Assert.DoesNotContain("Omar Youssef", names1);
             Assert.DoesNotContain("Sara Ali", names1);
 
             // 2. Omar switches to Second Gym (Team Leader of Alexandria Floor Team)

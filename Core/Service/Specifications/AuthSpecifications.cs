@@ -32,4 +32,24 @@ namespace Service.Specifications
             AddInclude(u => u.EmployeeProfile!.Position!);
         }
     }
+
+    /// <summary>Finds a refresh token by its hash.</summary>
+    public class RefreshTokenByHashSpec : BaseSpecification<RefreshToken, int>
+    {
+        public RefreshTokenByHashSpec(string tokenHash)
+        {
+            Criteria = rt => rt.TokenHash == tokenHash;
+            AddInclude(rt => rt.User);
+        }
+    }
+
+    /// <summary>All still-active (non-revoked) refresh tokens of one user — the set
+    /// reused detection revokes when a rotated token is presented again.</summary>
+    public class RefreshTokensByUserActiveSpec : BaseSpecification<RefreshToken, int>
+    {
+        public RefreshTokensByUserActiveSpec(int userId)
+        {
+            Criteria = rt => rt.UserId == userId && rt.RevokedAtUtc == null;
+        }
+    }
 }

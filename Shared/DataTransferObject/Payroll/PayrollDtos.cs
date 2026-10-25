@@ -244,11 +244,14 @@ namespace Shared.DataTransferObject.Payroll
         public int TotalPages { get; set; }
     }
 
-    /// <summary>POST /api/deduction-candidates/{id}/review body (Approve / Waive).</summary>
+    /// <summary>POST /api/deduction-candidates/{id}/review body (Approve / Waive, optionally re-priced).</summary>
     public class ReviewDeductionRequest
     {
         /// <summary>Accepted (Approve) | Rejected (Waive).</summary>
         public string? Decision { get; set; }
+
+        /// <summary>HR's end-of-month amount override — the line and its source candidate both move to it.</summary>
+        public decimal? Amount { get; set; }
     }
 
     /// <summary>Recomputed totals with the acting employee, as echoed by review.</summary>
@@ -282,6 +285,10 @@ namespace Shared.DataTransferObject.Payroll
         public string Gym { get; set; } = string.Empty;
         public PayslipEmployeeData Employee { get; set; } = null!;
         public decimal BaseSalary { get; set; }
+        /// <summary>The gym's annual-increase policy percent (mock's "ANNUAL INCREASE (10%)").</summary>
+        public decimal? AnnualIncreasePercent { get; set; }
+        /// <summary>This period's raise slice: base salary × the gym's annual-increase percent.</summary>
+        public decimal AnnualIncrease { get; set; }
         /// <summary>Overtime hours.</summary>
         public decimal Overtime { get; set; }
         public decimal OvertimePay { get; set; }

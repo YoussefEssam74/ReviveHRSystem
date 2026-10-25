@@ -254,6 +254,7 @@ namespace ReviveHRSystem.Web
             builder.Services.AddScoped<IEmployeeManagementService, EmployeeManagementService>();
             builder.Services.AddScoped<IRequestManagementService, RequestManagementService>();
             builder.Services.AddScoped<IAttendanceManagementService, AttendanceManagementService>();
+            builder.Services.AddScoped<IAttendanceDeductionSweepService, AttendanceDeductionSweepService>();
             builder.Services.AddScoped<ITeamOverviewService, TeamOverviewService>();
             builder.Services.AddScoped<IVacancyRequestService, VacancyRequestService>();
             builder.Services.AddScoped<IOffboardingService, OffboardingService>();

@@ -41,19 +41,22 @@ namespace Service.Services
         private readonly IUserAccessRepository _userAccess;
         private readonly ITeamScopeService _teamScope;
         private readonly TimeZoneInfo _attendanceTimeZone;
+        private readonly IAttendanceDeductionSweepService _deductionSweep;
 
         public AttendanceManagementService(
             IUnitOfWork unitOfWork,
             IAccessControlService accessControl,
             IUserAccessRepository userAccess,
             ITeamScopeService teamScope,
-            TimeZoneInfo attendanceTimeZone)
+            TimeZoneInfo attendanceTimeZone,
+            IAttendanceDeductionSweepService deductionSweep)
         {
             _unitOfWork = unitOfWork;
             _accessControl = accessControl;
             _userAccess = userAccess;
             _teamScope = teamScope;
             _attendanceTimeZone = attendanceTimeZone;
+            _deductionSweep = deductionSweep;
         }
 
         // ------------------------------------------------------------------
@@ -174,6 +177,11 @@ namespace Service.Services
 
             await _unitOfWork.SaveChangesAsync(cancellationToken);
 
+            // The written day decides the deduction it carries: a late/absent mark
+            // raises a priced pending candidate for the branch, a clean mark drops
+            // one the sweep had raised earlier. Idempotent for that single day.
+            await _deductionSweep.SweepAsync(new[] { employee.Id }, date, date, cancellationToken);
+
             // Re-read so the response carries the loaded shift template; the
             // latest correction (if this day was corrected before) comes with it.
             record = await repo.GetByIdAsync(new AttendanceRecordByEmployeeDateSpec(employee.Id, date), cancellationToken)
@@ -232,6 +240,10 @@ namespace Service.Services
             record.Notes = $"Corrected: {reason}";
 
             await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+            // The correction is authoritative for that day's deduction — a record
+            // corrected to On Time takes the pending auto-deduction with it.
+            await _deductionSweep.SweepAsync(new[] { record.EmployeeId }, record.Date, record.Date, cancellationToken);
 
             // Re-read so the response carries the just-written correction row.
             record = await repo.GetByIdAsync(new AttendanceRecordByIdWithDetailsSpec(recordId), cancellationToken)
@@ -588,7 +600,10 @@ namespace Service.Services
                 Name = employee.FullName,
                 Gym = gymName,
                 Date = record.Date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
-                Shift = shiftLabel ?? BuildShiftLabelFromRecord(record),
+                // The compose always passes an assignment label ("Off" when none covers
+                // the day), which would bury the shift the record itself was pinned to —
+                // the record's own template wins whenever the assignment says nothing.
+                Shift = shiftLabel is null or "Off" ? BuildShiftLabelFromRecord(record) : shiftLabel,
                 CheckIn = FormatPunch(record.CheckInTime),
                 CheckOut = FormatPunch(record.CheckOutTime),
                 Status = DisplayStatus(record.Status),

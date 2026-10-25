@@ -103,11 +103,21 @@ namespace Service.Services
             var page = Math.Max(query.Page, 1);
             var pageSize = query.PageSize <= 0 ? DefaultPageSize : Math.Min(query.PageSize, MaxPageSize);
 
-            var countSpec = new EmployeeDirectorySpec(gymFilter, teamFilter, query.Search, statusFilter, 0, 0, "name", false);
+            // Resolve the actor's own employee record so they are excluded from the
+            // directory — a BM or TL should never see or manage themselves in the list.
+            int? actorEmployeeId = null;
+            if (actor.UserType != DomainLayer.Models.UserModule.Enums.UserType.TopManagement)
+            {
+                var ownEmployee = await _unitOfWork.GetRepository<Employee, int>()
+                    .GetByIdAsync(new EmployeeByUserIdSpec(actor.Id), cancellationToken);
+                actorEmployeeId = ownEmployee?.Id;
+            }
+
+            var countSpec = new EmployeeDirectorySpec(gymFilter, teamFilter, query.Search, statusFilter, 0, 0, "name", false, actorEmployeeId);
             var total = await _unitOfWork.GetRepository<Employee, int>().CountAsync(countSpec, cancellationToken);
 
             var pageSpec = new EmployeeDirectorySpec(
-                gymFilter, teamFilter, query.Search, statusFilter, (page - 1) * pageSize, pageSize, sortBy, sortDescending);
+                gymFilter, teamFilter, query.Search, statusFilter, (page - 1) * pageSize, pageSize, sortBy, sortDescending, actorEmployeeId);
             var employees = await _unitOfWork.GetRepository<Employee, int>().GetAllAsync(pageSpec, cancellationToken);
 
             return new EmployeeListResponse

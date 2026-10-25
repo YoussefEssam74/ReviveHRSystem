@@ -210,7 +210,7 @@ export function PortalLayout() {
               return (
                 <NavLink
                   key={item.id}
-                  to={item.path}
+                  to={badge?.href ?? item.path}
                   end
                   className={({ isActive }) => cn('nav-item', isActive && 'active')}
                 >

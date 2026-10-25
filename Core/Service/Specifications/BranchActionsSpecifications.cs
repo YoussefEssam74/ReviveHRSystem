@@ -23,6 +23,9 @@ namespace Service.Specifications
             Criteria = d => employeeIds.Contains(d.EmployeeId);
             AddInclude(d => d.Employee);
             AddInclude(d => d.IssuedByUser);
+            // The linked attendance day (when set) is what a deduction punishes —
+            // read with the row so the detail views can date it correctly.
+            AddInclude(d => d.AttendanceRecord);
             OrderByDescending = d => d.IssuedAt;
         }
     }

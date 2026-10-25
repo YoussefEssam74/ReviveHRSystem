@@ -149,12 +149,16 @@ export interface EmployeeDeduction {
   description: string
   /** Money deductions only (day-based follow-ups leave it null). */
   amount: number | null
-  /** Human status: In review | Resolved | Applied | Rejected. */
+  /** Human status: In review | Branch approved | Resolved | Applied | Rejected. */
   status: string
   detail: string | null
   correctionRequestId: number | null
   /** Raw RequestStatus of the correction (Pending, PendingHRReview, ...). */
   correctionStatus: string | null
+  /** Username of the manager who levied it — null when the system sweep did. */
+  issuedBy: string | null
+  /** The attendance day the candidate punishes, "yyyy-MM-dd"; may be null. */
+  attendanceDate: string | null
 }
 
 export function getEmployeeDeductions(employeeId: number, signal?: AbortSignal): Promise<EmployeeDeduction[]> {

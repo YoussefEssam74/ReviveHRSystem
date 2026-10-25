@@ -125,9 +125,8 @@ namespace Service.Specifications
 
     /// <summary>
     /// Payroll periods of a gym including the still-Open one, for the employee's own
-    /// payroll view (mock §8). <see cref="PayrollPeriodsByGymSpec"/> hides Open periods
-    /// for reporting; the self view must surface them so the mapping can flag the entry
-    /// visible=false ("Processing" / "Payout pending") instead of omitting the month.
+    /// payroll view (mock §8). The mapping marks an Open period's entry visible=false
+    /// so the UI renders the "Current Period" card / Processing row without money.
     /// </summary>
     public class PayrollPeriodsByGymIncludingOpenSpec : BaseSpecification<PayrollPeriod, int>
     {

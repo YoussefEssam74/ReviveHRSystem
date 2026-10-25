@@ -17,7 +17,14 @@ export interface SessionUser {
 
 export interface StoredSession {
   accessToken: string
+  refreshToken?: string
   expiresAt: number
+  /**
+   * When the refresh credential itself expires (epoch ms, when known). The
+   * session survives an expired ACCESS token until this passes so the client
+   * can still silently refresh after a reload or inactivity.
+   */
+  refreshExpiresAt?: number
   user: SessionUser
 }
 
@@ -30,6 +37,7 @@ function isStoredSession(value: unknown): value is StoredSession {
   if (typeof value !== 'object' || value === null) return false
   const session = value as Partial<StoredSession>
   return typeof session.accessToken === 'string' && typeof session.expiresAt === 'number' && typeof session.user === 'object'
+    && (session.refreshExpiresAt === undefined || typeof session.refreshExpiresAt === 'number')
 }
 
 export function loadStoredSession(): StoredSession | null {
@@ -38,11 +46,15 @@ export function loadStoredSession(): StoredSession | null {
     if (!raw) return null
     const parsed: unknown = JSON.parse(raw)
     if (!isStoredSession(parsed)) return null
-    if (parsed.expiresAt <= Date.now()) {
-      window.localStorage.removeItem(STORAGE_KEY)
-      return null
-    }
-    return parsed
+    if (parsed.expiresAt > Date.now()) return parsed
+    // An expired access token is not the end of the session while the refresh
+    // credential is still alive — the 401 refresh flow needs it to renew the
+    // session silently after a reload or inactivity.
+    const refreshAlive =
+      typeof parsed.refreshToken === 'string' && parsed.refreshToken !== '' &&
+      (parsed.refreshExpiresAt === undefined || parsed.refreshExpiresAt > Date.now())
+    if (!refreshAlive) window.localStorage.removeItem(STORAGE_KEY)
+    return refreshAlive ? parsed : null
   } catch {
     return null
   }
