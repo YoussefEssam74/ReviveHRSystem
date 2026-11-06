@@ -30,6 +30,7 @@ namespace Service.Services
         IUnitOfWork _unitOfWork,
         IAccessControlService _accessControl,
         IUserAccessRepository _userAccess,
+        IUserSessionService _userSessions,
         IPasswordHasher _passwordHasher,
         ITeamScopeService _teamScope) : IEmployeeService
     {
@@ -327,6 +328,7 @@ namespace Service.Services
 
             var history = new List<EmploymentHistory>();
             var changed = false;
+            EmployeeStatus? previousStatus = null;
 
             if (!string.IsNullOrWhiteSpace(request.Name))
             {
@@ -345,6 +347,7 @@ namespace Service.Services
                 var standing = ParseStatusOrNull(request.Status)!.Value;
                 if (standing != employee.Status)
                 {
+                    previousStatus = employee.Status;
                     history.Add(NewHistory(employee.Id, today, EmploymentChangeType.StatusChange,
                         StatusDisplay(employee.Status), StatusDisplay(standing), "Status change", actor.Id));
                     employee.Status = standing;
@@ -374,6 +377,18 @@ namespace Service.Services
                     await _unitOfWork.GetRepository<EmploymentHistory, int>().AddAsync(entry, cancellationToken);
                 }
 
+                if (previousStatus is not null)
+                {
+                    if (employee.Status == EmployeeStatus.Terminated)
+                    {
+                        await _userSessions.TerminateAccessAsync(employee.UserId, cancellationToken);
+                    }
+                    else if (previousStatus == EmployeeStatus.Terminated && RestoresLogin(employee.Status))
+                    {
+                        await _userSessions.RestoreAccessAsync(employee.UserId, cancellationToken);
+                    }
+                }
+
                 await _unitOfWork.SaveChangesAsync(cancellationToken);
             }
 
@@ -400,11 +415,23 @@ namespace Service.Services
                 string.IsNullOrWhiteSpace(request.Note) ? "Status change" : request.Note.Trim(),
                 actor.Id);
 
-            // Deliberately does NOT touch User.IsActive: who may still log in is an
-            // offboarding concern (separations flow), not the HR directory standing.
+            var previous = employee.Status;
             employee.Status = standing;
             _unitOfWork.GetRepository<Employee, int>().Update(employee);
             await _unitOfWork.GetRepository<EmploymentHistory, int>().AddAsync(entry, cancellationToken);
+
+            // Termination is not only a directory standing: it must cut live access
+            // immediately (existing JWTs and refresh tokens). Moving back to a working
+            // standing restores login for a rehire or a correction.
+            if (standing == EmployeeStatus.Terminated)
+            {
+                await _userSessions.TerminateAccessAsync(employee.UserId, cancellationToken);
+            }
+            else if (previous == EmployeeStatus.Terminated && RestoresLogin(standing))
+            {
+                await _userSessions.RestoreAccessAsync(employee.UserId, cancellationToken);
+            }
+
             await _unitOfWork.SaveChangesAsync(cancellationToken);
 
             var updated = await _unitOfWork.GetRepository<Employee, int>()
@@ -453,10 +480,10 @@ namespace Service.Services
         public async Task<EmployeeDocumentItem> AddDocumentAsync(int? actorUserId, int employeeId, EmployeeDocumentUpload upload, CancellationToken cancellationToken = default)
         {
             var actor = await ResolveActorAsync(actorUserId, cancellationToken);
-            // Matrix row 16: uploads are an HR function — the employee self-upload
-            // affordance (allowSelf) was removed; only documents.manage holders may
-            // upload into an employee's file.
-            await EnsureEmployeeAccessAsync(actor.Id, employeeId, "employees.documents.manage", cancellationToken);
+            // Self-upload is part of the employee vault (§3 required documents);
+            // otherwise the caller must hold the HR document-management key.
+            await EnsureEmployeeAccessAsync(
+                actor.Id, employeeId, "employees.documents.manage", cancellationToken, allowSelf: true);
 
             var category = ParseDocumentCategory(upload.Category);
             var document = new EmployeeDocument
@@ -464,6 +491,10 @@ namespace Service.Services
                 EmployeeId = employeeId,
                 FileName = upload.FileName,
                 FilePath = upload.RelativeFilePath,
+                SizeBytes = upload.SizeBytes,
+                ContentType = upload.ContentType,
+                Source = DocumentSource.Employee,
+                EmployeeEditable = true,
                 Type = category,
                 ExpiryDate = upload.ExpiryDate,
             };
@@ -1108,6 +1139,13 @@ namespace Service.Services
             EmployeeStatus.NoticePeriod => "Notice Period",
             _ => status.ToString(),
         };
+
+        /// <summary>
+        /// Standings that put a previously terminated employee back to work and
+        /// therefore re-enable their login. Suspended stays access-restricted.
+        /// </summary>
+        private static bool RestoresLogin(EmployeeStatus status) =>
+            status is EmployeeStatus.Active or EmployeeStatus.OnLeave or EmployeeStatus.NoticePeriod;
 
         private static EmployeeStatus? ParseStatusOrNull(string? value)
         {

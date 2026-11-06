@@ -10,6 +10,8 @@ public sealed class DeductionCandidateDto
     public string Reason { get; init; } = string.Empty;
     public string? Note { get; init; }
     public string Status { get; init; } = string.Empty;
+    /// <summary>The day the deduction punishes: its attendance day, else the day it was issued.</summary>
+    public DateOnly Date { get; init; }
     public DateTime IssuedAt { get; init; }
     public string IssuedBy { get; init; } = string.Empty;
 }

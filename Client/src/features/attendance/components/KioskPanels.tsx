@@ -7,49 +7,83 @@ import type { AttendanceResult, FaceMatchDetail } from '../types'
 const STATUS_BADGE: Record<string, string> = {
   PRESENT: 'bg-emerald-100 text-emerald-800',
   LEFT: 'bg-slate-200 text-slate-600',
-  DAY_OFF: 'bg-slate-100 text-slate-500',
+  SCHEDULED: 'bg-sky-100 text-sky-800',
+  ABSENT: 'bg-red-100 text-red-700',
 }
 
 const STATUS_LABEL: Record<string, string> = {
   PRESENT: 'Present',
   LEFT: 'Left',
-  DAY_OFF: 'Day off',
+  SCHEDULED: 'Not in yet',
+  ABSENT: 'Absent',
 }
 
-function formatClock(iso: string | null | undefined): string {
-  if (!iso) return '-'
-  const date = new Date(iso)
-  return Number.isNaN(date.getTime()) ? '-' : date.toLocaleTimeString()
+function formatClock(value: string | null | undefined): string {
+  if (!value) return '—'
+  // The API sends the kiosk-local "HH:mm"; tolerate an ISO stamp from older payloads.
+  if (!value.includes('T')) return value
+  const date = new Date(value)
+  return Number.isNaN(date.getTime())
+    ? '—'
+    : date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
 }
 
-/** One row of the kiosk dashboard feed. */
+/** One row of the kiosk roster: shift, punches, and lateness/early-leave minutes. */
 export function FeedRow({ row }: { row: StationSummaryRecord }) {
   const status = (row.status ?? '').toUpperCase()
   const isManual = (row.method ?? '').toUpperCase() === 'MANUAL'
+  const late = row.lateMinutes ?? 0
+  const early = row.earlyLeaveMinutes ?? 0
 
   return (
-    <div className="flex items-center justify-between gap-2 rounded-lg border border-charcoal-100 bg-white px-2.5 py-2">
-      <div className="min-w-0">
-        <p className="truncate text-xs font-bold text-charcoal-800">{row.employeeName || row.employeeId}</p>
-        <p className="truncate font-mono text-[10px] leading-tight text-charcoal-500">
-          {row.employeeId}
-          {row.attendanceStatus ? ' - ' + row.attendanceStatus : ''}
-        </p>
+    <div className="rounded-lg border border-charcoal-100 bg-white px-2.5 py-2">
+      <div className="flex items-center justify-between gap-2">
+        <div className="min-w-0">
+          <p className="truncate text-xs font-bold text-charcoal-800">{row.employeeName || row.employeeId}</p>
+          <p className="truncate font-mono text-[10px] leading-tight text-charcoal-500">{row.employeeId}</p>
+        </div>
+        <div className="flex shrink-0 items-center gap-1.5">
+          {isManual && (
+            <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-800">manual</span>
+          )}
+          <span
+            className={
+              'rounded px-1.5 py-0.5 text-[10px] font-bold ' +
+              (STATUS_BADGE[status] ?? 'bg-slate-100 text-slate-500')
+            }
+          >
+            {STATUS_LABEL[status] ?? status}
+          </span>
+        </div>
       </div>
-      <div className="flex shrink-0 items-center gap-1.5">
-        {isManual && (
-          <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-800">manual</span>
-        )}
-        <span
-          className={
-            'rounded px-1.5 py-0.5 text-[10px] font-bold ' +
-            (STATUS_BADGE[status] ?? 'bg-slate-100 text-slate-500')
-          }
-        >
-          {STATUS_LABEL[status] ?? status}
+
+      <div className="mt-1 flex items-center justify-between gap-2 text-[10px]">
+        <span className="truncate text-charcoal-500">
+          {row.shiftName || 'Shift'} ·{' '}
+          <span className="font-mono tabular-nums">
+            {row.shiftStart || '—'}–{row.shiftEnd || '—'}
+          </span>
         </span>
-        <span className="font-mono text-[10px] tabular-nums text-charcoal-400">{formatClock(row.lastEventTime)}</span>
+        <span className="flex shrink-0 items-center gap-2 font-mono tabular-nums">
+          <span className={row.checkIn ? 'text-charcoal-700' : 'text-charcoal-400'}>in {formatClock(row.checkIn)}</span>
+          <span className={row.checkOut ? 'text-charcoal-700' : 'text-charcoal-400'}>out {formatClock(row.checkOut)}</span>
+        </span>
       </div>
+
+      {(late > 0 || early > 0) && (
+        <div className="mt-1 flex flex-wrap items-center gap-1">
+          {late > 0 && (
+            <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-800">
+              Late {late}m
+            </span>
+          )}
+          {early > 0 && (
+            <span className="rounded bg-orange-100 px-1.5 py-0.5 text-[10px] font-semibold text-orange-800">
+              Left early {early}m
+            </span>
+          )}
+        </div>
+      )}
     </div>
   )
 }

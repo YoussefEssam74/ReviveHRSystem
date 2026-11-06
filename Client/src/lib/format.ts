@@ -78,6 +78,14 @@ export function formatNumber(value: number | null | undefined): string {
   return Number.isInteger(value) ? value.toLocaleString('en-US') : value.toFixed(2)
 }
 
+/** 2_400_000 → "2.3 MB" (file sizes in upload feedback). */
+export function formatBytes(bytes: number): string {
+  if (!Number.isFinite(bytes) || bytes <= 0) return '0 B'
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1).replace(/\.0$/, '')} KB`
+  return `${(bytes / (1024 * 1024)).toFixed(1).replace(/\.0$/, '')} MB`
+}
+
 /** "FullTime" / "FullTime" enum-ish → "Full-time" display labels. */
 export function humanize(value: string | null | undefined): string {
   if (!value) return '—'

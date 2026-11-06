@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using System.Text;
 using System.Text.Json;
 using System.Threading.RateLimiting;
@@ -95,16 +96,44 @@ namespace ReviveHRSystem.Web
                     // claim is the differentiator: any token carrying it is rejected by the
                     // authentication pipeline. The select-gym flow consumes these tokens
                     // out-of-band via TokenService.ValidateGymSelectionToken and keeps working.
+                    //
+                    // Session revocation: the token itself is not enough. Every validated
+                    // request re-checks the account in the database, so terminating an
+                    // employee (or deactivating a user) invalidates already-issued access
+                    // tokens on their very next call instead of waiting for the 15-minute
+                    // lifetime to expire.
                     options.Events = new JwtBearerEvents
                     {
-                        OnTokenValidated = context =>
+                        OnTokenValidated = async context =>
                         {
                             if (context.Principal?.HasClaim("purpose", "gym-selection") == true)
                             {
                                 context.Fail("This token is a gym-selection token and cannot be used to call the API.");
+                                return;
                             }
 
-                            return Task.CompletedTask;
+                            var rawUserId = context.Principal?.FindFirst("uid")?.Value
+                                ?? context.Principal?.FindFirst(ClaimTypes.NameIdentifier)?.Value
+                                ?? context.Principal?.FindFirst("sub")?.Value;
+
+                            if (!int.TryParse(rawUserId, out var userId))
+                            {
+                                context.Fail("The token does not identify a user.");
+                                return;
+                            }
+
+                            var sessions = context.HttpContext.RequestServices.GetRequiredService<IUserSessionService>();
+                            try
+                            {
+                                if (!await sessions.IsSessionAllowedAsync(userId, context.HttpContext.RequestAborted))
+                                {
+                                    context.Fail("This account is no longer active.");
+                                }
+                            }
+                            catch (OperationCanceledException)
+                            {
+                                context.Fail("The request was canceled.");
+                            }
                         }
                     };
                 })
@@ -235,6 +264,7 @@ namespace ReviveHRSystem.Web
             builder.Services.AddScoped<IUserAccessRepository, UserAccessRepository>();
             builder.Services.AddScoped<IPasswordHasher, PasswordHasher>();
             builder.Services.AddScoped<ITokenService, TokenService>();
+            builder.Services.AddScoped<IUserSessionService, UserSessionService>();
             builder.Services.AddScoped<IAuthService, AuthService>();
             builder.Services.AddScoped<IAttendanceService, AttendanceService>();
             builder.Services.AddScoped<ITeamScopeService, TeamScopeService>();

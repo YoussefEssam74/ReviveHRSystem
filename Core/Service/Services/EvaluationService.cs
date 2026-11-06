@@ -295,11 +295,9 @@ namespace Service.Services
         /// <summary>Branch name → gym id without an access check (public filters + admin name filters).</summary>
         private async Task<int?> LookupGymIdByNameAsync(string name, CancellationToken cancellationToken)
         {
-            var gyms = await _unitOfWork.GetRepository<Gym, int>().GetAllAsync(cancellationToken);
-            return gyms
-                .Where(g => string.Equals(g.Name.Trim(), name.Trim(), StringComparison.OrdinalIgnoreCase))
-                .Select(g => (int?)g.Id)
-                .FirstOrDefault();
+            var gym = await _unitOfWork.GetRepository<Gym, int>()
+                .GetByIdAsync(new GymByNameSpec(name), cancellationToken);
+            return gym?.Id;
         }
 
         public async Task<HiringFormResponse> CreateHiringFormAsync(int? actorUserId, UpsertHiringFormRequest request, CancellationToken cancellationToken = default)

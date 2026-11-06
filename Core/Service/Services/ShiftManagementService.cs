@@ -188,6 +188,21 @@ namespace Service.Services
                 return;
             }
 
+            // Publishing supersedes an earlier published cycle over the same dates,
+            // so the employee schedule never has two published answers for one date.
+            var superseded = (await unitOfWork.GetRepository<ShiftCycle, int>()
+                    .GetAllAsync(new ShiftCyclesByGymSpec(gymId), cancellationToken))
+                .Where(c => c.Id != cycle.Id
+                    && c.Status == ShiftCycleStatus.Published
+                    && c.StartDate <= cycle.EndDate
+                    && c.EndDate >= cycle.StartDate)
+                .ToList();
+            foreach (var previous in superseded)
+            {
+                previous.Status = ShiftCycleStatus.Archived;
+                unitOfWork.GetRepository<ShiftCycle, int>().Update(previous);
+            }
+
             cycle.Status = ShiftCycleStatus.Published;
             cycle.PublishedAt = DateTime.UtcNow;
             cycle.PublishedBy = actorUserId;
@@ -229,7 +244,7 @@ namespace Service.Services
         {
             await EnsureManagementScopeAsync(actorUserId, gymId, cancellationToken);
 
-            var template = await SaveTemplateAsync(gymId, null, request.Name, request.Start, request.End, cancellationToken);
+            var template = await SaveTemplateAsync(gymId, null, request.Name, request.Start, request.End, request.Color, cancellationToken);
             return mapper.Map<ShiftTemplateDto>(template);
         }
 
@@ -238,7 +253,7 @@ namespace Service.Services
         {
             await EnsureManagementScopeAsync(actorUserId, gymId, cancellationToken);
 
-            var template = await SaveTemplateAsync(gymId, templateId, request.Name, request.Start, request.End, cancellationToken);
+            var template = await SaveTemplateAsync(gymId, templateId, request.Name, request.Start, request.End, request.Color, cancellationToken);
             return mapper.Map<ShiftTemplateDto>(template);
         }
 
@@ -274,18 +289,22 @@ namespace Service.Services
         // ---------- helpers ----------
 
         private async Task<DomainLayer.Models.SchedulingModule.ShiftTemplate> SaveTemplateAsync(
-            int gymId, int? templateId, string name, TimeOnly start, TimeOnly end, CancellationToken cancellationToken)
+            int gymId, int? templateId, string name, TimeOnly start, TimeOnly end, string? color, CancellationToken cancellationToken)
         {
             if (string.IsNullOrWhiteSpace(name))
             {
                 throw new BadRequestException("A template name is required.");
             }
 
-            if (end <= start)
+            // end < start is a valid overnight window (e.g. 20:00 → 04:00).
+            // Only a zero-length window is ambiguous: it cannot tell whether the
+            // shift ends the same day or the next one.
+            if (end == start)
             {
-                throw new BadRequestException("The end time must be after the start time.");
+                throw new BadRequestException("Start and end times must differ.");
             }
 
+            var normalizedColor = color is null ? null : ShiftTemplateColors.NormalizeOrThrow(color);
             var repository = unitOfWork.GetRepository<DomainLayer.Models.SchedulingModule.ShiftTemplate, int>();
 
             if (templateId is null)
@@ -296,6 +315,7 @@ namespace Service.Services
                     Name = name.Trim(),
                     StartTime = start,
                     EndTime = end,
+                    Color = normalizedColor ?? ShiftTemplateColors.DefaultColor,
                     IsActive = true
                 };
                 await repository.AddAsync(template, cancellationToken);
@@ -314,6 +334,7 @@ namespace Service.Services
             existing.Name = name.Trim();
             existing.StartTime = start;
             existing.EndTime = end;
+            existing.Color = normalizedColor ?? ShiftTemplateColors.NormalizeOrDefault(existing.Color);
             repository.Update(existing);
             await unitOfWork.SaveChangesAsync(cancellationToken);
             return existing;

@@ -333,6 +333,7 @@ namespace Service.Services
                     Reason = d.Reason,
                     Note = d.Note,
                     Status = d.Status.ToString(),
+                    Date = PayrollService.CandidateDayOf(d),
                     IssuedAt = d.IssuedAt,
                     IssuedBy = d.IssuedByUser?.UserName ?? string.Empty,
                 })
@@ -444,6 +445,7 @@ namespace Service.Services
                 Reason = candidate.Reason,
                 Note = candidate.Note,
                 Status = candidate.Status.ToString(),
+                Date = PayrollService.CandidateDayOf(candidate),
                 IssuedAt = candidate.IssuedAt,
                 IssuedBy = candidate.IssuedByUser?.UserName ?? string.Empty
             };

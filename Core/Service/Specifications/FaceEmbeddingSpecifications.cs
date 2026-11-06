@@ -9,7 +9,9 @@ namespace Service.Specifications
         public FaceEmbeddingByEmployeeSpec(int employeeId)
         {
             Criteria = f => f.EmployeeId == employeeId;
-            ApplyNoTracking();
+            // Enroll/delete mutate the fetched row before SaveChanges without
+            // Update() — keep tracked.
+            ApplyTracking();
         }
     }
 

@@ -1,5 +1,4 @@
 using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using ServiceAbstraction.Services;
@@ -26,7 +25,7 @@ namespace Presentation.Controllers
         IPayrollService _payroll,
         IEvaluationService _evaluations,
         ISeparationsService _separations,
-        IWebHostEnvironment _environment) : ApiControllerBase
+        IFileStorage _fileStorage) : ApiControllerBase
     {
         private static readonly string[] AllowedDocumentExtensions =
             [".pdf", ".png", ".jpg", ".jpeg", ".webp", ".doc", ".docx"];
@@ -122,9 +121,15 @@ namespace Presentation.Controllers
             return Ok(result);
         }
 
-        /// <summary>POST /api/employees/{id}/documents — multipart upload (file + category + optional expiryDate).</summary>
+        /// <summary>
+        /// POST /api/employees/{id}/documents — multipart upload (file + category +
+        /// optional expiryDate). The employee may upload into their own file; any
+        /// other target needs employees.documents.manage.
+        /// </summary>
         [HttpPost("{id:int}/documents")]
-        [RequestSizeLimit(10 * 1024 * 1024)]
+        // Multipart framing pushes a full 10 MB file over the request limit, so the
+        // transport cap sits above the storage cap rather than duplicating it.
+        [RequestSizeLimit(11 * 1024 * 1024)]
         public async Task<ActionResult<EmployeeDocumentItem>> UploadDocument(
             int id,
             IFormFile? file,
@@ -143,7 +148,7 @@ namespace Presentation.Controllers
                 return BadRequest(new
                 {
                     statusCode = 400,
-                    errorMessage = "Only PDF or image files are accepted.",
+                    errorMessage = "Only PDF, Word, or image files are accepted.",
                 });
             }
 
@@ -158,18 +163,23 @@ namespace Presentation.Controllers
                 parsedExpiry = parsed;
             }
 
-            // The presentation layer owns the file bytes (IFormFile is host-only);
-            // the service receives a validated, already-stored upload descriptor.
-            var storedName = $"{Guid.NewGuid():N}{extension}";
-            var directory = Path.Combine(
-                _environment.ContentRootPath, "App_Data", "EmployeeDocuments", id.ToString());
-            Directory.CreateDirectory(directory);
-            var absolutePath = Path.Combine(directory, storedName);
-            var relativePath = Path.Combine("App_Data", "EmployeeDocuments", id.ToString(), storedName);
-
-            await using (var stream = System.IO.File.Create(absolutePath))
+            // The presentation layer owns the request stream (IFormFile is host-only);
+            // storage writes the bytes and the service receives a validated,
+            // already-stored upload descriptor. The same provider serves the download
+            // route, so a row can never point at a file the download cannot open.
+            StoredFileInfo stored;
+            await using (var content = file.OpenReadStream())
             {
-                await file.CopyToAsync(stream, cancellationToken);
+                try
+                {
+                    stored = await _fileStorage.SaveAsync("documents", file.FileName, content, cancellationToken);
+                }
+                catch (InvalidOperationException exception)
+                {
+                    // Storage refused the request itself (unsupported type or over
+                    // the cap) — that is a 400, not a server error.
+                    return BadRequest(new { statusCode = 400, errorMessage = exception.Message });
+                }
             }
 
             try
@@ -177,8 +187,9 @@ namespace Presentation.Controllers
                 var result = await _service.AddDocumentAsync(GetActorUserId(), id, new EmployeeDocumentUpload
                 {
                     FileName = Path.GetFileName(file.FileName),
-                    RelativeFilePath = relativePath,
-                    SizeBytes = file.Length,
+                    RelativeFilePath = stored.RelativePath,
+                    SizeBytes = stored.SizeBytes,
+                    ContentType = stored.ContentType,
                     Category = category ?? string.Empty,
                     ExpiryDate = parsedExpiry,
                 }, cancellationToken);
@@ -187,11 +198,7 @@ namespace Presentation.Controllers
             catch
             {
                 // No database row was created, so remove the orphaned file.
-                if (System.IO.File.Exists(absolutePath))
-                {
-                    System.IO.File.Delete(absolutePath);
-                }
-
+                _fileStorage.Delete(stored.RelativePath);
                 throw;
             }
         }

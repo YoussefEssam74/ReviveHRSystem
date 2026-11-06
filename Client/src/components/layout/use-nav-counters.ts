@@ -16,14 +16,12 @@ import {
   getVacancyRequests,
   listBranchDeductions,
 } from '../../features/portal/api/branch.api'
-import { PAGE_PATHS, type PortalPageId } from '../../features/portal/portal-nav'
+import { type PortalPageId } from '../../features/portal/portal-nav'
 
 /** Number-only pill data (mock badgeHtml). count <= 0 removes the pill. */
 export interface NavBadge {
   count: number
   label: string
-  /** Deep link straight to the row the count points at, when there is one. */
-  href?: string
 }
 
 /** Count queries are cheap; refetching more often than this just burns calls. */
@@ -142,22 +140,20 @@ export function useNavCounters(): Partial<Record<PortalPageId, NavBadge>> {
     enabled: relevant != null && isManager && gymId != null,
     staleTime: FRESH_MS,
   })
-  const offTemplateIds = useMemo(
-    () => new Set((cycleDetail.data?.shiftTemplates ?? []).filter((t) => t.isOff).map((t) => t.id)),
-    [cycleDetail.data],
-  )
   const unscheduled = useMemo(
     () =>
       (cycleDetail.data?.assignments ?? []).filter((row) =>
-        row.days.some((day) => day == null || offTemplateIds.has(day)),
+        row.assignedDays?.length
+          ? row.assignedDays.some((assigned) => !assigned)
+          : row.days.some((day) => day == null),
       ).length,
-    [cycleDetail.data, offTemplateIds],
+    [cycleDetail.data],
   )
 
   return useMemo(() => {
     const badges: Partial<Record<PortalPageId, NavBadge>> = {}
-    const put = (id: PortalPageId, count: number, label: string, href?: string) => {
-      if (count > 0) badges[id] = { count, label, href }
+    const put = (id: PortalPageId, count: number, label: string) => {
+      if (count > 0) badges[id] = { count, label }
     }
 
     put('requests', dashboard.data?.pendingRequestCount ?? 0, 'pending')
@@ -181,8 +177,8 @@ export function useNavCounters(): Partial<Record<PortalPageId, NavBadge>> {
 
     // Employees Performance: everything the manager still owes a decision on —
     // stage-1 requests and deduction candidates nobody has approved or rejected —
-    // plus the leaving cases already in flight (BM). The pill links straight to the
-    // employee that owes it, opened on the tab holding the missing action.
+    // plus the leaving cases already in flight (BM). The pill is a pure count: the
+    // sidebar always opens the page at its root, never inside an employee.
     const openDeductions = (pendingDeductions.data ?? []).filter((row) => row.status === 'Pending')
     const openRequests = inbox.data?.totalCount ?? 0
     const openActions = openRequests + openDeductions.length
@@ -195,18 +191,7 @@ export function useNavCounters(): Partial<Record<PortalPageId, NavBadge>> {
     ]
       .filter((part): part is string => part != null)
       .join(' · ')
-    const perfTarget =
-      openDeductions[0] != null
-        ? `?employee=${openDeductions[0].employeeId}&tab=deductions`
-        : inbox.data?.items[0] != null
-          ? `?employee=${inbox.data.items[0].employeeId}&tab=requests`
-          : ''
-    put(
-      'employees-performance',
-      openActions + leavingCases,
-      perfLabel,
-      `${PAGE_PATHS['employees-performance']}${perfTarget}`,
-    )
+    put('employees-performance', openActions + leavingCases, perfLabel)
 
     if (isBranchManager) {
       put('recruitment', vacancies.data?.total ?? 0, 'pending vacancy requests')

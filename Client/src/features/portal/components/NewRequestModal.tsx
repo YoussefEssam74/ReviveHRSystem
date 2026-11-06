@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { FileText, X } from 'lucide-react'
 import {
   createRequest,
   getExcusedHoursBudget,
@@ -13,6 +14,13 @@ import { Button } from '../../../components/ui/button'
 import { Skeleton } from '../../../components/ui/skeleton'
 import { useToast } from '../../../components/ui/toast'
 import { describeApiError } from '../../../lib/api-client'
+import { formatBytes } from '../../../lib/format'
+import {
+  REQUEST_ATTACHMENT_ACCEPT,
+  REQUEST_ATTACHMENT_EXTENSIONS,
+  REQUEST_ATTACHMENT_FORMATS_LABEL,
+  validateUploadFile,
+} from '../../../lib/file-upload'
 import { cn } from '../../../lib/utils'
 
 const FIELD_TO_LABEL: Record<string, string> = {
@@ -158,6 +166,16 @@ export function NewRequestModal({
       setFormError('A medical certificate must be attached to a sick-leave request.')
       return
     }
+    if (form.attachment) {
+      const invalid = validateUploadFile(form.attachment, {
+        allowedExtensions: REQUEST_ATTACHMENT_EXTENSIONS,
+        formatsLabel: REQUEST_ATTACHMENT_FORMATS_LABEL,
+      })
+      if (invalid) {
+        setFormError(invalid)
+        return
+      }
+    }
     submitMutation.mutate()
   }
 
@@ -196,6 +214,7 @@ export function NewRequestModal({
               set('colleagueId', '')
               set('amount', '')
               set('attachment', null)
+              setFormError(null)
             }}
           >
             <option value="">{typesQuery.isLoading ? 'Loading types…' : 'Select type...'}</option>
@@ -304,15 +323,68 @@ export function NewRequestModal({
                     <label htmlFor="req-certificate" className="form-label">
                       Medical Certificate
                     </label>
+                    <label
+                      htmlFor="req-certificate"
+                      className={cn(
+                        'flex cursor-pointer items-center gap-2.5 rounded-lg border-2 border-dashed px-3 py-2.5 transition-colors',
+                        form.attachment
+                          ? 'border-brand-300 bg-brand-50/60'
+                          : 'border-charcoal-200 hover:border-brand-400',
+                      )}
+                    >
+                      <FileText className="h-4 w-4 shrink-0 text-charcoal-400" aria-hidden="true" />
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-xs font-medium text-charcoal-800">
+                          {form.attachment ? form.attachment.name : 'Attach a PDF, image or Word file'}
+                        </span>
+                        <span className="block text-[10px] text-charcoal-500">
+                          {form.attachment
+                            ? `${formatBytes(form.attachment.size)} · ready to submit`
+                            : `${REQUEST_ATTACHMENT_FORMATS_LABEL} up to 10 MB`}
+                        </span>
+                      </span>
+                      <span className="shrink-0 text-[10px] font-semibold text-brand-600">
+                        {form.attachment ? 'Replace' : 'Browse'}
+                      </span>
+                    </label>
                     <input
                       id="req-certificate"
                       type="file"
-                      className="form-input"
-                      accept=".pdf,.png,.jpg,.jpeg,.webp,.gif"
+                      className="hidden"
+                      accept={REQUEST_ATTACHMENT_ACCEPT}
                       onChange={(event) => {
-                        set('attachment', event.target.files?.[0] ?? null)
+                        const next = event.target.files?.[0] ?? null
+                        event.target.value = ''
+                        if (!next) return
+                        const invalid = validateUploadFile(next, {
+                          allowedExtensions: REQUEST_ATTACHMENT_EXTENSIONS,
+                          formatsLabel: REQUEST_ATTACHMENT_FORMATS_LABEL,
+                        })
+                        if (invalid) {
+                          set('attachment', null)
+                          setFormError(invalid)
+                          return
+                        }
+                        set('attachment', next)
+                        setFormError(null)
                       }}
                     />
+                    {form.attachment && (
+                      <div className="mt-1 flex items-center justify-between gap-2 rounded bg-white px-2 py-1 text-[10px] text-charcoal-500">
+                        <span className="min-w-0 truncate">Attached · {form.attachment.name}</span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            set('attachment', null)
+                            setFormError(null)
+                          }}
+                          className="inline-flex shrink-0 items-center gap-0.5 font-semibold text-charcoal-600 transition-colors hover:text-red-600"
+                        >
+                          <X className="h-3 w-3" aria-hidden="true" />
+                          Remove
+                        </button>
+                      </div>
+                    )}
                   </div>
                 )
               }

@@ -112,6 +112,7 @@ namespace Service.Services
 
             var total = rows.Count;
             var items = rows
+                .OrderByDescending(r => r.Date, StringComparer.Ordinal)
                 .Skip((page - 1) * pageSize)
                 .Take(pageSize)
                 .ToList();
@@ -389,12 +390,19 @@ namespace Service.Services
             {
                 for (var date = from; date <= to; date = date.AddDays(1))
                 {
-                    var shiftLabel = BuildShiftLabel(assignmentIndex.TryGetValue((employee.Id, date), out var assignment) ? assignment : null);
+                    assignmentIndex.TryGetValue((employee.Id, date), out var assignment);
+                    var shiftLabel = BuildShiftLabel(assignment);
+                    var isOffDay = assignment is null || IsOffAssignment(assignment);
 
                     if (recordIndex.TryGetValue((employee.Id, date), out var record))
                     {
                         correctionsByRecordId.TryGetValue(record.Id, out var correction);
-                        rows.Add(MapRow(record, employee, employee.Gym?.Name ?? string.Empty, correction, shiftLabel));
+                        var statusOverride = isOffDay
+                            && record.CheckInTime is null
+                            && record.CheckOutTime is null
+                            ? "Off"
+                            : null;
+                        rows.Add(MapRow(record, employee, employee.Gym?.Name ?? string.Empty, correction, shiftLabel, statusOverride));
                         continue;
                     }
 
@@ -402,10 +410,10 @@ namespace Service.Services
                 }
             }
 
-            // The grid opens grouped per employee, then chronologically.
+            // The grid opens grouped per employee, then newest first.
             return rows
                 .OrderBy(r => r.Name, StringComparer.OrdinalIgnoreCase)
-                .ThenBy(r => r.Date, StringComparer.Ordinal)
+                .ThenByDescending(r => r.Date)
                 .ToList();
         }
 
@@ -587,7 +595,12 @@ namespace Service.Services
         // ------------------------------------------------------------------
 
         private AttendanceListItem MapRow(
-            AttendanceRecord record, Employee employee, string gymName, AttendanceCorrection? latestCorrection, string? shiftLabel = null)
+            AttendanceRecord record,
+            Employee employee,
+            string gymName,
+            AttendanceCorrection? latestCorrection,
+            string? shiftLabel = null,
+            string? statusOverride = null)
         {
             var source = record.CheckInMethod.HasValue || record.CheckOutMethod.HasValue
                 ? ((record.CheckInMethod ?? record.CheckOutMethod) == AttendanceMethod.Manual ? "Manual" : "Biometric")
@@ -603,10 +616,10 @@ namespace Service.Services
                 // The compose always passes an assignment label ("Off" when none covers
                 // the day), which would bury the shift the record itself was pinned to —
                 // the record's own template wins whenever the assignment says nothing.
-                Shift = shiftLabel is null or "Off" ? BuildShiftLabelFromRecord(record) : shiftLabel,
+                Shift = shiftLabel is null ? BuildShiftLabelFromRecord(record) : shiftLabel,
                 CheckIn = FormatPunch(record.CheckInTime),
                 CheckOut = FormatPunch(record.CheckOutTime),
-                Status = DisplayStatus(record.Status),
+                Status = statusOverride ?? DisplayStatus(record.Status),
                 Source = source,
                 Notes = record.Notes,
                 CorrectedBy = latestCorrection is null
@@ -655,8 +668,13 @@ namespace Service.Services
             return "Off";
         }
 
+        private static bool IsOffAssignment(ShiftAssignment assignment) =>
+            assignment.ShiftTemplateId is null
+            || assignment.ShiftTemplate is null
+            || assignment.ShiftTemplate.Name.Contains("off", StringComparison.OrdinalIgnoreCase);
+
         private static string BuildShiftLabel(ShiftAssignment? assignment) =>
-            assignment?.ShiftTemplate is not null
+            assignment is not null && !IsOffAssignment(assignment)
                 ? FormatShift(assignment.ShiftTemplate.StartTime, assignment.ShiftTemplate.EndTime)
                 : "Off";
 

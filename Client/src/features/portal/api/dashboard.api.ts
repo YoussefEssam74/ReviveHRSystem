@@ -6,6 +6,8 @@ export interface DashboardUser {
   firstName: string
   position: string
   gymName: string
+  /** Gym the record is homed in — 0 when there is no employee record at all. */
+  gymId: number
 }
 
 export interface DashboardShift {

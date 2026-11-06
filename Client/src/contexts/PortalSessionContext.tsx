@@ -65,6 +65,17 @@ export function PortalSessionProvider({ children }: { children: ReactNode }) {
       // subsequent /api calls must carry the newly-scoped token.
       const next: StoredSession = {
         accessToken: response.accessToken,
+        // The switch rotated the refresh credential to the new gym's scope
+        // (SwitchGymAsync). Store the replacement — the pre-switch chain no
+        // longer matches the session's gym, so it is never carried over:
+        // keeping it would let a silent refresh re-mint OLD-gym tokens and
+        // undo the switch. A response without a refresh token (older backend)
+        // degrades to a mandatory re-login at access-token expiry, which is
+        // the same recovery the pre-rotation design already required.
+        refreshToken: response.refreshToken,
+        refreshExpiresAt: response.refreshExpiresInSeconds
+          ? Date.now() + response.refreshExpiresInSeconds * 1000
+          : undefined,
         expiresAt: Date.now() + response.expiresInSeconds * 1000,
         user: {
           ...session.user,

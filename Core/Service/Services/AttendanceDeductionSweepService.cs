@@ -92,7 +92,11 @@ namespace Service.Services
                     .GroupBy(r => r.Date)
                     .ToDictionary(g => g.Key, g => g.First());
                 var scheduled = assignments
-                    .Where(a => a.EmployeeId == employee.Id && a.ShiftTemplateId is not null)
+                    .Where(a => a.EmployeeId == employee.Id && !IsOffAssignment(a))
+                    .Select(a => a.Date)
+                    .ToHashSet();
+                var scheduledOff = assignments
+                    .Where(a => a.EmployeeId == employee.Id && IsOffAssignment(a))
                     .Select(a => a.Date)
                     .ToHashSet();
                 var dayOffDates = new HashSet<DateOnly>();
@@ -121,6 +125,12 @@ namespace Service.Services
                 for (var date = from; date <= to; date = date.AddDays(1))
                 {
                     dayRecords.TryGetValue(date, out var record);
+
+                    if (record is not null && scheduledOff.Contains(date) && record.CheckInTime is null && record.CheckOutTime is null)
+                    {
+                        changed |= Drop(own, date, record.Id);
+                        continue;
+                    }
 
                     if (record is not null && record.Status is not (AttendanceStatus.Late or AttendanceStatus.Absent))
                     {
@@ -330,6 +340,11 @@ namespace Service.Services
         /// only ever done by this sweep or by payroll close, which finalises at once).
         /// Manager-issued rows carry neither and survive.
         /// </summary>
+        private static bool IsOffAssignment(ShiftAssignment assignment) =>
+            assignment.ShiftTemplateId is null
+            || assignment.ShiftTemplate is null
+            || assignment.ShiftTemplate.Name.Contains("off", StringComparison.OrdinalIgnoreCase);
+
         private bool Drop(List<DeductionCandidate> own, DateOnly date, int? recordId)
         {
             var doomed = own.Where(c => c.Status == DeductionStatus.Pending

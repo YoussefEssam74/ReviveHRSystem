@@ -1,6 +1,7 @@
 using AutoMapper;
 using DomainLayer.Contracts;
 using DomainLayer.Exceptions;
+using DomainLayer.Models.EmployeeModule.Enums;
 using DomainLayer.Models.UserModule;
 using DomainLayer.Models.UserModule.Enums;
 using DomainLayer.Models.OrganizationModule;
@@ -24,6 +25,7 @@ namespace Service.Services
         IUserAccessRepository userAccess,
         IPasswordHasher passwordHasher,
         ITokenService tokenService,
+        IUserSessionService sessionService,
         SecurityLockoutOptions lockoutOptions,
         IMapper mapper) : IAuthService
     {
@@ -59,7 +61,7 @@ namespace Service.Services
                 throw new UnAuthorizedException("Invalid email or password.");
             }
 
-            if (!user.IsActive)
+            if (!await sessionService.IsSessionAllowedAsync(user.Id, cancellationToken))
             {
                 throw new UnAuthorizedException("Invalid email or password.");
             }
@@ -101,7 +103,7 @@ namespace Service.Services
             var user = await userRepository.GetByIdAsync(new UserByIdSpec(userId), cancellationToken)
                 ?? throw new UnAuthorizedException("Your session has expired. Please sign in again.");
 
-            if (!user.IsActive)
+            if (!await sessionService.IsSessionAllowedAsync(user.Id, cancellationToken))
             {
                 throw new UnAuthorizedException("Your session has expired. Please sign in again.");
             }
@@ -146,13 +148,13 @@ namespace Service.Services
                 // the user's other active sessions stay untouched.
                 if (stored?.ReplacedByTokenHash is not null)
                 {
-                    await RevokeAllUserRefreshTokensAsync(stored.UserId, cancellationToken);
+                    await sessionService.RevokeAllRefreshTokensAsync(stored.UserId, cancellationToken);
                 }
                 throw new UnAuthorizedException("Your session has expired. Please sign in again.");
             }
 
             var user = stored.User;
-            if (user is null || !user.IsActive)
+            if (user is null || !await sessionService.IsSessionAllowedAsync(user.Id, cancellationToken))
             {
                 throw new UnAuthorizedException("Your session is invalid. Please sign in again.");
             }
@@ -176,7 +178,7 @@ namespace Service.Services
             {
                 // A concurrent rotation won the claim: this token was already replaced
                 // — presented again, it is reuse; revoke the whole chain.
-                await RevokeAllUserRefreshTokensAsync(stored.UserId, cancellationToken);
+                await sessionService.RevokeAllRefreshTokensAsync(stored.UserId, cancellationToken);
                 throw new UnAuthorizedException("Your session has expired. Please sign in again.");
             }
 
@@ -226,34 +228,6 @@ namespace Service.Services
             };
         }
 
-        private async Task RevokeAllUserRefreshTokensAsync(int userId, CancellationToken cancellationToken)
-        {
-            var repo = unitOfWork.GetRepository<DomainLayer.Models.UserModule.RefreshToken, int>();
-            var activeTokens = await repo.GetAllAsync(new RefreshTokensByUserActiveSpec(userId), cancellationToken);
-            foreach (var rt in activeTokens)
-            {
-                rt.RevokedAtUtc = DateTime.UtcNow;
-                repo.Update(rt);
-            }
-
-            try
-            {
-                await unitOfWork.SaveChangesAsync(cancellationToken);
-            }
-            catch (DbUpdateConcurrencyException exception)
-            {
-                // A chain member was claimed by a concurrent refresh mid-revocation.
-                // That row is already revoked by the winner; reload the rejected rows
-                // (fresh xmin stamps) and persist the revocation of the remaining ones.
-                foreach (var entry in exception.Entries)
-                {
-                    await entry.ReloadAsync(cancellationToken);
-                }
-
-                await unitOfWork.SaveChangesAsync(cancellationToken);
-            }
-        }
-
         public async Task<CurrentUserResponse> GetCurrentUserAsync(int? actorUserId, int? selectedGymId, CancellationToken cancellationToken = default)
         {
             if (actorUserId is null or <= 0)
@@ -263,7 +237,7 @@ namespace Service.Services
 
             var userRepository = unitOfWork.GetRepository<User, int>();
             var user = await userRepository.GetByIdAsync(new UserByIdWithProfileSpec(actorUserId.Value), cancellationToken);
-            if (user is null || !user.IsActive)
+            if (user is null || !user.IsActive || user.EmployeeProfile?.Status == EmployeeStatus.Terminated)
             {
                 throw new UnAuthorizedException("Your session is invalid. Please sign in again.");
             }
@@ -345,15 +319,49 @@ namespace Service.Services
             // Issue a rotating refresh token so the session can outlive the access
             // token without forcing a re-login (ADR-002 refresh-token amendment).
             var plainRefreshToken = tokenService.GenerateRefreshToken();
-            await unitOfWork.GetRepository<DomainLayer.Models.UserModule.RefreshToken, int>().AddAsync(
+            var newTokenHash = tokenService.HashRefreshToken(plainRefreshToken);
+            var refreshRepo = unitOfWork.GetRepository<DomainLayer.Models.UserModule.RefreshToken, int>();
+            await refreshRepo.AddAsync(
                 new DomainLayer.Models.UserModule.RefreshToken
                 {
                     UserId = user.Id,
-                    TokenHash = tokenService.HashRefreshToken(plainRefreshToken),
+                    TokenHash = newTokenHash,
                     ScopedGymId = scopedGymId,
                     ExpiresAtUtc = tokenService.RefreshTokenExpiresAtUtc
                 }, cancellationToken);
-            await unitOfWork.SaveChangesAsync(cancellationToken);
+
+            // Single-live-chain discipline (same rationale as SwitchGymAsync): a
+            // fresh login/selection revokes every other alive refresh chain of
+            // this user, so a stale SPA context can no longer silently refresh
+            // an old chain and re-mint a token scoped to a gym the user no
+            // longer selected. The new row is excluded by hash (its Id is not
+            // assigned until the save).
+            var staleChain = await refreshRepo.GetAllAsync(
+                new RefreshTokensByUserActiveSpec(user.Id), cancellationToken);
+            foreach (var zombie in staleChain)
+            {
+                zombie.RevokedAtUtc = DateTime.UtcNow;
+                refreshRepo.Update(zombie);
+            }
+
+            // A concurrent refresh may have claimed one of the fetched chains between
+            // the read and this save (xmin concurrency): that update is rejected, but
+            // the login/selection itself must not fail — reload the rejected rows
+            // (fresh stamps; the winner already revoked/rotated them anyway) and
+            // persist the sweep. Mirrors RevokeAllUserRefreshTokensAsync.
+            try
+            {
+                await unitOfWork.SaveChangesAsync(cancellationToken);
+            }
+            catch (DbUpdateConcurrencyException exception)
+            {
+                foreach (var entry in exception.Entries)
+                {
+                    await entry.ReloadAsync(cancellationToken);
+                }
+
+                await unitOfWork.SaveChangesAsync(cancellationToken);
+            }
 
             return new LoginResponse
             {

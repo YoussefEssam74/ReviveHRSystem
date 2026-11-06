@@ -52,6 +52,8 @@ export interface RequestDetail {
   hrComment: string | null
   payment: string | null
   reason: string
+  /** A file (the sick-leave medical certificate) rides with this request. */
+  hasAttachment: boolean
   timeline: RequestTimelineStep[]
 }
 

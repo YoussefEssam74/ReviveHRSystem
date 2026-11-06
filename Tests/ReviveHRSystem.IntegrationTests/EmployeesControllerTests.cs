@@ -3,7 +3,11 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
+using DomainLayer.Models.EmployeeModule.Enums;
 using DomainLayer.Models.UserModule.Enums;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
+using Presistence.Data;
 using ReviveHRSystem.IntegrationTests.Fixtures;
 using ReviveHRSystem.IntegrationTests.Support;
 using Xunit;
@@ -345,6 +349,50 @@ namespace ReviveHRSystem.IntegrationTests
         }
 
         // ------------------------------------------------------------------
+        // PUT /api/employees/{id} — status termination
+        // ------------------------------------------------------------------
+
+        [Fact]
+        public async Task Put_StatusTerminated_DeactivatesUserAndRevokesRefreshTokens()
+        {
+            var gym = await new TestDataBuilder(_fixture.Services).CreateGymWithStationAsync();
+            var adminToken = await _fixture.GetAdminTokenAsync();
+            var created = await CreateViaApiAsync(adminToken, NewHireBody(gym.GymId));
+            var id = created.GetProperty("id").GetInt32();
+            var email = created.GetProperty("email").GetString()!;
+
+            var login = await _fixture.Client.PostAsJsonAsync("/api/auth/login",
+                new { email, password = "Revive!2026" });
+            Assert.Equal(HttpStatusCode.OK, login.StatusCode);
+            var loginBody = await login.Content.ReadFromJsonAsync<JsonElement>();
+            var accessToken = loginBody.GetProperty("accessToken").GetString()!;
+
+            var request = _fixture.AuthorizedRequest(HttpMethod.Put, $"/api/employees/{id}",
+                new { status = "Terminated" }, adminToken);
+            var response = await _fixture.Client.SendAsync(request);
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+            using var scope = _fixture.Services.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<ReviveHrDbContext>();
+            var employee = await db.Employees.AsNoTracking().SingleAsync(e => e.Id == id);
+            Assert.Equal(EmployeeStatus.Terminated, employee.Status);
+            var user = await db.Users.AsNoTracking().SingleAsync(u => u.Id == employee.UserId);
+            Assert.False(user.IsActive);
+            Assert.True(await db.RefreshTokens.AnyAsync(t => t.UserId == employee.UserId));
+            Assert.True(await db.RefreshTokens.AsNoTracking()
+                .Where(t => t.UserId == employee.UserId)
+                .AllAsync(t => t.RevokedAtUtc != null));
+
+            var me = await _fixture.Client.SendAsync(
+                _fixture.AuthorizedRequest(HttpMethod.Get, "/api/auth/me", null, accessToken));
+            Assert.Equal(HttpStatusCode.Unauthorized, me.StatusCode);
+
+            var relogin = await _fixture.Client.PostAsJsonAsync("/api/auth/login",
+                new { email, password = "Revive!2026" });
+            Assert.Equal(HttpStatusCode.Unauthorized, relogin.StatusCode);
+        }
+
+        // ------------------------------------------------------------------
         // POST /api/employees/{id}/status-change
         // ------------------------------------------------------------------
 
@@ -385,6 +433,83 @@ namespace ReviveHRSystem.IntegrationTests
             Assert.Equal("Active", entry.GetProperty("from").GetString());
             Assert.Equal("Suspended", entry.GetProperty("to").GetString());
             Assert.Equal("Policy violation", entry.GetProperty("detail").GetString());
+        }
+
+        [Fact]
+        public async Task StatusChange_Terminated_DeactivatesUserAndRevokesRefreshTokens()
+        {
+            var builder = new TestDataBuilder(_fixture.Services);
+            var gym = await builder.CreateGymWithStationAsync();
+            var adminToken = await _fixture.GetAdminTokenAsync();
+            var created = await CreateViaApiAsync(adminToken, NewHireBody(gym.GymId));
+            var id = created.GetProperty("id").GetInt32();
+            var email = created.GetProperty("email").GetString()!;
+
+            // Sign in while active to mint an access token + refresh chain.
+            var login = await _fixture.Client.PostAsJsonAsync("/api/auth/login",
+                new { email, password = "Revive!2026" });
+            Assert.Equal(HttpStatusCode.OK, login.StatusCode);
+            var loginBody = await login.Content.ReadFromJsonAsync<JsonElement>();
+            var accessToken = loginBody.GetProperty("accessToken").GetString()!;
+            var refreshToken = loginBody.GetProperty("refreshToken").GetString()!;
+
+            var request = _fixture.AuthorizedRequest(
+                HttpMethod.Post, $"/api/employees/{id}/status-change",
+                new { status = "Terminated", note = "Contract ended" }, adminToken);
+            var response = await _fixture.Client.SendAsync(request);
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+            using var scope = _fixture.Services.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<ReviveHrDbContext>();
+            var employee = await db.Employees.AsNoTracking().SingleAsync(e => e.Id == id);
+            Assert.Equal(EmployeeStatus.Terminated, employee.Status);
+            var user = await db.Users.AsNoTracking().SingleAsync(u => u.Id == employee.UserId);
+            Assert.False(user.IsActive);
+            Assert.True(await db.RefreshTokens.AnyAsync(t => t.UserId == employee.UserId));
+            Assert.True(await db.RefreshTokens.AsNoTracking()
+                .Where(t => t.UserId == employee.UserId)
+                .AllAsync(t => t.RevokedAtUtc != null));
+
+            // The pre-termination access token is dead on the next request.
+            var me = await _fixture.Client.SendAsync(
+                _fixture.AuthorizedRequest(HttpMethod.Get, "/api/auth/me", null, accessToken));
+            Assert.Equal(HttpStatusCode.Unauthorized, me.StatusCode);
+
+            // The refresh chain was revoked and a fresh sign-in is refused.
+            var refresh = await _fixture.Client.PostAsJsonAsync("/api/auth/refresh", new { refreshToken });
+            Assert.Equal(HttpStatusCode.Unauthorized, refresh.StatusCode);
+
+            var relogin = await _fixture.Client.PostAsJsonAsync("/api/auth/login",
+                new { email, password = "Revive!2026" });
+            Assert.Equal(HttpStatusCode.Unauthorized, relogin.StatusCode);
+        }
+
+        [Fact]
+        public async Task StatusChange_BackToActive_RestoresLogin()
+        {
+            var gym = await new TestDataBuilder(_fixture.Services).CreateGymWithStationAsync();
+            var adminToken = await _fixture.GetAdminTokenAsync();
+            var created = await CreateViaApiAsync(adminToken, NewHireBody(gym.GymId));
+            var id = created.GetProperty("id").GetInt32();
+            var email = created.GetProperty("email").GetString()!;
+
+            var terminate = await _fixture.Client.SendAsync(_fixture.AuthorizedRequest(
+                HttpMethod.Post, $"/api/employees/{id}/status-change",
+                new { status = "Terminated" }, adminToken));
+            Assert.Equal(HttpStatusCode.OK, terminate.StatusCode);
+
+            var blocked = await _fixture.Client.PostAsJsonAsync("/api/auth/login",
+                new { email, password = "Revive!2026" });
+            Assert.Equal(HttpStatusCode.Unauthorized, blocked.StatusCode);
+
+            var restore = await _fixture.Client.SendAsync(_fixture.AuthorizedRequest(
+                HttpMethod.Post, $"/api/employees/{id}/status-change",
+                new { status = "Active" }, adminToken));
+            Assert.Equal(HttpStatusCode.OK, restore.StatusCode);
+
+            var login = await _fixture.Client.PostAsJsonAsync("/api/auth/login",
+                new { email, password = "Revive!2026" });
+            Assert.Equal(HttpStatusCode.OK, login.StatusCode);
         }
 
         // ------------------------------------------------------------------

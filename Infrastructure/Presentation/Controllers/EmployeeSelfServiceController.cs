@@ -92,10 +92,14 @@ namespace Presentation.Controllers
     {
         [HttpGet]
         public async Task<ActionResult<EmployeeScheduleDto>> GetSchedule(
-            int id, [FromQuery] string? month, CancellationToken cancellationToken)
+            int id,
+            [FromQuery] string? month,
+            [FromQuery] string? from,
+            [FromQuery] string? to,
+            CancellationToken cancellationToken)
         {
             var schedule = await scheduleService.GetScheduleAsync(
-                GetActorUserId(), id, month, GetGymIdFromToken(), cancellationToken);
+                GetActorUserId(), id, month, from, to, GetGymIdFromToken(), cancellationToken);
             return Ok(schedule);
         }
     }

@@ -27,7 +27,8 @@ namespace Service.Services
     public sealed class SeparationsService(
         IUnitOfWork _unitOfWork,
         IAccessControlService _accessControl,
-        IUserAccessRepository _userAccess) : ISeparationsService
+        IUserAccessRepository _userAccess,
+        IUserSessionService _userSessions) : ISeparationsService
     {
         /// <summary>The five exit tasks the mock pre-seeds on every separation.</summary>
         internal static readonly string[] ExitChecklistLabels =
@@ -212,11 +213,12 @@ namespace Service.Services
             var target = SeparationStages.FirstOrDefault(s => string.Equals(s, request.Status?.Trim(), StringComparison.OrdinalIgnoreCase))
                 ?? throw new BadRequestException("Status must be Requested, Notice Period, Exit In Progress, Under Review, or Completed.");
 
-            if (target == kase.Status)
+            if (target == kase.Status && target != "Completed")
             {
                 return new MessageResponse { Message = $"Separation is already {target}." };
             }
 
+            var alreadyCompleted = target == kase.Status;
             kase.Status = target;
             if (target == "Completed")
             {
@@ -239,9 +241,34 @@ namespace Service.Services
             }
 
             _unitOfWork.GetRepository<OffboardingCase, int>().Update(kase);
+
+            if (target == "Completed")
+            {
+                // A completed case means the employment is over: archive the employee
+                // and cut live access, exactly like the explicit finalize action.
+                // Re-running this for an already-Completed case self-heals legacy rows
+                // whose employee/login were never terminated.
+                await AuditAsync(actor, "Employee Offboarded", nameof(Employee), kase.EmployeeId, kase.Employee.GymId,
+                    new
+                    {
+                        target = kase.Employee.FullName,
+                        detail = $"Separation completed via stage update (Reason: {kase.Reason})",
+                    },
+                    cancellationToken);
+                await TerminateEmployeeAsync(
+                    actor, kase,
+                    $"Separation completed via stage update (Reason: {kase.Reason})",
+                    cancellationToken);
+            }
+
             await _unitOfWork.SaveChangesAsync(cancellationToken);
 
-            return new MessageResponse { Message = $"Separation stage updated to {target}." };
+            return new MessageResponse
+            {
+                Message = alreadyCompleted
+                    ? "Separation is already Completed."
+                    : $"Separation stage updated to {target}.",
+            };
         }
 
         // ==================================================================
@@ -298,34 +325,6 @@ namespace Service.Services
                 throw new BadRequestException("Save the exit verdict before finalizing.");
             }
 
-            var employee = await _unitOfWork.GetRepository<Employee, int>().GetByIdAsync(kase.EmployeeId, cancellationToken)
-                ?? throw new NotFoundException("Employee not found.");
-
-            // Archive the employee: status → Terminated with an Offboard history row.
-            if (employee.Status != EmployeeStatus.Terminated)
-            {
-                var entry = EmployeeService.NewHistory(
-                    employee.Id,
-                    DateOnly.FromDateTime(DateTime.UtcNow),
-                    EmploymentChangeType.Offboard,
-                    EmployeeService.StatusDisplay(employee.Status),
-                    EmployeeService.StatusDisplay(EmployeeStatus.Terminated),
-                    $"Exit checklist completed. Separation finalized (Reason: {kase.Reason})",
-                    actor.Id);
-                employee.Status = EmployeeStatus.Terminated;
-                _unitOfWork.GetRepository<Employee, int>().Update(employee);
-                await _unitOfWork.GetRepository<EmploymentHistory, int>().AddAsync(entry, cancellationToken);
-            }
-
-            // Ending directory standing does not end access — ChangeStatusAsync deliberately
-            // leaves the login switch to the separations flow, so sever it here.
-            var user = await _unitOfWork.GetRepository<User, int>().GetByIdAsync(employee.UserId, cancellationToken);
-            if (user is { IsActive: true })
-            {
-                user.IsActive = false;
-                _unitOfWork.GetRepository<User, int>().Update(user);
-            }
-
             if (kase.Status != "Completed")
             {
                 kase.Status = "Completed";
@@ -334,13 +333,22 @@ namespace Service.Services
             kase.CompletedAt ??= DateTime.UtcNow;
             _unitOfWork.GetRepository<OffboardingCase, int>().Update(kase);
 
-            await AuditAsync(actor, "Employee Offboarded", nameof(Employee), employee.Id, employee.GymId,
+            await AuditAsync(actor, "Employee Offboarded", nameof(Employee), kase.EmployeeId, kase.Employee.GymId,
                 new
                 {
-                    target = employee.FullName,
+                    target = kase.Employee.FullName,
                     detail = $"Exit checklist completed. Separation finalized (Reason: {kase.Reason})",
                 },
                 cancellationToken);
+
+            // Archive the employee (status Terminated + Offboard history row) and
+            // sever every live session: deactivate the account and revoke refresh
+            // tokens. The shared helper keeps this path identical to stage → Completed.
+            var employee = await TerminateEmployeeAsync(
+                actor, kase,
+                $"Exit checklist completed. Separation finalized (Reason: {kase.Reason})",
+                cancellationToken);
+
             await _unitOfWork.SaveChangesAsync(cancellationToken);
 
             return new MessageResponse { Message = $"Separation completed for {employee.FullName}." };
@@ -475,6 +483,36 @@ namespace Service.Services
                     ? null
                     : new SeparationRehire { Status = c.RehireStatus, Note = c.RehireNote },
             };
+        }
+
+        /// <summary>
+        /// Archives the employee for a completed separation and cuts every live
+        /// session. Idempotent: an already-Terminated employee still gets their
+        /// account deactivated and refresh tokens revoked.
+        /// </summary>
+        private async Task<Employee> TerminateEmployeeAsync(
+            User actor, OffboardingCase kase, string historyReason, CancellationToken cancellationToken)
+        {
+            var employee = await _unitOfWork.GetRepository<Employee, int>().GetByIdAsync(kase.EmployeeId, cancellationToken)
+                ?? throw new NotFoundException("Employee not found.");
+
+            if (employee.Status != EmployeeStatus.Terminated)
+            {
+                var entry = EmployeeService.NewHistory(
+                    employee.Id,
+                    DateOnly.FromDateTime(DateTime.UtcNow),
+                    EmploymentChangeType.Offboard,
+                    EmployeeService.StatusDisplay(employee.Status),
+                    EmployeeService.StatusDisplay(EmployeeStatus.Terminated),
+                    historyReason,
+                    actor.Id);
+                employee.Status = EmployeeStatus.Terminated;
+                _unitOfWork.GetRepository<Employee, int>().Update(employee);
+                await _unitOfWork.GetRepository<EmploymentHistory, int>().AddAsync(entry, cancellationToken);
+            }
+
+            await _userSessions.TerminateAccessAsync(employee.UserId, cancellationToken);
+            return employee;
         }
 
         /// <summary>Parks the employee at a new standing with an employment-history row.</summary>

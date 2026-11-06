@@ -21,11 +21,26 @@ namespace ServiceAbstraction.Services
                 [".jpg"] = "image/jpeg",
                 [".jpeg"] = "image/jpeg",
                 [".webp"] = "image/webp",
-                [".gif"] = "image/gif"
+                [".gif"] = "image/gif",
+                [".doc"] = "application/msword",
+                [".docx"] = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
             };
+
+        private static readonly HashSet<string> ImageExtensions = new(StringComparer.OrdinalIgnoreCase)
+        {
+            ".png",
+            ".jpg",
+            ".jpeg",
+            ".webp",
+            ".gif"
+        };
 
         public static bool IsSupported(string? fileName) =>
             ByExtension.ContainsKey(ExtensionOf(fileName));
+
+        /// <summary>Avatars are images only; documents additionally allow PDF/Word.</summary>
+        public static bool IsImage(string? fileName) =>
+            ImageExtensions.Contains(ExtensionOf(fileName));
 
         public static string FromFileName(string? fileName) =>
             ByExtension.TryGetValue(ExtensionOf(fileName), out var contentType)

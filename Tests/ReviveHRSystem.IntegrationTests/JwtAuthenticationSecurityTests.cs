@@ -3,6 +3,7 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Security.Claims;
 using System.Text;
+using DomainLayer.Models.EmployeeModule.Enums;
 using DomainLayer.Models.UserModule.Enums;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -153,6 +154,26 @@ namespace ReviveHRSystem.IntegrationTests
             var token = tokenService.CreateAccessToken(dbUser, Enumerable.Empty<string>(), gym.GymId);
 
             await _builder.SetUserActiveAsync(user.UserId, isActive: false);
+
+            var response = await SendAsync(token);
+            Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        }
+
+        [Fact]
+        public async Task Me_TerminatedEmployeeWithValidToken_Returns401()
+        {
+            // Token minted while the employee was Active, then the employee is
+            // terminated with User.IsActive intentionally left true: the
+            // employee-standing check must still refuse the session.
+            var gym = await _builder.CreateGymWithStationAsync();
+            var employee = await _builder.CreateEmployeeAsync(gym);
+
+            using var scope = _fixture.Services.CreateScope();
+            var tokenService = scope.ServiceProvider.GetRequiredService<ITokenService>();
+            var dbUser = await LoadUserAsync(employee.UserId);
+            var token = tokenService.CreateAccessToken(dbUser, Enumerable.Empty<string>(), gym.GymId);
+
+            await _builder.SetEmployeeStatusAsync(employee.EmployeeId, EmployeeStatus.Terminated);
 
             var response = await SendAsync(token);
             Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);

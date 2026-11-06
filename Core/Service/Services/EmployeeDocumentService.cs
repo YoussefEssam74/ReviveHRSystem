@@ -6,7 +6,6 @@ using DomainLayer.Models.EmployeeModule.Enums;
 using DomainLayer.Models.UserModule.Enums;
 using Service.Specifications;
 using ServiceAbstraction.Services;
-using Shared.Authorization;
 using Shared.DataTransferObject;
 using Shared.DataTransferObject.EmployeeProfile;
 
@@ -53,45 +52,6 @@ namespace Service.Services
                     DocumentId = uploaded[type.ToString()].FirstOrDefault()?.Id
                 })
                 .ToList();
-        }
-
-        public async Task<EmployeeDocumentDto> UploadAsync(
-            int actorUserId, int employeeId, UploadDocumentRequestDto request, CancellationToken cancellationToken = default)
-        {
-            var employee = await unitOfWork.GetRepository<Employee, int>()
-                .GetByIdAsync(new EmployeeByUserIdSpec(actorUserId), cancellationToken)
-                ?? throw new UnAuthorizedException("This account has no employee profile.");
-
-            if (employee.Id != employeeId)
-            {
-                throw new NotFoundException("Employee not found.");
-            }
-
-            if (string.IsNullOrWhiteSpace(request.FileName))
-            {
-                throw new BadRequestException("A file name is required.");
-            }
-
-            if (!Enum.TryParse<DocumentType>(request.Category, ignoreCase: true, out var documentType))
-            {
-                throw new BadRequestException($"Unknown document category '{request.Category}'.");
-            }
-
-            var document = new EmployeeDocument
-            {
-                EmployeeId = employee.Id,
-                Type = documentType,
-                FileName = request.FileName.Trim(),
-                FilePath = request.FilePath?.Trim() ?? string.Empty,
-                ExpiryDate = request.ExpiryDate,
-                EmployeeEditable = true
-            };
-
-            await unitOfWork.GetRepository<EmployeeDocument, int>().AddAsync(document, cancellationToken);
-            await unitOfWork.SaveChangesAsync(cancellationToken);
-
-            var documents = await ProjectAsync(employee.Id, cancellationToken);
-            return documents.First(d => d.Id == document.Id);
         }
 
         /// <summary>
@@ -167,6 +127,11 @@ namespace Service.Services
             if (string.IsNullOrWhiteSpace(fileName))
             {
                 throw new BadRequestException("A file name is required.");
+            }
+
+            if (!FileContentTypes.IsImage(fileName))
+            {
+                throw new BadRequestException("Profile photos must be PNG, JPG, WEBP, or GIF.");
             }
 
             var stored = await SaveOrRefuseAsync("avatars", fileName, content, cancellationToken);
@@ -303,6 +268,8 @@ namespace Service.Services
             "image/jpeg" => "JPG",
             "image/webp" => "WEBP",
             "image/gif" => "GIF",
+            "application/msword" => "DOC",
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document" => "DOCX",
             _ => contentType
         };
 

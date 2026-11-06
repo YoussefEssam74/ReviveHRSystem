@@ -40,8 +40,10 @@ namespace Service.Services
             var employee = await unitOfWork.GetRepository<Employee, int>()
                 .GetByIdAsync(new EmployeeSummaryByUserIdSpec(userId), cancellationToken);
 
-            var greeting = DateTime.UtcNow.Hour < 12 ? "Good morning"
-                : DateTime.UtcNow.Hour < 17 ? "Good afternoon"
+            // Greeting and "today" follow the gym-local clock, not the server clock.
+            var localNow = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, attendanceTimeZone);
+            var greeting = localNow.Hour < 12 ? "Good morning"
+                : localNow.Hour < 17 ? "Good afternoon"
                 : "Good evening";
 
             var userDto = employee is not null
@@ -53,7 +55,7 @@ namespace Service.Services
                 return Empty(greeting, userDto);
             }
 
-            var today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, attendanceTimeZone));
+            var today = DateOnly.FromDateTime(localNow);
             var parts = await LoadEmployeePartsAsync(employee, today, cancellationToken);
 
             return new EmployeeDashboardDto
@@ -99,7 +101,14 @@ namespace Service.Services
             var record = todayRecords.FirstOrDefault();
             if (record is not null)
             {
-                todayAttendance = mapper.Map<DashboardAttendanceDto>(record);
+                todayAttendance = new DashboardAttendanceDto
+                {
+                    CheckIn = ToLocalPunch(record.CheckInTime),
+                    CheckOut = ToLocalPunch(record.CheckOutTime),
+                    CheckedIn = record.CheckInTime is not null,
+                    Status = record.Status.ToString(),
+                    Source = record.CheckInMethod?.ToString() ?? string.Empty
+                };
             }
 
             // Month summary — derived, not just stored records.
@@ -135,7 +144,7 @@ namespace Service.Services
             int derivedAbsent = 0;
             for (var date = monthStart; date <= today && date < monthEnd; date = date.AddDays(1))
             {
-                var assignment = monthAssignments[date].FirstOrDefault(a => a.ShiftTemplateId is not null);
+                var assignment = monthAssignments[date].FirstOrDefault(a => !IsOffAssignment(a));
                 if (assignment is null) continue;               // not scheduled this day
                 if (recordedDates.Contains(date)) continue;     // punched — stored record decides
                 if (dayOffDates.Contains(date)) continue;       // approved day off
@@ -145,7 +154,9 @@ namespace Service.Services
 
             var present = monthRecords.Count(r => r.Status is AttendanceStatus.OnTime or AttendanceStatus.Late);
             var late = monthRecords.Count(r => r.Status == AttendanceStatus.Late);
-            var storedAbsent = monthRecords.Count(r => r.Status == AttendanceStatus.Absent);
+            var storedAbsent = monthRecords.Count(r =>
+                r.Status == AttendanceStatus.Absent
+                && monthAssignments[r.Date].Any(a => !IsOffAssignment(a)));
             var totalAbsent = storedAbsent + derivedAbsent;
             var totalDays = monthRecords.Count + derivedAbsent;
 
@@ -187,8 +198,8 @@ namespace Service.Services
                     End = template?.EndTime,
                     IsOff = template is null,
                     IsToday = date == today,
-                    CheckIn = dayRecord?.CheckInTime is null ? null : TimeOnly.FromDateTime(dayRecord.CheckInTime.Value),
-                    CheckOut = dayRecord?.CheckOutTime is null ? null : TimeOnly.FromDateTime(dayRecord.CheckOutTime.Value),
+                    CheckIn = ToLocalPunch(dayRecord?.CheckInTime),
+                    CheckOut = ToLocalPunch(dayRecord?.CheckOutTime),
                 });
             }
 
@@ -321,6 +332,27 @@ namespace Service.Services
             return periods.Select(p => p.Id).ToList();
         }
 
+        /// <summary>
+        /// Punches are stored as UTC instants; the dashboard renders them on the
+        /// gym-local (Egypt) clock, exactly like the attendance grid.
+        /// </summary>
+        private TimeOnly? ToLocalPunch(DateTime? utcMoment)
+        {
+            if (utcMoment is null)
+            {
+                return null;
+            }
+
+            var local = TimeZoneInfo.ConvertTimeFromUtc(
+                DateTime.SpecifyKind(utcMoment.Value, DateTimeKind.Utc), attendanceTimeZone);
+            return TimeOnly.FromDateTime(local);
+        }
+
+        private static bool IsOffAssignment(ShiftAssignment assignment) =>
+            assignment.ShiftTemplateId is null
+            || assignment.ShiftTemplate is null
+            || assignment.ShiftTemplate.Name.Contains("off", StringComparison.OrdinalIgnoreCase);
+
         private sealed class DashboardParts
         {
             public DashboardShiftDto? TodayShift { get; init; }
@@ -334,4 +366,3 @@ namespace Service.Services
         }
     }
 }
-

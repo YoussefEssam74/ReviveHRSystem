@@ -12,6 +12,9 @@ namespace Service.Specifications
         public EmployeeByUserIdSpec(int userId)
         {
             Criteria = e => e.UserId == userId;
+            // Self-service profile/contact updates and document uploads mutate the
+            // fetched employee before SaveChanges — keep tracked.
+            ApplyTracking();
         }
     }
 
@@ -30,6 +33,10 @@ namespace Service.Specifications
             AddInclude(e => e.User!);
             AddInclude(e => e.User!.UserGymAccesses);
             AddInclude(e => e.Compensations);
+            // HR write flows (status/transfer/position/contract) mutate the fetched
+            // employee and ride its navs into Update() — keep tracked so the graph
+            // merges with the identity map instead of re-attaching detached rows.
+            ApplyTracking();
         }
     }
 
@@ -46,6 +53,10 @@ namespace Service.Specifications
             AddInclude(e => e.Position);
             AddInclude(e => e.User);
             AddInclude(e => e.Compensations);
+            // Profile / HR update flows mutate the fetched employee (contact info,
+            // status, notice-period flips) before SaveChanges without Update() —
+            // keeps those flows tracked.
+            ApplyTracking();
         }
     }
 
@@ -262,6 +273,9 @@ namespace Service.Specifications
         public LeaveBalancesForYearSpec(int employeeId, int year)
         {
             Criteria = b => b.EmployeeId == employeeId && b.Year == year;
+            // Approve/undo/cancel and entitlement updates mutate the fetched balances
+            // before SaveChanges without Update() — keep tracked.
+            ApplyTracking();
         }
     }
 

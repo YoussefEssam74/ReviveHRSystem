@@ -14,6 +14,9 @@ public sealed class AttendanceResponse
     public DateTime Timestamp { get; init; }
     /// <summary>Current record status: ONTIME, LATE, or EARLYCHECKOUT.</summary>
     public string AttendanceStatus { get; init; } = string.Empty;
-    /// <summary>Result for this event: ON_SCHEDULE, LATE, or EARLY_CHECKOUT.</summary>
+    /// <summary>
+    /// Result for this event: ON_SCHEDULE, LATE, or EARLY_CHECKOUT. The configured
+    /// late/early-leave grace windows decide when the boundary is crossed.
+    /// </summary>
     public string ShiftComparison { get; init; } = "ON_SCHEDULE";
 }

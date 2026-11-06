@@ -150,6 +150,26 @@
 .dark .card { box-shadow: 0 1px 3px rgba(0, 0, 0, 0.45); }
 .dark .card:hover, .dark .card-interactive:hover { box-shadow: 0 4px 14px rgba(0, 0, 0, 0.55); }
 
+/* Native <select> option popups: `color-scheme: dark` covers the closed
+   control plus date/time pickers, but Chromium's dropdown list still paints
+   white and option text inherits the dark theme's near-white tokens — white
+   on white. Style the options explicitly (browsers that ignore author styles
+   on the popup, like macOS Safari, simply fall back to their native dark
+   rendering). */
+.dark option {
+  background-color: var(--color-white);
+  color: var(--color-charcoal-900);
+}
+.dark option:checked,
+.dark option:hover,
+.dark option:focus {
+  background-color: var(--color-brand-100);
+  color: var(--color-brand-700);
+}
+.dark option:disabled {
+  color: var(--color-charcoal-500);
+}
+
 html {
   font-family: var(--font-sans);
   scroll-behavior: smooth;

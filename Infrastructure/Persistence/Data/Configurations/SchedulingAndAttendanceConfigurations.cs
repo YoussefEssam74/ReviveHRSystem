@@ -13,6 +13,10 @@ namespace Presistence.Data.Configurations
             builder.HasKey(st => st.Id);
 
             builder.Property(st => st.Name).IsRequired().HasMaxLength(100);
+            builder.Property(st => st.Color)
+                   .IsRequired()
+                   .HasMaxLength(7)
+                   .HasDefaultValue("#0ea5e9");
 
             builder.HasOne(st => st.Gym)
                    .WithMany()

@@ -290,7 +290,17 @@ export async function apiRequest<T>(path: string, options: RequestOptions & { fo
     }
 
     if (response.status === 401 && !accessToken && !stationToken && !stationAuth
-        && session && isAuthChallenge(response)) clearSession()
+        && session && isAuthChallenge(response)) {
+      // Clear-session discipline: a 401 challenge may be refused because the
+      // credential itself is dead, OR because another tab replaced the session
+      // while this request was in flight (single-live-chain sweep). Only the
+      // holder whose credential is still the stored one may clear shared
+      // storage — a stale in-flight retry must not evict the newer session;
+      // it caused the "randomly bounced to login right after picking a gym"
+      // multi-tab report.
+      const storedOnChallenge = loadStoredSession()
+      if (!storedOnChallenge || storedOnChallenge.accessToken === session.accessToken) clearSession()
+    }
     throw toApiError(response.status, json)
   }
 

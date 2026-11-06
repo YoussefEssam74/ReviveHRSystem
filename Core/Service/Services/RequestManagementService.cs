@@ -34,26 +34,32 @@ namespace Service.Services
             await EnsureDeskRoleAsync(actorUserId, gymId, cancellationToken);
             var employeeIds = await ScopedEmployeeIdsAsync(actorUserId, gymId, cancellationToken);
 
-            var requests = await unitOfWork.GetRepository<EmployeeRequest, int>()
-                .GetAllAsync(new RequestsByEmployeesSpec(employeeIds), cancellationToken);
+            // The status arrives as a free-form label: an unknown label matched no row
+            // under the old in-memory compare, so it yields an empty page, not an error.
+            RequestStatus? status = null;
+            if (!string.IsNullOrWhiteSpace(query.Status))
+            {
+                if (!Enum.TryParse<RequestStatus>(query.Status.Trim(), ignoreCase: true, out var parsedStatus))
+                {
+                    return new PaginationResult<EmployeeRequestDto>(query.PageNumber, query.PageSize, 0, []);
+                }
 
-            var filtered = requests
-                .Where(r => string.IsNullOrWhiteSpace(query.Status)
-                    || r.Status.ToString().Equals(query.Status, StringComparison.OrdinalIgnoreCase))
-                .Where(r => string.IsNullOrWhiteSpace(query.Type)
-                    || r.Type.Equals(query.Type, StringComparison.OrdinalIgnoreCase))
-                .Where(r => query.DateFrom is null || r.RequestDate >= query.DateFrom)
-                .Where(r => query.DateTo is null || r.RequestDate <= query.DateTo)
-                .OrderByDescending(r => r.SubmittedAt)
-                .ToList();
+                status = parsedStatus;
+            }
 
-            var page = filtered
-                .Skip(query.SkipCount)
-                .Take(query.PageSize)
-                .Select(r => mapper.Map<EmployeeRequestDto>(r))
-                .ToList();
+            // The desk list can cover a team's or a gym's whole history — filter, sort
+            // (spec keeps SubmittedAt desc) and page execute in SQL; the count repeats
+            // the filters without paging for the envelope total.
+            var repository = unitOfWork.GetRepository<EmployeeRequest, int>();
+            var total = await repository.CountAsync(
+                new RequestsByEmployeesSpec(employeeIds, status, query.Type, query.DateFrom, query.DateTo),
+                cancellationToken);
+            var rows = await repository.GetAllAsync(
+                new RequestsByEmployeesSpec(employeeIds, status, query.Type, query.DateFrom, query.DateTo, query.SkipCount, query.PageSize),
+                cancellationToken);
 
-            return new PaginationResult<EmployeeRequestDto>(query.PageNumber, query.PageSize, filtered.Count, page);
+            var page = rows.Select(r => mapper.Map<EmployeeRequestDto>(r)).ToList();
+            return new PaginationResult<EmployeeRequestDto>(query.PageNumber, query.PageSize, total, page);
         }
 
         public async Task DecideAsync(

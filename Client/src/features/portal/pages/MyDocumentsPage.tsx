@@ -8,6 +8,7 @@ import {
   FileText,
   IdCard,
   Upload,
+  X,
 } from 'lucide-react'
 import {
   getHrDocuments,
@@ -24,7 +25,8 @@ import { StatusBadge } from '../../../components/ui/badge'
 import { useToast } from '../../../components/ui/toast'
 import { usePortalSession } from '../../../contexts/PortalSessionContext'
 import { apiDownload, describeApiError } from '../../../lib/api-client'
-import { formatDate } from '../../../lib/format'
+import { formatBytes, formatDate } from '../../../lib/format'
+import { DOCUMENT_ACCEPT, DOCUMENT_FORMATS_LABEL, validateUploadFile } from '../../../lib/file-upload'
 import { cn } from '../../../lib/utils'
 
 const REQUIRED_ICONS: Record<string, typeof FileText> = {
@@ -519,6 +521,11 @@ function UploadModal({
             setError('Choose a document type and a file first.')
             return
           }
+          const invalid = validateUploadFile(file)
+          if (invalid) {
+            setError(invalid)
+            return
+          }
           uploadMutation.mutate()
         }}
       >
@@ -564,19 +571,50 @@ function UploadModal({
             className="flex cursor-pointer flex-col items-center rounded-lg border-2 border-dashed border-charcoal-200 p-6 text-center transition-colors hover:border-brand-400"
           >
             <Upload className="mb-1 h-6 w-6 text-charcoal-300" aria-hidden="true" />
-            <p className="text-xs text-charcoal-500">{file ? file.name : 'Click to upload or drag & drop'}</p>
-            <p className="mt-0.5 text-[10px] text-charcoal-400">PDF, JPG, PNG up to 10MB</p>
+            <p className="text-xs text-charcoal-500">
+              {file ? 'Choose a different file' : 'Click to upload or drag & drop'}
+            </p>
+            <p className="mt-0.5 text-[10px] text-charcoal-400">
+              {file ? 'Ready to upload' : `${DOCUMENT_FORMATS_LABEL} up to 10 MB`}
+            </p>
             <input
               id="doc-file"
               type="file"
-              accept=".pdf,.jpg,.jpeg,.png"
+              accept={DOCUMENT_ACCEPT}
               className="hidden"
               onChange={(event) => {
-                setFile(event.target.files?.[0] ?? null)
+                const next = event.target.files?.[0] ?? null
                 event.target.value = ''
+                if (!next) return
+                const invalid = validateUploadFile(next)
+                if (invalid) {
+                  setFile(null)
+                  setError(invalid)
+                  return
+                }
+                setFile(next)
+                setError(null)
               }}
             />
           </label>
+          {file && (
+            <div className="mt-1.5 flex items-center gap-2 rounded-lg bg-brand-50 px-2.5 py-1.5">
+              <FileText className="h-3.5 w-3.5 shrink-0 text-brand-600" aria-hidden="true" />
+              <p className="min-w-0 flex-1 truncate text-[11px] font-medium text-charcoal-800">{file.name}</p>
+              <span className="shrink-0 text-[10px] text-charcoal-500">{formatBytes(file.size)}</span>
+              <button
+                type="button"
+                aria-label="Remove selected file"
+                onClick={() => {
+                  setFile(null)
+                  setError(null)
+                }}
+                className="rounded p-0.5 text-charcoal-400 transition-colors hover:bg-white hover:text-charcoal-700"
+              >
+                <X className="h-3.5 w-3.5" aria-hidden="true" />
+              </button>
+            </div>
+          )}
           <p className="mt-1 text-[10px] text-charcoal-400">
             The document name is taken from the file you choose.
           </p>

@@ -64,3 +64,4 @@ __pycache__/
 
 # Uploaded employee documents (runtime storage, never committed)
 ReviveHRSystem.Web/App_Data/
+.deslop/

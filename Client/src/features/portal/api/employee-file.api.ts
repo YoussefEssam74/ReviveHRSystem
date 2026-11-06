@@ -3,7 +3,7 @@ import { withQuery } from '../../../lib/paged'
 
 /**
  * Employee-file self-service (mock §§2/3/4/9):
- *  - profile     GET   /api/employees/{id}                                → { data: EmployeeProfile }
+ *  - profile     GET   /api/employees/{id}/profile                        → EmployeeProfile
  *  - contact     PUT   /api/employees/{id}/contact                        → EmployeeProfile
  *  - emergency   PATCH /api/employees/{id}/emergency-contact              → EmployeeProfile
  *  - photo       GET/PUT /api/employees/{id}/photo (multipart `file`)     → binary / { photoUrl }
@@ -47,10 +47,6 @@ export interface EmployeeProfile {
   photoUrl: string | null
   /** HR-controlled salary — only ever populated on the employee's own profile. */
   baseSalary: number | null
-}
-
-export interface EmployeeProfileResponse {
-  data: EmployeeProfile
 }
 
 export interface EmployeeDocument {
@@ -110,7 +106,7 @@ export interface EmployeeEvaluationResponse {
 }
 
 export function getOwnProfile(employeeId: number, signal?: AbortSignal): Promise<EmployeeProfile> {
-  return apiRequest<EmployeeProfileResponse>(`/api/employees/${employeeId}`, { signal }).then((body) => body.data)
+  return apiRequest<EmployeeProfile>(`/api/employees/${employeeId}/profile`, { signal })
 }
 
 export function updateContact(

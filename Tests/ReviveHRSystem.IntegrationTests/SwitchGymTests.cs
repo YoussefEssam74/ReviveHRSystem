@@ -47,6 +47,63 @@ namespace ReviveHRSystem.IntegrationTests
         }
 
         [Fact]
+        public async Task SwitchGym_SwitchThenRefresh_KeepsSwitchedGymScope()
+        {
+            // A switch must rotate the refresh credential to the TARGET gym's
+            // scope: every later silent refresh would otherwise re-mint tokens
+            // scoped to the ORIGINAL login gym and un-do the switch (the SPA
+            // would silently fall back to the gym it logged into).
+            var gym1Id = await GymIdByNameAsync("Revive Main Gym");
+            var gym2Id = await GymIdByNameAsync("Revive Second Gym");
+
+            var login = await _fixture.Client.PostAsJsonAsync(
+                "/api/auth/login", new { email = "omar@revive.hr", password = "Revive!2026" });
+            login.EnsureSuccessStatusCode();
+            var loginBody = await login.Content.ReadFromJsonAsync<JsonElement>();
+            var tempToken = loginBody.GetProperty("tempSessionToken").GetString()!;
+
+            var select = await _fixture.Client.PostAsJsonAsync(
+                "/api/auth/login/select-gym", new { gymId = gym1Id, tempSessionToken = tempToken });
+            select.EnsureSuccessStatusCode();
+            var selected = await select.Content.ReadFromJsonAsync<JsonElement>();
+            var originalChain = selected.GetProperty("refreshToken").GetString()!;
+
+            var switchResponse = await _fixture.Client.SendAsync(
+                _fixture.AuthorizedRequest(HttpMethod.Post, "/api/auth/switch-gym", new { gymId = gym2Id },
+                    selected.GetProperty("accessToken").GetString()!));
+            switchResponse.EnsureSuccessStatusCode();
+            var switched = await switchResponse.Content.ReadFromJsonAsync<JsonElement>();
+
+            // The switch must hand back a ROTATED refresh credential scoped to gym2.
+            Assert.False(string.IsNullOrWhiteSpace(switched.GetProperty("refreshToken").GetString()));
+            Assert.True(switched.GetProperty("refreshExpiresInSeconds").GetInt32() > 0);
+
+            var refresh = await _fixture.Client.PostAsJsonAsync(
+                "/api/auth/refresh", new { refreshToken = switched.GetProperty("refreshToken").GetString() });
+            refresh.EnsureSuccessStatusCode();
+            var refreshed = await refresh.Content.ReadFromJsonAsync<JsonElement>();
+
+            Assert.Equal(gym2Id, refreshed.GetProperty("user").GetProperty("gymId").GetInt32());
+
+            // The refreshed access token must authenticate with the TARGET gym
+            // as the active one — not the original login gym.
+            var meResponse = await _fixture.Client.SendAsync(
+                _fixture.AuthorizedRequest(HttpMethod.Get, "/api/me", null,
+                    refreshed.GetProperty("accessToken").GetString()!));
+            meResponse.EnsureSuccessStatusCode();
+            var meBody = await meResponse.Content.ReadFromJsonAsync<JsonElement>();
+            Assert.Equal("Revive Second Gym", meBody.GetProperty("activeGym").GetProperty("gymName").GetString());
+
+            // Single-live-chain discipline: the switch revoked every other alive
+            // chain of the user, so refreshing with the ORIGINAL login chain (the
+            // credential a stale tab would still hold) must be refused — a stale
+            // context can never silently resurrect the pre-switch gym scope.
+            var staleRefresh = await _fixture.Client.PostAsJsonAsync(
+                "/api/auth/refresh", new { refreshToken = originalChain });
+            Assert.Equal(HttpStatusCode.Unauthorized, staleRefresh.StatusCode);
+        }
+
+        [Fact]
         public async Task SwitchGym_PermissionKeysFollowTheActiveGym()
         {
             // Omar is Branch Manager in gym1 and Team Leader in gym2. His keys must

@@ -325,6 +325,14 @@ namespace ReviveHRSystem.IntegrationTests.Support
             await _db.SaveChangesAsync();
         }
 
+        /// <summary>Moves an employee's directory standing without going through the API.</summary>
+        public async Task SetEmployeeStatusAsync(int employeeId, EmployeeStatus status)
+        {
+            var employee = await _db.Employees.FirstAsync(e => e.Id == employeeId);
+            employee.Status = status;
+            await _db.SaveChangesAsync();
+        }
+
         /// <summary>
         /// Inserts a stored attendance record for a (employee, day) pair — the A1/A4 tests
         /// assert against real rows rather than only derived grid days. Times are UTC.
@@ -372,7 +380,8 @@ namespace ReviveHRSystem.IntegrationTests.Support
         }
 
         /// <summary>Inserts a shift template at the gym (template CRUD is org-settings scope, no HR API).</summary>
-        public async Task<int> CreateShiftTemplateAsync(TestGym gym, string name, TimeOnly start, TimeOnly end, bool isActive = true)
+        public async Task<int> CreateShiftTemplateAsync(
+            TestGym gym, string name, TimeOnly start, TimeOnly end, bool isActive = true, string color = "#0ea5e9")
         {
             var template = new ShiftTemplate
             {
@@ -380,6 +389,7 @@ namespace ReviveHRSystem.IntegrationTests.Support
                 Name = name,
                 StartTime = start,
                 EndTime = end,
+                Color = color,
                 IsActive = isActive
             };
             _db.ShiftTemplates.Add(template);

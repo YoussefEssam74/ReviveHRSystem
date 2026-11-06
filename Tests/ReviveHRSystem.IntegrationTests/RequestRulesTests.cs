@@ -125,6 +125,13 @@ namespace ReviveHRSystem.IntegrationTests
             Assert.True(body.GetProperty("hasAttachment").GetBoolean());
             var requestId = body.GetProperty("id").GetInt32();
 
+            // The detail surface the desk drawer reads also carries the attachment flag.
+            var detail = await _fixture.Client.SendAsync(
+                Authorized(HttpMethod.Get, $"/api/requests/{requestId}", employee.Token));
+            detail.EnsureSuccessStatusCode();
+            var detailBody = await detail.Content.ReadFromJsonAsync<JsonElement>();
+            Assert.True(detailBody.GetProperty("data").GetProperty("hasAttachment").GetBoolean());
+
             // Sick balance reserved the day (default 10-day entitlement).
             var pending = await PendingDaysAsync(employee.EmployeeId, LeaveType.Sick);
             Assert.Equal(1m, pending);

@@ -1,5 +1,7 @@
 using System.Net;
+using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Text;
 using System.Text.Json;
 using DomainLayer.Models.RequestModule.Enums;
 using Microsoft.EntityFrameworkCore;
@@ -242,6 +244,36 @@ namespace ReviveHRSystem.IntegrationTests
             var db = scope.ServiceProvider.GetRequiredService<ReviveHrDbContext>();
             var request = await db.EmployeeRequests.FindAsync(requestId);
             Assert.Equal(RequestStatus.PendingHRReview, request!.Status);
+        }
+
+        [Fact]
+        public async Task DeskAttachment_TeamLeaderAndBranchManagerCanOpenSickLeaveCertificate()
+        {
+            // A team member's sick-leave certificate must be visible to the leader who
+            // approves it, and to the branch manager who covers the same gym.
+            var saraId = await OwnEmployeeIdAsync("sara@revive.hr");
+            var saraToken = await _fixture.LoginAsync("sara@revive.hr", "Revive!2026");
+            var saraRequestId = await CreateOwnSickLeaveAsync(saraId, saraToken);
+
+            var teamLeaderToken = await LoginOmarAtGym2Async();
+            var teamLeaderDetail = await GetJsonAsync($"/api/requests/{saraRequestId}", teamLeaderToken);
+            Assert.True(teamLeaderDetail.GetProperty("data").GetProperty("hasAttachment").GetBoolean());
+            var teamLeaderDownload = await SendAsync(
+                HttpMethod.Get, $"/api/requests/{saraRequestId}/attachment", null, teamLeaderToken);
+            Assert.Equal(HttpStatusCode.OK, teamLeaderDownload.StatusCode);
+            Assert.Equal("application/pdf", teamLeaderDownload.Content.Headers.ContentType?.MediaType);
+
+            var karimId = await OwnEmployeeIdAsync("karim@revive.hr");
+            var karimToken = await _fixture.LoginAsync("karim@revive.hr", "Revive!2026");
+            var karimRequestId = await CreateOwnSickLeaveAsync(karimId, karimToken);
+
+            var branchManagerToken = await LoginOmarAtGym1Async();
+            var branchManagerDetail = await GetJsonAsync($"/api/requests/{karimRequestId}", branchManagerToken);
+            Assert.True(branchManagerDetail.GetProperty("data").GetProperty("hasAttachment").GetBoolean());
+            var branchManagerDownload = await SendAsync(
+                HttpMethod.Get, $"/api/requests/{karimRequestId}/attachment", null, branchManagerToken);
+            Assert.Equal(HttpStatusCode.OK, branchManagerDownload.StatusCode);
+            Assert.Equal("application/pdf", branchManagerDownload.Content.Headers.ContentType?.MediaType);
         }
 
         [Fact]
@@ -743,6 +775,30 @@ namespace ReviveHRSystem.IntegrationTests
                 Content = form,
             };
             request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+
+            var response = await _fixture.Client.SendAsync(request);
+            response.EnsureSuccessStatusCode();
+            var created = await response.Content.ReadFromJsonAsync<JsonElement>();
+            return created.GetProperty("id").GetInt32();
+        }
+
+        /** Self-created sick leave with the medical certificate the desk must review. */
+        private async Task<int> CreateOwnSickLeaveAsync(int employeeId, string token)
+        {
+            var form = new MultipartFormDataContent();
+            form.Add(new StringContent("sick-leave"), "type");
+            form.Add(new StringContent(DateOnly.FromDateTime(DateTime.UtcNow.Date).ToString("yyyy-MM-dd")), "requestDate");
+            form.Add(new StringContent("Medical leave"), "reason");
+
+            var certificate = new ByteArrayContent(Encoding.ASCII.GetBytes("%PDF-1.4 fake medical certificate"));
+            certificate.Headers.ContentType = new MediaTypeHeaderValue("application/pdf");
+            form.Add(certificate, "attachment", "medical-certificate.pdf");
+
+            var request = new HttpRequestMessage(HttpMethod.Post, $"/api/employees/{employeeId}/requests")
+            {
+                Content = form,
+            };
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
             var response = await _fixture.Client.SendAsync(request);
             response.EnsureSuccessStatusCode();

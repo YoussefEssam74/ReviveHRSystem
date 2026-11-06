@@ -195,7 +195,7 @@ X-Station-Token: {{stationToken}}
 
 ###
 ### ============================================================
-### Kiosk dashboard data (counters + feed for the connected gym)
+### Kiosk dashboard data (counters + today's rota for the connected gym)
 ### ============================================================
 
 ###

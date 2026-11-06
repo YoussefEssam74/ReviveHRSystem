@@ -36,6 +36,10 @@ namespace Service.Specifications
                 AddInclude(e => e.Employee.Gym);
                 AddInclude(e => e.Employee.Position!);
             }
+
+            // Publish/lock and close-sheet flows mutate the fetched entries before
+            // SaveChanges without Update() — keep tracked.
+            ApplyTracking();
         }
     }
 
@@ -59,6 +63,9 @@ namespace Service.Specifications
             AddInclude(e => e.LineItems);
             AddInclude(e => e.Employee.Gym);
             AddInclude(e => e.Employee.Position!);
+            // Bonus/deduction/settle/reopen/publish mutate the fetched sheet before
+            // SaveChanges without Update() — keep tracked.
+            ApplyTracking();
         }
     }
 
@@ -115,6 +122,9 @@ namespace Service.Specifications
             Criteria = l => l.Id == lineId;
             AddInclude(l => l.PayrollEntry.PayrollPeriod.Gym);
             AddInclude(l => l.PayrollEntry.Employee);
+            // Line review mutates the line and its sheet (Update() on both) — keep
+            // tracked so the graph attachments merge with the identity map.
+            ApplyTracking();
         }
     }
 

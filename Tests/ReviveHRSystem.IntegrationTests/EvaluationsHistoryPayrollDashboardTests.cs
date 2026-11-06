@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Presistence.Data;
 using ReviveHRSystem.IntegrationTests.Fixtures;
+using ReviveHRSystem.IntegrationTests.Support;
 using ReviveHRSystem.Web.DataSeed;
 using Xunit;
 
@@ -38,6 +39,45 @@ namespace ReviveHRSystem.IntegrationTests
             Assert.Equal("Karim", body.GetProperty("user").GetProperty("firstName").GetString());
             Assert.Equal("Fitness Trainer", body.GetProperty("user").GetProperty("position").GetString());
             Assert.Equal(JsonValueKind.Null, body.GetProperty("overview").ValueKind);
+        }
+
+        [Fact]
+        public async Task Dashboard_RendersPunches_InAttendanceTimeZone()
+        {
+            // Punches are stored in UTC. Both the dashboard's today card and its
+            // 7-day strip must show the configured gym-local clock (Egypt), exactly
+            // like the attendance grid — not the raw UTC hour.
+            var builder = new TestDataBuilder(_fixture.Services);
+            var gym = await builder.CreateGymWithStationAsync();
+            var employee = await builder.CreateEmployeeAsync(gym, shiftAtGym: gym);
+
+            var timeZone = _fixture.Services.GetRequiredService<TimeZoneInfo>();
+            var today = builder.AttendanceToday;
+            var checkIn = new TimeOnly(10, 19);
+            var checkOut = new TimeOnly(18, 5);
+            await builder.CreateAttendanceRecordAsync(
+                employee.EmployeeId,
+                gym.GymId,
+                today,
+                ToUtc(today, checkIn, timeZone),
+                ToUtc(today, checkOut, timeZone));
+
+            var token = await _fixture.LoginAsync(employee.Email, employee.Password);
+            var request = _fixture.AuthorizedRequest(HttpMethod.Get, "/api/dashboard/employee", null, token);
+            var response = await _fixture.Client.SendAsync(request);
+
+            response.EnsureSuccessStatusCode();
+            var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+
+            var todayAttendance = body.GetProperty("todayAttendance");
+            Assert.Equal("10:19:00", todayAttendance.GetProperty("checkIn").GetString());
+            Assert.Equal("18:05:00", todayAttendance.GetProperty("checkOut").GetString());
+
+            var todayDate = today.ToString("yyyy-MM-dd");
+            var stripToday = body.GetProperty("upcomingSchedule").EnumerateArray()
+                .Single(d => d.GetProperty("date").GetString() == todayDate);
+            Assert.Equal("10:19:00", stripToday.GetProperty("checkIn").GetString());
+            Assert.Equal("18:05:00", stripToday.GetProperty("checkOut").GetString());
         }
 
         [Fact]
@@ -89,6 +129,11 @@ namespace ReviveHRSystem.IntegrationTests
         }
 
         // ---------- seeding helpers ----------
+
+        /// <summary>Gym-local wall clock → the UTC instant the app stores.</summary>
+        private static DateTime ToUtc(DateOnly date, TimeOnly time, TimeZoneInfo timeZone) =>
+            TimeZoneInfo.ConvertTimeToUtc(
+                DateTime.SpecifyKind(date.ToDateTime(time), DateTimeKind.Unspecified), timeZone);
 
         private async Task<int> SeedTeamAsync(int gymId, string name)
         {

@@ -96,7 +96,8 @@ namespace ReviveHRSystem.IntegrationTests
             var builder = new TestDataBuilder(_fixture.Services);
             var gym = await builder.CreateGymWithStationAsync();
             var employee = await builder.CreateEmployeeAsync(gym);
-            var templateId = await builder.CreateShiftTemplateAsync(gym, "IT Morning", new TimeOnly(8, 0), new TimeOnly(16, 0));
+            var templateId = await builder.CreateShiftTemplateAsync(
+                gym, "IT Morning", new TimeOnly(8, 0), new TimeOnly(16, 0), color: "#6366f1");
             await builder.CreateShiftTemplateAsync(gym, "IT Closed", new TimeOnly(0, 0), new TimeOnly(0, 0), isActive: false);
             var token = await _fixture.GetAdminTokenAsync();
             var (cycleId, start, _) = await CreateDraftCycleAsync(token, gym.GymId, NextMonday(builder.AttendanceToday), NextMonday(builder.AttendanceToday).AddDays(6));
@@ -121,11 +122,13 @@ namespace ReviveHRSystem.IntegrationTests
             Assert.Equal("08:00", morning.GetProperty("start").GetString());
             Assert.Equal("16:00", morning.GetProperty("end").GetString());
             Assert.False(morning.GetProperty("isOff").GetBoolean());
-            Assert.False(string.IsNullOrWhiteSpace(morning.GetProperty("color").GetString()));
-            Assert.False(string.IsNullOrWhiteSpace(morning.GetProperty("bgColor").GetString()));
-            Assert.False(string.IsNullOrWhiteSpace(morning.GetProperty("textColor").GetString()));
+            Assert.Equal("#6366f1", morning.GetProperty("color").GetString());
+            Assert.NotEqual("#6366f1", morning.GetProperty("bgColor").GetString());
+            Assert.NotEqual("#6366f1", morning.GetProperty("textColor").GetString());
 
-            // Roster row: Monday carries the template, every other day is Off (null).
+            // Roster row: Monday carries the template, Tuesday is an explicit Off
+            // (null template + assignedDays true), and the remaining weekdays were
+            // never assigned (assignedDays false).
             var row = Assert.Single(
                 body.GetProperty("assignments").EnumerateArray().ToList(),
                 a => a.GetProperty("employeeId").GetInt32() == employee.EmployeeId);
@@ -138,6 +141,12 @@ namespace ReviveHRSystem.IntegrationTests
             Assert.Equal(templateId, days[0].GetInt32());
             Assert.Equal(JsonValueKind.Null, days[1].ValueKind);
             Assert.Equal(JsonValueKind.Null, days[6].ValueKind);
+            var assignedDays = row.GetProperty("assignedDays").EnumerateArray().Select(v => v.GetBoolean()).ToList();
+            Assert.Equal(7, assignedDays.Count);
+            Assert.True(assignedDays[0]);  // Monday shift
+            Assert.True(assignedDays[1]);  // Tuesday explicit Off
+            Assert.False(assignedDays[2]); // Wednesday never assigned
+            Assert.False(assignedDays[6]); // Sunday never assigned
         }
 
         [Fact]
@@ -259,6 +268,63 @@ namespace ReviveHRSystem.IntegrationTests
             var response = await SetAssignmentsAsyncResponse(token, cycleId, Array.Empty<object>());
 
             Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        }
+
+        /// <summary>
+        /// The Branch Schedule flow for already-published weeks: the manager presses
+        /// Assign Shifts on a Published cycle (Publish shows only while Draft — it is
+        /// already published) and saves real cells. The edit must persist without a
+        /// change-tracker state error and immediately surface through the employee
+        /// schedule read, because profile Shift tabs read Published cycles only.
+        /// </summary>
+        [Fact]
+        public async Task SetAssignments_EditPublishedCycle_PersistsAndShowsInSchedule()
+        {
+            var builder = new TestDataBuilder(_fixture.Services);
+            var gym = await builder.CreateGymWithStationAsync();
+            var employee = await builder.CreateEmployeeAsync(gym);
+            var templateId = await builder.CreateShiftTemplateAsync(gym, "IT Morning", new TimeOnly(8, 0), new TimeOnly(16, 0));
+            var token = await _fixture.GetAdminTokenAsync();
+            var monday = NextMonday(builder.AttendanceToday);
+            var (cycleId, _, _) = await CreateDraftCycleAsync(token, gym.GymId, monday, monday.AddDays(6));
+            await PublishAsync(token, cycleId);
+
+            var edit = await SetAssignmentsAsyncResponse(token, cycleId, new object[]
+            {
+                new { employeeId = employee.EmployeeId, day = 0, shiftTemplateId = templateId },
+            });
+            Assert.Equal(HttpStatusCode.OK, edit.StatusCode);
+
+            // No re-publish exists for a published cycle — the employees' schedule
+            // read reflects the saved edit immediately.
+            var ownToken = await _fixture.LoginAsync(employee.Email, employee.Password);
+            var request = _fixture.AuthorizedRequest(
+                HttpMethod.Get, $"/api/employees/{employee.EmployeeId}/schedule?month={monday:yyyy-MM}", null, ownToken);
+            var response = await _fixture.Client.SendAsync(request);
+            response.EnsureSuccessStatusCode();
+            var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+            var dates = body.GetProperty("days").EnumerateArray()
+                .Where(d => !d.GetProperty("isOff").GetBoolean())
+                .Select(d => d.GetProperty("date").GetString())
+                .ToList();
+            Assert.Contains(monday.ToString("yyyy-MM-dd"), dates);
+
+            // The Branch Schedule grid reads the same data per exact date. It must
+            // show Monday's shift on Monday — not infer it from another week's
+            // weekday pattern — so the two screens can never disagree.
+            var detailRequest = _fixture.AuthorizedRequest(HttpMethod.Get, $"/api/shift-cycles/{cycleId}", null, token);
+            var detailResponse = await _fixture.Client.SendAsync(detailRequest);
+            detailResponse.EnsureSuccessStatusCode();
+            var detail = await detailResponse.Content.ReadFromJsonAsync<JsonElement>();
+            var rosterRow = Assert.Single(
+                detail.GetProperty("assignments").EnumerateArray().ToList(),
+                a => a.GetProperty("employeeId").GetInt32() == employee.EmployeeId);
+            var cells = rosterRow.GetProperty("daysByDate").EnumerateArray().ToList();
+            var mondayCell = Assert.Single(cells, c => c.GetProperty("date").GetString() == monday.ToString("yyyy-MM-dd"));
+            Assert.True(mondayCell.GetProperty("assigned").GetBoolean());
+            Assert.Equal(templateId, mondayCell.GetProperty("shiftTemplateId").GetInt32());
+            var tuesdayCell = Assert.Single(cells, c => c.GetProperty("date").GetString() == monday.AddDays(1).ToString("yyyy-MM-dd"));
+            Assert.False(tuesdayCell.GetProperty("assigned").GetBoolean());
         }
 
         [Fact]
@@ -456,6 +522,9 @@ namespace ReviveHRSystem.IntegrationTests
             var (sourceId, _, _) = await CreateDraftCycleAsync(token, gym.GymId, sourceStart, sourceStart.AddDays(9));
             var sourceMonday = NextMonday(sourceStart.AddDays(1)); // inside the source window
             await builder.AddShiftAssignmentAsync(sourceId, employee.EmployeeId, sourceMonday, templateId);
+            // Tuesday is an explicit rest day; copying must preserve it as Off,
+            // not turn it into "Not assigned".
+            await builder.AddShiftAssignmentAsync(sourceId, employee.EmployeeId, sourceMonday.AddDays(1), null);
 
             var targetStart = sourceStart.AddDays(20);
             var (targetId, targetEnd, _) = await CreateDraftCycleAsync(token, gym.GymId, targetStart, targetStart.AddDays(9));
@@ -475,7 +544,13 @@ namespace ReviveHRSystem.IntegrationTests
             var row = Assert.Single(
                 detail.GetProperty("assignments").EnumerateArray().ToList(),
                 a => a.GetProperty("employeeId").GetInt32() == employee.EmployeeId);
-            Assert.Equal(templateId, row.GetProperty("days").EnumerateArray().ElementAt(0).GetInt32());
+            var copiedDays = row.GetProperty("days").EnumerateArray().ToList();
+            Assert.Equal(templateId, copiedDays[0].GetInt32());
+            Assert.Equal(JsonValueKind.Null, copiedDays[1].ValueKind);
+            var copiedAssignedDays = row.GetProperty("assignedDays").EnumerateArray().Select(v => v.GetBoolean()).ToList();
+            Assert.True(copiedAssignedDays[0]);
+            Assert.True(copiedAssignedDays[1]);
+            Assert.False(copiedAssignedDays[2]);
             _ = targetEnd;
         }
 
@@ -520,6 +595,7 @@ namespace ReviveHRSystem.IntegrationTests
             Assert.Equal("IT Morning", templates[0].GetProperty("name").GetString());
             Assert.Equal("08:00", templates[0].GetProperty("start").GetString());
             Assert.Equal("16:00", templates[0].GetProperty("end").GetString());
+            Assert.Equal("#0ea5e9", templates[0].GetProperty("color").GetString());
             Assert.False(templates[0].GetProperty("isOff").GetBoolean());
             Assert.False(string.IsNullOrWhiteSpace(templates[0].GetProperty("bgColor").GetString()));
             Assert.False(string.IsNullOrWhiteSpace(templates[0].GetProperty("textColor").GetString()));

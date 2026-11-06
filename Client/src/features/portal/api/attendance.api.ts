@@ -56,6 +56,10 @@ export interface LeaveBalanceResponse {
 export interface ScheduleDay {
   date: string
   dayName: string
+  /** Published cycle that owns this date (a week can span two cycles). */
+  cycleId: number
+  /** Shift template id, or null for an explicit Off day. */
+  shiftTemplateId: number | null
   shiftName: string | null
   /** TimeOnly "HH:mm:ss". */
   start: string | null
@@ -165,7 +169,29 @@ export function getEmployeeDeductions(employeeId: number, signal?: AbortSignal):
   return apiRequest<EmployeeDeduction[]>(`/api/employees/${employeeId}/deductions`, { signal })
 }
 
-export function getOwnSchedule(employeeId: number, month?: string, signal?: AbortSignal): Promise<EmployeeScheduleDto> {
-  const monthQuery = month ? `?month=${month}` : ''
-  return apiRequest<EmployeeScheduleDto>(`/api/employees/${employeeId}/schedule${monthQuery}`, { signal })
+/**
+ * Window for GET /api/employees/{id}/schedule. Pass either a calendar `month`
+ * (yyyy-MM) or an explicit inclusive `from`/`to` week (yyyy-MM-dd); the server
+ * resolves the cycles overlapping that window.
+ */
+export interface OwnScheduleQuery {
+  month?: string
+  from?: string
+  to?: string
+}
+
+export function getOwnSchedule(
+  employeeId: number,
+  query: OwnScheduleQuery = {},
+  signal?: AbortSignal,
+): Promise<EmployeeScheduleDto> {
+  const params = new URLSearchParams()
+  if (query.month) params.set('month', query.month)
+  if (query.from) params.set('from', query.from)
+  if (query.to) params.set('to', query.to)
+  const search = params.toString()
+  return apiRequest<EmployeeScheduleDto>(
+    `/api/employees/${employeeId}/schedule${search ? `?${search}` : ''}`,
+    { signal },
+  )
 }

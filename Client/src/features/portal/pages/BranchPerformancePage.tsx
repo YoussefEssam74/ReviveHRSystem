@@ -13,7 +13,7 @@ import {
   type EmployeeDirectoryRow,
 } from '../api/branch.api'
 import { getOwnAttendance, type EmployeeAttendanceResponse, type EmployeeAttendanceItem } from '../api/attendance.api'
-import { getRequestInbox } from '../api/requests.api'
+import { getRequestInbox, type DeskRequestRow } from '../api/requests.api'
 import { getEvaluationResponses } from '../api/employee-file.api'
 import { EmptyState } from '../../../components/ui/primitives'
 import { StatusBadge } from '../../../components/ui/badge'
@@ -116,7 +116,7 @@ function PerformanceWorkspace() {
   const months = useMemo(() => {
     const keys = new Set<string>()
     inbox.forEach((row) => keys.add(ymOf(row.submittedDate)))
-    deductions.forEach((row) => keys.add(ymOf(row.issuedAt)))
+    deductions.forEach((row) => keys.add(ymOf(deductionDayOf(row))))
     warnings.forEach((row) => keys.add(ymOf(row.issuedAt)))
     bonuses.forEach((row) => keys.add(ymOf(row.issuedAt)))
     evaluations.forEach((row) => keys.add(ymOf(row.reviewedDate)))
@@ -135,7 +135,7 @@ function PerformanceWorkspace() {
         const memberEvaluations = evaluations.filter((item) => item.employee === row.name)
 
         const monthRequests = memberRequests.filter((item) => inMonth(item.submittedDate))
-        const monthDeductions = memberDeductions.filter((item) => inMonth(item.issuedAt))
+        const monthDeductions = memberDeductions.filter((item) => inMonth(deductionDayOf(item)))
         const monthWarnings = memberWarnings.filter((item) => inMonth(item.issuedAt))
         const monthBonuses = memberBonuses.filter((item) => inMonth(item.issuedAt))
         const monthEvaluations = memberEvaluations.filter((item) => inMonth(item.reviewedDate))
@@ -216,6 +216,7 @@ function PerformanceWorkspace() {
           month={month}
           months={months}
           tab={drillTab}
+          requests={inbox}
           onTabChange={changeDrillTab}
           onMonthChange={setMonth}
           onClose={closeDrill}
@@ -466,6 +467,48 @@ function currentMonthValue(): string {
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
 }
 
+/** The day a deduction punishes — the API's attendance day, else the issue day. */
+function deductionDayOf(row: DeductionCandidateRow): string {
+  const date = row.date?.slice(0, 10)
+  return date && date.length === 10 ? date : row.issuedAt.slice(0, 10)
+}
+
+/** Sweep rows and hand-issued rows use slightly different reason labels. */
+function isAbsenceReason(reason: string): boolean {
+  return reason.toLowerCase().startsWith('unapproved absence')
+}
+
+function isLateReason(reason: string): boolean {
+  return reason.toLowerCase().startsWith('late arrival')
+}
+
+/** "2026-09-18" → "Sep 2026" — the month the tallies below count. */
+function deductionMonthLabel(day: string): string {
+  const [year, month] = day.split('-')
+  const name = MONTH_NAMES[Number(month) - 1]
+  return name ? `${name} ${year}` : day
+}
+
+/** The sweep's formula boilerplate — the row shows the day and the month counts instead. */
+function isAutoPricedNote(note: string): boolean {
+  return note.toLowerCase().includes('auto-priced:')
+}
+
+/** Requests covering the day: single-day, a leave range, or a swap's target day. */
+function requestsOnDay(requests: DeskRequestRow[], employeeId: number, day: string): DeskRequestRow[] {
+  return requests.filter((request) => {
+    if (request.employeeId !== employeeId) return false
+    const start = request.requestedDate?.slice(0, 10)
+    if (!start) return false
+    const end = (request.endDate ?? request.requestedDate).slice(0, 10)
+    return (start <= day && day <= end) || request.targetDate?.slice(0, 10) === day
+  })
+}
+
+function requestStatusLabel(status: string): string {
+  return status === 'PendingHRReview' ? 'Pending HR Review' : humanize(status)
+}
+
 /* ==================== drill-in (mock §25 view 2) ==================== */
 
 const DRILL_TABS = [
@@ -485,6 +528,7 @@ function PerfDrillIn({
   month,
   months,
   tab,
+  requests,
   onTabChange,
   onMonthChange,
   onClose,
@@ -504,6 +548,7 @@ function PerfDrillIn({
   month: MonthKey
   months: string[]
   tab: DrillTabId
+  requests: DeskRequestRow[]
   onTabChange: (tab: DrillTabId) => void
   onMonthChange: (value: MonthKey) => void
   onClose: () => void
@@ -611,7 +656,7 @@ function PerfDrillIn({
             />
           )}
           {tab === 'requests' && <DrillRequests employeeId={employee.id} inMonth={inMonth} />}
-          {tab === 'deductions' && <DrillDeductions employeeId={employee.id} inMonth={inMonth} />}
+          {tab === 'deductions' && <DrillDeductions employeeId={employee.id} requests={requests} inMonth={inMonth} />}
           {tab === 'evaluations' && <DrillEvaluations employeeId={employee.id} />}
           {tab === 'bonuses' && <DrillBonuses employeeId={employee.id} inMonth={inMonth} />}
           {tab === 'warnings' && <DrillWarnings employeeId={employee.id} inMonth={inMonth} />}
@@ -740,8 +785,19 @@ function deductionViewOf(status: string): DeductionViewId {
  * approve, re-price or reject while pending; re-price or reject while it waits for
  * HR; nothing once HR has applied it or the branch has excused it. Approving a row
  * therefore moves it to the next view and takes its Approve button with it.
+ * Each row also dates the day it punishes (not the sweep run), tallies the
+ * employee's absences / late arrivals for that month, and surfaces any request
+ * filed for that same day — the context a reviewer actually needs.
  */
-function DrillDeductions({ employeeId, inMonth }: { employeeId: number; inMonth: (value: string | null | undefined) => boolean }) {
+function DrillDeductions({
+  employeeId,
+  requests,
+  inMonth,
+}: {
+  employeeId: number
+  requests: DeskRequestRow[]
+  inMonth: (value: string | null | undefined) => boolean
+}) {
   const { toast } = useToast()
   const queryClient = useQueryClient()
   const [editingId, setEditingId] = useState<number | null>(null)
@@ -775,9 +831,8 @@ function DrillDeductions({ employeeId, inMonth }: { employeeId: number; inMonth:
     return <ErrorState message={describeApiError(deductionsQuery.error)} onRetry={() => deductionsQuery.refetch()} />
   }
 
-  const rows = (deductionsQuery.data ?? []).filter(
-    (item) => item.employeeId === employeeId && inMonth(item.issuedAt),
-  )
+  const mine = (deductionsQuery.data ?? []).filter((item) => item.employeeId === employeeId)
+  const rows = mine.filter((item) => inMonth(deductionDayOf(item)))
   const counts: Record<DeductionViewId, number> = { pending: 0, approved: 0, rejected: 0 }
   rows.forEach((item) => {
     counts[deductionViewOf(item.status)] += 1
@@ -838,14 +893,52 @@ function DrillDeductions({ employeeId, inMonth }: { employeeId: number; inMonth:
           // applied it (or the branch has excused it).
           const isOpen = item.status === 'Pending'
           const canDecide = isOpen || item.status === 'BranchApproved'
+          // The useful context for a manager deciding this row: the attendance day
+          // itself, that employee's absence/late tally for the month, and any
+          // request the employee filed for that exact day.
+          const day = deductionDayOf(item)
+          const monthKey = ymOf(day)
+          const monthRows = mine.filter((row) => ymOf(deductionDayOf(row)) === monthKey)
+          const absences = monthRows.filter((row) => isAbsenceReason(row.reason)).length
+          const lates = monthRows.filter((row) => isLateReason(row.reason)).length
+          const linkedRequests = requestsOnDay(requests, employeeId, day)
+          const manualNote = item.note && !isAutoPricedNote(item.note) ? item.note : null
           return {
             key: item.id,
             left: (
               <>
                 <p className="text-xs font-medium text-charcoal-900">{item.reason}</p>
-                <p className="text-[10px] text-charcoal-500">
-                  {item.note ?? 'No note'} · by {item.issuedBy} · {formatDate(item.issuedAt)}
+                <p className="text-xs text-charcoal-600">
+                  {formatDateWithYear(day)}
+                  {(absences > 0 || lates > 0) && (
+                    <>
+                      {' · '}
+                      {absences} {absences === 1 ? 'absence' : 'absences'} · {lates}{' '}
+                      {lates === 1 ? 'late arrival' : 'late arrivals'} in {deductionMonthLabel(day)}
+                    </>
+                  )}
                 </p>
+                {manualNote && (
+                  <p className="mt-0.5 text-[11px] text-charcoal-500">
+                    {manualNote}
+                    {item.issuedBy ? ` · by ${item.issuedBy}` : ''}
+                  </p>
+                )}
+                {linkedRequests.length > 0 && (
+                  <div className="mt-1 flex flex-wrap items-center gap-1">
+                    <span className="text-[10px] font-medium text-charcoal-400">Request that day:</span>
+                    {linkedRequests.map((request) => (
+                      <span
+                        key={request.id}
+                        className="inline-flex items-center gap-1 rounded-md border border-charcoal-200 bg-charcoal-50 px-1.5 py-0.5 text-[10px] font-medium text-charcoal-700"
+                      >
+                        {request.type}
+                        {request.requestTime ? ` · ${request.requestTime.slice(0, 5)}` : ''}
+                        <StatusBadge status={requestStatusLabel(request.status)} />
+                      </span>
+                    ))}
+                  </div>
+                )}
                 {canDecide && (
                   <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
                     {isOpen && (

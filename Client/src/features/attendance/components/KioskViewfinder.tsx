@@ -55,7 +55,6 @@ interface KioskViewfinderProps {
   onToggleSound: () => void
   onScanNow: () => void
   onRetryCamera: () => void
-  onUseManual: () => void
   onDismissResult: () => void
   onConfirmCheckout: () => void
   onCancelCheckout: () => void
@@ -65,8 +64,7 @@ interface KioskViewfinderProps {
 /**
  * The always-on camera viewfinder: streams from the moment the station connects,
  * with the scanning reticle, laser line and live status HUD. Reticle color tracks
- * the scanner phase; a camera problem keeps manual entry one click away so a blocked
- * camera never blocks attendance.
+ * the scanner phase; a camera failure shows a retry card inside the frame.
  */
 export function KioskViewfinder({
   videoRef,
@@ -85,7 +83,6 @@ export function KioskViewfinder({
   onToggleSound,
   onScanNow,
   onRetryCamera,
-  onUseManual,
   onDismissResult,
   onConfirmCheckout,
   onCancelCheckout,
@@ -194,9 +191,6 @@ export function KioskViewfinder({
               <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
                 <Button size="sm" onClick={onRetryCamera}>
                   Try camera again
-                </Button>
-                <Button variant="outline" size="sm" onClick={onUseManual}>
-                  Enter employee number
                 </Button>
               </div>
             </div>

@@ -152,6 +152,8 @@ export interface DeductionCandidateRow {
   note: string | null
   /** Raw DeductionStatus: Pending | BranchApproved | Approved | Rejected. */
   status: string
+  /** DateOnly "yyyy-MM-dd" — the attendance day the deduction punishes. */
+  date: string
   /** UTC ISO timestamp. */
   issuedAt: string
   issuedBy: string

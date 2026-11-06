@@ -7,6 +7,7 @@ import { getOwnAttendance, getOwnLeaveBalance, getOwnSchedule, manualAttendance,
 import { decideRequest, getOwnRequests, undoManagedDecision, type EmployeeRequestItem } from '../api/requests.api'
 import { getOwnEvaluationDetails, downloadDocument, downloadHrDocument, getHrDocuments, getOwnDocuments, getOwnHistory, getOwnProfile, type EmployeeDocument, type EmployeeHistoryItem, type EvaluationDetail, type HrDocument } from '../api/employee-file.api'
 import { getOwnPayrollSheets } from '../api/payroll.api'
+import { invalidateScheduleQueries, scheduleKeys } from '../api/schedule-keys'
 import { getAttendanceGrid, listBranchDeductions, branchReviewDeduction, type DeductionCandidateRow } from '../api/branch.api'
 import { EmptyState, SectionCard } from '../../../components/ui/primitives'
 import { ErrorState, LoadingState } from '../../../components/async-state'
@@ -56,6 +57,25 @@ function currentWeekDates(): { label: string; date: string }[] {
       date: `${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, '0')}-${String(cursor.getDate()).padStart(2, '0')}`,
     }
   })
+}
+
+/** Explicit Mon–Sun window for GET /api/employees/{id}/schedule (inclusive). */
+function currentWeekRange(): { from: string; to: string } {
+  const week = currentWeekDates()
+  return { from: week[0].date, to: week[6].date }
+}
+
+/**
+ * The current-week schedule cache shared by the profile header and the Shift
+ * tab. The week is part of the key so the page can never serve last week's
+ * cached published rows after the calendar rolls over.
+ */
+function memberWeekQuery(memberId: number) {
+  const range = currentWeekRange()
+  return {
+    queryKey: scheduleKeys.memberWeek(memberId, range.from, range.to),
+    queryFn: ({ signal }: { signal: AbortSignal }) => getOwnSchedule(memberId, range, signal),
+  }
 }
 
 const WEEKDAY_LABELS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
@@ -402,8 +422,8 @@ function TodaysAttendanceCard({ memberId }: { memberId: number }) {
 
 function UpcomingSchedule({ memberId }: { memberId: number }) {
   const scheduleQuery = useQuery({
-    queryKey: ['portal', 'member', 'schedule', memberId],
-    queryFn: ({ signal }) => getOwnSchedule(memberId, undefined, signal),
+    queryKey: scheduleKeys.member(memberId),
+    queryFn: ({ signal }) => getOwnSchedule(memberId, {}, signal),
   })
 
   if (scheduleQuery.isLoading) return <SectionCard title="Upcoming shifts"><LoadingState /></SectionCard>
@@ -670,11 +690,9 @@ function BMProfile({ memberId, member }: { memberId: number; member: MemberHeade
   const { can } = usePortalSession()
   const [tab, setTab] = useState<BmTabId>('personal')
 
-  // Shares the ShiftTab cache entry (same query key) — no extra network call.
-  const scheduleQuery = useQuery({
-    queryKey: ['portal', 'member', 'schedule', memberId],
-    queryFn: ({ signal }) => getOwnSchedule(memberId, undefined, signal),
-  })
+  // Shares the current-week ShiftTab cache entry (same key) — no extra
+  // network call, and both stay in sync after an assignment edit.
+  const scheduleQuery = useQuery(memberWeekQuery(memberId))
 
   // Week days that fall inside a published cycle but have no assignment row —
   // surfaced on every tab so an unassigned day is never silent.
@@ -1212,15 +1230,20 @@ function MemberDeductions({ memberId }: { memberId: number }) {
 
   return (
     <div className="divide-y divide-charcoal-50 rounded-lg border border-charcoal-200">
-      {rows.map((row: DeductionCandidateRow) => (
+      {rows.map((row: DeductionCandidateRow) => {
+        // Date the attendance day, not the sweep run; the auto-priced formula
+        // boilerplate rides in the note and says nothing a manager needs here.
+        const day = row.date?.slice(0, 10) || row.issuedAt?.slice(0, 10) || ''
+        const showNote = row.note != null && !row.note.toLowerCase().includes('auto-priced:')
+        return (
         <div key={row.id} className="p-2.5">
           <div className="flex items-center justify-between gap-2">
             <div className="min-w-0">
               <p className="text-xs font-medium text-charcoal-900">{row.reason}</p>
-              <p className="truncate text-[10px] text-charcoal-500">
-                {formatDateWithYear(row.issuedAt?.slice(0, 10) ?? '')}
-                {row.issuedBy ? ` · by ${row.issuedBy}` : ''}
-                {row.note ? ` · ${row.note}` : ''}
+              <p className="text-[11px] text-charcoal-600">
+                {formatDateWithYear(day)}
+                {row.issuedBy && showNote ? ` · by ${row.issuedBy}` : ''}
+                {showNote ? ` · ${row.note}` : ''}
               </p>
             </div>
             <div className="flex flex-shrink-0 items-center gap-2">
@@ -1290,7 +1313,8 @@ function MemberDeductions({ memberId }: { memberId: number }) {
             </div>
           )}
         </div>
-      ))}
+        )
+      })}
     </div>
   )
 }
@@ -1301,10 +1325,7 @@ function ShiftTab({ memberId }: { memberId: number }) {
   const { can } = usePortalSession()
   const [editCycleId, setEditCycleId] = useState<number | null>(null)
 
-  const scheduleQuery = useQuery({
-    queryKey: ['portal', 'member', 'schedule', memberId],
-    queryFn: ({ signal }) => getOwnSchedule(memberId, undefined, signal),
-  })
+  const scheduleQuery = useQuery(memberWeekQuery(memberId))
 
   if (scheduleQuery.isLoading) return <LoadingState label="Loading shift…" />
   if (scheduleQuery.error)
@@ -1340,7 +1361,7 @@ function ShiftTab({ memberId }: { memberId: number }) {
       </div>
       {(schedule?.cycles?.length ?? 0) === 0 && (
         <p className="mb-2 text-[10px] text-charcoal-400">
-          No published cycles — days below stay unscheduled until HR publishes one.
+          No published schedule covers this week — assign shifts and press Publish in Branch Schedule to make them visible here.
         </p>
       )}
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-7">
@@ -1413,7 +1434,7 @@ function EditShiftModal({
   const { toast } = useToast()
   const queryClient = useQueryClient()
   const detailQuery = useQuery({
-    queryKey: ['portal', 'shift-cycle', cycleId],
+    queryKey: scheduleKeys.cycle(cycleId),
     queryFn: ({ signal }) => getShiftCycle(cycleId, signal),
   })
   const [selected, setSelected] = useState<Record<number, string> | null>(null)
@@ -1422,10 +1443,16 @@ function EditShiftModal({
   const templates = (detail?.shiftTemplates ?? []).filter((template) => !template.isOff)
   const row = detail?.assignments.find((assignment) => assignment.employeeId === memberId)
 
-  // Existing template id for a weekday; null = the day was never assigned.
+  // Existing template id for a weekday. null = the day was never assigned;
+  // an explicit Off row has assignedDays[day] = true with a null template id.
   const initialFor = (day: number): string | null => {
     const id = row?.days[day]
-    return id == null ? null : String(id)
+    if (id != null) return String(id)
+    if (!row) return null
+    // Older cached responses predate assignedDays; a null template there
+    // historically meant an explicit Off day.
+    if (row.assignedDays == null) return SHIFT_OFF
+    return row.assignedDays[day] === true ? SHIFT_OFF : null
   }
 
   const values: Record<number, string> =
@@ -1435,8 +1462,7 @@ function EditShiftModal({
   const saveMutation = useMutation({
     mutationFn: (payload: SetAssignmentInput[]) => setShiftAssignments(cycleId, payload),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['portal', 'member', 'schedule', memberId] })
-      void queryClient.invalidateQueries({ queryKey: ['portal', 'shift-cycle', cycleId] })
+      void invalidateScheduleQueries(queryClient)
       toast('Weekly shift pattern saved.')
       onClose()
     },
@@ -1491,7 +1517,7 @@ function EditShiftModal({
               <div key={WEEKDAY_LABELS[day]} className="flex items-center gap-3">
                 <p className="w-24 text-[11px] font-semibold text-charcoal-900">{WEEKDAY_LABELS[day]}</p>
                 <select
-                  className="field-input h-9 flex-1 !px-2.5 text-xs"
+                  className="form-select h-9 flex-1 !px-2.5 text-xs"
                   value={values[day]}
                   onChange={(event) => setSelected({ ...values, [day]: event.target.value })}
                 >

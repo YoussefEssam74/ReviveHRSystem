@@ -24,6 +24,9 @@ namespace Service.Specifications
             {
                 ApplyPaging(skip, take);
             }
+
+            // MarkAllRead mutates every fetched row before SaveChanges without Update() — keep tracked.
+            ApplyTracking();
         }
     }
 
@@ -33,6 +36,8 @@ namespace Service.Specifications
         public UserNotificationPreferenceByUserSpec(int userId)
         {
             Criteria = p => p.UserId == userId;
+            // UpdatePreferences mutates the fetched row before SaveChanges without Update() — keep tracked.
+            ApplyTracking();
         }
     }
 
@@ -52,6 +57,8 @@ namespace Service.Specifications
         {
             var clean = titlePrefix.Trim().ToLower();
             Criteria = n => n.Title.ToLower().StartsWith(clean) && n.Type == NotificationType.Announcement;
+            // Retraction removes the fetched fan-out rows — keep tracked.
+            ApplyTracking();
         }
     }
 
@@ -83,6 +90,8 @@ namespace Service.Specifications
         {
             Criteria = a => a.Id == announcementId;
             AddInclude(a => a.Targets);
+            // Announcement edit/retract mutates the fetched row (and targets) before SaveChanges — keep tracked.
+            ApplyTracking();
         }
     }
 
