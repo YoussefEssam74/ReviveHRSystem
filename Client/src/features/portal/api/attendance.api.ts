@@ -56,6 +56,10 @@ export interface LeaveBalanceResponse {
 export interface ScheduleDay {
   date: string
   dayName: string
+  /** Published cycle that owns this date (a week can span two cycles). */
+  cycleId: number
+  /** Shift template id, or null for an explicit Off day. */
+  shiftTemplateId: number | null
   shiftName: string | null
   /** TimeOnly "HH:mm:ss". */
   start: string | null
@@ -149,19 +153,45 @@ export interface EmployeeDeduction {
   description: string
   /** Money deductions only (day-based follow-ups leave it null). */
   amount: number | null
-  /** Human status: In review | Resolved | Applied | Rejected. */
+  /** Human status: In review | Branch approved | Resolved | Applied | Rejected. */
   status: string
   detail: string | null
   correctionRequestId: number | null
   /** Raw RequestStatus of the correction (Pending, PendingHRReview, ...). */
   correctionStatus: string | null
+  /** Username of the manager who levied it — null when the system sweep did. */
+  issuedBy: string | null
+  /** The attendance day the candidate punishes, "yyyy-MM-dd"; may be null. */
+  attendanceDate: string | null
 }
 
 export function getEmployeeDeductions(employeeId: number, signal?: AbortSignal): Promise<EmployeeDeduction[]> {
   return apiRequest<EmployeeDeduction[]>(`/api/employees/${employeeId}/deductions`, { signal })
 }
 
-export function getOwnSchedule(employeeId: number, month?: string, signal?: AbortSignal): Promise<EmployeeScheduleDto> {
-  const monthQuery = month ? `?month=${month}` : ''
-  return apiRequest<EmployeeScheduleDto>(`/api/employees/${employeeId}/schedule${monthQuery}`, { signal })
+/**
+ * Window for GET /api/employees/{id}/schedule. Pass either a calendar `month`
+ * (yyyy-MM) or an explicit inclusive `from`/`to` week (yyyy-MM-dd); the server
+ * resolves the cycles overlapping that window.
+ */
+export interface OwnScheduleQuery {
+  month?: string
+  from?: string
+  to?: string
+}
+
+export function getOwnSchedule(
+  employeeId: number,
+  query: OwnScheduleQuery = {},
+  signal?: AbortSignal,
+): Promise<EmployeeScheduleDto> {
+  const params = new URLSearchParams()
+  if (query.month) params.set('month', query.month)
+  if (query.from) params.set('from', query.from)
+  if (query.to) params.set('to', query.to)
+  const search = params.toString()
+  return apiRequest<EmployeeScheduleDto>(
+    `/api/employees/${employeeId}/schedule${search ? `?${search}` : ''}`,
+    { signal },
+  )
 }

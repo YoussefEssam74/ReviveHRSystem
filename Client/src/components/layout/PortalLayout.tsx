@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
-import { AlertTriangle, Bell, Check, ChevronDown, LogOut, Menu, Moon, RefreshCw, Settings, Sun, X, Zap } from 'lucide-react'
+import { AlertTriangle, Bell, Check, ChevronDown, LogOut, Menu, Moon, RefreshCw, Settings, Sun, X } from 'lucide-react'
 import { useAuthSession } from '../../contexts/AuthSessionContext'
 import { usePortalSession } from '../../contexts/PortalSessionContext'
 import { useTheme } from '../../contexts/ThemeContext'
@@ -23,10 +23,13 @@ import {
   useUnreadCount,
   type NotificationRow,
 } from '../../features/notifications/hooks/use-notifications'
+import { usePortalAvatar } from '../../features/portal/hooks/use-portal-avatar'
+import { BUILD_STAMP } from '../../lib/build-stamp'
 import { cn } from '../../lib/utils'
 import { timeAgo } from '../../lib/format'
 import { describeApiError } from '../../lib/api-client'
 import { Avatar } from '../ui/primitives'
+import { GymLogo } from '../ui/gym-logo'
 import { ConfirmDialog } from '../ui/modal'
 import { useToast } from '../ui/toast'
 import { Spinner } from '../async-state'
@@ -120,6 +123,7 @@ export function PortalLayout() {
   const markAllRead = useMarkAllNotificationsRead()
   const markOneRead = useMarkNotificationRead()
   const counters = useNavCounters()
+  const avatarUrl = usePortalAvatar(portal.me?.employeeId ?? null)
 
   const bellRef = useDismissable(bellOpen, () => setBellOpen(false))
   const profileRef = useDismissable(profileOpen, () => setProfileOpen(false))
@@ -180,13 +184,11 @@ export function PortalLayout() {
 
   const sidebar = (
     <div className="flex h-full flex-col">
-      <div className="flex h-14 flex-shrink-0 items-center gap-2 border-b border-charcoal-100 px-4">
-        <Link to="/employee/dashboard" className="flex items-center gap-2.5">
-          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-600">
-            <Zap className="h-5 w-5 text-white" aria-hidden="true" />
-          </span>
-          <span className="text-lg font-bold tracking-tight text-charcoal-900">
-            Revive<span className="text-brand-600">HR</span>
+      <div className="flex h-16 flex-shrink-0 items-center gap-2 border-b border-charcoal-100 px-4">
+        <Link to="/employee/dashboard" className="flex min-w-0 items-center gap-2.5">
+          <GymLogo gym={portal.me.activeGym} className="h-9 w-9 rounded-xl" />
+          <span className="min-w-0 truncate text-sm font-bold leading-tight text-charcoal-900">
+            {portal.me.activeGym?.gymName ?? 'Workforce portal'}
           </span>
         </Link>
         <button
@@ -233,6 +235,14 @@ export function PortalLayout() {
       </nav>
 
       <div className="relative flex-shrink-0 border-t border-charcoal-100 p-3" ref={userMenuRef}>
+        {import.meta.env.DEV && BUILD_STAMP && (
+          <p
+            className="mb-1 px-1 text-[9px] leading-none text-charcoal-300"
+            title="When this tab's JavaScript was loaded. An old stamp vs. other tabs = the tab is running stale code — hard-reload it (Ctrl+Shift+R)."
+          >
+            dev bundle · loaded {BUILD_STAMP}
+          </p>
+        )}
         <button
           type="button"
           className="flex w-full items-center gap-2.5 rounded-lg p-1 text-left transition-colors hover:bg-charcoal-50"
@@ -241,7 +251,7 @@ export function PortalLayout() {
           aria-expanded={userMenuOpen}
           aria-label="Account menu"
         >
-          <Avatar initials={initials} />
+          <Avatar initials={initials} src={avatarUrl} />
           <span className="min-w-0 flex-1">
             <span className="block truncate text-sm font-medium text-charcoal-900">{fullName}</span>
             <span className="block truncate text-xs text-charcoal-500">{roleLabel}</span>
@@ -378,7 +388,7 @@ export function PortalLayout() {
                 aria-label="Account menu"
                 aria-expanded={profileOpen}
               >
-                <Avatar initials={initials} size="sm" />
+                <Avatar initials={initials} src={avatarUrl} size="sm" />
                 <ChevronDown className="h-3.5 w-3.5 text-charcoal-400" aria-hidden="true" />
               </button>
 

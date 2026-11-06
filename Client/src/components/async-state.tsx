@@ -24,7 +24,10 @@ export function ErrorState({ title = 'Something went wrong', message, onRetry }:
   return (
     <div role="alert" className="mx-auto my-12 max-w-md rounded-2xl border border-red-200 bg-red-50 p-6 text-center">
       <AlertCircle className="mx-auto h-8 w-8 text-red-500" aria-hidden="true" />
-      <h2 className="mt-3 text-base font-semibold text-red-900">{title}</h2>
+      {/* red-800 (not red-900): the pastel bg flips dark in dark mode and only
+          the 600/700/800 text levels flip with it — red-900 would stay dark
+          and disappear against it. */}
+      <h2 className="mt-3 text-base font-semibold text-red-800">{title}</h2>
       <p className="mt-1 text-sm text-red-700">{message}</p>
       {onRetry && (
         <Button variant="outline" size="sm" className="mt-4" onClick={onRetry}>

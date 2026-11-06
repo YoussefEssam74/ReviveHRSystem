@@ -15,6 +15,8 @@ public sealed class ScheduleMappingProfile : Profile
     {
         CreateMap<ShiftAssignment, ScheduleDayDto>()
             .ForMember(d => d.DayName, o => o.MapFrom(s => s.Date.DayOfWeek.ToString()))
+            .ForMember(d => d.CycleId, o => o.MapFrom(s => s.ShiftCycleId))
+            .ForMember(d => d.ShiftTemplateId, o => o.MapFrom(s => s.ShiftTemplateId))
             .ForMember(d => d.ShiftName, o => o.MapFrom(s => s.ShiftTemplate != null ? s.ShiftTemplate.Name : null))
             .ForMember(d => d.Start, o => o.MapFrom(s => s.ShiftTemplate != null ? s.ShiftTemplate.StartTime : (TimeOnly?)null))
             .ForMember(d => d.End, o => o.MapFrom(s => s.ShiftTemplate != null ? s.ShiftTemplate.EndTime : (TimeOnly?)null))

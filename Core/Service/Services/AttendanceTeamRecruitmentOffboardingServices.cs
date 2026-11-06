@@ -200,23 +200,29 @@ namespace Service.Services
         {
             var gymId = activeGymId ?? throw new UnAuthorizedException("This operation requires an active gym context.");
 
-            var requests = await unitOfWork.GetRepository<VacancyRequest, int>()
-                .GetAllAsync(new VacancyRequestsByGymSpec(gymId), cancellationToken);
+            // The status arrives as a free-form label: an unknown label matched no row
+            // under the old in-memory compare, so it yields an empty page, not an error.
+            VacancyRequestStatus? status = null;
+            if (!string.IsNullOrWhiteSpace(query.Status))
+            {
+                if (!Enum.TryParse<VacancyRequestStatus>(query.Status.Trim(), ignoreCase: true, out var parsedStatus))
+                {
+                    return new PaginationResult<VacancyRequestDto>(query.PageNumber, query.PageSize, 0, []);
+                }
 
-            var filtered = string.IsNullOrWhiteSpace(query.Status)
-                ? requests.ToList()
-                : requests
-                    .Where(r => r.Status.ToString().Equals(query.Status, StringComparison.OrdinalIgnoreCase))
-                    .ToList();
+                status = parsedStatus;
+            }
 
-            var page = filtered
-                .OrderByDescending(r => r.Id)
-                .Skip(query.SkipCount)
-                .Take(query.PageSize)
-                .Select(r => mapper.Map<VacancyRequestDto>(r))
-                .ToList();
+            // Filter and page execute in SQL (the spec already orders newest first);
+            // the count repeats the filter without paging for the envelope total.
+            var repository = unitOfWork.GetRepository<VacancyRequest, int>();
+            var total = await repository.CountAsync(
+                new VacancyRequestsByGymSpec(gymId, status), cancellationToken);
+            var rows = await repository.GetAllAsync(
+                new VacancyRequestsByGymSpec(gymId, status, query.SkipCount, query.PageSize), cancellationToken);
 
-            return new PaginationResult<VacancyRequestDto>(query.PageNumber, query.PageSize, filtered.Count, page);
+            var page = rows.Select(r => mapper.Map<VacancyRequestDto>(r)).ToList();
+            return new PaginationResult<VacancyRequestDto>(query.PageNumber, query.PageSize, total, page);
         }
 
         public async Task<VacancyRequestDto> GetRequestAsync(
@@ -493,7 +499,15 @@ namespace Service.Services
                 ? await unitOfWork.GetRepository<Employee, int>().GetAllAsync(new EmployeesByTeamSpec(ledTeamId.Value), cancellationToken)
                 : await unitOfWork.GetRepository<Employee, int>().GetAllAsync(new EmployeesByGymSpec(gymId), cancellationToken);
 
-            return employees.Select(e => e.Id).ToList();
+            // Exclude the actor's own employee record — a BM or TL must not appear
+            // in lists they manage (offboarding, attendance, team operations).
+            var ownEmployee = await unitOfWork.GetRepository<Employee, int>()
+                .GetByIdAsync(new EmployeeByUserIdSpec(actorUserId), cancellationToken);
+
+            return employees
+                .Where(e => ownEmployee is null || e.Id != ownEmployee.Id)
+                .Select(e => e.Id)
+                .ToList();
         }
     }
 }

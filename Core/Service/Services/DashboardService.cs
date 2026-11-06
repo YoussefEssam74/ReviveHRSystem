@@ -29,7 +29,7 @@ namespace Service.Services
         IUserAccessRepository userAccess,
         IMapper mapper,
         TimeZoneInfo attendanceTimeZone,
-        ITeamActionsService teamActions) : IDashboardService
+        IAttendanceDeductionSweepService deductionSweep) : IDashboardService
     {
         public async Task<EmployeeDashboardDto> GetDashboardAsync(int userId, int? activeGymId, CancellationToken cancellationToken = default)
         {
@@ -40,8 +40,10 @@ namespace Service.Services
             var employee = await unitOfWork.GetRepository<Employee, int>()
                 .GetByIdAsync(new EmployeeSummaryByUserIdSpec(userId), cancellationToken);
 
-            var greeting = DateTime.UtcNow.Hour < 12 ? "Good morning"
-                : DateTime.UtcNow.Hour < 17 ? "Good afternoon"
+            // Greeting and "today" follow the gym-local clock, not the server clock.
+            var localNow = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, attendanceTimeZone);
+            var greeting = localNow.Hour < 12 ? "Good morning"
+                : localNow.Hour < 17 ? "Good afternoon"
                 : "Good evening";
 
             var userDto = employee is not null
@@ -53,7 +55,7 @@ namespace Service.Services
                 return Empty(greeting, userDto);
             }
 
-            var today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, attendanceTimeZone));
+            var today = DateOnly.FromDateTime(localNow);
             var parts = await LoadEmployeePartsAsync(employee, today, cancellationToken);
 
             return new EmployeeDashboardDto
@@ -99,14 +101,73 @@ namespace Service.Services
             var record = todayRecords.FirstOrDefault();
             if (record is not null)
             {
-                todayAttendance = mapper.Map<DashboardAttendanceDto>(record);
+                todayAttendance = new DashboardAttendanceDto
+                {
+                    CheckIn = ToLocalPunch(record.CheckInTime),
+                    CheckOut = ToLocalPunch(record.CheckOutTime),
+                    CheckedIn = record.CheckInTime is not null,
+                    Status = record.Status.ToString(),
+                    Source = record.CheckInMethod?.ToString() ?? string.Empty
+                };
             }
 
-            // Month summary.
+            // Month summary — derived, not just stored records.
+            // A scheduled employee who never punched is absent (like the management grid's
+            // DeriveRow), but approved day-offs and leave/suspended employees are excluded.
+            // Uses HashSet lookups so the per-day loop stays O(days in month) ≈ 31 max.
             var monthStart = new DateOnly(today.Year, today.Month, 1);
+            var monthEnd = monthStart.AddMonths(1);
             var monthRecords = (await unitOfWork.GetRepository<AttendanceRecord, int>()
                 .GetAllAsync(new AttendanceByEmployeeSpec(employee.Id, monthStart), cancellationToken)).ToList();
+
+            var monthAssignments = (await unitOfWork.GetRepository<ShiftAssignment, int>()
+                .GetAllAsync(new AssignmentsByEmployeeRangeSpec(employee.Id, monthStart, monthEnd.AddDays(-1)), cancellationToken))
+                .ToLookup(a => a.Date);
+
+            // O(1) day-off date lookups instead of .Any() per calendar day.
+            var dayOffDates = new HashSet<DateOnly>();
+            var approvedDayOffRequests = (await unitOfWork.GetRepository<EmployeeRequest, int>()
+                .GetAllAsync(new ApprovedDayOffRequestsByEmployeeIdsSpec(new[] { employee.Id }, monthStart, monthEnd.AddDays(-1)), cancellationToken))
+                .ToList();
+            foreach (var r in approvedDayOffRequests)
+            {
+                var start = r.TargetStartDate ?? r.RequestDate;
+                var end = r.TargetEndDate ?? r.RequestDate;
+                for (var d = start; d <= end; d = d.AddDays(1))
+                {
+                    dayOffDates.Add(d);
+                }
+            }
+
+            var recordedDates = monthRecords.Select(r => r.Date).ToHashSet();
+
+            int derivedAbsent = 0;
+            for (var date = monthStart; date <= today && date < monthEnd; date = date.AddDays(1))
+            {
+                var assignment = monthAssignments[date].FirstOrDefault(a => !IsOffAssignment(a));
+                if (assignment is null) continue;               // not scheduled this day
+                if (recordedDates.Contains(date)) continue;     // punched — stored record decides
+                if (dayOffDates.Contains(date)) continue;       // approved day off
+                if (employee.Status is EmployeeStatus.OnLeave or EmployeeStatus.Suspended) continue;
+                derivedAbsent++;                                // scheduled, no punch → absent
+            }
+
             var present = monthRecords.Count(r => r.Status is AttendanceStatus.OnTime or AttendanceStatus.Late);
+            var late = monthRecords.Count(r => r.Status == AttendanceStatus.Late);
+            var storedAbsent = monthRecords.Count(r =>
+                r.Status == AttendanceStatus.Absent
+                && monthAssignments[r.Date].Any(a => !IsOffAssignment(a)));
+            var totalAbsent = storedAbsent + derivedAbsent;
+            var totalDays = monthRecords.Count + derivedAbsent;
+
+            // Raise (and reconcile) the month's attendance deductions — derived
+            // absences and stored late/absent days — as priced pending candidates the
+            // branch sees in Employees Performance → Deductions. Idempotent per day,
+            // so a dashboard load never duplicates or re-prices a row.
+            if (derivedAbsent + storedAbsent + late > 0)
+            {
+                await deductionSweep.SweepAsync(new[] { employee.Id }, monthStart, today, cancellationToken);
+            }
 
             // 7-day schedule strip: two recent past days (so the check-in/check-out
             // clock times have context), today, and the next four upcoming days.
@@ -137,8 +198,8 @@ namespace Service.Services
                     End = template?.EndTime,
                     IsOff = template is null,
                     IsToday = date == today,
-                    CheckIn = dayRecord?.CheckInTime is null ? null : TimeOnly.FromDateTime(dayRecord.CheckInTime.Value),
-                    CheckOut = dayRecord?.CheckOutTime is null ? null : TimeOnly.FromDateTime(dayRecord.CheckOutTime.Value),
+                    CheckIn = ToLocalPunch(dayRecord?.CheckInTime),
+                    CheckOut = ToLocalPunch(dayRecord?.CheckOutTime),
                 });
             }
 
@@ -171,10 +232,10 @@ namespace Service.Services
                 TodayAttendance = todayAttendance,
                 MonthSummary = new AttendanceSummaryDto
                 {
-                    Rate = monthRecords.Count == 0 ? 0 : (int)Math.Round(present * 100.0 / monthRecords.Count),
+                    Rate = totalDays == 0 ? 0 : (int)Math.Round(present * 100.0 / totalDays),
                     Present = present,
-                    Late = monthRecords.Count(r => r.Status == AttendanceStatus.Late),
-                    Absent = monthRecords.Count(r => r.Status == AttendanceStatus.Absent),
+                    Late = late,
+                    Absent = totalAbsent,
                     EarlyCheckout = monthRecords.Count(r => r.Status == AttendanceStatus.EarlyCheckout),
                     MissingCheckout = monthRecords.Count(r => r.Status == AttendanceStatus.MissingCheckout)
                 },
@@ -247,12 +308,12 @@ namespace Service.Services
 
             var derivedAbsent = derivedAbsentEmployees.Count;
 
-            // Auto-deduction sweep: scheduled-but-unpunched employees without an
-            // approved day off get a pending 3-day deduction raised by the system.
-            if (derivedAbsentEmployees.Count > 0)
-            {
-                await teamActions.SweepAbsenceDeductionsAsync(derivedAbsentEmployees, today, cancellationToken);
-            }
+            // Auto-deduction sweep across the month: derived absences and stored
+            // late/absent days become priced pending candidates the manager reviews
+            // (and approves / re-prices / rejects) in Employees Performance →
+            // Deductions. Idempotent per day, so every dashboard load is safe.
+            var monthStart = new DateOnly(today.Year, today.Month, 1);
+            await deductionSweep.SweepAsync(scopedIds, monthStart, today, cancellationToken);
 
             return new DashboardOverviewDto
             {
@@ -271,6 +332,27 @@ namespace Service.Services
             return periods.Select(p => p.Id).ToList();
         }
 
+        /// <summary>
+        /// Punches are stored as UTC instants; the dashboard renders them on the
+        /// gym-local (Egypt) clock, exactly like the attendance grid.
+        /// </summary>
+        private TimeOnly? ToLocalPunch(DateTime? utcMoment)
+        {
+            if (utcMoment is null)
+            {
+                return null;
+            }
+
+            var local = TimeZoneInfo.ConvertTimeFromUtc(
+                DateTime.SpecifyKind(utcMoment.Value, DateTimeKind.Utc), attendanceTimeZone);
+            return TimeOnly.FromDateTime(local);
+        }
+
+        private static bool IsOffAssignment(ShiftAssignment assignment) =>
+            assignment.ShiftTemplateId is null
+            || assignment.ShiftTemplate is null
+            || assignment.ShiftTemplate.Name.Contains("off", StringComparison.OrdinalIgnoreCase);
+
         private sealed class DashboardParts
         {
             public DashboardShiftDto? TodayShift { get; init; }
@@ -284,4 +366,3 @@ namespace Service.Services
         }
     }
 }
-

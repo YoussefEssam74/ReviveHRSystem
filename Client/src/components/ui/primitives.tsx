@@ -134,14 +134,29 @@ export function Tabs<T extends string>({
 
 /* ==================== Avatar ==================== */
 
-export function Avatar({ initials, size = 'md', className }: { initials: string; size?: 'sm' | 'md' | 'lg'; className?: string }) {
+export function Avatar({
+  initials,
+  src,
+  size = 'md',
+  className,
+}: {
+  initials: string
+  /** Authenticated photo URL; initials remain the fallback when absent. */
+  src?: string | null
+  size?: 'sm' | 'md' | 'lg'
+  className?: string
+}) {
   const sizes = { sm: 'h-7 w-7 text-[10px]', md: 'h-9 w-9 text-sm', lg: 'h-12 w-12 text-base' }
   return (
     <div
-      className={cn('flex flex-shrink-0 items-center justify-center rounded-full bg-brand-100 font-semibold text-brand-700', sizes[size], className)}
+      className={cn(
+        'flex flex-shrink-0 items-center justify-center overflow-hidden rounded-full bg-brand-100 font-semibold text-brand-700',
+        sizes[size],
+        className,
+      )}
       aria-hidden="true"
     >
-      {initials}
+      {src ? <img src={src} alt="" className="h-full w-full object-cover" /> : initials}
     </div>
   )
 }

@@ -14,8 +14,9 @@ import {
   getAttendanceGrid,
   getOffboardingCases,
   getVacancyRequests,
+  listBranchDeductions,
 } from '../../features/portal/api/branch.api'
-import type { PortalPageId } from '../../features/portal/portal-nav'
+import { type PortalPageId } from '../../features/portal/portal-nav'
 
 /** Number-only pill data (mock badgeHtml). count <= 0 removes the pill. */
 export interface NavBadge {
@@ -107,6 +108,16 @@ export function useNavCounters(): Partial<Record<PortalPageId, NavBadge>> {
     staleTime: FRESH_MS,
   })
 
+  // Employees Performance — deduction candidates still awaiting the branch's own
+  // decision (Pending). Shares the performance page's cache key, so the badge, the
+  // roster column and the Deductions tab all count the same rows.
+  const pendingDeductions = useQuery({
+    queryKey: ['portal', 'perf', 'deductions'],
+    queryFn: ({ signal }) => listBranchDeductions(undefined, signal),
+    enabled: isManager && portal.can('employees.view'),
+    staleTime: FRESH_MS,
+  })
+
   // Recruitment (BM) — pending vacancy requests awaiting the decision.
   const vacancies = useQuery({
     queryKey: ['portal', 'nav-counts', 'vacancies', 'Pending', gymId],
@@ -129,16 +140,14 @@ export function useNavCounters(): Partial<Record<PortalPageId, NavBadge>> {
     enabled: relevant != null && isManager && gymId != null,
     staleTime: FRESH_MS,
   })
-  const offTemplateIds = useMemo(
-    () => new Set((cycleDetail.data?.shiftTemplates ?? []).filter((t) => t.isOff).map((t) => t.id)),
-    [cycleDetail.data],
-  )
   const unscheduled = useMemo(
     () =>
       (cycleDetail.data?.assignments ?? []).filter((row) =>
-        row.days.some((day) => day == null || offTemplateIds.has(day)),
+        row.assignedDays?.length
+          ? row.assignedDays.some((assigned) => !assigned)
+          : row.days.some((day) => day == null),
       ).length,
-    [cycleDetail.data, offTemplateIds],
+    [cycleDetail.data],
   )
 
   return useMemo(() => {
@@ -165,12 +174,26 @@ export function useNavCounters(): Partial<Record<PortalPageId, NavBadge>> {
         'today to follow up',
       )
     }
+
+    // Employees Performance: everything the manager still owes a decision on —
+    // stage-1 requests and deduction candidates nobody has approved or rejected —
+    // plus the leaving cases already in flight (BM). The pill is a pure count: the
+    // sidebar always opens the page at its root, never inside an employee.
+    const openDeductions = (pendingDeductions.data ?? []).filter((row) => row.status === 'Pending')
+    const openRequests = inbox.data?.totalCount ?? 0
+    const openActions = openRequests + openDeductions.length
+    const leavingCases = (leavingsDraft.data?.totalCount ?? 0) + (leavingsNotice.data?.totalCount ?? 0)
+    const perfLabel = [
+      openActions > 0 ? `${openActions} waiting for your decision` : null,
+      leavingCases > 0
+        ? `${leavingCases} leaving ${leavingCases === 1 ? 'case' : 'cases'} in progress`
+        : null,
+    ]
+      .filter((part): part is string => part != null)
+      .join(' · ')
+    put('employees-performance', openActions + leavingCases, perfLabel)
+
     if (isBranchManager) {
-      put(
-        'employees-performance',
-        (leavingsDraft.data?.totalCount ?? 0) + (leavingsNotice.data?.totalCount ?? 0),
-        'leaving cases in progress',
-      )
       put('recruitment', vacancies.data?.total ?? 0, 'pending vacancy requests')
     }
     put('team-schedule', unscheduled, 'not fully scheduled yet')
@@ -184,6 +207,7 @@ export function useNavCounters(): Partial<Record<PortalPageId, NavBadge>> {
     absentToday.data,
     leavingsDraft.data,
     leavingsNotice.data,
+    pendingDeductions.data,
     vacancies.data,
     unscheduled,
   ])

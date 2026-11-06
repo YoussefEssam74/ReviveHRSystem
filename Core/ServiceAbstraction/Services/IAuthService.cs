@@ -15,12 +15,13 @@ namespace ServiceAbstraction.Services
         /// <summary>Completes a two-gym employee login by exchanging the temp session token for a gym-scoped access token.</summary>
         Task<LoginResponse> SelectGymAsync(SelectGymRequest request, CancellationToken cancellationToken = default);
 
+        /// <summary>Exchanges a valid refresh token for a new access token + rotated refresh token.</summary>
+        Task<LoginResponse> RefreshAsync(string refreshToken, CancellationToken cancellationToken = default);
+
         /// <summary>
-        /// Records the caller's logout. With access-token-only auth (no refresh tokens)
-        /// there is no server-side session to revoke, so this stamps the audit trail and
-        /// the client discards the token; the token's own lifetime ends the session.
+        /// Records the caller's logout and revokes the supplied refresh token (if any).
         /// </summary>
-        Task LogoutAsync(int userId, CancellationToken cancellationToken = default);
+        Task LogoutAsync(int userId, string? refreshToken = null, CancellationToken cancellationToken = default);
 
         /// <summary>Loads the signed-in user's portal profile: name, position, gyms, permissions (GET /api/auth/me).</summary>
         /// <param name="actorUserId">The authenticated user's id (uid claim).</param>

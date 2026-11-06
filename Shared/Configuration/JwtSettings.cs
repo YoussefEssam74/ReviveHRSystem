@@ -11,5 +11,8 @@ namespace Shared.Configuration
         public int AccessTokenMinutes { get; set; } = 30;
         /// <summary>Lifetime of the temporary gym-selection session token in minutes.</summary>
         public int SelectionTokenMinutes { get; set; } = 5;
+
+        /// <summary>Refresh token lifetime in days (rotated on every refresh; revoked on logout).</summary>
+        public int RefreshTokenDays { get; set; } = 30;
     }
 }

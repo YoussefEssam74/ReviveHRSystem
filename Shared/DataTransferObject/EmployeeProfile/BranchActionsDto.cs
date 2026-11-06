@@ -10,6 +10,8 @@ public sealed class DeductionCandidateDto
     public string Reason { get; init; } = string.Empty;
     public string? Note { get; init; }
     public string Status { get; init; } = string.Empty;
+    /// <summary>The day the deduction punishes: its attendance day, else the day it was issued.</summary>
+    public DateOnly Date { get; init; }
     public DateTime IssuedAt { get; init; }
     public string IssuedBy { get; init; } = string.Empty;
 }
@@ -21,6 +23,14 @@ public sealed class CreateDeductionCandidateDto
     public string Reason { get; init; } = string.Empty;
     public string? Note { get; init; }
 }
+
+/// <summary>The branch's own decision on a deduction before HR applies it to payroll (mock §20).</summary>
+/// <param name="Decision"><c>approve</c> (branch approves), <c>reject</c> (final) or <c>edit</c> (amount re-price).</param>
+/// <param name="Amount">
+/// Optional revised amount — applied with the decision (approve/edit). Required for
+/// <c>edit</c>; must be positive.
+/// </param>
+public sealed record BranchDeductionReviewRequest(string Decision, decimal? Amount = null);
 
 /// <summary>A warning notice awaiting HR filing (mock §20 Issue Warning Notice).</summary>
 public sealed class WarningNoticeDto

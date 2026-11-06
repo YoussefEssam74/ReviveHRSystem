@@ -58,6 +58,10 @@ namespace Shared.DataTransferObject.Request
         public string? HrComment { get; init; }
         public string? Payment { get; init; }
         public string Reason { get; init; } = string.Empty;
+
+        /// <summary>A file (the sick-leave medical certificate) rides with this request.</summary>
+        public bool HasAttachment { get; init; }
+
         public List<RequestTimelineStep> Timeline { get; init; } = [];
     }
 

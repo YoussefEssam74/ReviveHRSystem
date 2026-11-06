@@ -58,6 +58,13 @@ export interface CurrentUserResponse {
 export interface SwitchGymResponse {
   accessToken: string
   expiresInSeconds: number
+  /**
+   * The switch rotates the refresh credential to the new gym's scope; it must be
+   * persisted or the session loses silent-refresh (the old chain no longer
+   * matches the active gym after a switch).
+   */
+  refreshToken?: string
+  refreshExpiresInSeconds?: number
   me: MeResponse
 }
 

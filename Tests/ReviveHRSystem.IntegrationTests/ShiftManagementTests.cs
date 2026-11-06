@@ -33,25 +33,29 @@ namespace ReviveHRSystem.IntegrationTests
             {
                 name = "Split Shift",
                 start = new TimeOnly(10, 0),
-                end = new TimeOnly(18, 0)
+                end = new TimeOnly(18, 0),
+                color = "#6366f1"
             }, token);
             var createResponse = await _fixture.Client.SendAsync(create);
             createResponse.EnsureSuccessStatusCode();
             var created = await createResponse.Content.ReadFromJsonAsync<JsonElement>();
             var templateId = created.GetProperty("id").GetInt32();
             Assert.Equal("Split Shift", created.GetProperty("name").GetString());
+            Assert.Equal("#6366f1", created.GetProperty("color").GetString());
 
             // Update
             var update = _fixture.AuthorizedRequest(HttpMethod.Put, $"/api/gyms/{gym1Id}/shift-templates/{templateId}", new
             {
                 name = "Split Shift (Late)",
                 start = new TimeOnly(11, 0),
-                end = new TimeOnly(19, 0)
+                end = new TimeOnly(19, 0),
+                color = "#22c55e"
             }, token);
             var updateResponse = await _fixture.Client.SendAsync(update);
             updateResponse.EnsureSuccessStatusCode();
             var updated = await updateResponse.Content.ReadFromJsonAsync<JsonElement>();
             Assert.Equal("Split Shift (Late)", updated.GetProperty("name").GetString());
+            Assert.Equal("#22c55e", updated.GetProperty("color").GetString());
 
             // Use it in an assignment, then delete the template: the cell becomes an Off Day.
             var employeeId = await OwnEmployeeIdAsync("karim@revive.hr");
@@ -74,16 +78,66 @@ namespace ReviveHRSystem.IntegrationTests
         }
 
         [Fact]
-        public async Task Template_InvalidTimeWindow_Returns400()
+        public async Task Template_OvernightTimeWindow_CreatesWithColor()
         {
             var gym1Id = await GymIdByNameAsync("Revive Main Gym");
             var token = await LoginSelectingGymAsync("omar@revive.hr", gym1Id);
 
+            // 20:00 → 04:00 is a valid overnight window: end < start means the
+            // shift finishes on the following day.
             var create = _fixture.AuthorizedRequest(HttpMethod.Post, $"/api/gyms/{gym1Id}/shift-templates", new
             {
-                name = "Backwards",
-                start = new TimeOnly(18, 0),
-                end = new TimeOnly(9, 0)
+                name = "Overnight Shift",
+                start = new TimeOnly(20, 0),
+                end = new TimeOnly(4, 0),
+                color = "#6366f1"
+            }, token);
+            var response = await _fixture.Client.SendAsync(create);
+
+            Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+            var created = await response.Content.ReadFromJsonAsync<JsonElement>();
+            Assert.Equal("20:00:00", created.GetProperty("start").GetString());
+            Assert.Equal("04:00:00", created.GetProperty("end").GetString());
+            Assert.Equal("#6366f1", created.GetProperty("color").GetString());
+
+            var templateId = created.GetProperty("id").GetInt32();
+            var delete = _fixture.AuthorizedRequest(HttpMethod.Delete, $"/api/gyms/{gym1Id}/shift-templates/{templateId}", null, token);
+            (await _fixture.Client.SendAsync(delete)).EnsureSuccessStatusCode();
+        }
+
+        [Fact]
+        public async Task Template_ZeroLengthTimeWindow_Returns400()
+        {
+            var gym1Id = await GymIdByNameAsync("Revive Main Gym");
+            var token = await LoginSelectingGymAsync("omar@revive.hr", gym1Id);
+
+            // Start == end is ambiguous: the API cannot tell whether the shift
+            // ends today or tomorrow, so it rejects the zero-length window.
+            var create = _fixture.AuthorizedRequest(HttpMethod.Post, $"/api/gyms/{gym1Id}/shift-templates", new
+            {
+                name = "Zero Length",
+                start = new TimeOnly(8, 0),
+                end = new TimeOnly(8, 0)
+            }, token);
+            var response = await _fixture.Client.SendAsync(create);
+
+            Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        }
+
+        [Fact]
+        public async Task Template_InvalidColor_Returns400()
+        {
+            var gym1Id = await GymIdByNameAsync("Revive Main Gym");
+            var token = await LoginSelectingGymAsync("omar@revive.hr", gym1Id);
+
+            // Only #rrggbb is accepted; anything else would end up in inline
+            // styles on the schedule grid.
+            var create = _fixture.AuthorizedRequest(HttpMethod.Post, $"/api/gyms/{gym1Id}/shift-templates", new
+            {
+                name = "Bad Color",
+                start = new TimeOnly(8, 0),
+                end = new TimeOnly(16, 0),
+                color = "red"
             }, token);
             var response = await _fixture.Client.SendAsync(create);
 
@@ -163,6 +217,81 @@ namespace ReviveHRSystem.IntegrationTests
             var publish = _fixture.AuthorizedRequest(HttpMethod.Post, $"/api/gyms/{gym1Id}/shift-cycles/{cycleId}/publish", new { }, token);
             var publishResponse = await _fixture.Client.SendAsync(publish);
             Assert.Equal(HttpStatusCode.NoContent, publishResponse.StatusCode);
+
+            var publishedSchedule = await GetEmployeeScheduleAsync(employeeId, cycleDay);
+            Assert.Contains(publishedSchedule, d => d == cycleDay);
+        }
+
+        /// <summary>
+        /// Regression: the profile Shift tab flags "no assigned shift" for any date
+        /// inside a published cycle's range, and that range routinely crosses a
+        /// month boundary (a Mon 26 – Sun Nov 1 week seen through the October
+        /// window). Cutting the schedule's Days list at the calendar month made
+        /// the next-month tail show "NO SHIFT" even with an assignment row — and
+        /// re-assigning it from the Edit modal never cleared the warning. The
+        /// tail dates of a cycle covering the requested month must come back.
+        /// </summary>
+        [Fact]
+        public async Task Schedule_MonthStraddlingCycle_ReturnsTailDates()
+        {
+            var gym1Id = await GymIdByNameAsync("Revive Main Gym");
+            var token = await LoginSelectingGymAsync("omar@revive.hr", gym1Id);
+            var employeeId = await OwnEmployeeIdAsync("karim@revive.hr");
+            var templateId = await AnyShiftTemplateIdAsync(gym1Id);
+
+            var (cycleId, cycleStart, cycleEnd) = await CreateStraddlingCycleAsync(
+                gym1Id, employeeId, await _fixture.GetAdminTokenAsync());
+
+            var assign = _fixture.AuthorizedRequest(HttpMethod.Put, $"/api/gyms/{gym1Id}/shift-cycles/{cycleId}/assignments", new
+            {
+                assignments = new[] { new { employeeId, date = cycleEnd, shiftTemplateId = templateId } }
+            }, token);
+            (await _fixture.Client.SendAsync(assign)).EnsureSuccessStatusCode();
+
+            var publish = _fixture.AuthorizedRequest(HttpMethod.Post, $"/api/gyms/{gym1Id}/shift-cycles/{cycleId}/publish", new { }, token);
+            (await _fixture.Client.SendAsync(publish)).EnsureSuccessStatusCode();
+
+            // Read the START month: the tail day belongs to the next month but
+            // its cycle overlaps this window, so the day must still be returned.
+            var publishedSchedule = await GetEmployeeScheduleAsync(employeeId, cycleStart);
+            Assert.Contains(publishedSchedule, d => d == cycleEnd);
+        }
+
+        /// <summary>
+        /// The Branch Schedule page (mock §16) creates a Draft, paints weekly
+        /// patterns through PUT /api/shift-cycles/{id}/assignments and finally
+        /// presses Publish on /api/shift-cycles/{id}/publish. A manager who saves
+        /// without publishing sees "no published schedule" in the employee's Shift
+        /// tab — by design (employees read published cycles only), so publishing
+        /// through this exact portal surface must surface the painted dates.
+        /// </summary>
+        [Fact]
+        public async Task Schedule_BranchSchedulePublish_MakesAssignmentsVisible()
+        {
+            var gym1Id = await GymIdByNameAsync("Revive Main Gym");
+            var token = await LoginSelectingGymAsync("omar@revive.hr", gym1Id);
+            var employeeId = await OwnEmployeeIdAsync("karim@revive.hr");
+            var templateId = await AnyShiftTemplateIdAsync(gym1Id);
+
+            var (cycleId, cycleDay) = await CreateCycleAsync(
+                gym1Id, await _fixture.GetAdminTokenAsync(), DateOnly.FromDateTime(DateTime.UtcNow).AddDays(7), employeeId);
+
+            // While the cycle is a Draft the employee schedule endpoint hides it —
+            // the Shift tab of that profile stays empty even though the top-right
+            // chip says Draft in Branch Schedule.
+            var draftSchedule = await GetEmployeeScheduleAsync(employeeId, cycleDay);
+            Assert.DoesNotContain(draftSchedule, d => d == cycleDay);
+
+            // The page's own write: day-count of Monday .. 6 = Sunday of cycleDay.
+            var assign = _fixture.AuthorizedRequest(HttpMethod.Put, $"/api/shift-cycles/{cycleId}/assignments", new
+            {
+                assignments = new[] { new { employeeId, day = ((int)cycleDay.DayOfWeek + 6) % 7, shiftTemplateId = templateId } }
+            }, token);
+            (await _fixture.Client.SendAsync(assign)).EnsureSuccessStatusCode();
+
+            // The page's own Publish button.
+            var publish = _fixture.AuthorizedRequest(HttpMethod.Post, $"/api/shift-cycles/{cycleId}/publish", new { }, token);
+            (await _fixture.Client.SendAsync(publish)).EnsureSuccessStatusCode();
 
             var publishedSchedule = await GetEmployeeScheduleAsync(employeeId, cycleDay);
             Assert.Contains(publishedSchedule, d => d == cycleDay);
@@ -358,6 +487,50 @@ namespace ReviveHRSystem.IntegrationTests
             createResponse.EnsureSuccessStatusCode();
             var created = await createResponse.Content.ReadFromJsonAsync<JsonElement>();
             return (created.GetProperty("data").GetProperty("id").GetInt32(), freeDay);
+        }
+
+        /// <summary>
+        /// Creates a Draft seven-day cycle whose last days fall in the month after
+        /// the cycle's start — the Monday-start week shape the Shift tab renders
+        /// across a month boundary. Scans ≈20 days out for a range free of existing
+        /// cycles (or the employee's occupied dates).
+        /// </summary>
+        private async Task<(int CycleId, DateOnly Start, DateOnly End)> CreateStraddlingCycleAsync(
+            int gymId, int employeeId, string token)
+        {
+            using var scope = _fixture.Services.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<ReviveHrDbContext>();
+            var cycles = await db.ShiftCycles.IgnoreQueryFilters()
+                .Where(c => c.GymId == gymId)
+                .ToListAsync();
+            var busyDates = (await db.ShiftAssignments.IgnoreQueryFilters()
+                .Where(a => a.EmployeeId == employeeId)
+                .Select(a => a.Date)
+                .ToListAsync())
+                .ToHashSet();
+
+            var start = DateOnly.FromDateTime(DateTime.UtcNow).AddDays(20);
+            for (var attempt = 0; attempt < 400; attempt++, start = start.AddDays(1))
+            {
+                var end = start.AddDays(6);
+                if (start.Month == end.Month) continue;
+                // Superset of the service's own overlap check (alive cycles only),
+                // so anything this scan accepts can never be rejected there.
+                if (cycles.Any(c => c.StartDate <= end && c.EndDate >= start)) continue;
+                if (busyDates.Any(b => b >= start && b <= end)) continue;
+
+                var create = _fixture.AuthorizedRequest(HttpMethod.Post, $"/api/gyms/{gymId}/shift-cycles", new
+                {
+                    startDate = start.ToString("yyyy-MM-dd"),
+                    endDate = end.ToString("yyyy-MM-dd")
+                }, token);
+                var createResponse = await _fixture.Client.SendAsync(create);
+                createResponse.EnsureSuccessStatusCode();
+                var created = await createResponse.Content.ReadFromJsonAsync<JsonElement>();
+                return (created.GetProperty("data").GetProperty("id").GetInt32(), start, end);
+            }
+
+            throw new InvalidOperationException("No free month-straddling cycle range found within 400 days.");
         }
 
         private async Task<List<DateOnly>> GetEmployeeScheduleAsync(int employeeId, DateOnly day)

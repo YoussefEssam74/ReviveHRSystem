@@ -1,5 +1,7 @@
 using System.Net;
+using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Text;
 using System.Text.Json;
 using DomainLayer.Models.RequestModule.Enums;
 using Microsoft.EntityFrameworkCore;
@@ -245,6 +247,36 @@ namespace ReviveHRSystem.IntegrationTests
         }
 
         [Fact]
+        public async Task DeskAttachment_TeamLeaderAndBranchManagerCanOpenSickLeaveCertificate()
+        {
+            // A team member's sick-leave certificate must be visible to the leader who
+            // approves it, and to the branch manager who covers the same gym.
+            var saraId = await OwnEmployeeIdAsync("sara@revive.hr");
+            var saraToken = await _fixture.LoginAsync("sara@revive.hr", "Revive!2026");
+            var saraRequestId = await CreateOwnSickLeaveAsync(saraId, saraToken);
+
+            var teamLeaderToken = await LoginOmarAtGym2Async();
+            var teamLeaderDetail = await GetJsonAsync($"/api/requests/{saraRequestId}", teamLeaderToken);
+            Assert.True(teamLeaderDetail.GetProperty("data").GetProperty("hasAttachment").GetBoolean());
+            var teamLeaderDownload = await SendAsync(
+                HttpMethod.Get, $"/api/requests/{saraRequestId}/attachment", null, teamLeaderToken);
+            Assert.Equal(HttpStatusCode.OK, teamLeaderDownload.StatusCode);
+            Assert.Equal("application/pdf", teamLeaderDownload.Content.Headers.ContentType?.MediaType);
+
+            var karimId = await OwnEmployeeIdAsync("karim@revive.hr");
+            var karimToken = await _fixture.LoginAsync("karim@revive.hr", "Revive!2026");
+            var karimRequestId = await CreateOwnSickLeaveAsync(karimId, karimToken);
+
+            var branchManagerToken = await LoginOmarAtGym1Async();
+            var branchManagerDetail = await GetJsonAsync($"/api/requests/{karimRequestId}", branchManagerToken);
+            Assert.True(branchManagerDetail.GetProperty("data").GetProperty("hasAttachment").GetBoolean());
+            var branchManagerDownload = await SendAsync(
+                HttpMethod.Get, $"/api/requests/{karimRequestId}/attachment", null, branchManagerToken);
+            Assert.Equal(HttpStatusCode.OK, branchManagerDownload.StatusCode);
+            Assert.Equal("application/pdf", branchManagerDownload.Content.Headers.ContentType?.MediaType);
+        }
+
+        [Fact]
         public async Task DeskDecision_PlainEmployeeProcessingOwnRequest_Returns404()
         {
             var employeeId = await OwnEmployeeIdAsync("karim@revive.hr");
@@ -315,6 +347,298 @@ namespace ReviveHRSystem.IntegrationTests
         }
 
         [Fact]
+        public async Task PayrollSheets_LateAndAbsentDays_CarryFullDeductionDetails()
+        {
+            var employeeId = await OwnEmployeeIdAsync("karim@revive.hr");
+            var token = await _fixture.LoginAsync("karim@revive.hr", "Revive!2026");
+
+            using var scope = _fixture.Services.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<ReviveHrDbContext>();
+            var gymId = await db.Employees.Where(e => e.Id == employeeId).Select(e => e.GymId).SingleAsync();
+
+            var builder = new TestDataBuilder(_fixture.Services);
+            var template = new DomainLayer.Models.SchedulingModule.ShiftTemplate
+            {
+                GymId = gymId,
+                Name = $"Late-detail template {Guid.NewGuid():N}",
+                StartTime = new TimeOnly(9, 0),
+                EndTime = new TimeOnly(17, 0),
+            };
+            db.ShiftTemplates.Add(template);
+            await db.SaveChangesAsync();
+
+            // Late day: 07:30Z = 09:30 gym-local (Egypt, UTC+2 in January) vs a 09:00 shift.
+            var lateRecordId = await builder.CreateAttendanceRecordAsync(
+                employeeId, gymId, new DateOnly(2026, 1, 5),
+                checkInUtc: new DateTime(2026, 1, 5, 7, 30, 0, DateTimeKind.Utc),
+                status: DomainLayer.Models.AttendanceModule.Enums.AttendanceStatus.Late);
+            var lateRecord = await db.AttendanceRecords.FirstAsync(r => r.Id == lateRecordId);
+            lateRecord.ScheduledShiftTemplateId = template.Id;
+            await db.SaveChangesAsync();
+            var absentRecordId = await builder.CreateAttendanceRecordAsync(
+                employeeId, gymId, new DateOnly(2026, 1, 12),
+                status: DomainLayer.Models.AttendanceModule.Enums.AttendanceStatus.Absent);
+
+            // A branch-raised deduction punishing exactly the absent day.
+            var issuerId = await db.Users.Where(u => u.Email == "omar@revive.hr").Select(u => u.Id).SingleAsync();
+            db.DeductionCandidates.Add(new DomainLayer.Models.PayrollModule.DeductionCandidate
+            {
+                EmployeeId = employeeId,
+                AttendanceRecordId = absentRecordId,
+                Amount = 150m,
+                Reason = "Unapproved absence",
+                Note = "Deduction approved by Branch Manager.",
+                IssuedBy = issuerId,
+                IssuedAt = new DateTime(2026, 1, 12, 12, 0, 0, DateTimeKind.Utc),
+                Status = DomainLayer.Models.PayrollModule.Enums.DeductionStatus.Pending,
+            });
+            await db.SaveChangesAsync();
+
+            var periodId = await builder.CreatePayrollPeriodAsync(
+                gymId, new DateOnly(2026, 1, 1), new DateOnly(2026, 1, 31),
+                DomainLayer.Models.PayrollModule.Enums.PayrollPeriodStatus.Locked, new DateOnly(2026, 2, 5));
+            await builder.CreatePayrollEntryAsync(periodId, employeeId, 7000m);
+
+            var sheets = await GetJsonAsync($"/api/employees/{employeeId}/payroll-sheets", token);
+            var january = sheets.EnumerateArray()
+                .First(s => s.GetProperty("period").GetString()!.StartsWith("January"));
+
+            var details = january.GetProperty("deductionDetails");
+            Assert.Equal(JsonValueKind.Array, details.ValueKind);
+
+            var lateRow = details.EnumerateArray().First(d => d.GetProperty("kind").GetString() == "late");
+            Assert.Equal("2026-01-05", lateRow.GetProperty("date").GetString());
+            Assert.Equal(30, lateRow.GetProperty("minutesLate").GetInt32());
+            Assert.Equal("09:30", lateRow.GetProperty("checkInAt").GetString());
+            Assert.Equal(JsonValueKind.Null, lateRow.GetProperty("amount").ValueKind);
+
+            var absentRow = details.EnumerateArray().First(d =>
+                d.GetProperty("kind").GetString() == "absent"
+                && d.GetProperty("date").GetString() == "2026-01-12");
+            Assert.Equal(150m, absentRow.GetProperty("amount").GetDecimal());
+            Assert.Equal("Deduction approved by Branch Manager.", absentRow.GetProperty("reason").GetString());
+            Assert.Equal("In review", absentRow.GetProperty("status").GetString());
+            Assert.Equal("omar", absentRow.GetProperty("issuedBy").GetString());
+        }
+
+        /// <summary>
+        /// The seeded paid month (mock §8): every late/absent day of a closed sheet
+        /// carries its own applied, priced line under Deductions — amount, the day's
+        /// shift window, gym-local check-in clock and minutes late — and the section
+        /// header totals exactly those lines. Nothing floats outside the section.
+        /// </summary>
+        [Fact]
+        public async Task PayrollSheets_PaidMonth_DeductionRowsCarryShiftAndAmounts()
+        {
+            var employeeId = await OwnEmployeeIdAsync("karim@revive.hr");
+            var token = await _fixture.LoginAsync("karim@revive.hr", "Revive!2026");
+
+            using var scope = _fixture.Services.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<ReviveHrDbContext>();
+            var timeZone = scope.ServiceProvider.GetRequiredService<TimeZoneInfo>();
+
+            // The seeder's paid month: karim's closed entry that prices attendance days
+            // (the entry id picks the sheet, so test-created periods cannot collide).
+            var prev = DateTime.UtcNow.AddMonths(-1);
+            var prevStart = new DateOnly(prev.Year, prev.Month, 1);
+            var entry = await db.PayrollEntries
+                .Include(e => e.PayrollPeriod)
+                .SingleAsync(e => e.EmployeeId == employeeId
+                    && e.PayrollPeriod!.StartDate == prevStart
+                    && e.PayrollPeriod.Status != DomainLayer.Models.PayrollModule.Enums.PayrollPeriodStatus.Open
+                    && e.LineItems.Any(li => li.Type == "Deduction" && li.AttendanceRecordId != null));
+
+            var sheets = await GetJsonAsync($"/api/employees/{employeeId}/payroll-sheets", token);
+            var paid = sheets.EnumerateArray()
+                .First(s => s.GetProperty("id").GetInt32() == entry.Id);
+            Assert.True(paid.GetProperty("visible").GetBoolean());
+
+            // The period's own pricing rule: base ÷ scheduled workdays (days × 6 ÷ 7),
+            // a quarter day per late arrival, a full day per unapproved absence.
+            var periodDays = entry.PayrollPeriod.EndDate.DayNumber - entry.PayrollPeriod.StartDate.DayNumber + 1;
+            var scheduled = Math.Max(1, (int)Math.Floor(periodDays * 6 / 7.0));
+            var daily = Math.Round(entry.BaseSalary / scheduled, 2);
+            var lateAmount = Math.Round(daily / 4m, 2);
+
+            var records = await db.AttendanceRecords
+                .Where(r => r.EmployeeId == employeeId
+                    && r.Date >= entry.PayrollPeriod.StartDate && r.Date <= entry.PayrollPeriod.EndDate
+                    && (r.Status == DomainLayer.Models.AttendanceModule.Enums.AttendanceStatus.Late
+                        || r.Status == DomainLayer.Models.AttendanceModule.Enums.AttendanceStatus.Absent))
+                .Include(r => r.ScheduledShiftTemplate)
+                .OrderBy(r => r.Date)
+                .ToListAsync();
+            Assert.NotEmpty(records);
+
+            var details = paid.GetProperty("deductionDetails").EnumerateArray()
+                .OrderBy(d => d.GetProperty("date").GetString())
+                .ToArray();
+            Assert.Equal(records.Count, details.Length);
+
+            for (var i = 0; i < records.Count; i++)
+            {
+                var record = records[i];
+                var row = details[i];
+                var isLate = record.Status == DomainLayer.Models.AttendanceModule.Enums.AttendanceStatus.Late;
+
+                Assert.Equal(record.Date.ToString("yyyy-MM-dd"), row.GetProperty("date").GetString());
+                Assert.Equal(isLate ? "late" : "absent", row.GetProperty("kind").GetString());
+                // The money and the review state of an applied day.
+                Assert.Equal(isLate ? lateAmount : daily, row.GetProperty("amount").GetDecimal());
+                Assert.Equal("Applied", row.GetProperty("status").GetString());
+                // The day's scheduled shift window.
+                Assert.Equal("Morning Shift 08:00–16:00", row.GetProperty("shift").GetString());
+
+                if (isLate)
+                {
+                    var localCheckIn = TimeOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(
+                        DateTime.SpecifyKind(record.CheckInTime!.Value, DateTimeKind.Utc), timeZone));
+                    var expectedMinutes = (int)(localCheckIn - record.ScheduledShiftTemplate!.StartTime).TotalMinutes;
+                    Assert.True(expectedMinutes > 0);
+                    Assert.Equal(expectedMinutes, row.GetProperty("minutesLate").GetInt32());
+                    Assert.Equal(localCheckIn.ToString("HH:mm"), row.GetProperty("checkInAt").GetString());
+                }
+            }
+
+            // Every detail row is backed by its own applied line — on a closed sheet
+            // nothing floats outside the Deductions section.
+            var lines = paid.GetProperty("items").EnumerateArray()
+                .Where(li => li.GetProperty("kind").GetString() == "deduction"
+                    && li.GetProperty("attendanceRecordId").ValueKind == JsonValueKind.Number)
+                .ToArray();
+            Assert.Equal(details.Length, lines.Length);
+            foreach (var row in details)
+            {
+                var recordId = row.GetProperty("attendanceRecordId").GetInt32();
+                var line = Assert.Single(lines.Where(li => li.GetProperty("attendanceRecordId").GetInt32() == recordId));
+                Assert.Equal(row.GetProperty("amount").GetDecimal(), Math.Abs(line.GetProperty("amount").GetDecimal()));
+                Assert.Equal("Accepted", line.GetProperty("status").GetString());
+            }
+
+            // The section header totals exactly the applied lines.
+            var appliedTotal = paid.GetProperty("items").EnumerateArray()
+                .Where(li => li.GetProperty("kind").GetString() == "deduction"
+                    && li.GetProperty("status").GetString() is "Accepted" or "Approved")
+                .Sum(li => li.GetProperty("amount").GetDecimal());
+            Assert.Equal(appliedTotal, paid.GetProperty("totalDeductions").GetDecimal());
+        }
+
+        /// <summary>Mock §8: a sheet carries the raise slice (gym policy) and the OT pay derivation.</summary>
+        [Fact]
+        public async Task PayrollSheets_AnnualIncreaseAndOvertimePay_FromGymPolicy()
+        {
+            var employeeId = await OwnEmployeeIdAsync("karim@revive.hr");
+            var token = await _fixture.LoginAsync("karim@revive.hr", "Revive!2026");
+
+            using var scope = _fixture.Services.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<ReviveHrDbContext>();
+            var gymId = await db.Employees.Where(e => e.Id == employeeId).Select(e => e.GymId).SingleAsync();
+
+            // The mock's 10% annual-increase policy, set explicitly so the row has data.
+            var gym = await db.Gyms.SingleAsync(g => g.Id == gymId);
+            gym.AnnualIncreasePercent = 10m;
+            await db.SaveChangesAsync();
+
+            var builder = new TestDataBuilder(_fixture.Services);
+            var periodId = await builder.CreatePayrollPeriodAsync(
+                gymId, new DateOnly(2027, 2, 1), new DateOnly(2027, 2, 28),
+                DomainLayer.Models.PayrollModule.Enums.PayrollPeriodStatus.Locked, new DateOnly(2027, 3, 5));
+            await builder.CreatePayrollEntryAsync(periodId, employeeId, 7000m, overtimeHours: 4);
+
+            var sheets = await GetJsonAsync($"/api/employees/{employeeId}/payroll-sheets", token);
+            var february = sheets.EnumerateArray()
+                .First(s => s.GetProperty("period").GetString()!.StartsWith("February 2027"));
+
+            Assert.Equal(10m, february.GetProperty("annualIncreasePercent").GetDecimal());
+            Assert.Equal(700m, february.GetProperty("annualIncrease").GetDecimal());
+            // OT pay = (base/176)×1.5×hours = 7000/176×1.5×4.
+            Assert.Equal(238.64m, february.GetProperty("overtimePay").GetDecimal());
+        }
+
+        [Fact]
+        public async Task EmployeeDeductions_CandidateDatesFromAttendanceAndIssuerName()
+        {
+            var employeeId = await OwnEmployeeIdAsync("karim@revive.hr");
+            var token = await _fixture.LoginAsync("karim@revive.hr", "Revive!2026");
+
+            using var scope = _fixture.Services.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<ReviveHrDbContext>();
+            var gymId = await db.Employees.Where(e => e.Id == employeeId).Select(e => e.GymId).SingleAsync();
+
+            var builder = new TestDataBuilder(_fixture.Services);
+            var absentRecordId = await builder.CreateAttendanceRecordAsync(
+                employeeId, gymId, new DateOnly(2026, 3, 3),
+                status: DomainLayer.Models.AttendanceModule.Enums.AttendanceStatus.Absent);
+
+            var issuerId = await db.Users.Where(u => u.Email == "omar@revive.hr").Select(u => u.Id).SingleAsync();
+            db.DeductionCandidates.Add(new DomainLayer.Models.PayrollModule.DeductionCandidate
+            {
+                EmployeeId = employeeId,
+                AttendanceRecordId = absentRecordId,
+                Amount = 90m,
+                Reason = "Unapproved absence",
+                Note = "No prior notice given",
+                IssuedBy = issuerId,
+                IssuedAt = new DateTime(2026, 3, 10, 10, 0, 0, DateTimeKind.Utc),
+                Status = DomainLayer.Models.PayrollModule.Enums.DeductionStatus.Pending,
+            });
+            await db.SaveChangesAsync();
+
+            var rows = await GetJsonAsync($"/api/employees/{employeeId}/deductions", token);
+
+            // The row must be dated by the punished attendance day, not the raise date.
+            var row = rows.EnumerateArray().First(r =>
+                r.GetProperty("id").GetString()!.StartsWith("candidate-")
+                && r.GetProperty("date").GetString() == "2026-03-03");
+            Assert.Equal(90m, row.GetProperty("amount").GetDecimal());
+            Assert.Equal("omar", row.GetProperty("issuedBy").GetString());
+            Assert.Equal("No prior notice given", row.GetProperty("detail").GetString());
+            Assert.Equal("2026-03-03", row.GetProperty("attendanceDate").GetString());
+        }
+
+        /// <summary>
+        /// A "Deduction — 3 Days" absence follow-up prices at the sheet's daily rate
+        /// (base ÷ scheduled workdays) for the period covering the absence day, so the
+        /// day drawer can answer "how much will be deducted".
+        /// </summary>
+        [Fact]
+        public async Task EmployeeDeductions_AbsenceFollowUp_CarriesPricedAmount()
+        {
+            var employeeId = await OwnEmployeeIdAsync("karim@revive.hr");
+            var token = await _fixture.LoginAsync("karim@revive.hr", "Revive!2026");
+
+            using var scope = _fixture.Services.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<ReviveHrDbContext>();
+            var gymId = await db.Employees.Where(e => e.Id == employeeId).Select(e => e.GymId).SingleAsync();
+
+            var builder = new TestDataBuilder(_fixture.Services);
+            var periodId = await builder.CreatePayrollPeriodAsync(
+                gymId, new DateOnly(2026, 3, 1), new DateOnly(2026, 3, 31),
+                DomainLayer.Models.PayrollModule.Enums.PayrollPeriodStatus.Locked);
+            await builder.CreatePayrollEntryAsync(periodId, employeeId, 9000);
+
+            var issuerId = await db.Users.Where(u => u.Email == "omar@revive.hr").Select(u => u.Id).SingleAsync();
+            db.TeamFollowUps.Add(new DomainLayer.Models.EmployeeModule.TeamFollowUp
+            {
+                EmployeeId = employeeId,
+                ActionType = DomainLayer.Models.EmployeeModule.Enums.FollowUpActionType.Deduction,
+                Description = "Deduction — 3 Days",
+                Note = "auto-absence:2026-03-04",
+                LastAction = "Auto-raised by the absence sweep.",
+                RaisedByUserId = issuerId,
+            });
+            await db.SaveChangesAsync();
+
+            var rows = await GetJsonAsync($"/api/employees/{employeeId}/deductions", token);
+            var followUp = rows.EnumerateArray().Single(r =>
+                r.GetProperty("id").GetString()!.StartsWith("followup-")
+                && r.GetProperty("date").GetString() == "2026-03-04");
+
+            // 3 days × daily (9000 ÷ 26 scheduled workdays = 346.15) = 1038.45.
+            Assert.Equal(1038.45m, followUp.GetProperty("amount").GetDecimal());
+        }
+
+        [Fact]
         public async Task PayrollSlip_OwnEntry_ReturnsPayslipCard()
         {
             var employeeId = await OwnEmployeeIdAsync("karim@revive.hr");
@@ -323,6 +647,11 @@ namespace ReviveHRSystem.IntegrationTests
             using var scope = _fixture.Services.CreateScope();
             var db = scope.ServiceProvider.GetRequiredService<ReviveHrDbContext>();
             var gymId = await db.Employees.Where(e => e.Id == employeeId).Select(e => e.GymId).SingleAsync();
+
+            // Mock §8's "Annual Increase (10%)" card rides the payslip too.
+            var gym = await db.Gyms.SingleAsync(g => g.Id == gymId);
+            gym.AnnualIncreasePercent = 10m;
+            await db.SaveChangesAsync();
 
             var builder = new TestDataBuilder(_fixture.Services);
             var periodId = await builder.CreatePayrollPeriodAsync(
@@ -335,8 +664,66 @@ namespace ReviveHRSystem.IntegrationTests
             var data = slip.GetProperty("data");
             Assert.Equal("September 2026", data.GetProperty("period").GetString());
             Assert.Equal(9000m, data.GetProperty("baseSalary").GetDecimal());
-            // net = base 9000 + bonus 250 + OT pay (9000/176×1.5×4 = 306.82) − accepted deduction 120
-            Assert.Equal(9436.82m, data.GetProperty("net").GetDecimal());
+            Assert.Equal(10m, data.GetProperty("annualIncreasePercent").GetDecimal());
+            Assert.Equal(900m, data.GetProperty("annualIncrease").GetDecimal());
+            // net = base 9000 + raise 900 + bonus 250 + OT pay (9000/176×1.5×4 = 306.82) − accepted deduction 120
+            Assert.Equal(10336.82m, data.GetProperty("net").GetDecimal());
+            Assert.Equal(10456.82m, data.GetProperty("gross").GetDecimal());
+        }
+
+        /// <summary>
+        /// Mock §8 + the pricing rule: while a period is open, every late / unapproved-
+        /// absent day prices itself into a pending candidate (quarter day / three days
+        /// of base salary = base ÷ scheduled workdays) the branch can review.
+        /// </summary>
+        [Fact]
+        public async Task PayrollSheets_OpenPeriod_PricesLateAndAbsentIntoPendingCandidates()
+        {
+            var employeeId = await OwnEmployeeIdAsync("karim@revive.hr");
+            var token = await _fixture.LoginAsync("karim@revive.hr", "Revive!2026");
+
+            using var scope = _fixture.Services.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<ReviveHrDbContext>();
+            var gymId = await db.Employees.Where(e => e.Id == employeeId).Select(e => e.GymId).SingleAsync();
+
+            var builder = new TestDataBuilder(_fixture.Services);
+            var periodId = await builder.CreatePayrollPeriodAsync(
+                gymId, new DateOnly(2027, 4, 1), new DateOnly(2027, 4, 30),
+                DomainLayer.Models.PayrollModule.Enums.PayrollPeriodStatus.Open);
+            await builder.CreatePayrollEntryAsync(periodId, employeeId, 8000);
+            var lateId = await builder.CreateAttendanceRecordAsync(
+                employeeId, gymId, new DateOnly(2027, 4, 6),
+                checkInUtc: new DateTime(2027, 4, 6, 7, 30, 0, DateTimeKind.Utc),
+                status: DomainLayer.Models.AttendanceModule.Enums.AttendanceStatus.Late);
+            var absentId = await builder.CreateAttendanceRecordAsync(
+                employeeId, gymId, new DateOnly(2027, 4, 13),
+                status: DomainLayer.Models.AttendanceModule.Enums.AttendanceStatus.Absent);
+
+            var sheets = await GetJsonAsync($"/api/employees/{employeeId}/payroll-sheets", token);
+            var april = sheets.EnumerateArray()
+                .First(s => s.GetProperty("period").GetString()!.StartsWith("April 2027"));
+
+            // Open months keep their money hidden; the detail rows carry the priced amount.
+            // April 2027 = 30 days → scheduled 30 × 6 ÷ 7 = 25 → daily 320, late 80,
+            // an unapproved absence = three days of it.
+            Assert.False(april.GetProperty("visible").GetBoolean());
+            var details = april.GetProperty("deductionDetails").EnumerateArray().ToList();
+            var lateRow = details.First(d => d.GetProperty("kind").GetString() == "late"
+                && d.GetProperty("attendanceRecordId").GetInt32() == lateId);
+            Assert.Equal(80m, lateRow.GetProperty("amount").GetDecimal());
+            Assert.Equal("In review", lateRow.GetProperty("status").GetString());
+            var absentRow = details.First(d => d.GetProperty("kind").GetString() == "absent"
+                && d.GetProperty("attendanceRecordId").GetInt32() == absentId);
+            Assert.Equal(960m, absentRow.GetProperty("amount").GetDecimal());
+            Assert.Equal("In review", absentRow.GetProperty("status").GetString());
+
+            // And the candidates really exist for the branch to approve / re-price.
+            var candidates = await db.DeductionCandidates
+                .Where(c => c.AttendanceRecordId == lateId || c.AttendanceRecordId == absentId)
+                .ToListAsync();
+            Assert.Equal(2, candidates.Count);
+            Assert.All(candidates, c => Assert.Equal(
+                DomainLayer.Models.PayrollModule.Enums.DeductionStatus.Pending, c.Status));
         }
 
         /// <summary>The rich evaluation view (criteria + reviewer) is self-readable without evaluations.view.</summary>
@@ -388,6 +775,30 @@ namespace ReviveHRSystem.IntegrationTests
                 Content = form,
             };
             request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+
+            var response = await _fixture.Client.SendAsync(request);
+            response.EnsureSuccessStatusCode();
+            var created = await response.Content.ReadFromJsonAsync<JsonElement>();
+            return created.GetProperty("id").GetInt32();
+        }
+
+        /** Self-created sick leave with the medical certificate the desk must review. */
+        private async Task<int> CreateOwnSickLeaveAsync(int employeeId, string token)
+        {
+            var form = new MultipartFormDataContent();
+            form.Add(new StringContent("sick-leave"), "type");
+            form.Add(new StringContent(DateOnly.FromDateTime(DateTime.UtcNow.Date).ToString("yyyy-MM-dd")), "requestDate");
+            form.Add(new StringContent("Medical leave"), "reason");
+
+            var certificate = new ByteArrayContent(Encoding.ASCII.GetBytes("%PDF-1.4 fake medical certificate"));
+            certificate.Headers.ContentType = new MediaTypeHeaderValue("application/pdf");
+            form.Add(certificate, "attachment", "medical-certificate.pdf");
+
+            var request = new HttpRequestMessage(HttpMethod.Post, $"/api/employees/{employeeId}/requests")
+            {
+                Content = form,
+            };
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
             var response = await _fixture.Client.SendAsync(request);
             response.EnsureSuccessStatusCode();

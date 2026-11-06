@@ -18,7 +18,15 @@ namespace DomainLayer.Contracts
         public int Skip { get; protected set; }
         public int Take { get; protected set; }
         public bool IsPaginated { get; protected set; }
-        public bool AsNoTracking { get; protected set; }
+
+        /// <summary>
+        /// Reads are materialized without ChangeTracker tracking unless a specification
+        /// opts in, so list/aggregate queries do not pay the tracking + GC cost for
+        /// rows they only read. Specifications whose rows are mutated and persisted
+        /// through the same fetched graph (tracked-save flows) call
+        /// <see cref="ApplyTracking"/> in their constructor.
+        /// </summary>
+        public bool AsNoTracking { get; protected set; } = true;
 
         protected void AddInclude(Expression<Func<TEntity, object>> includeExpression) =>
             IncludeExpressions.Add(includeExpression);
@@ -33,6 +41,11 @@ namespace DomainLayer.Contracts
         public void ApplyNoTracking()
         {
             AsNoTracking = true;
+        }
+
+        public void ApplyTracking()
+        {
+            AsNoTracking = false;
         }
     }
 }

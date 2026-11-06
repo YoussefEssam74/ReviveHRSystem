@@ -29,8 +29,9 @@ namespace Service.Services
             var records = await unitOfWork.GetRepository<AttendanceRecord, int>()
                 .GetAllAsync(new AttendanceByEmployeeSpec(employeeId, ParseMonth(month)), cancellationToken);
 
+            // AttendanceByEmployeeSpec already ordered by Date descending in SQL —
+            // re-sorting the month in memory would double the work for nothing.
             var items = records
-                .OrderByDescending(r => r.Date)
                 .Select(r => mapper.Map<AttendanceRecordDto>(r))
                 .ToList();
 

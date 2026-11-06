@@ -384,6 +384,7 @@ namespace Service.Services
                 if (entity.Type == "Resignation")
                 {
                     entity.Employee.Status = EmployeeStatus.NoticePeriod;
+                    _unitOfWork.GetRepository<Employee, int>().Update(entity.Employee);
                 }
 
                 entity.Status = RequestStatus.Approved;
@@ -397,6 +398,11 @@ namespace Service.Services
                     DecidedBy = actor.Id,
                     DecidedAt = DateTime.UtcNow,
                 });
+
+                // The targets come from a no-tracking directory query, so the
+                // status/payment/decision mutations above need an explicit attach —
+                // without it SaveChanges reports success and writes nothing.
+                _unitOfWork.GetRepository<EmployeeRequest, int>().Update(entity);
                 approved++;
             }
 
@@ -674,6 +680,7 @@ namespace Service.Services
                 HrComment = hr?.Comment,
                 Payment = entity.Payment,
                 Reason = entity.Details,
+                HasAttachment = !string.IsNullOrEmpty(entity.AttachmentPath),
                 Timeline = BuildTimeline(entity, bm, hr),
             };
         }

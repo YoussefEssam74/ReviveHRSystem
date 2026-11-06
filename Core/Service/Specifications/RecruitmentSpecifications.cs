@@ -56,6 +56,9 @@ namespace Service.Specifications
             AddInclude(v => v.Gym);
             AddInclude(v => v.Position);
             AddInclude(v => v.Applications);
+            // Vacancy edit/withdraw/update and hiring headcount decrement mutate or
+            // remove the fetched vacancy before SaveChanges — keep tracked.
+            ApplyTracking();
         }
     }
 
@@ -118,6 +121,9 @@ namespace Service.Specifications
             AddInclude(vr => vr.Position);
             AddInclude(vr => vr.Requester);
             AddInclude(vr => vr.Decider);
+            // Decide/reopen mutate the fetched request before SaveChanges without
+            // Update() — keep tracked.
+            ApplyTracking();
         }
     }
 
@@ -154,6 +160,9 @@ namespace Service.Specifications
         {
             Criteria = a => a.Id == applicationId;
             AddInclude(a => a.HiringForm);
+            // Reject/move-to-pipeline flows mutate the fetched row (and may ride the
+            // new candidate into it) before SaveChanges — keep tracked.
+            ApplyTracking();
         }
     }
 
@@ -234,6 +243,10 @@ namespace Service.Specifications
             AddInclude(a => a.Vacancy!.Position);
             AddInclude(a => a.Interviews);
             AddInclude(a => a.PipelineStages);
+            // Stage moves, interview scheduling, hiring and waiting-list removal
+            // mutate or remove the fetched application (and its vacancy nav) before
+            // SaveChanges — keep tracked.
+            ApplyTracking();
         }
     }
 
@@ -258,6 +271,9 @@ namespace Service.Specifications
         public CandidateByIdSpec(int candidateId)
         {
             Criteria = c => c.Id == candidateId;
+            // Block/restore mutates the fetched candidate before SaveChanges without
+            // Update() — keep tracked.
+            ApplyTracking();
         }
     }
 
@@ -374,6 +390,9 @@ namespace Service.Specifications
             AddInclude(i => i.Application!.Candidate);
             AddInclude(i => i.Application!.Vacancy!.Gym);
             AddInclude(i => i.Application!.Vacancy!.Position);
+            // Completion mutates the interview and its application nav before
+            // SaveChanges (Update() on both) — keep tracked.
+            ApplyTracking();
         }
     }
 
@@ -402,6 +421,9 @@ namespace Service.Specifications
         {
             Criteria = i => i.EmployeeId == employeeId;
             OrderBy = i => i.SortOrder;
+            // Checklist toggles mutate the fetched items before SaveChanges without
+            // Update() — keeps the flow tracked.
+            ApplyTracking();
         }
     }
 

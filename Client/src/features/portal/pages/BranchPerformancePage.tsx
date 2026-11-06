@@ -1,22 +1,25 @@
 import { useMemo, useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
-import { useNavigate } from 'react-router-dom'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { AlertTriangle, CheckCircle2, ChevronDown, MinusCircle, PiggyBank, Sparkles } from 'lucide-react'
 import {
+  branchReviewDeduction,
   getEmployeeDirectory,
   getOffboardingCases,
   listBonusProposals,
   listBranchDeductions,
   listWarningNotices,
+  type DeductionCandidateRow,
   type EmployeeDirectoryRow,
 } from '../api/branch.api'
 import { getOwnAttendance, type EmployeeAttendanceResponse, type EmployeeAttendanceItem } from '../api/attendance.api'
-import { getRequestInbox } from '../api/requests.api'
+import { getRequestInbox, type DeskRequestRow } from '../api/requests.api'
 import { getEvaluationResponses } from '../api/employee-file.api'
 import { EmptyState } from '../../../components/ui/primitives'
 import { StatusBadge } from '../../../components/ui/badge'
 import { ErrorState, LoadingState } from '../../../components/async-state'
 import { Button } from '../../../components/ui/button'
+import { useToast } from '../../../components/ui/toast'
 import { usePortalSession } from '../../../contexts/PortalSessionContext'
 import { describeApiError } from '../../../lib/api-client'
 import { fetchAllPages } from '../../../lib/paged'
@@ -56,7 +59,10 @@ export default function BranchPerformancePage() {
 function PerformanceWorkspace() {
   const { me } = usePortalSession()
   const [month, setMonth] = useState<MonthKey>('all')
-  const [drillId, setDrillId] = useState<number | null>(null)
+  // Who is drilled into, and on which tab, lives in the URL: the sidebar's action
+  // badge deep-links straight to the employee that still owes a decision, and the
+  // view survives a refresh or a back button.
+  const [searchParams, setSearchParams] = useSearchParams()
 
   // The whole roster drives the aggregates, so these walk all pages (the API
   // clamps one page to 100 — a large gym is truncated unless we loop).
@@ -110,7 +116,7 @@ function PerformanceWorkspace() {
   const months = useMemo(() => {
     const keys = new Set<string>()
     inbox.forEach((row) => keys.add(ymOf(row.submittedDate)))
-    deductions.forEach((row) => keys.add(ymOf(row.issuedAt)))
+    deductions.forEach((row) => keys.add(ymOf(deductionDayOf(row))))
     warnings.forEach((row) => keys.add(ymOf(row.issuedAt)))
     bonuses.forEach((row) => keys.add(ymOf(row.issuedAt)))
     evaluations.forEach((row) => keys.add(ymOf(row.reviewedDate)))
@@ -129,7 +135,7 @@ function PerformanceWorkspace() {
         const memberEvaluations = evaluations.filter((item) => item.employee === row.name)
 
         const monthRequests = memberRequests.filter((item) => inMonth(item.submittedDate))
-        const monthDeductions = memberDeductions.filter((item) => inMonth(item.issuedAt))
+        const monthDeductions = memberDeductions.filter((item) => inMonth(deductionDayOf(item)))
         const monthWarnings = memberWarnings.filter((item) => inMonth(item.issuedAt))
         const monthBonuses = memberBonuses.filter((item) => inMonth(item.issuedAt))
         const monthEvaluations = memberEvaluations.filter((item) => inMonth(item.reviewedDate))
@@ -143,6 +149,7 @@ function PerformanceWorkspace() {
           requests: monthRequests.length,
           pending: monthRequests.filter((item) => item.status === 'Pending').length,
           deductionTotal: monthDeductions.reduce((sum, item) => sum + Math.abs(item.amount), 0),
+          pendingDeductions: monthDeductions.filter((item) => item.status === 'Pending').length,
           bonusTotal: monthBonuses.reduce((sum, item) => sum + Math.abs(item.amount), 0),
           avgScore: avg,
           latestPeriod: monthEvaluations[0]?.period ?? null,
@@ -172,6 +179,32 @@ function PerformanceWorkspace() {
     return <ErrorState message={describeApiError(firstQuery.error)} onRetry={() => firstQuery.refetch()} />
   }
 
+  const drillIdParam = Number(searchParams.get('employee'))
+  const drillId = Number.isInteger(drillIdParam) && drillIdParam > 0 ? drillIdParam : null
+  const tabParam = searchParams.get('tab')
+  const drillTab: DrillTabId = DRILL_TABS.some((option) => option.id === tabParam)
+    ? (tabParam as DrillTabId)
+    : 'overview'
+
+  /** Open an employee — on the tab that actually holds something to act on. */
+  const openDrill = (row: (typeof rows)[number]) => {
+    const next = new URLSearchParams(searchParams)
+    next.set('employee', String(row.employee.id))
+    next.set('tab', row.pendingDeductions > 0 ? 'deductions' : row.pending > 0 ? 'requests' : 'overview')
+    setSearchParams(next)
+  }
+  const changeDrillTab = (tab: DrillTabId) => {
+    const next = new URLSearchParams(searchParams)
+    next.set('tab', tab)
+    setSearchParams(next, { replace: true })
+  }
+  const closeDrill = () => {
+    const next = new URLSearchParams(searchParams)
+    next.delete('employee')
+    next.delete('tab')
+    setSearchParams(next, { replace: true })
+  }
+
   const drillRow = rows.find((row) => row.employee.id === drillId) ?? null
   const monthLabel = month === 'all' ? null : months.includes(month as string) ? month : null
 
@@ -182,8 +215,11 @@ function PerformanceWorkspace() {
           row={drillRow}
           month={month}
           months={months}
+          tab={drillTab}
+          requests={inbox}
+          onTabChange={changeDrillTab}
           onMonthChange={setMonth}
-          onClose={() => setDrillId(null)}
+          onClose={closeDrill}
         />
       </div>
     )
@@ -245,7 +281,7 @@ function PerformanceWorkspace() {
                   <tr
                     key={row.employee.id}
                     className="cursor-pointer transition-colors hover:bg-charcoal-50/50"
-                    onClick={() => setDrillId(row.employee.id)}
+                    onClick={() => openDrill(row)}
                   >
                     <td className="px-3 py-2.5">
                       <div className="flex items-center gap-2.5">
@@ -271,6 +307,11 @@ function PerformanceWorkspace() {
                     </td>
                     <td className={cn('px-3 py-2.5 text-right text-xs font-semibold', row.deductionTotal ? 'text-red-600' : 'text-charcoal-400')}>
                       {formatMoney(row.deductionTotal)}
+                      {row.pendingDeductions > 0 && (
+                        <span className="block text-[10px] font-medium text-amber-600">
+                          {row.pendingDeductions} to approve
+                        </span>
+                      )}
                     </td>
                     <td className={cn('px-3 py-2.5 text-right text-xs font-semibold', row.bonusTotal ? 'text-green-600' : 'text-charcoal-400')}>
                       {formatMoney(row.bonusTotal)}
@@ -296,52 +337,67 @@ function PerformanceWorkspace() {
 
           {/* Mobile cards */}
           <div className="space-y-1.5 lg:hidden">
-            {rows.map((row) => (
-              <button
-                key={row.employee.id}
-                type="button"
-                onClick={() => setDrillId(row.employee.id)}
-                className="w-full rounded-xl border border-charcoal-200 bg-white p-3 text-left card-interactive"
-              >
-                <div className="flex items-center justify-between gap-2">
-                  <div className="flex min-w-0 items-center gap-2.5">
-                    <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-brand-100 text-[10px] font-semibold text-brand-700">
-                      {row.employee.initials}
-                    </span>
-                    <div className="min-w-0">
-                      <p className="truncate text-xs font-medium text-charcoal-900">
-                        {row.employee.name}
-                        {row.needsReview && <span className="ml-1.5 inline-block h-1.5 w-1.5 rounded-full bg-red-500 align-middle" />}
+            {rows.map((row) => {
+              const waiting = [
+                row.pending > 0 ? `${row.pending} request${row.pending === 1 ? '' : 's'}` : null,
+                row.pendingDeductions > 0
+                  ? `${row.pendingDeductions} deduction${row.pendingDeductions === 1 ? '' : 's'}`
+                  : null,
+              ]
+                .filter((part): part is string => part != null)
+                .join(' · ')
+              return (
+                <button
+                  key={row.employee.id}
+                  type="button"
+                  onClick={() => openDrill(row)}
+                  className="w-full rounded-xl border border-charcoal-200 bg-white p-3 text-left card-interactive"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex min-w-0 items-center gap-2.5">
+                      <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-brand-100 text-[10px] font-semibold text-brand-700">
+                        {row.employee.initials}
+                      </span>
+                      <div className="min-w-0">
+                        <p className="truncate text-xs font-medium text-charcoal-900">
+                          {row.employee.name}
+                          {row.needsReview && <span className="ml-1.5 inline-block h-1.5 w-1.5 rounded-full bg-red-500 align-middle" />}
+                        </p>
+                        <p className="truncate text-[10px] text-charcoal-500">
+                          {row.employee.position} · {row.employee.employeeNumber}
+                        </p>
+                      </div>
+                    </div>
+                    <StatusBadge status={humanize(row.employee.status)} />
+                  </div>
+                  <div className="mt-2 grid grid-cols-4 gap-1 text-center">
+                    <div className="rounded-lg bg-charcoal-50 py-1.5">
+                      <p className="text-xs font-bold text-charcoal-900">{row.requests}</p>
+                      <p className="text-[9px] text-charcoal-500">Requests</p>
+                    </div>
+                    <div className="rounded-lg bg-charcoal-50 py-1.5">
+                      <p className={cn('text-xs font-bold', row.deductionTotal ? 'text-red-600' : 'text-charcoal-900')}>
+                        {row.deductionTotal}
                       </p>
-                      <p className="truncate text-[10px] text-charcoal-500">
-                        {row.employee.position} · {row.employee.employeeNumber}
-                      </p>
+                      <p className="text-[9px] text-charcoal-500">Ded. EGP</p>
+                    </div>
+                    <div className="rounded-lg bg-charcoal-50 py-1.5">
+                      <p className="text-xs font-bold text-charcoal-900">{row.avgScore !== null ? row.avgScore.toFixed(1) : '—'}</p>
+                      <p className="text-[9px] text-charcoal-500">Eval /5</p>
+                    </div>
+                    <div className="rounded-lg bg-charcoal-50 py-1.5">
+                      <p className={cn('text-xs font-bold', row.warnings ? 'text-orange-600' : 'text-charcoal-900')}>{row.warnings}</p>
+                      <p className="text-[9px] text-charcoal-500">Warnings</p>
                     </div>
                   </div>
-                  <StatusBadge status={humanize(row.employee.status)} />
-                </div>
-                <div className="mt-2 grid grid-cols-4 gap-1 text-center">
-                  <div className="rounded-lg bg-charcoal-50 py-1.5">
-                    <p className="text-xs font-bold text-charcoal-900">{row.requests}</p>
-                    <p className="text-[9px] text-charcoal-500">Requests</p>
-                  </div>
-                  <div className="rounded-lg bg-charcoal-50 py-1.5">
-                    <p className={cn('text-xs font-bold', row.deductionTotal ? 'text-red-600' : 'text-charcoal-900')}>
-                      {row.deductionTotal}
+                  {waiting && (
+                    <p className="mt-2 rounded-lg bg-amber-50 px-2 py-1 text-center text-[10px] font-semibold text-amber-700 ring-1 ring-inset ring-amber-200">
+                      Waiting for your decision: {waiting}
                     </p>
-                    <p className="text-[9px] text-charcoal-500">Ded. EGP</p>
-                  </div>
-                  <div className="rounded-lg bg-charcoal-50 py-1.5">
-                    <p className="text-xs font-bold text-charcoal-900">{row.avgScore !== null ? row.avgScore.toFixed(1) : '—'}</p>
-                    <p className="text-[9px] text-charcoal-500">Eval /5</p>
-                  </div>
-                  <div className="rounded-lg bg-charcoal-50 py-1.5">
-                    <p className={cn('text-xs font-bold', row.warnings ? 'text-orange-600' : 'text-charcoal-900')}>{row.warnings}</p>
-                    <p className="text-[9px] text-charcoal-500">Warnings</p>
-                  </div>
-                </div>
-              </button>
-            ))}
+                  )}
+                </button>
+              )
+            })}
           </div>
         </>
       )}
@@ -411,6 +467,48 @@ function currentMonthValue(): string {
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
 }
 
+/** The day a deduction punishes — the API's attendance day, else the issue day. */
+function deductionDayOf(row: DeductionCandidateRow): string {
+  const date = row.date?.slice(0, 10)
+  return date && date.length === 10 ? date : row.issuedAt.slice(0, 10)
+}
+
+/** Sweep rows and hand-issued rows use slightly different reason labels. */
+function isAbsenceReason(reason: string): boolean {
+  return reason.toLowerCase().startsWith('unapproved absence')
+}
+
+function isLateReason(reason: string): boolean {
+  return reason.toLowerCase().startsWith('late arrival')
+}
+
+/** "2026-09-18" → "Sep 2026" — the month the tallies below count. */
+function deductionMonthLabel(day: string): string {
+  const [year, month] = day.split('-')
+  const name = MONTH_NAMES[Number(month) - 1]
+  return name ? `${name} ${year}` : day
+}
+
+/** The sweep's formula boilerplate — the row shows the day and the month counts instead. */
+function isAutoPricedNote(note: string): boolean {
+  return note.toLowerCase().includes('auto-priced:')
+}
+
+/** Requests covering the day: single-day, a leave range, or a swap's target day. */
+function requestsOnDay(requests: DeskRequestRow[], employeeId: number, day: string): DeskRequestRow[] {
+  return requests.filter((request) => {
+    if (request.employeeId !== employeeId) return false
+    const start = request.requestedDate?.slice(0, 10)
+    if (!start) return false
+    const end = (request.endDate ?? request.requestedDate).slice(0, 10)
+    return (start <= day && day <= end) || request.targetDate?.slice(0, 10) === day
+  })
+}
+
+function requestStatusLabel(status: string): string {
+  return status === 'PendingHRReview' ? 'Pending HR Review' : humanize(status)
+}
+
 /* ==================== drill-in (mock §25 view 2) ==================== */
 
 const DRILL_TABS = [
@@ -429,6 +527,9 @@ function PerfDrillIn({
   row,
   month,
   months,
+  tab,
+  requests,
+  onTabChange,
   onMonthChange,
   onClose,
 }: {
@@ -437,6 +538,7 @@ function PerfDrillIn({
     needsReview: boolean
     requests: number
     pending: number
+    pendingDeductions: number
     deductionTotal: number
     bonusTotal: number
     avgScore: number | null
@@ -445,12 +547,21 @@ function PerfDrillIn({
   }
   month: MonthKey
   months: string[]
+  tab: DrillTabId
+  requests: DeskRequestRow[]
+  onTabChange: (tab: DrillTabId) => void
   onMonthChange: (value: MonthKey) => void
   onClose: () => void
 }) {
   const { employee } = row
-  const [tab, setTab] = useState<DrillTabId>('overview')
   const navigate = useNavigate()
+
+  // How much on each tab is still waiting for a decision — month-scoped, exactly
+  // like the rows the tab renders, so the pill never disagrees with the list.
+  const tabCounts: Partial<Record<DrillTabId, number>> = {
+    requests: row.pending,
+    deductions: row.pendingDeductions,
+  }
 
   const inMonth = (value: string | null | undefined) => month === 'all' || ymOf(value) === month
 
@@ -491,7 +602,12 @@ function PerfDrillIn({
       </div>
 
       {/* Aggregated tiles (same algebra as the roster row) */}
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-6">
+        <PerfTile
+          label="To act on"
+          value={String(row.pending + row.pendingDeductions)}
+          valueClass={row.pending + row.pendingDeductions ? 'text-amber-600' : 'text-charcoal-900'}
+        />
         <PerfTile label={`Requests${row.pending ? ` · ${row.pending} pending` : ''}`} value={String(row.requests)} />
         <PerfTile label="Deductions" value={formatMoney(row.deductionTotal)} valueClass={row.deductionTotal ? 'text-red-600' : 'text-charcoal-900'} />
         <PerfTile label="Bonuses" value={formatMoney(row.bonusTotal)} valueClass={row.bonusTotal ? 'text-green-600' : 'text-charcoal-900'} />
@@ -501,21 +617,36 @@ function PerfDrillIn({
 
       <div className="overflow-hidden rounded-xl border border-charcoal-200 bg-white">
         <div className="flex overflow-x-auto border-b border-charcoal-100 bg-charcoal-50/60 px-1.5">
-          {DRILL_TABS.map((option) => (
-            <button
-              key={option.id}
-              type="button"
-              onClick={() => setTab(option.id)}
-              className={cn(
-                'whitespace-nowrap border-b-2 px-3 py-2.5 text-xs font-semibold transition-colors',
-                tab === option.id
-                  ? 'border-brand-600 text-brand-700'
-                  : 'border-transparent text-charcoal-500 hover:text-charcoal-700',
-              )}
-            >
-              {option.label}
-            </button>
-          ))}
+          {DRILL_TABS.map((option) => {
+            const count = tabCounts[option.id] ?? 0
+            return (
+              <button
+                key={option.id}
+                type="button"
+                onClick={() => onTabChange(option.id)}
+                className={cn(
+                  'whitespace-nowrap border-b-2 px-3 py-2.5 text-xs font-semibold transition-colors',
+                  tab === option.id
+                    ? 'border-brand-600 text-brand-700'
+                    : 'border-transparent text-charcoal-500 hover:text-charcoal-700',
+                )}
+              >
+                {option.label}
+                {count > 0 && (
+                  <span
+                    className={cn(
+                      'ml-1 inline-flex items-center rounded-full px-1.5 py-px text-[9px] font-bold leading-none tabular-nums',
+                      tab === option.id
+                        ? 'bg-brand-100 text-brand-700'
+                        : 'bg-amber-50 text-amber-700 ring-1 ring-inset ring-amber-200',
+                    )}
+                  >
+                    {count}
+                  </span>
+                )}
+              </button>
+            )
+          })}
         </div>
         <div className="p-4">
           {tab === 'overview' && (
@@ -525,7 +656,7 @@ function PerfDrillIn({
             />
           )}
           {tab === 'requests' && <DrillRequests employeeId={employee.id} inMonth={inMonth} />}
-          {tab === 'deductions' && <DrillDeductions employeeId={employee.id} inMonth={inMonth} />}
+          {tab === 'deductions' && <DrillDeductions employeeId={employee.id} requests={requests} inMonth={inMonth} />}
           {tab === 'evaluations' && <DrillEvaluations employeeId={employee.id} />}
           {tab === 'bonuses' && <DrillBonuses employeeId={employee.id} inMonth={inMonth} />}
           {tab === 'warnings' && <DrillWarnings employeeId={employee.id} inMonth={inMonth} />}
@@ -608,37 +739,285 @@ function DrillRequests({ employeeId, inMonth }: { employeeId: number; inMonth: (
   />
 }
 
-function DrillDeductions({ employeeId, inMonth }: { employeeId: number; inMonth: (value: string | null | undefined) => boolean }) {
+/**
+ * The three states the branch's deduction list splits into: the rows it still has
+ * to decide on, the rows already approved here and waiting for HR's payroll run
+ * (still re-priceable / rejectable until HR applies them), and the rows it excused.
+ */
+const DEDUCTION_VIEWS = [
+  {
+    id: 'pending',
+    label: 'Pending',
+    hint: 'Awaiting your decision — approve, re-price or reject.',
+    emptyHint: 'No pending deductions.',
+    icon: <MinusCircle className="h-8 w-8" aria-hidden="true" />,
+  },
+  {
+    id: 'approved',
+    label: 'Approved',
+    hint: 'Approved here, waiting for HR — still re-priceable or rejectable until HR applies them.',
+    emptyHint: 'No approved deductions yet.',
+    icon: <CheckCircle2 className="h-8 w-8" aria-hidden="true" />,
+  },
+  {
+    id: 'rejected',
+    label: 'Rejected',
+    hint: 'Excused by the branch — a rejected deduction is final.',
+    emptyHint: 'No rejected deductions.',
+    icon: <AlertTriangle className="h-8 w-8" aria-hidden="true" />,
+  },
+] as const
+
+type DeductionViewId = (typeof DEDUCTION_VIEWS)[number]['id']
+
+/** Pending is actionable; BranchApproved / Approved sit in the approved view; Rejected in its own. */
+function deductionViewOf(status: string): DeductionViewId {
+  if (status === 'Pending') return 'pending'
+  if (status === 'Rejected') return 'rejected'
+  return 'approved'
+}
+
+/**
+ * One employee's deductions (mock §25 deductions tab): every attendance deduction
+ * raised against him — auto-priced absences and late arrivals from the sweep plus
+ * whatever the manager issued by hand — grouped into Pending / Approved (waiting
+ * for HR) / Rejected. Each row carries the decisions its state still allows:
+ * approve, re-price or reject while pending; re-price or reject while it waits for
+ * HR; nothing once HR has applied it or the branch has excused it. Approving a row
+ * therefore moves it to the next view and takes its Approve button with it.
+ * Each row also dates the day it punishes (not the sweep run), tallies the
+ * employee's absences / late arrivals for that month, and surfaces any request
+ * filed for that same day — the context a reviewer actually needs.
+ */
+function DrillDeductions({
+  employeeId,
+  requests,
+  inMonth,
+}: {
+  employeeId: number
+  requests: DeskRequestRow[]
+  inMonth: (value: string | null | undefined) => boolean
+}) {
+  const { toast } = useToast()
+  const queryClient = useQueryClient()
+  const [editingId, setEditingId] = useState<number | null>(null)
+  const [amount, setAmount] = useState('')
+  const [view, setView] = useState<DeductionViewId>('pending')
+
   const deductionsQuery = useQuery({
     queryKey: ['portal', 'perf', 'deductions'],
     queryFn: ({ signal }) => listBranchDeductions(undefined, signal),
   })
-  const rows = (deductionsQuery.data ?? []).filter(
-    (item) => item.employeeId === employeeId && inMonth(item.issuedAt),
-  )
+
+  const reviewMutation = useMutation({
+    mutationFn: ({ id, decision, amount: revised }: { id: number; decision: 'approve' | 'reject' | 'edit'; amount?: number }) =>
+      branchReviewDeduction(id, { decision, amount: revised }),
+    onSuccess: (_data, variables) => {
+      toast(
+        variables.decision === 'approve'
+          ? 'Deduction approved — it goes to HR for the payroll run.'
+          : variables.decision === 'reject'
+            ? 'Deduction rejected.'
+            : 'Deduction amount updated.',
+      )
+      setEditingId(null)
+      void queryClient.invalidateQueries({ queryKey: ['portal', 'perf', 'deductions'] })
+    },
+    onError: (error) => toast(describeApiError(error), 'error'),
+  })
+
+  if (deductionsQuery.isLoading) return <LoadingState />
+  if (deductionsQuery.isError) {
+    return <ErrorState message={describeApiError(deductionsQuery.error)} onRetry={() => deductionsQuery.refetch()} />
+  }
+
+  const mine = (deductionsQuery.data ?? []).filter((item) => item.employeeId === employeeId)
+  const rows = mine.filter((item) => inMonth(deductionDayOf(item)))
+  const counts: Record<DeductionViewId, number> = { pending: 0, approved: 0, rejected: 0 }
+  rows.forEach((item) => {
+    counts[deductionViewOf(item.status)] += 1
+  })
+
+  const current = DEDUCTION_VIEWS.find((option) => option.id === view) ?? DEDUCTION_VIEWS[0]
+  const visible = rows.filter((item) => deductionViewOf(item.status) === view)
+  const pending = reviewMutation.isPending
+  const submitReprice = (item: DeductionCandidateRow) => {
+    const value = Number(amount)
+    if (amount === '' || !Number.isFinite(value) || value <= 0) {
+      toast('Enter an amount greater than zero.', 'error')
+      return
+    }
+    reviewMutation.mutate({ id: item.id, decision: 'edit', amount: value })
+  }
+
   return (
-    <DrillList
-      isLoading={deductionsQuery.isFetching && !deductionsQuery.data}
-      emptyHint="No deductions raised in this scope."
-      rows={rows.map((item) => ({
-        key: item.id,
-        left: (
-          <>
-            <p className="text-xs font-medium text-charcoal-900">{item.reason}</p>
-            <p className="text-[10px] text-charcoal-500">
-              {item.note ?? 'No note'} · by {item.issuedBy} · {formatDate(item.issuedAt)}
-            </p>
-          </>
-        ),
-        right: (
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-bold text-red-600">{formatMoney(item.amount)}</span>
-            <StatusBadge status={humanize(item.status)} />
-          </div>
-        ),
-      }))}
-      icon={<MinusCircle className="h-8 w-8" aria-hidden="true" />}
-    />
+    <div className="space-y-3">
+      <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-between">
+        <div className="inline-flex self-start rounded-lg border border-charcoal-200 bg-charcoal-50 p-1">
+          {DEDUCTION_VIEWS.map((option) => (
+            <button
+              key={option.id}
+              type="button"
+              onClick={() => {
+                setView(option.id)
+                setEditingId(null)
+              }}
+              className={cn(
+                'flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-[11px] font-semibold transition-colors',
+                view === option.id
+                  ? 'bg-white text-brand-700 shadow-sm ring-1 ring-charcoal-200'
+                  : 'text-charcoal-500 hover:text-charcoal-700',
+              )}
+            >
+              {option.label}
+              <span
+                className={cn(
+                  'rounded-full px-1.5 py-px text-[9px] font-bold tabular-nums',
+                  view === option.id ? 'bg-brand-100 text-brand-700' : 'bg-charcoal-200 text-charcoal-600',
+                )}
+              >
+                {counts[option.id]}
+              </span>
+            </button>
+          ))}
+        </div>
+        <p className="text-[10px] text-charcoal-500">{current.hint}</p>
+      </div>
+
+      <DrillList
+        isLoading={deductionsQuery.isFetching && !deductionsQuery.data}
+        emptyHint={current.emptyHint}
+        rows={visible.map((item) => {
+          // What this row's state still allows: the whole decision while it is
+          // pending, re-price / reject while it waits for HR, nothing once HR has
+          // applied it (or the branch has excused it).
+          const isOpen = item.status === 'Pending'
+          const canDecide = isOpen || item.status === 'BranchApproved'
+          // The useful context for a manager deciding this row: the attendance day
+          // itself, that employee's absence/late tally for the month, and any
+          // request the employee filed for that exact day.
+          const day = deductionDayOf(item)
+          const monthKey = ymOf(day)
+          const monthRows = mine.filter((row) => ymOf(deductionDayOf(row)) === monthKey)
+          const absences = monthRows.filter((row) => isAbsenceReason(row.reason)).length
+          const lates = monthRows.filter((row) => isLateReason(row.reason)).length
+          const linkedRequests = requestsOnDay(requests, employeeId, day)
+          const manualNote = item.note && !isAutoPricedNote(item.note) ? item.note : null
+          return {
+            key: item.id,
+            left: (
+              <>
+                <p className="text-xs font-medium text-charcoal-900">{item.reason}</p>
+                <p className="text-xs text-charcoal-600">
+                  {formatDateWithYear(day)}
+                  {(absences > 0 || lates > 0) && (
+                    <>
+                      {' · '}
+                      {absences} {absences === 1 ? 'absence' : 'absences'} · {lates}{' '}
+                      {lates === 1 ? 'late arrival' : 'late arrivals'} in {deductionMonthLabel(day)}
+                    </>
+                  )}
+                </p>
+                {manualNote && (
+                  <p className="mt-0.5 text-[11px] text-charcoal-500">
+                    {manualNote}
+                    {item.issuedBy ? ` · by ${item.issuedBy}` : ''}
+                  </p>
+                )}
+                {linkedRequests.length > 0 && (
+                  <div className="mt-1 flex flex-wrap items-center gap-1">
+                    <span className="text-[10px] font-medium text-charcoal-400">Request that day:</span>
+                    {linkedRequests.map((request) => (
+                      <span
+                        key={request.id}
+                        className="inline-flex items-center gap-1 rounded-md border border-charcoal-200 bg-charcoal-50 px-1.5 py-0.5 text-[10px] font-medium text-charcoal-700"
+                      >
+                        {request.type}
+                        {request.requestTime ? ` · ${request.requestTime.slice(0, 5)}` : ''}
+                        <StatusBadge status={requestStatusLabel(request.status)} />
+                      </span>
+                    ))}
+                  </div>
+                )}
+                {canDecide && (
+                  <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                    {isOpen && (
+                      <button
+                        type="button"
+                        disabled={pending}
+                        onClick={() => reviewMutation.mutate({ id: item.id, decision: 'approve' })}
+                        className="rounded-md border border-green-200 px-2 py-1 text-[10px] font-semibold text-green-700 transition-colors hover:bg-green-50 disabled:opacity-50"
+                      >
+                        Approve
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      disabled={pending}
+                      onClick={() => {
+                        setEditingId(editingId === item.id ? null : item.id)
+                        setAmount(String(item.amount))
+                      }}
+                      className="rounded-md border border-charcoal-200 px-2 py-1 text-[10px] font-semibold text-charcoal-600 transition-colors hover:bg-charcoal-50 disabled:opacity-50"
+                    >
+                      Edit amount
+                    </button>
+                    <button
+                      type="button"
+                      disabled={pending}
+                      onClick={() => reviewMutation.mutate({ id: item.id, decision: 'reject' })}
+                      className="rounded-md border border-red-200 px-2 py-1 text-[10px] font-semibold text-red-600 transition-colors hover:bg-red-50 disabled:opacity-50"
+                    >
+                      Reject
+                    </button>
+                  </div>
+                )}
+                {editingId === item.id && (
+                  <div className="mt-1.5 flex items-center gap-1.5">
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={amount}
+                      onChange={(event) => setAmount(event.target.value)}
+                      placeholder="New amount (EGP)"
+                      className="w-28 rounded-md border border-charcoal-200 px-2 py-1 text-[11px] text-charcoal-800 focus:border-brand-400 focus:outline-none"
+                    />
+                    <button
+                      type="button"
+                      disabled={pending}
+                      onClick={() => submitReprice(item)}
+                      className="rounded-md bg-brand-600 px-2 py-1 text-[10px] font-semibold text-white transition-colors hover:bg-brand-700 disabled:opacity-50"
+                    >
+                      Save
+                    </button>
+                    <button
+                      type="button"
+                      disabled={pending}
+                      onClick={() => setEditingId(null)}
+                      className="rounded-md border border-charcoal-200 px-2 py-1 text-[10px] font-semibold text-charcoal-600 transition-colors hover:bg-charcoal-50 disabled:opacity-50"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                )}
+              </>
+            ),
+            right: (
+              <div className="flex flex-col items-end gap-1">
+                <span className="text-xs font-bold text-red-600">
+                  {item.amount > 0 ? formatMoney(item.amount) : 'Price manually'}
+                </span>
+                <StatusBadge
+                  status={item.status === 'BranchApproved' ? 'Branch approved' : humanize(item.status)}
+                />
+              </div>
+            ),
+          }
+        })}
+        icon={current.icon}
+      />
+    </div>
   )
 }
 

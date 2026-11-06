@@ -36,10 +36,35 @@ export function AuthSessionProvider({ children }: { children: ReactNode }) {
   }, [queryClient])
 
   const signOut = useCallback(() => {
+    // Capture the credentials BEFORE clearing the session, so the best-effort
+    // revocation call doesn't depend on a store it just emptied.
+    const refreshToken = session?.refreshToken
+    const accessToken = session?.accessToken ?? null
+    const accessUsable = Boolean(session && session.expiresAt > Date.now())
+    if (refreshToken) {
+      // Best-effort server-side revocation; don't block the UI on it. Logout is
+      // an authenticated endpoint: with an expired access token the bearer can't
+      // carry the call, so the auth contract's alternative is the refresh flow —
+      // mint a fresh bearer first, then revoke through it. When the refresh
+      // credential is also spent there is nothing left to revoke client-side;
+      // the record simply expires server-side on its own.
+      void import('../features/auth/api/auth.api').then(async ({ postLogout, postRefresh }) => {
+        try {
+          let token = accessUsable ? accessToken : null
+          if (!token) {
+            const refreshed = await postRefresh(refreshToken)
+            token = refreshed.accessToken ?? null
+          }
+          if (token) await postLogout(refreshToken, token)
+        } catch {
+          // Revocation succeeded nowhere (credentials already dead) — clear locally anyway.
+        }
+      })
+    }
     clearSession()
     setSession(null)
     queryClient.removeQueries({ queryKey: ['portal'] })
-  }, [queryClient])
+  }, [session, queryClient])
 
   const value = useMemo<AuthSessionContextValue>(() => ({ session, signIn, signOut }), [session, signIn, signOut])
 

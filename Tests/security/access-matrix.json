@@ -48,7 +48,7 @@
     {
       "id": "C3",
       "category": "seed-vs-matrix",
-      "detail": "User wants POST /api/employees/{id}/documents = HR+HRM only. Conflicts twice: BM holds employees.documents.manage (seeded), and the code marks the key allowSelf:true so the employee cannot upload his own documents if the matrix is enforced as-is (self-service portal flow may break)."
+      "detail": "POST /api/employees/{id}/documents: the user-confirmed matrix originally limited uploads to HR+HRM, but the portal requires employees to upload their own required documents. Resolution: self uploads are allowed (route id = caller's own employee), while uploading into another employee's file still requires employees.documents.manage. The BM bundle no longer holds that key."
     },
     {
       "id": "C4",
@@ -237,10 +237,10 @@
     {
       "id": 16, "route": "/api/employees/{id}/documents", "method": "POST", "source": "user-confirmed",
       "expected": {
-        "anonymous": 401, "employee": [401, 404], "teamLeader": [401, 404], "branchManager": [401, 404], "hr": [200, 201, 400], "hrManager": [200, 201, 400],
+        "anonymous": 401, "employee": [200, 201, 400], "teamLeader": [401, 404], "branchManager": [401, 404], "hr": [200, 201, 400], "hrManager": [200, 201, 400],
         "topManagement": [200, 201, 400], "crossTenantTwin": [401, 404]
       },
-      "notes": ["C3 resolved: employees.documents.manage removed from the BM bundle and the employee self-upload affordance was removed - only HR/HRM upload documents"]
+      "notes": ["Employee self-upload is required by the portal (required-documents checklist); a route id other than the caller's own employee still needs employees.documents.manage (HR/HRM/top management)."]
     },
     {
       "id": 17, "route": "/api/employees/{id}/leave-balance", "method": "GET", "source": "user-confirmed",
@@ -599,6 +599,38 @@
       "notes": [
         "USER DECISION (phase 3): one-to-one team message (TeamActionsController message action; the integration Vector Message_Persists_AndNotifiesMember proves this canonical path answers 204 for the team's leader).",
         "TEAM MEMBERSHIP ONLY (ResolveTeamMemberAsync): only the Team Leader whose led team contains the employee answers 204; Branch Managers and Top Management lead no team, so they are concealed with 404 (the payload targets the suite team's member - the probe employee)."
+      ]
+    },
+    {
+      "id": 59, "route": "/api/employees/{id}/deductions", "method": "GET", "source": "user-confirmed",
+      "expected": {
+        "anonymous": 401, "employeeSelf": 200, "employeeOther": [401, 404], "teamLeader": 200, "branchManager": 200,
+        "hr": 200, "hrManager": 200, "topManagement": 200, "crossTenantTwin": 404
+      },
+      "notes": [
+        "Row 34's visibility semantics (payroll-sheets convergence) clone onto the employee-session deductions trail: EnsureCanAccess reads — owner sees own; same-gym TL/BM/HR/HRM read; out-of-gym concealed with 404.",
+        "GET needs no payload; {id} substitutes karim's employee id, the deductions trail's target employee."
+      ]
+    },
+    {
+      "id": 60, "route": "/api/requests/{id}/undo", "method": "POST", "source": "user-confirmed",
+      "expected": {
+        "anonymous": 401, "employeeSelf": 404, "employeeOther": 404, "teamLeader": 204, "branchManager": 204,
+        "hr": 404, "hrManager": 404, "topManagement": 204, "crossTenantTwin": 404
+      },
+      "notes": [
+        "Stage-1 undo of a BranchManager-stage decision (RequestManagementController /undo): TL + BM + Top Management are the management desk roles expected to answer 204; HR and HR Manager act at the HR stage and are out of scope here (404), a plain employee is outside the desk (404), anonymous 401, cross-tenant twin concealed with 404.",
+        "Per-identity decided targets are provisioned in SecurityProvisioning (teamLeader / branchManager / topManagement own a decided request) so a parallel theory run can never flip a shared request back to Pending before another identity flips it."
+      ]
+    },
+    {
+      "id": 61, "route": "/api/employees/{id}/profile", "method": "GET", "source": "user-confirmed",
+      "expected": {
+        "anonymous": 401, "employeeSelf": 200, "employeeOther": [401, 404], "teamLeader": 200, "branchManager": 200,
+        "hr": 200, "hrManager": 200, "topManagement": 200, "crossTenantTwin": [401, 404]
+      },
+      "notes": [
+        "Self-service profile contract used by My Profile and the employee-file Personal tab; access is identical to the directory detail (row 4). The portal reads this route for photoUrl and the emergency-contact/gym shape."
       ]
     }
   ]

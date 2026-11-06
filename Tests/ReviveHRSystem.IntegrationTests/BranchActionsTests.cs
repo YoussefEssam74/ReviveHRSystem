@@ -156,6 +156,119 @@ namespace ReviveHRSystem.IntegrationTests
         }
 
         [Fact]
+        public async Task Deduction_BranchReview_ApproveThenReprice_KeepsOpenForHr()
+        {
+            var gym1Id = await GymIdByNameAsync("Revive Main Gym");
+            var token = await LoginSelectingGymAsync("omar@revive.hr", gym1Id);
+            var karimId = await OwnEmployeeIdAsync("karim@revive.hr");
+
+            var candidateId = await IssueDeductionAndGetIdAsync(token, karimId, 120m, "Branch review approve test");
+
+            var approve = _fixture.AuthorizedRequest(HttpMethod.Post, $"/api/deduction-candidates/{candidateId}/branch-review", new
+            {
+                decision = "approve"
+            }, token);
+            var approveResponse = await _fixture.Client.SendAsync(approve);
+            approveResponse.EnsureSuccessStatusCode();
+            var approved = await approveResponse.Content.ReadFromJsonAsync<JsonElement>();
+            Assert.Equal("BranchApproved", approved.GetProperty("status").GetString());
+            Assert.Equal(120m, approved.GetProperty("amount").GetDecimal());
+
+            // edit travelled together with approve — 150 EGP
+            var edit = _fixture.AuthorizedRequest(HttpMethod.Post, $"/api/deduction-candidates/{candidateId}/branch-review", new
+            {
+                decision = "approve",
+                amount = 150m
+            }, token);
+            var editResponse = await _fixture.Client.SendAsync(edit);
+            editResponse.EnsureSuccessStatusCode();
+            var repriced = await editResponse.Content.ReadFromJsonAsync<JsonElement>();
+            Assert.Equal("BranchApproved", repriced.GetProperty("status").GetString());
+            Assert.Equal(150m, repriced.GetProperty("amount").GetDecimal());
+        }
+
+        [Fact]
+        public async Task Deduction_BranchReview_RejectOnlyAmountChange_Returns400()
+        {
+            var gym1Id = await GymIdByNameAsync("Revive Main Gym");
+            var token = await LoginSelectingGymAsync("omar@revive.hr", gym1Id);
+            var karimId = await OwnEmployeeIdAsync("karim@revive.hr");
+
+            var candidateId = await IssueDeductionAndGetIdAsync(token, karimId, 80m, "Branch review reprice test");
+
+            var edit = _fixture.AuthorizedRequest(HttpMethod.Post, $"/api/deduction-candidates/{candidateId}/branch-review", new
+            {
+                decision = "edit"
+            }, token);
+            var editResponse = await _fixture.Client.SendAsync(edit);
+
+            Assert.Equal(HttpStatusCode.BadRequest, editResponse.StatusCode);
+        }
+
+        [Fact]
+        public async Task Deduction_BranchReview_RejectIsFinal_SecondDecisionReturns400()
+        {
+            var gym1Id = await GymIdByNameAsync("Revive Main Gym");
+            var token = await LoginSelectingGymAsync("omar@revive.hr", gym1Id);
+            var karimId = await OwnEmployeeIdAsync("karim@revive.hr");
+
+            var candidateId = await IssueDeductionAndGetIdAsync(token, karimId, 60m, "Branch review reject test");
+
+            var reject = _fixture.AuthorizedRequest(HttpMethod.Post, $"/api/deduction-candidates/{candidateId}/branch-review", new
+            {
+                decision = "reject"
+            }, token);
+            var rejectResponse = await _fixture.Client.SendAsync(reject);
+            rejectResponse.EnsureSuccessStatusCode();
+            var rejected = await rejectResponse.Content.ReadFromJsonAsync<JsonElement>();
+            Assert.Equal("Rejected", rejected.GetProperty("status").GetString());
+
+            var second = _fixture.AuthorizedRequest(HttpMethod.Post, $"/api/deduction-candidates/{candidateId}/branch-review", new
+            {
+                decision = "approve"
+            }, token);
+            var secondResponse = await _fixture.Client.SendAsync(second);
+
+            Assert.Equal(HttpStatusCode.BadRequest, secondResponse.StatusCode);
+        }
+
+        [Fact]
+        public async Task Deduction_BranchReview_PlainEmployee_Returns404()
+        {
+            var gym1Id = await GymIdByNameAsync("Revive Main Gym");
+            var token = await LoginSelectingGymAsync("omar@revive.hr", gym1Id);
+            var karimId = await OwnEmployeeIdAsync("karim@revive.hr");
+
+            var candidateId = await IssueDeductionAndGetIdAsync(token, karimId, 40m, "Branch review scope test");
+
+            var karimToken = await _fixture.LoginAsync("karim@revive.hr", "Revive!2026");
+            var acting = _fixture.AuthorizedRequest(HttpMethod.Post, $"/api/deduction-candidates/{candidateId}/branch-review", new
+            {
+                decision = "approve"
+            }, karimToken);
+            var actingResponse = await _fixture.Client.SendAsync(acting);
+
+            // A non-manager answers exactly like the row never existed.
+            Assert.Equal(HttpStatusCode.NotFound, actingResponse.StatusCode);
+        }
+
+        /// <summary>Issues a deduction as the active manager and returns the created candidate id.</summary>
+        private async Task<int> IssueDeductionAndGetIdAsync(string token, int employeeId, decimal amount, string note)
+        {
+            var issue = _fixture.AuthorizedRequest(HttpMethod.Post, "/api/deduction-candidates", new
+            {
+                employeeId,
+                amount,
+                reason = "Unapproved absence",
+                note
+            }, token);
+            var issueResponse = await _fixture.Client.SendAsync(issue);
+            issueResponse.EnsureSuccessStatusCode();
+            var created = await issueResponse.Content.ReadFromJsonAsync<JsonElement>();
+            return created.GetProperty("id").GetInt32();
+        }
+
+        [Fact]
         public async Task BranchReport_AnyEmployee_LandsInHrQueue()
         {
             var token = await _fixture.LoginAsync("karim@revive.hr", "Revive!2026");

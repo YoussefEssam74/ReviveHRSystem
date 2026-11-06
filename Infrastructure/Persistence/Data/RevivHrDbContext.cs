@@ -34,6 +34,7 @@ namespace Presistence.Data
         public DbSet<UserGymAccess> UserGymAccesses => Set<UserGymAccess>();
         public DbSet<UserGymRole> UserGymRoles => Set<UserGymRole>();
         public DbSet<UserNotificationPreference> UserNotificationPreferences => Set<UserNotificationPreference>();
+        public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
 
         // Organization
         public DbSet<Gym> Gyms => Set<Gym>();

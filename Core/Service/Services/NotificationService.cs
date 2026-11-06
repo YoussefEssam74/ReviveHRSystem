@@ -292,8 +292,8 @@ namespace Service.Services
                 return new AnnouncementTarget { TargetType = AnnouncementTargetType.AllGym };
             }
 
-            var gyms = await _unitOfWork.GetRepository<Gym, int>().GetAllAsync(cancellationToken);
-            var gym = gyms.FirstOrDefault(g => string.Equals(g.Name.Trim(), audience, StringComparison.OrdinalIgnoreCase));
+            var gym = await _unitOfWork.GetRepository<Gym, int>()
+                .GetByIdAsync(new GymByNameSpec(audience), cancellationToken);
             if (gym is not null)
             {
                 return new AnnouncementTarget { TargetType = AnnouncementTargetType.AllGym, GymId = gym.Id };

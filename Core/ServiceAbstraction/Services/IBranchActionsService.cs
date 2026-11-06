@@ -12,6 +12,14 @@ namespace ServiceAbstraction.Services
         Task<DeductionCandidateDto> IssueDeductionAsync(
             int actorUserId, int? activeGymId, CreateDeductionCandidateDto request, CancellationToken cancellationToken = default);
 
+        /// <summary>
+        /// The branch's decision on one of its deductions before HR applies it to
+        /// payroll: approve (BranchApproved), reject (final) or re-price the amount.
+        /// Requires the caller's management scope over the deduction's employee.
+        /// </summary>
+        Task<DeductionCandidateDto> BranchReviewDeductionAsync(
+            int actorUserId, int candidateId, BranchDeductionReviewRequest request, int? activeGymId, CancellationToken cancellationToken = default);
+
         Task<WarningNoticeDto> IssueWarningAsync(
             int actorUserId, int? activeGymId, CreateWarningNoticeDto request, CancellationToken cancellationToken = default);
 

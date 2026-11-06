@@ -38,6 +38,9 @@ namespace Service.Specifications
         {
             Criteria = r => r.Id == roleId;
             AddInclude(r => r.RolePermissions);
+            // Role update / clone-source / permission swap mutate the fetched role (and
+            // its join rows) before SaveChanges without Update() — keeps the flow tracked.
+            ApplyTracking();
         }
     }
 

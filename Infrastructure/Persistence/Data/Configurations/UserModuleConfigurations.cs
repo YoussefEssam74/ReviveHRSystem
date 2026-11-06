@@ -159,16 +159,27 @@ namespace Presistence.Data.Configurations
         }
     }
 
-    public class UserNotificationPreferenceConfiguration : IEntityTypeConfiguration<UserNotificationPreference>
+    public class RefreshTokenConfiguration : IEntityTypeConfiguration<RefreshToken>
     {
-        public void Configure(EntityTypeBuilder<UserNotificationPreference> builder)
+        public void Configure(EntityTypeBuilder<RefreshToken> builder)
         {
-            builder.ToTable("UserNotificationPreferences");
-            builder.HasKey(p => p.Id);
-            builder.HasOne(p => p.User).WithOne(u => u.NotificationPreference)
-                   .HasForeignKey<UserNotificationPreference>(p => p.UserId)
+            builder.ToTable("RefreshTokens");
+            builder.HasKey(rt => rt.Id);
+
+            builder.Property(rt => rt.TokenHash).IsRequired().HasMaxLength(64);
+            builder.HasIndex(rt => rt.TokenHash).IsUnique();
+            builder.HasIndex(rt => rt.UserId);
+
+            builder.HasOne(rt => rt.User)
+                   .WithMany()
+                   .HasForeignKey(rt => rt.UserId)
                    .OnDelete(DeleteBehavior.Cascade);
-            builder.HasIndex(p => p.UserId).IsUnique();
+
+            // Optimistic concurrency via the PostgreSQL xmin system column (no schema
+            // impact): the refresh rotation's claim becomes a conditional UPDATE, so a
+            // concurrent rotation of the same token loses the claim instead of both
+            // revoking and double-issuing (AuthService.RefreshAsync).
+            builder.UseXminAsConcurrencyToken();
         }
     }
 }

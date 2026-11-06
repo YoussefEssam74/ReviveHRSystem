@@ -1,7 +1,8 @@
 import { Link, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { Calendar, ChevronRight, Clock, LogIn, LogOut, Users, Wallet, Zap } from 'lucide-react'
+import { Building2, Calendar, ChevronRight, Clock, LogIn, LogOut, Users, Wallet, Zap } from 'lucide-react'
 import { getEmployeeDashboard, type DashboardOverview, type ScheduleDay } from '../api/dashboard.api'
+import { usePortalSession } from '../../../contexts/PortalSessionContext'
 import { EmptyState } from '../../../components/ui/primitives'
 import { ErrorState } from '../../../components/async-state'
 import { Skeleton } from '../../../components/ui/skeleton'
@@ -127,6 +128,7 @@ function DashboardSkeleton() {
 
 export default function EmployeeDashboardPage() {
   const navigate = useNavigate()
+  const { me } = usePortalSession()
   const dashboard = useQuery({ queryKey: ['portal', 'dashboard'], queryFn: ({ signal }) => getEmployeeDashboard(signal) })
 
   if (dashboard.isError) {
@@ -139,6 +141,12 @@ export default function EmployeeDashboardPage() {
 
   const data = dashboard.data
   const today = data.todayShift
+  // The dashboard body is derived from the caller's employment record, which is
+  // homed in one gym and never follows the active-gym switch (a manager holding
+  // a Team-Leader role elsewhere has no record there at all). When the two gym
+  // contexts differ, say so explicitly — a bare "{position} · {record gym}"
+  // line otherwise reads as "the gym switch didn't happen".
+  const recordGymMismatch = Boolean(me?.activeGym?.gymId && data.user.gymId && me.activeGym.gymId !== data.user.gymId)
   const attendance = data.todayAttendance
   const attendanceLabel = attendance?.status || 'Not Checked In'
   const attendanceTone =
@@ -160,6 +168,12 @@ export default function EmployeeDashboardPage() {
             <Zap className="h-3.5 w-3.5" aria-hidden="true" />
             {data.user.position || '—'} · {data.user.gymName || '—'}
           </p>
+          {recordGymMismatch && (
+            <p className="mt-1 inline-flex w-fit items-center gap-1.5 rounded-full bg-brand-50 px-2.5 py-1 text-[11px] font-semibold text-brand-700">
+              <Building2 className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+              Employment record is from {data.user.gymName} — you are working in {me?.activeGym?.gymName} today
+            </p>
+          )}
         </div>
         <div className="hidden sm:block">
           <Button size="sm" variant="secondary" onClick={() => navigate(PAGE_PATHS.requests)}>

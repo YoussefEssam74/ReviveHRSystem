@@ -16,11 +16,19 @@ namespace Shared.DataTransferObject.EmployeeProfile
     /// follow-ups that never carried one. Candidates fall back to their issue date.
     /// </param>
     /// <param name="Description">What the deduction is for ("Deduction — 3 Days" / the reason).</param>
-    /// <param name="Amount">Money deductions (candidates) carry an amount; day-based follow-ups don't.</param>
+    /// <param name="Amount">
+    /// Candidates carry their money amount; follow-ups price their described
+    /// day-multiple against the sheet's daily rate (null without a priced sheet).
+    /// </param>
     /// <param name="Status">Human status: In review / Resolved / Applied / Rejected.</param>
     /// <param name="Detail">Extra line — the follow-up's last action or the candidate's note.</param>
     /// <param name="CorrectionRequestId">His correction request for this date, when one exists.</param>
     /// <param name="CorrectionStatus">Raw status of that request (Pending, PendingHRReview, ...).</param>
+    /// <param name="IssuedBy">Username of the manager who raised it; null when the system sweep did.</param>
+    /// <param name="AttendanceDate">
+    /// The attendance day the candidate targets (from its linked AttendanceRecord) —
+    /// the issue date alone can lag the absence it punishes.
+    /// </param>
     public record EmployeeDeductionDto(
         string Id,
         string Source,
@@ -30,5 +38,7 @@ namespace Shared.DataTransferObject.EmployeeProfile
         string Status,
         string? Detail,
         int? CorrectionRequestId,
-        string? CorrectionStatus);
+        string? CorrectionStatus,
+        string? IssuedBy = null,
+        DateOnly? AttendanceDate = null);
 }

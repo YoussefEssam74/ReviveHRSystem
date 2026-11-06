@@ -35,6 +35,15 @@ namespace Presentation.Controllers
             return NoContent();
         }
 
+        /// <summary>POST /api/requests/{id}/undo — reverts a stage-1 decision while the date is ahead.</summary>
+        [HttpPost("{id}/undo")]
+        public async Task<IActionResult> Undo(int id, CancellationToken cancellationToken)
+        {
+            await requestManagementService.UndoAsync(
+                GetActorUserId(), id, GetGymIdFromToken(), cancellationToken);
+            return NoContent();
+        }
+
         /// <summary>Edits a pending request of an in-scope employee.</summary>
         [HttpPut("{id}")]
         public async Task<IActionResult> Edit(int id, UpdateRequestDto update, CancellationToken cancellationToken)

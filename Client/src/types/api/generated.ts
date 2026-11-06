@@ -1166,6 +1166,9 @@ export interface components {
             accessToken?: string | null;
             /** Format: int32 */
             expiresInSeconds?: number | null;
+            refreshToken?: string | null;
+            /** Format: int32 */
+            refreshExpiresInSeconds?: number | null;
             user?: components["schemas"]["UserInfo"];
             requiresGymSelection?: boolean;
             gyms?: components["schemas"]["GymOption"][] | null;

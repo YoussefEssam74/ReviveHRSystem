@@ -1,3 +1,5 @@
+using System.Globalization;
+using System.Text.RegularExpressions;
 using AutoMapper;
 using DomainLayer.Contracts;
 using DomainLayer.Exceptions;
@@ -126,6 +128,20 @@ namespace Service.Services
             var candidates = await unitOfWork.GetRepository<DeductionCandidate, int>()
                 .GetAllAsync(new DeductionCandidatesByEmployeesSpec(employeeIds), cancellationToken);
 
+            // His sheets, so a day-based follow-up ("Deduction — 3 Days") can be priced
+            // at the same daily rate the payroll pipeline closes with.
+            var entries = await unitOfWork.GetRepository<PayrollEntry, int>()
+                .GetAllAsync(new PayrollEntriesByEmployeeSpec(employeeId), cancellationToken);
+
+            // …and his salary history for months no sheet covers yet, so an auto-raised
+            // absence answers with a number instead of a bare status word.
+            var fallbackSalary = (await unitOfWork.GetRepository<Employee, int>()
+                    .GetByIdAsync(new EmployeeProfileByIdSpec(employeeId), cancellationToken))?
+                .Compensations
+                .Where(c => c.Amount > 0)
+                .OrderByDescending(c => c.EffectiveDate)
+                .FirstOrDefault()?.Amount ?? 0m;
+
             // His correction requests keyed by the day they target, so a deduction row can
             // show the dispute sitting on it (newest submission wins a shared date).
             var correctionsByDate = (await unitOfWork.GetRepository<EmployeeRequest, int>()
@@ -137,9 +153,19 @@ namespace Service.Services
 
             var rows = new List<EmployeeDeductionDto>(followUps.Count + candidates.Count());
 
+            // Days the sweep has already priced as a candidate: its legacy auto-raised
+            // follow-up for the same day is superseded and stays out of the trail, so
+            // one absence never reads as two deductions.
+            var candidateDays = candidates.Select(PayrollService.CandidateDayOf).ToHashSet();
+
             foreach (var followUp in followUps)
             {
-                var date = ParseAbsenceMarker(followUp.Note);
+                var date = PayrollService.ParseAbsenceMarker(followUp.Note);
+                if (date is not null && candidateDays.Contains(date.Value))
+                {
+                    continue;
+                }
+
                 int? correctionId = null;
                 string? correctionStatus = null;
                 if (date is not null && correctionsByDate.TryGetValue(date.Value, out var followUpCorrection))
@@ -148,21 +174,28 @@ namespace Service.Services
                     correctionStatus = followUpCorrection.Status.ToString();
                 }
 
+                // The system sweep raises absence deductions silently; a hand-raised
+                // follow-up names the manager who levied it. Either way its size
+                // ("Deduction — 3 Days") prices at the sheet's daily rate.
                 rows.Add(new EmployeeDeductionDto(
                     $"followup-{followUp.Id}",
                     "absence",
                     date,
                     followUp.Description,
-                    Amount: null,
+                    Amount: FollowUpAmount(followUp.Description, date, entries, fallbackSalary),
                     followUp.IsResolved ? "Resolved" : "In review",
                     followUp.LastAction,
                     correctionId,
-                    correctionStatus));
+                    correctionStatus,
+                    IssuedBy: followUp.RaisedByUser?.UserName));
             }
 
             foreach (var candidate in candidates)
             {
-                var date = DateOnly.FromDateTime(candidate.IssuedAt);
+                // The punished attendance day, not the raise date — a deduction can be
+                // issued days after the absence/lateness it punishes (and a derived
+                // absence carries its day in the note marker instead of a record).
+                var date = PayrollService.CandidateDayOf(candidate);
                 int? correctionId = null;
                 string? correctionStatus = null;
                 if (correctionsByDate.TryGetValue(date, out var candidateCorrection))
@@ -180,12 +213,15 @@ namespace Service.Services
                     candidate.Status switch
                     {
                         DeductionStatus.Pending => "In review",
+                        DeductionStatus.BranchApproved => "Branch approved",
                         DeductionStatus.Approved => "Applied",
                         _ => "Rejected"
                     },
                     candidate.Note,
                     correctionId,
-                    correctionStatus));
+                    correctionStatus,
+                    IssuedBy: candidate.IssuedByUser?.UserName,
+                    AttendanceDate: candidate.AttendanceRecord?.Date));
             }
 
             return rows
@@ -195,34 +231,66 @@ namespace Service.Services
         }
 
         /// <summary>
-        /// The absence day stamped into a follow-up's note (<c>auto-absence:yyyy-MM-dd</c>),
-        /// or null for manually raised deductions that never carried the marker.
+        /// The money a deduction follow-up threatens: the day-multiple its description
+        /// carries ("Deduction — 3 Days" from the sweep, a manager's Quarter/Half/Day
+        /// preset) priced at the daily rate of the sheet whose period covers the
+        /// absence day — the same base ÷ scheduled-workdays rule the payroll
+        /// candidates use. Months without a sheet fall back to the employee's salary
+        /// history, so the row still carries a number; only an employee with no
+        /// salary on file at all prices as null.
         /// </summary>
-        private static DateOnly? ParseAbsenceMarker(string? note)
+        private static decimal? FollowUpAmount(
+            string description, DateOnly? date, IEnumerable<PayrollEntry> entries, decimal fallbackSalary)
         {
-            const string prefix = "auto-absence:";
-            if (string.IsNullOrEmpty(note))
+            var days = FollowUpDayCount(description);
+            if (days is null || date is null)
             {
                 return null;
             }
 
-            var start = note.IndexOf(prefix, StringComparison.Ordinal);
-            if (start < 0)
+            var entry = entries.FirstOrDefault(e => e.PayrollPeriod is not null
+                && e.PayrollPeriod.StartDate <= date.Value && date.Value <= e.PayrollPeriod.EndDate);
+
+            decimal baseSalary;
+            DateOnly start;
+            DateOnly end;
+            if (entry is { BaseSalary: > 0 })
+            {
+                baseSalary = entry.BaseSalary;
+                start = entry.PayrollPeriod!.StartDate;
+                end = entry.PayrollPeriod.EndDate;
+            }
+            else if (fallbackSalary > 0)
+            {
+                baseSalary = fallbackSalary;
+                start = new DateOnly(date.Value.Year, date.Value.Month, 1);
+                end = start.AddMonths(1).AddDays(-1);
+            }
+            else
             {
                 return null;
             }
 
-            var value = note[(start + prefix.Length)..];
-            if (value.Length < 10)
+            var (_, daily, _, _) = PayrollService.AttendanceRates(baseSalary, start, end);
+            return daily > 0 ? Math.Round(daily * days.Value, 2) : null;
+        }
+
+        /// <summary>The size in days a deduction follow-up levies, read off its description.</summary>
+        private static decimal? FollowUpDayCount(string description)
+        {
+            var text = description.ToLowerInvariant();
+            if (text.Contains("quarter day", StringComparison.Ordinal)) return 0.25m;
+            if (text.Contains("half day", StringComparison.Ordinal)) return 0.5m;
+
+            var match = Regex.Match(text, @"\b(\d+(?:\.\d+)?)\s*days?\b");
+            if (match.Success
+                && decimal.TryParse(match.Groups[1].Value, NumberStyles.Number, CultureInfo.InvariantCulture, out var count)
+                && count > 0)
             {
-                return null;
+                return count;
             }
 
-            return DateOnly.TryParseExact(
-                value[..10], "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture,
-                System.Globalization.DateTimeStyles.None, out var date)
-                ? date
-                : null;
+            return Regex.IsMatch(text, @"\bday\b") ? 1m : null;
         }
 
         public async Task<EmployeeRequestDto> CreateAsync(

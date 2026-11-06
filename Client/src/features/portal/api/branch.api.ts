@@ -150,7 +150,10 @@ export interface DeductionCandidateRow {
   amount: number
   reason: string
   note: string | null
+  /** Raw DeductionStatus: Pending | BranchApproved | Approved | Rejected. */
   status: string
+  /** DateOnly "yyyy-MM-dd" — the attendance day the deduction punishes. */
+  date: string
   /** UTC ISO timestamp. */
   issuedAt: string
   issuedBy: string
@@ -236,6 +239,22 @@ export function getPendingHrQueue(signal?: AbortSignal): Promise<BranchQueueItem
 export function listBranchDeductions(employeeId?: number, signal?: AbortSignal): Promise<DeductionCandidateRow[]> {
   const path = withQuery('/api/deduction-candidates/branch', employeeId ? { employeeId } : {})
   return apiRequest<DeductionCandidateRow[]>(path, { signal })
+}
+
+/**
+ * POST /api/deduction-candidates/{id}/branch-review — the branch's own decision on
+ * one of its deductions: approve (`BranchApproved` — goes to HR), reject (final) or
+ * re-price the amount (status untouched). Amount is honored with approve, required
+ * for edit, must be positive.
+ */
+export function branchReviewDeduction(
+  id: number,
+  fields: { decision: 'approve' | 'reject' | 'edit'; amount?: number },
+): Promise<DeductionCandidateRow> {
+  return apiRequest<DeductionCandidateRow>(`/api/deduction-candidates/${id}/branch-review`, {
+    method: 'POST',
+    body: fields,
+  })
 }
 
 /** GET /api/warning-notices?employeeId= — scope-wide, newest first. */

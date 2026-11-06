@@ -113,7 +113,10 @@ namespace ReviveHRSystem.SecurityTests.Support
                     }, null);
 
                 case "POST /api/requests/{p}/cancel":
-                    return (Kind.Json, new { }, null);
+                case "POST /api/requests/{p}/undo":
+                    // The management-side undo carries no body (the stage-1 decided
+                    // request it targets is substituted from the identity's own clone).
+                    return (Kind.NoBody, null, null);
 
                 case "PUT /api/employees/{p}/contact":
                     return (Kind.Json, new { phone = "01000000000", address = "Security Matrix St 1" }, null);
@@ -173,6 +176,21 @@ namespace ReviveHRSystem.SecurityTests.Support
                 result,
                 @"/requests/\d+/attachment$",
                 $"/requests/{c.KarimAttachedRequestId}/attachment");
+
+            // The stage-1 undo adresses a stage-1 decided request; each allowed
+            // identity owns a distinct decided target so parallel matches of the row
+            // can never undo the same request twice. Out-of-scope identities keep the
+            // karim-employee fallback, which requests with that id do not possess.
+            result = System.Text.RegularExpressions.Regex.Replace(
+                result,
+                @"/requests/\d+/undo$",
+                identityKey switch
+                {
+                    "teamLeader" => $"/requests/{c.KarimStage1DecidedTlRequestId}/undo",
+                    "branchManager" => $"/requests/{c.KarimStage1DecidedBmRequestId}/undo",
+                    "topManagement" => $"/requests/{c.KarimStage1DecidedTopRequestId}/undo",
+                    _ => result,
+                });
 
             // The two download routes address different document sources.
             return result.Replace("{docId}", result.Contains("/hr-documents/")

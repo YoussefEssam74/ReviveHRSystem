@@ -85,7 +85,7 @@ export default function MySchedulePage() {
 
   const scheduleQuery = useQuery({
     queryKey: ['portal', 'schedule', employeeId, monthIso],
-    queryFn: ({ signal }) => getOwnSchedule(employeeId!, monthIso, signal),
+    queryFn: ({ signal }) => getOwnSchedule(employeeId!, { month: monthIso }, signal),
     enabled: employeeId != null,
   })
   const attendanceQuery = useQuery({

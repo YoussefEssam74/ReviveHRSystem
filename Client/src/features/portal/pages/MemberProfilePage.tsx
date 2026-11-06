@@ -4,10 +4,11 @@ import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import { AlertTriangle, ArrowLeft, BadgeCheck, Briefcase, CalendarDays, Check, ChevronsLeft, CreditCard, Lock, MapPin, Pencil, X } from 'lucide-react'
 import { getShiftCycle, getTeamToday, setShiftAssignments, type SetAssignmentInput, type TeamMemberDay } from '../api/team.api'
 import { getOwnAttendance, getOwnLeaveBalance, getOwnSchedule, manualAttendance, type EmployeeScheduleDto, type EmployeeAttendanceResponse } from '../api/attendance.api'
-import { decideRequest, getOwnRequests, type EmployeeRequestItem } from '../api/requests.api'
+import { decideRequest, getOwnRequests, undoManagedDecision, type EmployeeRequestItem } from '../api/requests.api'
 import { getOwnEvaluationDetails, downloadDocument, downloadHrDocument, getHrDocuments, getOwnDocuments, getOwnHistory, getOwnProfile, type EmployeeDocument, type EmployeeHistoryItem, type EvaluationDetail, type HrDocument } from '../api/employee-file.api'
 import { getOwnPayrollSheets } from '../api/payroll.api'
-import { getAttendanceGrid } from '../api/branch.api'
+import { invalidateScheduleQueries, scheduleKeys } from '../api/schedule-keys'
+import { getAttendanceGrid, listBranchDeductions, branchReviewDeduction, type DeductionCandidateRow } from '../api/branch.api'
 import { EmptyState, SectionCard } from '../../../components/ui/primitives'
 import { ErrorState, LoadingState } from '../../../components/async-state'
 import { Modal } from '../../../components/ui/modal'
@@ -56,6 +57,25 @@ function currentWeekDates(): { label: string; date: string }[] {
       date: `${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, '0')}-${String(cursor.getDate()).padStart(2, '0')}`,
     }
   })
+}
+
+/** Explicit Mon–Sun window for GET /api/employees/{id}/schedule (inclusive). */
+function currentWeekRange(): { from: string; to: string } {
+  const week = currentWeekDates()
+  return { from: week[0].date, to: week[6].date }
+}
+
+/**
+ * The current-week schedule cache shared by the profile header and the Shift
+ * tab. The week is part of the key so the page can never serve last week's
+ * cached published rows after the calendar rolls over.
+ */
+function memberWeekQuery(memberId: number) {
+  const range = currentWeekRange()
+  return {
+    queryKey: scheduleKeys.memberWeek(memberId, range.from, range.to),
+    queryFn: ({ signal }: { signal: AbortSignal }) => getOwnSchedule(memberId, range, signal),
+  }
 }
 
 const WEEKDAY_LABELS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
@@ -402,8 +422,8 @@ function TodaysAttendanceCard({ memberId }: { memberId: number }) {
 
 function UpcomingSchedule({ memberId }: { memberId: number }) {
   const scheduleQuery = useQuery({
-    queryKey: ['portal', 'member', 'schedule', memberId],
-    queryFn: ({ signal }) => getOwnSchedule(memberId, undefined, signal),
+    queryKey: scheduleKeys.member(memberId),
+    queryFn: ({ signal }) => getOwnSchedule(memberId, {}, signal),
   })
 
   if (scheduleQuery.isLoading) return <SectionCard title="Upcoming shifts"><LoadingState /></SectionCard>
@@ -467,7 +487,7 @@ function MemberRequests({ memberId }: { memberId: number }) {
     )
 
   const requests: EmployeeRequestItem[] = requestsQuery.data ?? []
-  const canDecide = can('requests.view')
+  const canDecide = can('requests.view') || can('employees.view')
   return (
     <SectionCard title={`Requests (${requests.length})`}>
       {requests.length === 0 ? (
@@ -512,9 +532,24 @@ function MemberRequestRow({
     onError: (error) => toast(describeApiError(error), 'error'),
   })
 
+  const undoMutation = useMutation({
+    mutationFn: () => undoManagedDecision(request.id),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['portal', 'member', 'requests', memberId] })
+      void queryClient.invalidateQueries({ queryKey: ['portal', 'requests'] })
+      toast(`Request #${request.id} decision undone.`)
+    },
+    onError: (error) => toast(describeApiError(error), 'error'),
+  })
+
   // BM acts on Pending; once it reaches HR it is HR's call (same as the team desk).
   const canApprove = canDecide && request.status === 'Pending'
   const canReject = canDecide && (request.status === 'Pending' || request.status === 'PendingHRReview')
+  // Mirror the service's undo rule (RequestManagementService.UndoAsync): the
+  // request's last date must not have passed — the range's end date counts
+  // (inclusive), so only `lastDate < today` closes the undo window.
+  const undoDeadlinePassed =
+    (request.endDate ?? request.requestedDate) < todayIso()
 
   return (
     <li className="flex items-center justify-between gap-2 py-2.5">
@@ -540,6 +575,11 @@ function MemberRequestRow({
               </Button>
             )}
           </div>
+        )}
+        {canDecide && (request.status === 'PendingHRReview' || request.status === 'Rejected') && !undoDeadlinePassed && (
+          <Button size="sm" variant="secondary" loading={undoMutation.isPending} onClick={() => undoMutation.mutate()}>
+            Undo
+          </Button>
         )}
       </div>
 
@@ -650,11 +690,9 @@ function BMProfile({ memberId, member }: { memberId: number; member: MemberHeade
   const { can } = usePortalSession()
   const [tab, setTab] = useState<BmTabId>('personal')
 
-  // Shares the ShiftTab cache entry (same query key) — no extra network call.
-  const scheduleQuery = useQuery({
-    queryKey: ['portal', 'member', 'schedule', memberId],
-    queryFn: ({ signal }) => getOwnSchedule(memberId, undefined, signal),
-  })
+  // Shares the current-week ShiftTab cache entry (same key) — no extra
+  // network call, and both stay in sync after an assignment edit.
+  const scheduleQuery = useQuery(memberWeekQuery(memberId))
 
   // Week days that fall inside a published cycle but have no assignment row —
   // surfaced on every tab so an unassigned day is never silent.
@@ -1119,6 +1157,164 @@ function AttendanceTab({ memberId }: { memberId: number }) {
       {items.length > 12 && (
         <p className="mt-1 text-[10px] text-charcoal-400">Showing the 12 latest rows of {items.length}.</p>
       )}
+
+      {/* Deductions raised on this employee — full trail with branch actions */}
+      <div className="mt-3">
+        <p className="bento-label mb-1.5 text-charcoal-400">DEDUCTIONS</p>
+        <MemberDeductions memberId={memberId} />
+      </div>
+    </div>
+  )
+}
+
+/**
+ * One employee's deductions as the manager sees them (mock §20 performance tab):
+ * every raised deduction with its reason/note/issuer, plus the branch's own
+ * decisions — approve (goes to HR), reject (final) or re-price the amount — while
+ * the line is still open.
+ */
+function MemberDeductions({ memberId }: { memberId: number }) {
+  const { toast } = useToast()
+  const queryClient = useQueryClient()
+  const [editingId, setEditingId] = useState<number | null>(null)
+  const [amount, setAmount] = useState('')
+
+  const deductionsQuery = useQuery({
+    queryKey: ['portal', 'member', 'deductions', memberId],
+    queryFn: ({ signal }) => listBranchDeductions(memberId, signal),
+  })
+
+  const reviewMutation = useMutation({
+    mutationFn: ({ row, decision, amount: revised }: { row: DeductionCandidateRow; decision: 'approve' | 'reject' | 'edit'; amount?: number }) =>
+      branchReviewDeduction(row.id, { decision, amount: revised }),
+    onSuccess: (_data, variables) => {
+      toast(
+        variables.decision === 'approve'
+          ? 'Deduction approved — it goes to HR for the payroll run.'
+          : variables.decision === 'reject'
+            ? 'Deduction rejected.'
+            : 'Deduction amount updated.',
+      )
+      setEditingId(null)
+      void queryClient.invalidateQueries({ queryKey: ['portal', 'member', 'deductions', memberId] })
+    },
+    onError: (error) => toast(describeApiError(error), 'error'),
+  })
+
+  if (deductionsQuery.isLoading) {
+    return <LoadingState label="Loading deductions…" />
+  }
+  if (deductionsQuery.isError) {
+    return <ErrorState message={describeApiError(deductionsQuery.error)} onRetry={() => deductionsQuery.refetch()} />
+  }
+
+  const rows = deductionsQuery.data ?? []
+  if (rows.length === 0) {
+    return <p className="text-xs text-charcoal-500">No deductions raised on this employee.</p>
+  }
+
+  // Open rows get the whole decision (approve / re-price / reject); a branch-approved
+  // one is on its way to HR but can still be re-priced or rejected until HR applies it.
+  const isOpen = (row: DeductionCandidateRow) => row.status === 'Pending'
+  const canRevise = (row: DeductionCandidateRow) => row.status === 'Pending' || row.status === 'BranchApproved'
+  const pending = reviewMutation.isPending
+
+  const submitReprice = (row: DeductionCandidateRow, decision: 'approve' | 'edit') => {
+    const value = Number(amount)
+    if (amount === '' || !Number.isFinite(value) || value <= 0) {
+      toast('Enter an amount greater than zero.', 'error')
+      return
+    }
+    reviewMutation.mutate({ row, decision, amount: value })
+  }
+
+  return (
+    <div className="divide-y divide-charcoal-50 rounded-lg border border-charcoal-200">
+      {rows.map((row: DeductionCandidateRow) => {
+        // Date the attendance day, not the sweep run; the auto-priced formula
+        // boilerplate rides in the note and says nothing a manager needs here.
+        const day = row.date?.slice(0, 10) || row.issuedAt?.slice(0, 10) || ''
+        const showNote = row.note != null && !row.note.toLowerCase().includes('auto-priced:')
+        return (
+        <div key={row.id} className="p-2.5">
+          <div className="flex items-center justify-between gap-2">
+            <div className="min-w-0">
+              <p className="text-xs font-medium text-charcoal-900">{row.reason}</p>
+              <p className="text-[11px] text-charcoal-600">
+                {formatDateWithYear(day)}
+                {row.issuedBy && showNote ? ` · by ${row.issuedBy}` : ''}
+                {showNote ? ` · ${row.note}` : ''}
+              </p>
+            </div>
+            <div className="flex flex-shrink-0 items-center gap-2">
+              <span className="text-[11px] font-semibold text-charcoal-900">{formatMoney(row.amount)}</span>
+              <StatusBadge status={row.status === 'BranchApproved' ? 'Branch approved' : row.status} />
+            </div>
+          </div>
+          {canRevise(row) && (
+            <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+              {isOpen(row) && (
+                <button
+                  type="button"
+                  disabled={pending}
+                  onClick={() => reviewMutation.mutate({ row, decision: 'approve' })}
+                  className="rounded-md border border-green-200 px-2 py-1 text-[10px] font-semibold text-green-700 transition-colors hover:bg-green-50 disabled:opacity-50"
+                >
+                  Approve
+                </button>
+              )}
+              <button
+                type="button"
+                disabled={pending}
+                onClick={() => {
+                  setEditingId(editingId === row.id ? null : row.id)
+                  setAmount(String(row.amount))
+                }}
+                className="rounded-md border border-charcoal-200 px-2 py-1 text-[10px] font-semibold text-charcoal-600 transition-colors hover:bg-charcoal-50 disabled:opacity-50"
+              >
+                Edit amount
+              </button>
+              <button
+                type="button"
+                disabled={pending}
+                onClick={() => reviewMutation.mutate({ row, decision: 'reject' })}
+                className="rounded-md border border-red-200 px-2 py-1 text-[10px] font-semibold text-red-600 transition-colors hover:bg-red-50 disabled:opacity-50"
+              >
+                Reject
+              </button>
+            </div>
+          )}
+          {editingId === row.id && (
+            <div className="mt-1.5 flex items-center gap-1.5">
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={amount}
+                onChange={(event) => setAmount(event.target.value)}
+                placeholder="New amount (EGP)"
+                className="w-28 rounded-md border border-charcoal-200 px-2 py-1 text-[11px] text-charcoal-800 focus:border-brand-400 focus:outline-none"
+              />
+              <button
+                type="button"
+                disabled={pending}
+                onClick={() => submitReprice(row, 'edit')}
+                className="rounded-md bg-brand-600 px-2 py-1 text-[10px] font-semibold text-white transition-colors hover:bg-brand-700 disabled:opacity-50"
+              >
+                Save
+              </button>
+              <button
+                type="button"
+                onClick={() => setEditingId(null)}
+                className="rounded-md px-2 py-1 text-[10px] font-semibold text-charcoal-500 hover:text-charcoal-800"
+              >
+                Cancel
+              </button>
+            </div>
+          )}
+        </div>
+        )
+      })}
     </div>
   )
 }
@@ -1129,10 +1325,7 @@ function ShiftTab({ memberId }: { memberId: number }) {
   const { can } = usePortalSession()
   const [editCycleId, setEditCycleId] = useState<number | null>(null)
 
-  const scheduleQuery = useQuery({
-    queryKey: ['portal', 'member', 'schedule', memberId],
-    queryFn: ({ signal }) => getOwnSchedule(memberId, undefined, signal),
-  })
+  const scheduleQuery = useQuery(memberWeekQuery(memberId))
 
   if (scheduleQuery.isLoading) return <LoadingState label="Loading shift…" />
   if (scheduleQuery.error)
@@ -1149,25 +1342,26 @@ function ShiftTab({ memberId }: { memberId: number }) {
   const week = currentWeekDates().map((entry) => ({ ...entry, day: byDate.get(entry.date) }))
   const missingCount = week.filter((entry) => !entry.day && inCycle(entry.date)).length
 
-  // The assignments PUT upserts a Draft cycle's weekly pattern only, so the
-  // edit action is offered solely while today sits inside a Draft cycle.
-  const draftCycle = (schedule?.cycles ?? []).find(
-    (cycle) => cycle.status === 'Draft' && cycle.start <= todayIso() && todayIso() <= cycle.end,
+  // Allow editing any non-archived cycle covering today (Draft or Published),
+  // so a manager can fix a published week's assignments too.
+  const editableCycle = (schedule?.cycles ?? []).find(
+    (cycle) =>
+      cycle.status !== 'Archived' && cycle.start <= todayIso() && todayIso() <= cycle.end,
   )
 
   return (
     <div>
       <div className="mb-1.5 flex items-center justify-between gap-2">
         <p className="bento-label text-charcoal-400">CURRENT WEEK</p>
-        {can('schedule.manage') && draftCycle && (
-          <Button size="sm" variant="secondary" onClick={() => setEditCycleId(draftCycle.id)}>
+        {can('schedule.manage') && editableCycle && (
+          <Button size="sm" variant="secondary" onClick={() => setEditCycleId(editableCycle.id)}>
             <Pencil className="h-3.5 w-3.5" aria-hidden="true" /> Edit shift
           </Button>
         )}
       </div>
       {(schedule?.cycles?.length ?? 0) === 0 && (
         <p className="mb-2 text-[10px] text-charcoal-400">
-          No published cycles — days below stay unscheduled until HR publishes one.
+          No published schedule covers this week — assign shifts and press Publish in Branch Schedule to make them visible here.
         </p>
       )}
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-7">
@@ -1240,7 +1434,7 @@ function EditShiftModal({
   const { toast } = useToast()
   const queryClient = useQueryClient()
   const detailQuery = useQuery({
-    queryKey: ['portal', 'shift-cycle', cycleId],
+    queryKey: scheduleKeys.cycle(cycleId),
     queryFn: ({ signal }) => getShiftCycle(cycleId, signal),
   })
   const [selected, setSelected] = useState<Record<number, string> | null>(null)
@@ -1249,10 +1443,16 @@ function EditShiftModal({
   const templates = (detail?.shiftTemplates ?? []).filter((template) => !template.isOff)
   const row = detail?.assignments.find((assignment) => assignment.employeeId === memberId)
 
-  // Existing template id for a weekday; null = the day was never assigned.
+  // Existing template id for a weekday. null = the day was never assigned;
+  // an explicit Off row has assignedDays[day] = true with a null template id.
   const initialFor = (day: number): string | null => {
     const id = row?.days[day]
-    return id == null ? null : String(id)
+    if (id != null) return String(id)
+    if (!row) return null
+    // Older cached responses predate assignedDays; a null template there
+    // historically meant an explicit Off day.
+    if (row.assignedDays == null) return SHIFT_OFF
+    return row.assignedDays[day] === true ? SHIFT_OFF : null
   }
 
   const values: Record<number, string> =
@@ -1262,8 +1462,7 @@ function EditShiftModal({
   const saveMutation = useMutation({
     mutationFn: (payload: SetAssignmentInput[]) => setShiftAssignments(cycleId, payload),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['portal', 'member', 'schedule', memberId] })
-      void queryClient.invalidateQueries({ queryKey: ['portal', 'shift-cycle', cycleId] })
+      void invalidateScheduleQueries(queryClient)
       toast('Weekly shift pattern saved.')
       onClose()
     },
@@ -1318,7 +1517,7 @@ function EditShiftModal({
               <div key={WEEKDAY_LABELS[day]} className="flex items-center gap-3">
                 <p className="w-24 text-[11px] font-semibold text-charcoal-900">{WEEKDAY_LABELS[day]}</p>
                 <select
-                  className="field-input h-9 flex-1 !px-2.5 text-xs"
+                  className="form-select h-9 flex-1 !px-2.5 text-xs"
                   value={values[day]}
                   onChange={(event) => setSelected({ ...values, [day]: event.target.value })}
                 >

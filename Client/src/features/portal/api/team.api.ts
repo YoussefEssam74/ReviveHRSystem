@@ -182,7 +182,25 @@ export interface ShiftTemplateItem {
   isOff: boolean
 }
 
-/** One roster row: days[0 = Monday … 6 = Sunday] hold template ids or null (Off). */
+/** Exact value of one date inside the cycle. assigned=false = no row written. */
+export interface ShiftAssignmentDateCell {
+  /** yyyy-MM-dd. */
+  date: string
+  /** Shift template id, or null for an explicit Off day. */
+  shiftTemplateId: number | null
+  assigned: boolean
+}
+
+/**
+ * One roster row: days[0 = Monday … 6 = Sunday] hold template ids or null (Off).
+ * assignedDays tells an explicit Off day (true + null) from a day that was never
+ * assigned (false) — the grid renders the latter as "Not assigned".
+ *
+ * daysByDate carries the exact value of every date in the cycle. The weekday
+ * pattern is what the editors write, but a cycle may hold a date-specific
+ * override; the Branch Schedule renders daysByDate so it always shows the same
+ * value an employee sees in their Shift tab for that date.
+ */
 export interface ShiftRosterRow {
   employeeId: number
   name: string
@@ -190,6 +208,9 @@ export interface ShiftRosterRow {
   gym: string
   initials: string
   days: (number | null)[]
+  assignedDays: boolean[]
+  /** Present on current servers; optional so an older cached response still renders. */
+  daysByDate?: ShiftAssignmentDateCell[]
 }
 
 export interface ShiftConflictItem {
@@ -220,6 +241,7 @@ export interface ShiftCycleCreated {
 export interface SetAssignmentInput {
   employeeId: number
   day: number
+  /** null = explicit Off day. Days never written stay "Not assigned". */
   shiftTemplateId: number | null
 }
 
@@ -285,21 +307,23 @@ export interface ShiftTemplateDtoApi {
   /** "HH:mm:ss". */
   start: string
   end: string
+  /** Base #rrggbb color chosen for the template. */
+  color: string
 }
 
-/** POST /api/gyms/{gymId}/shift-templates — creates a template; colors are server-derived. */
+/** POST /api/gyms/{gymId}/shift-templates — creates a template with its color. */
 export function createShiftTemplate(
   gymId: number,
-  input: { name: string; start: string; end: string },
+  input: { name: string; start: string; end: string; color: string },
 ): Promise<ShiftTemplateDtoApi> {
   return apiRequest<ShiftTemplateDtoApi>(`/api/gyms/${gymId}/shift-templates`, { method: 'POST', body: input })
 }
 
-/** PUT /api/gyms/{gymId}/shift-templates/{id} — renames / re-times a template. */
+/** PUT /api/gyms/{gymId}/shift-templates/{id} — renames / re-times / re-colors a template. */
 export function updateShiftTemplate(
   gymId: number,
   templateId: number,
-  input: { name: string; start: string; end: string },
+  input: { name: string; start: string; end: string; color: string },
 ): Promise<ShiftTemplateDtoApi> {
   return apiRequest<ShiftTemplateDtoApi>(`/api/gyms/${gymId}/shift-templates/${templateId}`, {
     method: 'PUT',

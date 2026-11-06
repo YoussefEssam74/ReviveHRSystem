@@ -23,6 +23,7 @@ import {
   proposeBonus,
   sendBranchReport,
 } from '../api/branch.api'
+import { getOwnPayrollSheets } from '../api/payroll.api'
 import { fetchAllPages } from '../../../lib/paged'
 import { ErrorState, LoadingState } from '../../../components/async-state'
 import { Modal } from '../../../components/ui/modal'
@@ -323,6 +324,14 @@ function IssueDeductionModal({ onClose }: { onClose: () => void }) {
   const [reason, setReason] = useState(DEDUCTION_REASONS[0])
   const [note, setNote] = useState('')
 
+  const salaryQuery = useQuery({
+    queryKey: ['portal', 'salary', employeeId],
+    queryFn: ({ signal }) => getOwnPayrollSheets(Number(employeeId), signal),
+    enabled: !!employeeId,
+  })
+  const latestSheet = (salaryQuery.data ?? []).find((sheet) => sheet.visible) ?? null
+  const suggestedDaily = latestSheet ? Math.round((latestSheet.baseSalary / 30) * 100) / 100 : null
+
   const save = useMutation({
     mutationFn: () =>
       issueDeduction({
@@ -382,13 +391,25 @@ function IssueDeductionModal({ onClose }: { onClose: () => void }) {
               id="ded-amount"
               type="number"
               min={1}
-              step={1}
+              step="0.01"
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
               className="form-input"
               placeholder="e.g. 150"
               required
             />
+            {suggestedDaily != null && (
+              <p className="mt-1 text-[10px] text-charcoal-500">
+                Suggested: 1 day ≈ {formatMoney(suggestedDaily)} (based on basic salary).{' '}
+                <button
+                  type="button"
+                  className="font-semibold text-brand-600 hover:underline"
+                  onClick={() => setAmount(String(suggestedDaily))}
+                >
+                  Use suggested
+                </button>
+              </p>
+            )}
           </div>
           <div>
             <label className="form-label" htmlFor="ded-reason">

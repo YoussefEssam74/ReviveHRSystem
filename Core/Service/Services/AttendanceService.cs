@@ -1,4 +1,5 @@
-﻿using System.Text.Json;
+﻿using System.Globalization;
+using System.Text.Json;
 using DomainLayer.Contracts;
 using DomainLayer.Exceptions;
 using DomainLayer.Models.AttendanceModule;
@@ -33,6 +34,10 @@ namespace Service.Services
     {
         private const double MinimumLivenessScore = 0.70;
         private static readonly TimeSpan MaxFutureSkew = TimeSpan.FromMinutes(10);
+
+        // An AUTO scan shortly after an overnight shift ends should close that
+        // shift's still-open record instead of opening a new check-in for today.
+        private static readonly TimeSpan OvernightAutoCheckoutGrace = TimeSpan.FromHours(6);
 
         // Anonymous station callers may backdate within a bounded window (device clock
         // drift, buffered offline events, same-day manual entry) but never pick an
@@ -120,8 +125,9 @@ namespace Service.Services
         }
 
         /// <summary>
-        /// Today's view of a gym for the kiosk dashboard: present count, scheduled
-        /// count, and the most recent events. Read-only, station-session scoped.
+        /// Today's view of a gym for the kiosk dashboard: present/scheduled counters
+        /// and the full roster of employees scheduled today — shift, punches, and how
+        /// late they checked in / how early they left. Read-only, station-session scoped.
         /// </summary>
         public async Task<StationSummaryResponse> GetStationSummaryAsync(int gymId, CancellationToken cancellationToken = default)
         {
@@ -130,40 +136,74 @@ namespace Service.Services
                 throw new UnAuthorizedException("Attendance requests require a station session token.");
             }
 
-            var today = DateOnly.FromDateTime(
-                TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, _attendanceTimeZone));
+            var localNow = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, _attendanceTimeZone);
+            var today = DateOnly.FromDateTime(localNow);
 
-            // Sequential: these three share one scoped DbContext, and EF Core does not
+            // Sequential: these share one scoped DbContext, and EF Core does not
             // allow concurrent operations on a single context (the previous
             // Task.WhenAll version threw InvalidOperationException under load).
-            var presentCount = await unitOfWork.GetRepository<AttendanceRecord, int>()
-                .CountAsync(new CheckedInCountByGymDateSpec(gymId, today), cancellationToken);
-            var recentRecords = await unitOfWork.GetRepository<AttendanceRecord, int>()
-                .GetAllAsync(new RecentAttendanceRecordsByGymDateSpec(gymId, today), cancellationToken);
-            var scheduledToday = await unitOfWork.GetRepository<DomainLayer.Models.SchedulingModule.ShiftAssignment, int>()
-                .CountAsync(new ShiftAssignmentsByGymDateSpec(gymId, today), cancellationToken);
+            var roster = await unitOfWork.GetRepository<ShiftAssignment, int>()
+                .GetAllAsync(new StationRosterByGymDateSpec(gymId, today), cancellationToken);
+            var records = await unitOfWork.GetRepository<AttendanceRecord, int>()
+                .GetAllAsync(new AttendanceRecordsByGymDateSpec(gymId, today), cancellationToken);
 
-            var recent = recentRecords
-                .Select(r => new StationSummaryRecord
+            var recordByEmployee = records
+                .GroupBy(r => r.EmployeeId)
+                .ToDictionary(g => g.Key, g => g.OrderByDescending(r => r.CheckInTime ?? DateTime.MinValue).First());
+
+            var rows = roster
+                .OrderBy(a => a.ShiftTemplate!.StartTime)
+                .ThenBy(a => a.Employee.FullName, StringComparer.OrdinalIgnoreCase)
+                .Select(a =>
                 {
-                    RecordId = $"ATT-{r.Id}",
-                    EmployeeId = r.Employee.EmployeeNumber,
-                    EmployeeName = r.Employee.FullName,
-                    Status = r.CheckInTime is null
-                        ? "DAY_OFF"
-                        : r.CheckOutTime is null ? "PRESENT" : "LEFT",
-                    LastEventType = r.CheckOutTime is not null ? "OUT" : r.CheckInTime is not null ? "IN" : null,
-                    LastEventTime = r.CheckOutTime ?? r.CheckInTime,
-                    AttendanceStatus = r.Status.ToString().ToUpperInvariant(),
-                    Method = (r.CheckOutTime is not null ? r.CheckOutMethod : r.CheckInMethod)?.ToString(),
+                    var template = a.ShiftTemplate!;
+                    var shiftStartsAt = ShiftWindowStartsAt(a.Date, template);
+                    var shiftEndsAt = ShiftWindowEndsAt(a.Date, template);
+                    recordByEmployee.TryGetValue(a.EmployeeId, out var record);
+
+                    var checkIn = record?.CheckInTime is { } checkInUtc
+                        ? TimeZoneInfo.ConvertTimeFromUtc(checkInUtc, _attendanceTimeZone)
+                        : (DateTime?)null;
+                    var checkOut = record?.CheckOutTime is { } checkOutUtc
+                        ? TimeZoneInfo.ConvertTimeFromUtc(checkOutUtc, _attendanceTimeZone)
+                        : (DateTime?)null;
+
+                    // No punch yet: still due before the shift ends, absent after it.
+                    var status = record?.CheckInTime is null
+                        ? localNow > shiftEndsAt ? "ABSENT" : "SCHEDULED"
+                        : record.CheckOutTime is null ? "PRESENT" : "LEFT";
+
+                    var method = record is null
+                        ? null
+                        : (record.CheckOutTime is not null ? record.CheckOutMethod : record.CheckInMethod)?.ToString();
+
+                    return new StationSummaryRecord
+                    {
+                        RecordId = record is null ? null : $"ATT-{record.Id}",
+                        EmployeeId = a.Employee.EmployeeNumber,
+                        EmployeeName = a.Employee.FullName,
+                        Status = status,
+                        ShiftName = template.Name,
+                        ShiftStart = template.StartTime.ToString("HH:mm", CultureInfo.InvariantCulture),
+                        ShiftEnd = template.EndTime.ToString("HH:mm", CultureInfo.InvariantCulture),
+                        CheckIn = checkIn?.ToString("HH:mm", CultureInfo.InvariantCulture),
+                        CheckOut = checkOut?.ToString("HH:mm", CultureInfo.InvariantCulture),
+                        LateMinutes = checkIn is { } inAt && inAt > shiftStartsAt
+                            ? (int)Math.Ceiling((inAt - shiftStartsAt).TotalMinutes)
+                            : 0,
+                        EarlyLeaveMinutes = checkOut is { } outAt && outAt < shiftEndsAt
+                            ? (int)Math.Ceiling((shiftEndsAt - outAt).TotalMinutes)
+                            : 0,
+                        Method = method,
+                    };
                 })
                 .ToArray();
 
             return new StationSummaryResponse
             {
-                PresentCount = presentCount,
-                ScheduledTodayCount = scheduledToday,
-                Records = recent,
+                PresentCount = records.Count(r => r.CheckInTime is not null),
+                ScheduledTodayCount = rows.Length,
+                Records = rows,
             };
         }
 
@@ -250,9 +290,22 @@ namespace Service.Services
             var todayHasOpenRecord = possibleRecords.Any(r =>
                 r.Date == eventDate && r.GymId == gymId && r.CheckInTime is not null && r.CheckOutTime is null);
 
+            // A kiosk scan after midnight can belong to yesterday's overnight shift.
+            // Only an overnight template (end earlier than start) with an open record
+            // and a scan shortly after its end is treated as that shift's checkout;
+            // otherwise the scan opens today's shift as usual.
+            var previousDayOvernightOpen = previousDayAtGym
+                .FirstOrDefault(a =>
+                    a.ShiftTemplate!.EndTime < a.ShiftTemplate.StartTime
+                    && localEvent <= ShiftWindowEndsAt(a.Date, a.ShiftTemplate!).Add(OvernightAutoCheckoutGrace)
+                    && possibleRecords.Any(r =>
+                        r.Date == a.Date && r.GymId == gymId
+                        && r.CheckInTime is not null && r.CheckOutTime is null));
+
             // The always-on kiosk camera sends AUTO: resolve the direction from the
-            // employee's own state — an open record today closes (OUT), anything else
-            // opens (IN) — so the station never has to guess what the employee did.
+            // employee's own state — an open record today or yesterday's open
+            // overnight shift closes (OUT), anything else opens (IN) — so the
+            // station never has to guess what the employee did.
             var requestedAuto = type == "AUTO";
             if (type == "AUTO")
             {
@@ -264,7 +317,7 @@ namespace Service.Services
                     throw new AttendanceAlreadyCompleteException("This employee has already completed attendance for today.");
                 }
 
-                type = todayHasOpenRecord ? "OUT" : "IN";
+                type = todayHasOpenRecord || previousDayOvernightOpen is not null ? "OUT" : "IN";
             }
 
             // Kiosk confirmation gate: an AUTO scan that would close today's open record
@@ -290,9 +343,10 @@ namespace Service.Services
             else if (!todayHasOpenRecord)
             {
                 // OUT after midnight closes the previous day's record — a late checkout
-                // or an overnight shift finishing in the early hours.
-                carriedOverAssignment = previousDayAtGym
-                    .FirstOrDefault(a => possibleRecords.Any(r => r.Date == a.Date && r.GymId == gymId));
+                // or an overnight shift finishing in the early hours. Prefer the
+                // overnight shift AUTO already identified.
+                carriedOverAssignment = previousDayOvernightOpen
+                    ?? previousDayAtGym.FirstOrDefault(a => possibleRecords.Any(r => r.Date == a.Date && r.GymId == gymId));
             }
 
             var shiftAtThisGym = carriedOverAssignment

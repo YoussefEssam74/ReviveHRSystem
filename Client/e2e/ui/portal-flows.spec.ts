@@ -15,7 +15,7 @@ import { OMAR, PASSWORD } from '../support/api'
 async function login(page: import('@playwright/test').Page, email: string, gymName?: string) {
   await page.goto('/login')
   await page.getByLabel('Email').fill(email)
-  await page.getByLabel('Password').fill(PASSWORD)
+  await page.locator('#password').fill(PASSWORD)
   await page.getByRole('button', { name: 'Sign in' }).click()
   if (gymName) {
     await expect(page.getByRole('heading', { name: 'Choose your gym' })).toBeVisible()
