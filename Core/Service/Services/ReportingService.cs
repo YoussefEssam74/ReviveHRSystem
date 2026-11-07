@@ -288,6 +288,159 @@ namespace Service.Services
         }
 
         // ==================================================================
+        // Overview JSON (§5.8 Reports & Analytics cards)
+        // ==================================================================
+
+        public async Task<ReportsOverviewDto> GetOverviewAsync(int? actorUserId, ReportsOverviewQuery query, CancellationToken cancellationToken = default)
+        {
+            var actor = await HrPortalHelpers.ResolveActorAsync(_unitOfWork, actorUserId, cancellationToken);
+            await _accessControl.EnsurePermissionAsync(actor.Id, "reports.view", cancellationToken);
+            var gymFilter = await HrPortalHelpers.ResolveGymFilterAsync(_unitOfWork, query.Gym, cancellationToken);
+            var scope = await HrPortalHelpers.ResolveGymScopeAsync(_unitOfWork, _userAccess, actor, gymFilter, cancellationToken);
+
+            var (periodLabel, from) = ResolvePeriod(query.Period);
+            Func<int, bool> inScope = scope.Length == 0 ? _ => true : id => scope.Contains(id);
+            var fromDate = DateOnly.FromDateTime(from);
+            var today = DateOnly.FromDateTime(DateTime.UtcNow);
+
+            // ---- workforce ----
+            var employees = (await _unitOfWork.GetRepository<Employee, int>().GetAllAsync(cancellationToken))
+                .Where(e => inScope(e.GymId))
+                .ToList();
+
+            static int MonthsSince(DateOnly hire, DateOnly reference)
+            {
+                var months = (reference.Year - hire.Year) * 12 + reference.Month - hire.Month;
+                if (reference.Day < hire.Day)
+                {
+                    months--;
+                }
+
+                return Math.Max(months, 0);
+            }
+
+            var tenureBuckets = new[]
+            {
+                new ReportBucketDto { Label = "< 6 mo", Value = employees.Count(e => MonthsSince(e.HireDate, today) < 6) },
+                new ReportBucketDto { Label = "6–12 mo", Value = employees.Count(e => MonthsSince(e.HireDate, today) is >= 6 and < 12) },
+                new ReportBucketDto { Label = "1–2 yr", Value = employees.Count(e => MonthsSince(e.HireDate, today) is >= 12 and < 24) },
+                new ReportBucketDto { Label = "2 yr+", Value = employees.Count(e => MonthsSince(e.HireDate, today) >= 24) },
+            };
+
+            var workforce = new ReportWorkforceDto
+            {
+                TotalEmployees = employees.Count,
+                Active = employees.Count(e => e.Status == EmployeeStatus.Active),
+                OnLeave = employees.Count(e => e.Status == EmployeeStatus.OnLeave),
+                NoticePeriod = employees.Count(e => e.Status == EmployeeStatus.NoticePeriod),
+                Suspended = employees.Count(e => e.Status == EmployeeStatus.Suspended),
+                Terminated = employees.Count(e => e.Status == EmployeeStatus.Terminated),
+                NewHiresInPeriod = employees.Count(e => e.HireDate >= fromDate),
+                ByStatus = new[]
+                {
+                    new ReportBucketDto { Label = "Active", Value = employees.Count(e => e.Status == EmployeeStatus.Active) },
+                    new ReportBucketDto { Label = "On Leave", Value = employees.Count(e => e.Status == EmployeeStatus.OnLeave) },
+                    new ReportBucketDto { Label = "Notice Period", Value = employees.Count(e => e.Status == EmployeeStatus.NoticePeriod) },
+                    new ReportBucketDto { Label = "Suspended", Value = employees.Count(e => e.Status == EmployeeStatus.Suspended) },
+                },
+                ByTenure = tenureBuckets,
+                AvgTenureMonths = employees.Count == 0
+                    ? 0
+                    : (int)Math.Round(employees.Average(e => MonthsSince(e.HireDate, today))),
+            };
+
+            // ---- attendance ----
+            var attendance = (await _unitOfWork.GetRepository<AttendanceRecord, int>().GetAllAsync(cancellationToken))
+                .Where(r => inScope(r.GymId) && r.Date >= fromDate)
+                .ToList();
+            var worked = attendance
+                .Where(r => r.Status is AttendanceStatus.OnTime or AttendanceStatus.Late or AttendanceStatus.EarlyCheckout)
+                .ToList();
+            var onTimeCount = worked.Count(r => r.Status == AttendanceStatus.OnTime);
+
+            var attendanceDto = new ReportAttendanceDto
+            {
+                RecordsInPeriod = attendance.Count,
+                OnTime = attendance.Count(r => r.Status == AttendanceStatus.OnTime),
+                Late = attendance.Count(r => r.Status == AttendanceStatus.Late),
+                Absent = attendance.Count(r => r.Status == AttendanceStatus.Absent),
+                MissingCheckout = attendance.Count(r => r.Status == AttendanceStatus.MissingCheckout),
+                OnTimeRate = worked.Count == 0 ? 0 : (int)Math.Round(onTimeCount * 100d / worked.Count),
+            };
+
+            // ---- requests ----
+            var requests = (await _unitOfWork.GetRepository<EmployeeRequest, int>().GetAllAsync(cancellationToken))
+                .Where(r => r.Employee != null && inScope(r.Employee.GymId) && r.RequestDate >= fromDate)
+                .ToList();
+            var approvedCount = requests.Count(r => r.Status == RequestStatus.Approved);
+            var decidedCount = approvedCount + requests.Count(r => r.Status == RequestStatus.Rejected);
+
+            var requestsDto = new ReportRequestsDto
+            {
+                RequestsInPeriod = requests.Count,
+                Approved = approvedCount,
+                Rejected = requests.Count(r => r.Status == RequestStatus.Rejected),
+                Pending = requests.Count(r => r.Status is RequestStatus.Pending or RequestStatus.PendingHRReview),
+                ApprovalRate = decidedCount == 0 ? 0 : (int)Math.Round(approvedCount * 100d / decidedCount),
+                ByType = requests
+                    .GroupBy(r => r.Type)
+                    .Select(g => new ReportBucketDto { Label = g.Key, Value = g.Count() })
+                    .OrderByDescending(b => b.Value)
+                    .ToList(),
+            };
+
+            // ---- recruiting ----
+            var vacancies = (await _unitOfWork.GetRepository<Vacancy, int>().GetAllAsync(cancellationToken))
+                .Where(v => inScope(v.GymId))
+                .ToList();
+            var openVacancies = vacancies.Where(v => v.Status == VacancyStatus.Open).ToList();
+            var applications = (await _unitOfWork.GetRepository<Application, int>().GetAllAsync(cancellationToken))
+                .Where(a => a.Vacancy is null ? scope.Length == 0 : inScope(a.Vacancy.GymId))
+                .ToList();
+
+            var recruitingDto = new ReportRecruitingDto
+            {
+                ApplicationsInPipeline = applications.Count(a => a.Status == ApplicationStatus.InProgress),
+                HiredInPeriod = applications.Count(a => a.Status == ApplicationStatus.Hired && a.LastActivityAt >= from),
+                OpenVacancies = openVacancies.Count,
+                OpenSlots = openVacancies.Sum(v => v.HeadcountNeeded),
+            };
+
+            // ---- payroll ----
+            var entries = (await _unitOfWork.GetRepository<PayrollEntry, int>().GetAllAsync(cancellationToken))
+                .Where(en => en.PayrollPeriod != null && inScope(en.PayrollPeriod.GymId))
+                .ToList();
+
+            var payrollDto = new ReportPayrollDto
+            {
+                Entries = entries.Count,
+                TotalNetPay = entries.Sum(en => en.NetPay),
+            };
+
+            // ---- offboarding ----
+            var separations = (await _unitOfWork.GetRepository<OffboardingCase, int>().GetAllAsync(cancellationToken))
+                .Where(c => c.Employee != null && inScope(c.Employee.GymId) && c.InitiatedAt >= from)
+                .ToList();
+
+            var offboardingDto = new ReportOffboardingDto
+            {
+                SeparationsInPeriod = separations.Count,
+                OpenChecklists = separations.Count(c => c.Status == "Open"),
+            };
+
+            return new ReportsOverviewDto
+            {
+                Period = periodLabel,
+                Workforce = workforce,
+                Attendance = attendanceDto,
+                Requests = requestsDto,
+                Recruiting = recruitingDto,
+                Payroll = payrollDto,
+                Offboarding = offboardingDto,
+            };
+        }
+
+        // ==================================================================
         // Helpers
         // ==================================================================
 

@@ -148,6 +148,19 @@ namespace Shared.DataTransferObject.Payroll
         public CreateDeductionData Data { get; set; } = null!;
     }
 
+    /// <summary>DELETE …/entries/{employeeId}/deductions/{lineId} → removed line id + the recomputed entry.</summary>
+    public class RemoveDeductionData
+    {
+        /// <summary>The removed line's id.</summary>
+        public int Id { get; set; }
+        public DeductionEntrySummary Entry { get; set; } = null!;
+    }
+
+    public class RemoveDeductionResponse
+    {
+        public RemoveDeductionData Data { get; set; } = null!;
+    }
+
     /// <summary>POST …/entries/{employeeId}/close → `{ data: { employeeId, status, reviewed, reviewedAt, gross, deductions, net } }`.</summary>
     public class CloseEntryData
     {

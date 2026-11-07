@@ -6,6 +6,8 @@ using DomainLayer.Models.NotificationModule;
 using DomainLayer.Models.NotificationModule.Enums;
 using DomainLayer.Models.PayrollModule;
 using DomainLayer.Models.PayrollModule.Enums;
+using DomainLayer.Models.UserModule;
+using DomainLayer.Models.UserModule.Enums;
 using Service.Specifications;
 using ServiceAbstraction.Services;
 using Shared.DataTransferObject.EmployeeProfile;
@@ -20,7 +22,9 @@ namespace Service.Services
     /// </summary>
     public class BranchActionsService(
         IUnitOfWork unitOfWork,
-        ITeamScopeService teamScopeService) : IBranchActionsService
+        ITeamScopeService teamScopeService,
+        IAccessControlService accessControl,
+        IUserAccessRepository userAccess) : IBranchActionsService
     {
         private static readonly string[] DeductionReasons =
         {
@@ -241,7 +245,193 @@ namespace Service.Services
             await unitOfWork.SaveChangesAsync(cancellationToken);
         }
 
+        // ------------------------------------------------------------------
+        // HR-side review (requests.view / requests.approve)
+        // ------------------------------------------------------------------
+
+        public async Task<ProposalListResponse<WarningNoticeDto>> GetWarningsAsync(
+            int? actorUserId, ProposalListQuery query, CancellationToken cancellationToken = default)
+        {
+            var actor = await HrPortalHelpers.ResolveActorAsync(unitOfWork, actorUserId, cancellationToken);
+            await accessControl.EnsurePermissionAsync(actor.Id, "requests.view", cancellationToken);
+            var (scope, gymId, status, page, pageSize) = await ResolveProposalQueryAsync(actor, query, cancellationToken);
+
+            var repository = unitOfWork.GetRepository<WarningNotice, int>();
+            var total = await repository.CountAsync(new WarningNoticeListSpec(scope, gymId, status, 0, 0), cancellationToken);
+            var rows = await repository.GetAllAsync(
+                new WarningNoticeListSpec(scope, gymId, status, (page - 1) * pageSize, pageSize), cancellationToken);
+
+            return new ProposalListResponse<WarningNoticeDto>
+            {
+                Items = rows.Select(MapWarning).ToList(),
+                Page = page,
+                PageSize = pageSize,
+                Total = total,
+                TotalPages = (int)Math.Ceiling(total / (double)pageSize),
+            };
+        }
+
+        public async Task<ReviewProposalResponse<WarningNoticeDto>> ReviewWarningAsync(
+            int? actorUserId, int noticeId, ReviewProposalRequest request, CancellationToken cancellationToken = default)
+        {
+            var actor = await HrPortalHelpers.ResolveActorAsync(unitOfWork, actorUserId, cancellationToken);
+            await accessControl.EnsurePermissionAsync(actor.Id, "requests.approve", cancellationToken);
+
+            var notice = await unitOfWork.GetRepository<WarningNotice, int>()
+                .GetByIdAsync(new WarningNoticeByIdSpec(noticeId), cancellationToken)
+                ?? throw new NotFoundException("Warning notice not found.");
+            await EnsureProposalInScopeAsync(actor, notice.Employee?.GymId, cancellationToken);
+
+            EnsurePending(notice.Status);
+            var (decision, note) = ResolveDecision(request);
+            notice.Status = decision;
+            notice.ReviewNote = note;
+            notice.ReviewedBy = actor.Id;
+            notice.ReviewedAt = DateTime.UtcNow;
+
+            unitOfWork.GetRepository<WarningNotice, int>().Update(notice);
+            await unitOfWork.SaveChangesAsync(cancellationToken);
+
+            return new ReviewProposalResponse<WarningNoticeDto> { Data = MapWarning(notice) };
+        }
+
+        public async Task<ProposalListResponse<BonusProposalDto>> GetBonusesAsync(
+            int? actorUserId, ProposalListQuery query, CancellationToken cancellationToken = default)
+        {
+            var actor = await HrPortalHelpers.ResolveActorAsync(unitOfWork, actorUserId, cancellationToken);
+            await accessControl.EnsurePermissionAsync(actor.Id, "requests.view", cancellationToken);
+            var (scope, gymId, status, page, pageSize) = await ResolveProposalQueryAsync(actor, query, cancellationToken);
+
+            var repository = unitOfWork.GetRepository<BonusProposal, int>();
+            var total = await repository.CountAsync(new BonusProposalListSpec(scope, gymId, status, 0, 0), cancellationToken);
+            var rows = await repository.GetAllAsync(
+                new BonusProposalListSpec(scope, gymId, status, (page - 1) * pageSize, pageSize), cancellationToken);
+
+            return new ProposalListResponse<BonusProposalDto>
+            {
+                Items = rows.Select(MapBonus).ToList(),
+                Page = page,
+                PageSize = pageSize,
+                Total = total,
+                TotalPages = (int)Math.Ceiling(total / (double)pageSize),
+            };
+        }
+
+        public async Task<ReviewProposalResponse<BonusProposalDto>> ReviewBonusAsync(
+            int? actorUserId, int proposalId, ReviewProposalRequest request, CancellationToken cancellationToken = default)
+        {
+            var actor = await HrPortalHelpers.ResolveActorAsync(unitOfWork, actorUserId, cancellationToken);
+            await accessControl.EnsurePermissionAsync(actor.Id, "requests.approve", cancellationToken);
+
+            var proposal = await unitOfWork.GetRepository<BonusProposal, int>()
+                .GetByIdAsync(new BonusProposalByIdSpec(proposalId), cancellationToken)
+                ?? throw new NotFoundException("Bonus proposal not found.");
+            await EnsureProposalInScopeAsync(actor, proposal.Employee?.GymId, cancellationToken);
+
+            EnsurePending(proposal.Status);
+            var (decision, note) = ResolveDecision(request);
+            proposal.Status = decision;
+            proposal.ReviewNote = note;
+            proposal.ReviewedBy = actor.Id;
+            proposal.ReviewedAt = DateTime.UtcNow;
+
+            unitOfWork.GetRepository<BonusProposal, int>().Update(proposal);
+            await unitOfWork.SaveChangesAsync(cancellationToken);
+
+            return new ReviewProposalResponse<BonusProposalDto> { Data = MapBonus(proposal) };
+        }
+
         // ---------- helpers ----------
+
+        /// <summary>Shared parsing for the HR proposal queues: gym scope, status, pager.</summary>
+        private async Task<(int[]? Scope, int? GymId, ProposalStatus? Status, int Page, int PageSize)> ResolveProposalQueryAsync(
+            User actor, ProposalListQuery query, CancellationToken cancellationToken)
+        {
+            var gymFilter = await HrPortalHelpers.ResolveGymFilterAsync(unitOfWork, query.Gym, cancellationToken);
+            var scope = await HrPortalHelpers.ResolveGymScopeAsync(unitOfWork, userAccess, actor, gymFilter, cancellationToken);
+
+            ProposalStatus? status = HrPortalHelpers.NullIfBlank(query.Status)?.ToLowerInvariant() switch
+            {
+                "pending" => ProposalStatus.Pending,
+                "approved" => ProposalStatus.Approved,
+                "rejected" => ProposalStatus.Rejected,
+                null => null,
+                var other => throw new BadRequestException($"Unknown status '{other}'."),
+            };
+
+            var page = Math.Max(query.Page, 1);
+            var pageSize = HrPortalHelpers.NormalizePageSize(query.PageSize);
+            return (scope, gymFilter, status, page, pageSize);
+        }
+
+        /// <summary>ADR-003: the acting HR user must be assigned to the proposal's gym (404 on mismatch).</summary>
+        private async Task EnsureProposalInScopeAsync(User actor, int? employeeGymId, CancellationToken cancellationToken)
+        {
+            if (employeeGymId is null ||
+                (actor.UserType != UserType.TopManagement &&
+                 !await userAccess.HasGymAccessAsync(actor.Id, employeeGymId.Value, cancellationToken)))
+            {
+                // Out-of-scope items answer exactly like missing ones.
+                throw new NotFoundException("Warning notice not found.");
+            }
+        }
+
+        /// <summary>Pending → Approved/Rejected with the reviewer stamped; declines require a reason.</summary>
+        private static (ProposalStatus Status, string? Note) ResolveDecision(ReviewProposalRequest request)
+        {
+            var decision = HrPortalHelpers.NullIfBlank(request.Decision)?.ToLowerInvariant();
+            var note = HrPortalHelpers.NullIfBlank(request.Note);
+
+            return decision switch
+            {
+                "approved" => (ProposalStatus.Approved, note),
+                "rejected" when note is null =>
+                    throw new BadRequestException("A reason is required to decline."),
+                "rejected" => (ProposalStatus.Rejected, note),
+                _ => throw new BadRequestException("Decision must be \"Approved\" or \"Rejected\"."),
+            };
+        }
+
+        private static void EnsurePending(ProposalStatus current)
+        {
+            if (current != ProposalStatus.Pending)
+            {
+                throw new BadRequestException("This item has already been decided.");
+            }
+        }
+
+        private static WarningNoticeDto MapWarning(WarningNotice notice) => new()
+        {
+            Id = notice.Id,
+            EmployeeId = notice.EmployeeId,
+            Employee = notice.Employee?.FullName ?? string.Empty,
+            Type = notice.Type,
+            Reason = notice.Reason,
+            Note = notice.Note,
+            Status = notice.Status.ToString(),
+            IssuedAt = notice.IssuedAt,
+            IssuedBy = notice.IssuedByUser?.UserName ?? string.Empty,
+            ReviewedBy = notice.Reviewer?.UserName,
+            ReviewedAt = notice.ReviewedAt,
+            ReviewNote = notice.ReviewNote,
+        };
+
+        private static BonusProposalDto MapBonus(BonusProposal proposal) => new()
+        {
+            Id = proposal.Id,
+            EmployeeId = proposal.EmployeeId,
+            Employee = proposal.Employee?.FullName ?? string.Empty,
+            Type = proposal.Type,
+            Amount = proposal.Amount,
+            Reason = proposal.Reason,
+            Note = proposal.Note,
+            Status = proposal.Status.ToString(),
+            IssuedAt = proposal.IssuedAt,
+            IssuedBy = proposal.IssuedByUser?.UserName ?? string.Empty,
+            ReviewedBy = proposal.Reviewer?.UserName,
+            ReviewedAt = proposal.ReviewedAt,
+            ReviewNote = proposal.ReviewNote,
+        };
 
         private async Task<DeductionCandidateDto> LoadDeductionAsync(int id, CancellationToken cancellationToken)
         {

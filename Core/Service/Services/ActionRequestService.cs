@@ -312,6 +312,129 @@ namespace Service.Services
             };
         }
 
+        // ==================================================================
+        // POST /api/action-requests
+        // ==================================================================
+
+        public async Task<ActionRequestDataResponse> CreateAsync(int? actorUserId, int? tokenGymId, CreateActionRequestRequest body, CancellationToken cancellationToken = default)
+        {
+            var actor = await HrPortalHelpers.ResolveActorAsync(_unitOfWork, actorUserId, cancellationToken);
+
+            var rawType = HrPortalHelpers.NullIfBlank(body.ActionType)?.Trim();
+            if (rawType is null || !ActionTypes.Contains(rawType, StringComparer.OrdinalIgnoreCase))
+            {
+                throw new BadRequestException($"Unknown action type '{body.ActionType}'. Valid types: {string.Join(", ", ActionTypes)}.");
+            }
+
+            var actionType = ActionTypes.First(t => string.Equals(t, rawType, StringComparison.OrdinalIgnoreCase));
+            var justification = HrPortalHelpers.NullIfBlank(body.Justification)
+                ?? throw new BadRequestException("A justification is required.");
+
+            // Gym scope: the employee's gym for employee-bound actions; the caller's
+            // selected gym otherwise (BulkImport raises rows without an employee).
+            Employee? employee = null;
+            if (body.EmployeeId is int employeeId)
+            {
+                employee = await _unitOfWork.GetRepository<Employee, int>().GetByIdAsync(employeeId, cancellationToken)
+                    ?? throw new NotFoundException("Employee not found.");
+            }
+
+            int gymId;
+            if (employee is not null)
+            {
+                gymId = employee.GymId;
+            }
+            else if (tokenGymId is int selectedGymId)
+            {
+                gymId = selectedGymId;
+            }
+            else
+            {
+                var fallbackGymId = (await _userAccess.GetGymAccessAsync(actor.Id, cancellationToken))
+                    .Select(entry => entry.GymId)
+                    .FirstOrDefault();
+                if (fallbackGymId == 0)
+                {
+                    throw new BadRequestException("Select a gym before submitting this request.");
+                }
+
+                gymId = fallbackGymId;
+            }
+
+            // The same meta key the Escalated tab gates this row with — the requester
+            // must hold it on the target gym to raise (and later see) the escalation.
+            await _accessControl.EnsurePermissionForGymAsync(
+                actor.Id, EventsService.PermissionKeyOfActionType(actionType), gymId, cancellationToken);
+
+            // Validate up front everything ApproveAsync will require, so no row can
+            // reach the tab in an un-approvable state.
+            var details = body.ProposedDetails ?? new ActionRequestProposedDetails();
+            switch (actionType)
+            {
+                case "Transfer":
+                {
+                    _ = employee ?? throw new BadRequestException("An employee is required for a transfer.");
+                    var toGymName = HrPortalHelpers.NullIfBlank(details.ToGym)
+                        ?? throw new BadRequestException("A destination gym is required.");
+                    _ = await HrPortalHelpers.FindGymByNameAsync(_unitOfWork, toGymName, cancellationToken)
+                        ?? throw new BadRequestException($"Unknown gym '{toGymName}'.");
+                    break;
+                }
+
+                case "CompensationChange":
+                    _ = employee ?? throw new BadRequestException("An employee is required for a compensation change.");
+                    if (details.NewSalary is not decimal salary || salary <= 0)
+                    {
+                        throw new BadRequestException("A proposed salary greater than zero is required.");
+                    }
+                    break;
+
+                case "RoleAssign":
+                    _ = employee ?? throw new BadRequestException("An employee is required for a role assignment.");
+                    _ = HrPortalHelpers.NullIfBlank(details.SystemRole)
+                        ?? throw new BadRequestException("A system role is required.");
+                    break;
+
+                case "Offboard":
+                    _ = employee ?? throw new BadRequestException("An employee is required for an offboarding.");
+                    _ = details.LastDay
+                        ?? throw new BadRequestException("A last working day is required.");
+                    _ = HrPortalHelpers.NullIfBlank(details.Reason)
+                        ?? throw new BadRequestException("A reason is required.");
+                    break;
+
+                case "BulkImport":
+                    _ = HrPortalHelpers.NullIfBlank(details.Source)
+                        ?? throw new BadRequestException("A source is required for a bulk import.");
+                    break;
+            }
+
+            var request = new ActionRequest
+            {
+                GymId = gymId,
+                EmployeeId = employee?.Id,
+                ActionType = actionType,
+                ProposedDetailsJson = JsonSerializer.Serialize(details, JsonStore),
+                Justification = justification,
+                RequestedById = actor.Id,
+                Status = "Pending",
+                SubmittedDate = DateTime.UtcNow,
+            };
+            await _unitOfWork.GetRepository<ActionRequest, int>().AddAsync(request, cancellationToken);
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+            await AuditAsync(actor, $"{EventsService.ActionTypeLabel(actionType)} Request Created", "ActionRequest", request.Id, gymId,
+                new { target = employee?.FullName, detail = ActionSummary(request) },
+                cancellationToken);
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+            var created = await _unitOfWork.GetRepository<ActionRequest, int>()
+                .GetByIdAsync(new ActionRequestByIdSpec(request.Id), cancellationToken)
+                ?? throw new NotFoundException("Action request not found.");
+
+            return new ActionRequestDataResponse { Data = MapItem(created) };
+        }
+
         // ------------------------------------------------------------------
         // Shared plumbing
         // ------------------------------------------------------------------

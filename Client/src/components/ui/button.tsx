@@ -2,7 +2,7 @@ import type { ButtonHTMLAttributes } from 'react'
 import { Loader2 } from 'lucide-react'
 import { cn } from '../../lib/utils'
 
-type ButtonVariant = 'primary' | 'secondary' | 'outline' | 'ghost' | 'danger'
+type ButtonVariant = 'primary' | 'secondary' | 'outline' | 'ghost' | 'danger' | 'success'
 type ButtonSize = 'sm' | 'md' | 'lg'
 
 const variantClasses: Record<ButtonVariant, string> = {
@@ -11,6 +11,8 @@ const variantClasses: Record<ButtonVariant, string> = {
   outline: 'border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 focus-visible:ring-slate-400',
   ghost: 'text-slate-600 hover:bg-slate-100 hover:text-slate-900 focus-visible:ring-slate-400',
   danger: 'bg-red-600 text-white hover:bg-red-700 focus-visible:ring-red-500 shadow-sm',
+  // Mock UI "btn-success" (green approve) — Mock UI/HR/styles.css.
+  success: 'bg-[#06b664] text-white hover:bg-[#059a55] focus-visible:ring-[#06b664] shadow-sm',
 }
 
 const sizeClasses: Record<ButtonSize, string> = {

@@ -150,7 +150,7 @@ function evtCardRequests(e) {
       <div class="min-w-0 flex-1">
         <div class="flex items-center gap-1.5 flex-wrap">
           <span class="text-xs font-semibold text-charcoal-900 truncate">${evtEsc(e.employee)}</span>
-          <span class="badge ${e.requestType === 'Resignation' ? 'badge-red' : e.requestType === 'Day Off' ? 'badge-blue' : 'badge-yellow'} text-[9px]">${evtEsc(e.requestType)}</span>
+          <span class="badge ${e.requestType === 'Resignation' ? 'badge-red' : e.requestType === 'Annual Leave' ? 'badge-blue' : 'badge-yellow'} text-[9px]">${evtEsc(e.requestType)}</span>
           ${decided ? statusBadge(req.status) : ''}
         </div>
         <p class="text-[10px] text-charcoal-500 mt-0.5">${evtEsc(e.branch)} · for <b class="text-charcoal-700">${evtEsc(e.forDate ? new Date(e.forDate + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '—')}</b> · submitted ${evtShort(e.submittedOn)}</p>

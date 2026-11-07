@@ -19,5 +19,12 @@ namespace ServiceAbstraction.Services
 
         /// <summary>PUT /api/action-requests/{id}/reject — body { comment } (required) + audit "{Label} Request Rejected".</summary>
         Task<ActionRequestDecisionResponse> RejectAsync(int? actorUserId, int requestId, ActionRequestRejectRequest request, CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// POST /api/action-requests (E20) — creates the Pending escalation the
+        /// mock's "Request …" modals submit. Gated by the action type's own meta
+        /// key on the employee's gym (BulkImport: the caller's token gym).
+        /// </summary>
+        Task<ActionRequestDataResponse> CreateAsync(int? actorUserId, int? tokenGymId, CreateActionRequestRequest request, CancellationToken cancellationToken = default);
     }
 }

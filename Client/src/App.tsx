@@ -3,12 +3,15 @@ import { RouterProvider } from 'react-router-dom'
 import { router } from './app/router'
 import { queryClient } from './app/query-client'
 import { AuthSessionProvider } from './contexts/AuthSessionContext'
+import { MeProvider } from './contexts/MeContext'
 
 export function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <AuthSessionProvider>
-        <RouterProvider router={router} />
+        <MeProvider>
+          <RouterProvider router={router} />
+        </MeProvider>
       </AuthSessionProvider>
     </QueryClientProvider>
   )

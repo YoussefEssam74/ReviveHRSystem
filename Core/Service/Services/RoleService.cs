@@ -1,11 +1,14 @@
+using System.Text.Json;
 using DomainLayer.Contracts;
 using DomainLayer.Exceptions;
+using DomainLayer.Models.AuditModule;
 using DomainLayer.Models.OrganizationModule;
 using DomainLayer.Models.OrganizationModule.Enums;
 using DomainLayer.Models.UserModule;
 using DomainLayer.Models.UserModule.Enums;
 using Service.Specifications;
 using ServiceAbstraction.Services;
+using Shared.DataTransferObject.Employee;
 using Shared.DataTransferObject.Permission;
 using Shared.DataTransferObject.Role;
 using Shared.DataTransferObject.User;
@@ -23,8 +26,14 @@ namespace Service.Services
     public sealed class RoleService(
         IUnitOfWork _unitOfWork,
         IAccessControlService _accessControl,
-        IUserAccessRepository _userAccess) : IRoleService
+        IUserAccessRepository _userAccess,
+        IPasswordHasher _passwordHasher) : IRoleService
     {
+        /// <summary>Temporary password handed to a brand-new HR account until the admin resets it (same value EmployeeService provisions employee logins with).</summary>
+        private const string DefaultNewAccountPassword = "Revive!2026";
+
+        private static readonly JsonSerializerOptions JsonStore = new(JsonSerializerDefaults.Web);
+
         // ------------------------------------------------------------------
         // Roles (7.1–7.6)
         // ------------------------------------------------------------------
@@ -275,20 +284,7 @@ namespace Service.Services
             }
             else if (!string.IsNullOrWhiteSpace(request.RolePreset))
             {
-                var preset = request.RolePreset.Trim();
-
-                // The create-user wizard's "no bundled role" label — clears roles.
-                var isNoneLabel = string.Equals(preset, "Custom Granular Overrides", StringComparison.OrdinalIgnoreCase)
-                    || string.Equals(preset, "None", StringComparison.OrdinalIgnoreCase);
-
-                if (!isNoneLabel)
-                {
-                    var matches = await _unitOfWork.GetRepository<Role, int>()
-                        .GetAllAsync(new RoleByNameSpec(preset), cancellationToken);
-                    var role = matches.FirstOrDefault()
-                        ?? throw new BadRequestException($"Unknown role preset '{preset}'.");
-                    roleIds.Add(role.Id);
-                }
+                roleIds = await ResolveRolePresetIdsAsync(request.RolePreset, cancellationToken);
             }
 
             await _userAccess.ReplaceUserRolesAsync(userId, roleIds, cancellationToken);
@@ -420,6 +416,253 @@ namespace Service.Services
         }
 
         private static string ResolveUserTypeLabel(UserType userType) => userType.ToString();
+
+        // ------------------------------------------------------------------
+        // HR Team member list (GET /api/users)
+        // ------------------------------------------------------------------
+
+        public async Task<UsersListResponse> GetUsersAsync(int? actorUserId, UserListQuery query, CancellationToken cancellationToken = default)
+        {
+            var actor = await ResolveActorAsync(actorUserId, cancellationToken);
+            await _accessControl.EnsurePermissionAsync(actor.Id, "team.view", cancellationToken);
+
+            var page = Math.Max(1, query.Page);
+            var pageSize = Math.Clamp(query.PageSize, 1, 100);
+            var search = string.IsNullOrWhiteSpace(query.Search) ? null : query.Search.Trim();
+            bool? isActive = query.Status?.Trim().ToLowerInvariant() switch
+            {
+                "active" => true,
+                "suspended" => false,
+                _ => null,
+            };
+
+            // ADR-003 gym scope: requested gym or the actor's assignment (Top Management unrestricted).
+            var gymFilter = await HrPortalHelpers.ResolveGymFilterAsync(_unitOfWork, query.Gym, cancellationToken);
+            var scope = await HrPortalHelpers.ResolveGymScopeAsync(_unitOfWork, _userAccess, actor, gymFilter, cancellationToken);
+
+            var repository = _unitOfWork.GetRepository<User, int>();
+            var users = (await repository.GetAllAsync(
+                new UserListSpec(scope, query.Type, search, isActive, (page - 1) * pageSize, pageSize), cancellationToken)).ToList();
+            var total = await repository.CountAsync(new UserListSpec(scope, query.Type, search, isActive, 0, 0), cancellationToken);
+
+            var items = new List<UserListItem>(users.Count);
+            foreach (var user in users)
+            {
+                items.Add(await BuildUserItemAsync(user, cancellationToken));
+            }
+
+            return new UsersListResponse
+            {
+                Items = items,
+                Page = page,
+                PageSize = pageSize,
+                Total = total,
+                TotalPages = (int)Math.Ceiling(total / (double)pageSize),
+            };
+        }
+
+        /// <summary>One team-member row (identity, role badge, gyms, effective keys) — shared by the list and the create response.</summary>
+        private async Task<UserListItem> BuildUserItemAsync(User user, CancellationToken cancellationToken)
+        {
+            var roleIds = (await _userAccess.GetUserRoleIdsAsync(user.Id, cancellationToken)).ToList();
+            var roleNames = new List<string>(roleIds.Count);
+            foreach (var roleId in roleIds)
+            {
+                var role = await _unitOfWork.GetRepository<Role, int>().GetByIdAsync(roleId, cancellationToken);
+                if (role is not null)
+                {
+                    roleNames.Add(role.Name);
+                }
+            }
+
+            var gyms = (await _userAccess.GetGymAccessAsync(user.Id, cancellationToken))
+                .Select(entry => entry.GymName)
+                .OrderBy(name => name, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            var effectiveKeys = (await _userAccess.GetPermissionKeysAsync(user.Id, cancellationToken))
+                .OrderBy(key => key, StringComparer.Ordinal)
+                .ToList();
+
+            var name = !string.IsNullOrWhiteSpace(user.EmployeeProfile?.FullName)
+                ? user.EmployeeProfile.FullName
+                : user.UserName;
+
+            return new UserListItem
+            {
+                Id = user.Id,
+                Name = name,
+                Email = user.Email,
+                Initials = BuildInitials(name),
+                Role = roleNames.Count > 0 ? roleNames[0] : ResolveUserTypeLabel(user.UserType),
+                Roles = roleNames,
+                Gyms = gyms,
+                PermissionsCount = effectiveKeys.Count,
+                Permissions = effectiveKeys,
+                Status = user.IsActive ? "Active" : "Suspended",
+                LastLoginAt = user.LastLoginAt,
+            };
+        }
+
+        // ------------------------------------------------------------------
+        // HR account lifecycle (POST /api/users, PUT …/status, POST …/reset-password)
+        // ------------------------------------------------------------------
+
+        public async Task<CreateUserResponse> CreateUserAsync(int? actorUserId, CreateUserRequest request, CancellationToken cancellationToken = default)
+        {
+            var actor = await ResolveActorAsync(actorUserId, cancellationToken);
+            await _accessControl.EnsurePermissionAsync(actor.Id, "team.manage", cancellationToken);
+
+            var fullName = NormalizeRequiredName(request.FullName, "Full name");
+            var email = request.Email.Trim().ToLowerInvariant();
+
+            var emailMatches = await _unitOfWork.GetRepository<User, int>()
+                .GetAllAsync(new UserByEmailSpec(email), cancellationToken);
+            if (emailMatches.Any())
+            {
+                throw new BadRequestException($"An account with email '{email}' already exists.");
+            }
+
+            var gymIds = (request.GymIds ?? []).Where(id => id > 0).Distinct().ToList();
+            if (gymIds.Count == 0)
+            {
+                throw new BadRequestException("Select at least one gym.");
+            }
+
+            var activeGyms = (await _unitOfWork.GetRepository<Gym, int>().GetAllAsync(cancellationToken))
+                .Where(g => g.Status == GymStatus.Active)
+                .ToList();
+            var unknownGymIds = gymIds.Where(id => activeGyms.All(g => g.Id != id)).ToList();
+            if (unknownGymIds.Count > 0)
+            {
+                throw new BadRequestException($"Unknown gym(s): {string.Join(", ", unknownGymIds)}.");
+            }
+
+            var permissionIds = request.Permissions is null
+                ? new List<int>()
+                : (await ResolvePermissionIdsAsync(request.Permissions, cancellationToken)).ToList();
+
+            // Wizard step 3 template — resolved by name like PUT roles (6.5); the
+            // mock's "None" / "Custom Granular Overrides" labels mean no bundled role.
+            var roleIds = new List<int>();
+            if (!string.IsNullOrWhiteSpace(request.RolePreset))
+            {
+                roleIds = await ResolveRolePresetIdsAsync(request.RolePreset, cancellationToken);
+            }
+
+            var user = new User
+            {
+                Email = email,
+                UserName = await BuildAvailableUserNameAsync(fullName, cancellationToken),
+                PasswordHash = _passwordHasher.Hash(DefaultNewAccountPassword),
+                UserType = UserType.HR,
+                IsActive = true,
+            };
+            await _unitOfWork.GetRepository<User, int>().AddAsync(user, cancellationToken);
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+            foreach (var gymId in gymIds.OrderBy(id => id))
+            {
+                await _userAccess.AddGymAccessAsync(user.Id, gymId, cancellationToken);
+            }
+
+            if (roleIds.Count > 0)
+            {
+                await _userAccess.ReplaceUserRolesAsync(user.Id, roleIds, cancellationToken);
+            }
+
+            if (permissionIds.Count > 0)
+            {
+                await _userAccess.ReplaceUserPermissionsAsync(user.Id, permissionIds, cancellationToken);
+            }
+
+            await AuditAsync(actor, "HR Account Created", nameof(User), user.Id, null,
+                new { target = fullName, email, gyms = gymIds, permissions = permissionIds.Count, rolePreset = request.RolePreset },
+                cancellationToken);
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+            return new CreateUserResponse { Data = await BuildUserItemAsync(user, cancellationToken) };
+        }
+
+        public async Task<MessageResponse> ChangeUserStatusAsync(int? actorUserId, int userId, UserStatusRequest request, CancellationToken cancellationToken = default)
+        {
+            var actor = await ResolveActorAsync(actorUserId, cancellationToken);
+            await _accessControl.EnsurePermissionAsync(actor.Id, "team.manage", cancellationToken);
+
+            var activate = request.Status?.Trim().ToLowerInvariant() switch
+            {
+                "active" => true,
+                "suspended" => false,
+                _ => throw new BadRequestException("Status must be \"Active\" or \"Suspended\"."),
+            };
+            var reason = NormalizeRequiredName(request.Reason, "Reason");
+
+            var user = await _unitOfWork.GetRepository<User, int>().GetByIdAsync(userId, cancellationToken)
+                ?? throw new NotFoundException("User not found.");
+
+            if (!activate && user.Id == actor.Id)
+            {
+                throw new BadRequestException("You cannot suspend your own account.");
+            }
+
+            if (user.IsActive != activate)
+            {
+                user.IsActive = activate;
+                _unitOfWork.GetRepository<User, int>().Update(user);
+
+                await AuditAsync(actor,
+                    activate ? "HR Account Reactivated" : "HR Account Suspended",
+                    nameof(User), user.Id, null,
+                    new { target = user.UserName, email = user.Email, reason },
+                    cancellationToken);
+                await _unitOfWork.SaveChangesAsync(cancellationToken);
+            }
+
+            return new MessageResponse
+            {
+                Message = activate ? "Account reactivated." : "Account suspended.",
+            };
+        }
+
+        public async Task<MessageResponse> ResetUserPasswordAsync(int? actorUserId, int userId, ResetPasswordRequest request, CancellationToken cancellationToken = default)
+        {
+            var actor = await ResolveActorAsync(actorUserId, cancellationToken);
+            await _accessControl.EnsurePermissionAsync(actor.Id, "team.manage", cancellationToken);
+
+            var password = request.NewPassword;
+            if (string.IsNullOrWhiteSpace(password) || password.Length < 8)
+            {
+                throw new BadRequestException("Password must be at least 8 characters.");
+            }
+
+            var user = await _unitOfWork.GetRepository<User, int>().GetByIdAsync(userId, cancellationToken)
+                ?? throw new NotFoundException("User not found.");
+
+            user.PasswordHash = _passwordHasher.Hash(password);
+            _unitOfWork.GetRepository<User, int>().Update(user);
+
+            // Audit that a reset happened — never the plaintext value.
+            await AuditAsync(actor, "HR Account Password Reset", nameof(User), user.Id, null,
+                new { target = user.UserName, email = user.Email },
+                cancellationToken);
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+            return new MessageResponse { Message = "Password reset." };
+        }
+
+        /// <summary>Two-letter avatar from a display name ("Sarah Hassan" → "SH").</summary>
+        private static string BuildInitials(string name)
+        {
+            var parts = name.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            if (parts.Length == 0)
+            {
+                return string.Empty;
+            }
+
+            var first = parts[0][..1];
+            var last = parts.Length > 1 ? parts[^1][..1] : string.Empty;
+            return (first + last).ToUpperInvariant();
+        }
 
         // ------------------------------------------------------------------
         // Helpers
@@ -581,5 +824,52 @@ namespace Service.Services
                 GymIds = gymIds,
             };
         }
+
+        /// <summary>Resolves a wizard/assignment role-preset name to ids ("None"/"Custom Granular Overrides" labels clear roles; unknown names are a 400).</summary>
+        private async Task<List<int>> ResolveRolePresetIdsAsync(string preset, CancellationToken cancellationToken)
+        {
+            var trimmed = preset.Trim();
+            var isNoneLabel = string.Equals(trimmed, "Custom Granular Overrides", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(trimmed, "None", StringComparison.OrdinalIgnoreCase);
+            if (isNoneLabel)
+            {
+                return [];
+            }
+
+            var matches = await _unitOfWork.GetRepository<Role, int>()
+                .GetAllAsync(new RoleByNameSpec(trimmed), cancellationToken);
+            var role = matches.FirstOrDefault()
+                ?? throw new BadRequestException($"Unknown role preset '{trimmed}'.");
+            return [role.Id];
+        }
+
+        /// <summary>Unique login name for a new account (DB unique index): the full name when free, then "name (2)", …; capped at the 100-char column.</summary>
+        private async Task<string> BuildAvailableUserNameAsync(string preferred, CancellationToken cancellationToken)
+        {
+            var repository = _unitOfWork.GetRepository<User, int>();
+            var baseName = preferred.Length > 90 ? preferred[..90].TrimEnd() : preferred;
+            var candidate = baseName;
+            for (var suffix = 2; await repository.CountAsync(new UserByUserNameSpec(candidate), cancellationToken) > 0; suffix++)
+            {
+                var tail = $" ({suffix})";
+                candidate = baseName.Length + tail.Length > 100
+                    ? string.Concat(baseName[..(100 - tail.Length)].TrimEnd(), tail)
+                    : string.Concat(baseName, tail);
+            }
+
+            return candidate;
+        }
+
+        /// <summary>Standard audit row (who / what / target / payload) — never records plaintext credentials.</summary>
+        private async Task AuditAsync(User actor, string action, string entityType, int entityId, int? gymId, object values, CancellationToken cancellationToken) =>
+            await _unitOfWork.GetRepository<AuditLog, int>().AddAsync(new AuditLog
+            {
+                UserId = actor.Id,
+                Action = action,
+                EntityType = entityType,
+                EntityId = entityId,
+                GymId = gymId,
+                NewValues = JsonSerializer.Serialize(values, JsonStore),
+            }, cancellationToken);
     }
 }

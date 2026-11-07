@@ -17,5 +17,13 @@ namespace Presentation.Controllers
             var (fileName, content) = await _service.ExportReportAsync(GetActorUserId(), query, ct);
             return File(content, "text/csv", fileName);
         }
+
+        /// <summary>GET /api/reports/overview?period=30d|90d|ytd — Reports page metric cards (reports.view).</summary>
+        [HttpGet("overview")]
+        public async Task<ActionResult<ReportsOverviewDto>> GetOverview([FromQuery] ReportsOverviewQuery query, CancellationToken ct)
+        {
+            var overview = await _service.GetOverviewAsync(GetActorUserId(), query, ct);
+            return Ok(overview);
+        }
     }
 }

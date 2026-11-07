@@ -71,6 +71,34 @@ namespace Shared.DataTransferObject.Employee
         public int TotalPages { get; set; }
     }
 
+    /// <summary>
+    /// POST /api/action-requests body (E20 — the mock's "Request Transfer /
+    /// Request Compensation / Request Role / Request Offboard / Request Bulk
+    /// Import" escalation modal). Gym scope resolves from the employee's gym
+    /// (BulkImport falls back to the caller's token gym).
+    /// </summary>
+    public class CreateActionRequestRequest
+    {
+        /// <summary>Target employee; optional only for BulkImport.</summary>
+        public int? EmployeeId { get; init; }
+
+        /// <summary>"Transfer" | "CompensationChange" | "RoleAssign" | "Offboard" | "BulkImport".</summary>
+        [Required, StringLength(50)]
+        public string ActionType { get; init; } = string.Empty;
+
+        public ActionRequestProposedDetails? ProposedDetails { get; init; }
+
+        /// <summary>Why the change is needed — echoed on the Escalated tab.</summary>
+        [Required, StringLength(1000)]
+        public string Justification { get; init; } = string.Empty;
+    }
+
+    /// <summary>POST /api/action-requests → 201 `{ data: &lt;row&gt; }`.</summary>
+    public class ActionRequestDataResponse
+    {
+        public ActionRequestItem Data { get; set; } = new();
+    }
+
     /// <summary>PUT /api/action-requests/{id}/reject — the comment is required (§9.4).</summary>
     public class ActionRequestRejectRequest
     {

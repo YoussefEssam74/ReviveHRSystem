@@ -50,6 +50,15 @@ namespace ReviveHRSystem.IntegrationTests
             return JsonSerializer.Deserialize<JsonElement>(body);
         }
 
+        private static async Task<string> AssertErrorAsync(HttpResponseMessage response, HttpStatusCode expected)
+        {
+            var body = await response.Content.ReadAsStringAsync();
+            Assert.True(response.StatusCode == expected,
+                $"Expected {(int)expected} but got {(int)response.StatusCode}: {body}");
+            using var doc = JsonDocument.Parse(body);
+            return doc.RootElement.GetProperty("errorMessage").GetString() ?? string.Empty;
+        }
+
         // ------------------------------------------------------------------
         // Period directory + detail
         // ------------------------------------------------------------------
@@ -708,6 +717,108 @@ namespace ReviveHRSystem.IntegrationTests
                 .Select(i => i.GetProperty("id").GetInt32()).ToArray();
             Assert.Contains(first, bothIds);
             Assert.Contains(second, bothIds);
+        }
+
+        // ------------------------------------------------------------------
+        // DELETE …/entries/{employeeId}/deductions/{lineId}
+        // ------------------------------------------------------------------
+
+        [Fact]
+        public async Task RemoveDeduction_DeletesPendingLine_RecomputesTotals()
+        {
+            var (_, employee, periodId, _) = await SetupSheetAsync();
+            var admin = await _fixture.GetAdminTokenAsync();
+
+            // Add through the API first (the Add-Line form).
+            var add = await _fixture.Client.SendAsync(_fixture.AuthorizedRequest(HttpMethod.Post,
+                $"/api/payroll-periods/{periodId}/entries/{employee.EmployeeId}/deductions",
+                new { source = "manager", reason = "Undo me", amount = 120m }, admin));
+            Assert.Equal(HttpStatusCode.Created, add.StatusCode);
+            var created = (await add.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("data");
+            var lineId = created.GetProperty("id").GetInt32();
+            Assert.Equal(1, created.GetProperty("entry").GetProperty("pendingCount").GetInt32());
+
+            // Remove it (the entry sheet's ✕).
+            var remove = await _fixture.Client.SendAsync(_fixture.AuthorizedRequest(HttpMethod.Delete,
+                $"/api/payroll-periods/{periodId}/entries/{employee.EmployeeId}/deductions/{lineId}", null, admin));
+            Assert.Equal(HttpStatusCode.OK, remove.StatusCode);
+
+            var data = (await remove.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("data");
+            Assert.Equal(lineId, data.GetProperty("id").GetInt32());
+            var entry = data.GetProperty("entry");
+            Assert.Equal(0, entry.GetProperty("pendingCount").GetInt32());
+            Assert.Equal(0m, entry.GetProperty("deductions").GetDecimal());
+            Assert.Equal(17600m, entry.GetProperty("gross").GetDecimal());
+            Assert.Equal(17600m, entry.GetProperty("net").GetDecimal());
+
+            // The line is gone — removing it again is a 400.
+            var again = await _fixture.Client.SendAsync(_fixture.AuthorizedRequest(HttpMethod.Delete,
+                $"/api/payroll-periods/{periodId}/entries/{employee.EmployeeId}/deductions/{lineId}", null, admin));
+            var message = await AssertErrorAsync(again, HttpStatusCode.BadRequest);
+            Assert.Contains("not found", message);
+        }
+
+        [Fact]
+        public async Task RemoveDeduction_ApprovedLine_RestoresNetPay()
+        {
+            var (_, employee, periodId, entryId) = await SetupSheetAsync();
+            var builder = NewBuilder();
+            var lineId = await builder.AddPayrollLineAsync(entryId, 300m, status: "Approved");
+            var admin = await _fixture.GetAdminTokenAsync();
+
+            var remove = await _fixture.Client.SendAsync(_fixture.AuthorizedRequest(HttpMethod.Delete,
+                $"/api/payroll-periods/{periodId}/entries/{employee.EmployeeId}/deductions/{lineId}", null, admin));
+            Assert.Equal(HttpStatusCode.OK, remove.StatusCode);
+
+            var entry = (await remove.Content.ReadFromJsonAsync<JsonElement>())
+                .GetProperty("data").GetProperty("entry");
+            Assert.Equal(0m, entry.GetProperty("deductions").GetDecimal());
+            Assert.Equal(17600m, entry.GetProperty("net").GetDecimal());
+        }
+
+        [Fact]
+        public async Task RemoveDeduction_UnknownLine_Returns400()
+        {
+            var (_, employee, periodId, _) = await SetupSheetAsync();
+            var admin = await _fixture.GetAdminTokenAsync();
+
+            var request = _fixture.AuthorizedRequest(HttpMethod.Delete,
+                $"/api/payroll-periods/{periodId}/entries/{employee.EmployeeId}/deductions/999999", null, admin);
+            var message = await AssertErrorAsync(await _fixture.Client.SendAsync(request), HttpStatusCode.BadRequest);
+            Assert.Contains("not found", message);
+        }
+
+        [Fact]
+        public async Task RemoveDeduction_LockedPeriod_Returns400()
+        {
+            var builder = NewBuilder();
+            var gym = await builder.CreateGymWithStationAsync();
+            var employee = await builder.CreateEmployeeAsync(gym);
+            var periodId = await builder.CreatePayrollPeriodAsync(
+                gym.GymId, new DateOnly(2031, 2, 1), new DateOnly(2031, 2, 28),
+                DomainLayer.Models.PayrollModule.Enums.PayrollPeriodStatus.Locked);
+            var entryId = await builder.CreatePayrollEntryAsync(periodId, employee.EmployeeId, 10000m);
+            var lineId = await builder.AddPayrollLineAsync(entryId, 50m, status: "Pending");
+            var admin = await _fixture.GetAdminTokenAsync();
+
+            var request = _fixture.AuthorizedRequest(HttpMethod.Delete,
+                $"/api/payroll-periods/{periodId}/entries/{employee.EmployeeId}/deductions/{lineId}", null, admin);
+            var message = await AssertErrorAsync(await _fixture.Client.SendAsync(request), HttpStatusCode.BadRequest);
+            Assert.Contains("locked", message);
+        }
+
+        [Fact]
+        public async Task RemoveDeduction_WithoutPayrollEditPermission_Returns401()
+        {
+            var (gym, _, periodId, _) = await SetupSheetAsync();
+            var builder = NewBuilder();
+            var hr = await builder.CreateUserAsync(UserType.HR, new[] { gym });
+            var token = await _fixture.LoginAsync(hr.Email, hr.Password);
+
+            var request = _fixture.AuthorizedRequest(HttpMethod.Delete,
+                $"/api/payroll-periods/{periodId}/entries/1/deductions/1", null, token);
+            var response = await _fixture.Client.SendAsync(request);
+            await AssertErrorAsync(response, HttpStatusCode.Unauthorized);
         }
     }
 }

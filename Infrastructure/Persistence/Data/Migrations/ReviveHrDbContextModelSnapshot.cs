@@ -1271,6 +1271,16 @@ namespace Persistence.Data.Migrations
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)");
 
+                    b.Property<string>("ReviewNote")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<DateTime?>("ReviewedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int?>("ReviewedBy")
+                        .HasColumnType("integer");
+
                     b.Property<int>("Status")
                         .HasColumnType("integer");
 
@@ -1288,6 +1298,8 @@ namespace Persistence.Data.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("IssuedBy");
+
+                    b.HasIndex("ReviewedBy");
 
                     b.HasIndex("EmployeeId", "IssuedAt");
 
@@ -1557,12 +1569,12 @@ namespace Persistence.Data.Migrations
                         .HasColumnType("boolean")
                         .HasDefaultValue(false);
 
+                    b.Property<string>("Notes")
+                        .HasColumnType("text");
+
                     b.Property<string>("OverallComment")
                         .HasMaxLength(1000)
                         .HasColumnType("character varying(1000)");
-
-                    b.Property<string>("Notes")
-                        .HasColumnType("text");
 
                     b.Property<string>("Period")
                         .HasColumnType("text");
@@ -2267,6 +2279,16 @@ namespace Persistence.Data.Migrations
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)");
 
+                    b.Property<string>("ReviewNote")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<DateTime?>("ReviewedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int?>("ReviewedBy")
+                        .HasColumnType("integer");
+
                     b.Property<int>("Status")
                         .HasColumnType("integer");
 
@@ -2284,6 +2306,8 @@ namespace Persistence.Data.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("IssuedBy");
+
+                    b.HasIndex("ReviewedBy");
 
                     b.HasIndex("EmployeeId", "IssuedAt");
 
@@ -4343,9 +4367,16 @@ namespace Persistence.Data.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.HasOne("DomainLayer.Models.UserModule.User", "Reviewer")
+                        .WithMany()
+                        .HasForeignKey("ReviewedBy")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.Navigation("Employee");
 
                     b.Navigation("IssuedByUser");
+
+                    b.Navigation("Reviewer");
                 });
 
             modelBuilder.Entity("DomainLayer.Models.EvaluationModule.EvaluationAnswer", b =>
@@ -4626,9 +4657,16 @@ namespace Persistence.Data.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.HasOne("DomainLayer.Models.UserModule.User", "Reviewer")
+                        .WithMany()
+                        .HasForeignKey("ReviewedBy")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.Navigation("Employee");
 
                     b.Navigation("IssuedByUser");
+
+                    b.Navigation("Reviewer");
                 });
 
             modelBuilder.Entity("DomainLayer.Models.PayrollModule.DeductionCandidate", b =>

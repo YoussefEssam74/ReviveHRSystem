@@ -24,7 +24,6 @@ A completed session returns 200 with accessToken, expiresInSeconds, requiresGymS
 
 Request: { gymId, tempSessionToken }. Returns the completed session shape above; the token must be valid and the user must have access to the selected gym. Possible errors: 400, 401, or 429.
 
-<<<<<<< HEAD
 ### POST /api/auth/logout
 
 Records the caller's logout and returns 204. Auth is access-token-only with no refresh tokens (ADR-002), so there is no server-side session to revoke: the client discards its token and the token's own lifetime ends the session. The endpoint is idempotent and always writes an `AuditLog` entry ({ action: "Logout", entityType: "User" }); a missing/invalid token is answered 401 by the framework before the handler runs.
@@ -227,7 +226,7 @@ HR-editable attendance policy: { gymId, gymName, excusedLateHoursCapPerMonth }. 
 
 ### POST /api/deduction-candidates
 
-Body: { employeeId (in-scope), amount > 0, reason (Unapproved absence | Late arrival (30+ min) | Early checkout without approval | Damaged equipment / property | Policy violation | Other (see note)), note? }. Created with status Pending for HR review; 404 for an out-of-scope employee. Feature: attendance Edit.
+Body: { employeeId (in-scope), amount > 0, reason (Unapproved absence | Late arrival (30+ min) | Early checkout without approval | Damaged equipment / property | Policy violation | Other (see note)), note? }. Created with status Pending for HR review; 404 for an out-of-scope employee. Feature: attendance Edit. **Known backend gap:** these raised `DeductionCandidate` records currently have no HR-facing list or review endpoint — the GET/review pair on this same route path operates on `PayrollEntryLineItem` deduction lines instead (see §Payroll), so a raised candidate is only visible via `GET /api/branch-actions/pending-hr`. Needs a follow-up (auto-convert to a payroll line on raise, or an HR list+review for the entity).
 
 ### POST /api/warning-notices
 
@@ -419,6 +418,18 @@ Permission: `team.manage`. Single-role assignment: request { roleId?, rolePreset
 ### PUT /api/users/{id}/gym-access
 
 Permission: `team.manage`. The H4 replacement set: request { gymIds?: [int], gyms?: [names] } — the union of both addressings becomes the full new access set (the hire wizard sends names, admin tabs send ids); unknown ids or names (not active) → 400, an empty set revokes all access (the wizard enforces its own minimum of one). Rows for gyms that later become suspended are left untouched (only active gyms are addressable). Returns 200 { data: <assignment > gymIds is the resulting set }. Errors: 400, 401, 404.
+
+### POST /api/users
+
+Permission: `team.manage` — H3, the HR-Team wizard's final submit. Request: { fullName (required), email (required, unique, lowercased), gymIds: [int] (≥ 1, active gyms only), permissions?: [keys], rolePreset? } — gymIds becomes the account's gym access, permissions replace the direct overrides wholesale (unknown key → 400), rolePreset resolves a role by name (the wizard's "None"/"Custom Granular Overrides" labels mean no bundled role; unknown → 400). Creates an active `HR` account whose UserName is the unique full name (falls back to the email when the name is taken — both columns are unique-indexed) with the standard temporary password `Revive!2026`, never echoed; set a known one via reset-password below. The wizard's phone / Start Date fields are dropped (no home on the User row). Audits `HR Account Created`. Returns 201 { data: { id, name, email, initials, role, roles[], gyms[], permissions[], permissionsCount, status, lastLoginAt } }. Errors: 400 (duplicate email, no/unknown gyms, unknown permission key or role), 401.
+
+### PUT /api/users/{id}/status
+
+Permission: `team.manage` — H6, the HR-Team row's status toggle. Request: { status: "Active" | "Suspended" (anything else → 400), reason (required → 400 when missing) }. Suspending flips `isActive` off — `POST /api/auth/login` refuses the account immediately — and self-suspend is refused with 400 ("You cannot suspend your own account."); reactivate restores login. Idempotent: already in that state → 200 with no audit write; otherwise audits `HR Account Suspended` / `HR Account Reactivated` with the reason. Returns 200 { message: "Account suspended." | "Account reactivated." }. Errors: 400 (bad status, missing reason, self-suspend), 401, 404.
+
+### POST /api/users/{id}/reset-password
+
+Permission: `team.manage` — D12, the Change Password & Access modal. Request: { newPassword (required, min 8) }. Rehashes the target account's password; the plaintext is never echoed or logged — only an audit row `HR Account Password Reset`. Returns 200 { message: "Password reset." }. Errors: 400 (short password), 401, 404.
 
 ### POST /api/employees/{id}/role-change
 
@@ -772,6 +783,10 @@ Permission: `payroll.edit` on the period's gym; the only editable field while th
 
 Permission: `payroll.edit`; the inline Add-Line form on an open period. Request: `{ source ("manager" | "biometric"), reason (required), amount (required, > 0) }`. Creates a `Pending` line dated today (`attendanceRef` `ATT-MANUAL` for biometric). Returns 201 `{ data: { id, date, label, reason, source, amount, status: "Pending", attendanceRef, requestId, entry: { gross, deductions, net, pendingCount } } }` — pending lines do not yet count toward deductions/net. Errors: 400 (locked period, bad source/amount, missing reason), 401, 404.
 
+### DELETE /api/payroll-periods/{periodId}/entries/{employeeId}/deductions/{lineId}
+
+Permission: `payroll.edit` — T8's remove side, the settlement sheet's per-line ✕ (quick undo of an Add-Line). The period must be open (locked → 400 "This payroll period is locked.") and the line must belong to that sheet (otherwise 400 "Deduction line not found on this sheet."). Removes the row, recomputes the entry totals and returns 200 { data: { id, entry: { gross, deductions, net, pendingCount } } }. Errors: 400 (locked, unknown line), 401, 404 (unknown period/entry).
+
 ### POST /api/payroll-periods/{periodId}/entries/{employeeId}/close · …/reopen
 
 Permission: `payroll.edit`. Close settles one sheet — refused (400) while any line is still `Pending` — setting status `Reviewed` + `reviewedAt`; reopen returns it to `Draft` (rejected on a locked period). Returns 200 `{ data: { employeeId, status, reviewed, reviewedAt?, gross, deductions, net } }` (reopen omits `reviewedAt`). Errors: 400 (pending lines / locked), 401, 404.
@@ -938,7 +953,11 @@ Permission: `employees.offboard` — T6. Gates: the whole checklist must be done
 
 ### GET /api/action-requests
 
-Permission: `events.view` **or** any of the ACTION_TYPES meta keys (`employees.transfer`, `employees.compensation.manage`, `employees.role.assign`, `employees.offboard`, `employees.bulk_import`) — rows are then filtered to the action types the caller actually holds (plus gym scope; TopManagement sees all). Query: `gym` (id or name — unknown → 400), `status` (Pending | Approved | Rejected), `actionType` (Transfer | CompensationChange | RoleAssign | Offboard | BulkImport), `page`, `pageSize` (default 20). Returns 200 `{ items: [{ id, employeeId, employee, position, ActionType, proposedDetails: { fromGym, toGym (branch NAMES — approve resolves the destination to an id), effectiveDate, currentSalary, newSalary, systemRole, lastDay, reason, source }, justification, requestedById, requestedBy (display name), status, submittedDate, reviewedById, reviewedBy, reviewedDate, reviewComment }], page, pageSize, total, totalPages }`. There is no create endpoint (E20 out of scope). Errors: 400 (unknown gym), 401.
+Permission: `events.view` **or** any of the ACTION_TYPES meta keys (`employees.transfer`, `employees.compensation.manage`, `employees.role.assign`, `employees.offboard`, `employees.bulk_import`) — rows are then filtered to the action types the caller actually holds (plus gym scope; TopManagement sees all). Query: `gym` (id or name — unknown → 400), `status` (Pending | Approved | Rejected), `actionType` (Transfer | CompensationChange | RoleAssign | Offboard | BulkImport), `page`, `pageSize` (default 20). Returns 200 `{ items: [{ id, employeeId, employee, position, ActionType, proposedDetails: { fromGym, toGym (branch NAMES — approve resolves the destination to an id), effectiveDate, currentSalary, newSalary, systemRole, lastDay, reason, source }, justification, requestedById, requestedBy (display name), status, submittedDate, reviewedById, reviewedBy, reviewedDate, reviewComment }], page, pageSize, total, totalPages }`. Errors: 400 (unknown gym), 401.
+
+### POST /api/action-requests
+
+Permission: the action type's own meta key on the target gym (E20 — the mock's "Request …" modals; TopManagement bypasses per ADR-003). Request: { employeeId?, actionType ("Transfer" | "CompensationChange" | "RoleAssign" | "Offboard" | "BulkImport"; unknown → 400), proposedDetails?, justification (required) }. Gym scope: the employee's gym when an employee is given, otherwise the token gym (BulkImport rows carry no employee; no gym anywhere → 400). Validates up front everything approve will later require — Transfer → `toGym` must resolve to a real gym (unknown → 400), CompensationChange → `newSalary > 0`, RoleAssign → `systemRole`, Offboard → `lastDay` + `reason`, BulkImport → `source`; an employee is required for every type except BulkImport. Creates a `Pending` row and audits `{Label} Request Created`. Returns 201 { data: { …list item…, status: "Pending" } }. Errors: 400 (validation), 401 (missing meta key or employee outside the caller's gyms), 404 (unknown employee).
 
 ### PUT /api/action-requests/{id}/approve
 

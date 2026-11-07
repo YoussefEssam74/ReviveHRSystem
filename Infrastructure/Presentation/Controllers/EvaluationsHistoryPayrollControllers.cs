@@ -15,4 +15,16 @@ namespace Presentation.Controllers
             return Ok(dashboard);
         }
     }
+
+    /// <summary>HR portal dashboard aggregate (mock §1 HR): KPI strip, actions, branches.</summary>
+    [Route("api/dashboard/hr")]
+    public class HrDashboardController(IDashboardService dashboardService) : ApiControllerBase
+    {
+        [HttpGet]
+        public async Task<ActionResult<HrDashboardDto>> GetHrDashboard(CancellationToken cancellationToken)
+        {
+            var dashboard = await dashboardService.GetHrDashboardAsync(GetActorUserId(), GetGymIdFromToken(), cancellationToken);
+            return Ok(dashboard);
+        }
+    }
 }

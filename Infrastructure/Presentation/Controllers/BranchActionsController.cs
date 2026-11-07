@@ -41,6 +41,18 @@ namespace Presentation.Controllers
                 GetActorUserId(), GetGymIdFromToken(), request, cancellationToken);
             return Created($"/api/warning-notices/{created.Id}", created);
         }
+
+        /// <summary>GET /api/warning-notices — HR review queue (requests.view); ?status=Pending|Approved|Rejected&amp;gym=.</summary>
+        [HttpGet]
+        public async Task<ActionResult<ProposalListResponse<WarningNoticeDto>>> GetWarnings(
+            [FromQuery] ProposalListQuery query, CancellationToken cancellationToken)
+            => Ok(await branchActionsService.GetWarningsAsync(GetActorUserId(), query, cancellationToken));
+
+        /// <summary>POST /api/warning-notices/{id}/review — File (Approved) / Decline (Rejected, reason required) (requests.approve).</summary>
+        [HttpPost("{id:int}/review")]
+        public async Task<ActionResult<ReviewProposalResponse<WarningNoticeDto>>> ReviewWarning(
+            int id, [FromBody] ReviewProposalRequest request, CancellationToken cancellationToken)
+            => Ok(await branchActionsService.ReviewWarningAsync(GetActorUserId(), id, request, cancellationToken));
     }
 
     /// <summary>Bonus proposals awaiting HR approval.</summary>
@@ -56,6 +68,18 @@ namespace Presentation.Controllers
                 GetActorUserId(), GetGymIdFromToken(), request, cancellationToken);
             return Created($"/api/bonus-proposals/{created.Id}", created);
         }
+
+        /// <summary>GET /api/bonus-proposals — HR review queue (requests.view); ?status=Pending|Approved|Rejected&amp;gym=.</summary>
+        [HttpGet]
+        public async Task<ActionResult<ProposalListResponse<BonusProposalDto>>> GetBonuses(
+            [FromQuery] ProposalListQuery query, CancellationToken cancellationToken)
+            => Ok(await branchActionsService.GetBonusesAsync(GetActorUserId(), query, cancellationToken));
+
+        /// <summary>POST /api/bonus-proposals/{id}/review — Approve / Decline (reason required) (requests.approve).</summary>
+        [HttpPost("{id:int}/review")]
+        public async Task<ActionResult<ReviewProposalResponse<BonusProposalDto>>> ReviewBonus(
+            int id, [FromBody] ReviewProposalRequest request, CancellationToken cancellationToken)
+            => Ok(await branchActionsService.ReviewBonusAsync(GetActorUserId(), id, request, cancellationToken));
     }
 
     /// <summary>

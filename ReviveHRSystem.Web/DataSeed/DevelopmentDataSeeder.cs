@@ -3,6 +3,8 @@ using DomainLayer.Models.EmployeeModule;
 using DomainLayer.Models.EmployeeModule.Enums;
 using DomainLayer.Models.OrganizationModule;
 using DomainLayer.Models.OrganizationModule.Enums;
+using DomainLayer.Models.PayrollModule;
+using DomainLayer.Models.PayrollModule.Enums;
 using DomainLayer.Models.SchedulingModule;
 using DomainLayer.Models.SchedulingModule.Enums;
 using DomainLayer.Models.UserModule;
@@ -82,12 +84,14 @@ namespace ReviveHRSystem.Web.DataSeed
             var hr = await EnsureUserAsync(db, hasher, HrEmail, "hr", UserType.HR);
             await EnsureGymAccessAsync(db, hr.Id, gym1.Id);
             await FeatureAccessSeeder.EnsureUserGymRoleAsync(db, hr.Id, gym1.Id, RoleNames.Hr);
+            await EnsurePermissionGrantsAsync(db, hr.Id, AllPortalPermissionKeys);
 
             var hrManager = await EnsureUserAsync(db, hasher, HrManagerEmail, "hrmanager", UserType.HR);
             await EnsureGymAccessAsync(db, hrManager.Id, gym1.Id);
             await EnsureGymAccessAsync(db, hrManager.Id, gym2.Id);
             await FeatureAccessSeeder.EnsureUserGymRoleAsync(db, hrManager.Id, gym1.Id, RoleNames.HrManager);
             await FeatureAccessSeeder.EnsureUserGymRoleAsync(db, hrManager.Id, gym2.Id, RoleNames.HrManager);
+            await EnsurePermissionGrantsAsync(db, hrManager.Id, AllPortalPermissionKeys);
 
             var stationCodeLifetimeMinutes = configuration.GetValue<int?>(StationCodeLifetimeKey);
             var gym1StationCode = await EnsureStationCodeAsync(db, gym1.Id, admin.Id, stationCodeLifetimeMinutes, logger);
@@ -117,6 +121,7 @@ namespace ReviveHRSystem.Web.DataSeed
             await EnsureGymAccessAsync(db, omarUser.Id, gym2.Id);
             await FeatureAccessSeeder.EnsureUserGymRoleAsync(db, omarUser.Id, gym1.Id, RoleNames.BranchManager);
             await FeatureAccessSeeder.EnsureUserGymRoleAsync(db, omarUser.Id, gym2.Id, RoleNames.TeamLeader);
+            await EnsurePermissionGrantsAsync(db, omarUser.Id, BranchManagerPermissionKeys);
             await EnsureAssignmentAsync(db, cycle1.Id, omar.Id, today, template.Id);
 
             // Sara - gym2 only, deliberately no shift today.
@@ -124,6 +129,19 @@ namespace ReviveHRSystem.Web.DataSeed
                 "Sara Ali", "EMP-1060", gym2.Id, position2.Id);
             await EnsureGymAccessAsync(db, saraUser.Id, gym2.Id);
             await FeatureAccessSeeder.EnsureUserGymRoleAsync(db, saraUser.Id, gym2.Id, RoleNames.Employee);
+
+            // No HTTP endpoint creates payroll periods, so without seed data the
+            // Settlement sheet / deductions / publish / payslips / export screens
+            // would have nothing to open. One Open period per gym, Draft entries
+            // for that gym's active employees.
+            await EnsurePayrollSeedAsync(db, gym1.Id, today);
+            await EnsurePayrollSeedAsync(db, gym2.Id, today);
+
+            // Rich console-testing scenario layered on top (12 extra employees,
+            // months of attendance/payroll history, request/recruitment/evaluation/
+            // offboarding pipelines, branch queues, announcements, events).
+            // Idempotent — guarded by its own marker, safe on every startup.
+            await RichScenarioSeeder.SeedAsync(db, hasher, logger);
 
             logger.LogWarning(
                 "Development seed complete. Logins (password {Password}): {Admin}, hr@revive.hr, hrmanager@revive.hr, and employee accounts (karim@revive.hr, omar@revive.hr, sara@revive.hr). " +
@@ -197,6 +215,82 @@ namespace ReviveHRSystem.Web.DataSeed
             ("Teams", "evaluations.view.team", "View evaluations of own team members."),
             ("Teams", "evaluations.manage.team", "Manage evaluations of own team members."),
         ];
+
+        /// <summary>
+        /// Tracked permission keys granted to the seeded HR / HR-Manager accounts so
+        /// every HR-portal endpoint is exercisable in Swagger manual testing without
+        /// hand-editing the database. The HR-portal guards read direct
+        /// <c>UserPermissions</c> rows (UserAccessRepository.GetPermissionKeysAsync),
+        /// which the per-gym feature roles above do not populate.
+        /// </summary>
+        private static readonly string[] AllPortalPermissionKeys =
+        [
+            "employees.view", "employees.create", "employees.edit", "employees.transfer",
+            "employees.position.change", "employees.role.assign", "employees.status.change",
+            "employees.compensation.manage", "employees.contract.manage", "employees.offboard",
+            "employees.documents.view", "employees.documents.manage", "employees.bulk_import",
+            "employees.leave_balance.manage",
+            "positions.view", "positions.manage",
+            "recruitment.view", "recruitment.vacancies.manage", "recruitment.candidates.manage",
+            "recruitment.hire.approve", "recruitment.vacancy_request.create", "recruitment.vacancy_request.approve",
+            "attendance.view", "attendance.edit", "attendance.manual_entry",
+            "schedule.view", "schedule.manage",
+            "requests.view", "requests.approve.branch", "requests.approve",
+            "payroll.view", "payroll.edit", "payroll.approve", "payroll.export",
+            "evaluations.view", "evaluations.manage", "evaluations.forms.manage",
+            "events.view", "reports.view",
+            "announcements.view", "announcements.manage",
+            "audit.view",
+            "team.view", "team.manage",
+        ];
+
+        /// <summary>Branch-manager keys (Omar) — enough to exercise stage-1 decisions and team views.</summary>
+        private static readonly string[] BranchManagerPermissionKeys =
+        [
+            "employees.view",
+            "attendance.view", "attendance.view.team",
+            "schedule.view", "schedule.view.team",
+            "requests.view", "requests.view.team", "requests.approve.branch", "requests.approve.team",
+            "evaluations.view.team", "evaluations.manage.team",
+            "recruitment.view", "recruitment.vacancy_request.create",
+            "payroll.view",
+            "events.view",
+        ];
+
+        /// <summary>
+        /// Idempotently grants tracked permission keys (UserPermissions rows at Edit
+        /// level) so the HR-portal endpoint guards accept the seeded accounts. Keys
+        /// that do not exist in the catalog are skipped.
+        /// </summary>
+        private static async Task EnsurePermissionGrantsAsync(ReviveHrDbContext db, int userId, IReadOnlyList<string> keys)
+        {
+            var wanted = await db.Permissions
+                .Where(p => keys.Contains(p.Key))
+                .Select(p => p.Id)
+                .ToListAsync();
+            var existing = await db.UserPermissions
+                .Where(up => up.UserId == userId)
+                .Select(up => up.PermissionId)
+                .ToListAsync();
+
+            var missing = wanted.Except(existing).ToList();
+            if (missing.Count == 0)
+            {
+                return;
+            }
+
+            foreach (var permissionId in missing)
+            {
+                db.UserPermissions.Add(new UserPermission
+                {
+                    UserId = userId,
+                    PermissionId = permissionId,
+                    Level = AccessLevel.Edit,
+                });
+            }
+
+            await db.SaveChangesAsync();
+        }
 
         /// <summary>Inserts any catalog keys that are not yet tracked (never overwrites existing rows).</summary>
         private static async Task EnsurePermissionCatalogAsync(ReviveHrDbContext db)
@@ -382,6 +476,68 @@ namespace ReviveHRSystem.Web.DataSeed
             db.ShiftCycles.Add(cycle);
             await db.SaveChangesAsync();
             return cycle;
+        }
+
+        /// <summary>
+        /// One Open payroll period for the current month at the gym, with Draft
+        /// entries for each of its active employees — the manual-testing fixture
+        /// that makes every settlement-sheet endpoint (bonus, deductions, close,
+        /// publish, payslips, export, review queue) exercisable in Swagger.
+        /// Idempotent: existing periods/entries are left untouched.
+        /// </summary>
+        private static async Task EnsurePayrollSeedAsync(ReviveHrDbContext db, int gymId, DateOnly today)
+        {
+            var monthStart = new DateOnly(today.Year, today.Month, 1);
+            var monthEnd = new DateOnly(today.Year, today.Month, DateTime.DaysInMonth(today.Year, today.Month));
+
+            var period = await db.PayrollPeriods
+                .FirstOrDefaultAsync(p => p.GymId == gymId && p.StartDate == monthStart);
+            if (period is null)
+            {
+                period = new PayrollPeriod
+                {
+                    GymId = gymId,
+                    StartDate = monthStart,
+                    EndDate = monthEnd,
+                    Status = PayrollPeriodStatus.Open,
+                };
+                db.PayrollPeriods.Add(period);
+                await db.SaveChangesAsync();
+            }
+
+            var employees = await db.Employees
+                .Where(e => e.GymId == gymId && e.Status == EmployeeStatus.Active)
+                .Select(e => e.Id)
+                .ToListAsync();
+            if (employees.Count == 0)
+            {
+                return;
+            }
+
+            var existing = await db.PayrollEntries
+                .Where(e => e.PayrollPeriodId == period.Id)
+                .Select(e => e.EmployeeId)
+                .ToListAsync();
+
+            foreach (var employeeId in employees.Where(id => !existing.Contains(id)))
+            {
+                // 8000 base / 21 days / no OT or bonus — money is recomputed
+                // server-side, these columns only seed the starting sheet.
+                db.PayrollEntries.Add(new PayrollEntry
+                {
+                    PayrollPeriodId = period.Id,
+                    EmployeeId = employeeId,
+                    BaseSalary = 8000m,
+                    TotalDeductions = 0m,
+                    TotalBonuses = 0m,
+                    NetPay = 8000m,
+                    DaysWorked = 21,
+                    OvertimeHours = 0m,
+                    Status = "Draft",
+                });
+            }
+
+            await db.SaveChangesAsync();
         }
 
         private static async Task<(Employee Employee, User User)> EnsureEmployeeAsync(

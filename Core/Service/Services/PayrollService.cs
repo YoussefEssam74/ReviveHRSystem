@@ -183,6 +183,31 @@ namespace Service.Services
             };
         }
 
+        public async Task<RemoveDeductionResponse> RemoveDeductionAsync(int? actorUserId, int periodId, int employeeId, int lineId, CancellationToken cancellationToken = default)
+        {
+            var actor = await HrPortalHelpers.ResolveActorAsync(_unitOfWork, actorUserId, cancellationToken);
+            await _accessControl.EnsurePermissionAsync(actor.Id, "payroll.edit", cancellationToken);
+            var (_, entry) = await LoadEntryAsync(actor, periodId, employeeId, requireOpen: true, cancellationToken);
+
+            var line = entry.LineItems.FirstOrDefault(l => l.Id == lineId)
+                ?? throw new BadRequestException("Deduction line not found on this sheet.");
+
+            _unitOfWork.GetRepository<PayrollEntryLineItem, int>().Remove(line);
+            entry.LineItems.Remove(line);
+            SyncTotals(entry);
+            _unitOfWork.GetRepository<PayrollEntry, int>().Update(entry);
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+            return new RemoveDeductionResponse
+            {
+                Data = new RemoveDeductionData
+                {
+                    Id = lineId,
+                    Entry = BuildEntrySummary(entry),
+                },
+            };
+        }
+
         public async Task<CloseEntryResponse> CloseEntryAsync(int? actorUserId, int periodId, int employeeId, CancellationToken cancellationToken = default)
         {
             var actor = await HrPortalHelpers.ResolveActorAsync(_unitOfWork, actorUserId, cancellationToken);

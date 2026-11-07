@@ -1,3 +1,4 @@
+using Shared.DataTransferObject.Employee;
 using Shared.DataTransferObject.Permission;
 using Shared.DataTransferObject.Role;
 using Shared.DataTransferObject.User;
@@ -44,5 +45,21 @@ namespace ServiceAbstraction.Services
 
         /// <summary>GET /api/users/{id} — access profile (own id, or any id with team.view).</summary>
         Task<UserAccessProfileResponse> GetUserAccessProfileAsync(int? actorUserId, int userId, CancellationToken cancellationToken = default);
+
+        /// <summary>Paged HR Team member list with role/gym/permission counters (team.view).</summary>
+        Task<UsersListResponse> GetUsersAsync(int? actorUserId, UserListQuery query, CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// Creates an HR-portal account (the HR-Team wizard's final submit, H3):
+        /// identity + gym access + direct permissions + optional role, atomically.
+        /// The account starts with the standard temporary password (team.manage).
+        /// </summary>
+        Task<CreateUserResponse> CreateUserAsync(int? actorUserId, CreateUserRequest request, CancellationToken cancellationToken = default);
+
+        /// <summary>Suspends / reactivates an account; reason required, self-suspend refused (H6, team.manage).</summary>
+        Task<MessageResponse> ChangeUserStatusAsync(int? actorUserId, int userId, UserStatusRequest request, CancellationToken cancellationToken = default);
+
+        /// <summary>Admin password reset (dashboard D12): sets a known new password, never echoed back (team.manage).</summary>
+        Task<MessageResponse> ResetUserPasswordAsync(int? actorUserId, int userId, ResetPasswordRequest request, CancellationToken cancellationToken = default);
     }
 }

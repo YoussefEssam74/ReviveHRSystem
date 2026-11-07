@@ -299,6 +299,8 @@ namespace ReviveHRSystem.Web
                 // Standard error responses (400/401/404/500, plus 429 where
                 // rate-limited) come from one place instead of per-action attributes.
                 options.OperationFilter<Swagger.ErrorResponseOperationFilter>();
+                // Paste-ready example request bodies for manual Swagger testing.
+                options.OperationFilter<Swagger.RequestExampleOperationFilter>();
 
                 // Controller XML comments (Infrastructure/Presentation) — resolved next to the
                 // assembly so paths stay correct under any content root/layout.
