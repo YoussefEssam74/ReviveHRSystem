@@ -20,6 +20,13 @@ The system needs secure authentication for multiple user types (Top Management, 
 - Longer-lived (7 days)
 - Rotated on each use (old token invalidated)
 - Stored server-side in database for validation and revocation
+- **Rotation grace window (60s):** re-presenting a token that was rotated moments
+  ago is treated as a concurrent refresh from another tab, not as theft — the
+  caller is refused but the chain is not revoked. Revoking on that race signed
+  every tab out mid-session. A rotated token presented *outside* the window still
+  trips reuse detection and revokes the whole chain.
+- Access tokens are renewed silently on **every** authenticated call, binary
+  downloads included: an expired access token never ends a session by itself.
 
 ### Token Storage (Frontend)
 - Access token: kept in memory (not localStorage, not sessionStorage)

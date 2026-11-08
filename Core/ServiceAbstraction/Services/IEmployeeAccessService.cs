@@ -15,9 +15,23 @@ namespace ServiceAbstraction.Services
         /// <summary>
         /// Throws <see cref="DomainLayer.Exceptions.NotFoundException"/> when the actor
         /// may not access the employee in the active gym; otherwise returns the target
-        /// employee id.
+        /// employee id. A null <paramref name="activeGymId"/> means "self-only": every
+        /// other target is refused.
         /// </summary>
         Task<int> EnsureCanAccessAsync(
+            int actorUserId, int employeeId,
+            int? activeGymId, CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// Same guard, but a null <paramref name="activeGymId"/> (an unscoped multi-gym
+        /// session such as HR Manager or Top Management) resolves its scope from the
+        /// employee's own gym instead of refusing. The actor must still cover that gym,
+        /// and the per-gym team/role rules then apply as usual. Use this where a
+        /// cross-gym account legitimately reads another employee's record (a request
+        /// attachment); keep <see cref="EnsureCanAccessAsync"/> where a null gym is the
+        /// deliberate "self-only" signal.
+        /// </summary>
+        Task<int> EnsureCanAccessCoveredGymAsync(
             int actorUserId, int employeeId,
             int? activeGymId, CancellationToken cancellationToken = default);
     }

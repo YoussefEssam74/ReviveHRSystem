@@ -146,7 +146,13 @@ namespace Service.Services
                 // rotated — revoke the whole chain for that user. An expired token or a
                 // token revoked by logout was never rotated: it is simply invalid, and
                 // the user's other active sessions stay untouched.
-                if (stored?.ReplacedByTokenHash is not null)
+                //
+                // Rotation grace: two tabs (or a retry racing its own answer) present the
+                // same token the instant the winner rotates it. That is the ordinary
+                // multi-tab refresh race, not theft — revoking the chain there signed
+                // every tab out, which is exactly the random mid-session sign-out this
+                // window removes. Outside the window the sweep still runs.
+                if (stored?.ReplacedByTokenHash is not null && !IsWithinRotationGrace(stored))
                 {
                     await sessionService.RevokeAllRefreshTokensAsync(stored.UserId, cancellationToken);
                 }
@@ -176,9 +182,9 @@ namespace Service.Services
             }
             catch (DbUpdateConcurrencyException)
             {
-                // A concurrent rotation won the claim: this token was already replaced
-                // — presented again, it is reuse; revoke the whole chain.
-                await sessionService.RevokeAllRefreshTokensAsync(stored.UserId, cancellationToken);
+                // A concurrent rotation won the claim: this presentation lost the same
+                // benign race the rotation grace window covers, so the winner's chain
+                // survives and this caller is simply refused.
                 throw new UnAuthorizedException("Your session has expired. Please sign in again.");
             }
 
@@ -431,5 +437,14 @@ namespace Service.Services
                 await unitOfWork.SaveChangesAsync(cancellationToken);
             }
         }
+
+        /// <summary>
+        /// Window in which re-presenting an already-rotated refresh token is treated as
+        /// a concurrent refresh from another tab rather than as token theft.
+        /// </summary>
+        private static readonly TimeSpan RotationReuseGrace = TimeSpan.FromSeconds(60);
+
+        private static bool IsWithinRotationGrace(DomainLayer.Models.UserModule.RefreshToken stored) =>
+            stored.RevokedAtUtc is { } revokedAt && DateTime.UtcNow - revokedAt <= RotationReuseGrace;
     }
 }

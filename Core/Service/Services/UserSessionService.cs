@@ -2,6 +2,7 @@ using DomainLayer.Contracts;
 using DomainLayer.Models.EmployeeModule.Enums;
 using DomainLayer.Models.UserModule;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using Service.Specifications;
 using ServiceAbstraction.Services;
 
@@ -14,20 +15,40 @@ namespace Service.Services
     /// is shared by every termination path (employee status change, separation
     /// finalize, and separation stage → Completed).
     /// </summary>
-    public class UserSessionService(IUnitOfWork unitOfWork) : IUserSessionService
+    public class UserSessionService(IUnitOfWork unitOfWork, ILogger<UserSessionService> logger) : IUserSessionService
     {
         public async Task<bool> IsSessionAllowedAsync(int userId, CancellationToken cancellationToken = default)
         {
             if (userId <= 0)
             {
+                logger.LogWarning("Session refused: {UserId} is not a valid user id.", userId);
                 return false;
             }
 
             var user = await unitOfWork.GetRepository<User, int>()
                 .GetByIdAsync(new UserSessionStatusSpec(userId), cancellationToken);
 
-            return user is { IsActive: true }
-                && (user.EmployeeProfile is null || user.EmployeeProfile.Status != EmployeeStatus.Terminated);
+            // A silent `false` made a rejected refresh impossible to diagnose; record
+            // which condition refused it.
+            if (user is null)
+            {
+                logger.LogWarning("Session refused for user {UserId}: no such user row.", userId);
+                return false;
+            }
+
+            if (!user.IsActive)
+            {
+                logger.LogWarning("Session refused for user {UserId}: the account is deactivated.", userId);
+                return false;
+            }
+
+            if (user.EmployeeProfile?.Status == EmployeeStatus.Terminated)
+            {
+                logger.LogWarning("Session refused for user {UserId}: the employee profile is terminated.", userId);
+                return false;
+            }
+
+            return true;
         }
 
         public async Task TerminateAccessAsync(int userId, CancellationToken cancellationToken = default)

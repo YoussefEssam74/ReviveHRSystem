@@ -16,6 +16,8 @@ export interface EmployeeAttendanceItem {
   checkOut: string | null
   status: string
   notes: string | null
+  /** Approved cover/extra days for an unscheduled punch (1 or 2), null otherwise. */
+  coverDays: number | null
 }
 
 export interface EmployeeAttendanceTotals {
@@ -29,6 +31,8 @@ export interface EmployeeAttendanceTotals {
   hours: number
   /** Scheduled hours summed over the same days (future days excluded). */
   expected: number
+  /** Total approved cover/extra days in the period (display-only). */
+  coverDays: number
 }
 
 export interface EmployeeAttendanceResponse {

@@ -304,6 +304,7 @@ namespace Service.Services
                     CheckOut = r.CheckOut,
                     Status = r.Status,
                     Notes = r.Notes,
+                    CoverDays = r.CoverDays,
                 })
                 .ToList();
 
@@ -382,6 +383,7 @@ namespace Service.Services
             var assignmentIndex = assignments.ToDictionary(a => (a.EmployeeId, a.Date));
 
             var dayOffDates = await LoadApprovedDayOffDatesAsync(employeeIds, from, to, cancellationToken);
+            var coverByEmployeeDate = await LoadCoverDaysByEmployeeDateAsync(employeeIds, from, to, cancellationToken);
 
             var today = Today();
             var rows = new List<AttendanceListItem>((to.DayNumber - from.DayNumber + 1) * employees.Count);
@@ -402,7 +404,8 @@ namespace Service.Services
                             && record.CheckOutTime is null
                             ? "Off"
                             : null;
-                        rows.Add(MapRow(record, employee, employee.Gym?.Name ?? string.Empty, correction, shiftLabel, statusOverride));
+                        coverByEmployeeDate.TryGetValue((employee.Id, date), out var coverDays);
+                        rows.Add(MapRow(record, employee, employee.Gym?.Name ?? string.Empty, correction, shiftLabel, statusOverride, coverDays));
                         continue;
                     }
 
@@ -472,7 +475,7 @@ namespace Service.Services
             int[] employeeIds, DateOnly from, DateOnly to, CancellationToken cancellationToken)
         {
             var requests = await _unitOfWork.GetRepository<DomainLayer.Models.RequestModule.EmployeeRequest, int>()
-                .GetAllAsync(new ApprovedDayOffRequestsByEmployeeIdsSpec(employeeIds, from, to), cancellationToken);
+                .GetAllAsync(new ApprovedLeaveByEmployeeIdsSpec(employeeIds, from, to), cancellationToken);
 
             var map = new Dictionary<int, HashSet<DateOnly>>();
             foreach (var request in requests)
@@ -487,6 +490,28 @@ namespace Service.Services
                 for (var date = start; date <= end; date = date.AddDays(1))
                 {
                     set.Add(date);
+                }
+            }
+
+            return map;
+        }
+
+        /// <summary>Approved cover/extra days per (employee, date). Display-only.</summary>
+        private async Task<Dictionary<(int EmployeeId, DateOnly Date), int>> LoadCoverDaysByEmployeeDateAsync(
+            int[] employeeIds, DateOnly from, DateOnly to, CancellationToken cancellationToken)
+        {
+            var requests = await _unitOfWork.GetRepository<DomainLayer.Models.RequestModule.EmployeeRequest, int>()
+                .GetAllAsync(new ApprovedUnscheduledAttendanceByEmployeeIdsSpec(employeeIds, from, to), cancellationToken);
+
+            var map = new Dictionary<(int EmployeeId, DateOnly Date), int>();
+            foreach (var request in requests)
+            {
+                var days = request.OvertimeHoursRequested.HasValue
+                    ? (int)request.OvertimeHoursRequested.Value
+                    : (request.Payment?.Contains("2") == true ? 2 : 1);
+                if (days is 1 or 2)
+                {
+                    map[(request.EmployeeId, request.RequestDate)] = days;
                 }
             }
 
@@ -527,6 +552,7 @@ namespace Service.Services
 
                 totals.Hours += WorkedHours(row);
                 totals.Expected += ExpectedHours(row.Shift);
+                totals.CoverDays += row.CoverDays ?? 0;
             }
 
             return new EmployeeAttendanceTotals
@@ -539,6 +565,7 @@ namespace Service.Services
                 Off = totals.Off,
                 Hours = (decimal)Math.Round(totals.Hours, 2),
                 Expected = (decimal)Math.Round(totals.Expected, 2),
+                CoverDays = totals.CoverDays,
             };
         }
 
@@ -552,6 +579,7 @@ namespace Service.Services
             public int Off;
             public double Hours;
             public double Expected;
+            public int CoverDays;
         }
 
         /// <summary>Worked hours from the punches; overnight spans roll past midnight.</summary>
@@ -600,7 +628,8 @@ namespace Service.Services
             string gymName,
             AttendanceCorrection? latestCorrection,
             string? shiftLabel = null,
-            string? statusOverride = null)
+            string? statusOverride = null,
+            int? coverDays = null)
         {
             var source = record.CheckInMethod.HasValue || record.CheckOutMethod.HasValue
                 ? ((record.CheckInMethod ?? record.CheckOutMethod) == AttendanceMethod.Manual ? "Manual" : "Biometric")
@@ -629,6 +658,7 @@ namespace Service.Services
                 CorrectedAt = latestCorrection is null
                     ? null
                     : latestCorrection.CorrectedAt.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+                CoverDays = coverDays,
             };
         }
 

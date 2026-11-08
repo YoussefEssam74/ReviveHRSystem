@@ -26,6 +26,8 @@ export interface EmployeeRequestItem {
   status: string
   reason: string
   bmComment: string | null
+  /** Cover/extra days when an Unscheduled Attendance request was approved (1 or 2). */
+  calculatedDays?: number | null
 }
 
 /** One timeline chip of the detail drawer's approval workflow. */
@@ -45,12 +47,18 @@ export interface RequestDetail {
   requestedDate: string
   /** End of a leave/swap range, null on single-day types. */
   endDate: string | null
+  /** Time request "HH:mm:ss" (late/early types); null when the type has no time. */
+  requestTime?: string | null
+  /** Amount carried by the type (overtime / allowance); null otherwise. */
+  amount?: number | null
   status: string
   bmDecision: string | null
   bmComment: string | null
   hrDecision: string | null
   hrComment: string | null
   payment: string | null
+  /** Cover/extra days when an Unscheduled Attendance request was approved (1 or 2). */
+  calculatedDays?: number | null
   reason: string
   /** A file (the sick-leave medical certificate) rides with this request. */
   hasAttachment: boolean
@@ -122,6 +130,8 @@ export interface DeskRequestRow {
   employeeName: string
   type: string
   submittedDate: string
+  /** Date + clock time the request was filed (UTC ISO); null on older payloads. */
+  submittedAt?: string | null
   requestedDate: string
   /** End of a leave/swap range, null on single-day types. */
   endDate: string | null
@@ -135,7 +145,43 @@ export interface DeskRequestRow {
   hasAttachment: boolean
   status: string
   reason: string
+  payment?: string | null
+  /** Cover/extra days when an Unscheduled Attendance request was approved (1 or 2). */
+  calculatedDays?: number | null
   timeline: { step: string; date: string | null; done: boolean }[]
+}
+
+/** One card of the HR requests inbox (GET /api/requests items). */
+export interface HrRequestItem {
+  id: number
+  employee: string
+  gym: string
+  type: string
+  submittedDate: string
+  requestedDate: string
+  endDate: string | null
+  /** Time request "HH:mm:ss" (late/early types); null when the type has no time. */
+  requestTime?: string | null
+  /** Amount carried by the type (overtime / allowance); null otherwise. */
+  amount?: number | null
+  status: string
+  bmDecision: string | null
+  bmComment: string | null
+  hrDecision: string | null
+  hrComment: string | null
+  payment: string | null
+  calculatedDays?: number | null
+  reason: string
+  hasAttachment: boolean
+  timeline: RequestTimelineStep[]
+}
+
+export interface HrRequestListResponse {
+  items: HrRequestItem[]
+  page: number
+  pageSize: number
+  total: number
+  totalPages: number
 }
 
 export interface RequestInboxParams {
@@ -155,10 +201,38 @@ export function getRequestInbox(
 }
 
 /** POST /api/requests/{id}/decisions — stage "BranchManager" is the default. */
-export function decideRequest(requestId: number, decision: string, comment: string | null): Promise<void> {
+export function decideRequest(
+  requestId: number,
+  decision: string,
+  comment: string | null,
+  calculatedDays?: 1 | 2,
+): Promise<void> {
   return apiRequest<void>(`/api/requests/${requestId}/decisions`, {
     method: 'POST',
-    body: { decision, comment },
+    body: { decision, comment, calculatedDays },
+  })
+}
+
+/** GET /api/requests — the HR portal inbox (requests.view). Status accepts the
+ *  display values ("Pending HR Review", Approved, ...) or the raw enum names. */
+export function getHrRequests(
+  { signal, ...params }: RequestInboxParams,
+): Promise<HrRequestListResponse> {
+  return apiRequest<HrRequestListResponse>(withQuery('/api/requests', params), { signal })
+}
+
+/** POST /api/requests/{id}/decide — HR final stage (Stage must be "HR").
+ *  Rejection requires a comment server-side; cover days are 1 or 2 for
+ *  Unscheduled Attendance approvals. */
+export function decideRequestHr(
+  requestId: number,
+  decision: string,
+  comment: string | null,
+  calculatedDays?: 1 | 2,
+): Promise<void> {
+  return apiRequest<void>(`/api/requests/${requestId}/decide`, {
+    method: 'POST',
+    body: { stage: 'HR', decision, comment, calculatedDays },
   })
 }
 

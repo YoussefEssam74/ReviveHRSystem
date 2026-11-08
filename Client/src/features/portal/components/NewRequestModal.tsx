@@ -93,7 +93,9 @@ export function NewRequestModal({
     queryFn: ({ signal }) => getRequestTypes(signal),
     staleTime: 10 * 60_000,
   })
-  const selectedType = typesQuery.data?.find((type) => type.id === form.typeId) ?? null
+  // Unscheduled Attendance is system-generated at the kiosk, never filed by hand.
+  const manualTypes = (typesQuery.data ?? []).filter((type) => type.id !== 'unscheduled-attendance')
+  const selectedType = manualTypes.find((type) => type.id === form.typeId) ?? null
 
   // Rule-flag driven needs of the selected type.
   const needsBalance = selectedType?.consumesLeave != null
@@ -218,7 +220,7 @@ export function NewRequestModal({
             }}
           >
             <option value="">{typesQuery.isLoading ? 'Loading types…' : 'Select type...'}</option>
-            {typesQuery.data?.map((type) => (
+            {manualTypes.map((type) => (
               <option key={type.id} value={type.id}>
                 {type.label}
               </option>

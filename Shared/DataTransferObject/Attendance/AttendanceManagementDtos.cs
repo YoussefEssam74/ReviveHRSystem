@@ -51,6 +51,9 @@ namespace Shared.DataTransferObject.Attendance
         public string? Notes { get; init; }
         public string? CorrectedBy { get; init; }
         public string? CorrectedAt { get; init; }
+
+        /// <summary>Approved cover/extra days for an unscheduled punch (1 or 2), else null.</summary>
+        public int? CoverDays { get; init; }
     }
 
     /// <summary>Paged envelope for GET /api/attendance (A1).</summary>
@@ -115,6 +118,9 @@ namespace Shared.DataTransferObject.Attendance
         public string? CheckOut { get; init; }
         public required string Status { get; init; }
         public string? Notes { get; init; }
+
+        /// <summary>Approved cover/extra days for an unscheduled punch (1 or 2), else null.</summary>
+        public int? CoverDays { get; init; }
     }
 
     /// <summary>
@@ -133,6 +139,9 @@ namespace Shared.DataTransferObject.Attendance
         public int Off { get; init; }
         public decimal Hours { get; init; }
         public decimal Expected { get; init; }
+
+        /// <summary>Total approved cover/extra days in the period (display-only).</summary>
+        public int CoverDays { get; init; }
     }
 
     /// <summary>Response for GET /api/employees/{id}/attendance (A7).</summary>

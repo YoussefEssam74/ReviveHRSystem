@@ -366,6 +366,7 @@ export function CreateFollowUpModal({
   const [action, setAction] = useState<ActionKind>('Deduction')
   const [severity, setSeverity] = useState<Severity>('Medium')
   const [description, setDescription] = useState('')
+  const [deductionDate, setDeductionDate] = useState(() => new Date().toISOString().slice(0, 10))
   const [deductionAmount, setDeductionAmount] = useState<(typeof DEDUCTION_AMOUNTS)[number] | ''>('')
   const [note, setNote] = useState('')
 
@@ -385,6 +386,8 @@ export function CreateFollowUpModal({
         severity,
         description: effectiveDescription,
         note: note.trim() || null,
+        date: action === 'Deduction' ? deductionDate : null,
+        deductionSize: action === 'Deduction' ? deductionAmount : null,
       }),
     onSuccess: (created) => {
       toast(`Follow-up raised for ${first(created.employee)}.`)
@@ -424,7 +427,7 @@ export function CreateFollowUpModal({
             disabled={
               effectiveEmployeeId == null ||
               effectiveDescription.trim().length === 0 ||
-              (action === 'Deduction' && deductionAmount === '')
+              (action === 'Deduction' && (deductionAmount === '' || deductionDate === ''))
             }
             loading={createMutation.isPending}
             onClick={() => createMutation.mutate()}
@@ -500,26 +503,44 @@ export function CreateFollowUpModal({
             </div>
           </div>
           {action === 'Deduction' ? (
-            <div>
-              <label className="form-label" htmlFor="fu-deduction">
-                Deduction amount
-              </label>
-              <select
-                id="fu-deduction"
-                value={deductionAmount}
-                onChange={(e) => setDeductionAmount(e.target.value as (typeof DEDUCTION_AMOUNTS)[number] | '')}
-                className="form-input"
-              >
-                <option value="">Choose deduction…</option>
-                {DEDUCTION_AMOUNTS.map((amount) => (
-                  <option key={amount} value={amount}>
-                    {amount}
-                  </option>
-                ))}
-              </select>
-              {deductionAmount === '' && (
-                <p className="mt-1 text-[10px] text-red-500">Deduction amount is required.</p>
-              )}
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="form-label" htmlFor="fu-deduction-date">
+                  Deduction date
+                </label>
+                <input
+                  id="fu-deduction-date"
+                  type="date"
+                  value={deductionDate}
+                  max={new Date().toISOString().slice(0, 10)}
+                  onChange={(e) => setDeductionDate(e.target.value)}
+                  className="form-input"
+                />
+                {deductionDate === '' && (
+                  <p className="mt-1 text-[10px] text-red-500">Deduction date is required.</p>
+                )}
+              </div>
+              <div>
+                <label className="form-label" htmlFor="fu-deduction">
+                  Deduction amount
+                </label>
+                <select
+                  id="fu-deduction"
+                  value={deductionAmount}
+                  onChange={(e) => setDeductionAmount(e.target.value as (typeof DEDUCTION_AMOUNTS)[number] | '')}
+                  className="form-input"
+                >
+                  <option value="">Choose deduction…</option>
+                  {DEDUCTION_AMOUNTS.map((amount) => (
+                    <option key={amount} value={amount}>
+                      {amount}
+                    </option>
+                  ))}
+                </select>
+                {deductionAmount === '' && (
+                  <p className="mt-1 text-[10px] text-red-500">Deduction amount is required.</p>
+                )}
+              </div>
             </div>
           ) : (
             <div>

@@ -11,6 +11,7 @@ namespace Service.Specifications
         {
             Criteria = d => d.Id == id;
             AddInclude(d => d.Employee);
+            AddInclude(d => d.Employee.Compensations);
             AddInclude(d => d.IssuedByUser);
             AddInclude(d => d.AttendanceRecord);
             // Branch review (approve / reject / re-price) mutates the fetched candidate

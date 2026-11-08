@@ -52,7 +52,7 @@ interface NavSection {
  * Team Performance / Team Actions) is not in the sidebar — the TL works on the
  * same Branch pages, team-scoped. Key-gated items apply /api/auth/me keys.
  */
-function buildNavSections(isTeamLeader: boolean, isBranchManager: boolean, can: (key: string) => boolean): NavSection[] {
+function buildNavSections(isTeamLeader: boolean, isBranchManager: boolean, can: (key: string) => boolean, userType?: string): NavSection[] {
   const sections: NavSection[] = [{ title: 'Personal', items: PERSONAL_ITEMS }]
 
   if (isTeamLeader || isBranchManager) {
@@ -71,6 +71,20 @@ function buildNavSections(isTeamLeader: boolean, isBranchManager: boolean, can: 
       title: 'Branch',
       items: branch.filter((item) => !item.permission || can(item.permission)),
     })
+  } else if (userType === 'HR' || userType === 'TopManagement') {
+    // HR sees the final-stage desks only: requests awaiting sign-off and the
+    // attendance roster. Backend policies still enforce the real access.
+    const hrItems = TEAM_ITEMS.filter((item) => item.id === 'team-requests').map((item) => ({
+      ...item,
+      label: 'HR Requests',
+    }))
+    const attendanceItem = BRANCH_ITEMS.find((item) => item.id === 'attendance-management')
+    const branch = [...hrItems, ...(attendanceItem ? [attendanceItem] : [])].filter(
+      (item) => !item.permission || can(item.permission),
+    )
+    if (branch.length > 0) {
+      sections.push({ title: 'HR', items: branch })
+    }
   }
 
   return sections
@@ -175,7 +189,7 @@ export function PortalLayout() {
     )
   }
 
-  const sections = buildNavSections(portal.isTeamLeader, portal.isBranchManager, portal.can)
+  const sections = buildNavSections(portal.isTeamLeader, portal.isBranchManager, portal.can, portal.me.userType)
   const user = portal.user
   const initials = user?.initials || portal.me.userName.slice(0, 2).toUpperCase()
   const fullName = user?.fullName || portal.me.userName

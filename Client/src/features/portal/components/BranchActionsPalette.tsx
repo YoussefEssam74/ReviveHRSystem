@@ -320,6 +320,7 @@ function IssueDeductionModal({ onClose }: { onClose: () => void }) {
   const options = roster.data?.filter((e) => e.status !== 'Terminated') ?? []
 
   const [employeeId, setEmployeeId] = useState('')
+  const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10))
   const [amount, setAmount] = useState('')
   const [reason, setReason] = useState(DEDUCTION_REASONS[0])
   const [note, setNote] = useState('')
@@ -336,6 +337,7 @@ function IssueDeductionModal({ onClose }: { onClose: () => void }) {
     mutationFn: () =>
       issueDeduction({
         employeeId: Number(employeeId),
+        date,
         amount: Number(amount),
         reason,
         note: note.trim() || null,
@@ -381,6 +383,23 @@ function IssueDeductionModal({ onClose }: { onClose: () => void }) {
               onChange={setEmployeeId}
             />
           )}
+        </div>
+        <div>
+          <label className="form-label" htmlFor="ded-date">
+            Deduction date
+          </label>
+          <input
+            id="ded-date"
+            type="date"
+            value={date}
+            max={new Date().toISOString().slice(0, 10)}
+            onChange={(e) => setDate(e.target.value)}
+            className="form-input"
+            required
+          />
+          <p className="mt-1 text-[10px] text-charcoal-500">
+            One deduction per employee per day. A rejected day cannot be re-issued.
+          </p>
         </div>
         <div className="grid grid-cols-2 gap-3">
           <div>

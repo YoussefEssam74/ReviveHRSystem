@@ -6,6 +6,8 @@ using DomainLayer.Models.EmployeeModule.Enums;
 using DomainLayer.Models.RequestModule;
 using DomainLayer.Models.RequestModule.Enums;
 using DomainLayer.Models.SchedulingModule;
+using DomainLayer.Models.UserModule;
+using DomainLayer.Models.UserModule.Enums;
 
 namespace Service.Specifications
 {
@@ -298,14 +300,22 @@ namespace Service.Specifications
         }
     }
 
-    /// <summary>Approved Day Off requests whose effective span overlaps the range (roster "Off — Day Off approved").</summary>
-    public class ApprovedDayOffRequestsByEmployeeIdsSpec : BaseSpecification<EmployeeRequest, int>
+    /// <summary>
+    /// Approved leave requests whose effective span overlaps the range. Every leave
+    /// type exempts the day from absence derivation — Day Off, Annual Leave, Sick
+    /// Leave and unpaid leave alike (the deduction sweep and the attendance grid
+    /// read the same set).
+    /// </summary>
+    public class ApprovedLeaveByEmployeeIdsSpec : BaseSpecification<EmployeeRequest, int>
     {
-        public ApprovedDayOffRequestsByEmployeeIdsSpec(int[] employeeIds, DateOnly from, DateOnly to)
+        public ApprovedLeaveByEmployeeIdsSpec(int[] employeeIds, DateOnly from, DateOnly to)
         {
-            Criteria = r => r.Type == "Day Off"
-                && r.Status == RequestStatus.Approved
+            Criteria = r => r.Status == RequestStatus.Approved
                 && employeeIds.Contains(r.EmployeeId)
+                && (r.Type == "Day Off"
+                    || r.Type == "Annual Leave"
+                    || r.Type == "Sick Leave"
+                    || r.Payment == "unpaid")
                 && (r.TargetStartDate ?? r.RequestDate) <= to
                 && (r.TargetEndDate ?? r.RequestDate) >= from;
         }
@@ -381,6 +391,48 @@ namespace Service.Specifications
         public ShiftAssignmentByEmployeeDateSpec(int employeeId, DateOnly date)
         {
             Criteria = sa => sa.EmployeeId == employeeId && sa.Date == date;
+        }
+    }
+
+    /// <summary>Finds an employee's requests on a date with a specific type.</summary>
+    public class EmployeeRequestsByDateAndTypeSpec : BaseSpecification<EmployeeRequest, int>
+    {
+        public EmployeeRequestsByDateAndTypeSpec(int employeeId, DateOnly date, string type)
+        {
+            Criteria = r => r.EmployeeId == employeeId && r.RequestDate == date && r.Type == type;
+            OrderByDescending = r => r.CreatedAt;
+        }
+    }
+
+    /// <summary>
+    /// Approved Unscheduled Attendance requests for several employees over a range.
+    /// The stored value lives on <see cref="EmployeeRequest.OvertimeHoursRequested"/>
+    /// (1 or 2 cover/extra days); only the HR-final <c>Approved</c> status counts,
+    /// never <c>PendingHRReview</c>.
+    /// </summary>
+    public class ApprovedUnscheduledAttendanceByEmployeeIdsSpec : BaseSpecification<EmployeeRequest, int>
+    {
+        public ApprovedUnscheduledAttendanceByEmployeeIdsSpec(int[] employeeIds, DateOnly from, DateOnly to)
+        {
+            Criteria = r => r.Status == RequestStatus.Approved
+                && employeeIds.Contains(r.EmployeeId)
+                && r.Type == Service.Services.RequestTypeCatalog.UnscheduledAttendanceLabel
+                && (r.TargetStartDate ?? r.RequestDate) <= to
+                && (r.TargetEndDate ?? r.RequestDate) >= from;
+        }
+    }
+
+    /// <summary>Finds active Branch Managers and HR users who have access to this gym.</summary>
+    public class BranchManagersAndHrForGymSpec : BaseSpecification<User, int>
+    {
+        public BranchManagersAndHrForGymSpec(int gymId)
+        {
+            Criteria = u => u.IsActive && (
+                u.UserGymRoles.Any(ugr => ugr.GymId == gymId && ugr.Role.Name.Contains("Branch Manager"))
+                || (u.UserType == UserType.HR && u.UserGymAccesses.Any(uga => uga.GymId == gymId))
+                || u.UserType == UserType.TopManagement);
+            AddInclude(u => u.UserGymRoles);
+            AddInclude(u => u.UserGymAccesses);
         }
     }
 }

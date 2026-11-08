@@ -114,7 +114,7 @@ export default function AttendancePage() {
     livenessScore: number
   }) {
     // Only an outcome that actually recorded a punch reaches here; pending
-    // check-outs and silent "already complete" frames carry no punch to show.
+    // check-out prompts carry nothing to show yet.
     if (!result.attendance) return
     setLastFace({ similarity: result.similarity, livenessScore: result.livenessScore })
     setLastResult(result.attendance)

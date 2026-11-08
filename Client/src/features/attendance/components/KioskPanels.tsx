@@ -159,6 +159,12 @@ export function ResultOverlay({
                   <dt>Status</dt>
                   <dd>{result.attendanceStatus}</dd>
                 </div>
+                {result.shiftComparison === 'UNSCHEDULED' && (
+                  <div className="mt-2 rounded-lg border border-amber-400/40 bg-amber-500/10 p-2.5 text-xs text-[#fde68a]">
+                    <p className="font-semibold">Unscheduled / off day</p>
+                    <p className="mt-0.5">No shift was scheduled for today — a request was sent to the branch manager and HR for cover/extra-day approval (1 or 2 days).</p>
+                  </div>
+                )}
                 {face && (
                   <div className="flex justify-between gap-3">
                     <dt>Face match</dt>

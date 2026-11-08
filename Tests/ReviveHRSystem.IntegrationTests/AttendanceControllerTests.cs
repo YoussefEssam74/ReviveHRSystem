@@ -86,18 +86,25 @@ namespace ReviveHRSystem.IntegrationTests
         }
 
         [Fact]
-        public async Task Event_CheckOutAfterCheckIn_Returns201_ThenDuplicateOut400()
+        public async Task Event_CheckOutAfterCheckIn_Returns201_ThenStaleOut400()
         {
             var (_, employee, stationToken) = await NewStationWithEmployeeAsync();
 
-            await PostEventAsync(EventPayload(employee.EmployeeNumber, "IN"), stationToken);
-            var checkOut = await PostEventAsync(EventPayload(employee.EmployeeNumber, "OUT"), stationToken);
-            var duplicateOut = await PostEventAsync(EventPayload(employee.EmployeeNumber, "OUT"), stationToken);
+            var checkIn = await PostEventAsync(EventPayload(employee.EmployeeNumber, "IN"), stationToken);
+            Assert.Equal(HttpStatusCode.Created, checkIn.Status);
+            var checkInAt = checkIn.Body.GetProperty("timestamp").GetDateTime();
 
+            var checkOut = await PostEventAsync(EventPayload(employee.EmployeeNumber, "OUT"), stationToken);
             Assert.Equal(HttpStatusCode.Created, checkOut.Status);
             Assert.Equal("OUT", checkOut.Body.GetProperty("type").GetString());
-            Assert.Equal(HttpStatusCode.BadRequest, duplicateOut.Status);
-            Assert.Equal("This employee is already checked out today.", duplicateOut.Body.GetProperty("errorMessage").GetString());
+
+            // A checkout that is not after the recorded one is refused — a replayed or
+            // back-dated punch cannot move the day's end time backwards.
+            var staleOut = await PostEventAsync(
+                EventPayload(employee.EmployeeNumber, "OUT", timestamp: checkInAt), stationToken);
+
+            Assert.Equal(HttpStatusCode.BadRequest, staleOut.Status);
+            Assert.Equal("This employee is already checked out today.", staleOut.Body.GetProperty("errorMessage").GetString());
         }
 
         [Fact]
@@ -112,7 +119,7 @@ namespace ReviveHRSystem.IntegrationTests
         }
 
         [Fact]
-        public async Task Event_AutoType_OpensWhenNoRecord_ClosesWhenOpen_RejectsWhenComplete()
+        public async Task Event_AutoType_OpensWhenNoRecord_ClosesWhenOpen_ReopensWhenComplete()
         {
             // The always-on kiosk camera sends AUTO: the server decides the direction
             // from the employee's own state, so the terminal never has to guess.
@@ -126,11 +133,17 @@ namespace ReviveHRSystem.IntegrationTests
             Assert.Equal(HttpStatusCode.Created, checkOut.Status);
             Assert.Equal("OUT", checkOut.Body.GetProperty("type").GetString());
 
-            var complete = await PostEventAsync(EventPayload(employee.EmployeeNumber, "AUTO"), stationToken);
-            Assert.Equal(HttpStatusCode.BadRequest, complete.Status);
-            Assert.Equal(
-                "This employee has already completed attendance for today.",
-                complete.Body.GetProperty("errorMessage").GetString());
+            // A scan on an already-complete day opens it again: the employee is back,
+            // so the day is re-opened rather than nagging the terminal with an error.
+            var reopened = await PostEventAsync(EventPayload(employee.EmployeeNumber, "AUTO"), stationToken);
+            Assert.Equal(HttpStatusCode.Created, reopened.Status);
+            Assert.Equal("IN", reopened.Body.GetProperty("type").GetString());
+
+            using var scope = _fixture.Services.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<ReviveHrDbContext>();
+            var record = await db.AttendanceRecords.SingleAsync(r => r.EmployeeId == employee.EmployeeId);
+            Assert.NotNull(record.CheckInTime);
+            Assert.Null(record.CheckOutTime);
         }
 
         [Fact]
@@ -172,11 +185,11 @@ namespace ReviveHRSystem.IntegrationTests
         }
 
         [Fact]
-        public async Task AutoScan_AfterDayComplete_ThrowsAlreadyComplete()
+        public async Task AutoScan_AfterDayComplete_ReopensTheDay()
         {
-            // A completed day (IN then OUT) must surface as the typed exception the
-            // face pipeline catches and turns into a silent "already complete" outcome,
-            // rather than a generic rejection the kiosk would nag with.
+            // The face pipeline's "already complete" outcome is gone: a scan on a
+            // completed day re-opens it (the same AUTO behaviour /events has), so the
+            // terminal never blocks an employee who is genuinely back at work.
             var (gym, employee, _) = await NewStationWithEmployeeAsync();
 
             using var scope = _fixture.Services.CreateScope();
@@ -199,14 +212,14 @@ namespace ReviveHRSystem.IntegrationTests
             Assert.NotNull(checkOut);
             Assert.Equal("OUT", checkOut!.Type);
 
-            var exception = await Assert.ThrowsAsync<AttendanceAlreadyCompleteException>(() =>
-                attendance.RecordBiometricEventAsync(new AttendanceEventRequest
-                {
-                    EmployeeId = employee.EmployeeNumber,
-                    Type = "AUTO",
-                    LivenessScore = 0.95,
-                }, gym.GymId));
-            Assert.Equal("This employee has already completed attendance for today.", exception.Message);
+            var reopened = await attendance.RecordBiometricEventAsync(new AttendanceEventRequest
+            {
+                EmployeeId = employee.EmployeeNumber,
+                Type = "AUTO",
+                LivenessScore = 0.95,
+            }, gym.GymId, confirmCheckout: true);
+            Assert.NotNull(reopened);
+            Assert.Equal("IN", reopened!.Type);
         }
 
         [Fact]
@@ -377,8 +390,11 @@ namespace ReviveHRSystem.IntegrationTests
         }
 
         [Fact]
-        public async Task Event_ScheduledDayOff_Returns404()
+        public async Task Event_ScheduledDayOff_RecordsUnscheduledCheckIn()
         {
+            // An employee with no shift today who still shows up is not turned away:
+            // the punch is recorded as an unscheduled / off-day check-in (pending
+            // approval) so HR can decide whether to pay it.
             var builder = NewBuilder();
             var gym = await builder.CreateGymWithStationAsync();
             // Access to the gym but no shift today.
@@ -387,8 +403,19 @@ namespace ReviveHRSystem.IntegrationTests
 
             var (status, body) = await PostEventAsync(EventPayload(employee.EmployeeNumber, "IN"), stationToken);
 
-            Assert.Equal(HttpStatusCode.NotFound, status);
-            Assert.Equal("No shift is scheduled for this employee today.", body.GetProperty("errorMessage").GetString());
+            Assert.Equal(HttpStatusCode.Created, status);
+            Assert.Equal("IN", body.GetProperty("type").GetString());
+
+            using var scope = _fixture.Services.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<ReviveHrDbContext>();
+            var record = await db.AttendanceRecords.SingleAsync(r => r.EmployeeId == employee.EmployeeId);
+            Assert.NotNull(record.CheckInTime);
+            Assert.Contains("Unscheduled", record.Notes ?? string.Empty, StringComparison.Ordinal);
+
+            // …and the approval request behind it exists for HR to decide.
+            var request = await db.EmployeeRequests.SingleAsync(r =>
+                r.EmployeeId == employee.EmployeeId && r.RequestDate == record.Date);
+            Assert.Equal("Unscheduled Attendance", request.Type);
         }
 
         [Fact]

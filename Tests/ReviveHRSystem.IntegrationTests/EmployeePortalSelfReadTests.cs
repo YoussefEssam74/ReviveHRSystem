@@ -379,18 +379,21 @@ namespace ReviveHRSystem.IntegrationTests
                 employeeId, gymId, new DateOnly(2026, 1, 12),
                 status: DomainLayer.Models.AttendanceModule.Enums.AttendanceStatus.Absent);
 
-            // A branch-raised deduction punishing exactly the absent day.
+            // A branch-raised deduction punishing exactly the absent day. It counts as
+            // applied money on the employee's own card.
             var issuerId = await db.Users.Where(u => u.Email == "omar@revive.hr").Select(u => u.Id).SingleAsync();
             db.DeductionCandidates.Add(new DomainLayer.Models.PayrollModule.DeductionCandidate
             {
                 EmployeeId = employeeId,
                 AttendanceRecordId = absentRecordId,
+                DeductionDate = new DateOnly(2026, 1, 12),
+                DeductionDays = 1m,
                 Amount = 150m,
                 Reason = "Unapproved absence",
                 Note = "Deduction approved by Branch Manager.",
                 IssuedBy = issuerId,
                 IssuedAt = new DateTime(2026, 1, 12, 12, 0, 0, DateTimeKind.Utc),
-                Status = DomainLayer.Models.PayrollModule.Enums.DeductionStatus.Pending,
+                Status = DomainLayer.Models.PayrollModule.Enums.DeductionStatus.Approved,
             });
             await db.SaveChangesAsync();
 
@@ -417,7 +420,7 @@ namespace ReviveHRSystem.IntegrationTests
                 && d.GetProperty("date").GetString() == "2026-01-12");
             Assert.Equal(150m, absentRow.GetProperty("amount").GetDecimal());
             Assert.Equal("Deduction approved by Branch Manager.", absentRow.GetProperty("reason").GetString());
-            Assert.Equal("In review", absentRow.GetProperty("status").GetString());
+            Assert.Equal("Applied", absentRow.GetProperty("status").GetString());
             Assert.Equal("omar", absentRow.GetProperty("issuedBy").GetString());
         }
 
@@ -453,11 +456,9 @@ namespace ReviveHRSystem.IntegrationTests
                 .First(s => s.GetProperty("id").GetInt32() == entry.Id);
             Assert.True(paid.GetProperty("visible").GetBoolean());
 
-            // The period's own pricing rule: base ÷ scheduled workdays (days × 6 ÷ 7),
-            // a quarter day per late arrival, a full day per unapproved absence.
-            var periodDays = entry.PayrollPeriod.EndDate.DayNumber - entry.PayrollPeriod.StartDate.DayNumber + 1;
-            var scheduled = Math.Max(1, (int)Math.Floor(periodDays * 6 / 7.0));
-            var daily = Math.Round(entry.BaseSalary / scheduled, 2);
+            // The period's own pricing rule: a fixed 30-day month, a quarter day per
+            // late arrival, one day per unapproved absence.
+            var daily = Math.Round(entry.BaseSalary / 30m, 2);
             var lateAmount = Math.Round(daily / 4m, 2);
 
             var records = await db.AttendanceRecords
@@ -575,12 +576,14 @@ namespace ReviveHRSystem.IntegrationTests
             {
                 EmployeeId = employeeId,
                 AttendanceRecordId = absentRecordId,
+                DeductionDate = new DateOnly(2026, 3, 3),
+                DeductionDays = 1m,
                 Amount = 90m,
                 Reason = "Unapproved absence",
                 Note = "No prior notice given",
                 IssuedBy = issuerId,
                 IssuedAt = new DateTime(2026, 3, 10, 10, 0, 0, DateTimeKind.Utc),
-                Status = DomainLayer.Models.PayrollModule.Enums.DeductionStatus.Pending,
+                Status = DomainLayer.Models.PayrollModule.Enums.DeductionStatus.Approved,
             });
             await db.SaveChangesAsync();
 
@@ -598,8 +601,8 @@ namespace ReviveHRSystem.IntegrationTests
 
         /// <summary>
         /// A "Deduction — 3 Days" absence follow-up prices at the sheet's daily rate
-        /// (base ÷ scheduled workdays) for the period covering the absence day, so the
-        /// day drawer can answer "how much will be deducted".
+        /// (base ÷ 30) for the period covering the absence day, so the day drawer can
+        /// answer "how much will be deducted".
         /// </summary>
         [Fact]
         public async Task EmployeeDeductions_AbsenceFollowUp_CarriesPricedAmount()
@@ -634,8 +637,8 @@ namespace ReviveHRSystem.IntegrationTests
                 r.GetProperty("id").GetString()!.StartsWith("followup-")
                 && r.GetProperty("date").GetString() == "2026-03-04");
 
-            // 3 days × daily (9000 ÷ 26 scheduled workdays = 346.15) = 1038.45.
-            Assert.Equal(1038.45m, followUp.GetProperty("amount").GetDecimal());
+            // 3 days × daily (9000 ÷ 30 = 300) = 900.
+            Assert.Equal(900m, followUp.GetProperty("amount").GetDecimal());
         }
 
         [Fact]
@@ -672,12 +675,12 @@ namespace ReviveHRSystem.IntegrationTests
         }
 
         /// <summary>
-        /// Mock §8 + the pricing rule: while a period is open, every late / unapproved-
-        /// absent day prices itself into a pending candidate (quarter day / three days
-        /// of base salary = base ÷ scheduled workdays) the branch can review.
+        /// Mock §8: a sheet that is still open keeps its money from its owner — the
+        /// late/absent day rows carry their facts, but a pending deduction is manager
+        /// triage, not an employee-facing amount, even after HR reconciled the sheet.
         /// </summary>
         [Fact]
-        public async Task PayrollSheets_OpenPeriod_PricesLateAndAbsentIntoPendingCandidates()
+        public async Task PayrollSheets_OpenPeriod_KeepsPendingDeductionsInvisible()
         {
             var employeeId = await OwnEmployeeIdAsync("karim@revive.hr");
             var token = await _fixture.LoginAsync("karim@revive.hr", "Revive!2026");
@@ -687,35 +690,41 @@ namespace ReviveHRSystem.IntegrationTests
             var gymId = await db.Employees.Where(e => e.Id == employeeId).Select(e => e.GymId).SingleAsync();
 
             var builder = new TestDataBuilder(_fixture.Services);
+            // A month that already happened but whose sheet is still open.
+            var previousMonth = new DateOnly(DateTime.Today.Year, DateTime.Today.Month, 1).AddMonths(-1);
             var periodId = await builder.CreatePayrollPeriodAsync(
-                gymId, new DateOnly(2027, 4, 1), new DateOnly(2027, 4, 30),
+                gymId, previousMonth, previousMonth.AddMonths(1).AddDays(-1),
                 DomainLayer.Models.PayrollModule.Enums.PayrollPeriodStatus.Open);
-            await builder.CreatePayrollEntryAsync(periodId, employeeId, 8000);
+            var entryId = await builder.CreatePayrollEntryAsync(periodId, employeeId, 8000);
             var lateId = await builder.CreateAttendanceRecordAsync(
-                employeeId, gymId, new DateOnly(2027, 4, 6),
-                checkInUtc: new DateTime(2027, 4, 6, 7, 30, 0, DateTimeKind.Utc),
+                employeeId, gymId, previousMonth.AddDays(13),
+                checkInUtc: new DateTime(previousMonth.Year, previousMonth.Month, 13, 7, 30, 0, DateTimeKind.Utc),
                 status: DomainLayer.Models.AttendanceModule.Enums.AttendanceStatus.Late);
             var absentId = await builder.CreateAttendanceRecordAsync(
-                employeeId, gymId, new DateOnly(2027, 4, 13),
+                employeeId, gymId, previousMonth.AddDays(14),
                 status: DomainLayer.Models.AttendanceModule.Enums.AttendanceStatus.Absent);
 
-            var sheets = await GetJsonAsync($"/api/employees/{employeeId}/payroll-sheets", token);
-            var april = sheets.EnumerateArray()
-                .First(s => s.GetProperty("period").GetString()!.StartsWith("April 2027"));
+            // HR reconciles the open sheet (the same sweep the branch tab runs): both
+            // days raise pending candidates and pending deduction lines.
+            var admin = await _fixture.GetAdminTokenAsync();
+            var close = _fixture.AuthorizedRequest(HttpMethod.Post,
+                $"/api/payroll-periods/{periodId}/entries/{employeeId}/close", null, admin);
+            Assert.Equal(HttpStatusCode.OK, (await _fixture.Client.SendAsync(close)).StatusCode);
 
-            // Open months keep their money hidden; the detail rows carry the priced amount.
-            // April 2027 = 30 days → scheduled 30 × 6 ÷ 7 = 25 → daily 320, late 80,
-            // an unapproved absence = three days of it.
-            Assert.False(april.GetProperty("visible").GetBoolean());
-            var details = april.GetProperty("deductionDetails").EnumerateArray().ToList();
+            var sheets = await GetJsonAsync($"/api/employees/{employeeId}/payroll-sheets", token);
+            var sheet = sheets.EnumerateArray()
+                .First(s => s.GetProperty("id").GetInt32() == entryId);
+
+            Assert.False(sheet.GetProperty("visible").GetBoolean());
+            var details = sheet.GetProperty("deductionDetails").EnumerateArray().ToList();
             var lateRow = details.First(d => d.GetProperty("kind").GetString() == "late"
                 && d.GetProperty("attendanceRecordId").GetInt32() == lateId);
-            Assert.Equal(80m, lateRow.GetProperty("amount").GetDecimal());
-            Assert.Equal("In review", lateRow.GetProperty("status").GetString());
+            Assert.Equal(JsonValueKind.Null, lateRow.GetProperty("amount").ValueKind);
+            Assert.Equal(JsonValueKind.Null, lateRow.GetProperty("status").ValueKind);
             var absentRow = details.First(d => d.GetProperty("kind").GetString() == "absent"
                 && d.GetProperty("attendanceRecordId").GetInt32() == absentId);
-            Assert.Equal(960m, absentRow.GetProperty("amount").GetDecimal());
-            Assert.Equal("In review", absentRow.GetProperty("status").GetString());
+            Assert.Equal(JsonValueKind.Null, absentRow.GetProperty("amount").ValueKind);
+            Assert.Equal(JsonValueKind.Null, absentRow.GetProperty("status").ValueKind);
 
             // And the candidates really exist for the branch to approve / re-price.
             var candidates = await db.DeductionCandidates

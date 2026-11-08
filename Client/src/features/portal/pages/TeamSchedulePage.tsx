@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type MutableRefObject } from 'react'
 import { useLocation } from 'react-router-dom'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueries, useQueryClient } from '@tanstack/react-query'
 import { AlertTriangle, CheckSquare, Pencil, Plus, RotateCcw, Square, Trash2 } from 'lucide-react'
 import {
   copyPreviousCycle,
@@ -307,6 +307,20 @@ function ScheduleWorkspace({
             <span className={cn('inline-block h-1.5 w-1.5 rounded-full', selLock === 'current' ? 'bg-brand-500' : 'bg-charcoal-300')} />
             {selLock === 'current' ? 'Live' : selLock === 'past' ? 'Past' : 'Planned'}
           </span>
+          <Button
+            size="sm"
+            className="ml-auto shrink-0"
+            variant={view === 'month' ? 'primary' : 'secondary'}
+            onClick={() => setView(view === 'month' ? 'week' : 'month')}
+            title={
+              view === 'month'
+                ? 'Back to the 7-day view — shifts repeat weekly'
+                : 'Show every day of the month (up to 31 days)'
+            }
+          >
+            <CalendarGlyph className="h-3.5 w-3.5" aria-hidden="true" />{' '}
+            {view === 'month' ? 'Show 7 days' : 'Show 30 days'}
+          </Button>
         </div>
 
         {/* Period strip */}
@@ -361,10 +375,10 @@ function ScheduleWorkspace({
             gymId={gymId}
             cycleId={selectedId}
             view={view}
-            onView={setView}
             editing={editing && canEdit}
             manage={manage}
             selMonth={selMonth}
+            monthCycles={monthCycles}
             onDeleted={() => {
               setExplicitId(null)
               setEditing(false)
@@ -426,19 +440,21 @@ function CycleDetailPanel({
   gymId,
   cycleId,
   view,
-  onView,
   editing,
   manage,
   selMonth,
+  monthCycles,
   onDeleted,
 }: {
   gymId: number
   cycleId: number
   view: 'week' | 'month'
-  onView: (view: 'week' | 'month') => void
   editing: boolean
   manage: boolean
   selMonth: string
+  /** Every schedule overlapping the selected month — the month view reads each date
+   *  from the one that owns it. */
+  monthCycles: { id: number; startDate: string; endDate: string }[]
   onDeleted: () => void
 }) {
   const { toast } = useToast()
@@ -469,6 +485,54 @@ function CycleDetailPanel({
   const activeTemplates = templates.filter((t) => !t.isOff)
   const paintValue: number | null =
     paintPick.kind === 'unset' ? (activeTemplates[0]?.id ?? null) : paintPick.kind === 'off' ? null : paintPick.id
+
+  // "Show 30 days" spans every schedule that overlaps the month, so each column has
+  // to read from the cycle that actually owns that date: resolving them all from the
+  // selected cycle painted one shift across the entire month. Sibling cycles are
+  // fetched only for the month view and share the picker's cache key.
+  const siblingCycleIds = useMemo(
+    () => (view === 'month' ? monthCycles.filter((c) => c.id !== cycleId).map((c) => c.id) : []),
+    [monthCycles, cycleId, view],
+  )
+  const siblingQueries = useQueries({
+    queries: siblingCycleIds.map((id) => ({
+      queryKey: scheduleKeys.cycle(id),
+      queryFn: ({ signal }: { signal: AbortSignal }) => getShiftCycle(id, signal),
+    })),
+  })
+  const cycleById = useMemo(() => {
+    const map = new Map<number, ShiftCycleDetail>()
+    if (detail) map.set(detail.id, detail)
+    for (const query of siblingQueries) {
+      const sibling = query.data
+      if (sibling) map.set(sibling.id, sibling)
+    }
+    return map
+  }, [detail, siblingQueries])
+  const ownerCycleOf = useCallback(
+    (date: string) => monthCycles.find((c) => c.startDate <= date && date <= c.endDate) ?? null,
+    [monthCycles],
+  )
+  // Same date-accurate rule as the selected cycle: exact date cell first, weekly
+  // pattern as the fallback for responses that predate daysByDate.
+  const cellValueIn = useCallback((ownerDetail: ShiftCycleDetail, employeeId: number, date: string): CellPaint => {
+    const row = ownerDetail.assignments.find((r) => r.employeeId === employeeId)
+    if (!row) return 'unassigned'
+    const byDate = row.daysByDate?.find((cell) => cell.date === date)
+    if (byDate) return byDate.assigned ? (byDate.shiftTemplateId ?? null) : 'unassigned'
+    const day = weekdayIndex(date)
+    if (row.assignedDays?.[day] === false) return 'unassigned'
+    return row.days[day] ?? null
+  }, [])
+  // The grid spans every schedule shown, so a shift that only appears in a sibling
+  // cycle still renders with its own label and colour.
+  const gridTemplateById = useMemo(() => {
+    const map = new Map(templateById)
+    for (const cycle of cycleById.values()) {
+      for (const template of cycle.shiftTemplates) map.set(template.id, template)
+    }
+    return map
+  }, [cycleById, templateById])
 
   const invalidate = useCallback(() => {
     void invalidateScheduleQueries(queryClient)
@@ -510,6 +574,19 @@ function CycleDetailPanel({
       return weeklyCellValue(employeeId, day)
     },
     [detail, edits, weeklyCellValue],
+  )
+
+  // Grid value per column: the selected cycle keeps its pending paint edits, while a
+  // date owned by another schedule in the month reads that schedule's own assignment.
+  const cellValueAtDate = useCallback(
+    (employeeId: number, date: string): CellPaint => {
+      const owner = ownerCycleOf(date)
+      if (!owner) return 'unassigned'
+      if (owner.id === cycleId) return cellValueForDate(employeeId, date)
+      const ownerDetail = cycleById.get(owner.id)
+      return ownerDetail ? cellValueIn(ownerDetail, employeeId, date) : 'unassigned'
+    },
+    [cellValueForDate, cellValueIn, cycleById, cycleId, ownerCycleOf],
   )
 
   const setCell = useCallback((employeeId: number, day: number, templateId: number | null) => {
@@ -595,8 +672,13 @@ function CycleDetailPanel({
   // same Mon–Sun an employee sees in their Shift tab); month = the selected
   // month ∩ the cycle range ("Show 30 days").
   const weekCols = weekColsOf(detail)
-  const monthCols = monthColsOf(detail, selMonth)
+  const monthCols = monthColsOf(selMonth)
   const cols = view === 'week' ? weekCols : monthCols
+  // Days owned by another schedule in the month are shown but not painted here —
+  // an edit would write this cycle's weekday pattern, not that schedule's.
+  const readOnlyDates = new Set(
+    cols.filter((col) => ownerCycleOf(col.date)?.id !== cycleId).map((col) => col.date),
+  )
   const cycleDays = isoRange(detail.startDate, detail.endDate).length
 
   // Assignments are weekly patterns, so "missing" counts weekdays that have no
@@ -618,7 +700,7 @@ function CycleDetailPanel({
     (acc, row) =>
       acc +
       cols.filter((col) => {
-        const value = cellValueForDate(row.employeeId, col.date)
+        const value = cellValueAtDate(row.employeeId, col.date)
         if (typeof value !== 'number') return false
         const template = templateById.get(value)
         return template ? !template.isOff : true
@@ -659,14 +741,6 @@ function CycleDetailPanel({
               {detail.conflicts.length === 1 ? '' : 's'}
             </span>
           )}
-          <Button
-            size="sm"
-            variant={view === 'month' ? 'primary' : 'secondary'}
-            onClick={() => onView(view === 'month' ? 'week' : 'month')}
-            title={view === 'month' ? 'Back to the 7-day view — shifts repeat weekly' : 'Show the whole month (up to 31 days)'}
-          >
-            <CalendarGlyph className="h-3.5 w-3.5" aria-hidden="true" /> {view === 'month' ? 'Show 7 days' : 'Show 30 days'}
-          </Button>
           {manage && editing && (
             <Button size="sm" variant="secondary" loading={copyMutation.isPending} onClick={() => copyMutation.mutate()}>
               <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" /> Copy Previous
@@ -805,8 +879,9 @@ function CycleDetailPanel({
           detail={detail}
           cols={cols}
           editing={editing}
-          templateById={templateById}
-          cellValueForDate={cellValueForDate}
+          templateById={gridTemplateById}
+          cellValueForDate={cellValueAtDate}
+          readOnlyDates={readOnlyDates}
           missingDaysOf={missingDaysOf}
           paintingRef={paintingRef}
           onCell={(employeeId, day) => setCell(employeeId, day, paintValue)}
@@ -870,13 +945,10 @@ function weekColsOf(detail: ShiftCycleDetail): ISODate[] {
   return isoRange(start, end)
 }
 
-/** Month view = the dates of the selected month that fall inside the cycle. */
-function monthColsOf(detail: ShiftCycleDetail, selMonth: string): ISODate[] {
-  const clippedStart = detail.startDate > `${selMonth}-01` ? detail.startDate : `${selMonth}-01`
-  const clippedEnd = detail.endDate < `${selMonth}-${pad2(daysInMonthOf(selMonth))}`
-    ? detail.endDate
-    : `${selMonth}-${pad2(daysInMonthOf(selMonth))}`
-  return clippedStart <= clippedEnd ? isoRange(clippedStart, clippedEnd) : []
+/** Month view = every day of the selected month, so days the chosen schedule does
+ *  not cover still appear (a partial cycle must not hide the rest of the month). */
+function monthColsOf(selMonth: string): ISODate[] {
+  return isoRange(`${selMonth}-01`, `${selMonth}-${pad2(daysInMonthOf(selMonth))}`)
 }
 
 function dirtyCountOf(edits: Map<string, number | null>): number {
@@ -891,6 +963,7 @@ function ScheduleGrid({
   editing,
   templateById,
   cellValueForDate,
+  readOnlyDates,
   missingDaysOf,
   paintingRef,
   onCell,
@@ -902,6 +975,8 @@ function ScheduleGrid({
   editing: boolean
   templateById: Map<number, ShiftTemplateItem>
   cellValueForDate: (employeeId: number, date: string) => CellPaint
+  /** Columns owned by another schedule in the month: shown, never painted here. */
+  readOnlyDates: Set<string>
   missingDaysOf: (employeeId: number) => number
   paintingRef: MutableRefObject<boolean>
   onCell: (employeeId: number, day: number) => void
@@ -936,11 +1011,12 @@ function ScheduleGrid({
               </th>
               {cols.map((col) => {
                 const day = weekdayIndex(col.date)
+                const foreign = readOnlyDates.has(col.date)
                 return (
-                  <th key={col.date} className="text-center">
+                  <th key={col.date} className={cn('text-center', foreign && 'opacity-60')}>
                     <span className="block text-[11px] font-semibold text-charcoal-700">{col.num}</span>
                     <span className="text-[9px] font-normal text-charcoal-400">{col.dow}</span>
-                    {editing && (
+                    {editing && !foreign && (
                       <button
                         type="button"
                         onMouseDown={(event) => event.preventDefault()}
@@ -987,13 +1063,14 @@ function ScheduleGrid({
                 </td>
                 {cols.map((col) => {
                   const day = weekdayIndex(col.date)
+                  const foreign = readOnlyDates.has(col.date)
                   const value = cellValueForDate(row.employeeId, col.date)
                   const unassigned = value === 'unassigned'
                   const template = typeof value === 'number' ? templateById.get(value) : undefined
                   const off = !unassigned && (value === null || template?.isOff === true)
                   return (
-                    <td key={col.date} className={cn('text-center', editing && EDIT_CELL[day])}>
-                      {editing ? (
+                    <td key={col.date} className={cn('text-center', editing && !foreign && EDIT_CELL[day])}>
+                      {editing && !foreign ? (
                         <button
                           type="button"
                           onMouseDown={(event) => {
@@ -1046,13 +1123,14 @@ function ScheduleGrid({
             <div className="flex flex-wrap gap-1">
               {cols.map((col) => {
                 const day = weekdayIndex(col.date)
+                const foreign = readOnlyDates.has(col.date)
                 const value = cellValueForDate(row.employeeId, col.date)
                 const unassigned = value === 'unassigned'
                 const template = typeof value === 'number' ? templateById.get(value) : undefined
                 const off = !unassigned && (value === null || template?.isOff === true)
                 const label = `${col.num}/${col.dow}: ${unassigned ? 'Not assigned' : off ? 'OFF' : cellLabel(template ?? unknownTemplate())}`
                 const style = unassigned ? UNASSIGNED_CELL : cellStyle(template, off)
-                return editing ? (
+                return editing && !foreign ? (
                   <button
                     key={col.date}
                     type="button"

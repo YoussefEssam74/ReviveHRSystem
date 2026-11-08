@@ -124,20 +124,6 @@ namespace Biometrics
                     confirmCheckout: request.ConfirmCheckout,
                     cancellationToken);
             }
-            catch (AttendanceAlreadyCompleteException ex)
-            {
-                // Recognized, day already closed: the kiosk stays silent (name + ID in
-                // the HUD only) instead of nagging with a rejection card.
-                return new FaceScanResponse
-                {
-                    Outcome = FaceScanOutcome.AlreadyComplete,
-                    EmployeeId = employeeId,
-                    EmployeeName = employeeName,
-                    Message = ex.Message,
-                    Similarity = similarity,
-                    LivenessScore = liveness,
-                };
-            }
             catch (Exception ex) when (ex is BadRequestException or NotFoundException or UnAuthorizedException)
             {
                 return new FaceScanResponse

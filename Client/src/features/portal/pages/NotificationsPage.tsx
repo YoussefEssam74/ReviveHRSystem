@@ -38,6 +38,7 @@ import { cn } from '../../../lib/utils'
  */
 const PORTAL_LINKS: Record<string, string> = {
   requests: '/employee/requests',
+  'team-requests': '/employee/team/requests',
   '/schedule': '/employee/schedule',
   payroll: '/employee/payroll',
   documents: '/employee/documents',

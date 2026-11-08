@@ -520,9 +520,11 @@ function MemberRequestRow({
   const { toast } = useToast()
   const queryClient = useQueryClient()
   const [decision, setDecision] = useState<'Approve' | 'Reject' | null>(null)
+  const [calculatedDays, setCalculatedDays] = useState<1 | 2>(1)
 
   const decideMutation = useMutation({
-    mutationFn: (input: { decision: 'Approve' | 'Reject' }) => decideRequest(request.id, input.decision, null),
+    mutationFn: (input: { decision: 'Approve' | 'Reject'; calculatedDays?: 1 | 2 }) =>
+      decideRequest(request.id, input.decision, null, input.calculatedDays),
     onSuccess: (_data, variables) => {
       void queryClient.invalidateQueries({ queryKey: ['portal', 'member', 'requests', memberId] })
       void queryClient.invalidateQueries({ queryKey: ['portal', 'requests'] })
@@ -554,7 +556,14 @@ function MemberRequestRow({
   return (
     <li className="flex items-center justify-between gap-2 py-2.5">
       <div className="min-w-0">
-        <p className="text-xs font-medium text-charcoal-900">{request.type}</p>
+        <p className="flex flex-wrap items-center gap-1.5 text-xs font-medium text-charcoal-900">
+          {request.type}
+          {request.calculatedDays != null && (
+            <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
+              Cover: {request.calculatedDays} day{request.calculatedDays === 1 ? '' : 's'}
+            </span>
+          )}
+        </p>
         <p className="text-[10px] text-charcoal-500">
           {formatDateWithYear(request.requestedDate)} · Submitted {formatDateWithYear(request.submittedDate)}
         </p>
@@ -601,7 +610,15 @@ function MemberRequestRow({
               <Button
                 variant={decision === 'Reject' ? 'danger' : 'primary'}
                 loading={decideMutation.isPending}
-                onClick={() => decideMutation.mutate({ decision })}
+                onClick={() =>
+                  decideMutation.mutate({
+                    decision,
+                    calculatedDays:
+                      decision === 'Approve' && request.type === 'Unscheduled Attendance'
+                        ? calculatedDays
+                        : undefined,
+                  })
+                }
               >
                 {decision === 'Approve' ? 'Confirm approve' : 'Confirm reject'}
               </Button>
@@ -613,6 +630,25 @@ function MemberRequestRow({
               ? 'The request moves to HR review for the final sign-off.'
               : 'Reject this request? Reserved leave days are released.'}
           </p>
+          {decision === 'Approve' && request.type === 'Unscheduled Attendance' && (
+            <div className="mt-3 rounded-lg border border-brand-200 bg-brand-50 p-2.5">
+              <label className="form-label" htmlFor={`member-calculated-days-${request.id}`}>
+                Count this cover/extra day as
+              </label>
+              <select
+                id={`member-calculated-days-${request.id}`}
+                value={calculatedDays}
+                onChange={(event) => setCalculatedDays(Number(event.target.value) as 1 | 2)}
+                className="form-input mt-1"
+              >
+                <option value={1}>1 day</option>
+                <option value={2}>2 days</option>
+              </select>
+              <p className="mt-1 text-[10px] text-charcoal-500">
+                This does not reduce the employee&apos;s monthly day-off balance.
+              </p>
+            </div>
+          )}
         </Modal>
       )}
     </li>
@@ -878,6 +914,10 @@ function PersonalTab({ memberId, member }: { memberId: number; member: MemberHea
               icon={<Briefcase className={iconClass} aria-hidden="true" />}
             />
             <HrRow label="Employment Level" value={member.level ?? null} />
+            <HrRow
+              label="Monthly Salary"
+              value={profile?.baseSalary != null ? formatMoney(profile.baseSalary) : member.salary != null ? formatMoney(member.salary) : null}
+            />
             <HrRow label="Hire Date" value={hireDate} icon={<CalendarDays className={iconClass} aria-hidden="true" />} />
             <HrRow
               label="Current Status"
@@ -1104,7 +1144,7 @@ function AttendanceTab({ memberId }: { memberId: number }) {
             </span>
           ))}
         </div>
-        <div className="mt-2 grid grid-cols-2 gap-2 text-center sm:grid-cols-6">
+        <div className="mt-2 grid grid-cols-2 gap-2 text-center sm:grid-cols-7">
           <div className="rounded-lg bg-charcoal-50 p-2">
             <p className="text-base font-bold text-brand-700">{onTime} days</p>
             <p className="text-[10px] text-charcoal-500">On time</p>
@@ -1129,6 +1169,10 @@ function AttendanceTab({ memberId }: { memberId: number }) {
             <p className="text-base font-bold text-charcoal-600">{balance?.unpaid?.used ?? 0} days</p>
             <p className="text-[10px] text-charcoal-500">Unpaid Leave</p>
           </div>
+          <div className="rounded-lg bg-charcoal-50 p-2">
+            <p className="text-base font-bold text-violet-600">{totals?.coverDays ?? 0} days</p>
+            <p className="text-[10px] text-charcoal-500">Cover days</p>
+          </div>
         </div>
         {totals && <p className="mt-1 text-[10px] text-charcoal-400">{totals.hours.toFixed(0)}h — {early} early leaving {early === 1 ? 'day' : 'days'} this month.</p>}
       </div>
@@ -1140,7 +1184,14 @@ function AttendanceTab({ memberId }: { memberId: number }) {
           {items.slice(0, 12).map((item) => (
             <div key={item.date} className="flex items-center justify-between gap-2 p-2.5">
               <div className="min-w-0">
-                <p className="text-xs font-medium text-charcoal-900">{formatDateWithYear(item.date)}</p>
+                <p className="flex flex-wrap items-center gap-1.5 text-xs font-medium text-charcoal-900">
+                  {formatDateWithYear(item.date)}
+                  {item.coverDays != null && (
+                    <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
+                      Cover: {item.coverDays} day{item.coverDays === 1 ? '' : 's'}
+                    </span>
+                  )}
+                </p>
                 <p className="truncate text-[10px] text-charcoal-500">
                   {item.checkIn ?? '—'} → {item.checkOut ?? '—'}
                   {item.notes ? ` · ${item.notes}` : ''}
@@ -1215,8 +1266,12 @@ function MemberDeductions({ memberId }: { memberId: number }) {
 
   // Open rows get the whole decision (approve / re-price / reject); a branch-approved
   // one is on its way to HR but can still be re-priced or rejected until HR applies it.
+  // A rejected row is frozen everywhere else, but here the manager can still edit
+  // its amount or re-approve it to undo a wrong rejection (edit re-opens it).
   const isOpen = (row: DeductionCandidateRow) => row.status === 'Pending'
-  const canRevise = (row: DeductionCandidateRow) => row.status === 'Pending' || row.status === 'BranchApproved'
+  const isRejected = (row: DeductionCandidateRow) => row.status === 'Rejected'
+  const canRevise = (row: DeductionCandidateRow) =>
+    row.status === 'Pending' || row.status === 'BranchApproved' || row.status === 'Rejected'
   const pending = reviewMutation.isPending
 
   const submitReprice = (row: DeductionCandidateRow, decision: 'approve' | 'edit') => {
@@ -1251,9 +1306,14 @@ function MemberDeductions({ memberId }: { memberId: number }) {
               <StatusBadge status={row.status === 'BranchApproved' ? 'Branch approved' : row.status} />
             </div>
           </div>
+          {isRejected(row) && (
+            <p className="mt-1.5 text-[10px] font-medium text-red-600">
+              Rejected — edit the amount or re-approve to undo this decision.
+            </p>
+          )}
           {canRevise(row) && (
             <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-              {isOpen(row) && (
+              {(isOpen(row) || isRejected(row)) && (
                 <button
                   type="button"
                   disabled={pending}
@@ -1274,14 +1334,16 @@ function MemberDeductions({ memberId }: { memberId: number }) {
               >
                 Edit amount
               </button>
-              <button
-                type="button"
-                disabled={pending}
-                onClick={() => reviewMutation.mutate({ row, decision: 'reject' })}
-                className="rounded-md border border-red-200 px-2 py-1 text-[10px] font-semibold text-red-600 transition-colors hover:bg-red-50 disabled:opacity-50"
-              >
-                Reject
-              </button>
+              {!isRejected(row) && (
+                <button
+                  type="button"
+                  disabled={pending}
+                  onClick={() => reviewMutation.mutate({ row, decision: 'reject' })}
+                  className="rounded-md border border-red-200 px-2 py-1 text-[10px] font-semibold text-red-600 transition-colors hover:bg-red-50 disabled:opacity-50"
+                >
+                  Reject
+                </button>
+              )}
             </div>
           )}
           {editingId === row.id && (

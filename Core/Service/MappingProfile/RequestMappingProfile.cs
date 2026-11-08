@@ -19,6 +19,7 @@ public sealed class RequestMappingProfile : Profile
             .ForMember(d => d.EmployeeId, o => o.MapFrom(s => s.EmployeeId))
             .ForMember(d => d.EmployeeName, o => o.MapFrom(s => s.Employee != null ? s.Employee.FullName : string.Empty))
             .ForMember(d => d.SubmittedDate, o => o.MapFrom(s => DateOnly.FromDateTime(s.SubmittedAt)))
+            .ForMember(d => d.SubmittedAt, o => o.MapFrom(s => s.SubmittedAt))
             .ForMember(d => d.RequestDate, o => o.MapFrom(s => s.RequestDate))
             .ForMember(d => d.EndDate, o => o.MapFrom(s => s.TargetEndDate))
             .ForMember(d => d.TargetDate, o => o.MapFrom(s => s.TargetStartDate))
@@ -30,6 +31,8 @@ public sealed class RequestMappingProfile : Profile
             .ForMember(d => d.HasAttachment, o => o.MapFrom(s => !string.IsNullOrEmpty(s.AttachmentPath)))
             .ForMember(d => d.Status, o => o.MapFrom(s => s.Status.ToString()))
             .ForMember(d => d.Reason, o => o.MapFrom(s => s.Details))
+            .ForMember(d => d.Payment, o => o.MapFrom(s => s.Payment))
+            .ForMember(d => d.CalculatedDays, o => o.MapFrom(s => s.OvertimeHoursRequested.HasValue ? (int?)s.OvertimeHoursRequested.Value : (s.Payment != null && s.Payment.Contains("2") ? (int?)2 : (s.Payment != null && s.Payment.Contains("1") ? (int?)1 : null))))
             .ForMember(d => d.Timeline, o => o.MapFrom(s => BuildTimeline(s)));
 
         CreateMap<RequestComment, RequestCommentDto>()

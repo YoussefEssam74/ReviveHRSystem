@@ -297,11 +297,13 @@ export default function MyAttendancePage() {
       .filter((entry): entry is readonly [string, WarningNoticeRow] => entry !== null),
   )
   // Off days (no shift planned) are omitted from the history like in the mock —
-  // unless the day carries a warning or a deduction, which must stay reachable
-  // on the day it happened.
+  // unless the day carries a warning, a deduction, or an unscheduled punch
+  // (shift "Cover / Extra Day" or a cover-day value), all of which must stay
+  // reachable on the day they happened.
   const history = (attendance?.items ?? []).filter((item) => {
     const shift = item.shift.trim().toLowerCase()
     if (shift !== '' && shift !== 'off') return true
+    if (item.coverDays != null) return true
     return warningsByDate.has(item.date) || deductionsByDate.has(item.date)
   })
   const now = new Date()
@@ -399,13 +401,14 @@ export default function MyAttendancePage() {
 
       {/* Stats row (the dashboard aggregate's real month summary) */}
       {dashboard && (
-        <div className="grid grid-cols-3 gap-2 sm:grid-cols-6">
+        <div className="grid grid-cols-3 gap-2 sm:grid-cols-7">
           <StatPill value={`${Math.round(dashboard.monthSummary.rate)}%`} label="Attendance Rate" color="text-brand-700" accent="border-l-brand-500" />
           <StatPill value={dashboard.monthSummary.present} label="Present" color="text-brand-600" accent="border-l-brand-500" />
           <StatPill value={dashboard.monthSummary.late} label="Late" color="text-yellow-600" accent="border-l-yellow-500" />
           <StatPill value={dashboard.monthSummary.absent} label="Absent" color="text-red-600" accent="border-l-red-500" />
           <StatPill value={dashboard.monthSummary.earlyCheckout} label="Early Out" color="text-blue-600" accent="border-l-blue-500" />
           <StatPill value={dashboard.monthSummary.missingCheckout} label="Missing Out" color="text-charcoal-600" accent="border-l-charcoal-400" />
+          <StatPill value={dashboard.monthSummary.coverDays} label="Cover days" color="text-violet-600" accent="border-l-violet-500" />
         </div>
       )}
 
@@ -446,7 +449,7 @@ export default function MyAttendancePage() {
             <p className="text-[11px] text-red-600">{describeApiError(typesQuery.error)}</p>
           ) : (
             <div className="grid grid-cols-3 gap-1.5">
-              {(typesQuery.data ?? []).map((type) => (
+              {(typesQuery.data ?? []).filter((type) => type.id !== 'unscheduled-attendance').map((type) => (
                 <button
                   key={type.id}
                   type="button"
@@ -513,7 +516,14 @@ export default function MyAttendancePage() {
                       <td className="px-4 py-2.5">{time12(item.checkIn)}</td>
                       <td className="px-4 py-2.5">{time12(item.checkOut)}</td>
                       <td className="px-4 py-2.5">
-                        {leave ? <StatusBadge status={leave.status} /> : <StatusBadge status={dayDisplayStatus(item, dayDeductions)} />}
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          {leave ? <StatusBadge status={leave.status} /> : <StatusBadge status={dayDisplayStatus(item, dayDeductions)} />}
+                          {item.coverDays != null && (
+                            <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
+                              Cover: {item.coverDays}
+                            </span>
+                          )}
+                        </div>
                       </td>
                       <td className="px-4 py-2.5">
                         <DayWarningChips item={item} warning={warning} deductions={dayDeductions} onOpen={(w) => openDetail(item.date, w)} />
@@ -552,7 +562,14 @@ export default function MyAttendancePage() {
                   <p className="text-xs font-medium text-charcoal-900">{formatDate(item.date)}</p>
                   <p className="text-[10px] text-charcoal-500">{item.shift}</p>
                 </div>
-                {leave ? <StatusBadge status={leave.status} /> : <StatusBadge status={dayDisplayStatus(item, dayDeductions)} />}
+                <div className="flex flex-wrap items-center justify-end gap-1.5">
+                  {item.coverDays != null && (
+                    <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
+                      Cover: {item.coverDays}
+                    </span>
+                  )}
+                  {leave ? <StatusBadge status={leave.status} /> : <StatusBadge status={dayDisplayStatus(item, dayDeductions)} />}
+                </div>
               </div>
               <div className="mt-1.5">
                 <DayWarningChips item={item} warning={warning} deductions={dayDeductions} onOpen={(w) => openDetail(item.date, w)} />
@@ -724,6 +741,14 @@ function AttendanceDetailDrawer({
               <DayRow label="Scheduled Shift" value={detail.shift} />
               <DayRow label="Check In" value={time12(detail.checkIn)} valueClass={detail.checkIn ? 'text-brand-600' : 'text-charcoal-400'} bold />
               <DayRow label="Check Out" value={time12(detail.checkOut)} bold />
+              {detail.coverDays != null && (
+                <DayRow
+                  label="Cover / Extra Days"
+                  value={`${detail.coverDays} day${detail.coverDays === 1 ? '' : 's'}`}
+                  valueClass="text-violet-600"
+                  bold
+                />
+              )}
               {detail.notes ? (
                 <div className="py-1.5 text-xs">
                   <span className="mb-1 flex items-center gap-1.5 text-charcoal-500">Notes</span>

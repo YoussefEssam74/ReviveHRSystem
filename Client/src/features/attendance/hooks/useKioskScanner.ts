@@ -12,6 +12,10 @@ const FRAME_INTERVAL_MS = 1_300
 /** How long the "check out now?" prompt waits for the employee before resuming. */
 const CHECKOUT_PROMPT_TIMEOUT_MS = 5_000
 
+/** After a punch is recorded, scanning holds for this long so the same face is
+ * not immediately re-recorded as the opposite direction before walking away. */
+const POST_RECORD_COOLDOWN_MS = 10_000
+
 /**
  * What the last scanned frame told us. The API returns one of these for every frame
  * (a plain 200 with an outcome discriminator), so the HUD shows a live liveness
@@ -61,10 +65,11 @@ function toFrameState(result: FaceScanResponse): FrameState {
  * check-in vs check-out from the employee's own state.
  *
  * Every frame yields an outcome, not an error: frame-level states (no face, low
- * liveness, unrecognized, already complete) just refresh the HUD and keep the loop
- * running. Only a rejection that deserves the employee's attention (day off, wrong
- * branch) pauses with a card, and an invalid session stops the loop instead of
- * hammering the API.
+ * liveness, unrecognized) just refresh the HUD and keep the loop running. A scan
+ * after checkout re-opens the day (IN→OUT→IN), guarded by a short post-record
+ * cooldown so the same face cannot flip direction in one linger. Only a rejection
+ * that deserves the employee's attention (wrong branch) pauses with a card, and
+ * an invalid session stops the loop instead of hammering the API.
  */
 export function useKioskScanner({ autoScan = true, onResult, onSessionExpired }: KioskScannerOptions) {
   const { videoRef, error: cameraError, start: startCamera, stop: stopCamera, capture } = useCamera()
@@ -82,6 +87,11 @@ export function useKioskScanner({ autoScan = true, onResult, onSessionExpired }:
   // The frame that triggered the check-out question - re-sent on confirmation so the
   // server re-identifies the same person instead of trusting a client-supplied ID.
   const pendingImageRef = useRef<string | null>(null)
+  // Post-record cooldown: employeeId -> recorded timestamp. While an entry is
+  // fresh, frames are not sent at all (the person is still in front of the
+  // camera), so the same face can't flip IN→OUT→IN in one linger.
+  const cooldownRef = useRef(new Map<string, number>())
+  const cooldownUntilRef = useRef(0)
 
   // Keep the callbacks fresh without restarting the loop.
   const onResultRef = useRef(onResult)
@@ -100,6 +110,18 @@ export function useKioskScanner({ autoScan = true, onResult, onSessionExpired }:
 
   const sendFrame = useCallback(async () => {
     if (inFlightRef.current || stoppedRef.current || pausedRef.current) return
+
+    // Post-record cooldown: hold frames so the just-recorded face walks away
+    // before the next AUTO scan. Entries are pruned lazily.
+    const now = Date.now()
+    for (const [key, at] of cooldownRef.current) {
+      if (now - at > POST_RECORD_COOLDOWN_MS) cooldownRef.current.delete(key)
+    }
+    if (cooldownRef.current.size === 0) cooldownUntilRef.current = 0
+    if (now < cooldownUntilRef.current) {
+      setStatusText('Thanks — you are recorded. Please step away.')
+      return
+    }
 
     const image = capture()
     if (!image) return
@@ -140,6 +162,13 @@ export function useKioskScanner({ autoScan = true, onResult, onSessionExpired }:
 
         case 'recorded': {
           // Hold the result on screen; resumeAfterResult restarts the loop.
+          // The cooldown counts from now (card visibility included) so the
+          // same face walking away is not re-recorded as the opposite punch.
+          const recordedId = result.employeeId ?? result.attendance?.employeeId ?? null
+          if (recordedId) {
+            cooldownRef.current.set(String(recordedId), Date.now())
+            cooldownUntilRef.current = Date.now() + POST_RECORD_COOLDOWN_MS
+          }
           pausedRef.current = true
           setPhase('recognized')
           setStatusText('')
@@ -243,6 +272,11 @@ export function useKioskScanner({ autoScan = true, onResult, onSessionExpired }:
       }
       setFrame(toFrameState(result))
       if (result.outcome === 'recorded') {
+        const recordedId = result.employeeId ?? result.attendance?.employeeId ?? null
+        if (recordedId) {
+          cooldownRef.current.set(String(recordedId), Date.now())
+          cooldownUntilRef.current = Date.now() + POST_RECORD_COOLDOWN_MS
+        }
         pausedRef.current = true
         setPhase('recognized')
         setStatusText('')

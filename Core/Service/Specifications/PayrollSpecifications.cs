@@ -134,6 +134,7 @@ namespace Service.Specifications
         public DeductionLinesSpec(int[]? gymIds, int? gym, int? periodId, string? status, int skip, int take)
         {
             Criteria = l =>
+                l.Type == "Deduction" &&
                 (gymIds == null || gymIds.Length == 0 || gymIds.Contains(l.PayrollEntry.PayrollPeriod.GymId)) &&
                 (gym == null || l.PayrollEntry.PayrollPeriod.GymId == gym) &&
                 (periodId == null || l.PayrollEntry.PayrollPeriodId == periodId) &&

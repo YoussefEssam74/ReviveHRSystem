@@ -1,6 +1,7 @@
 using AutoMapper;
 using DomainLayer.Contracts;
 using DomainLayer.Exceptions;
+using DomainLayer.Models.AttendanceModule;
 using DomainLayer.Models.EmployeeModule.Enums;
 using DomainLayer.Models.RequestModule;
 using DomainLayer.Models.RequestModule.Enums;
@@ -25,7 +26,8 @@ namespace Service.Services
         IUnitOfWork unitOfWork,
         ITeamScopeService teamScopeService,
         IUserAccessRepository userAccess,
-        IMapper mapper) : IRequestManagementService
+        IMapper mapper,
+        TimeZoneInfo attendanceTimeZone) : IRequestManagementService
     {
         public async Task<PaginationResult<EmployeeRequestDto>> GetInboxAsync(
             int actorUserId, int? activeGymId, RequestQueryParams query, CancellationToken cancellationToken = default)
@@ -58,7 +60,18 @@ namespace Service.Services
                 new RequestsByEmployeesSpec(employeeIds, status, query.Type, query.DateFrom, query.DateTo, query.SkipCount, query.PageSize),
                 cancellationToken);
 
-            var page = rows.Select(r => mapper.Map<EmployeeRequestDto>(r)).ToList();
+            // Unscheduled Attendance rows from before the request carried its own
+            // check-in time have no TargetTime: the linked attendance record is the
+            // source of truth for the check-in shown on the desk.
+            var checkInFallbacks = await ResolveCheckInTimeFallbacksAsync(rows, cancellationToken);
+
+            var page = rows.Select(r =>
+            {
+                var dto = mapper.Map<EmployeeRequestDto>(r);
+                return dto.RequestTime is null && checkInFallbacks.TryGetValue((r.EmployeeId, r.RequestDate), out var checkIn)
+                    ? WithRequestTime(dto, checkIn)
+                    : dto;
+            }).ToList();
             return new PaginationResult<EmployeeRequestDto>(query.PageNumber, query.PageSize, total, page);
         }
 
@@ -115,6 +128,29 @@ namespace Service.Services
 
             unitOfWork.GetRepository<EmployeeRequest, int>().Update(request);
 
+            if (request.Type == RequestTypeCatalog.UnscheduledAttendanceLabel)
+            {
+                var attendanceRepo = unitOfWork.GetRepository<AttendanceRecord, int>();
+                var records = await attendanceRepo.GetAllAsync(
+                    new AttendanceRecordByEmployeeDatesSpec(request.EmployeeId, request.RequestDate), cancellationToken);
+                var record = records.FirstOrDefault(r => r.Date == request.RequestDate);
+                if (record is not null)
+                {
+                    if (outcome == DecisionOutcome.Approved)
+                    {
+                        var days = ValidateUnscheduledAttendanceDays(decision.CalculatedDays);
+                        request.Payment = $"{days} day{(days > 1 ? "s" : "")}";
+                        request.OvertimeHoursRequested = days;
+                        record.Notes = $"Approved by BM as {days} day(s) (Pending HR review)";
+                    }
+                    else
+                    {
+                        record.Notes = "Unscheduled attendance rejected by Branch Manager";
+                    }
+                    attendanceRepo.Update(record);
+                }
+            }
+
             // A rejected stage-1 decision releases any reserved leave days immediately;
             // approval consumes them at the HR stage.
             var leaveType = LeaveBalanceReservation.LeaveTypeFor(request);
@@ -125,6 +161,17 @@ namespace Service.Services
             }
 
             await unitOfWork.SaveChangesAsync(cancellationToken);
+        }
+
+        private static int ValidateUnscheduledAttendanceDays(int? calculatedDays)
+        {
+            var days = calculatedDays ?? 1;
+            if (days is not (1 or 2))
+            {
+                throw new BadRequestException("Unscheduled attendance can be counted as 1 or 2 days.");
+            }
+
+            return days;
         }
 
         public async Task UndoAsync(
@@ -169,6 +216,20 @@ namespace Service.Services
 
             request.Status = RequestStatus.Pending;
             unitOfWork.GetRepository<EmployeeRequest, int>().Update(request);
+
+            if (request.Type == RequestTypeCatalog.UnscheduledAttendanceLabel)
+            {
+                var attendanceRepo = unitOfWork.GetRepository<AttendanceRecord, int>();
+                var records = await attendanceRepo.GetAllAsync(
+                    new AttendanceRecordByEmployeeDatesSpec(request.EmployeeId, request.RequestDate), cancellationToken);
+                var record = records.FirstOrDefault(r => r.Date == request.RequestDate);
+                if (record is not null)
+                {
+                    record.Notes = "Unscheduled / Off-day check-in (pending approval)";
+                    attendanceRepo.Update(record);
+                }
+            }
+
             await unitOfWork.SaveChangesAsync(cancellationToken);
         }
 
@@ -190,7 +251,21 @@ namespace Service.Services
                 // the catalog knows so its rules (balance, caps) still apply.
                 var type = RequestTypeCatalog.Find(update.Type)
                     ?? throw new BadRequestException($"Unknown request type '{update.Type}'.");
+                // System-generated cover requests are tied to the attendance record
+                // for that date; re-typing one would orphan the record.
+                if (request.Type == RequestTypeCatalog.UnscheduledAttendanceLabel
+                    && type.Label != RequestTypeCatalog.UnscheduledAttendanceLabel)
+                {
+                    throw new BadRequestException("Unscheduled Attendance requests cannot change type.");
+                }
                 request.Type = type.Label;
+            }
+
+            if (request.Type == RequestTypeCatalog.UnscheduledAttendanceLabel
+                && ((update.RequestDate.HasValue && update.RequestDate.Value != request.RequestDate)
+                    || update.EndDate.HasValue))
+            {
+                throw new BadRequestException("Unscheduled Attendance requests cannot change date.");
             }
 
             if (update.RequestDate.HasValue)
@@ -257,6 +332,61 @@ namespace Service.Services
         }
 
         // ---------- helpers ----------
+
+        /// <summary>Re-emits a mapped inbox row with the resolved check-in time: the DTO
+        /// is init-only, so a copy is needed to overlay the attendance-record fallback.</summary>
+        private static EmployeeRequestDto WithRequestTime(EmployeeRequestDto dto, TimeOnly checkIn) => new()
+        {
+            Id = dto.Id,
+            EmployeeId = dto.EmployeeId,
+            EmployeeName = dto.EmployeeName,
+            Type = dto.Type,
+            SubmittedDate = dto.SubmittedDate,
+            SubmittedAt = dto.SubmittedAt,
+            RequestDate = dto.RequestDate,
+            EndDate = dto.EndDate,
+            TargetDate = dto.TargetDate,
+            RequestTime = checkIn,
+            Hours = dto.Hours,
+            Amount = dto.Amount,
+            SwapWithEmployeeId = dto.SwapWithEmployeeId,
+            SwapWithEmployeeName = dto.SwapWithEmployeeName,
+            HasAttachment = dto.HasAttachment,
+            Status = dto.Status,
+            Reason = dto.Reason,
+            Payment = dto.Payment,
+            CalculatedDays = dto.CalculatedDays,
+            Timeline = dto.Timeline,
+        };
+
+        /// <summary>Check-in wall times (attendance timezone) for Unscheduled Attendance
+        /// rows whose own TargetTime was never recorded: one range query over the
+        /// linked attendance records covers the whole page.</summary>
+        private async Task<Dictionary<(int EmployeeId, DateOnly Date), TimeOnly>> ResolveCheckInTimeFallbacksAsync(
+            IEnumerable<EmployeeRequest> entities, CancellationToken cancellationToken)
+        {
+            var needed = entities
+                .Where(e => e.TargetTime is null && e.Type == RequestTypeCatalog.UnscheduledAttendanceLabel)
+                .ToList();
+            if (needed.Count == 0)
+            {
+                return [];
+            }
+
+            var ids = needed.Select(e => e.EmployeeId).Distinct().ToArray();
+            var from = needed.Min(e => e.RequestDate);
+            var to = needed.Max(e => e.RequestDate);
+            var records = await unitOfWork.GetRepository<AttendanceRecord, int>()
+                .GetAllAsync(new AttendanceRecordsByEmployeeIdsRangeSpec(ids, from, to), cancellationToken);
+
+            return records
+                .Where(r => r.CheckInTime is not null)
+                .GroupBy(r => (r.EmployeeId, r.Date))
+                .ToDictionary(
+                    g => g.Key,
+                    g => TimeOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(
+                        g.Min(r => r.CheckInTime!.Value), attendanceTimeZone)));
+        }
 
         private async Task<List<int>> ScopedEmployeeIdsAsync(int actorUserId, int gymId, CancellationToken cancellationToken)
         {

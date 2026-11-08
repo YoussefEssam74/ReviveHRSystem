@@ -186,7 +186,16 @@ function RequestsWorkspace({
                   onClick={() => onDetail(request.id)}
                 >
                   <td className="px-4 py-2.5 font-medium">#{request.id}</td>
-                  <td className="px-4 py-2.5">{request.type}</td>
+                  <td className="px-4 py-2.5">
+                    <span className="flex flex-wrap items-center gap-1.5">
+                      {request.type}
+                      {request.calculatedDays != null && (
+                        <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
+                          Cover: {request.calculatedDays}
+                        </span>
+                      )}
+                    </span>
+                  </td>
                   <td className="px-4 py-2.5">{rangeLabel(request.requestedDate, request.endDate)}</td>
                   <td className="px-4 py-2.5">{formatDate(request.submittedDate)}</td>
                   <td className="px-4 py-2.5">
@@ -211,7 +220,14 @@ function RequestsWorkspace({
                   <FileText className="h-4 w-4" aria-hidden="true" />
                 </div>
                 <div className="min-w-0">
-                  <p className="truncate text-xs font-medium text-charcoal-900">{request.type}</p>
+                  <p className="flex flex-wrap items-center gap-1.5 text-xs font-medium text-charcoal-900">
+                    <span className="truncate">{request.type}</span>
+                    {request.calculatedDays != null && (
+                      <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
+                        Cover: {request.calculatedDays}
+                      </span>
+                    )}
+                  </p>
                   <p className="text-[10px] text-charcoal-500">
                     #{request.id} · {formatDate(request.submittedDate)}
                   </p>
@@ -272,7 +288,12 @@ function RequestDetailDrawer({
   })
 
   const detail: RequestDetail | undefined = query.data
-  const canCancel = detail?.status === 'Pending' || detail?.status === 'Pending HR Review'
+  // System-generated cover requests are not employee-filed, so they can't be
+  // cancelled from the employee side.
+  const canCancel =
+    detail != null &&
+    detail.type !== 'Unscheduled Attendance' &&
+    (detail.status === 'Pending' || detail.status === 'Pending HR Review')
 
   return (
     <Drawer open={requestId != null} title={detail ? detail.type : 'Request'} onClose={onClose}>
@@ -281,9 +302,14 @@ function RequestDetailDrawer({
       {detail && (
         <div className="space-y-4">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <StatusBadge status={detail.status} />
               <span className="text-[10px] font-medium text-charcoal-400">#{detail.id}</span>
+              {detail.calculatedDays != null && (
+                <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
+                  Cover: {detail.calculatedDays} day{detail.calculatedDays === 1 ? '' : 's'}
+                </span>
+              )}
             </div>
           </div>
 
@@ -301,6 +327,16 @@ function RequestDetailDrawer({
           <div className="rounded-lg bg-charcoal-50 p-3">
             <p className="bento-label mb-1">REQUESTED DATE</p>
             <p className="text-sm font-bold text-charcoal-900">{rangeLabel(detail.requestedDate, detail.endDate)}</p>
+            {detail.calculatedDays != null && (
+              <p className="mt-1 text-xs text-violet-700">
+                Cover / extra days: <span className="font-semibold">{detail.calculatedDays}</span>
+              </p>
+            )}
+            {detail.type === 'Unscheduled Attendance' && (
+              <p className="mt-1 text-[10px] text-charcoal-500">
+                Recorded automatically at the attendance station — you can&apos;t cancel it, but agreeing doesn&apos;t change your monthly day-off balance.
+              </p>
+            )}
           </div>
 
           <div>

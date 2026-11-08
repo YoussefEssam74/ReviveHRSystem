@@ -602,17 +602,46 @@ function PerfDrillIn({
       </div>
 
       {/* Aggregated tiles (same algebra as the roster row) */}
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-6">
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 xl:grid-cols-7">
         <PerfTile
           label="To act on"
           value={String(row.pending + row.pendingDeductions)}
           valueClass={row.pending + row.pendingDeductions ? 'text-amber-600' : 'text-charcoal-900'}
+          accent="border-l-amber-400"
         />
-        <PerfTile label={`Requests${row.pending ? ` · ${row.pending} pending` : ''}`} value={String(row.requests)} />
-        <PerfTile label="Deductions" value={formatMoney(row.deductionTotal)} valueClass={row.deductionTotal ? 'text-red-600' : 'text-charcoal-900'} />
-        <PerfTile label="Bonuses" value={formatMoney(row.bonusTotal)} valueClass={row.bonusTotal ? 'text-green-600' : 'text-charcoal-900'} />
-        <PerfTile label="Warnings" value={String(row.warnings)} valueClass={row.warnings ? 'text-orange-600' : 'text-charcoal-900'} />
-        <PerfTile label="Eval avg" value={row.avgScore !== null ? `${row.avgScore.toFixed(1)} / 5` : '—'} />
+        <PerfTile
+          label={`Requests${row.pending ? ` · ${row.pending} pending` : ''}`}
+          value={String(row.requests)}
+          accent="border-l-blue-400"
+        />
+        <PerfTile
+          label="Deductions"
+          value={formatMoney(row.deductionTotal)}
+          valueClass={row.deductionTotal ? 'text-red-600' : 'text-charcoal-900'}
+          accent="border-l-red-400"
+        />
+        <PerfTile
+          label="Bonuses"
+          value={formatMoney(row.bonusTotal)}
+          valueClass={row.bonusTotal ? 'text-green-600' : 'text-charcoal-900'}
+          accent="border-l-green-400"
+        />
+        <PerfTile
+          label="Warnings"
+          value={String(row.warnings)}
+          valueClass={row.warnings ? 'text-orange-600' : 'text-charcoal-900'}
+          accent="border-l-orange-400"
+        />
+        <PerfTile
+          label="Eval avg"
+          value={row.avgScore !== null ? `${row.avgScore.toFixed(1)} / 5` : '—'}
+          accent="border-l-violet-400"
+        />
+        <PerfTile
+          label="Monthly salary"
+          value={row.employee.salary != null ? formatMoney(row.employee.salary) : '—'}
+          accent="border-l-brand-400"
+        />
       </div>
 
       <div className="overflow-hidden rounded-xl border border-charcoal-200 bg-white">
@@ -801,7 +830,7 @@ function DrillDeductions({
   const { toast } = useToast()
   const queryClient = useQueryClient()
   const [editingId, setEditingId] = useState<number | null>(null)
-  const [amount, setAmount] = useState('')
+  const [days, setDays] = useState('')
   const [view, setView] = useState<DeductionViewId>('pending')
 
   const deductionsQuery = useQuery({
@@ -810,15 +839,15 @@ function DrillDeductions({
   })
 
   const reviewMutation = useMutation({
-    mutationFn: ({ id, decision, amount: revised }: { id: number; decision: 'approve' | 'reject' | 'edit'; amount?: number }) =>
-      branchReviewDeduction(id, { decision, amount: revised }),
+    mutationFn: ({ id, decision, days: revisedDays }: { id: number; decision: 'approve' | 'reject' | 'edit'; days?: number }) =>
+      branchReviewDeduction(id, { decision, days: revisedDays }),
     onSuccess: (_data, variables) => {
       toast(
         variables.decision === 'approve'
           ? 'Deduction approved — it goes to HR for the payroll run.'
           : variables.decision === 'reject'
             ? 'Deduction rejected.'
-            : 'Deduction amount updated.',
+            : 'Deduction days updated and amount recalculated.',
       )
       setEditingId(null)
       void queryClient.invalidateQueries({ queryKey: ['portal', 'perf', 'deductions'] })
@@ -842,12 +871,12 @@ function DrillDeductions({
   const visible = rows.filter((item) => deductionViewOf(item.status) === view)
   const pending = reviewMutation.isPending
   const submitReprice = (item: DeductionCandidateRow) => {
-    const value = Number(amount)
-    if (amount === '' || !Number.isFinite(value) || value <= 0) {
-      toast('Enter an amount greater than zero.', 'error')
+    const value = Number(days)
+    if (days === '' || !Number.isInteger(value) || value < 1 || value > 30) {
+      toast('Enter a whole number of deduction days between 1 and 30.', 'error')
       return
     }
-    reviewMutation.mutate({ id: item.id, decision: 'edit', amount: value })
+    reviewMutation.mutate({ id: item.id, decision: 'edit', days: value })
   }
 
   return (
@@ -889,10 +918,13 @@ function DrillDeductions({
         emptyHint={current.emptyHint}
         rows={visible.map((item) => {
           // What this row's state still allows: the whole decision while it is
-          // pending, re-price / reject while it waits for HR, nothing once HR has
-          // applied it (or the branch has excused it).
+          // pending, re-price / reject while it waits for HR, and — since a
+          // rejected row is otherwise frozen — the full decision again once
+          // rejected, so a manager who rejected in error can edit the days or
+          // re-approve it. Nothing once HR has applied it.
           const isOpen = item.status === 'Pending'
-          const canDecide = isOpen || item.status === 'BranchApproved'
+          const isRejected = item.status === 'Rejected'
+          const canDecide = isOpen || item.status === 'BranchApproved' || isRejected
           // The useful context for a manager deciding this row: the attendance day
           // itself, that employee's absence/late tally for the month, and any
           // request the employee filed for that exact day.
@@ -939,9 +971,14 @@ function DrillDeductions({
                     ))}
                   </div>
                 )}
+                {isRejected && (
+                  <p className="mt-1.5 text-[10px] font-medium text-red-600">
+                    Rejected — edit the days or re-approve to undo this decision.
+                  </p>
+                )}
                 {canDecide && (
                   <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-                    {isOpen && (
+                    {(isOpen || isRejected) && (
                       <button
                         type="button"
                         disabled={pending}
@@ -956,33 +993,41 @@ function DrillDeductions({
                       disabled={pending}
                       onClick={() => {
                         setEditingId(editingId === item.id ? null : item.id)
-                        setAmount(String(item.amount))
+                        setDays(String(Math.max(1, Math.round(item.deductionDays))))
                       }}
                       className="rounded-md border border-charcoal-200 px-2 py-1 text-[10px] font-semibold text-charcoal-600 transition-colors hover:bg-charcoal-50 disabled:opacity-50"
                     >
-                      Edit amount
+                      Edit deduction days
                     </button>
-                    <button
-                      type="button"
-                      disabled={pending}
-                      onClick={() => reviewMutation.mutate({ id: item.id, decision: 'reject' })}
-                      className="rounded-md border border-red-200 px-2 py-1 text-[10px] font-semibold text-red-600 transition-colors hover:bg-red-50 disabled:opacity-50"
-                    >
-                      Reject
-                    </button>
+                    {!isRejected && (
+                      <button
+                        type="button"
+                        disabled={pending}
+                        onClick={() => reviewMutation.mutate({ id: item.id, decision: 'reject' })}
+                        className="rounded-md border border-red-200 px-2 py-1 text-[10px] font-semibold text-red-600 transition-colors hover:bg-red-50 disabled:opacity-50"
+                      >
+                        Reject
+                      </button>
+                    )}
                   </div>
                 )}
                 {editingId === item.id && (
                   <div className="mt-1.5 flex items-center gap-1.5">
                     <input
                       type="number"
-                      min="0"
-                      step="0.01"
-                      value={amount}
-                      onChange={(event) => setAmount(event.target.value)}
-                      placeholder="New amount (EGP)"
+                      min="1"
+                      max="30"
+                      step="1"
+                      value={days}
+                      onChange={(event) => setDays(event.target.value)}
+                      placeholder="Deduction days"
                       className="w-28 rounded-md border border-charcoal-200 px-2 py-1 text-[11px] text-charcoal-800 focus:border-brand-400 focus:outline-none"
                     />
+                    <p className="text-[10px] text-charcoal-500">
+                      New amount: {item.deductionDays > 0
+                        ? formatMoney((item.amount / item.deductionDays) * Number(days || item.deductionDays))
+                        : 'calculated after saving'}
+                    </p>
                     <button
                       type="button"
                       disabled={pending}
