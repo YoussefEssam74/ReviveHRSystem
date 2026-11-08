@@ -26,6 +26,20 @@ namespace Service.Specifications
         }
     }
 
+    /// <summary>
+    /// One gym by trimmed, case-insensitive name — announcement audience resolution
+    /// and public filter lookups read the matching row straight from SQL instead of
+    /// loading the gym table into memory.
+    /// </summary>
+    public class GymByNameSpec : BaseSpecification<Gym, int>
+    {
+        public GymByNameSpec(string name)
+        {
+            var wanted = name.Trim().ToLower();
+            Criteria = g => g.Name.Trim().ToLower() == wanted;
+        }
+    }
+
     /// <summary>Finds a gym's active employees (staff count for the gym list).</summary>
     public class ActiveEmployeesByGymCountSpec : BaseSpecification<Employee, int>
     {

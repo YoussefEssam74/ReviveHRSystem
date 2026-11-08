@@ -33,6 +33,13 @@ public sealed class CreateEmployeeRequestDto
     public string Reason { get; init; } = string.Empty;
 }
 
+/// <summary>A swap candidate for the request form (id + display name only — PII-light).</summary>
+public sealed class EmployeeColleagueDto
+{
+    public int Id { get; init; }
+    public string FullName { get; init; } = string.Empty;
+}
+
 /// <summary>
 /// A file riding with a request (the sick-leave medical certificate). The stream is
 /// handed to storage exactly as the avatar upload does; only the relative path is kept.

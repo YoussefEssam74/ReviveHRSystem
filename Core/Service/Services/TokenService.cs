@@ -1,5 +1,6 @@
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
+using System.Security.Cryptography;
 using System.Text;
 using DomainLayer.Models.UserModule;
 using Microsoft.IdentityModel.Tokens;
@@ -28,6 +29,14 @@ namespace Service.Services
         private readonly JwtSecurityTokenHandler _tokenHandler = new();
 
         public int AccessTokenExpiresInSeconds => settings.AccessTokenMinutes * 60;
+
+        public string GenerateRefreshToken() =>
+            Convert.ToHexString(RandomNumberGenerator.GetBytes(64)).ToLowerInvariant();
+
+        public string HashRefreshToken(string token) =>
+            Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(token))).ToLowerInvariant();
+
+        public DateTime RefreshTokenExpiresAtUtc => DateTime.UtcNow.AddDays(settings.RefreshTokenDays);
 
         public string CreateAccessToken(User user, IEnumerable<string> permissionKeys, int? scopedGymId)
         {

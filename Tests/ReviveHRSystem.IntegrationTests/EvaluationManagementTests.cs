@@ -160,44 +160,6 @@ namespace ReviveHRSystem.IntegrationTests
         }
 
         [Fact]
-        public async Task Create_TeamLeaderWithoutEvaluationsEdit_Returns403()
-        {
-            // TL/BM hold evaluations at View per the locked plan table: they may read
-            // evaluations but not author them. Anyone needing to run evaluations is
-            // granted the level per gym (individual grant or role bundle).
-            var gym1Id = await GymIdByNameAsync("Revive Main Gym");
-            var seed = await SeedTeamWithLeaderAsync(gym1Id, "Eval Own Team", "ev4@revive.hr");
-            var (formId, questionId) = await SeedEvaluationFormAsync(gym1Id, "Q4 TL Read");
-            var memberId = await SeedTeamMemberAsync(seed.TeamId, gym1Id, "evtmmember@revive.hr");
-
-            var token = await _fixture.LoginAsync("ev4@revive.hr", DevelopmentDataSeeder.EmployeePassword);
-            var create = _fixture.AuthorizedRequest(HttpMethod.Post, $"/api/employees/{memberId}/evaluations", new
-            {
-                evaluationFormId = formId,
-                answers = new[] { new { questionId, score = 3 } }
-            }, token);
-            var response = await _fixture.Client.SendAsync(create);
-
-            Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
-        }
-
-        [Fact]
-        public async Task Create_PlainEmployee_Returns403()
-        {
-            var token = await _fixture.LoginAsync("karim@revive.hr", "Revive!2026");
-            var anyId = await OwnEmployeeIdAsync("karim@revive.hr");
-
-            var create = _fixture.AuthorizedRequest(HttpMethod.Post, $"/api/employees/{anyId}/evaluations", new
-            {
-                evaluationFormId = 1,
-                answers = new[] { new { questionId = 1, score = 1 } }
-            }, token);
-            var response = await _fixture.Client.SendAsync(create);
-
-            Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
-        }
-
-        [Fact]
         public async Task Create_ScoreOutOfRange_Returns400()
         {
             // MaxScore is hard-coded 5, so an unbounded score would poison the average

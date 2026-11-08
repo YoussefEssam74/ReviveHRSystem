@@ -378,6 +378,8 @@ namespace ReviveHRSystem.IntegrationTests
         public async Task Stage_Completed_AutoTicksWholeChecklist()
         {
             var scene = await CreateSceneAsync("employees.view", "employees.offboard");
+            // Mint a live refresh chain for the employee before the separation completes.
+            await _fixture.LoginAsync(scene.Employee.Email, scene.Employee.Password);
             var separationId = await OffboardAsync(scene, scene.Employee,
                 new { lastDay = Iso(Days(6)), reason = "Relocation" });
 
@@ -391,7 +393,18 @@ namespace ReviveHRSystem.IntegrationTests
             Assert.Equal(100, detail.GetProperty("progress").GetInt32());
             Assert.All(detail.GetProperty("checklist").EnumerateArray(), entry => Assert.True(entry[1].GetBoolean()));
 
-            // Idempotent repeat.
+            // Completed is a real termination: the employee is archived, the account
+            // is deactivated, and the live refresh chain is revoked.
+            var employee = await Db.Employees.AsNoTracking().SingleAsync(e => e.Id == scene.Employee.EmployeeId);
+            Assert.Equal(EmployeeStatus.Terminated, employee.Status);
+            var user = await Db.Users.AsNoTracking().SingleAsync(u => u.Id == scene.Employee.UserId);
+            Assert.False(user.IsActive);
+            Assert.True(await Db.RefreshTokens.AnyAsync(t => t.UserId == scene.Employee.UserId));
+            Assert.True(await Db.RefreshTokens.AsNoTracking()
+                .Where(t => t.UserId == scene.Employee.UserId)
+                .AllAsync(t => t.RevokedAtUtc != null));
+
+            // Idempotent repeat (and it self-heals an already-completed case).
             var again = await SendAsync(HttpMethod.Put, $"/api/separations/{separationId}/stage",
                 new { status = "Completed" }, scene.Token);
             Assert.Equal(HttpStatusCode.OK, again.StatusCode);
@@ -455,6 +468,8 @@ namespace ReviveHRSystem.IntegrationTests
         public async Task Finalize_GatesOnChecklistAndVerdict_ThenArchivesEmployee()
         {
             var scene = await CreateSceneAsync("employees.view", "employees.offboard");
+            // Mint a live refresh chain for the employee before finalize.
+            await _fixture.LoginAsync(scene.Employee.Email, scene.Employee.Password);
             var separationId = await OffboardAsync(scene, scene.Employee,
                 new { lastDay = Iso(Days(6)), reason = "Relocation", notes = "Moving abroad" });
 
@@ -499,6 +514,10 @@ namespace ReviveHRSystem.IntegrationTests
             Assert.Equal(EmployeeStatus.Terminated, employee.Status);
             var user = await Db.Users.AsNoTracking().SingleAsync(u => u.Id == scene.Employee.UserId);
             Assert.False(user.IsActive);
+            Assert.True(await Db.RefreshTokens.AnyAsync(t => t.UserId == scene.Employee.UserId));
+            Assert.True(await Db.RefreshTokens.AsNoTracking()
+                .Where(t => t.UserId == scene.Employee.UserId)
+                .AllAsync(t => t.RevokedAtUtc != null));
             Assert.True(await Db.OffboardingCases.AnyAsync(c => c.Id == separationId && c.CompletedAt != null));
             Assert.True(await Db.AuditLogs.AnyAsync(a =>
                 a.Action == "Employee Offboarded" && a.UserId == scene.Hr.UserId));

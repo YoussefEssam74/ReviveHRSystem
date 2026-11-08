@@ -124,6 +124,89 @@ namespace ReviveHRSystem.IntegrationTests
             Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
         }
 
+        [Fact]
+        public async Task Offboarding_RescheduleAndClose_InFlightCase()
+        {
+            // The Branch Manager moves the last working day of an in-flight case
+            // and can close it without completing the separation — the person
+            // stays employed and a new process may start afterwards. A dedicated
+            // employee keeps this fact independent from the shared-fixture cases
+            // InitiateAndList uses.
+            var gym1Id = await GymIdByNameAsync("Revive Main Gym");
+            var targetUserId = await CreateUserAsync("hamad@revive.hr");
+            var employeeId = await CreateEmployeeForUserAsync(targetUserId, gym1Id, "EMP-7801");
+            var token = await LoginSelectingGymAsync("omar@revive.hr", gym1Id);
+
+            var initiate = _fixture.AuthorizedRequest(HttpMethod.Post, "/api/offboarding-requests", new
+            {
+                employeeId,
+                lastWorkingDate = DateOnly.FromDateTime(DateTime.UtcNow).AddDays(30),
+                reason = "Resignation"
+            }, token);
+            var initiateResponse = await _fixture.Client.SendAsync(initiate);
+            initiateResponse.EnsureSuccessStatusCode();
+            var created = await initiateResponse.Content.ReadFromJsonAsync<JsonElement>();
+            var caseId = created.GetProperty("id").GetInt32();
+
+            var newDay = DateOnly.FromDateTime(DateTime.UtcNow).AddDays(60);
+            var reschedule = _fixture.AuthorizedRequest(
+                HttpMethod.Put, $"/api/offboarding-requests/{caseId}/last-day", new { lastWorkingDate = newDay }, token);
+            var rescheduleResponse = await _fixture.Client.SendAsync(reschedule);
+            rescheduleResponse.EnsureSuccessStatusCode();
+            var rescheduled = await rescheduleResponse.Content.ReadFromJsonAsync<JsonElement>();
+            Assert.Equal("Notice Period", rescheduled.GetProperty("status").GetString());
+            Assert.Equal(newDay.ToString("yyyy-MM-dd"), rescheduled.GetProperty("lastWorkingDate").GetString());
+
+            var close = _fixture.AuthorizedRequest(HttpMethod.Post, $"/api/offboarding-requests/{caseId}/close", null, token);
+            var closeResponse = await _fixture.Client.SendAsync(close);
+            closeResponse.EnsureSuccessStatusCode();
+            var closed = await closeResponse.Content.ReadFromJsonAsync<JsonElement>();
+            Assert.Equal("Cancelled", closed.GetProperty("status").GetString());
+
+            // The closed case no longer blocks a new leaving process…
+            var reinitiate = _fixture.AuthorizedRequest(HttpMethod.Post, "/api/offboarding-requests", new
+            {
+                employeeId,
+                lastWorkingDate = newDay,
+                reason = "The real one this time"
+            }, token);
+            var reinitiateResponse = await _fixture.Client.SendAsync(reinitiate);
+            reinitiateResponse.EnsureSuccessStatusCode();
+            var reinitiated = await reinitiateResponse.Content.ReadFromJsonAsync<JsonElement>();
+            Assert.Equal("Notice Period", reinitiated.GetProperty("status").GetString());
+
+            // …but the cancelled case itself can no longer be modified.
+            var closeAgain = _fixture.AuthorizedRequest(HttpMethod.Post, $"/api/offboarding-requests/{caseId}/close", null, token);
+            Assert.Equal(HttpStatusCode.BadRequest, (await _fixture.Client.SendAsync(closeAgain)).StatusCode);
+            var rescheduleAgain = _fixture.AuthorizedRequest(
+                HttpMethod.Put, $"/api/offboarding-requests/{caseId}/last-day", new { lastWorkingDate = newDay }, token);
+            Assert.Equal(HttpStatusCode.BadRequest, (await _fixture.Client.SendAsync(rescheduleAgain)).StatusCode);
+
+            // Employment continues: the employee is not Terminated by the close.
+            var employeeStatus = await OwnEmployeeStatusAsync(employeeId);
+            Assert.Equal("Active", employeeStatus);
+        }
+
+        [Fact]
+        public async Task VacancyRequests_TeamLeaderGym_IsDenied()
+        {
+            // Closing the cross-gym key hole: omar is only a Team Leader in gym2,
+            // so his gym2 token must NOT act with the manager-side recruitment
+            // keys he holds through his Branch Manager role in gym1.
+            var gym2Id = await GymIdByNameAsync("Revive Second Gym");
+            var token = await LoginSelectingGymAsync("omar@revive.hr", gym2Id);
+
+            var request = _fixture.AuthorizedRequest(HttpMethod.Post, "/api/vacancy-requests", new
+            {
+                gymId = gym2Id,
+                position = "Req Coach TL-Poke",
+                reason = "Team Leaders must not reach requisitions."
+            }, token);
+            var response = await _fixture.Client.SendAsync(request);
+
+            Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        }
+
         // ---------- helpers ----------
 
         private async Task<string> LoginSelectingGymAsync(string email, int gymId)
@@ -369,6 +452,13 @@ namespace ReviveHRSystem.IntegrationTests
             using var scope = _fixture.Services.CreateScope();
             var db = scope.ServiceProvider.GetRequiredService<ReviveHrDbContext>();
             return await db.Employees.Where(e => e.User!.Email == email).Select(e => e.Id).SingleAsync();
+        }
+
+        private async Task<string> OwnEmployeeStatusAsync(int employeeId)
+        {
+            using var scope = _fixture.Services.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<ReviveHrDbContext>();
+            return await db.Employees.Where(e => e.Id == employeeId).Select(e => e.Status.ToString()).SingleAsync();
         }
     }
 }

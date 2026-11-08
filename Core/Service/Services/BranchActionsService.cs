@@ -15,16 +15,17 @@ using Shared.DataTransferObject.EmployeeProfile;
 namespace Service.Services
 {
     /// <summary>
-    /// Branch Actions queue (mock §20). Deductions ride on the attendance feature,
-    /// warnings and bonuses on the employees feature (enforced by the controller);
-    /// here the service validates the target is in scope (team for Team Leaders, gym
-    /// for Branch Managers) and always issues at the active gym with status Pending.
+    /// Branch Actions queue (mock §20). Deductions, warnings and bonus proposals are
+    /// raised by in-gym management only (Team Leader within his team, Branch Manager
+    /// gym-wise); the service validates that, the target lands inside that scope, and
+    /// every issue is recorded at the active gym with status Pending.
     /// </summary>
     public class BranchActionsService(
         IUnitOfWork unitOfWork,
         ITeamScopeService teamScopeService,
         IAccessControlService accessControl,
-        IUserAccessRepository userAccess) : IBranchActionsService
+        IUserAccessRepository userAccess,
+        IAttendanceDeductionSweepService deductionSweep) : IBranchActionsService
     {
         private static readonly string[] DeductionReasons =
         {
@@ -56,6 +57,8 @@ namespace Service.Services
         {
             var gymId = RequireGym(activeGymId);
 
+            await EnsureManagementScopeAsync(actorUserId, gymId, cancellationToken);
+
             if (request.Amount <= 0)
             {
                 throw new BadRequestException("The deduction amount must be greater than zero.");
@@ -85,10 +88,71 @@ namespace Service.Services
             return await LoadDeductionAsync(candidate.Id, cancellationToken);
         }
 
+        /// <summary>
+        /// The branch's own decision on one of its deductions before HR applies it to
+        /// payroll (mock §20): approve (BranchApproved — goes to HR), reject (final) or
+        /// re-price the amount. Restricted to the caller's management scope and only
+        /// while no decision has closed the line.
+        /// </summary>
+        public async Task<DeductionCandidateDto> BranchReviewDeductionAsync(
+            int actorUserId, int candidateId, BranchDeductionReviewRequest request, int? activeGymId, CancellationToken cancellationToken = default)
+        {
+            var gymId = RequireGym(activeGymId);
+            await EnsureManagementScopeAsync(actorUserId, gymId, cancellationToken);
+
+            var candidate = await unitOfWork.GetRepository<DeductionCandidate, int>()
+                .GetByIdAsync(new DeductionCandidateByIdSpec(candidateId), cancellationToken)
+                ?? throw new NotFoundException("Deduction candidate not found.");
+
+            await EnsureEmployeeInScopeAsync(actorUserId, gymId, candidate.EmployeeId, cancellationToken);
+
+            if (candidate.Status is DeductionStatus.Rejected or DeductionStatus.Approved)
+            {
+                throw new BadRequestException(
+                    "This deduction is already finalized — rejected and applied deductions can no longer change.");
+            }
+
+            var amount = request.Amount;
+            if (amount is { } revised && revised <= 0)
+            {
+                throw new BadRequestException("The deduction amount must be greater than zero.");
+            }
+
+            switch (request.Decision?.Trim().ToLowerInvariant())
+            {
+                case "approve":
+                    if (amount is not null)
+                    {
+                        candidate.Amount = amount.Value;
+                    }
+                    candidate.Status = DeductionStatus.BranchApproved;
+                    break;
+
+                case "reject":
+                    candidate.Status = DeductionStatus.Rejected;
+                    break;
+
+                case "edit" when amount is not null:
+                    candidate.Amount = amount.Value;
+                    break;
+
+                case "edit":
+                    throw new BadRequestException("Re-pricing a deduction requires the new amount.");
+
+                default:
+                    throw new BadRequestException("The decision must be 'approve', 'reject' or 'edit'.");
+            }
+
+            await unitOfWork.SaveChangesAsync(cancellationToken);
+            return await LoadDeductionAsync(candidate.Id, cancellationToken);
+        }
+
         public async Task<WarningNoticeDto> IssueWarningAsync(
             int actorUserId, int? activeGymId, CreateWarningNoticeDto request, CancellationToken cancellationToken = default)
         {
             var gymId = RequireGym(activeGymId);
+
+            await EnsureManagementScopeAsync(actorUserId, gymId, cancellationToken);
 
             if (!WarningTypes.Contains(request.Type, StringComparer.OrdinalIgnoreCase))
             {
@@ -123,6 +187,8 @@ namespace Service.Services
             int actorUserId, int? activeGymId, CreateBonusProposalDto request, CancellationToken cancellationToken = default)
         {
             var gymId = RequireGym(activeGymId);
+
+            await EnsureManagementScopeAsync(actorUserId, gymId, cancellationToken);
 
             if (!BonusTypes.Contains(request.Type, StringComparer.OrdinalIgnoreCase))
             {
@@ -163,6 +229,7 @@ namespace Service.Services
             int actorUserId, int? activeGymId, CancellationToken cancellationToken = default)
         {
             var gymId = RequireGym(activeGymId);
+            await EnsureManagementScopeAsync(actorUserId, gymId, cancellationToken);
             var employeeIds = await ScopedEmployeeIdsAsync(actorUserId, gymId, cancellationToken);
 
             var items = new List<BranchQueueItemDto>();
@@ -210,6 +277,125 @@ namespace Service.Services
                 }));
 
             return items.OrderByDescending(i => i.Date).ToList();
+        }
+
+        /// <summary>
+        /// The branch/history reads only answer for an acting manager: a Team
+        /// Leader sees his led team, a Branch Manager the whole gym; anyone else
+        /// gets the same "not found" the raise endpoints answer with, so a plain
+        /// employee cannot page through the branch's discipline data. HR rides
+        /// along so it can re-price a deduction at month end through the same
+        /// branch-review route the tab uses.
+        /// </summary>
+        private static readonly string[] ManagementRoleNames =
+        [
+            Shared.Authorization.RoleNames.TeamLeader,
+            Shared.Authorization.RoleNames.BranchManager,
+            Shared.Authorization.RoleNames.Hr,
+            Shared.Authorization.RoleNames.HrManager,
+            Shared.Authorization.RoleNames.SuperAdmin,
+        ];
+
+        private async Task EnsureManagementScopeAsync(int actorUserId, int gymId, CancellationToken cancellationToken)
+        {
+            var roleNames = await userAccess.GetGymRoleNamesAsync(actorUserId, gymId, cancellationToken);
+            if (!roleNames.Any(ManagementRoleNames.Contains))
+            {
+                throw new NotFoundException("Employee not found.");
+            }
+        }
+
+        public async Task<IReadOnlyList<DeductionCandidateDto>> GetDeductionsAsync(
+            int actorUserId, int? employeeId, int? activeGymId, CancellationToken cancellationToken = default)
+        {
+            var gymId = RequireGym(activeGymId);
+            await EnsureManagementScopeAsync(actorUserId, gymId, cancellationToken);
+            var employeeIds = await ScopedEmployeeIdsAsync(actorUserId, gymId, cancellationToken);
+
+            // This list is the branch's live view of attendance deductions: reconcile
+            // the month first (idempotent), so an absence or late arrival that has
+            // happened is already raised and priced by the time the tab renders. The
+            // sweep clamps the window to the gym's local today itself.
+            await deductionSweep.SweepAsync(
+                employeeIds,
+                new DateOnly(DateTime.Today.Year, DateTime.Today.Month, 1),
+                DateOnly.MaxValue,
+                cancellationToken);
+
+            var candidates = await unitOfWork.GetRepository<DeductionCandidate, int>()
+                .GetAllAsync(new DeductionCandidatesByEmployeesSpec(employeeIds), cancellationToken);
+
+            return candidates
+                .Where(d => employeeId is null || d.EmployeeId == employeeId)
+                .Select(d => new DeductionCandidateDto
+                {
+                    Id = d.Id,
+                    EmployeeId = d.EmployeeId,
+                    Employee = d.Employee?.FullName ?? string.Empty,
+                    Amount = d.Amount,
+                    Reason = d.Reason,
+                    Note = d.Note,
+                    Status = d.Status.ToString(),
+                    Date = PayrollService.CandidateDayOf(d),
+                    IssuedAt = d.IssuedAt,
+                    IssuedBy = d.IssuedByUser?.UserName ?? string.Empty,
+                })
+                .ToList();
+        }
+
+        public async Task<IReadOnlyList<WarningNoticeDto>> GetWarningsAsync(
+            int actorUserId, int? employeeId, int? activeGymId, CancellationToken cancellationToken = default)
+        {
+            var gymId = RequireGym(activeGymId);
+            await EnsureManagementScopeAsync(actorUserId, gymId, cancellationToken);
+            var employeeIds = await ScopedEmployeeIdsAsync(actorUserId, gymId, cancellationToken);
+
+            var notices = await unitOfWork.GetRepository<WarningNotice, int>()
+                .GetAllAsync(new WarningNoticesByEmployeesSpec(employeeIds), cancellationToken);
+
+            return notices
+                .Where(w => employeeId is null || w.EmployeeId == employeeId)
+                .Select(w => new WarningNoticeDto
+                {
+                    Id = w.Id,
+                    EmployeeId = w.EmployeeId,
+                    Employee = w.Employee?.FullName ?? string.Empty,
+                    Type = w.Type,
+                    Reason = w.Reason,
+                    Note = w.Note,
+                    Status = w.Status.ToString(),
+                    IssuedAt = w.IssuedAt,
+                    IssuedBy = w.IssuedByUser?.UserName ?? string.Empty,
+                })
+                .ToList();
+        }
+
+        public async Task<IReadOnlyList<BonusProposalDto>> GetBonusesAsync(
+            int actorUserId, int? employeeId, int? activeGymId, CancellationToken cancellationToken = default)
+        {
+            var gymId = RequireGym(activeGymId);
+            await EnsureManagementScopeAsync(actorUserId, gymId, cancellationToken);
+            var employeeIds = await ScopedEmployeeIdsAsync(actorUserId, gymId, cancellationToken);
+
+            var proposals = await unitOfWork.GetRepository<BonusProposal, int>()
+                .GetAllAsync(new BonusProposalsByEmployeesSpec(employeeIds), cancellationToken);
+
+            return proposals
+                .Where(b => employeeId is null || b.EmployeeId == employeeId)
+                .Select(b => new BonusProposalDto
+                {
+                    Id = b.Id,
+                    EmployeeId = b.EmployeeId,
+                    Employee = b.Employee?.FullName ?? string.Empty,
+                    Type = b.Type,
+                    Amount = b.Amount,
+                    Reason = b.Reason,
+                    Note = b.Note,
+                    Status = b.Status.ToString(),
+                    IssuedAt = b.IssuedAt,
+                    IssuedBy = b.IssuedByUser?.UserName ?? string.Empty,
+                })
+                .ToList();
         }
 
         public async Task SendReportAsync(int actorUserId, int? activeGymId, CreateBranchReportDto request, CancellationToken cancellationToken = default)
@@ -448,6 +634,7 @@ namespace Service.Services
                 Reason = candidate.Reason,
                 Note = candidate.Note,
                 Status = candidate.Status.ToString(),
+                Date = PayrollService.CandidateDayOf(candidate),
                 IssuedAt = candidate.IssuedAt,
                 IssuedBy = candidate.IssuedByUser?.UserName ?? string.Empty
             };
@@ -513,7 +700,15 @@ namespace Service.Services
                 ? await unitOfWork.GetRepository<Employee, int>().GetAllAsync(new EmployeesByTeamSpec(ledTeamId.Value), cancellationToken)
                 : await unitOfWork.GetRepository<Employee, int>().GetAllAsync(new EmployeesByGymSpec(gymId), cancellationToken);
 
-            return employees.Select(e => e.Id).ToList();
+            // Resolve the actor's own employee row and exclude them: a BM or TL must
+            // not be able to issue or view branch actions against themselves.
+            var ownEmployee = await unitOfWork.GetRepository<Employee, int>()
+                .GetByIdAsync(new EmployeeByUserIdSpec(actorUserId), cancellationToken);
+
+            return employees
+                .Where(e => ownEmployee is null || e.Id != ownEmployee.Id)
+                .Select(e => e.Id)
+                .ToList();
         }
 
         private static int RequireGym(int? activeGymId) =>

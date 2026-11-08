@@ -33,8 +33,8 @@ namespace Presistence.Data
         public DbSet<UserPermission> UserPermissions => Set<UserPermission>();
         public DbSet<UserGymAccess> UserGymAccesses => Set<UserGymAccess>();
         public DbSet<UserGymRole> UserGymRoles => Set<UserGymRole>();
-        public DbSet<UserGymPermission> UserGymPermissions => Set<UserGymPermission>();
         public DbSet<UserNotificationPreference> UserNotificationPreferences => Set<UserNotificationPreference>();
+        public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
 
         // Organization
         public DbSet<Gym> Gyms => Set<Gym>();
@@ -156,8 +156,6 @@ namespace Presistence.Data
                 !EF.Property<bool>(x.User, "IsDeleted") && !EF.Property<bool>(x.Gym, "IsDeleted"));
             modelBuilder.Entity<UserGymRole>().HasQueryFilter(x =>
                 !EF.Property<bool>(x.User, "IsDeleted") && !EF.Property<bool>(x.Gym, "IsDeleted") && !EF.Property<bool>(x.Role, "IsDeleted"));
-            modelBuilder.Entity<UserGymPermission>().HasQueryFilter(x =>
-                !EF.Property<bool>(x.User, "IsDeleted") && !EF.Property<bool>(x.Gym, "IsDeleted") && !EF.Property<bool>(x.Permission, "IsDeleted"));
         }
 
         public override Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)

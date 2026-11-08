@@ -1,4 +1,5 @@
-import { clearSession, loadStoredSession } from './session-store'
+import { clearSession, loadStoredSession, saveSession } from './session-store'
+import type { StoredSession } from './session-store'
 
 /**
  * Same-origin by default: the Vite dev proxy forwards /api to the API host.
@@ -137,8 +138,74 @@ export function describeApiError(error: unknown): string {
   return 'Something went wrong. Please try again.'
 }
 
-export async function apiRequest<T>(path: string, options: RequestOptions = {}): Promise<T> {
-  const { method = 'GET', body, signal, accessToken, stationToken, stationAuth } = options
+/**
+ * True when the API's bearer middleware rejected the token itself (invalid or
+ * expired session) — its auth failures always carry the standard bearer
+ * challenge. A permission denial (a key gate refusing a live session) is a
+ * plain 401 with a ProblemDetails body and no challenge (M4): the user stays
+ * signed in and the page surfaces it as an access message.
+ */
+function isAuthChallenge(response: Response): boolean {
+  return response.headers.has('WWW-Authenticate')
+}
+
+let refreshPromise: Promise<StoredSession | null> | null = null
+
+/** Attempts a single refresh using the stored refresh token; dedupes concurrent calls. */
+async function tryRefreshSession(session: StoredSession, signal?: AbortSignal): Promise<StoredSession | null> {
+  if (!session.refreshToken) return null
+  if (refreshPromise) return refreshPromise
+  // Bound the refresh like every other request: a stalled refresh must settle
+  // (releasing the waiters joined on this promise) instead of leaving them and
+  // their queued requests pending forever.
+  refreshPromise = (async () => {
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
+    const onExternalAbort = () => controller.abort()
+    if (signal) {
+      if (signal.aborted) controller.abort()
+      else signal.addEventListener('abort', onExternalAbort, { once: true })
+    }
+    try {
+      const response = await fetch(BASE_URL + '/api/auth/refresh', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify({ refreshToken: session.refreshToken }),
+        signal: controller.signal,
+      })
+      if (!response.ok) return null
+      const json = (await response.json()) as {
+        accessToken?: string
+        expiresInSeconds?: number
+        refreshExpiresInSeconds?: number
+        refreshToken?: string
+        user?: StoredSession['user']
+      }
+      if (!json.accessToken) return null
+      const next: StoredSession = {
+        accessToken: json.accessToken,
+        refreshToken: json.refreshToken ?? session.refreshToken,
+        expiresAt: Date.now() + (json.expiresInSeconds ?? 3600) * 1000,
+        refreshExpiresAt: json.refreshExpiresInSeconds
+          ? Date.now() + json.refreshExpiresInSeconds * 1000
+          : undefined,
+        user: json.user ?? session.user,
+      }
+      saveSession(next)
+      return next
+    } catch {
+      return null
+    } finally {
+      clearTimeout(timer)
+      signal?.removeEventListener('abort', onExternalAbort)
+      refreshPromise = null
+    }
+  })()
+  return refreshPromise
+}
+
+export async function apiRequest<T>(path: string, options: RequestOptions & { form?: FormData } = {}): Promise<T> {
+  const { method = 'GET', body, form, signal, accessToken, stationToken, stationAuth } = options
   const session = loadStoredSession()
   // Station requests authenticate with their own header or session cookie; a kiosk
   // browser may also hold a stale web session, which must never be sent from a
@@ -159,17 +226,22 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
     else signal.addEventListener('abort', onExternalAbort, { once: true })
   }
 
+  // Multipart: the browser sets the Content-Type with the boundary; JSON gets it
+  // explicitly. Only one of the two applies to a request.
+  const headers: Record<string, string> = {
+    Accept: 'application/json',
+    ...(form === undefined && body !== undefined ? { 'Content-Type': 'application/json' } : {}),
+    ...(bearerToken ? { Authorization: 'Bearer ' + bearerToken } : {}),
+    ...(stationToken ? { 'X-Station-Token': stationToken } : {}),
+  }
+  const payload: BodyInit | undefined = form ?? (body === undefined ? undefined : JSON.stringify(body))
+
   let response: Response
   try {
     response = await fetch(BASE_URL + path, {
       method,
-      headers: {
-        Accept: 'application/json',
-        ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}),
-        ...(bearerToken ? { Authorization: 'Bearer ' + bearerToken } : {}),
-        ...(stationToken ? { 'X-Station-Token': stationToken } : {}),
-      },
-      body: body === undefined ? undefined : JSON.stringify(body),
+      headers,
+      body: payload,
       // Cookie-authenticated station requests must carry the HttpOnly session
       // cookie (and accept Set-Cookie on login) even when the API is on another
       // origin; same-origin requests already behave this way by default.
@@ -192,13 +264,91 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
   const json: unknown = text ? safeJsonParse(text) : null
 
   if (!response.ok) {
-    // The API issues short-lived access tokens with no refresh endpoint, so a
-    // 401 always means the session is over --- clear it and let the UI react.
-    // Only session-signed requests are allowed to do that: an expired or
-    // rotated station token must leave the HR user's session alone.
-    if (response.status === 401 && !accessToken && !stationToken && !stationAuth && session) clearSession()
+    // Access-token expired? Try a silent refresh once, then retry the original request.
+    if (response.status === 401 && !accessToken && !stationToken && !stationAuth
+        && session && isAuthChallenge(response)
+        && path !== '/api/auth/refresh' && path !== '/api/auth/login' && path !== '/api/auth/login/select-gym') {
+      // Another tab may have rotated the session meanwhile: the captured session's
+      // refresh token is then stale (refreshing with it would trip the server's
+      // reuse detection), so prefer the newer credentials already in storage.
+      const storedNow = loadStoredSession()
+      if (storedNow && storedNow.accessToken !== session.accessToken) {
+        if (storedNow.expiresAt > Date.now()) {
+          // The newer bearer is usable — retry with it instead of spinning a refresh.
+          return apiRequest<T>(path, { ...options, accessToken: storedNow.accessToken })
+        }
+        const refreshed = await tryRefreshSession(storedNow, signal)
+        if (refreshed) {
+          return apiRequest<T>(path, { ...options, accessToken: refreshed.accessToken })
+        }
+      } else {
+        const refreshed = await tryRefreshSession(session, signal)
+        if (refreshed) {
+          return apiRequest<T>(path, { ...options, accessToken: refreshed.accessToken })
+        }
+      }
+    }
+
+    if (response.status === 401 && !accessToken && !stationToken && !stationAuth
+        && session && isAuthChallenge(response)) {
+      // Clear-session discipline: a 401 challenge may be refused because the
+      // credential itself is dead, OR because another tab replaced the session
+      // while this request was in flight (single-live-chain sweep). Only the
+      // holder whose credential is still the stored one may clear shared
+      // storage — a stale in-flight retry must not evict the newer session;
+      // it caused the "randomly bounced to login right after picking a gym"
+      // multi-tab report.
+      const storedOnChallenge = loadStoredSession()
+      if (!storedOnChallenge || storedOnChallenge.accessToken === session.accessToken) clearSession()
+    }
     throw toApiError(response.status, json)
   }
 
   return json as T
+}
+
+/** Downloads a binary endpoint (payslip PDF, request attachment) with session auth. */
+export async function apiDownload(path: string, signal?: AbortSignal): Promise<{ blob: Blob; fileName: string | null }> {
+  const session = loadStoredSession()
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS * 4)
+  if (signal) {
+    if (signal.aborted) controller.abort()
+    else signal.addEventListener('abort', () => controller.abort(), { once: true })
+  }
+
+  let response: Response
+  try {
+    response = await fetch(BASE_URL + path, {
+      headers: {
+        ...(session?.accessToken ? { Authorization: 'Bearer ' + session.accessToken } : {}),
+      },
+      signal: controller.signal,
+    })
+  } catch (error) {
+    // A caller-initiated cancellation (navigation, unmount) is not an app error.
+    if (signal?.aborted) throw error
+    throw new ApiError(0, 'NETWORK_ERROR', 'Could not reach the server. Check your connection and try again.')
+  } finally {
+    clearTimeout(timer)
+  }
+
+  if (!response.ok) {
+    // Same 401 split as apiRequest (M4): only a bearer-challenge auth failure
+    // signs the user out; a permission-denial 401 keeps the session.
+    if (response.status === 401 && isAuthChallenge(response) && session) clearSession()
+    let message = fallbackMessage(response.status)
+    try {
+      const text = await response.text()
+      const json = text ? safeJsonParse(text) : null
+      if (json) message = toApiError(response.status, json).message
+    } catch {
+      /* body was binary — keep the fallback */
+    }
+    throw new ApiError(response.status, 'HTTP_' + response.status, message)
+  }
+
+  const contentDisposition = response.headers.get('Content-Disposition')
+  const fileName = contentDisposition?.match(/filename\*?=(?:UTF-8'')?"?([^";]+)"?/i)?.[1] ?? null
+  return { blob: await response.blob(), fileName }
 }

@@ -1,6 +1,8 @@
+using System.Linq.Expressions;
 using DomainLayer.Contracts;
 using DomainLayer.Models.AttendanceModule;
 using DomainLayer.Models.EmployeeModule;
+using DomainLayer.Models.EmployeeModule.Enums;
 using DomainLayer.Models.EvaluationModule;
 using DomainLayer.Models.NotificationModule;
 using DomainLayer.Models.NotificationModule.Enums;
@@ -22,6 +24,7 @@ namespace Service.Specifications
             Criteria = a => a.EvaluationResponse.EmployeeId == employeeId;
             AddInclude(a => a.EvaluationQuestion);
             AddInclude(a => a.EvaluationResponse);
+            AddInclude(a => a.EvaluationResponse.Employee);
         }
     }
 
@@ -44,7 +47,11 @@ namespace Service.Specifications
             Criteria = a => a.EvaluationResponseId == responseId;
             AddInclude(a => a.EvaluationQuestion);
             AddInclude(a => a.EvaluationResponse);
+            AddInclude(a => a.EvaluationResponse.Employee);
             AddInclude(a => a.EvaluationResponse.Evaluator);
+            // Editing a response mutates every fetched answer row before SaveChanges
+            // without Update() — keep tracked.
+            ApplyTracking();
         }
     }
 
@@ -56,6 +63,7 @@ namespace Service.Specifications
             Criteria = a => employeeIds.Contains(a.EvaluationResponse.EmployeeId);
             AddInclude(a => a.EvaluationQuestion);
             AddInclude(a => a.EvaluationResponse);
+            AddInclude(a => a.EvaluationResponse.Employee);
             AddInclude(a => a.EvaluationResponse.Evaluator);
         }
     }
@@ -68,6 +76,9 @@ namespace Service.Specifications
             Criteria = r => r.Id == responseId;
             AddInclude(r => r.EvaluationForm);
             AddInclude(r => r.Employee);
+            // Response edit mutates the fetched response before SaveChanges without
+            // Update() — keep tracked.
+            ApplyTracking();
         }
     }
 
@@ -119,6 +130,20 @@ namespace Service.Specifications
         }
     }
 
+    /// <summary>
+    /// Payroll periods of a gym including the still-Open one, for the employee's own
+    /// payroll view (mock §8). The mapping marks an Open period's entry visible=false
+    /// so the UI renders the "Current Period" card / Processing row without money.
+    /// </summary>
+    public class PayrollPeriodsByGymIncludingOpenSpec : BaseSpecification<PayrollPeriod, int>
+    {
+        public PayrollPeriodsByGymIncludingOpenSpec(int gymId)
+        {
+            Criteria = p => p.GymId == gymId;
+            OrderByDescending = p => p.EndDate;
+        }
+    }
+
     /// <summary>Shift assignments of one employee inside an inclusive date range.</summary>
     public class AssignmentsByEmployeeRangeSpec : BaseSpecification<DomainLayer.Models.SchedulingModule.ShiftAssignment, int>
     {
@@ -135,7 +160,9 @@ namespace Service.Specifications
     {
         public EmployeesByTeamSpec(int teamId)
         {
-            Criteria = e => e.TeamId == teamId;
+            Criteria = e => e.TeamId == teamId && e.Status != EmployeeStatus.Terminated;
+            AddInclude(e => e.Position);
+            AddInclude(e => e.Gym);
             OrderBy = e => e.FullName;
         }
     }
@@ -170,15 +197,69 @@ namespace Service.Specifications
         }
     }
 
-    /// <summary>Requests of a set of employees (team/gym scope).</summary>
+    /// <summary>
+    /// Requests of a set of employees (team/gym scope). The inbox passes the UI's
+    /// filter vocabulary straight through so filter, sort and page run in SQL; the
+    /// count instance simply omits <c>take</c>. The <c>type</c> filter compares
+    /// exactly (the catalog's canonical labels, matching RequestDirectorySpec).
+    /// </summary>
     public class RequestsByEmployeesSpec : BaseSpecification<DomainLayer.Models.RequestModule.EmployeeRequest, int>
     {
-        public RequestsByEmployeesSpec(IReadOnlyCollection<int> employeeIds)
+        public RequestsByEmployeesSpec(
+            IReadOnlyCollection<int> employeeIds,
+            DomainLayer.Models.RequestModule.Enums.RequestStatus? status = null,
+            string? type = null,
+            DateOnly? dateFrom = null,
+            DateOnly? dateTo = null,
+            int skip = 0,
+            int take = 0)
         {
-            Criteria = r => employeeIds.Contains(r.EmployeeId);
+            Expression<Func<DomainLayer.Models.RequestModule.EmployeeRequest, bool>> predicate =
+                r => employeeIds.Contains(r.EmployeeId);
+
+            if (status is { } wantedStatus)
+            {
+                predicate = And(predicate, r => r.Status == wantedStatus);
+            }
+
+            if (!string.IsNullOrWhiteSpace(type))
+            {
+                var wantedType = type.Trim();
+                predicate = And(predicate, r => r.Type == wantedType);
+            }
+
+            if (dateFrom is { } from)
+            {
+                predicate = And(predicate, r => r.RequestDate >= from);
+            }
+
+            if (dateTo is { } to)
+            {
+                predicate = And(predicate, r => r.RequestDate <= to);
+            }
+
+            Criteria = predicate;
+            AddInclude(r => r.Employee);
             AddInclude(r => r.Decisions);
             AddInclude(r => r.SwapWithEmployee);
             OrderByDescending = r => r.SubmittedAt;
+            if (take > 0)
+            {
+                ApplyPaging(skip, take);
+            }
+        }
+
+        private static Expression<Func<T, bool>> And<T>(Expression<Func<T, bool>> left, Expression<Func<T, bool>> right)
+        {
+            var parameter = left.Parameters[0];
+            var rightBody = new ParameterRewriter(right.Parameters[0], parameter).Visit(right.Body)!;
+            return Expression.Lambda<Func<T, bool>>(Expression.AndAlso(left.Body, rightBody), parameter);
+        }
+
+        private sealed class ParameterRewriter(ParameterExpression from, ParameterExpression to) : ExpressionVisitor
+        {
+            protected override Expression VisitParameter(ParameterExpression node) =>
+                node == from ? to : base.VisitParameter(node);
         }
     }
 

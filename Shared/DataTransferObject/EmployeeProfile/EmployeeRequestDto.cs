@@ -4,6 +4,8 @@ namespace Shared.DataTransferObject.EmployeeProfile;
 public sealed class EmployeeRequestDto
 {
     public int Id { get; init; }
+    public int EmployeeId { get; init; }
+    public string EmployeeName { get; init; } = string.Empty;
     public string Type { get; init; } = string.Empty;
     public DateOnly SubmittedDate { get; init; }
     public DateOnly RequestDate { get; init; }

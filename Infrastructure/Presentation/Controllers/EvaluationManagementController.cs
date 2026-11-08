@@ -1,9 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
-using Presentation.Authorization;
 using ServiceAbstraction.Services;
-using Shared.Authorization;
 using Shared.DataTransferObject.EmployeeProfile;
-using DomainLayer.Models.UserModule.Enums;
 
 namespace Presentation.Controllers
 {
@@ -14,7 +11,6 @@ namespace Presentation.Controllers
     {
         /// <summary>Submits an evaluation for an in-scope employee.</summary>
         [HttpPost]
-        [HasFeatureAccess(Features.Evaluations, AccessLevel.Edit)]
         public async Task<ActionResult<EvaluationDto>> Create(
             int employeeId, CreateEvaluationResponseDto request, CancellationToken cancellationToken)
         {
@@ -30,7 +26,6 @@ namespace Presentation.Controllers
     {
         /// <summary>Edits the answers of an in-scope evaluation.</summary>
         [HttpPut]
-        [HasFeatureAccess(Features.Evaluations, AccessLevel.Edit)]
         public async Task<ActionResult<EvaluationDto>> Update(
             int employeeId, int evaluationId, UpdateEvaluationDto request, CancellationToken cancellationToken)
         {
@@ -46,7 +41,6 @@ namespace Presentation.Controllers
     {
         /// <summary>Evaluations of the team's members, newest first.</summary>
         [HttpGet]
-        [HasFeatureAccess(Features.Evaluations, AccessLevel.View)]
         public async Task<ActionResult<IReadOnlyList<EvaluationDto>>> GetTeamEvaluations(
             int teamId, CancellationToken cancellationToken)
         {

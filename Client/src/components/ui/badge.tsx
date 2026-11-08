@@ -1,32 +1,99 @@
 import type { ReactNode } from 'react'
 import { cn } from '../../lib/utils'
-import { statusBadgeClass } from '../../lib/format'
+
+export type BadgeColor = 'green' | 'yellow' | 'red' | 'blue' | 'gray' | 'purple' | 'orange'
 
 export interface BadgeProps {
   children: ReactNode
-  /** Precomputed Tailwind ring/text classes (e.g. from statusBadgeClass). */
+  /** Explicit palette entry; wins over `status`. */
+  color?: BadgeColor
+  /** When set, derives the color from a known status string. */
+  status?: string | null
   className?: string
-  /** When set, derives colors from a known status string. */
-  status?: string
 }
 
-/** Small pill used for statuses across the console. */
-export function Badge({ children, className, status }: BadgeProps) {
+/** Small pill used for statuses across the portals. */
+export function Badge({ color, status, children, className }: BadgeProps) {
+  const tone = color ?? (status ? statusColor(status) : 'gray')
+  return <span className={cn('badge', `badge-${tone}`, className)}>{children}</span>
+}
+
+const STATUS_COLORS: Record<string, BadgeColor> = {
+  // Employment / lifecycle
+  active: 'green',
+  'on time': 'green',
+  present: 'green',
+  approved: 'green',
+  paid: 'green',
+  published: 'green',
+  completed: 'green',
+  valid: 'green',
+  eligible: 'green',
+  'on shift': 'green',
+  // Warning-ish
+  late: 'yellow',
+  pending: 'yellow',
+  'pending hr review': 'yellow',
+  pendinghrreview: 'yellow',
+  'pending hr': 'yellow',
+  processing: 'yellow',
+  'expiring soon': 'yellow',
+  draft: 'yellow',
+  'in progress': 'yellow',
+  review: 'yellow',
+  scheduled: 'blue',
+  'partially published': 'yellow',
+  'under review': 'yellow',
+  // Branch approval stage on deductions (BM accepted, HR applies next)
+  'branch approved': 'yellow',
+  // Danger
+  absent: 'red',
+  rejected: 'red',
+  suspended: 'red',
+  terminated: 'red',
+  overdue: 'red',
+  missingcheckout: 'red',
+  'missing checkout': 'red',
+  expired: 'red',
+  banned: 'red',
+  cancelled: 'red',
+  // Neutral / info
+  'on leave': 'orange',
+  'notice period': 'orange',
+  'early checkout': 'orange',
+  off: 'gray',
+  inactive: 'gray',
+  disabled: 'gray',
+  archived: 'gray',
+  'day off': 'blue',
+  open: 'blue',
+  'off day': 'blue',
+  // Evaluation results + server enum names (deal with .ToString() payloads)
+  exceeds: 'green',
+  meets: 'blue',
+  below: 'red',
+  onleave: 'orange',
+  noticeperiod: 'orange',
+}
+
+function normalize(status: string): string {
+  return status.trim().toLowerCase()
+}
+
+/** Maps a business status string to the mock's badge color vocabulary. */
+export function statusColor(status: string): BadgeColor {
+  return STATUS_COLORS[normalize(status)] ?? 'gray'
+}
+
+/** Status pill; an empty status renders a neutral dash instead of a blank chip. */
+export function StatusBadge({ status, className }: { status: string | null | undefined; className?: string }) {
+  if (!status) {
+    return <span className={cn('badge', 'badge-gray', className)}>—</span>
+  }
+  const color = statusColor(status)
   return (
-    <span
-      className={cn(
-        'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset',
-        status ? statusBadgeClass(status) : 'bg-slate-100 text-slate-600 ring-slate-200',
-        className,
-      )}
-    >
-      {children}
+    <span className={cn('badge', `badge-${color}`, className)}>
+      {normalize(status) === 'missingcheckout' ? 'Missing Checkout' : status}
     </span>
   )
-}
-
-/** Status pill with a leading dot, matching the mock's status chips. */
-export function StatusBadge({ status }: { status: string | null | undefined }) {
-  const label = status ?? '—'
-  return <Badge status={status ?? undefined}>{label}</Badge>
 }

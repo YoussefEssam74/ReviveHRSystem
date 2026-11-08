@@ -220,6 +220,8 @@ namespace Presistence.Data.Configurations
                    .HasForeignKey(f => f.EmployeeId)
                    .OnDelete(DeleteBehavior.Cascade);
 
+            // Nullable: a Branch Manager may raise a follow-up about a gym employee
+            // nobody has assigned to a team yet (his scope is the whole roster).
             builder.HasOne(f => f.Team)
                    .WithMany()
                    .HasForeignKey(f => f.TeamId)

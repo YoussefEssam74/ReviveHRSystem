@@ -10,5 +10,13 @@ namespace Shared.DataTransferObject.Employee
         public required string Name { get; init; }
         public required string Category { get; init; }
         public required string Status { get; init; }
+
+        /// <summary>Id for the self-download route ({docId}/download).</summary>
+        public int Id { get; init; }
+
+        /// <summary>When the document was uploaded (the vault's date column).</summary>
+        public DateOnly UploadDate { get; init; }
+
+        public DateOnly? ExpiryDate { get; init; }
     }
 }

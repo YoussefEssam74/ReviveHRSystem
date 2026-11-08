@@ -1,0 +1,27 @@
+{
+  "employee": {
+    "email": "karim@revive.hr",
+    "password": "Revive!2026",
+    "employeeId": 3
+  },
+  "teamLeader": {
+    "email": "itest-7cfaa37f@test.local",
+    "password": "Revive!2026"
+  },
+  "branchManager": {
+    "email": "itest-9cbae8ee@test.local",
+    "password": "Revive!2026"
+  },
+  "hr": {
+    "email": "hr@revive.hr",
+    "password": "Revive!2026"
+  },
+  "hrManager": {
+    "email": "ittest-d72b5bdf@test.local",
+    "password": "Revive!2026"
+  },
+  "topManagement": {
+    "email": "admin@revive.hr",
+    "password": "Revive!2026"
+  }
+}

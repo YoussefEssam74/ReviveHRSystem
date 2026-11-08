@@ -13,6 +13,10 @@ namespace Service.Specifications
             Criteria = d => d.Id == id;
             AddInclude(d => d.Employee);
             AddInclude(d => d.IssuedByUser);
+            AddInclude(d => d.AttendanceRecord);
+            // Branch review (approve / reject / re-price) mutates the fetched candidate
+            // before SaveChanges without Update() — keeps the flow tracked.
+            ApplyTracking();
         }
     }
 
@@ -23,6 +27,13 @@ namespace Service.Specifications
         {
             Criteria = d => employeeIds.Contains(d.EmployeeId);
             AddInclude(d => d.Employee);
+            AddInclude(d => d.IssuedByUser);
+            // Payroll close finalizes the loaded candidates (status → Approved, reviewed
+            // stamps) before SaveChanges without Update() — keeps the flow tracked.
+            ApplyTracking();
+            // The linked attendance day (when set) is what a deduction punishes —
+            // read with the row so the detail views can date it correctly.
+            AddInclude(d => d.AttendanceRecord);
             OrderByDescending = d => d.IssuedAt;
         }
     }
@@ -45,6 +56,7 @@ namespace Service.Specifications
         {
             Criteria = w => employeeIds.Contains(w.EmployeeId);
             AddInclude(w => w.Employee);
+            AddInclude(w => w.IssuedByUser);
             OrderByDescending = w => w.IssuedAt;
         }
     }
@@ -67,6 +79,7 @@ namespace Service.Specifications
         {
             Criteria = b => employeeIds.Contains(b.EmployeeId);
             AddInclude(b => b.Employee);
+            AddInclude(b => b.IssuedByUser);
             OrderByDescending = b => b.IssuedAt;
         }
     }

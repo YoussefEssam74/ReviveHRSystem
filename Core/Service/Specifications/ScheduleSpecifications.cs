@@ -8,15 +8,15 @@ using DomainLayer.Models.SchedulingModule.Enums;
 
 namespace Service.Specifications
 {
-    /// <summary>Published cycles of a gym overlapping a month window.</summary>
+    /// <summary>Published cycles of a gym overlapping [windowStart, windowEndExclusive).</summary>
     public class PublishedCyclesByGymSpec : BaseSpecification<ShiftCycle, int>
     {
-        public PublishedCyclesByGymSpec(int gymId, DateOnly monthStart, DateOnly monthEnd)
+        public PublishedCyclesByGymSpec(int gymId, DateOnly windowStart, DateOnly windowEndExclusive)
         {
             Criteria = c => c.GymId == gymId
                 && c.Status == ShiftCycleStatus.Published
-                && c.StartDate < monthEnd
-                && c.EndDate >= monthStart;
+                && c.StartDate < windowEndExclusive
+                && c.EndDate >= windowStart;
             OrderBy = c => c.StartDate;
         }
     }
@@ -59,6 +59,9 @@ namespace Service.Specifications
             Criteria = c => c.Id == cycleId;
             AddInclude(c => c.Gym);
             AddInclude(c => c.ShiftAssignments);
+            // Assignment editing mutates the cycle's loaded assignments before
+            // SaveChanges without Update() — keeps the flow tracked.
+            ApplyTracking();
         }
     }
 
@@ -112,6 +115,9 @@ namespace Service.Specifications
         public ShiftAssignmentsOfEmployeesInRangeSpec(int[] employeeIds, DateOnly from, DateOnly to)
         {
             Criteria = a => employeeIds.Contains(a.EmployeeId) && a.Date >= from && a.Date <= to;
+            // (EmployeeId, Date) re-parenting mutates the fetched rows before
+            // SaveChanges without Update() — keeps the flow tracked.
+            ApplyTracking();
         }
     }
 

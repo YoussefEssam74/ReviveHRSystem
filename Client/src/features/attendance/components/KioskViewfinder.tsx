@@ -11,10 +11,10 @@ const RETICLE_IDLE = 'rgba(255,255,255,0.25)'
 const LIVENESS_GATE = 0.7
 
 const PHASE_META: Record<ScannerPhase, { title: string; badge: string; tone: string }> = {
-  starting: { title: 'Starting camera...', badge: 'STARTING', tone: 'text-white/90' },
-  scanning: { title: 'Stand in front of the camera', badge: 'SCANNING', tone: 'text-white/90' },
+  starting: { title: 'Starting camera...', badge: 'STARTING', tone: 'text-[#fff]/90' },
+  scanning: { title: 'Stand in front of the camera', badge: 'SCANNING', tone: 'text-[#fff]/90' },
   recognized: { title: 'Recognized', badge: 'MATCHED', tone: 'text-emerald-300' },
-  idle: { title: 'Camera is off', badge: 'IDLE', tone: 'text-white/90' },
+  idle: { title: 'Camera is off', badge: 'IDLE', tone: 'text-[#fff]/90' },
 }
 
 /**
@@ -55,7 +55,6 @@ interface KioskViewfinderProps {
   onToggleSound: () => void
   onScanNow: () => void
   onRetryCamera: () => void
-  onUseManual: () => void
   onDismissResult: () => void
   onConfirmCheckout: () => void
   onCancelCheckout: () => void
@@ -65,8 +64,7 @@ interface KioskViewfinderProps {
 /**
  * The always-on camera viewfinder: streams from the moment the station connects,
  * with the scanning reticle, laser line and live status HUD. Reticle color tracks
- * the scanner phase; a camera problem keeps manual entry one click away so a blocked
- * camera never blocks attendance.
+ * the scanner phase; a camera failure shows a retry card inside the frame.
  */
 export function KioskViewfinder({
   videoRef,
@@ -85,7 +83,6 @@ export function KioskViewfinder({
   onToggleSound,
   onScanNow,
   onRetryCamera,
-  onUseManual,
   onDismissResult,
   onConfirmCheckout,
   onCancelCheckout,
@@ -159,7 +156,7 @@ export function KioskViewfinder({
           />
 
           <div
-            className="pointer-events-none absolute inset-4 rounded-2xl border border-white/10 transition-all sm:inset-8"
+            className="pointer-events-none absolute inset-4 rounded-2xl border border-[#fff]/10 transition-all sm:inset-8"
             style={{ borderColor: streaming ? RETICLE_ACTIVE : RETICLE_IDLE }}
           />
           {['left-4 top-4 rounded-tl-lg sm:left-8 sm:top-8', 'right-4 top-4 rounded-tr-lg sm:right-8 sm:top-8', 'left-4 bottom-4 rounded-bl-lg sm:left-8 sm:bottom-8', 'right-4 bottom-4 rounded-br-lg sm:right-8 sm:bottom-8'].map((position) => (
@@ -173,11 +170,11 @@ export function KioskViewfinder({
           {streaming && phase !== 'recognized' && <div className="scanline z-10" />}
 
           <div className="relative z-10 flex items-center justify-between p-3">
-            <span className="inline-flex items-center gap-1.5 rounded-md border border-white/15 bg-black/60 px-2.5 py-1 font-mono text-[11px] text-white/90 backdrop-blur-md">
+            <span className="inline-flex items-center gap-1.5 rounded-md border border-[#fff]/15 bg-black/60 px-2.5 py-1 font-mono text-[11px] text-[#fff]/90 backdrop-blur-md">
               <span className="h-2 w-2 animate-pulse rounded-full bg-brand-400" />
               LIVE VISION ACTIVE
             </span>
-            <span className="rounded-md border border-white/15 bg-black/60 px-2 py-1 font-mono text-[11px] text-white/70 backdrop-blur-md">
+            <span className="rounded-md border border-[#fff]/15 bg-black/60 px-2 py-1 font-mono text-[11px] text-[#fff]/70 backdrop-blur-md">
               {clockTime}
             </span>
           </div>
@@ -195,24 +192,21 @@ export function KioskViewfinder({
                 <Button size="sm" onClick={onRetryCamera}>
                   Try camera again
                 </Button>
-                <Button variant="outline" size="sm" onClick={onUseManual}>
-                  Enter employee number
-                </Button>
               </div>
             </div>
           )}
 
           {!streaming && !cameraError && (
             <div className="pointer-events-none absolute inset-0 z-10 flex flex-col items-center justify-center px-6 text-center">
-              <div className="flex h-20 w-20 animate-pulse items-center justify-center rounded-full border-2 border-white/20 bg-black/20 text-white/70 backdrop-blur-sm">
+              <div className="flex h-20 w-20 animate-pulse items-center justify-center rounded-full border-2 border-[#fff]/20 bg-black/20 text-[#fff]/70 backdrop-blur-sm">
                 <ScanFace className="h-12 w-12" aria-hidden="true" />
               </div>
-              <p className="mt-3 text-sm font-bold text-white drop-shadow">Starting camera...</p>
+              <p className="mt-3 text-sm font-bold text-[#fff] drop-shadow">Starting camera...</p>
             </div>
           )}
 
           <div className="relative z-10 p-3">
-            <div className="flex w-full items-center justify-between gap-3 rounded-xl border border-white/15 bg-black/75 px-4 py-2.5 text-white shadow-lg backdrop-blur-md">
+            <div className="flex w-full items-center justify-between gap-3 rounded-xl border border-[#fff]/15 bg-black/75 px-4 py-2.5 text-[#fff] shadow-lg backdrop-blur-md">
               <div className="flex min-w-0 items-center gap-2.5">
                 {phase === 'recognized' ? (
                   <CheckCircle2 className="h-5 w-5 shrink-0 text-brand-400" aria-hidden="true" />
@@ -229,14 +223,14 @@ export function KioskViewfinder({
                   <p aria-live="polite" className={'truncate text-xs font-bold leading-tight ' + meta.tone}>
                     {stripTitle}
                   </p>
-                  <p className="truncate text-[10px] leading-tight text-white/70">{stripDetail}</p>
+                  <p className="truncate text-[10px] leading-tight text-[#fff]/70">{stripDetail}</p>
                 </div>
               </div>
               <div className="shrink-0 text-right">
                 {faceInFrame && frame ? (
                   <LivenessBadge liveness={frame.liveness} />
                 ) : (
-                  <span className="rounded bg-white/10 px-2 py-0.5 font-mono text-[10px] font-bold text-white/90 uppercase">
+                  <span className="rounded bg-[#fff]/10 px-2 py-0.5 font-mono text-[10px] font-bold text-[#fff]/90 uppercase">
                     {meta.badge}
                   </span>
                 )}

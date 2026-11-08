@@ -1,10 +1,12 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using DomainLayer.Models.EmployeeModule.Enums;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Presistence.Data;
 using ReviveHRSystem.IntegrationTests.Fixtures;
+using ReviveHRSystem.IntegrationTests.Support;
 using ServiceAbstraction.Services;
 using Xunit;
 
@@ -135,6 +137,44 @@ namespace ReviveHRSystem.IntegrationTests
 
             Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
             Assert.Equal("You do not have access to the selected gym.", body.GetProperty("errorMessage").GetString());
+        }
+
+        [Fact]
+        public async Task Login_TerminatedEmployee_Returns401()
+        {
+            var builder = new TestDataBuilder(_fixture.Services);
+            var gym = await builder.CreateGymWithStationAsync();
+            var employee = await builder.CreateEmployeeAsync(gym);
+
+            // Terminate the employee standing but leave the login account active:
+            // the employee-status check alone must refuse the sign-in.
+            await builder.SetEmployeeStatusAsync(employee.EmployeeId, EmployeeStatus.Terminated);
+
+            var (status, body) = await LoginAsync(new { email = employee.Email, password = employee.Password });
+
+            Assert.Equal(HttpStatusCode.Unauthorized, status);
+            Assert.Equal("Invalid email or password.", body.GetProperty("errorMessage").GetString());
+        }
+
+        [Fact]
+        public async Task Refresh_TerminatedEmployee_Returns401()
+        {
+            var builder = new TestDataBuilder(_fixture.Services);
+            var gym = await builder.CreateGymWithStationAsync();
+            var employee = await builder.CreateEmployeeAsync(gym);
+
+            // Sign in while active and keep the refresh credential.
+            var (loginStatus, loginBody) = await LoginAsync(new { email = employee.Email, password = employee.Password });
+            Assert.Equal(HttpStatusCode.OK, loginStatus);
+            var refreshToken = loginBody.GetProperty("refreshToken").GetString()!;
+
+            await builder.SetEmployeeStatusAsync(employee.EmployeeId, EmployeeStatus.Terminated);
+
+            var response = await _fixture.Client.PostAsJsonAsync("/api/auth/refresh", new { refreshToken });
+            var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+
+            Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+            Assert.Equal("Your session is invalid. Please sign in again.", body.GetProperty("errorMessage").GetString());
         }
 
         [Fact]

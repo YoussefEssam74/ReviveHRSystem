@@ -12,7 +12,7 @@ namespace ServiceAbstraction.Services
     public interface IEmployeeService
     {
         /// <summary>Paged, gym-scoped, filterable employee directory.</summary>
-        Task<EmployeeListResponse> GetEmployeesAsync(int? actorUserId, EmployeeListQuery query, CancellationToken cancellationToken = default);
+        Task<EmployeeListResponse> GetEmployeesAsync(int? actorUserId, EmployeeListQuery query, int? activeGymId = null, CancellationToken cancellationToken = default);
 
         /// <summary>Onboards a new employee (user account + profile + hire history).</summary>
         Task<EmployeeDataResponse> CreateEmployeeAsync(int? actorUserId, CreateEmployeeRequest request, CancellationToken cancellationToken = default);
@@ -21,7 +21,7 @@ namespace ServiceAbstraction.Services
         Task<BulkImportResultResponse> BulkImportAsync(int? actorUserId, string csvContent, CancellationToken cancellationToken = default);
 
         /// <summary>One employee's full profile.</summary>
-        Task<EmployeeDataResponse> GetEmployeeAsync(int? actorUserId, int employeeId, CancellationToken cancellationToken = default);
+        Task<EmployeeDataResponse> GetEmployeeAsync(int? actorUserId, int employeeId, int? activeGymId = null, CancellationToken cancellationToken = default);
 
         /// <summary>Applies edit-modal fields (name, position, status) to an employee.</summary>
         Task<EmployeeDetailResponse> UpdateEmployeeAsync(int? actorUserId, int employeeId, UpdateEmployeeRequest request, CancellationToken cancellationToken = default);

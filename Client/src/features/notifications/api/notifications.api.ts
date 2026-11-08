@@ -1,4 +1,5 @@
 import { apiRequest } from '../../../lib/api-client'
+import { withQuery, type PagedResult } from '../../../lib/paged'
 
 /**
  * Notifications (S5.7) — the signed-in user's own inbox; a JWT is enough, no
@@ -7,6 +8,7 @@ import { apiRequest } from '../../../lib/api-client'
  */
 export interface NotificationItem {
   id: number
+  /** Requests | Recruitment | Document | System | Announcements. */
   category: string
   title: string
   description: string | null
@@ -17,12 +19,10 @@ export interface NotificationItem {
 }
 
 /** The paged envelope every list endpoint returns. */
-export interface Paged<T> {
-  items: T[]
-  page: number
-  pageSize: number
-  total: number
-  totalPages: number
+export type Paged<T> = PagedResult<T>
+
+export interface UnreadCountResponse {
+  count: number
 }
 
 /** Filter categories accepted by GET /api/notifications. */
@@ -35,25 +35,29 @@ export interface NotificationListParams {
   category?: NotificationCategory | string
   page?: number
   pageSize?: number
+  /** Callers that keep the signal in the params object (portal hooks). */
+  signal?: AbortSignal
 }
 
 /** GET /api/notifications — newest first, scoped to the caller. */
 export function getNotifications(
   params: NotificationListParams = {},
   signal?: AbortSignal,
-): Promise<Paged<NotificationItem>> {
-  const query = new URLSearchParams()
-  if (params.unread) query.set('unread', 'true')
-  if (params.category) query.set('category', params.category)
-  if (params.page) query.set('page', String(params.page))
-  if (params.pageSize) query.set('pageSize', String(params.pageSize))
-  const qs = query.toString()
-  return apiRequest<Paged<NotificationItem>>(`/api/notifications${qs ? '?' + qs : ''}`, { signal })
+): Promise<PagedResult<NotificationItem>> {
+  return apiRequest<PagedResult<NotificationItem>>(
+    withQuery('/api/notifications', {
+      unread: params.unread ? true : undefined,
+      category: params.category,
+      page: params.page,
+      pageSize: params.pageSize,
+    }),
+    { signal: params.signal ?? signal },
+  )
 }
 
 /** GET /api/notifications/unread-count — the header bell badge. */
-export function getUnreadCount(signal?: AbortSignal): Promise<{ count: number }> {
-  return apiRequest<{ count: number }>('/api/notifications/unread-count', { signal })
+export function getUnreadCount(signal?: AbortSignal): Promise<UnreadCountResponse> {
+  return apiRequest<UnreadCountResponse>('/api/notifications/unread-count', { signal })
 }
 
 /** PUT /api/notifications/read-all — marks every unread row read. */
@@ -64,6 +68,15 @@ export function putReadAll(signal?: AbortSignal): Promise<{ message: string }> {
 /** PUT /api/notifications/{id}/read — marks one owned row read (another user's row → 404). */
 export function putReadOne(id: number, signal?: AbortSignal): Promise<NotificationItem> {
   return apiRequest<NotificationItem>(`/api/notifications/${id}/read`, { method: 'PUT', signal })
+}
+
+/** Portal naming for the two mark-read operations. */
+export function putMarkRead(id: number, signal?: AbortSignal): Promise<NotificationItem> {
+  return putReadOne(id, signal)
+}
+
+export function putMarkAllRead(signal?: AbortSignal): Promise<{ message: string }> {
+  return putReadAll(signal)
 }
 
 // ---------------------------------------------------------------------------
@@ -113,14 +126,16 @@ export interface AnnouncementListParams {
 export function getAnnouncements(
   params: AnnouncementListParams = {},
   signal?: AbortSignal,
-): Promise<Paged<AnnouncementItem>> {
-  const query = new URLSearchParams()
-  if (params.gym != null) query.set('gym', String(params.gym))
-  if (params.status) query.set('status', params.status)
-  if (params.page) query.set('page', String(params.page))
-  if (params.pageSize) query.set('pageSize', String(params.pageSize))
-  const qs = query.toString()
-  return apiRequest<Paged<AnnouncementItem>>(`/api/announcements${qs ? '?' + qs : ''}`, { signal })
+): Promise<PagedResult<AnnouncementItem>> {
+  return apiRequest<PagedResult<AnnouncementItem>>(
+    withQuery('/api/announcements', {
+      gym: params.gym,
+      status: params.status,
+      page: params.page,
+      pageSize: params.pageSize,
+    }),
+    { signal },
+  )
 }
 
 /** POST /api/announcements — compose + fan out (announcements.manage) → 201 { data }. */

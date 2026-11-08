@@ -37,6 +37,9 @@ namespace Service.Specifications
         {
             Criteria = sc => sc.GymId == gymId && sc.IsActive;
             AddInclude(sc => sc.Gym);
+            // Enroll-rotation deactivates the fetched code when a successor is issued —
+            // keep it tracked for that save.
+            ApplyTracking();
         }
     }
 
@@ -60,6 +63,9 @@ namespace Service.Specifications
         {
             Criteria = ss => ss.Id == stationSessionId;
             AddInclude(ss => ss.Gym);
+            // Kiosk logout revokes the fetched session before SaveChanges without
+            // Update() — keep tracked.
+            ApplyTracking();
         }
     }
 
@@ -72,6 +78,9 @@ namespace Service.Specifications
                 && ss.RevokedAtUtc == null
                 && ss.ExpiresAtUtc > nowUtc;
             OrderByDescending = ss => ss.CreatedAtUtc;
+            // Gym-wide revocation stamps RevokedAtUtc on every fetched session before
+            // SaveChanges without Update() — keep tracked.
+            ApplyTracking();
         }
     }
 
@@ -132,6 +141,22 @@ namespace Service.Specifications
     }
 
     /// <summary>
+    /// The kiosk's staff roster for one date: every assignment with a real shift
+    /// at the gym, with its employee and shift template read along.
+    /// </summary>
+    public class StationRosterByGymDateSpec : BaseSpecification<ShiftAssignment, int>
+    {
+        public StationRosterByGymDateSpec(int gymId, DateOnly date)
+        {
+            Criteria = sa => sa.ShiftCycle.GymId == gymId
+                && sa.Date == date
+                && sa.ShiftTemplateId != null;
+            AddInclude(sa => sa.Employee);
+            AddInclude(sa => sa.ShiftTemplate);
+        }
+    }
+
+    /// <summary>
     /// Resolves an employee by numeric id or by employee number (e.g. "EMP-1042").
     /// </summary>
     public class EmployeeLookupSpec : BaseSpecification<Employee, int>
@@ -152,6 +177,9 @@ namespace Service.Specifications
             var previousDate = eventDate.AddDays(-1);
             Criteria = ar => ar.EmployeeId == employeeId && (ar.Date == eventDate || ar.Date == previousDate);
             AddInclude(ar => ar.ScheduledShiftTemplate!);
+            // Check-in / check-out mutate the fetched record's punch columns before
+            // SaveChanges without Update() — keeps the flow tracked.
+            ApplyTracking();
         }
     }
 
@@ -191,6 +219,16 @@ namespace Service.Specifications
         }
     }
 
+    /// <summary>Attendance records of one employee inside an inclusive date range.</summary>
+    public class AttendanceByEmployeeRangeSpec : BaseSpecification<AttendanceRecord, int>
+    {
+        public AttendanceByEmployeeRangeSpec(int employeeId, DateOnly from, DateOnly to)
+        {
+            Criteria = r => r.EmployeeId == employeeId && r.Date >= from && r.Date <= to;
+            OrderBy = r => r.Date;
+        }
+    }
+
     // ------------------------------------------------------------------
     // S4 — HR attendance management (A1/A3/A4/A7)
     // ------------------------------------------------------------------
@@ -205,6 +243,7 @@ namespace Service.Specifications
         {
             Criteria = e => e.Status != EmployeeStatus.Terminated
                 && (gymIds == null || gymIds.Contains(e.GymId));
+            AddInclude(e => e.Position);
             AddInclude(e => e.Gym);
             OrderBy = e => e.FullName;
         }
@@ -223,6 +262,28 @@ namespace Service.Specifications
         {
             Criteria = ar => employeeIds.Contains(ar.EmployeeId)
                 && ar.Date >= from && ar.Date <= to;
+            // The compose shows a record's own pinned shift when no assignment
+            // covers the day, and lazy loading is off.
+            AddInclude(ar => ar.ScheduledShiftTemplate);
+        }
+    }
+
+    /// <summary>
+    /// Same window as <see cref="AttendanceRecordsByEmployeeIdsRangeSpec"/> but with the
+    /// scheduled shift template loaded, so the payroll breakdown can date a late
+    /// check-in against its shift start.
+    /// </summary>
+    public class AttendanceRecordsWithShiftByEmployeeIdsRangeSpec : BaseSpecification<AttendanceRecord, int>
+    {
+        public AttendanceRecordsWithShiftByEmployeeIdsRangeSpec(int[] employeeIds, DateOnly from, DateOnly to)
+        {
+            Criteria = ar => employeeIds.Contains(ar.EmployeeId)
+                && ar.Date >= from && ar.Date <= to;
+            AddInclude(ar => ar.ScheduledShiftTemplate);
+            // Payroll auto-generation seeds new deduction candidates that reference
+            // the fetched rows by navigation (AttendanceRecord = record), and payroll
+            // close mutates its loaded candidates before SaveChanges — tracking is required.
+            ApplyTracking();
         }
     }
 
@@ -295,6 +356,9 @@ namespace Service.Specifications
             AddInclude(ar => ar.Employee);
             AddInclude(ar => ar.Employee.Gym);
             AddInclude(ar => ar.ScheduledShiftTemplate!);
+            // A4 correction overwrites the punch columns on the fetched record before
+            // SaveChanges without Update() — keeps the flow tracked.
+            ApplyTracking();
         }
     }
 
@@ -305,6 +369,9 @@ namespace Service.Specifications
         {
             Criteria = ar => ar.EmployeeId == employeeId && ar.Date == date;
             AddInclude(ar => ar.ScheduledShiftTemplate!);
+            // A3 manual entry mutates the fetched record (upsert) before SaveChanges
+            // without Update() — keeps the flow tracked.
+            ApplyTracking();
         }
     }
 

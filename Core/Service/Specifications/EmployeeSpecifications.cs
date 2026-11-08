@@ -12,6 +12,9 @@ namespace Service.Specifications
         public EmployeeByUserIdSpec(int userId)
         {
             Criteria = e => e.UserId == userId;
+            // Self-service profile/contact updates and document uploads mutate the
+            // fetched employee before SaveChanges — keep tracked.
+            ApplyTracking();
         }
     }
 
@@ -30,6 +33,10 @@ namespace Service.Specifications
             AddInclude(e => e.User!);
             AddInclude(e => e.User!.UserGymAccesses);
             AddInclude(e => e.Compensations);
+            // HR write flows (status/transfer/position/contract) mutate the fetched
+            // employee and ride its navs into Update() — keep tracked so the graph
+            // merges with the identity map instead of re-attaching detached rows.
+            ApplyTracking();
         }
     }
 
@@ -46,6 +53,24 @@ namespace Service.Specifications
             AddInclude(e => e.Position);
             AddInclude(e => e.User);
             AddInclude(e => e.Compensations);
+            // Profile / HR update flows mutate the fetched employee (contact info,
+            // status, notice-period flips) before SaveChanges without Update() —
+            // keeps those flows tracked.
+            ApplyTracking();
+        }
+    }
+
+    /// <summary>
+    /// A fixed set of employees for the absence/late deduction sweep: the salary
+    /// history prices the deduction, the status decides whether the day is exempt
+    /// (On Leave / Suspended), and UserId carries the notification.
+    /// </summary>
+    public class EmployeesForDeductionSweepSpec : BaseSpecification<Employee, int>
+    {
+        public EmployeesForDeductionSweepSpec(int[] ids)
+        {
+            Criteria = e => ids.Contains(e.Id);
+            AddInclude(e => e.Compensations);
         }
     }
 
@@ -59,18 +84,26 @@ namespace Service.Specifications
     {
         public EmployeeDirectorySpec(
             int[]? gymIds,
+            int? teamId,
             string? search,
             EmployeeStatus? status,
             int skip,
             int take,
             string sortBy,
-            bool sortDescending)
+            bool sortDescending,
+            int? excludeEmployeeId = null)
         {
             Expression<Func<Employee, bool>> predicate = _ => true;
             if (gymIds is not null)
             {
                 var scopedGyms = gymIds;
                 predicate = And(predicate, e => scopedGyms.Contains(e.GymId));
+            }
+
+            if (teamId.HasValue)
+            {
+                var scopedTeam = teamId.Value;
+                predicate = And(predicate, e => e.TeamId == scopedTeam);
             }
 
             if (!string.IsNullOrWhiteSpace(search))
@@ -83,6 +116,14 @@ namespace Service.Specifications
             {
                 var standing = status.Value;
                 predicate = And(predicate, e => e.Status == standing);
+            }
+
+            // A manager must never see or act on their own employee row in the
+            // directory; exclude the actor's employee record when provided.
+            if (excludeEmployeeId.HasValue)
+            {
+                var excludedId = excludeEmployeeId.Value;
+                predicate = And(predicate, e => e.Id != excludedId);
             }
 
             Criteria = predicate;
@@ -113,6 +154,19 @@ namespace Service.Specifications
             {
                 ApplyPaging(Math.Max(skip, 0), take);
             }
+        }
+
+        public EmployeeDirectorySpec(
+            int[]? gymIds,
+            string? search,
+            EmployeeStatus? status,
+            int skip,
+            int take,
+            string sortBy,
+            bool sortDescending,
+            int? excludeEmployeeId = null)
+            : this(gymIds, null, search, status, skip, take, sortBy, sortDescending, excludeEmployeeId)
+        {
         }
 
         /// <summary>ANDs two predicates over the same parameter without Invoke nodes.</summary>
@@ -219,6 +273,9 @@ namespace Service.Specifications
         public LeaveBalancesForYearSpec(int employeeId, int year)
         {
             Criteria = b => b.EmployeeId == employeeId && b.Year == year;
+            // Approve/undo/cancel and entitlement updates mutate the fetched balances
+            // before SaveChanges without Update() — keep tracked.
+            ApplyTracking();
         }
     }
 

@@ -1,3 +1,4 @@
+using System.Linq.Expressions;
 using DomainLayer.Contracts;
 using DomainLayer.Models.EmployeeModule;
 using DomainLayer.Models.OrganizationModule;
@@ -34,6 +35,22 @@ namespace Service.Specifications
         {
             Criteria = t => t.GymId == gymId
                 && (t.Members.Any(m => m.Id == employeeId) || t.TeamLeaders.Any(tl => tl.EmployeeId == employeeId));
+            AddInclude(t => t.Members);
+            AddInclude(t => t.TeamLeaders);
+        }
+    }
+
+    /// <summary>
+    /// Teams of a gym the employee leads (My Team scope). Team surfaces are
+    /// leader-only: a plain member answers NotFound, the leader owns the team's
+    /// management data.
+    /// </summary>
+    public class TeamsLedByUserSpec : BaseSpecification<Team, int>
+    {
+        public TeamsLedByUserSpec(int employeeId, int gymId)
+        {
+            Criteria = t => t.GymId == gymId
+                && t.TeamLeaders.Any(tl => tl.EmployeeId == employeeId);
             AddInclude(t => t.Members);
             AddInclude(t => t.TeamLeaders);
         }
@@ -80,7 +97,25 @@ namespace Service.Specifications
     {
         public TeamFollowUpsByTeamsSpec(IReadOnlyCollection<int> teamIds)
         {
-            Criteria = f => teamIds.Contains(f.TeamId);
+            Criteria = f => f.TeamId.HasValue && teamIds.Contains(f.TeamId.Value);
+            AddInclude(f => f.Employee);
+            OrderByDescending = f => EF.Property<DateTime?>(f, "UpdatedAt") ?? EF.Property<DateTime>(f, "CreatedAt");
+            ThenByDescending = f => f.Id;
+        }
+    }
+
+    /// <summary>
+    /// The Branch Manager's scope-wide follow-up list: every team of the gym plus the
+    /// team-less items he raises about employees nobody has assigned to a team yet.
+    /// Those hang off no team, so they can only be reached through the employee's gym —
+    /// a Team Leader never sees them (his scope stays the teams he leads).
+    /// </summary>
+    public class TeamFollowUpsForGymScopeSpec : BaseSpecification<TeamFollowUp, int>
+    {
+        public TeamFollowUpsForGymScopeSpec(IReadOnlyCollection<int> teamIds, int gymId)
+        {
+            Criteria = f => (f.TeamId.HasValue && teamIds.Contains(f.TeamId.Value))
+                || (!f.TeamId.HasValue && f.Employee.GymId == gymId);
             AddInclude(f => f.Employee);
             OrderByDescending = f => EF.Property<DateTime?>(f, "UpdatedAt") ?? EF.Property<DateTime>(f, "CreatedAt");
             ThenByDescending = f => f.Id;
@@ -94,6 +129,21 @@ namespace Service.Specifications
         {
             Criteria = f => f.Id == followUpId;
             AddInclude(f => f.Employee);
+            // Update/delete mutate the fetched follow-up before SaveChanges — keep tracked.
+            ApplyTracking();
+        }
+    }
+
+    /// <summary>
+    /// Auto-absence deductions raised by the system for a set of employees, used by
+    /// the sweep's idempotency check before it creates new rows.
+    /// </summary>
+    public class TeamFollowUpsDeductionForEmployeesSpec : BaseSpecification<TeamFollowUp, int>
+    {
+        public TeamFollowUpsDeductionForEmployeesSpec(IReadOnlyCollection<int> employeeIds)
+        {
+            Criteria = f => employeeIds.Contains(f.EmployeeId);
+            AddInclude(f => f.RaisedByUser);
         }
     }
 
@@ -116,18 +166,35 @@ namespace Service.Specifications
             Criteria = c => employeeIds.Contains(c.EmployeeId);
             AddInclude(c => c.Employee);
             OrderByDescending = c => c.InitiatedAt;
+            // Leaving-process updates (last-day change / close) mutate the fetched case
+            // before SaveChanges without Update() — keeps the flow tracked.
+            ApplyTracking();
         }
     }
 
-    /// <summary>Vacancy requests of one gym, newest first.</summary>
+    /// <summary>
+    /// Vacancy requests of one gym, newest first. The listing endpoint passes an
+    /// optional status filter and paging so they run in SQL; the count instance
+    /// omits <c>take</c>. Other callers keep the single-argument shape.
+    /// </summary>
     public class VacancyRequestsByGymSpec : BaseSpecification<VacancyRequest, int>
     {
-        public VacancyRequestsByGymSpec(int gymId)
+        public VacancyRequestsByGymSpec(
+            int gymId,
+            DomainLayer.Models.RecruitmentModule.Enums.VacancyRequestStatus? status = null,
+            int skip = 0,
+            int take = 0)
         {
-            Criteria = r => r.GymId == gymId;
+            Criteria = status is { } wanted
+                ? (Expression<Func<VacancyRequest, bool>>)(r => r.GymId == gymId && r.Status == wanted)
+                : r => r.GymId == gymId;
             AddInclude(r => r.Position);
             AddInclude(r => r.Requester);
             OrderByDescending = r => r.Id;
+            if (take > 0)
+            {
+                ApplyPaging(skip, take);
+            }
         }
     }
 }

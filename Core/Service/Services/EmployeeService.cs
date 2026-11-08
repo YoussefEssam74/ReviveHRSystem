@@ -30,7 +30,9 @@ namespace Service.Services
         IUnitOfWork _unitOfWork,
         IAccessControlService _accessControl,
         IUserAccessRepository _userAccess,
-        IPasswordHasher _passwordHasher) : IEmployeeService
+        IUserSessionService _userSessions,
+        IPasswordHasher _passwordHasher,
+        ITeamScopeService _teamScope) : IEmployeeService
     {
         // Mirrors ReviveHRSystem.Web.DataSeed.DevelopmentDataSeeder.EmployeePassword.
         // The seeder constant lives in the Web host, which Core cannot reference,
@@ -39,12 +41,14 @@ namespace Service.Services
         private const int DefaultPageSize = 20;
         private const int MaxPageSize = 100;
 
-        public async Task<EmployeeListResponse> GetEmployeesAsync(int? actorUserId, EmployeeListQuery query, CancellationToken cancellationToken = default)
+        public async Task<EmployeeListResponse> GetEmployeesAsync(int? actorUserId, EmployeeListQuery query, int? activeGymId = null, CancellationToken cancellationToken = default)
         {
             var actor = await ResolveActorAsync(actorUserId, cancellationToken);
-            await _accessControl.EnsurePermissionForGymAsync(actor.Id, "employees.view", query.Gym, cancellationToken);
+            await _accessControl.EnsurePermissionForGymAsync(actor.Id, "employees.view", query.Gym ?? activeGymId, cancellationToken);
 
             int[]? gymFilter;
+            int? teamFilter = null;
+
             if (actor.UserType == UserType.TopManagement)
             {
                 gymFilter = query.Gym.HasValue ? [query.Gym.Value] : null;
@@ -54,14 +58,37 @@ namespace Service.Services
                 var allowedIds = (await _userAccess.GetGymAccessAsync(actor.Id, cancellationToken))
                     .Select(a => a.GymId)
                     .ToHashSet();
+
+                int? targetGymId = null;
                 if (query.Gym.HasValue)
                 {
                     if (!allowedIds.Contains(query.Gym.Value))
                     {
                         throw new UnAuthorizedException("You are not assigned to this gym.");
                     }
+                    if (activeGymId.HasValue && query.Gym.Value != activeGymId.Value)
+                    {
+                        throw new UnAuthorizedException("You do not have access to this gym.");
+                    }
+                    targetGymId = query.Gym.Value;
+                }
+                else if (activeGymId.HasValue)
+                {
+                    if (!allowedIds.Contains(activeGymId.Value))
+                    {
+                        throw new UnAuthorizedException("You are not assigned to this gym.");
+                    }
+                    targetGymId = activeGymId.Value;
+                }
 
-                    gymFilter = [query.Gym.Value];
+                if (targetGymId.HasValue)
+                {
+                    gymFilter = [targetGymId.Value];
+                    if (await _teamScope.IsTeamScopedAsync(actor.Id, targetGymId.Value, cancellationToken))
+                    {
+                        var ledTeamId = await _teamScope.GetLedTeamIdAsync(actor.Id, targetGymId.Value, cancellationToken);
+                        teamFilter = ledTeamId ?? -1;
+                    }
                 }
                 else
                 {
@@ -77,11 +104,21 @@ namespace Service.Services
             var page = Math.Max(query.Page, 1);
             var pageSize = query.PageSize <= 0 ? DefaultPageSize : Math.Min(query.PageSize, MaxPageSize);
 
-            var countSpec = new EmployeeDirectorySpec(gymFilter, query.Search, statusFilter, 0, 0, "name", false);
+            // Resolve the actor's own employee record so they are excluded from the
+            // directory — a BM or TL should never see or manage themselves in the list.
+            int? actorEmployeeId = null;
+            if (actor.UserType != DomainLayer.Models.UserModule.Enums.UserType.TopManagement)
+            {
+                var ownEmployee = await _unitOfWork.GetRepository<Employee, int>()
+                    .GetByIdAsync(new EmployeeByUserIdSpec(actor.Id), cancellationToken);
+                actorEmployeeId = ownEmployee?.Id;
+            }
+
+            var countSpec = new EmployeeDirectorySpec(gymFilter, teamFilter, query.Search, statusFilter, 0, 0, "name", false, actorEmployeeId);
             var total = await _unitOfWork.GetRepository<Employee, int>().CountAsync(countSpec, cancellationToken);
 
             var pageSpec = new EmployeeDirectorySpec(
-                gymFilter, query.Search, statusFilter, (page - 1) * pageSize, pageSize, sortBy, sortDescending);
+                gymFilter, teamFilter, query.Search, statusFilter, (page - 1) * pageSize, pageSize, sortBy, sortDescending, actorEmployeeId);
             var employees = await _unitOfWork.GetRepository<Employee, int>().GetAllAsync(pageSpec, cancellationToken);
 
             return new EmployeeListResponse
@@ -238,7 +275,7 @@ namespace Service.Services
             };
         }
 
-        public async Task<EmployeeDataResponse> GetEmployeeAsync(int? actorUserId, int employeeId, CancellationToken cancellationToken = default)
+        public async Task<EmployeeDataResponse> GetEmployeeAsync(int? actorUserId, int employeeId, int? activeGymId = null, CancellationToken cancellationToken = default)
         {
             var actor = await ResolveActorAsync(actorUserId, cancellationToken);
 
@@ -247,7 +284,24 @@ namespace Service.Services
             var isSelf = await IsOwnEmployeeAsync(actor.Id, employeeId, cancellationToken);
             if (!isSelf)
             {
-                await _accessControl.EnsurePermissionForGymAsync(actor.Id, "employees.view", await GymOfAsync(employeeId, cancellationToken), cancellationToken);
+                var targetGymId = await GymOfAsync(employeeId, cancellationToken);
+                await _accessControl.EnsurePermissionForGymAsync(actor.Id, "employees.view", targetGymId, cancellationToken);
+
+                if (actor.UserType != UserType.TopManagement && activeGymId.HasValue && targetGymId != activeGymId.Value)
+                {
+                    throw new NotFoundException("Employee not found.");
+                }
+
+                if (activeGymId.HasValue && await _teamScope.IsTeamScopedAsync(actor.Id, activeGymId.Value, cancellationToken))
+                {
+                    var ledTeamId = await _teamScope.GetLedTeamIdAsync(actor.Id, activeGymId.Value, cancellationToken);
+                    var targetEmp = await _unitOfWork.GetRepository<Employee, int>()
+                        .GetByIdAsync(new EmployeeByIdSpec(employeeId), cancellationToken);
+                    if (targetEmp is null || targetEmp.TeamId != ledTeamId)
+                    {
+                        throw new NotFoundException("Employee not found.");
+                    }
+                }
             }
 
             var employee = await _unitOfWork.GetRepository<Employee, int>()
@@ -274,6 +328,7 @@ namespace Service.Services
 
             var history = new List<EmploymentHistory>();
             var changed = false;
+            EmployeeStatus? previousStatus = null;
 
             if (!string.IsNullOrWhiteSpace(request.Name))
             {
@@ -292,6 +347,7 @@ namespace Service.Services
                 var standing = ParseStatusOrNull(request.Status)!.Value;
                 if (standing != employee.Status)
                 {
+                    previousStatus = employee.Status;
                     history.Add(NewHistory(employee.Id, today, EmploymentChangeType.StatusChange,
                         StatusDisplay(employee.Status), StatusDisplay(standing), "Status change", actor.Id));
                     employee.Status = standing;
@@ -321,6 +377,18 @@ namespace Service.Services
                     await _unitOfWork.GetRepository<EmploymentHistory, int>().AddAsync(entry, cancellationToken);
                 }
 
+                if (previousStatus is not null)
+                {
+                    if (employee.Status == EmployeeStatus.Terminated)
+                    {
+                        await _userSessions.TerminateAccessAsync(employee.UserId, cancellationToken);
+                    }
+                    else if (previousStatus == EmployeeStatus.Terminated && RestoresLogin(employee.Status))
+                    {
+                        await _userSessions.RestoreAccessAsync(employee.UserId, cancellationToken);
+                    }
+                }
+
                 await _unitOfWork.SaveChangesAsync(cancellationToken);
             }
 
@@ -347,11 +415,23 @@ namespace Service.Services
                 string.IsNullOrWhiteSpace(request.Note) ? "Status change" : request.Note.Trim(),
                 actor.Id);
 
-            // Deliberately does NOT touch User.IsActive: who may still log in is an
-            // offboarding concern (separations flow), not the HR directory standing.
+            var previous = employee.Status;
             employee.Status = standing;
             _unitOfWork.GetRepository<Employee, int>().Update(employee);
             await _unitOfWork.GetRepository<EmploymentHistory, int>().AddAsync(entry, cancellationToken);
+
+            // Termination is not only a directory standing: it must cut live access
+            // immediately (existing JWTs and refresh tokens). Moving back to a working
+            // standing restores login for a rehire or a correction.
+            if (standing == EmployeeStatus.Terminated)
+            {
+                await _userSessions.TerminateAccessAsync(employee.UserId, cancellationToken);
+            }
+            else if (previous == EmployeeStatus.Terminated && RestoresLogin(standing))
+            {
+                await _userSessions.RestoreAccessAsync(employee.UserId, cancellationToken);
+            }
+
             await _unitOfWork.SaveChangesAsync(cancellationToken);
 
             var updated = await _unitOfWork.GetRepository<Employee, int>()
@@ -363,7 +443,7 @@ namespace Service.Services
         public async Task<IReadOnlyList<EmployeeHistoryItem>> GetHistoryAsync(int? actorUserId, int employeeId, CancellationToken cancellationToken = default)
         {
             var actor = await ResolveActorAsync(actorUserId, cancellationToken);
-            await EnsureEmployeeAccessAsync(actor.Id, employeeId, "employees.view", cancellationToken);
+            await EnsureEmployeeAccessAsync(actor.Id, employeeId, "employees.view", cancellationToken, allowSelf: true);
 
             var entries = await _unitOfWork.GetRepository<EmploymentHistory, int>()
                 .GetAllAsync(new HistoryByEmployeeSpec(employeeId), cancellationToken);
@@ -381,7 +461,7 @@ namespace Service.Services
         public async Task<IReadOnlyList<EmployeeDocumentItem>> GetDocumentsAsync(int? actorUserId, int employeeId, CancellationToken cancellationToken = default)
         {
             var actor = await ResolveActorAsync(actorUserId, cancellationToken);
-            await EnsureEmployeeAccessAsync(actor.Id, employeeId, "employees.documents.view", cancellationToken);
+            await EnsureEmployeeAccessAsync(actor.Id, employeeId, "employees.documents.view", cancellationToken, allowSelf: true);
 
             var documents = await _unitOfWork.GetRepository<EmployeeDocument, int>()
                 .GetAllAsync(new DocumentsByEmployeeSpec(employeeId), cancellationToken);
@@ -391,13 +471,19 @@ namespace Service.Services
                 Name = d.FileName,
                 Category = DocumentCategoryDisplay(d.Type),
                 Status = DocumentStatusDisplay(d.ExpiryDate),
+                Id = d.Id,
+                UploadDate = DateOnly.FromDateTime(d.UploadedAt),
+                ExpiryDate = d.ExpiryDate,
             }).ToList();
         }
 
         public async Task<EmployeeDocumentItem> AddDocumentAsync(int? actorUserId, int employeeId, EmployeeDocumentUpload upload, CancellationToken cancellationToken = default)
         {
             var actor = await ResolveActorAsync(actorUserId, cancellationToken);
-            await EnsureEmployeeAccessAsync(actor.Id, employeeId, "employees.documents.manage", cancellationToken);
+            // Self-upload is part of the employee vault (§3 required documents);
+            // otherwise the caller must hold the HR document-management key.
+            await EnsureEmployeeAccessAsync(
+                actor.Id, employeeId, "employees.documents.manage", cancellationToken, allowSelf: true);
 
             var category = ParseDocumentCategory(upload.Category);
             var document = new EmployeeDocument
@@ -405,6 +491,10 @@ namespace Service.Services
                 EmployeeId = employeeId,
                 FileName = upload.FileName,
                 FilePath = upload.RelativeFilePath,
+                SizeBytes = upload.SizeBytes,
+                ContentType = upload.ContentType,
+                Source = DocumentSource.Employee,
+                EmployeeEditable = true,
                 Type = category,
                 ExpiryDate = upload.ExpiryDate,
             };
@@ -417,13 +507,16 @@ namespace Service.Services
                 Name = document.FileName,
                 Category = DocumentCategoryDisplay(document.Type),
                 Status = DocumentStatusDisplay(document.ExpiryDate),
+                Id = document.Id,
+                UploadDate = DateOnly.FromDateTime(document.UploadedAt),
+                ExpiryDate = document.ExpiryDate,
             };
         }
 
         public async Task<LeaveBalanceResponse> GetLeaveBalanceAsync(int? actorUserId, int employeeId, CancellationToken cancellationToken = default)
         {
             var actor = await ResolveActorAsync(actorUserId, cancellationToken);
-            await EnsureEmployeeAccessAsync(actor.Id, employeeId, "employees.view", cancellationToken);
+            await EnsureEmployeeAccessAsync(actor.Id, employeeId, "employees.view", cancellationToken, allowSelf: true);
 
             var year = DateTime.UtcNow.Year;
             var rows = await _unitOfWork.GetRepository<LeaveBalance, int>()
@@ -846,14 +939,36 @@ namespace Service.Services
             return employee.GymId;
         }
 
-        /// <summary>Loads an employee and enforces the guard on the employee's gym.</summary>
-        private async Task<Employee> EnsureEmployeeAccessAsync(int actorUserId, int employeeId, string permissionKey, CancellationToken cancellationToken)
+        /// <summary>
+        /// Loads an employee and enforces the guard on the employee's gym. Own-profile
+        /// reads and the self-owned writes (documents upload) pass without a permission
+        /// key; HR mutations (status, transfer, compensation, …) keep their key —
+        /// self-service never widens an employee's authority over his own record.
+        /// </summary>
+        private async Task<Employee> EnsureEmployeeAccessAsync(
+            int actorUserId, int employeeId, string permissionKey,
+            CancellationToken cancellationToken, bool allowSelf = false)
         {
             var employee = await _unitOfWork.GetRepository<Employee, int>()
                 .GetByIdAsync(new EmployeeByIdSpec(employeeId), cancellationToken)
                 ?? throw new NotFoundException("Employee not found.");
 
+            if (allowSelf && await IsOwnEmployeeAsync(actorUserId, employeeId, cancellationToken))
+            {
+                return employee;
+            }
+
             await _accessControl.EnsurePermissionForGymAsync(actorUserId, permissionKey, employee.GymId, cancellationToken);
+
+            if (await _teamScope.IsTeamScopedAsync(actorUserId, employee.GymId, cancellationToken))
+            {
+                var ledTeamId = await _teamScope.GetLedTeamIdAsync(actorUserId, employee.GymId, cancellationToken);
+                if (ledTeamId is null || employee.TeamId != ledTeamId.Value)
+                {
+                    throw new NotFoundException("Employee not found.");
+                }
+            }
+
             return employee;
         }
 
@@ -1024,6 +1139,13 @@ namespace Service.Services
             EmployeeStatus.NoticePeriod => "Notice Period",
             _ => status.ToString(),
         };
+
+        /// <summary>
+        /// Standings that put a previously terminated employee back to work and
+        /// therefore re-enable their login. Suspended stays access-restricted.
+        /// </summary>
+        private static bool RestoresLogin(EmployeeStatus status) =>
+            status is EmployeeStatus.Active or EmployeeStatus.OnLeave or EmployeeStatus.NoticePeriod;
 
         private static EmployeeStatus? ParseStatusOrNull(string? value)
         {

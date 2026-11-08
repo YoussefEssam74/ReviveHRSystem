@@ -36,6 +36,10 @@ namespace Service.Specifications
                 AddInclude(e => e.Employee.Gym);
                 AddInclude(e => e.Employee.Position!);
             }
+
+            // Publish/lock and close-sheet flows mutate the fetched entries before
+            // SaveChanges without Update() — keep tracked.
+            ApplyTracking();
         }
     }
 
@@ -59,6 +63,21 @@ namespace Service.Specifications
             AddInclude(e => e.LineItems);
             AddInclude(e => e.Employee.Gym);
             AddInclude(e => e.Employee.Position!);
+            // Bonus/deduction/settle/reopen/publish mutate the fetched sheet before
+            // SaveChanges without Update() — keep tracked.
+            ApplyTracking();
+        }
+    }
+
+    /// <summary>One entry by id with everything the payslip build needs (self-service portal).</summary>
+    public sealed class PayrollEntryByIdSpec : BaseSpecification<PayrollEntry, int>
+    {
+        public PayrollEntryByIdSpec(int entryId)
+        {
+            Criteria = e => e.Id == entryId;
+            AddInclude(e => e.LineItems);
+            AddInclude(e => e.PayrollPeriod.Gym);
+            AddInclude(e => e.Employee.Position!);
         }
     }
 
@@ -81,6 +100,20 @@ namespace Service.Specifications
         }
     }
 
+    /// <summary>
+    /// Sheets of a whole employee set with their periods — the absence sweep prices a
+    /// day against the sheet covering it (else against the salary history), so it needs
+    /// every candidate sheet of the scoped roster in one read.
+    /// </summary>
+    public sealed class PayrollEntriesByEmployeeIdsSpec : BaseSpecification<PayrollEntry, int>
+    {
+        public PayrollEntriesByEmployeeIdsSpec(int[] employeeIds)
+        {
+            Criteria = e => employeeIds.Contains(e.EmployeeId);
+            AddInclude(e => e.PayrollPeriod);
+        }
+    }
+
     /// <summary>One deduction line with its entry/period/employee for review + list rows.</summary>
     public sealed class DeductionLineByIdSpec : BaseSpecification<PayrollEntryLineItem, int>
     {
@@ -89,6 +122,9 @@ namespace Service.Specifications
             Criteria = l => l.Id == lineId;
             AddInclude(l => l.PayrollEntry.PayrollPeriod.Gym);
             AddInclude(l => l.PayrollEntry.Employee);
+            // Line review mutates the line and its sheet (Update() on both) — keep
+            // tracked so the graph attachments merge with the identity map.
+            ApplyTracking();
         }
     }
 

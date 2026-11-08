@@ -1347,8 +1347,21 @@ namespace Service.Services
         public async Task<NewComerListResponse> GetNewComersAsync(int? actorUserId, CancellationToken cancellationToken = default)
         {
             var actor = await ResolveActorAsync(actorUserId, cancellationToken);
-            await _accessControl.EnsurePermissionForGymAsync(actor.Id, "recruitment.view", null, cancellationToken);
             var gymIds = await ResolveGymScopeAsync(actor, null, cancellationToken);
+
+            // Matrix row 44: the check is per gym of the resolved scope (a Branch
+            // Manager holds recruitment.view as a per-gym role key, so a null-gym
+            // global check would wrongly hide the queue from him). No accessible
+            // gym means nothing to check against — deny like any unscoped caller.
+            if (gymIds.Length == 0 && actor.UserType != UserType.TopManagement)
+            {
+                throw new UnAuthorizedException("You do not have permission to perform this action.");
+            }
+
+            foreach (var gymId in gymIds)
+            {
+                await _accessControl.EnsurePermissionForGymAsync(actor.Id, "recruitment.view", gymId, cancellationToken);
+            }
 
             var cutoff = DateOnly.FromDateTime(DateTime.UtcNow).AddDays(-NewComerLookbackDays);
             var employees = await _unitOfWork.GetRepository<Employee, int>()

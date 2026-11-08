@@ -1,5 +1,4 @@
 using DomainLayer.Models.UserModule;
-using DomainLayer.Models.UserModule.Enums;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
@@ -82,11 +81,6 @@ namespace Presistence.Data.Configurations
             builder.ToTable("RolePermissions");
             builder.HasKey(rp => new { rp.RoleId, rp.PermissionId });
 
-            builder.Property(rp => rp.Level)
-                   .IsRequired()
-                   .HasDefaultValue(AccessLevel.None)
-                   .HasConversion<int>();
-
             builder.HasOne(rp => rp.Role)
                    .WithMany(r => r.RolePermissions)
                    .HasForeignKey(rp => rp.RoleId)
@@ -105,11 +99,6 @@ namespace Presistence.Data.Configurations
         {
             builder.ToTable("UserPermissions");
             builder.HasKey(up => new { up.UserId, up.PermissionId });
-
-            builder.Property(up => up.Level)
-                   .IsRequired()
-                   .HasDefaultValue(AccessLevel.None)
-                   .HasConversion<int>();
 
             builder.HasOne(up => up.User)
                    .WithMany(u => u.UserPermissions)
@@ -149,37 +138,6 @@ namespace Presistence.Data.Configurations
         }
     }
 
-    public class UserGymPermissionConfiguration : IEntityTypeConfiguration<UserGymPermission>
-    {
-        public void Configure(EntityTypeBuilder<UserGymPermission> builder)
-        {
-            builder.ToTable("UserGymPermissions");
-            builder.HasKey(ugp => new { ugp.UserId, ugp.GymId, ugp.PermissionId });
-
-            builder.Property(ugp => ugp.Level)
-                   .IsRequired()
-                   .HasDefaultValue(AccessLevel.None)
-                   .HasConversion<int>();
-
-            builder.HasOne(ugp => ugp.User)
-                   .WithMany(u => u.UserGymPermissions)
-                   .HasForeignKey(ugp => ugp.UserId)
-                   .OnDelete(DeleteBehavior.Cascade);
-
-            builder.HasOne(ugp => ugp.Gym)
-                   .WithMany(g => g.UserGymPermissions)
-                   .HasForeignKey(ugp => ugp.GymId)
-                   .OnDelete(DeleteBehavior.Cascade);
-
-            builder.HasOne(ugp => ugp.Permission)
-                   .WithMany(p => p.UserGymPermissions)
-                   .HasForeignKey(ugp => ugp.PermissionId)
-                   .OnDelete(DeleteBehavior.Cascade);
-
-            builder.HasIndex(ugp => new { ugp.UserId, ugp.GymId });
-        }
-    }
-
     public class UserGymAccessConfiguration : IEntityTypeConfiguration<UserGymAccess>
     {
         public void Configure(EntityTypeBuilder<UserGymAccess> builder)
@@ -201,16 +159,27 @@ namespace Presistence.Data.Configurations
         }
     }
 
-    public class UserNotificationPreferenceConfiguration : IEntityTypeConfiguration<UserNotificationPreference>
+    public class RefreshTokenConfiguration : IEntityTypeConfiguration<RefreshToken>
     {
-        public void Configure(EntityTypeBuilder<UserNotificationPreference> builder)
+        public void Configure(EntityTypeBuilder<RefreshToken> builder)
         {
-            builder.ToTable("UserNotificationPreferences");
-            builder.HasKey(p => p.Id);
-            builder.HasOne(p => p.User).WithOne(u => u.NotificationPreference)
-                   .HasForeignKey<UserNotificationPreference>(p => p.UserId)
+            builder.ToTable("RefreshTokens");
+            builder.HasKey(rt => rt.Id);
+
+            builder.Property(rt => rt.TokenHash).IsRequired().HasMaxLength(64);
+            builder.HasIndex(rt => rt.TokenHash).IsUnique();
+            builder.HasIndex(rt => rt.UserId);
+
+            builder.HasOne(rt => rt.User)
+                   .WithMany()
+                   .HasForeignKey(rt => rt.UserId)
                    .OnDelete(DeleteBehavior.Cascade);
-            builder.HasIndex(p => p.UserId).IsUnique();
+
+            // Optimistic concurrency via the PostgreSQL xmin system column (no schema
+            // impact): the refresh rotation's claim becomes a conditional UPDATE, so a
+            // concurrent rotation of the same token loses the claim instead of both
+            // revoking and double-issuing (AuthService.RefreshAsync).
+            builder.UseXminAsConcurrencyToken();
         }
     }
 }

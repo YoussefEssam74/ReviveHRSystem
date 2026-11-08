@@ -88,6 +88,22 @@ namespace Presentation.Controllers
 
         #endregion
 
+        #region Refresh
+
+        /// <summary>Exchanges a valid refresh token for a new access token and a rotated refresh token.</summary>
+        /// <response code="200">New access + refresh tokens issued.</response>
+        /// <response code="401">Refresh token missing, invalid, expired, or revoked.</response>
+        [HttpPost("refresh")]
+        [AllowAnonymous]
+        [EnableRateLimiting("auth-login")]
+        public async Task<ActionResult<LoginResponse>> Refresh([FromBody] RefreshRequest request, CancellationToken cancellationToken)
+        {
+            var response = await _authService.RefreshAsync(request?.RefreshToken ?? string.Empty, cancellationToken);
+            return Ok(response);
+        }
+
+        #endregion
+
         #region Logout
 
         /// <summary>
@@ -100,9 +116,9 @@ namespace Presentation.Controllers
         /// <response code="204">Logout recorded.</response>
         /// <response code="401">No valid session.</response>
         [HttpPost("logout")]
-        public async Task<IActionResult> Logout(CancellationToken cancellationToken)
+        public async Task<IActionResult> Logout([FromBody] RefreshRequest? request, CancellationToken cancellationToken)
         {
-            await _authService.LogoutAsync(GetActorUserId(), cancellationToken);
+            await _authService.LogoutAsync(GetActorUserId(), request?.RefreshToken, cancellationToken);
             return NoContent();
         }
 

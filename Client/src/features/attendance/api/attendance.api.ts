@@ -77,17 +77,6 @@ export function postFaceScan(body: FaceScanBody, signal?: AbortSignal): Promise<
   return apiRequest<FaceScanResponse>('/api/attendance/face-scan', { method: 'POST', body, stationAuth: true, signal })
 }
 
-export interface ManualAttendanceBody {
-  employeeId: string
-  type: AttendanceEventType
-  reason: string
-}
-
-/** POST /api/attendance/manual - Face-ID fallback; the reason is audited server-side. */
-export function postManualAttendance(body: ManualAttendanceBody, signal?: AbortSignal): Promise<AttendanceResponse> {
-  return apiRequest<AttendanceResponse>('/api/attendance/manual', { method: 'POST', body, stationAuth: true, signal })
-}
-
 export interface FaceEnrollmentResponse {
   employeeId: number
   employeeNumber: string
@@ -100,20 +89,28 @@ export function postFaceEnrollment(body: { employeeNumber: string; image: string
   return apiRequest<FaceEnrollmentResponse>('/api/employees/face/enroll', { method: 'POST', body, signal })
 }
 
-/** One row of the kiosk dashboard feed. */
+/** One row of the kiosk's staff roster: a scheduled employee and today's punches. */
 export interface StationSummaryRecord {
   recordId?: string | null
-  employeeId?: string | null
-  employeeName?: string | null
-  /** PRESENT, LEFT, or DAY_OFF for this employee today. */
-  status?: string | null
-  lastEventType?: string | null
-  lastEventTime?: string | null
-  attendanceStatus?: string | null
+  employeeId: string
+  employeeName: string
+  /** SCHEDULED (not in yet), PRESENT, LEFT, or ABSENT. */
+  status: string
+  shiftName: string
+  /** "HH:mm" attendance-timezone shift window. */
+  shiftStart: string
+  shiftEnd: string
+  /** "HH:mm" attendance-timezone punches; null until recorded. */
+  checkIn?: string | null
+  checkOut?: string | null
+  /** Minutes between the shift start and the check-in (0 = on time / not in yet). */
+  lateMinutes?: number | null
+  /** Minutes between the check-out and the shift end (0 = not early / still in). */
+  earlyLeaveMinutes?: number | null
   method?: string | null
 }
 
-/** Today's counters + recent feed for the station's gym. */
+/** Today's counters + scheduled roster for the station's gym. */
 export interface StationSummaryResponse {
   presentCount?: number
   scheduledTodayCount?: number

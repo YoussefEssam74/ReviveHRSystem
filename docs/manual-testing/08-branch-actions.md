@@ -31,7 +31,7 @@ out-of-scope → 404, and stamped `reviewedBy` / `reviewedAt` / `reviewNote`.
 
 ---
 
-### GET /api/warning-notices — HR review queue
+### GET /api/warning-notices/queue — HR review queue
 
 Query: `?status=Pending|Approved|Rejected&gym=<id or name>&page=1&pageSize=20`
 
@@ -85,7 +85,7 @@ Decline: `{ "decision": "Rejected", "note": "Declined — first occurrence, coac
 
 ---
 
-### GET /api/bonus-proposals — HR review queue
+### GET /api/bonus-proposals/queue — HR review queue
 
 Query: `?status=&gym=&page=&pageSize=` (same shape as warnings)
 

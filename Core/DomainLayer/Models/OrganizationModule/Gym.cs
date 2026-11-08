@@ -27,7 +27,6 @@ namespace DomainLayer.Models.OrganizationModule
         // Navigations
         public virtual ICollection<UserGymAccess> UserGymAccesses { get; set; } = new List<UserGymAccess>();
         public virtual ICollection<UserGymRole> UserGymRoles { get; set; } = new List<UserGymRole>();
-        public virtual ICollection<UserGymPermission> UserGymPermissions { get; set; } = new List<UserGymPermission>();
         public virtual ICollection<Department> Departments { get; set; } = new List<Department>();
         public virtual ICollection<Position> Positions { get; set; } = new List<Position>();
         public virtual ICollection<Team> Teams { get; set; } = new List<Team>();

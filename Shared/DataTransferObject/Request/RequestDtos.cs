@@ -48,6 +48,9 @@ namespace Shared.DataTransferObject.Request
         public required string Type { get; init; }
         public DateOnly SubmittedDate { get; init; }
         public DateOnly RequestedDate { get; init; }
+
+        /// <summary>End of a leave/swap range (annual, sick, shift swap), null on single-day types.</summary>
+        public DateOnly? EndDate { get; init; }
         public required string Status { get; init; }
         public string? BmDecision { get; init; }
         public string? BmComment { get; init; }
@@ -55,6 +58,10 @@ namespace Shared.DataTransferObject.Request
         public string? HrComment { get; init; }
         public string? Payment { get; init; }
         public string Reason { get; init; } = string.Empty;
+
+        /// <summary>A file (the sick-leave medical certificate) rides with this request.</summary>
+        public bool HasAttachment { get; init; }
+
         public List<RequestTimelineStep> Timeline { get; init; } = [];
     }
 
@@ -159,6 +166,10 @@ namespace Shared.DataTransferObject.Request
         public int Id { get; init; }
         public required string Type { get; init; }
         public DateOnly RequestedDate { get; init; }
+
+        /// <summary>End of a leave/swap range, null on single-day types (A8 list).</summary>
+        public DateOnly? EndDate { get; init; }
+
         public DateOnly SubmittedDate { get; init; }
         public required string Status { get; init; }
         public string Reason { get; init; } = string.Empty;

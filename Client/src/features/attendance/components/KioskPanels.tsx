@@ -7,49 +7,83 @@ import type { AttendanceResult, FaceMatchDetail } from '../types'
 const STATUS_BADGE: Record<string, string> = {
   PRESENT: 'bg-emerald-100 text-emerald-800',
   LEFT: 'bg-slate-200 text-slate-600',
-  DAY_OFF: 'bg-slate-100 text-slate-500',
+  SCHEDULED: 'bg-sky-100 text-sky-800',
+  ABSENT: 'bg-red-100 text-red-700',
 }
 
 const STATUS_LABEL: Record<string, string> = {
   PRESENT: 'Present',
   LEFT: 'Left',
-  DAY_OFF: 'Day off',
+  SCHEDULED: 'Not in yet',
+  ABSENT: 'Absent',
 }
 
-function formatClock(iso: string | null | undefined): string {
-  if (!iso) return '-'
-  const date = new Date(iso)
-  return Number.isNaN(date.getTime()) ? '-' : date.toLocaleTimeString()
+function formatClock(value: string | null | undefined): string {
+  if (!value) return '—'
+  // The API sends the kiosk-local "HH:mm"; tolerate an ISO stamp from older payloads.
+  if (!value.includes('T')) return value
+  const date = new Date(value)
+  return Number.isNaN(date.getTime())
+    ? '—'
+    : date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
 }
 
-/** One row of the kiosk dashboard feed. */
+/** One row of the kiosk roster: shift, punches, and lateness/early-leave minutes. */
 export function FeedRow({ row }: { row: StationSummaryRecord }) {
   const status = (row.status ?? '').toUpperCase()
   const isManual = (row.method ?? '').toUpperCase() === 'MANUAL'
+  const late = row.lateMinutes ?? 0
+  const early = row.earlyLeaveMinutes ?? 0
 
   return (
-    <div className="flex items-center justify-between gap-2 rounded-lg border border-charcoal-100 bg-white px-2.5 py-2">
-      <div className="min-w-0">
-        <p className="truncate text-xs font-bold text-charcoal-800">{row.employeeName || row.employeeId}</p>
-        <p className="truncate font-mono text-[10px] leading-tight text-charcoal-500">
-          {row.employeeId}
-          {row.attendanceStatus ? ' - ' + row.attendanceStatus : ''}
-        </p>
+    <div className="rounded-lg border border-charcoal-100 bg-white px-2.5 py-2">
+      <div className="flex items-center justify-between gap-2">
+        <div className="min-w-0">
+          <p className="truncate text-xs font-bold text-charcoal-800">{row.employeeName || row.employeeId}</p>
+          <p className="truncate font-mono text-[10px] leading-tight text-charcoal-500">{row.employeeId}</p>
+        </div>
+        <div className="flex shrink-0 items-center gap-1.5">
+          {isManual && (
+            <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-800">manual</span>
+          )}
+          <span
+            className={
+              'rounded px-1.5 py-0.5 text-[10px] font-bold ' +
+              (STATUS_BADGE[status] ?? 'bg-slate-100 text-slate-500')
+            }
+          >
+            {STATUS_LABEL[status] ?? status}
+          </span>
+        </div>
       </div>
-      <div className="flex shrink-0 items-center gap-1.5">
-        {isManual && (
-          <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-800">manual</span>
-        )}
-        <span
-          className={
-            'rounded px-1.5 py-0.5 text-[10px] font-bold ' +
-            (STATUS_BADGE[status] ?? 'bg-slate-100 text-slate-500')
-          }
-        >
-          {STATUS_LABEL[status] ?? status}
+
+      <div className="mt-1 flex items-center justify-between gap-2 text-[10px]">
+        <span className="truncate text-charcoal-500">
+          {row.shiftName || 'Shift'} ·{' '}
+          <span className="font-mono tabular-nums">
+            {row.shiftStart || '—'}–{row.shiftEnd || '—'}
+          </span>
         </span>
-        <span className="font-mono text-[10px] tabular-nums text-charcoal-400">{formatClock(row.lastEventTime)}</span>
+        <span className="flex shrink-0 items-center gap-2 font-mono tabular-nums">
+          <span className={row.checkIn ? 'text-charcoal-700' : 'text-charcoal-400'}>in {formatClock(row.checkIn)}</span>
+          <span className={row.checkOut ? 'text-charcoal-700' : 'text-charcoal-400'}>out {formatClock(row.checkOut)}</span>
+        </span>
       </div>
+
+      {(late > 0 || early > 0) && (
+        <div className="mt-1 flex flex-wrap items-center gap-1">
+          {late > 0 && (
+            <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-800">
+              Late {late}m
+            </span>
+          )}
+          {early > 0 && (
+            <span className="rounded bg-orange-100 px-1.5 py-0.5 text-[10px] font-semibold text-orange-800">
+              Left early {early}m
+            </span>
+          )}
+        </div>
+      )}
     </div>
   )
 }
@@ -75,13 +109,19 @@ export function ResultOverlay({
 
   return (
     <div className="absolute inset-0 z-20 flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm fade-in">
+      {/* Always-dark panel: bg-*-950 never flips with the theme, while dark
+          mode remaps text-*-50/100/200 to dark tints (they pair with pastel
+          backgrounds there). Literal light hexes keep this copy readable in
+          both modes — the same convention the rest of the kiosk uses. */}
       <div
         role="alertdialog"
         aria-modal="true"
         aria-label={isError ? 'Attendance rejected' : 'Attendance recorded'}
         className={
           'w-full max-w-md rounded-2xl border p-6 shadow-2xl ' +
-          (isError ? 'border-red-500/30 bg-red-950/95 text-red-50' : 'border-emerald-500/30 bg-emerald-950/95 text-emerald-50')
+          (isError
+            ? 'border-red-500/30 bg-red-950/95 text-[#fef2f2]'
+            : 'border-emerald-500/30 bg-emerald-950/95 text-[#ecfdf5]')
         }
       >
         {isError ? (
@@ -90,7 +130,7 @@ export function ResultOverlay({
               <XCircle className="h-8 w-8 text-red-400" aria-hidden="true" />
               <h2 className="text-lg font-bold">Attendance rejected</h2>
             </div>
-            <p className="mt-3 text-sm text-red-200">{rejection}</p>
+            <p className="mt-3 text-sm text-[#fecaca]">{rejection}</p>
           </>
         ) : (
           result && (
@@ -102,7 +142,7 @@ export function ResultOverlay({
                 </h2>
               </div>
               <p className="mt-3 text-base font-semibold">{result.employeeName ?? result.employeeId}</p>
-              <dl className="mt-2 space-y-1 text-sm text-emerald-200">
+              <dl className="mt-2 space-y-1 text-sm text-[#a7f3d0]">
                 <div className="flex justify-between gap-3">
                   <dt>Employee</dt>
                   <dd className="font-mono">{result.employeeId}</dd>
@@ -166,14 +206,14 @@ export function CheckoutConfirmCard({
         role="alertdialog"
         aria-modal="true"
         aria-label="Confirm check-out"
-        className="w-full max-w-md rounded-2xl border border-amber-500/30 bg-amber-950/95 p-6 text-amber-50 shadow-2xl"
+        className="w-full max-w-md rounded-2xl border border-amber-500/30 bg-amber-950/95 p-6 text-[#fffbeb] shadow-2xl"
       >
         <div className="flex items-center gap-3">
           <LogOut className="h-8 w-8 text-amber-400" aria-hidden="true" />
           <h2 className="text-lg font-bold">Check out now?</h2>
         </div>
         <p className="mt-3 text-base font-semibold">{employeeName ?? employeeId ?? 'This employee'}</p>
-        <p className="mt-1 text-sm text-amber-200">
+        <p className="mt-1 text-sm text-[#fde68a]">
           You are checked in for today. Confirming records your check-out with the current time.
         </p>
         <div className="mt-5 flex gap-2">

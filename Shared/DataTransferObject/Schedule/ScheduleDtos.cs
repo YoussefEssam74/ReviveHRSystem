@@ -1,6 +1,7 @@
 namespace Shared.DataTransferObject.Schedule
 {
-    /// <summary>S1 — one cycle selector chip: id, label, status.</summary>
+    /// <summary>S1 — one cycle selector chip: id, label, status and the covered
+    /// date range (the client needs the range for the month/30-day views).</summary>
     public class ShiftCycleListItem
     {
         public int Id { get; init; }
@@ -9,6 +10,12 @@ namespace Shared.DataTransferObject.Schedule
 
         /// <summary>'Draft' | 'Published' | 'Archived'.</summary>
         public required string Status { get; init; }
+
+        /// <summary>Cycle start, yyyy-MM-dd.</summary>
+        public required string StartDate { get; init; }
+
+        /// <summary>Cycle end (inclusive), yyyy-MM-dd.</summary>
+        public required string EndDate { get; init; }
     }
 
     /// <summary>S3 — the { data } envelope returned by create.</summary>
@@ -45,7 +52,7 @@ namespace Shared.DataTransferObject.Schedule
         /// <summary>Start time, HH:mm.</summary>
         public required string Start { get; init; }
 
-        /// <summary>End time, HH:mm (00:00 for overnight shifts).</summary>
+        /// <summary>End time, HH:mm. Earlier than Start for overnight shifts.</summary>
         public required string End { get; init; }
 
         public required string Color { get; init; }
@@ -60,6 +67,8 @@ namespace Shared.DataTransferObject.Schedule
     /// <summary>
     /// S2 — one employee's weekly pattern row. days[0 = Monday … 6 = Sunday]
     /// holds the shiftTemplateId scheduled that weekday, or null for Off.
+    /// assignedDays distinguishes an explicit Off row (true + null template)
+    /// from a weekday that has never been assigned (false).
     /// </summary>
     public class ShiftAssignmentRow
     {
@@ -74,6 +83,27 @@ namespace Shared.DataTransferObject.Schedule
         public required string Initials { get; init; }
 
         public List<int?> Days { get; init; } = [];
+
+        public List<bool> AssignedDays { get; init; } = [];
+
+        /// <summary>
+        /// Exact value of every date inside the cycle. <see cref="Days"/> is the
+        /// weekly pattern used by the editors, but a published cycle may carry a
+        /// date-specific override (Set Assignments accepts an exact date); the grid
+        /// reads this list so those dates never fall back to another week's value.
+        /// </summary>
+        public List<ShiftAssignmentDateCell> DaysByDate { get; init; } = [];
+    }
+
+    /// <summary>One date of a roster row. Assigned=false means the weekday was never written.</summary>
+    public class ShiftAssignmentDateCell
+    {
+        public DateOnly Date { get; init; }
+
+        /// <summary>Shift template id, or null for an explicit Off day.</summary>
+        public int? ShiftTemplateId { get; init; }
+
+        public bool Assigned { get; init; }
     }
 
     /// <summary>S6 — one conflict flag for the toolbar pill / publish warning.</summary>
@@ -103,6 +133,12 @@ namespace Shared.DataTransferObject.Schedule
         public required string Label { get; init; }
 
         public required string Status { get; init; }
+
+        /// <summary>Cycle start, yyyy-MM-dd (anchors the weekly pattern).</summary>
+        public required string StartDate { get; init; }
+
+        /// <summary>Cycle end (inclusive), yyyy-MM-dd.</summary>
+        public required string EndDate { get; init; }
 
         public List<ShiftTemplateItem> ShiftTemplates { get; init; } = [];
 
@@ -135,8 +171,15 @@ namespace Shared.DataTransferObject.Schedule
     {
         public int EmployeeId { get; init; }
 
-        /// <summary>Weekday, 0 = Monday … 6 = Sunday.</summary>
+        /// <summary>Weekday, 0 = Monday … 6 = Sunday. Ignored when <see cref="Date"/> is set.</summary>
         public int Day { get; init; }
+
+        /// <summary>
+        /// Exact date (yyyy-MM-dd) to write. When present it takes precedence over
+        /// <see cref="Day"/>, so the profile's current-week editor changes only the
+        /// dates the manager is looking at instead of every matching weekday.
+        /// </summary>
+        public DateOnly? Date { get; init; }
 
         /// <summary>Shift template id, or null for Off.</summary>
         public int? ShiftTemplateId { get; init; }

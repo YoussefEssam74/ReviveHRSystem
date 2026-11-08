@@ -290,6 +290,36 @@ namespace ReviveHRSystem.IntegrationTests
         }
 
         [Fact]
+        public async Task Event_AutoAfterMidnight_ClosesPreviousOvernightShift()
+        {
+            var builder = NewBuilder();
+            var gym = await builder.CreateGymWithStationAsync();
+            var employee = await builder.CreateEmployeeAsync(gym);
+            var stationToken = await _fixture.GetStationTokenAsync(gym.StationCode);
+
+            // Overnight shift (22:00 → 05:00) assigned only to yesterday.
+            await builder.AssignShiftAsync(
+                employee.EmployeeId, gym.GymId, builder.AttendanceToday.AddDays(-1), "IT Night", new TimeOnly(22, 0), new TimeOnly(5, 0));
+
+            var attendanceTimeZone = _fixture.Services.GetRequiredService<TimeZoneInfo>();
+            var nowLocal = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, attendanceTimeZone);
+            var afterMidnight = TimeZoneInfo.ConvertTimeToUtc(nowLocal.Date, attendanceTimeZone);
+
+            // Check in just after midnight, then let the always-on kiosk send AUTO a
+            // few minutes later. It must close yesterday's open overnight record as
+            // OUT instead of trying to open a second check-in for today.
+            var checkIn = await PostEventAsync(
+                EventPayload(employee.EmployeeNumber, "IN", timestamp: afterMidnight.AddMinutes(5)), stationToken);
+            var auto = await PostEventAsync(
+                EventPayload(employee.EmployeeNumber, "AUTO", timestamp: afterMidnight.AddMinutes(10)), stationToken);
+
+            Assert.Equal(HttpStatusCode.Created, checkIn.Status);
+            Assert.Equal(HttpStatusCode.Created, auto.Status);
+            Assert.Equal("OUT", auto.Body.GetProperty("type").GetString());
+            Assert.Equal(checkIn.Body.GetProperty("recordId").GetString(), auto.Body.GetProperty("recordId").GetString());
+        }
+
+        [Fact]
         public async Task Event_LivenessBelowThreshold_Returns400()
         {
             var stationToken = await _fixture.GetStationTokenAsync(_fixture.Gym1StationCode);

@@ -51,6 +51,9 @@ namespace Service.Specifications
             AddInclude(f => f.Position!);
             AddInclude(f => f.Responses);
             AddInclude(f => f.Assignments);
+            // The editor replaces/clears questions + assignments and mutates the form
+            // before SaveChanges without Update() — keep tracked.
+            ApplyTracking();
         }
     }
 
@@ -85,6 +88,9 @@ namespace Service.Specifications
         {
             Criteria = h => h.Id == formId;
             AddInclude(h => h.Gym!);
+            // Hiring-form edit/delete/application flows mutate the fetched form before
+            // SaveChanges without Update() — keep tracked.
+            ApplyTracking();
         }
     }
 
@@ -163,6 +169,10 @@ namespace Service.Specifications
             {
                 ApplyPaging(skip, take);
             }
+
+            // Submitting an evaluation flips the evaluator's row to Completed before
+            // SaveChanges without Update() — keep tracked (bounded per form).
+            ApplyTracking();
         }
     }
 

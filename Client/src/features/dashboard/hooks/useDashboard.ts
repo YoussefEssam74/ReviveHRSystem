@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { getHrDashboard } from '../api/dashboard.api'
 import { putDecideVacancyRequest, type DecideVacancyRequestBody } from '../../recruitment/api/recruitment.api'
-import { postWarningReview, postBonusReview, postDeductionReview, type ReviewProposalBody } from '../../branch-queue/api/branch-queue.api'
+import { postWarningReview, postBonusReview, postDeductionReview } from '../../branch-queue/api/branch-queue.api'
 import { postFaceEnrollment } from '../../attendance/api/attendance.api'
 import { postResetPassword } from '../../hr-team/api/hr-team.api'
 

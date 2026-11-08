@@ -10,8 +10,9 @@ using Xunit;
 namespace ReviveHRSystem.IntegrationTests
 {
     /// <summary>
-    /// The kiosk dashboard data endpoint: today's counters and recent feed for the
-    /// station's gym, authenticated by the station session.
+    /// The kiosk dashboard data endpoint: today's counters and the scheduled roster
+    /// (shift, punches, lateness / early leave) for the station's gym, authenticated
+    /// by the station session.
     /// </summary>
     [Collection(ApiTestFixture.CollectionName)]
     public class StationSummaryControllerTests
@@ -52,7 +53,12 @@ namespace ReviveHRSystem.IntegrationTests
             Assert.Contains(records, r => r.GetProperty("employeeId").GetString() == employee.EmployeeNumber);
             var row = records.First(r => r.GetProperty("employeeId").GetString() == employee.EmployeeNumber);
             Assert.Equal("PRESENT", row.GetProperty("status").GetString());
-            Assert.Equal("IN", row.GetProperty("lastEventType").GetString());
+            Assert.False(string.IsNullOrWhiteSpace(row.GetProperty("checkIn").GetString()));
+            Assert.Null(row.GetProperty("checkOut").GetString());
+            Assert.Matches(@"^\d{2}:\d{2}$", row.GetProperty("shiftStart").GetString()!);
+            Assert.Matches(@"^\d{2}:\d{2}$", row.GetProperty("shiftEnd").GetString()!);
+            Assert.True(row.GetProperty("lateMinutes").GetInt32() >= 0);
+            Assert.Equal(0, row.GetProperty("earlyLeaveMinutes").GetInt32());
         }
 
         [Fact]

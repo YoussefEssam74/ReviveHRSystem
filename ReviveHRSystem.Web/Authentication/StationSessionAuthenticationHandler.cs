@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using System.Text.Encodings.Web;
 using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using ServiceAbstraction.Services;
@@ -45,6 +46,7 @@ namespace ReviveHRSystem.Web.Authentication
             // Header first (explicit wins), then the HttpOnly session cookie — the kiosk
             // SPA never touches the token itself; the browser sends the cookie.
             string? token = null;
+            var tokenFromCookie = false;
             if (Request.Headers.TryGetValue(StationSessionAuthentication.TokenHeader, out var headerValues))
             {
                 token = headerValues.ToString();
@@ -57,6 +59,7 @@ namespace ReviveHRSystem.Web.Authentication
                      && !string.IsNullOrWhiteSpace(cookieToken))
             {
                 token = cookieToken;
+                tokenFromCookie = true;
             }
 
             if (string.IsNullOrWhiteSpace(token))
@@ -70,6 +73,12 @@ namespace ReviveHRSystem.Web.Authentication
             {
                 session = await stationSessions.ValidateSessionAsync(token, Context.RequestAborted);
             }
+            catch (OperationCanceledException) when (Context.RequestAborted.IsCancellationRequested)
+            {
+                // The request itself was aborted (client hung up mid-validation) — that
+                // is not a validation failure: let the pipeline tear down normally.
+                throw;
+            }
             catch (Exception exception)
             {
                 Logger.LogError(exception, "Validating a station session token failed.");
@@ -78,6 +87,19 @@ namespace ReviveHRSystem.Web.Authentication
 
             if (session is null)
             {
+                // The presented token is unknown, expired, or revoked. Drop the
+                // (possibly stale) HttpOnly cookie so the kiosk stops presenting a
+                // dead token and can fall back to the enrollment screen instead of
+                // looping 401s on every subsequent request — but only when the
+                // failing token came from the cookie: an invalid header token must
+                // not destroy a still-valid cookie session.
+                if (tokenFromCookie && Request.Cookies.ContainsKey(StationSessionOptions.SessionCookieName))
+                {
+                    Response.Cookies.Delete(
+                        StationSessionOptions.SessionCookieName,
+                        new CookieOptions { Path = "/" });
+                }
+
                 return AuthenticateResult.Fail("Station session is unknown, expired, or revoked.");
             }
 

@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using System.Text;
 using System.Text.Json;
 using System.Threading.RateLimiting;
@@ -20,7 +21,6 @@ using ReviveHRSystem.Web.CustomMiddleWares;
 using ReviveHRSystem.Web.DataSeed;
 using ReviveHRSystem.Web.Factories;
 using ReviveHRSystem.Web.Middleware;
-using Presentation.Authorization;
 using Service.Mapping;
 using Service.Services;
 using ServiceAbstraction.Services;
@@ -35,7 +35,13 @@ namespace ReviveHRSystem.Web
         {
             var builder = WebApplication.CreateBuilder(args);
 
-            builder.Services.AddControllers();
+            builder.Services.AddControllers().AddJsonOptions(options =>
+            {
+                // <input type="time"> posts "HH:mm", which the framework's TimeOnly
+                // converter rejects (it wants "HH:mm:ss") — shift-template creation
+                // answered 400 validation errors for valid times until this shipped.
+                options.JsonSerializerOptions.Converters.Add(new Shared.Serialization.TimeOnlyFlexibleJsonConverter());
+            });
 
             // Configure DbContext with PostgreSQL
             // cspell:disable-next-line
@@ -51,6 +57,12 @@ namespace ReviveHRSystem.Web
             }
 
             builder.Services.AddSingleton(jwtSettings);
+
+            // Brute-force account lockout (matrix RateLimitAndLockout spec):
+            // 5 consecutive failed logins lock the account for 15 minutes.
+            var lockoutOptions = builder.Configuration.GetSection(SecurityLockoutOptions.SectionName)
+                .Get<SecurityLockoutOptions>() ?? new SecurityLockoutOptions();
+            builder.Services.AddSingleton(lockoutOptions);
 
             // Station (kiosk) credentials are opaque, DB-backed session tokens — not JWTs.
             // Both schemes back the authorization policies below: a request signed in as a
@@ -77,6 +89,53 @@ namespace ReviveHRSystem.Web
                         ValidateLifetime = true,
                         ClockSkew = TimeSpan.FromSeconds(30)
                     };
+
+                    // JWT-001: gym-selection temp tokens are minted with the access
+                    // token's issuer/audience/signing key (TokenService.CreateGymSelectionToken),
+                    // so the bearer pipeline alone cannot tell them apart. The selection
+                    // claim is the differentiator: any token carrying it is rejected by the
+                    // authentication pipeline. The select-gym flow consumes these tokens
+                    // out-of-band via TokenService.ValidateGymSelectionToken and keeps working.
+                    //
+                    // Session revocation: the token itself is not enough. Every validated
+                    // request re-checks the account in the database, so terminating an
+                    // employee (or deactivating a user) invalidates already-issued access
+                    // tokens on their very next call instead of waiting for the 15-minute
+                    // lifetime to expire.
+                    options.Events = new JwtBearerEvents
+                    {
+                        OnTokenValidated = async context =>
+                        {
+                            if (context.Principal?.HasClaim("purpose", "gym-selection") == true)
+                            {
+                                context.Fail("This token is a gym-selection token and cannot be used to call the API.");
+                                return;
+                            }
+
+                            var rawUserId = context.Principal?.FindFirst("uid")?.Value
+                                ?? context.Principal?.FindFirst(ClaimTypes.NameIdentifier)?.Value
+                                ?? context.Principal?.FindFirst("sub")?.Value;
+
+                            if (!int.TryParse(rawUserId, out var userId))
+                            {
+                                context.Fail("The token does not identify a user.");
+                                return;
+                            }
+
+                            var sessions = context.HttpContext.RequestServices.GetRequiredService<IUserSessionService>();
+                            try
+                            {
+                                if (!await sessions.IsSessionAllowedAsync(userId, context.HttpContext.RequestAborted))
+                                {
+                                    context.Fail("This account is no longer active.");
+                                }
+                            }
+                            catch (OperationCanceledException)
+                            {
+                                context.Fail("The request was canceled.");
+                            }
+                        }
+                    };
                 })
                 .AddScheme<AuthenticationSchemeOptions, StationSessionAuthenticationHandler>(
                     StationSessionAuthentication.SchemeName, _ => { });
@@ -96,15 +155,7 @@ namespace ReviveHRSystem.Web
 
                 options.DefaultPolicy = requireAuthenticated;
                 options.FallbackPolicy = requireAuthenticated;
-
-                // Per-gym feature access policies (ADR-003 Amendment 1): one
-                // "feature:{code}:{level}" policy per catalog feature at View and Edit.
-                AuthorizationPolicies.Register(options);
             });
-
-            // Resolves [HasFeatureAccess] policies against the caller's effective
-            // feature levels in the token's gym. Scoped: the permission service is scoped.
-            builder.Services.AddScoped<IAuthorizationHandler, FeatureAccessHandler>();
 
             // --- Rate limiting for the public endpoints (limits configurable per environment;
             //     appsettings.Testing.json raises them so integration tests aren't throttled) ---
@@ -188,6 +239,10 @@ namespace ReviveHRSystem.Web
             builder.Services.AddCors(options => options.AddDefaultPolicy(policy => policy
                 .WithOrigins(allowedOrigins)
                 .AllowAnyHeader()
+                // The SPA distinguishes an auth failure (bearer challenge emitted by the
+                // authentication middleware) from a permission denial (plain 401 from the
+                // action's key gate); expose the challenge so a cross-origin SPA can read it.
+                .WithExposedHeaders("WWW-Authenticate")
                 .AllowCredentials() // the station session travels in an HttpOnly cookie for cross-origin kiosk SPAs
                 .WithMethods("GET", "POST", "PUT", "PATCH", "DELETE")));
 
@@ -209,9 +264,9 @@ namespace ReviveHRSystem.Web
             builder.Services.AddScoped<IUserAccessRepository, UserAccessRepository>();
             builder.Services.AddScoped<IPasswordHasher, PasswordHasher>();
             builder.Services.AddScoped<ITokenService, TokenService>();
+            builder.Services.AddScoped<IUserSessionService, UserSessionService>();
             builder.Services.AddScoped<IAuthService, AuthService>();
             builder.Services.AddScoped<IAttendanceService, AttendanceService>();
-            builder.Services.AddScoped<IPermissionService, PermissionService>();
             builder.Services.AddScoped<ITeamScopeService, TeamScopeService>();
             builder.Services.AddScoped<IEmployeeAccessService, EmployeeAccessService>();
             builder.Services.AddScoped<IEmployeeProfileService, EmployeeProfileService>();
@@ -229,6 +284,7 @@ namespace ReviveHRSystem.Web
             builder.Services.AddScoped<IEmployeeManagementService, EmployeeManagementService>();
             builder.Services.AddScoped<IRequestManagementService, RequestManagementService>();
             builder.Services.AddScoped<IAttendanceManagementService, AttendanceManagementService>();
+            builder.Services.AddScoped<IAttendanceDeductionSweepService, AttendanceDeductionSweepService>();
             builder.Services.AddScoped<ITeamOverviewService, TeamOverviewService>();
             builder.Services.AddScoped<IVacancyRequestService, VacancyRequestService>();
             builder.Services.AddScoped<IOffboardingService, OffboardingService>();

@@ -15,6 +15,7 @@ namespace Service.Specifications
         public RequestsByEmployeeSpec(int employeeId)
         {
             Criteria = r => r.EmployeeId == employeeId;
+            AddInclude(r => r.Employee);
             AddInclude(r => r.Decisions);
             AddInclude(r => r.SwapWithEmployee!);
             OrderByDescending = r => r.SubmittedAt;
@@ -34,6 +35,10 @@ namespace Service.Specifications
             AddInclude(r => r.Employee.Gym);
             AddInclude(r => r.Decisions);
             AddInclude(r => r.SwapWithEmployee!);
+            // Decide / undo / archive / restore mutate the fetched request (and its
+            // employee navigation) before SaveChanges without Update() — keeps the
+            // flow tracked.
+            ApplyTracking();
         }
     }
 
@@ -259,6 +264,10 @@ namespace Service.Specifications
 
             Criteria = predicate;
             AddInclude(e => e.Gym);
+            // R7 resolves the subject by name and rides him in the new request's graph
+            // (Employee = employee); an untracked reference would be re-inserted as a
+            // new employee on Add — keeps the flow tracked.
+            ApplyTracking();
         }
 
         private static Expression<Func<T, bool>> And<T>(Expression<Func<T, bool>> left, Expression<Func<T, bool>> right)

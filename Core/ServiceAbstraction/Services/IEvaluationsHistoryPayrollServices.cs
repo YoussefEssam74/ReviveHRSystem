@@ -1,4 +1,5 @@
 using Shared.DataTransferObject.EmployeeProfile;
+using Shared.DataTransferObject.Payroll;
 
 namespace ServiceAbstraction.Services
 {
@@ -53,5 +54,9 @@ namespace ServiceAbstraction.Services
     {
         Task<IReadOnlyList<PayrollEntryDto>> GetPayrollAsync(
             int actorUserId, int employeeId, int? activeGymId, CancellationToken cancellationToken = default);
+
+        /// <summary>One sheet's payslip card (mock §8 modal) for the employee's own sheet.</summary>
+        Task<PayslipResponse> GetPayslipAsync(
+            int actorUserId, int employeeId, int entryId, CancellationToken cancellationToken = default);
     }
 }

@@ -31,15 +31,18 @@ namespace Service.Services
         private readonly IUnitOfWork _unitOfWork;
         private readonly IAccessControlService _accessControl;
         private readonly IUserAccessRepository _userAccess;
+        private readonly ITeamScopeService _teamScope;
 
         public ShiftCycleService(
             IUnitOfWork unitOfWork,
             IAccessControlService accessControl,
-            IUserAccessRepository userAccess)
+            IUserAccessRepository userAccess,
+            ITeamScopeService teamScope)
         {
             _unitOfWork = unitOfWork;
             _accessControl = accessControl;
             _userAccess = userAccess;
+            _teamScope = teamScope;
         }
 
         // ------------------------------------------------------------------
@@ -55,7 +58,14 @@ namespace Service.Services
 
             var cycles = await _unitOfWork.GetRepository<ShiftCycle, int>().GetAllAsync(new ShiftCyclesByGymSpec(gymId), cancellationToken);
             return cycles
-                .Select(c => new ShiftCycleListItem { Id = c.Id, Label = LabelFor(c), Status = StatusFor(c) })
+                .Select(c => new ShiftCycleListItem
+                {
+                    Id = c.Id,
+                    Label = LabelFor(c),
+                    Status = StatusFor(c),
+                    StartDate = c.StartDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+                    EndDate = c.EndDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+                })
                 .ToList();
         }
 
@@ -81,27 +91,54 @@ namespace Service.Services
             var cycle = await LoadCycleAsync(cycleId, cancellationToken);
             await _accessControl.EnsurePermissionForGymAsync(actor.Id, "schedule.view", cycle.GymId, cancellationToken);
 
-            var employees = await LoadAssignedEmployeesAsync(cycle, cancellationToken);
+            // The grid lists the FULL assignable roster (assigned or not) so an
+            // employee is never hidden from assignment: for team leaders the
+            // members of the team they lead in this gym, otherwise the gym's
+            // non-terminated roster. Assignments overlay the pattern on top.
+            var roster = await LoadRosterEmployeesAsync(actor.Id, cycle.GymId, cancellationToken);
+            var assigned = await LoadAssignedEmployeesAsync(cycle, cancellationToken);
             var allTemplates = (await _unitOfWork.GetRepository<ShiftTemplate, int>()
                 .GetAllAsync(new AnyShiftTemplatesByGymSpec(cycle.GymId), cancellationToken)).ToList();
-            var conflicts = await ComputeConflictsAsync(cycle, allTemplates, employees, cancellationToken);
+            var conflicts = await ComputeConflictsAsync(cycle, allTemplates, assigned, cancellationToken);
 
             var rows = new List<ShiftAssignmentRow>();
-            foreach (var employee in employees.OrderBy(e => e.FullName, StringComparer.OrdinalIgnoreCase))
+            var cycleDates = DatesOf(cycle).ToList();
+            foreach (var employee in roster.OrderBy(e => e.FullName, StringComparer.OrdinalIgnoreCase))
             {
                 // days[0 = Mon … 6 = Sun]; first occurrence wins so a later
-                // duplicate row can never overwrite an explicit cell.
+                // duplicate row can never overwrite an explicit cell. AssignedDays
+                // distinguishes an explicit Off row (null template) from a weekday
+                // that was never assigned at all.
                 var days = new int?[7];
+                var assignedDays = new bool[7];
                 var filled = new bool[7];
+                // The grid renders real dates, not the weekday pattern: a cycle can
+                // carry a date-specific override (Set Assignments accepts a Date),
+                // and falling back to "first Monday of the cycle" showed a different
+                // shift from the employee's Shift tab.
+                var byDate = new Dictionary<DateOnly, ShiftAssignment>();
                 foreach (var assignment in cycle.ShiftAssignments
                              .Where(a => a.EmployeeId == employee.Id && a.Date >= cycle.StartDate && a.Date <= cycle.EndDate)
                              .OrderBy(a => a.Date))
                 {
+                    byDate.TryAdd(assignment.Date, assignment);
                     var day = WeekdayIndex(assignment.Date);
                     if (filled[day]) continue;
                     days[day] = assignment.ShiftTemplateId;
+                    assignedDays[day] = true;
                     filled[day] = true;
                 }
+
+                var daysByDate = cycleDates
+                    .Select(date => byDate.TryGetValue(date, out var assignment)
+                        ? new ShiftAssignmentDateCell
+                        {
+                            Date = date,
+                            ShiftTemplateId = assignment.ShiftTemplateId,
+                            Assigned = true,
+                        }
+                        : new ShiftAssignmentDateCell { Date = date, Assigned = false })
+                    .ToList();
 
                 rows.Add(new ShiftAssignmentRow
                 {
@@ -111,6 +148,8 @@ namespace Service.Services
                     Gym = employee.Gym?.Name ?? "—",
                     Initials = BuildInitials(employee.FullName),
                     Days = days.ToList(),
+                    AssignedDays = assignedDays.ToList(),
+                    DaysByDate = daysByDate,
                 });
             }
 
@@ -119,6 +158,8 @@ namespace Service.Services
                 Id = cycle.Id,
                 Label = LabelFor(cycle),
                 Status = StatusFor(cycle),
+                StartDate = cycle.StartDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+                EndDate = cycle.EndDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
                 ShiftTemplates = allTemplates.Where(t => t.IsActive).Select(ToTemplateItem).ToList(),
                 Assignments = rows,
                 Conflicts = conflicts,
@@ -164,6 +205,8 @@ namespace Service.Services
                     Id = cycle.Id,
                     Label = LabelFor(cycle),
                     Status = StatusFor(cycle),
+                    StartDate = cycle.StartDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+                    EndDate = cycle.EndDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
                 },
             };
         }
@@ -212,16 +255,17 @@ namespace Service.Services
                     .Select(e => e.Id)
                     .ToArray();
 
-            // Weekly pattern per (employee, weekday); working shifts only —
-            // Off cells stay Off (absence of a row displays as Off anyway).
-            var pattern = new Dictionary<(int EmployeeId, int Day), int>();
+            // Weekly pattern per (employee, weekday). Explicit Off rows (null
+            // template) are copied too so a rest day never silently becomes
+            // "not assigned" in the target cycle.
+            var pattern = new Dictionary<(int EmployeeId, int Day), int?>();
             foreach (var assignment in source.ShiftAssignments
-                         .Where(a => a.ShiftTemplateId.HasValue && eligibleEmployeeIds.Contains(a.EmployeeId))
+                         .Where(a => eligibleEmployeeIds.Contains(a.EmployeeId))
                          .OrderBy(a => a.Date))
             {
                 var key = (assignment.EmployeeId, WeekdayIndex(assignment.Date));
                 if (!pattern.ContainsKey(key))
-                    pattern[key] = assignment.ShiftTemplateId!.Value;
+                    pattern[key] = assignment.ShiftTemplateId;
             }
 
             if (pattern.Count == 0)
@@ -260,6 +304,23 @@ namespace Service.Services
             if (cycle.Status == ShiftCycleStatus.Archived)
                 throw new BadRequestException("Archived cycles cannot be published.");
 
+            // Publishing supersedes any earlier published cycle covering the same
+            // dates. Two published cycles over one date make the employee schedule
+            // ambiguous (and let assignment writes re-parent rows between them), so
+            // the previous one is archived as part of the publish.
+            var superseded = (await _unitOfWork.GetRepository<ShiftCycle, int>()
+                    .GetAllAsync(new ShiftCyclesByGymSpec(cycle.GymId), cancellationToken))
+                .Where(c => c.Id != cycle.Id
+                    && c.Status == ShiftCycleStatus.Published
+                    && c.StartDate <= cycle.EndDate
+                    && c.EndDate >= cycle.StartDate)
+                .ToList();
+            foreach (var previous in superseded)
+            {
+                previous.Status = ShiftCycleStatus.Archived;
+                _unitOfWork.GetRepository<ShiftCycle, int>().Update(previous);
+            }
+
             var employees = await LoadAssignedEmployeesAsync(cycle, cancellationToken);
             var templates = (await _unitOfWork.GetRepository<ShiftTemplate, int>()
                 .GetAllAsync(new AnyShiftTemplatesByGymSpec(cycle.GymId), cancellationToken)).ToList();
@@ -291,6 +352,11 @@ namespace Service.Services
             var message = conflicts.Count > 0
                 ? $"Schedule published with {conflicts.Count} unresolved conflict(s)."
                 : "Schedule published.";
+            if (superseded.Count > 0)
+            {
+                message += $" Superseded cycle(s) archived: {string.Join(", ", superseded.Select(LabelFor))}.";
+            }
+
             return new MessageResponse { Message = message };
         }
 
@@ -309,7 +375,8 @@ namespace Service.Services
         }
 
         // ------------------------------------------------------------------
-        // S7 — Edit Shift save (upsert across the cycle's matching weekdays)
+        // S7 — Edit Shift save (exact dates when supplied, otherwise the
+        // cycle's matching weekdays)
         // ------------------------------------------------------------------
 
         /// <inheritdoc />
@@ -319,13 +386,23 @@ namespace Service.Services
             var cycle = await LoadCycleAsync(cycleId, cancellationToken);
             await _accessControl.EnsurePermissionForGymAsync(actor.Id, "schedule.manage", cycle.GymId, cancellationToken);
 
-            if (cycle.Status != ShiftCycleStatus.Draft)
-                throw new BadRequestException("Only draft cycles can be edited.");
+            if (cycle.Status == ShiftCycleStatus.Archived)
+                throw new BadRequestException("Archived cycles are read-only.");
 
             foreach (var input in request.Assignments)
             {
-                if (input.Day < 0 || input.Day > 6)
+                if (input.Date is DateOnly date)
+                {
+                    if (date < cycle.StartDate || date > cycle.EndDate)
+                    {
+                        throw new BadRequestException(
+                            $"date {date:yyyy-MM-dd} is outside the cycle's range ({cycle.StartDate:yyyy-MM-dd} – {cycle.EndDate:yyyy-MM-dd}).");
+                    }
+                }
+                else if (input.Day < 0 || input.Day > 6)
+                {
                     throw new BadRequestException("day must be between 0 (Monday) and 6 (Sunday).");
+                }
             }
 
             // Validate employees (unknown id → 400).
@@ -365,9 +442,13 @@ namespace Service.Services
             var applied = 0;
             foreach (var input in request.Assignments)
             {
-                foreach (var date in DatesForWeekday(cycle, input.Day))
+                IEnumerable<DateOnly> dates = input.Date is DateOnly date
+                    ? new[] { date }
+                    : DatesForWeekday(cycle, input.Day);
+
+                foreach (var target in dates)
                 {
-                    ApplyAssignment(cycle, globalRows, input.EmployeeId, date, input.ShiftTemplateId);
+                    ApplyAssignment(cycle, globalRows, input.EmployeeId, target, input.ShiftTemplateId);
                     applied++;
                 }
             }
@@ -382,12 +463,14 @@ namespace Service.Services
 
         private static int WeekdayIndex(DateOnly date) => ((int)date.DayOfWeek + 6) % 7;
 
-        private static IEnumerable<DateOnly> DatesForWeekday(ShiftCycle cycle, int day)
+        private static IEnumerable<DateOnly> DatesOf(ShiftCycle cycle)
         {
             for (var date = cycle.StartDate; date <= cycle.EndDate; date = date.AddDays(1))
-                if (WeekdayIndex(date) == day)
-                    yield return date;
+                yield return date;
         }
+
+        private static IEnumerable<DateOnly> DatesForWeekday(ShiftCycle cycle, int day) =>
+            DatesOf(cycle).Where(date => WeekdayIndex(date) == day);
 
         private static string LabelFor(ShiftCycle cycle) =>
             !string.IsNullOrWhiteSpace(cycle.Label)
@@ -435,6 +518,22 @@ namespace Service.Services
             var ids = cycle.ShiftAssignments.Select(a => a.EmployeeId).Distinct().ToArray();
             if (ids.Length == 0) return [];
             return (await _unitOfWork.GetRepository<Employee, int>().GetAllAsync(new EmployeesByIdsSpec(ids), cancellationToken)).ToList();
+        }
+
+        /// <summary>
+        /// The cycle's assignable roster: members of the team the caller leads
+        /// in this gym when they lead one, otherwise every non-terminated
+        /// employee of the gym. Fresh drafts therefore open with the complete
+        /// grid instead of "no employees".
+        /// </summary>
+        private async Task<List<Employee>> LoadRosterEmployeesAsync(int actorUserId, int gymId, CancellationToken cancellationToken)
+        {
+            var ledTeamId = await _teamScope.GetLedTeamIdAsync(actorUserId, gymId, cancellationToken);
+            var employeeRepo = _unitOfWork.GetRepository<Employee, int>();
+            var employees = ledTeamId is int teamId
+                ? await employeeRepo.GetAllAsync(new EmployeesByTeamSpec(teamId), cancellationToken)
+                : await employeeRepo.GetAllAsync(new EmployeesForRosterSpec(new[] { gymId }), cancellationToken);
+            return employees.ToList();
         }
 
         /// <summary>All rows of these employees inside [from, to], keyed by (employee, date) — cross-cycle collision lookup.</summary>
@@ -485,7 +584,7 @@ namespace Service.Services
 
         private static ShiftTemplateItem ToTemplateItem(ShiftTemplate template)
         {
-            var (color, bg, text) = ColorsFor(template.Name, template.Id);
+            var (color, bg, text) = ShiftTemplateColors.Derive(template.Color);
             return new ShiftTemplateItem
             {
                 Id = template.Id,
@@ -495,31 +594,9 @@ namespace Service.Services
                 Color = color,
                 BgColor = bg,
                 TextColor = text,
-                IsOff = template.Name.Contains("off", StringComparison.OrdinalIgnoreCase),
+                // Off is an explicit assignment without a template, never a template.
+                IsOff = false,
             };
-        }
-
-        /// <summary>
-        /// Server-derived palette: name heuristics (morning / evening / night /
-        /// off) with an id-hash fallback. The contract example uses
-        /// bg #eff6ff / text #1d4ed8 for the blue morning style.
-        /// </summary>
-        private static (string Color, string BgColor, string TextColor) ColorsFor(string name, int id)
-        {
-            var n = name.Trim().ToLowerInvariant();
-            if (n.Contains("off")) return ("#94a3b8", "#f1f5f9", "#475569");
-            if (n.Contains("morning")) return ("#22c55e", "#dcfce7", "#166534");
-            if (n.Contains("evening")) return ("#f59e0b", "#fef3c7", "#92400e");
-            if (n.Contains("night")) return ("#6366f1", "#e0e7ff", "#3730a3");
-
-            var palette = new[]
-            {
-                ("#0ea5e9", "#eff6ff", "#1d4ed8"),
-                ("#a855f7", "#f3e8ff", "#7e22ce"),
-                ("#14b8a6", "#ccfbf1", "#0f766e"),
-                ("#f43f5e", "#ffe4e6", "#be123c"),
-            };
-            return palette[Math.Abs(id) % palette.Length];
         }
 
         private static string BuildInitials(string fullName)

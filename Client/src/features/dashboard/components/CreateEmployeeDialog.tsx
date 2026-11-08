@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react'
-import { Camera, Loader2, RefreshCw } from 'lucide-react'
+import { Camera, RefreshCw } from 'lucide-react'
 import { Dialog } from '../../../components/ui/dialog'
 import { Button } from '../../../components/ui/button'
 import { Input } from '../../../components/ui/input'

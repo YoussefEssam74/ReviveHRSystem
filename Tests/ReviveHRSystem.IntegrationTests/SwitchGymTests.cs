@@ -47,6 +47,100 @@ namespace ReviveHRSystem.IntegrationTests
         }
 
         [Fact]
+        public async Task SwitchGym_SwitchThenRefresh_KeepsSwitchedGymScope()
+        {
+            // A switch must rotate the refresh credential to the TARGET gym's
+            // scope: every later silent refresh would otherwise re-mint tokens
+            // scoped to the ORIGINAL login gym and un-do the switch (the SPA
+            // would silently fall back to the gym it logged into).
+            var gym1Id = await GymIdByNameAsync("Revive Main Gym");
+            var gym2Id = await GymIdByNameAsync("Revive Second Gym");
+
+            var login = await _fixture.Client.PostAsJsonAsync(
+                "/api/auth/login", new { email = "omar@revive.hr", password = "Revive!2026" });
+            login.EnsureSuccessStatusCode();
+            var loginBody = await login.Content.ReadFromJsonAsync<JsonElement>();
+            var tempToken = loginBody.GetProperty("tempSessionToken").GetString()!;
+
+            var select = await _fixture.Client.PostAsJsonAsync(
+                "/api/auth/login/select-gym", new { gymId = gym1Id, tempSessionToken = tempToken });
+            select.EnsureSuccessStatusCode();
+            var selected = await select.Content.ReadFromJsonAsync<JsonElement>();
+            var originalChain = selected.GetProperty("refreshToken").GetString()!;
+
+            var switchResponse = await _fixture.Client.SendAsync(
+                _fixture.AuthorizedRequest(HttpMethod.Post, "/api/auth/switch-gym", new { gymId = gym2Id },
+                    selected.GetProperty("accessToken").GetString()!));
+            switchResponse.EnsureSuccessStatusCode();
+            var switched = await switchResponse.Content.ReadFromJsonAsync<JsonElement>();
+
+            // The switch must hand back a ROTATED refresh credential scoped to gym2.
+            Assert.False(string.IsNullOrWhiteSpace(switched.GetProperty("refreshToken").GetString()));
+            Assert.True(switched.GetProperty("refreshExpiresInSeconds").GetInt32() > 0);
+
+            var refresh = await _fixture.Client.PostAsJsonAsync(
+                "/api/auth/refresh", new { refreshToken = switched.GetProperty("refreshToken").GetString() });
+            refresh.EnsureSuccessStatusCode();
+            var refreshed = await refresh.Content.ReadFromJsonAsync<JsonElement>();
+
+            Assert.Equal(gym2Id, refreshed.GetProperty("user").GetProperty("gymId").GetInt32());
+
+            // The refreshed access token must authenticate with the TARGET gym
+            // as the active one — not the original login gym.
+            var meResponse = await _fixture.Client.SendAsync(
+                _fixture.AuthorizedRequest(HttpMethod.Get, "/api/me", null,
+                    refreshed.GetProperty("accessToken").GetString()!));
+            meResponse.EnsureSuccessStatusCode();
+            var meBody = await meResponse.Content.ReadFromJsonAsync<JsonElement>();
+            Assert.Equal("Revive Second Gym", meBody.GetProperty("activeGym").GetProperty("gymName").GetString());
+
+            // Single-live-chain discipline: the switch revoked every other alive
+            // chain of the user, so refreshing with the ORIGINAL login chain (the
+            // credential a stale tab would still hold) must be refused — a stale
+            // context can never silently resurrect the pre-switch gym scope.
+            var staleRefresh = await _fixture.Client.PostAsJsonAsync(
+                "/api/auth/refresh", new { refreshToken = originalChain });
+            Assert.Equal(HttpStatusCode.Unauthorized, staleRefresh.StatusCode);
+        }
+
+        [Fact]
+        public async Task SwitchGym_PermissionKeysFollowTheActiveGym()
+        {
+            // Omar is Branch Manager in gym1 and Team Leader in gym2. His keys must
+            // follow the ACTIVE gym's role — not the union of his global roles — so
+            // the TL gym never reports the BM-only keys (e.g. recruitment).
+            var token1 = await LoginSelectingGymAsync("omar@revive.hr", await GymIdByNameAsync("Revive Main Gym"));
+
+            var me1 = await _fixture.Client.SendAsync(
+                _fixture.AuthorizedRequest(HttpMethod.Get, "/api/auth/me", null, token1));
+            me1.EnsureSuccessStatusCode();
+            var keys1 = (await me1.Content.ReadFromJsonAsync<JsonElement>())
+                .GetProperty("permissions").EnumerateArray().Select(p => p.GetString()!).ToHashSet();
+
+            Assert.Contains("recruitment.view", keys1);          // BM-only key, present in the BM gym
+            Assert.Contains("employees.view", keys1);
+
+            var switchRequest = _fixture.AuthorizedRequest(
+                HttpMethod.Post, "/api/auth/switch-gym", new { gymId = await GymIdByNameAsync("Revive Second Gym") }, token1);
+            var switchResponse = await _fixture.Client.SendAsync(switchRequest);
+            switchResponse.EnsureSuccessStatusCode();
+            var token2 = (await switchResponse.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("accessToken").GetString()!;
+
+            var me2 = await _fixture.Client.SendAsync(
+                _fixture.AuthorizedRequest(HttpMethod.Get, "/api/auth/me", null, token2));
+            me2.EnsureSuccessStatusCode();
+            var keys2 = (await me2.Content.ReadFromJsonAsync<JsonElement>())
+                .GetProperty("permissions").EnumerateArray().Select(p => p.GetString()!).ToHashSet();
+
+            Assert.DoesNotContain("recruitment.view", keys2);    // BM-only key must vanish in the TL gym
+            Assert.DoesNotContain("recruitment.vacancy_request.create", keys2);
+            Assert.Contains("schedule.view", keys2);             // TL bundle keys still present
+            Assert.Contains("schedule.manage", keys2);
+            Assert.Contains("employees.view", keys2);            // TL shares the BM branch pages…
+            Assert.Contains("attendance.view", keys2);           // …except Recruitment
+        }
+
+        [Fact]
         public async Task SwitchGym_SingleGymEmployeeWithoutAccess_Returns401()
         {
             // Karim only has gym1 access.
@@ -76,6 +170,67 @@ namespace ReviveHRSystem.IntegrationTests
         {
             var response = await _fixture.Client.PostAsJsonAsync("/api/auth/switch-gym", new { gymId = 1 });
             Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        }
+
+        [Fact]
+        public async Task SwitchGym_SeparatesEmployeeDirectory_AndAppliesAccessLevel()
+        {
+            var gym1Id = await GymIdByNameAsync("Revive Main Gym");
+            var gym2Id = await GymIdByNameAsync("Revive Second Gym");
+
+            // 1. Omar in Main Gym (Branch Manager)
+            var token1 = await LoginSelectingGymAsync("omar@revive.hr", gym1Id);
+
+            var req1 = _fixture.AuthorizedRequest(HttpMethod.Get, "/api/employees?pageSize=100", null, token1);
+            var res1 = await _fixture.Client.SendAsync(req1);
+            res1.EnsureSuccessStatusCode();
+            var body1 = await res1.Content.ReadFromJsonAsync<JsonElement>();
+            var names1 = body1.GetProperty("items").EnumerateArray()
+                .Select(e => e.GetProperty("name").GetString()!)
+                .ToList();
+
+            // BM in Gym 1 sees Gym 1 employees, but NOT Gym 2 employees — and never
+            // himself (the directory deliberately drops the actor's own row).
+            Assert.Contains("Karim Hassan", names1);
+            Assert.DoesNotContain("Omar Youssef", names1);
+            Assert.DoesNotContain("Sara Ali", names1);
+
+            // 2. Omar switches to Second Gym (Team Leader of Alexandria Floor Team)
+            var switchReq = _fixture.AuthorizedRequest(
+                HttpMethod.Post, "/api/auth/switch-gym", new { gymId = gym2Id }, token1);
+            var switchRes = await _fixture.Client.SendAsync(switchReq);
+            switchRes.EnsureSuccessStatusCode();
+            var token2 = (await switchRes.Content.ReadFromJsonAsync<JsonElement>())
+                .GetProperty("accessToken").GetString()!;
+
+            var req2 = _fixture.AuthorizedRequest(HttpMethod.Get, "/api/employees?pageSize=100", null, token2);
+            var res2 = await _fixture.Client.SendAsync(req2);
+            res2.EnsureSuccessStatusCode();
+            var body2 = await res2.Content.ReadFromJsonAsync<JsonElement>();
+            var names2 = body2.GetProperty("items").EnumerateArray()
+                .Select(e => e.GetProperty("name").GetString()!)
+                .ToList();
+
+            // TL in Gym 2 sees only his team in Gym 2 (Sara Ali), NOT Gym 1 employees
+            Assert.Contains("Sara Ali", names2);
+            Assert.DoesNotContain("Karim Hassan", names2);
+            Assert.DoesNotContain("Omar Youssef", names2);
+
+            // 3. Drill-in profile IDOR protection: cannot read Gym 1 employee using Gym 2 token
+            var karimId = body1.GetProperty("items").EnumerateArray()
+                .First(e => e.GetProperty("name").GetString() == "Karim Hassan")
+                .GetProperty("id").GetInt32();
+            var saraId = body2.GetProperty("items").EnumerateArray()
+                .First(e => e.GetProperty("name").GetString() == "Sara Ali")
+                .GetProperty("id").GetInt32();
+
+            var crossGymReq = _fixture.AuthorizedRequest(HttpMethod.Get, $"/api/employees/{karimId}", null, token2);
+            var crossGymRes = await _fixture.Client.SendAsync(crossGymReq);
+            Assert.Equal(HttpStatusCode.NotFound, crossGymRes.StatusCode);
+
+            var validTeamReq = _fixture.AuthorizedRequest(HttpMethod.Get, $"/api/employees/{saraId}", null, token2);
+            var validTeamRes = await _fixture.Client.SendAsync(validTeamReq);
+            Assert.Equal(HttpStatusCode.OK, validTeamRes.StatusCode);
         }
 
         private async Task<string> LoginSelectingGymAsync(string email, int gymId)

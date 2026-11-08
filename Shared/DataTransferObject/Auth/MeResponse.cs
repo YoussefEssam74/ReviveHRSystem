@@ -1,10 +1,9 @@
 namespace Shared.DataTransferObject.Auth;
 
 /// <summary>
-/// Session context for the authenticated user (ADR-003 Amendment 1): identity,
-/// the active gym, every accessible gym, the role held IN the active gym, and the
-/// effective feature access levels for the active gym. Drives SPA navigation and
-/// action gating; returned by GET /api/me and by gym switching.
+/// Session context for the authenticated user: identity, the active gym, every
+/// accessible gym, and the role held IN the active gym. Drives SPA navigation;
+/// returned by GET /api/me and by gym switching.
 /// </summary>
 public sealed class MeResponse
 {
@@ -26,8 +25,9 @@ public sealed class MeResponse
     public int? LedTeamId { get; init; }
 
     /// <summary>
-    /// Effective feature levels for the active gym: feature code (see Shared.Authorization.Features)
-    /// mapped to level (0=None, 1=View, 2=Edit). Absent features mean None.
+    /// The employee profile linked 1:1 to this account (User ↔ Employee), when one
+    /// exists. Every self-service route (/api/employees/{id}/schedule, /requests, …)
+    /// is addressed by this id — the SPA could not reach them without it.
     /// </summary>
-    public IReadOnlyDictionary<string, int> FeatureLevels { get; init; } = new Dictionary<string, int>();
+    public int? EmployeeId { get; init; }
 }

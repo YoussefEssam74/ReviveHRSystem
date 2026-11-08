@@ -16,6 +16,8 @@ public sealed class RequestMappingProfile : Profile
     public RequestMappingProfile()
     {
         CreateMap<EmployeeRequest, EmployeeRequestDto>()
+            .ForMember(d => d.EmployeeId, o => o.MapFrom(s => s.EmployeeId))
+            .ForMember(d => d.EmployeeName, o => o.MapFrom(s => s.Employee != null ? s.Employee.FullName : string.Empty))
             .ForMember(d => d.SubmittedDate, o => o.MapFrom(s => DateOnly.FromDateTime(s.SubmittedAt)))
             .ForMember(d => d.RequestDate, o => o.MapFrom(s => s.RequestDate))
             .ForMember(d => d.EndDate, o => o.MapFrom(s => s.TargetEndDate))

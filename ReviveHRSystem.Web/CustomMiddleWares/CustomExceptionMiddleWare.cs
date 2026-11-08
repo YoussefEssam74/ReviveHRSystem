@@ -23,6 +23,13 @@ namespace ReviveHRSystem.Web.CustomMiddleWares
                 await _next.Invoke(context);
                 await HandleNotFoundEndPointAsync(context);
             }
+            catch (OperationCanceledException ex) when (context.RequestAborted.IsCancellationRequested)
+            {
+                // The client walked away (page navigation, gym switch, an aborted
+                // refetch). No response can reach it anymore — don't spam the
+                // error log with these, they are not failures.
+                _logger.LogDebug(ex, "Request {Method} {Path} was canceled by the client.", context.Request.Method, context.Request.Path);
+            }
             catch (Exception ex)
             {
                 _logger.LogError(ex, ex.Message);

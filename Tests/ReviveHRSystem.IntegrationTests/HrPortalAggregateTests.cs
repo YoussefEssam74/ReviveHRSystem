@@ -167,7 +167,7 @@ namespace ReviveHRSystem.IntegrationTests
             var (noticeId, gym) = await CreatePendingNoticeAsync();
             var token = await HrTokenWithAsync(gym, "requests.view");
 
-            var body = await GetAsync("/api/warning-notices?status=Pending", token);
+            var body = await GetAsync("/api/warning-notices/queue?status=Pending", token);
 
             Assert.True(body.TryGetProperty("items", out var items));
             Assert.Contains(items.EnumerateArray(), i => i.GetProperty("id").GetInt32() == noticeId);
@@ -251,7 +251,7 @@ namespace ReviveHRSystem.IntegrationTests
             var (proposalId, gym) = await CreatePendingBonusAsync();
             var token = await HrTokenWithAsync(gym, "requests.view");
 
-            var body = await GetAsync("/api/bonus-proposals?status=Pending", token);
+            var body = await GetAsync("/api/bonus-proposals/queue?status=Pending", token);
 
             Assert.True(body.TryGetProperty("items", out var items));
             Assert.Contains(items.EnumerateArray(), i => i.GetProperty("id").GetInt32() == proposalId);

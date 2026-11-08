@@ -197,6 +197,45 @@ namespace ReviveHRSystem.IntegrationTests.Support
             return new TestUser(user.Id, email, plainPassword);
         }
 
+        /// <summary>
+        /// Attaches an employee profile to an ALREADY-CREATED user (HR/HRM staff have
+        /// profiles of their own — the matrix's actor-based row-22 contact writes
+        /// depend on it, as does every "own record" self-service surface).
+        /// </summary>
+        public async Task<TestEmployee> AttachEmployeeProfileAsync(
+            TestUser user,
+            TestGym homeGym,
+            string? fullName = null)
+        {
+            var suffix = UniqueSuffix();
+            var position = await _db.Positions.FirstOrDefaultAsync(p => p.GymId == homeGym.GymId && p.Title == "IT Tester")
+                ?? new Position { GymId = homeGym.GymId, Title = "IT Tester", Level = "1", IsActive = true };
+            if (position.Id == 0)
+            {
+                _db.Positions.Add(position);
+                await _db.SaveChangesAsync();
+            }
+
+            var hireDate = DateOnly.FromDateTime(DateTime.Now.AddDays(-7));
+            var employeeNumber = $"IT-{suffix}";
+            var employee = new Employee
+            {
+                UserId = user.UserId,
+                GymId = homeGym.GymId,
+                PositionId = position.Id,
+                FullName = fullName ?? $"IT Employee {suffix}",
+                EmployeeNumber = employeeNumber,
+                HireDate = hireDate,
+                ContractType = "FullTime",
+                ContractStartDate = hireDate,
+                Status = EmployeeStatus.Active
+            };
+            _db.Employees.Add(employee);
+            await _db.SaveChangesAsync();
+
+            return new TestEmployee(employee.Id, employeeNumber, user.UserId, user.Email, user.Password, employee.FullName);
+        }
+
         public Task AssignShiftTodayAsync(int employeeId, int gymId) =>
             AssignShiftAsync(employeeId, gymId, AttendanceToday, "IT Morning", new TimeOnly(8, 0), new TimeOnly(16, 0));
 
@@ -286,6 +325,14 @@ namespace ReviveHRSystem.IntegrationTests.Support
             await _db.SaveChangesAsync();
         }
 
+        /// <summary>Moves an employee's directory standing without going through the API.</summary>
+        public async Task SetEmployeeStatusAsync(int employeeId, EmployeeStatus status)
+        {
+            var employee = await _db.Employees.FirstAsync(e => e.Id == employeeId);
+            employee.Status = status;
+            await _db.SaveChangesAsync();
+        }
+
         /// <summary>
         /// Inserts a stored attendance record for a (employee, day) pair — the A1/A4 tests
         /// assert against real rows rather than only derived grid days. Times are UTC.
@@ -333,7 +380,8 @@ namespace ReviveHRSystem.IntegrationTests.Support
         }
 
         /// <summary>Inserts a shift template at the gym (template CRUD is org-settings scope, no HR API).</summary>
-        public async Task<int> CreateShiftTemplateAsync(TestGym gym, string name, TimeOnly start, TimeOnly end, bool isActive = true)
+        public async Task<int> CreateShiftTemplateAsync(
+            TestGym gym, string name, TimeOnly start, TimeOnly end, bool isActive = true, string color = "#0ea5e9")
         {
             var template = new ShiftTemplate
             {
@@ -341,6 +389,7 @@ namespace ReviveHRSystem.IntegrationTests.Support
                 Name = name,
                 StartTime = start,
                 EndTime = end,
+                Color = color,
                 IsActive = isActive
             };
             _db.ShiftTemplates.Add(template);

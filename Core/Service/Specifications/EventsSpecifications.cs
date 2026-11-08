@@ -55,12 +55,12 @@ namespace Service.Specifications
         }
     }
 
-    /// <summary>Ongoing separations (the Leaving tab) — not yet Completed.</summary>
+    /// <summary>Ongoing separations (the Leaving tab) — not yet Completed or Cancelled.</summary>
     public sealed class ActiveSeparationsSpec : BaseSpecification<OffboardingCase, int>
     {
         public ActiveSeparationsSpec()
         {
-            Criteria = c => c.Status != "Completed";
+            Criteria = c => c.Status != "Completed" && c.Status != "Cancelled";
             AddInclude(c => c.Employee.Gym);
             AddInclude(c => c.Employee.Position!);
             AddInclude(c => c.InitiatedByUser);
@@ -211,6 +211,9 @@ namespace Service.Specifications
             Criteria = e => e.Id == id;
             AddInclude(e => e.Gym);
             AddInclude(e => e.Resolver);
+            // Resolve/reopen/escalate-decision mutate the fetched row before
+            // SaveChanges without Update() — keep tracked.
+            ApplyTracking();
         }
     }
 
@@ -249,6 +252,9 @@ namespace Service.Specifications
             AddInclude(c => c.Employee.Position!);
             AddInclude(c => c.InitiatedByUser);
             AddInclude(c => c.ChecklistItems);
+            // Separation actions (verdict save / finalize / checklist updates) mutate the
+            // fetched case before SaveChanges without Update() — keeps the flow tracked.
+            ApplyTracking();
         }
     }
 
@@ -257,7 +263,7 @@ namespace Service.Specifications
     {
         public EmployeeActiveSeparationsSpec(int employeeId)
         {
-            Criteria = c => c.EmployeeId == employeeId && c.Status != "Completed";
+            Criteria = c => c.EmployeeId == employeeId && c.Status != "Completed" && c.Status != "Cancelled";
         }
     }
 
@@ -307,6 +313,10 @@ namespace Service.Specifications
             AddInclude(a => a.Employee.Position!);
             AddInclude(a => a.RequestedBy);
             AddInclude(a => a.ReviewedBy);
+            // Approve/reject mutate the fetched request before Update() — the graph's
+            // User nav rows are typically tracked separately (the actor), so keep the
+            // fetch tracked to let the identity map merge the instances.
+            ApplyTracking();
         }
     }
 }

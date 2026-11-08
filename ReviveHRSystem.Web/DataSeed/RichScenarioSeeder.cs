@@ -198,7 +198,7 @@ namespace ReviveHRSystem.Web.DataSeed
                 staffByNumber[seed.Number] = employee;
 
                 await EnsureGymAccessAsync(db, employee.UserId, seed.Gym);
-                await FeatureAccessSeeder.EnsureUserGymRoleAsync(db, employee.UserId, seed.Gym, RoleNames.Employee);
+                await DevelopmentDataSeeder.EnsureUserGymRoleAsync(db, employee.UserId, seed.Gym, RoleNames.Employee);
             }
 
             // Rania was hired through the recruitment pipeline below.

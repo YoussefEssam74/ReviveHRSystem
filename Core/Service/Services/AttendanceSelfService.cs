@@ -24,13 +24,14 @@ namespace Service.Services
             int actorUserId, int employeeId, string? month, int? activeGymId, CancellationToken cancellationToken = default)
         {
             await employeeAccess.EnsureCanAccessAsync(
-                actorUserId, employeeId, Features.Employees, AccessLevel.View, activeGymId, cancellationToken);
+                actorUserId, employeeId, activeGymId, cancellationToken);
 
             var records = await unitOfWork.GetRepository<AttendanceRecord, int>()
                 .GetAllAsync(new AttendanceByEmployeeSpec(employeeId, ParseMonth(month)), cancellationToken);
 
+            // AttendanceByEmployeeSpec already ordered by Date descending in SQL —
+            // re-sorting the month in memory would double the work for nothing.
             var items = records
-                .OrderByDescending(r => r.Date)
                 .Select(r => mapper.Map<AttendanceRecordDto>(r))
                 .ToList();
 
@@ -47,7 +48,7 @@ namespace Service.Services
             int actorUserId, int employeeId, int? activeGymId, CancellationToken cancellationToken = default)
         {
             await employeeAccess.EnsureCanAccessAsync(
-                actorUserId, employeeId, Features.Employees, AccessLevel.View, activeGymId, cancellationToken);
+                actorUserId, employeeId, activeGymId, cancellationToken);
 
             var year = DateTime.UtcNow.Year;
             var balances = await unitOfWork.GetRepository<LeaveBalance, int>()

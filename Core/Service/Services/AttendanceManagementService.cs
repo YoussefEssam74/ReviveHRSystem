@@ -39,18 +39,24 @@ namespace Service.Services
         private readonly IUnitOfWork _unitOfWork;
         private readonly IAccessControlService _accessControl;
         private readonly IUserAccessRepository _userAccess;
+        private readonly ITeamScopeService _teamScope;
         private readonly TimeZoneInfo _attendanceTimeZone;
+        private readonly IAttendanceDeductionSweepService _deductionSweep;
 
         public AttendanceManagementService(
             IUnitOfWork unitOfWork,
             IAccessControlService accessControl,
             IUserAccessRepository userAccess,
-            TimeZoneInfo attendanceTimeZone)
+            ITeamScopeService teamScope,
+            TimeZoneInfo attendanceTimeZone,
+            IAttendanceDeductionSweepService deductionSweep)
         {
             _unitOfWork = unitOfWork;
             _accessControl = accessControl;
             _userAccess = userAccess;
+            _teamScope = teamScope;
             _attendanceTimeZone = attendanceTimeZone;
+            _deductionSweep = deductionSweep;
         }
 
         // ------------------------------------------------------------------
@@ -58,10 +64,10 @@ namespace Service.Services
         // ------------------------------------------------------------------
 
         public async Task<AttendanceListResponse> GetAttendanceAsync(
-            int? actorUserId, AttendanceListQuery query, CancellationToken cancellationToken = default)
+            int? actorUserId, AttendanceListQuery query, int? activeGymId = null, CancellationToken cancellationToken = default)
         {
             var actor = await ResolveActorAsync(actorUserId, cancellationToken);
-            var requestedGym = query.Gym ?? query.GymId;
+            var requestedGym = query.Gym ?? query.GymId ?? (actor.UserType == UserType.TopManagement ? null : activeGymId);
             await _accessControl.EnsurePermissionForGymAsync(actor.Id, "attendance.view", requestedGym, cancellationToken);
             var gymFilter = await ResolveGymFilterAsync(actor, requestedGym, cancellationToken);
 
@@ -81,7 +87,17 @@ namespace Service.Services
             }
             else
             {
-                employees = (await employeeRepo.GetAllAsync(new EmployeesForRosterSpec(gymFilter), cancellationToken)).ToList();
+                if (gymFilter is { Length: 1 } && await _teamScope.IsTeamScopedAsync(actor.Id, gymFilter[0], cancellationToken))
+                {
+                    var ledTeamId = await _teamScope.GetLedTeamIdAsync(actor.Id, gymFilter[0], cancellationToken);
+                    employees = ledTeamId.HasValue
+                        ? (await employeeRepo.GetAllAsync(new EmployeesByTeamSpec(ledTeamId.Value), cancellationToken)).ToList()
+                        : [];
+                }
+                else
+                {
+                    employees = (await employeeRepo.GetAllAsync(new EmployeesForRosterSpec(gymFilter), cancellationToken)).ToList();
+                }
             }
 
             var rows = await ComposeRowsAsync(employees, from, to, cancellationToken);
@@ -96,6 +112,7 @@ namespace Service.Services
 
             var total = rows.Count;
             var items = rows
+                .OrderByDescending(r => r.Date, StringComparer.Ordinal)
                 .Skip((page - 1) * pageSize)
                 .Take(pageSize)
                 .ToList();
@@ -161,6 +178,11 @@ namespace Service.Services
 
             await _unitOfWork.SaveChangesAsync(cancellationToken);
 
+            // The written day decides the deduction it carries: a late/absent mark
+            // raises a priced pending candidate for the branch, a clean mark drops
+            // one the sweep had raised earlier. Idempotent for that single day.
+            await _deductionSweep.SweepAsync(new[] { employee.Id }, date, date, cancellationToken);
+
             // Re-read so the response carries the loaded shift template; the
             // latest correction (if this day was corrected before) comes with it.
             record = await repo.GetByIdAsync(new AttendanceRecordByEmployeeDateSpec(employee.Id, date), cancellationToken)
@@ -220,6 +242,10 @@ namespace Service.Services
 
             await _unitOfWork.SaveChangesAsync(cancellationToken);
 
+            // The correction is authoritative for that day's deduction — a record
+            // corrected to On Time takes the pending auto-deduction with it.
+            await _deductionSweep.SweepAsync(new[] { record.EmployeeId }, record.Date, record.Date, cancellationToken);
+
             // Re-read so the response carries the just-written correction row.
             record = await repo.GetByIdAsync(new AttendanceRecordByIdWithDetailsSpec(recordId), cancellationToken)
                 ?? record;
@@ -243,7 +269,14 @@ namespace Service.Services
                 .GetByIdAsync(new EmployeeForAttendanceSpec(employeeId), cancellationToken)
                 ?? throw new NotFoundException("Employee not found.");
 
-            await _accessControl.EnsurePermissionForGymAsync(actor.Id, "attendance.view", employee.GymId, cancellationToken);
+            // Own attendance history is self-service; other readers need
+            // attendance.view on the employee's gym, and a team-scoped Team
+            // Leader only ever sees his team members (F2).
+            if (!await IsOwnEmployeeAsync(actor.Id, employeeId, cancellationToken))
+            {
+                await _accessControl.EnsurePermissionForGymAsync(actor.Id, "attendance.view", employee.GymId, cancellationToken);
+                await EnsureTeamScopeAsync(actor.Id, employee, cancellationToken);
+            }
 
             var page = Math.Max(query.Page, 1);
             var pageSize = query.PageSize <= 0 ? 31 : Math.Min(query.PageSize, MaxPageSize);
@@ -283,6 +316,32 @@ namespace Service.Services
                 Total = total,
                 TotalPages = total == 0 ? 0 : (int)Math.Ceiling(total / (double)pageSize),
             };
+        }
+
+        /// <summary>True when the employee row belongs to the caller's own login.</summary>
+        private async Task<bool> IsOwnEmployeeAsync(int actorUserId, int employeeId, CancellationToken cancellationToken)
+        {
+            var own = await _unitOfWork.GetRepository<Employee, int>()
+                .GetByIdAsync(new EmployeeByUserIdSpec(actorUserId), cancellationToken);
+            return own is not null && own.Id == employeeId;
+        }
+
+        /// <summary>
+        /// Team-scoped Team Leaders see only the members of the team they lead in
+        /// the employee's gym (F2); every other role is gym-wide already.
+        /// </summary>
+        private async Task EnsureTeamScopeAsync(int actorUserId, Employee employee, CancellationToken cancellationToken)
+        {
+            if (!await _teamScope.IsTeamScopedAsync(actorUserId, employee.GymId, cancellationToken))
+            {
+                return;
+            }
+
+            var ledTeamId = await _teamScope.GetLedTeamIdAsync(actorUserId, employee.GymId, cancellationToken);
+            if (ledTeamId is null || employee.TeamId != ledTeamId.Value)
+            {
+                throw new NotFoundException("Employee not found.");
+            }
         }
 
         // ------------------------------------------------------------------
@@ -331,12 +390,19 @@ namespace Service.Services
             {
                 for (var date = from; date <= to; date = date.AddDays(1))
                 {
-                    var shiftLabel = BuildShiftLabel(assignmentIndex.TryGetValue((employee.Id, date), out var assignment) ? assignment : null);
+                    assignmentIndex.TryGetValue((employee.Id, date), out var assignment);
+                    var shiftLabel = BuildShiftLabel(assignment);
+                    var isOffDay = assignment is null || IsOffAssignment(assignment);
 
                     if (recordIndex.TryGetValue((employee.Id, date), out var record))
                     {
                         correctionsByRecordId.TryGetValue(record.Id, out var correction);
-                        rows.Add(MapRow(record, employee, employee.Gym?.Name ?? string.Empty, correction, shiftLabel));
+                        var statusOverride = isOffDay
+                            && record.CheckInTime is null
+                            && record.CheckOutTime is null
+                            ? "Off"
+                            : null;
+                        rows.Add(MapRow(record, employee, employee.Gym?.Name ?? string.Empty, correction, shiftLabel, statusOverride));
                         continue;
                     }
 
@@ -344,10 +410,10 @@ namespace Service.Services
                 }
             }
 
-            // The grid opens grouped per employee, then chronologically.
+            // The grid opens grouped per employee, then newest first.
             return rows
                 .OrderBy(r => r.Name, StringComparer.OrdinalIgnoreCase)
-                .ThenBy(r => r.Date, StringComparer.Ordinal)
+                .ThenByDescending(r => r.Date)
                 .ToList();
         }
 
@@ -454,6 +520,11 @@ namespace Service.Services
                     totals.Late++;
                 }
 
+                if (row.Status == "Early Checkout")
+                {
+                    totals.Early++;
+                }
+
                 totals.Hours += WorkedHours(row);
                 totals.Expected += ExpectedHours(row.Shift);
             }
@@ -463,6 +534,7 @@ namespace Service.Services
                 Total = totals.Total,
                 Present = totals.Present,
                 Late = totals.Late,
+                Early = totals.Early,
                 Absent = totals.Absent,
                 Off = totals.Off,
                 Hours = (decimal)Math.Round(totals.Hours, 2),
@@ -475,6 +547,7 @@ namespace Service.Services
             public int Total;
             public int Present;
             public int Late;
+            public int Early;
             public int Absent;
             public int Off;
             public double Hours;
@@ -522,7 +595,12 @@ namespace Service.Services
         // ------------------------------------------------------------------
 
         private AttendanceListItem MapRow(
-            AttendanceRecord record, Employee employee, string gymName, AttendanceCorrection? latestCorrection, string? shiftLabel = null)
+            AttendanceRecord record,
+            Employee employee,
+            string gymName,
+            AttendanceCorrection? latestCorrection,
+            string? shiftLabel = null,
+            string? statusOverride = null)
         {
             var source = record.CheckInMethod.HasValue || record.CheckOutMethod.HasValue
                 ? ((record.CheckInMethod ?? record.CheckOutMethod) == AttendanceMethod.Manual ? "Manual" : "Biometric")
@@ -535,10 +613,13 @@ namespace Service.Services
                 Name = employee.FullName,
                 Gym = gymName,
                 Date = record.Date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
-                Shift = shiftLabel ?? BuildShiftLabelFromRecord(record),
+                // The compose always passes an assignment label ("Off" when none covers
+                // the day), which would bury the shift the record itself was pinned to —
+                // the record's own template wins whenever the assignment says nothing.
+                Shift = shiftLabel is null ? BuildShiftLabelFromRecord(record) : shiftLabel,
                 CheckIn = FormatPunch(record.CheckInTime),
                 CheckOut = FormatPunch(record.CheckOutTime),
-                Status = DisplayStatus(record.Status),
+                Status = statusOverride ?? DisplayStatus(record.Status),
                 Source = source,
                 Notes = record.Notes,
                 CorrectedBy = latestCorrection is null
@@ -587,8 +668,13 @@ namespace Service.Services
             return "Off";
         }
 
+        private static bool IsOffAssignment(ShiftAssignment assignment) =>
+            assignment.ShiftTemplateId is null
+            || assignment.ShiftTemplate is null
+            || assignment.ShiftTemplate.Name.Contains("off", StringComparison.OrdinalIgnoreCase);
+
         private static string BuildShiftLabel(ShiftAssignment? assignment) =>
-            assignment?.ShiftTemplate is not null
+            assignment is not null && !IsOffAssignment(assignment)
                 ? FormatShift(assignment.ShiftTemplate.StartTime, assignment.ShiftTemplate.EndTime)
                 : "Off";
 

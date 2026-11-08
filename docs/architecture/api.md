@@ -38,7 +38,11 @@ Every endpoint below requires a Bearer access token. Self reads/writes act on th
 
 ### GET /api/employees/{id}
 
-Profile of the employee (self, or with the `employees` grant): { id, fullName, position, status, employmentType, hireDate, dateOfBirth, nationalId, gender, address, phone, email, gym: { id, name, branch }, emergencyContact: { name, relationship, phone }, baseSalary }. Errors: 404.
+Directory detail of the employee (self, or with the `employees` grant): { id, name, position, level, status, employmentType, hireDate, email, phone, gym, … }. This is the HR directory shape; the portal's My Profile screen reads `/profile` below for the self-service shape.
+
+### GET /api/employees/{id}/profile
+
+The self-service profile contract (mock §2.1): { id, fullName, position, status, employmentType, hireDate, dateOfBirth, nationalId, gender, address, phone, email, gym: { id, name, branch }, emergencyContact: { name, relationship, phone }, photoUrl, baseSalary }. Self reads always work; another employee's profile follows the same scope rule as the directory detail. `photoUrl` is the avatar route URL or null when the profile still shows initials. Errors: 401, 404.
 
 ### PUT /api/employees/{id}/contact
 
@@ -62,7 +66,7 @@ Checklist: [{ key, label, documentId (null until uploaded) }] — one entry per 
 
 ### POST /api/employees/{id}/documents
 
-Self-only upload. Body: { category (Contract | NationalId | Certification | Other), fileName, filePath?, expiryDate? }. Returns 201 with the created document; 400 on unknown category or missing file name. This records the document's *metadata*; rows with no stored file report `canDownload: false` and their download route answers 404.
+Multipart upload of a document into the employee's vault. Self uploads need no permission key; uploading for another employee requires `employees.documents.manage` and the usual employee scope. Fields: `file` (PDF/PNG/JPG/JPEG/WEBP/DOC/DOCX, max 10 MB), `category` (Contract | NationalId | Certification | Other), `expiryDate?` (yyyy-MM-dd). Bytes are written through `IFileStorage` under the configured storage root (category `documents`), and the row records the size and media type so the download route serves the right type. Returns 200 with the created document: { id, name, category, status, uploadDate, expiryDate }. Errors: 400 (empty/unsupported file, unknown category, bad expiry), 401, 404. An orphaned file is deleted when the row insert fails.
 
 ### GET /api/employees/{id}/hr-documents
 
@@ -365,11 +369,11 @@ Permission: `employees.contract.manage`. Request: { level?, salary?, effectiveDa
 
 ### GET /api/employees/{id}/documents
 
-Permission: `employees.documents.view`. Returns 200 [{ name, category, status }] — category is the display label (Employment Contract, Identification, Certification, Other) and status is Valid (no expiry, or expiring more than 30 days out) or Expiring Soon. Errors: 401, 404.
+Permission: `employees.documents.view`, or self (no key). Returns 200 [{ id, name, category, status, uploadDate, expiryDate }] — category is the display label (Employment Contract, Identification, Certification, Other) and status is Valid (no expiry, or expiring more than 30 days out) or Expiring Soon. Errors: 401, 404.
 
 ### POST /api/employees/{id}/documents
 
-Permission: `employees.documents.manage`. Multipart upload: file (PDF/PNG/JPG/JPEG/WEBP/DOC/DOCX, max 10 MB), category (Employment Contract | Identification | Personal Photo | First Aid | Medical Fitness | Degree Certificate | Other; invalid → 400), expiryDate? (yyyy-MM-dd). Bytes are stored under App_Data/EmployeeDocuments/{id}/ (orphaned files are removed when the row insert fails); expiry drives the Valid/Expiring Soon status. Returns 200 { name, category, status }. Errors: 400 (empty file, wrong type, bad category/expiry), 401, 404.
+Self uploads need no permission key; another employee's file requires `employees.documents.manage`. Multipart upload: file (PDF/PNG/JPG/JPEG/WEBP/DOC/DOCX, max 10 MB), category (Employment Contract | Identification | Personal Photo | First Aid | Medical Fitness | Degree Certificate | Other; invalid → 400), expiryDate? (yyyy-MM-dd). Bytes are written through `IFileStorage` under the configured storage root (category `documents`) with the row's size and media type; an orphaned file is removed when the row insert fails. Expiry drives the Valid / Expiring Soon status. Returns 200 { id, name, category, status, uploadDate, expiryDate }. Errors: 400 (empty file, wrong type, bad category/expiry), 401, 404.
 
 ## Roles & Permissions
 
@@ -499,7 +503,7 @@ Authenticated with `X-Station-Token` (or a gym-scoped Bearer token). Same event 
 
 ### GET /api/attendance/station-summary
 
-Authenticated with `X-Station-Token` (station session) or a gym-scoped Bearer token. Today's counters and the most recent events for the station's gym - the kiosk dashboard data. Returns 200 { presentCount, scheduledTodayCount, records: [{ recordId, employeeId, employeeName, status (PRESENT/LEFT/DAY_OFF), lastEventType, lastEventTime, attendanceStatus, method }] }. 401 without a valid, gym-bound credential.
+Authenticated with `X-Station-Token` (station session) or a gym-scoped Bearer token. Today's counters and the staff roster for the station's gym — the kiosk dashboard data. The roster lists every employee scheduled with a real shift today, sorted by shift start, so the kiosk always shows who is expected even before they punch. Returns 200 { presentCount, scheduledTodayCount, records: [{ recordId?, employeeId, employeeName, status (SCHEDULED/PRESENT/LEFT/ABSENT), shiftName, shiftStart (HH:mm), shiftEnd (HH:mm), checkIn (HH:mm/null), checkOut (HH:mm/null), lateMinutes, earlyLeaveMinutes, method }] }, with times in the attendance timezone. `lateMinutes` counts from the shift start to the check-in; `earlyLeaveMinutes` counts from the check-out to the shift end. 401 without a valid, gym-bound credential.
 
 ### DELETE /api/gyms/{gymId}/station-sessions
 

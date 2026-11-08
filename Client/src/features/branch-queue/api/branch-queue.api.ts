@@ -99,17 +99,17 @@ function proposalQuery(params: ProposalListParams): string {
   return qs ? '?' + qs : ''
 }
 
-/** GET /api/warning-notices — HR review queue, newest first. */
+/** GET /api/warning-notices/queue — HR review queue, newest first. */
 export function getWarnings(
   params: ProposalListParams = {},
   signal?: AbortSignal,
 ): Promise<Paged<WarningNotice>> {
-  return apiRequest<Paged<WarningNotice>>(`/api/warning-notices${proposalQuery(params)}`, { signal })
+  return apiRequest<Paged<WarningNotice>>(`/api/warning-notices/queue${proposalQuery(params)}`, { signal })
 }
 
-/** GET /api/bonus-proposals — HR review queue, newest first. */
+/** GET /api/bonus-proposals/queue — HR review queue, newest first. */
 export function getBonuses(params: ProposalListParams = {}, signal?: AbortSignal): Promise<Paged<BonusProposal>> {
-  return apiRequest<Paged<BonusProposal>>(`/api/bonus-proposals${proposalQuery(params)}`, { signal })
+  return apiRequest<Paged<BonusProposal>>(`/api/bonus-proposals/queue${proposalQuery(params)}`, { signal })
 }
 
 /** GET /api/deduction-candidates — pending deduction lines, newest first. */
