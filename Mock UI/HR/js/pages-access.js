@@ -572,7 +572,7 @@ function renderReports() {
   const totalFilled = POS.reduce((s, p) => s + p.active, 0);
 
   // ---------- Requests ----------
-  const reqByType = ['Annual Leave', 'Early Leave', 'Late Attendance', 'Shift Swap'].map(t => ({ label: t, val: REQ.filter(r => r.type === t).length }));
+  const reqByType = ['Day Off', 'Leave Early', 'Late Arrival', 'Shift Swap'].map(t => ({ label: t, val: REQ.filter(r => r.type === t).length }));
   const reqMax = mathMax(...reqByType.map(r => r.val), 1);
   const reqPending = REQ.filter(r => r.status === 'Pending HR Review').length;
   const reqApproved = REQ.filter(r => r.status === 'Approved').length;

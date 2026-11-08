@@ -113,22 +113,22 @@ function attGenerate(entry, iso, reqs) {
   const today = iso === ATT_TODAY;
   const past = iso < ATT_TODAY;
 
-  const approvedDayOff = reqs.some(r => r.status === 'Approved' && r.type === 'Annual Leave');
-  const pendingDayOff = reqs.some(r => r.status !== 'Approved' && r.type === 'Annual Leave');
-  const approvedLate = reqs.some(r => r.status === 'Approved' && r.type === 'Late Attendance');
-  const approvedEarly = reqs.some(r => r.status === 'Approved' && r.type === 'Early Leave');
+  const approvedDayOff = reqs.some(r => r.status === 'Approved' && r.type === 'Day Off');
+  const pendingDayOff = reqs.some(r => r.status !== 'Approved' && r.type === 'Day Off');
+  const approvedLate = reqs.some(r => r.status === 'Approved' && r.type === 'Late Arrival');
+  const approvedEarly = reqs.some(r => r.status === 'Approved' && r.type === 'Leave Early');
 
   const rec = { employeeId: entry.empId, name: entry.name, gym: entry.gym, date: iso, shift: attShiftLabel(tpl), checkIn: null, checkOut: null, status: 'Off', source: '', notes: '' };
 
   // Scheduled off, or the day is covered by an approved day-off request.
   if (tpl.isOff) { rec.status = 'Off'; rec.notes = 'Scheduled off'; if (approvedDayOff) rec.notes = 'On approved leave'; return rec; }
-  if (approvedDayOff) { rec.status = 'Off'; rec.notes = 'Annual Leave approved'; return rec; }
+  if (approvedDayOff) { rec.status = 'Off'; rec.notes = 'Day Off approved'; return rec; }
   if (entry.empStatus === 'Suspended') { rec.status = 'Absent'; rec.notes = 'Suspended employee'; return rec; }
 
   // A day that has not happened yet: show the rostered shift, never invent punches.
   if (!past && !today) {
     rec.status = 'Scheduled';
-    rec.notes = pendingDayOff ? 'Annual Leave request pending' : 'Upcoming shift';
+    rec.notes = pendingDayOff ? 'Day Off request pending' : 'Upcoming shift';
     return rec;
   }
 
@@ -137,7 +137,7 @@ function attGenerate(entry, iso, reqs) {
   if (pendingDayOff) {
     // The request is not approved yet — the gym is short-handed, so the employee was expected.
     rec.status = roll < 0.12 ? 'Absent' : (roll < 0.32 ? 'Late' : 'On Time');
-    rec.notes = 'Annual Leave request still pending';
+    rec.notes = 'Day Off request still pending';
   } else if (roll < 0.07) {
     rec.status = 'Absent'; rec.notes = 'No punch recorded';
   } else if (roll < 0.26) {
@@ -202,14 +202,14 @@ function attDay(iso) {
     // Conflict detection between the request and what actually happened
     const flags = [];
     reqs.forEach(q => {
-      if (q.type === 'Annual Leave' && q.status === 'Approved' && rec.checkIn) flags.push({ tone: 'red', text: 'Punched in on an approved day off' });
-      if (q.type === 'Annual Leave' && q.status !== 'Approved' && rec.status === 'Absent') flags.push({ tone: 'amber', text: 'Absent — leave request not approved' });
-      if (q.type === 'Annual Leave' && q.status === 'Rejected' && rec.status === 'Off') flags.push({ tone: 'red', text: 'Off on a rejected request' });
-      if (q.type === 'Late Attendance' && q.status === 'Approved' && rec.status === 'On Time') flags.push({ tone: 'brand', text: 'Approved lateness — arrived on time' });
-      if (q.type === 'Late Attendance' && q.status !== 'Approved' && rec.status === 'Late') flags.push({ tone: 'amber', text: 'Late without an approved request' });
-      if (q.type === 'Early Leave' && q.status === 'Pending HR Review' && rec.checkIn && !rec.checkOut) flags.push({ tone: 'amber', text: 'Early Leave pending — still on the clock' });
-      if (q.type === 'Early Leave' && q.status === 'Approved' && rec.checkIn && rec.checkOut) flags.push({ tone: 'brand', text: 'Left early as approved' });
-      if (q.type !== 'Annual Leave' && rec.status === 'Off' && rec.notes === 'Scheduled off') flags.push({ tone: 'amber', text: q.type + ' requested on a scheduled day off' });
+      if (q.type === 'Day Off' && q.status === 'Approved' && rec.checkIn) flags.push({ tone: 'red', text: 'Punched in on an approved day off' });
+      if (q.type === 'Day Off' && q.status !== 'Approved' && rec.status === 'Absent') flags.push({ tone: 'amber', text: 'Absent — day-off request not approved' });
+      if (q.type === 'Day Off' && q.status === 'Rejected' && rec.status === 'Off') flags.push({ tone: 'red', text: 'Off on a rejected request' });
+      if (q.type === 'Late Arrival' && q.status === 'Approved' && rec.status === 'On Time') flags.push({ tone: 'brand', text: 'Approved lateness — arrived on time' });
+      if (q.type === 'Late Arrival' && q.status !== 'Approved' && rec.status === 'Late') flags.push({ tone: 'amber', text: 'Late without an approved request' });
+      if (q.type === 'Leave Early' && q.status === 'Pending HR Review' && rec.checkIn && !rec.checkOut) flags.push({ tone: 'amber', text: 'Leave Early pending — still on the clock' });
+      if (q.type === 'Leave Early' && q.status === 'Approved' && rec.checkIn && rec.checkOut) flags.push({ tone: 'brand', text: 'Left early as approved' });
+      if (q.type !== 'Day Off' && rec.status === 'Off' && rec.notes === 'Scheduled off') flags.push({ tone: 'amber', text: q.type + ' requested on a scheduled day off' });
     });
 
     return { entry, rec, tpl, reqs, flags, canEdit };
