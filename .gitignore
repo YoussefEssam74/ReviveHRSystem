@@ -58,6 +58,9 @@ __pycache__/
 *.py[cod]
 *.pyo
 
+## Test result
+Tests/Performance/
+
 
 # Local file storage root (avatars, employee documents) - never commit user files
 **/App_Data/storage/
