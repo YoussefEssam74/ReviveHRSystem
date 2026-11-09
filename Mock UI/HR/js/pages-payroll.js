@@ -102,6 +102,94 @@ function formatEGP(val) {
   return 'EGP ' + Number(val || 0).toLocaleString('en-US');
 }
 
+// Day-fraction deduction calculator: monthly base ÷ 22 working days = daily rate.
+function payrollDailyRateOf(item) { return Math.round(baseSalaryOf(item) / 22); }
+
+const DEDUCTION_DAY_PRESETS = {
+  amount:  { label: 'Manual amount', factor: null },
+  full:    { label: 'Full day',      factor: 1 },
+  half:    { label: 'Half day',      factor: 0.5 },
+  quarter: { label: 'Quarter day',   factor: 0.25 },
+  custom:  { label: 'Custom days',   factor: null }
+};
+
+// ==================== ATTENDANCE FACTS + EMPLOYEE-REQUEST ATTRIBUTES ====================
+// The request attributes mirror the official New Request type catalog that employees act on
+// (Annual Leave, Sick Leave, Late Attendance, Early Leave, Shift Swap, Weekly Off Swap,
+// Check-in Correction, Salary Advance, Paid Holiday).
+const REQUEST_ATTRS = [
+  { type: 'Annual Leave',        short: 'Annual',  tone: 'brand'  },
+  { type: 'Sick Leave',          short: 'Sick',    tone: 'amber'  },
+  { type: 'Paid Holiday',        short: 'Holiday', tone: 'green'  },
+  { type: 'Late Attendance',     short: 'Late',    tone: 'red'    },
+  { type: 'Early Leave',         short: 'Early',   tone: 'orange' },
+  { type: 'Shift Swap',          short: 'Swap',    tone: 'blue'   },
+  { type: 'Weekly Off Swap',     short: 'OffSw',   tone: 'indigo' },
+  { type: 'Check-in Correction', short: 'Corr',    tone: 'teal'   },
+  { type: 'Salary Advance',      short: 'Adv',     tone: 'purple' }
+];
+
+// Legacy HR request data still uses older type names — map them onto the official catalog.
+const LEGACY_REQUEST_TYPE = {
+  'Day Off': 'Annual Leave',
+  'Late Arrival': 'Late Attendance',
+  'Leave Early': 'Early Leave'
+};
+
+function officialRequestType(raw) { return LEGACY_REQUEST_TYPE[raw] || raw; }
+
+function attendanceOf(item) {
+  const a = item.attendance || {};
+  return {
+    actual: a.actual !== undefined ? a.actual : (item.days || 0),
+    weeklyOffs: a.weeklyOffs || 0
+  };
+}
+
+// Count each employee's requests per official type — the attributes HR can act on.
+function requestAttrCounts(item) {
+  const counts = {};
+  (MOCK.requests || [])
+    .filter(r => r.employee === item.name)
+    .forEach(r => {
+      const t = officialRequestType(r.type);
+      if (REQUEST_ATTRS.some(a => a.type === t)) counts[t] = (counts[t] || 0) + 1;
+    });
+  return counts;
+}
+
+function attendanceChip(label, value, tone, title) {
+  const tones = {
+    gray:   'bg-charcoal-100 text-charcoal-600',
+    blue:   'bg-blue-50 text-blue-700',
+    amber:  'bg-amber-50 text-amber-700',
+    green:  'bg-emerald-50 text-emerald-700',
+    brand:  'bg-brand-50 text-brand-700',
+    red:    'bg-red-50 text-red-700',
+    orange: 'bg-orange-50 text-orange-700',
+    indigo: 'bg-indigo-50 text-indigo-700',
+    teal:   'bg-teal-50 text-teal-700',
+    purple: 'bg-purple-50 text-purple-700'
+  };
+  return `<span class="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded ${tones[tone] || tones.gray}" title="${title || label}">
+    <span class="opacity-60">${label}</span><span class="font-bold">${value}</span>
+  </span>`;
+}
+
+function attendanceCell(item) {
+  const a = attendanceOf(item);
+  const counts = requestAttrCounts(item);
+  const reqChips = REQUEST_ATTRS
+    .filter(attr => counts[attr.type])
+    .map(attr => attendanceChip(attr.short, counts[attr.type], attr.tone, attr.type))
+    .join('');
+  return `<div class="flex items-center gap-1 flex-wrap py-0.5 max-w-[240px]">
+    ${attendanceChip('Att', a.actual, 'blue', 'Actual Attendance')}
+    ${attendanceChip('Off', a.weeklyOffs, 'gray', 'Weekly Days Off')}
+    ${reqChips ? `<span class="text-charcoal-300">·</span>${reqChips}` : ''}
+  </div>`;
+}
+
 // ==================== MAIN PAGE RENDERER ====================
 function renderPayroll() {
   const gym = getEffectivePayrollGym();
@@ -225,12 +313,13 @@ function renderPayrollOverviewTable(items, gym) {
           <span class="text-[10px] text-charcoal-500 font-semibold">${items.length} records</span>
         </div>
 
-        <div class="flex-1 min-h-0 overflow-y-auto">
-          <table class="w-full text-left border-collapse text-xs">
+        <div class="flex-1 min-h-0 overflow-y-auto overflow-x-auto">
+          <table class="w-full min-w-[900px] text-left border-collapse text-xs">
             <thead class="sticky top-0 z-10 bg-charcoal-50 border-b border-charcoal-200">
               <tr class="text-[10px] font-semibold text-charcoal-500 uppercase tracking-wider">
                 <th class="py-2 px-3">Employee</th>
                 <th class="py-2 px-3">Role</th>
+                <th class="py-2 px-3">Attendance &amp; Requests</th>
                 <th class="py-2 px-3 text-right">Base Salary</th>
                 <th class="py-2 px-3 text-right">OT &amp; Bonus</th>
                 <th class="py-2 px-3 text-right">Deductions</th>
@@ -262,6 +351,7 @@ function renderPayrollOverviewTable(items, gym) {
                       </div>
                     </td>
                     <td class="py-2 px-3 text-charcoal-600 font-medium">${it.position}</td>
+                    <td class="py-2 px-3">${attendanceCell(it)}</td>
                     <td class="py-2 px-3 text-right font-semibold text-charcoal-900">${formatEGP(base)}</td>
                     <td class="py-2 px-3 text-right text-emerald-600 font-semibold">+ ${formatEGP(additions)}</td>
                     <td class="py-2 px-3 text-right ${deds > 0 ? 'text-red-600' : 'text-charcoal-400'} font-semibold">
@@ -313,6 +403,14 @@ function renderPayrollSettlementSheet(item, items) {
   const gross = grossOf(item);
   const approvedDeds = approvedDedTotal(item);
   const net = netOf(item);
+
+  // Attendance facts + request attributes (same source as the overview table)
+  const att = attendanceOf(item);
+  const reqCounts = requestAttrCounts(item);
+  const reqAttrChips = REQUEST_ATTRS
+    .filter(attr => reqCounts[attr.type])
+    .map(attr => attendanceChip(attr.short, reqCounts[attr.type], attr.tone, attr.type))
+    .join('');
 
   return `
     <div class="h-full flex flex-col gap-2 overflow-hidden">
@@ -438,17 +536,31 @@ function renderPayrollSettlementSheet(item, items) {
 
             <!-- Inline Add Form if opened -->
             ${_showAddDeductionForm && canEditPayroll() ? `
-              <form onsubmit="savePayrollDeductionInline(event, '${item.employeeId}')" class="p-2 rounded bg-charcoal-50 border border-charcoal-200 mb-2 space-y-1.5 text-xs flex-shrink-0">
+              <form id="payroll-ded-form" onsubmit="savePayrollDeductionInline(event, '${item.employeeId}')" class="p-2 rounded bg-charcoal-50 border border-charcoal-200 mb-2 space-y-1.5 text-xs flex-shrink-0">
+                <input type="hidden" name="dailyRate" value="${payrollDailyRateOf(item)}" />
                 <div class="grid grid-cols-3 gap-1.5">
                   <select name="source" class="form-select text-[11px] py-0.5 px-1.5">
                     <option value="manager">Manager Operational Charge</option>
                     <option value="biometric">Biometric Penalty</option>
                   </select>
                   <input name="reason" required placeholder="Reason / Description" class="form-input text-[11px] py-0.5 px-1.5" />
-                  <div class="flex gap-1">
-                    <input name="amount" type="number" min="0" step="50" required placeholder="Amount (EGP)" class="form-input text-[11px] py-0.5 px-1.5 w-full" />
-                    <button type="submit" class="btn btn-sm btn-primary text-[10px] h-6 px-2 flex-shrink-0">Add</button>
+                  <select name="basis" onchange="togglePayrollDeductionBasis()" class="form-select text-[11px] py-0.5 px-1.5">
+                    <option value="amount">Manual amount</option>
+                    <option value="full">Full day</option>
+                    <option value="half">Half day</option>
+                    <option value="quarter">Quarter day</option>
+                    <option value="custom">Custom days…</option>
+                  </select>
+                </div>
+                <div class="flex items-center gap-1.5">
+                  <div id="dd-amount-wrap" class="flex-1 min-w-0">
+                    <input name="amount" type="number" min="0" step="50" placeholder="Amount (EGP)" oninput="updatePayrollDeductionPreview()" class="form-input text-[11px] py-0.5 px-1.5 w-full" />
                   </div>
+                  <div id="dd-days-wrap" class="flex-1 min-w-0 hidden">
+                    <input name="days" type="number" min="0.25" step="0.25" placeholder="Days (e.g. 1.5)" oninput="updatePayrollDeductionPreview()" class="form-input text-[11px] py-0.5 px-1.5 w-full" />
+                  </div>
+                  <span id="dd-preview" class="text-[10px] text-charcoal-500 font-semibold whitespace-nowrap">Daily rate: ${formatEGP(payrollDailyRateOf(item))}</span>
+                  <button type="submit" class="btn btn-sm btn-primary text-[10px] h-6 px-2 flex-shrink-0 ml-auto">Add Deduction</button>
                 </div>
               </form>
             ` : ''}
@@ -537,32 +649,25 @@ function renderPayrollSettlementSheet(item, items) {
               <span class="text-[10px] text-charcoal-400 font-semibold">${_payPeriod}</span>
             </div>
 
-            <div class="grid grid-cols-2 gap-x-3 gap-y-1 text-xs">
-              <div class="flex justify-between py-0.5 border-b border-charcoal-100">
-                <span class="text-charcoal-500">Days Attended</span>
-                <span class="font-bold text-charcoal-900">${item.days || 22} days</span>
+            <div class="grid grid-cols-3 gap-2 text-xs mb-2">
+              <div class="p-1.5 rounded bg-charcoal-50 border border-charcoal-100">
+                <span class="text-[10px] text-charcoal-500 block">Days Attended</span>
+                <span class="font-bold text-charcoal-900">${att.actual} days</span>
               </div>
-              <div class="flex justify-between py-0.5 border-b border-charcoal-100">
-                <span class="text-charcoal-500">Weekly Offs</span>
-                <span class="font-bold text-charcoal-900">4 days</span>
+              <div class="p-1.5 rounded bg-charcoal-50 border border-charcoal-100">
+                <span class="text-[10px] text-charcoal-500 block">Weekly Offs</span>
+                <span class="font-bold text-charcoal-900">${att.weeklyOffs} days</span>
               </div>
-              <div class="flex justify-between py-0.5 border-b border-charcoal-100">
-                <span class="text-charcoal-500">Approved Leaves</span>
-                <span class="font-bold text-charcoal-900">0 days</span>
-              </div>
-              <div class="flex justify-between py-0.5 border-b border-charcoal-100">
-                <span class="text-charcoal-500">Overtime Logged</span>
+              <div class="p-1.5 rounded bg-charcoal-50 border border-charcoal-100">
+                <span class="text-[10px] text-charcoal-500 block">Overtime Logged</span>
                 <span class="font-bold text-brand-700">${otHours} hrs</span>
               </div>
-              <div class="flex justify-between py-0.5">
-                <span class="text-charcoal-500">Late Arrivals</span>
-                <span class="font-bold ${deductions.some(d => d.source==='biometric') ? 'text-amber-600' : 'text-charcoal-900'}">
-                  1 incident
-                </span>
-              </div>
-              <div class="flex justify-between py-0.5">
-                <span class="text-charcoal-500">Unexcused Absences</span>
-                <span class="font-bold text-charcoal-900">0 days</span>
+            </div>
+
+            <div class="pt-2 border-t border-charcoal-150">
+              <span class="text-[10px] text-charcoal-500 font-semibold uppercase tracking-wide">Employee Requests · HR Action</span>
+              <div class="flex items-center gap-1 flex-wrap mt-1.5">
+                ${reqAttrChips || '<span class="text-[11px] text-charcoal-400">No requests logged for this employee.</span>'}
               </div>
             </div>
           </div>
@@ -577,7 +682,7 @@ function renderPayrollSettlementSheet(item, items) {
             <div class="space-y-1 text-xs">
               <div class="p-1.5 rounded bg-amber-50 border border-amber-200 flex items-center justify-between">
                 <div>
-                  <p class="font-bold text-amber-900 text-[11px]">Aug 19 (Late Arrival Exception)</p>
+                  <p class="font-bold text-amber-900 text-[11px]">Aug 19 (Late Attendance Exception)</p>
                   <p class="text-[10px] text-charcoal-500">Punch: 08:41 In → 16:02 Out · Terminal #1</p>
                 </div>
                 <button onclick="openPayrollAttendanceRef('ATT-2608-0417', '${item.employeeId}')" class="btn btn-sm btn-secondary text-[9px] h-5 px-1 font-bold">
@@ -684,6 +789,30 @@ function commitPayrollBonus(empId, rawVal) {
   showToast(`Bonus updated to ${formatEGP(item.bonus)}. Net pay recalculated.`);
 }
 
+function togglePayrollDeductionBasis() {
+  const form = document.getElementById('payroll-ded-form');
+  if (!form) return;
+  const basis = form.basis.value;
+  document.getElementById('dd-amount-wrap').classList.toggle('hidden', basis !== 'amount');
+  document.getElementById('dd-days-wrap').classList.toggle('hidden', basis !== 'custom');
+  updatePayrollDeductionPreview();
+}
+
+function updatePayrollDeductionPreview() {
+  const form = document.getElementById('payroll-ded-form');
+  if (!form) return;
+  const el = document.getElementById('dd-preview');
+  const daily = Number(form.dailyRate.value) || 0;
+  const basis = form.basis.value;
+  if (basis === 'amount') {
+    el.textContent = `Amount: ${formatEGP(Number(form.amount.value) || 0)}`;
+  } else {
+    const days = basis === 'custom' ? (Number(form.days.value) || 0)
+                                    : (DEDUCTION_DAY_PRESETS[basis] ? DEDUCTION_DAY_PRESETS[basis].factor : 0);
+    el.textContent = `${days} day${days === 1 ? '' : 's'} × ${formatEGP(daily)}/day = ${formatEGP(Math.round(daily * days))}`;
+  }
+}
+
 function savePayrollDeductionInline(e, empId) {
   e.preventDefault();
   if (!canEditPayroll()) { showToast('Requires payroll.edit permission', 'error'); return; }
@@ -693,23 +822,36 @@ function savePayrollDeductionInline(e, empId) {
 
   const form = e.target;
   const data = new FormData(form);
-  const amount = Math.max(0, Number(data.get('amount')) || 0);
+  const basis = data.get('basis') || 'amount';
+  const daily = Number(data.get('dailyRate')) || 0;
   const reason = String(data.get('reason') || '').trim();
   const source = data.get('source') === 'biometric' ? 'biometric' : 'manager';
 
+  let amount = 0;
+  let basisNote = '';
+  if (basis === 'amount') {
+    amount = Math.max(0, Number(data.get('amount')) || 0);
+  } else {
+    const days = basis === 'custom' ? Math.max(0, Number(data.get('days')) || 0)
+                                    : (DEDUCTION_DAY_PRESETS[basis] ? DEDUCTION_DAY_PRESETS[basis].factor : 0);
+    amount = Math.round(daily * days);
+    basisNote = `${days} day${days === 1 ? '' : 's'} @ ${formatEGP(daily)}/day`;
+  }
+
   if (!reason || !amount) {
-    showToast('Please specify reason and amount', 'error');
+    showToast(basis !== 'amount' && !amount ? 'Please enter the number of days' : 'Please specify reason and amount', 'error');
     return;
   }
 
   const newLine = {
     id: `dn-${item.employeeId}-${Date.now()}`,
     label: reason,
-    reason: reason,
+    reason: basisNote ? `${reason} — ${basisNote}` : reason,
     source: source,
     date: new Date().toISOString().slice(0, 10),
     amount: amount,
     status: 'Pending',
+    basis: basis,
     attendanceRef: source === 'biometric' ? 'ATT-MANUAL' : ''
   };
 

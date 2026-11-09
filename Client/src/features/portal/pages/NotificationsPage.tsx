@@ -209,7 +209,7 @@ export default function NotificationsPage() {
                   <div
                     className={cn(
                       'flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full',
-                      COLOR_CLASSES[notification.color] ?? 'bg-charcoal-100 text-charcoal-600',
+                      COLOR_CLASSES[notification.color ?? ''] ?? 'bg-charcoal-100 text-charcoal-600',
                     )}
                   >
                     <Icon className="h-3.5 w-3.5" aria-hidden="true" />

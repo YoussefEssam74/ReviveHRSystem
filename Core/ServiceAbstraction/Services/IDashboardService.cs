@@ -16,5 +16,13 @@ namespace ServiceAbstraction.Services
         /// the employee's primary gym as the fallback for unscoped sessions.
         /// </summary>
         Task<EmployeeDashboardDto> GetDashboardAsync(int userId, int? activeGymId, CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// HR portal dashboard (mock §1 HR): KPI strip (gyms/staff/pending
+        /// requests/actions), the Actions Needed decision cards (permission-gated
+        /// per card) and the per-gym branches oversight, all within the actor's
+        /// gym scope.
+        /// </summary>
+        Task<HrDashboardDto> GetHrDashboardAsync(int userId, int? activeGymId, CancellationToken cancellationToken = default);
     }
 }

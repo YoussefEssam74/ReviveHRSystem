@@ -2,7 +2,15 @@ import type { ButtonHTMLAttributes } from 'react'
 import { Loader2 } from 'lucide-react'
 import { cn } from '../../lib/utils'
 
-type ButtonVariant = 'primary' | 'secondary' | 'outline' | 'ghost' | 'danger' | 'dangerOutline' | 'link'
+type ButtonVariant =
+  | 'primary'
+  | 'secondary'
+  | 'outline'
+  | 'ghost'
+  | 'danger'
+  | 'dangerOutline'
+  | 'link'
+  | 'success'
 type ButtonSize = 'sm' | 'md' | 'lg'
 
 /**
@@ -17,6 +25,8 @@ const variantClasses: Record<ButtonVariant, string> = {
   danger: 'btn-danger',
   dangerOutline: 'btn-danger-outline',
   link: 'btn-link',
+  // Mock UI/HR "btn-success" (green approve).
+  success: 'btn-success',
 }
 
 const sizeClasses: Record<ButtonSize, string> = {

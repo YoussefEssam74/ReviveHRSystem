@@ -558,9 +558,17 @@ Endpoint reference: [`docs/architecture/api.md`](../architecture/api.md).
 
 ## B7. Escalated action requests (§9.4) — Swagger group **ActionRequests**, base `/api/action-requests`
 
-> No create endpoint (E20 is out of scope) — rows come from the Escalated tab's sources. To see rows you must hold the matching meta key (`employees.transfer`, `employees.compensation.manage`, `employees.role.assign`, `employees.offboard`, `employees.bulk_import`) or `events.view`.
+> Rows are raised with **POST /api/action-requests** (E20, implemented 2026-10-22) — creating needs the matching meta key (`employees.transfer`, `employees.compensation.manage`, `employees.role.assign`, `employees.offboard`, `employees.bulk_import`) on the target gym; reading (GET) needs any of those keys or `events.view`, and rows are filtered per held type + gym.
 
 - [ ] **GET /api/action-requests** — `?status=Pending`, `?actionType=` (Transfer | CompensationChange | RoleAssign | Offboard | BulkImport), `?gym=` — items carry `proposedDetails` (gym **names**), `justification`, `requestedBy`
+- [ ] **POST /api/action-requests** — E20 (201)
+
+  ```json
+  { "employeeId": 1, "actionType": "Transfer", "proposedDetails": { "fromGym": "Revive Main Gym", "toGym": "Revive Second Gym", "effectiveDate": "2026-11-01" }, "justification": "Shorter commute for the team" }
+  ```
+
+  - Missing meta key (or employee outside your gyms) → **401**; unknown `actionType`, blank justification, Transfer without a resolvable `toGym`, CompensationChange without `newSalary > 0`, Offboard without `lastDay`+`reason`, BulkImport without `source` → **400**
+  - Expect `{ data: { status: "Pending", … } }`, the row appears in `GET …?status=Pending`, and an `{Label} Request Created` audit row lands
 - [ ] **PUT /api/action-requests/{id}/approve** — executes the effect and marks the row **Approved**
   - Transfer → employee moves and "Gym Transfer Executed" audits; CompensationChange → "Compensation Updated"; RoleAssign → "System Role Assigned" (the role name must already exist — create it in A2); Offboard → a `Notice Period` separation case appears in B6 + "Offboarding Initiated"; BulkImport → "Bulk Import Executed"
   - Approve twice → **400** ("already been decided"); approve with the wrong meta key → 401

@@ -10,7 +10,7 @@ function toggleReqQuick(key) {
 }
 
 function adjustLeaveBal(r, delta) {
-  const key = r.type === 'Day Off' ? 'dayOff' : (r.type === 'Sick Leave' ? 'sick' : null);
+  const key = r.type === 'Annual Leave' ? 'dayOff' : (r.type === 'Sick Leave' ? 'sick' : null);
   if (!key) return;
   const lb = (MOCK.leaveBalances || {})[r.employee];
   if (!lb || !lb[key]) return;
@@ -130,9 +130,9 @@ function renderRequests() {
 }
 
 const REQ_ICONS = {
-  'Day Off': 'M8 7V3m8 4V3M3 11h18M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z',
-  'Leave Early': 'M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z',
-  'Late Arrival': 'M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z',
+  'Annual Leave': 'M8 7V3m8 4V3M3 11h18M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z',
+  'Early Leave': 'M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z',
+  'Late Attendance': 'M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z',
   'Shift Swap': 'M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4',
   'Resignation': 'M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1',
   'Sick Leave': 'M12 21a9 9 0 100-18 9 9 0 000 18zM12 8v8M8 12h8',
@@ -160,15 +160,15 @@ function reqRelDays(dateStr) {
 }
 
 function reqLeaveBalance(r) {
-  if (r.type !== 'Day Off' && r.type !== 'Sick Leave') return null;
-  const key = r.type === 'Day Off' ? 'dayOff' : 'sick';
+  if (r.type !== 'Annual Leave' && r.type !== 'Sick Leave') return null;
+  const key = r.type === 'Annual Leave' ? 'dayOff' : 'sick';
   const lb = (MOCK.leaveBalances || {})[r.employee];
   if (!lb || !lb[key]) return null;
   const used = lb[key].used, total = lb[key].total;
   const left = Math.max(0, total - used);
   const pending = r.status === 'Pending HR Review';
   const after = pending ? left - 1 : left;
-  return { used, total, left, after, pending, label: r.type === 'Day Off' ? 'Day-off balance' : 'Sick leave balance' };
+  return { used, total, left, after, pending, label: r.type === 'Annual Leave' ? 'Annual leave balance' : 'Sick leave balance' };
 }
 
 function reqBalanceStrip(r) {
@@ -212,20 +212,20 @@ function updateNewReqBalance() {
   const el = document.getElementById('new-req-bal'); if (!el) return;
   const name = document.getElementById('new-req-emp')?.value;
   const type = document.getElementById('new-req-type')?.value;
-  if (type !== 'Day Off' && type !== 'Sick Leave') { el.innerHTML = ''; return; }
-  const key = type === 'Day Off' ? 'dayOff' : 'sick';
+  if (type !== 'Annual Leave' && type !== 'Sick Leave') { el.innerHTML = ''; return; }
+  const key = type === 'Annual Leave' ? 'dayOff' : 'sick';
   const lb = (MOCK.leaveBalances || {})[name];
   if (!lb || !lb[key]) { el.innerHTML = ''; return; }
   const { used, total } = lb[key];
   const left = Math.max(0, total - used);
   const tone = left <= 0 ? 'text-red-600' : left === 1 ? 'text-yellow-600' : 'text-brand-600';
   const warn = left <= 0 ? ' — no balance left · HR decides paid/unpaid' : left === 1 ? ' — this uses the last day' : ' — deducted when approved';
-  el.innerHTML = `<div class="bg-charcoal-50 border border-charcoal-200 rounded-lg p-2.5"><p class="text-[9px] uppercase tracking-wide text-charcoal-500">${type === 'Day Off' ? 'Day-off' : 'Sick leave'} balance</p><p class="text-xs font-bold ${tone} mt-0.5">${left} <span class="text-charcoal-400 font-normal">of ${total} days left</span>${warn}</p></div>`;
+  el.innerHTML = `<div class="bg-charcoal-50 border border-charcoal-200 rounded-lg p-2.5"><p class="text-[9px] uppercase tracking-wide text-charcoal-500">${type === 'Annual Leave' ? 'Annual leave' : 'Sick leave'} balance</p><p class="text-xs font-bold ${tone} mt-0.5">${left} <span class="text-charcoal-400 font-normal">of ${total} days left</span>${warn}</p></div>`;
 }
 
 function reqUrgency(r) {
   if (r.type === 'Resignation') return 'Notice';
-  if (r.type === 'Late Arrival' || r.type === 'Leave Early' || r.type === 'Sick Leave') return 'Urgent';
+  if (r.type === 'Early Leave' || r.type === 'Late Attendance' || r.type === 'Sick Leave') return 'Urgent';
   if (r.bmDecision === 'Rejected') return 'Review';
   return 'Normal';
 }
@@ -512,7 +512,7 @@ function doBulkApprove() {
 function openNewRequest() {
   openModal('New Request', `<form onsubmit="event.preventDefault();submitNewRequest();" class="space-y-3">
     <div><label class="form-label">Employee</label><select id="new-req-emp" class="form-select" onchange="updateNewReqBalance()">${MOCK.employees.map(e=>`<option value="${e.name}">${e.name} (${e.gym})</option>`).join('')}</select></div>
-    <div><label class="form-label">Type</label><select id="new-req-type" class="form-select" onchange="updateNewReqBalance()"><option>Day Off</option><option>Sick Leave</option><option>Leave Early</option><option>Late Arrival</option><option>Shift Swap</option><option>Resignation</option></select></div>
+    <div><label class="form-label">Type</label><select id="new-req-type" class="form-select" onchange="updateNewReqBalance()"><option>Annual Leave</option><option>Sick Leave</option><option>Early Leave</option><option>Late Attendance</option><option>Shift Swap</option><option>Resignation</option></select></div>
     <div id="new-req-bal"></div>
     <div class="grid grid-cols-2 gap-3"><div><label class="form-label">Date</label><input id="new-req-date" type="date" class="form-input" value="2026-09-14"></div><div><label class="form-label">End / Last Day</label><input id="new-req-end" type="date" class="form-input" value="2026-09-16"></div></div>
     <div><label class="form-label">Reason</label><textarea id="new-req-reason" class="form-input" rows="2" placeholder="Reason..."></textarea></div>

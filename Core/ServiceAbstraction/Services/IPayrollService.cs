@@ -24,6 +24,9 @@ namespace ServiceAbstraction.Services
         /// <summary>Adds a Pending deduction line to an open period (payroll.edit) → 201.</summary>
         Task<CreateDeductionResponse> AddDeductionAsync(int? actorUserId, int periodId, int employeeId, CreateDeductionRequest request, CancellationToken cancellationToken = default);
 
+        /// <summary>Removes one deduction line from an open sheet (payroll.edit) — the exit-settlement ✕.</summary>
+        Task<RemoveDeductionResponse> RemoveDeductionAsync(int? actorUserId, int periodId, int employeeId, int lineId, CancellationToken cancellationToken = default);
+
         /// <summary>Closes &amp; settles one sheet — refuses while lines are pending (payroll.edit).</summary>
         Task<CloseEntryResponse> CloseEntryAsync(int? actorUserId, int periodId, int employeeId, CancellationToken cancellationToken = default);
 

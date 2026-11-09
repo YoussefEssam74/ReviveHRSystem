@@ -399,6 +399,9 @@ body {
 .btn-md { padding: 0.4375rem 0.875rem; }
 .btn-primary { background: #16a34a; color: white; border: 1px solid #16a34a; }
 .btn-primary:hover { background: #15803d; border-color: #15803d; }
+/* Mock UI/HR "btn-success" — the green approve action. */
+.btn-success { background: #06b664; color: white; border: 1px solid #06b664; }
+.btn-success:hover { background: #059a55; border-color: #059a55; }
 .btn-secondary { background: var(--color-white); color: var(--color-charcoal-700); border: 1px solid var(--color-charcoal-300); }
 .btn-secondary:hover { background: var(--color-charcoal-50); }
 .btn-danger { background: #dc2626; color: white; border: 1px solid #dc2626; }

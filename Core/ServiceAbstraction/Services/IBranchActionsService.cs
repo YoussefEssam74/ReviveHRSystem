@@ -48,5 +48,25 @@ namespace ServiceAbstraction.Services
 
         /// <summary>Sends a free-form report to HR (any employee may report; lands in the HR queue).</summary>
         Task SendReportAsync(int actorUserId, int? activeGymId, CreateBranchReportDto request, CancellationToken cancellationToken = default);
+
+        // ------------------------------------------------------------------
+        // HR-side review (requests.approve / requests.view)
+        // ------------------------------------------------------------------
+
+        /// <summary>Paged warning-notice review queue (requests.view).</summary>
+        Task<ProposalListResponse<WarningNoticeDto>> GetWarningsAsync(
+            int? actorUserId, ProposalListQuery query, CancellationToken cancellationToken = default);
+
+        /// <summary>Files or declines a warning notice (requests.approve).</summary>
+        Task<ReviewProposalResponse<WarningNoticeDto>> ReviewWarningAsync(
+            int? actorUserId, int noticeId, ReviewProposalRequest request, CancellationToken cancellationToken = default);
+
+        /// <summary>Paged bonus-proposal review queue (requests.view).</summary>
+        Task<ProposalListResponse<BonusProposalDto>> GetBonusesAsync(
+            int? actorUserId, ProposalListQuery query, CancellationToken cancellationToken = default);
+
+        /// <summary>Approves or declines a bonus proposal (requests.approve).</summary>
+        Task<ReviewProposalResponse<BonusProposalDto>> ReviewBonusAsync(
+            int? actorUserId, int proposalId, ReviewProposalRequest request, CancellationToken cancellationToken = default);
     }
 }

@@ -38,6 +38,11 @@ namespace Presentation.Controllers
             return StatusCode(StatusCodes.Status201Created, response);
         }
 
+        /// <summary>DELETE /api/payroll-periods/{periodId}/entries/{employeeId}/deductions/{lineId} — removes one line from an open sheet (payroll.edit).</summary>
+        [HttpDelete("{periodId:int}/entries/{employeeId:int}/deductions/{lineId:int}")]
+        public async Task<ActionResult<RemoveDeductionResponse>> RemoveDeduction(int periodId, int employeeId, int lineId, CancellationToken ct)
+            => Ok(await _service.RemoveDeductionAsync(GetActorUserId(), periodId, employeeId, lineId, ct));
+
         /// <summary>POST /api/payroll-periods/{periodId}/entries/{employeeId}/close — settle &amp; close the sheet (payroll.edit).</summary>
         [HttpPost("{periodId:int}/entries/{employeeId:int}/close")]
         public async Task<ActionResult<CloseEntryResponse>> CloseEntry(int periodId, int employeeId, CancellationToken ct)

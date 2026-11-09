@@ -5,11 +5,15 @@ using DomainLayer.Models.AttendanceModule.Enums;
 using DomainLayer.Models.EmployeeModule;
 using DomainLayer.Models.EmployeeModule.Enums;
 using DomainLayer.Models.NotificationModule;
+using DomainLayer.Models.OrganizationModule;
 using DomainLayer.Models.PayrollModule;
 using DomainLayer.Models.PayrollModule.Enums;
+using DomainLayer.Models.RecruitmentModule;
+using DomainLayer.Models.RecruitmentModule.Enums;
 using DomainLayer.Models.RequestModule;
 using DomainLayer.Models.RequestModule.Enums;
 using DomainLayer.Models.SchedulingModule;
+using DomainLayer.Models.UserModule.Enums;
 using Service.Specifications;
 using ServiceAbstraction.Services;
 using Shared.Authorization;
@@ -27,6 +31,7 @@ namespace Service.Services
         IUnitOfWork unitOfWork,
         ITeamScopeService teamScopeService,
         IUserAccessRepository userAccess,
+        IAccessControlService accessControl,
         IMapper mapper,
         TimeZoneInfo attendanceTimeZone,
         IAttendanceDeductionSweepService deductionSweep) : IDashboardService
@@ -331,6 +336,254 @@ namespace Service.Services
                 PresentToday = attendance.Count(a => a.Status == AttendanceStatus.OnTime || a.Status == AttendanceStatus.Late),
                 PendingRequests = requests.Count(r => r.Status == RequestStatus.Pending || r.Status == RequestStatus.PendingHRReview),
                 Absent = attendance.Count(a => a.Status == AttendanceStatus.Absent) + derivedAbsent
+            };
+        }
+
+        // ==================================================================
+        // HR portal dashboard (GET /api/dashboard/hr)
+        // ==================================================================
+
+        public async Task<HrDashboardDto> GetHrDashboardAsync(int userId, int? activeGymId, CancellationToken cancellationToken = default)
+        {
+            var user = await unitOfWork.GetRepository<DomainLayer.Models.UserModule.User, int>()
+                .GetByIdAsync(new UserByIdSpec(userId), cancellationToken)
+                ?? throw new DomainLayer.Exceptions.NotFoundException("User not found.");
+
+            // ADR-003: the caller's gym scope drives the whole aggregate; an
+            // active gym narrows it further (same rule as the employee variant).
+            var allowed = (await userAccess.GetGymAccessAsync(user.Id, cancellationToken)).Select(g => g.GymId).ToList();
+            var inScope = user.UserType == UserType.TopManagement
+                ? (activeGymId.HasValue ? new[] { activeGymId.Value } : Array.Empty<int>())
+                : (activeGymId.HasValue && allowed.Contains(activeGymId.Value) ? new[] { activeGymId.Value } : allowed.ToArray());
+
+            bool InScope(int gymId) => inScope.Length == 0 || inScope.Contains(gymId);
+
+            // ---- gyms + headcount (Branches Oversight + KPI) ----
+            var allGyms = await unitOfWork.GetRepository<Gym, int>().GetAllAsync(cancellationToken);
+            var scopedGyms = allGyms.Where(g => InScope(g.Id)).OrderBy(g => g.Name).ToList();
+            var employees = await unitOfWork.GetRepository<Employee, int>().GetAllAsync(cancellationToken);
+            var scopedEmployees = employees.Where(e => InScope(e.GymId)).ToList();
+            var employeeIds = scopedEmployees.Select(e => e.Id).ToList();
+            var nameById = scopedEmployees.ToDictionary(e => e.Id, e => e.FullName);
+            var gymNameById = scopedGyms.ToDictionary(g => g.Id, g => g.Name);
+
+            // ---- pending sources ----
+            var requests = employeeIds.Count == 0
+                ? new List<DomainLayer.Models.RequestModule.EmployeeRequest>()
+                : (await unitOfWork.GetRepository<DomainLayer.Models.RequestModule.EmployeeRequest, int>()
+                    .GetAllAsync(new RequestsByEmployeesSpec(employeeIds), cancellationToken)).ToList();
+            var pendingRequests = requests.Where(r => r.Status == RequestStatus.PendingHRReview).ToList();
+
+            var vacancies = new List<VacancyRequest>();
+            foreach (var gym in scopedGyms)
+            {
+                var gymVacancies = await unitOfWork.GetRepository<VacancyRequest, int>()
+                    .GetAllAsync(new VacancyRequestsByGymSpec(gym.Id), cancellationToken);
+                vacancies.AddRange(gymVacancies.Where(v => v.Status == VacancyRequestStatus.Pending));
+            }
+
+            var deductions = employeeIds.Count == 0
+                ? new List<DeductionCandidate>()
+                : (await unitOfWork.GetRepository<DeductionCandidate, int>()
+                    .GetAllAsync(new DeductionCandidatesByEmployeesSpec(employeeIds), cancellationToken)).Where(d => d.Status == DeductionStatus.Pending).ToList();
+            var warnings = employeeIds.Count == 0
+                ? new List<WarningNotice>()
+                : (await unitOfWork.GetRepository<WarningNotice, int>()
+                    .GetAllAsync(new WarningNoticesByEmployeesSpec(employeeIds), cancellationToken)).Where(w => w.Status == ProposalStatus.Pending).ToList();
+            var bonuses = employeeIds.Count == 0
+                ? new List<BonusProposal>()
+                : (await unitOfWork.GetRepository<BonusProposal, int>()
+                    .GetAllAsync(new BonusProposalsByEmployeesSpec(employeeIds), cancellationToken)).Where(b => b.Status == ProposalStatus.Pending).ToList();
+
+            // Contracts expiring within 30 days (the Contract Expiry action card).
+            var today = DateTime.UtcNow.Date;
+            var expiringContracts = scopedEmployees
+                .Where(e => e.ContractEndDate.HasValue
+                    && DateOnly.FromDateTime(today) <= e.ContractEndDate.Value
+                    && e.ContractEndDate.Value <= DateOnly.FromDateTime(today.AddDays(30)))
+                .ToList();
+
+            // Open payroll periods awaiting sign-off (payroll.approve gated below).
+            var openPeriods = new List<DomainLayer.Models.PayrollModule.PayrollPeriod>();
+            foreach (var gym in scopedGyms)
+            {
+                var periods = await unitOfWork.GetRepository<DomainLayer.Models.PayrollModule.PayrollPeriod, int>()
+                    .GetAllAsync(new PayrollPeriodsByGymSpec(gym.Id), cancellationToken);
+                openPeriods.AddRange(periods.Where(p => p.Status == PayrollPeriodStatus.Open));
+            }
+
+            // ---- permission-gated action cards ----
+            async Task<bool> CanAsync(string key)
+            {
+                try
+                {
+                    await accessControl.EnsurePermissionAsync(user.Id, key, cancellationToken);
+                    return true;
+                }
+                catch (DomainLayer.Exceptions.UnAuthorizedException)
+                {
+                    return false;
+                }
+            }
+
+            var actions = new List<HrDashboardActionDto>();
+
+            if (await CanAsync("requests.view"))
+            {
+                actions.AddRange(pendingRequests.Select(r => new HrDashboardActionDto
+                {
+                    Id = $"request-{r.Id}",
+                    Kind = "request",
+                    Badge = r.Type,
+                    BadgeClass = "badge-blue",
+                    Title = nameById.GetValueOrDefault(r.EmployeeId, "Unknown"),
+                    Subtitle = r.Type,
+                    Detail = r.Details,
+                    Date = r.SubmittedAt,
+                    GymId = scopedEmployees.FirstOrDefault(e => e.Id == r.EmployeeId)?.GymId,
+                    Gym = gymNameById.GetValueOrDefault(scopedEmployees.FirstOrDefault(e => e.Id == r.EmployeeId)?.GymId ?? 0),
+                }));
+            }
+
+            if (await CanAsync("recruitment.vacancy_request.approve"))
+            {
+                actions.AddRange(vacancies.Select(v => new HrDashboardActionDto
+                {
+                    Id = $"vacancy-{v.Id}",
+                    Kind = "vacancy",
+                    Badge = "Vacancy",
+                    BadgeClass = "badge-purple",
+                    Title = v.Position?.Title ?? "Position",
+                    Subtitle = $"{v.Headcount} head{(v.Headcount == 1 ? "" : "s")}",
+                    Detail = v.Justification,
+                    Date = v.SubmittedDate,
+                    GymId = v.GymId,
+                    Gym = gymNameById.GetValueOrDefault(v.GymId),
+                }));
+            }
+
+            if (await CanAsync("requests.view"))
+            {
+                actions.AddRange(deductions.Select(d => new HrDashboardActionDto
+                {
+                    Id = $"deduction-{d.Id}",
+                    Kind = "deduction",
+                    Badge = "Deduction",
+                    BadgeClass = "badge-yellow",
+                    Title = nameById.GetValueOrDefault(d.EmployeeId, "Unknown"),
+                    Subtitle = d.Reason,
+                    Detail = d.Note,
+                    Date = d.IssuedAt,
+                    GymId = scopedEmployees.FirstOrDefault(e => e.Id == d.EmployeeId)?.GymId,
+                    Gym = gymNameById.GetValueOrDefault(scopedEmployees.FirstOrDefault(e => e.Id == d.EmployeeId)?.GymId ?? 0),
+                }));
+                actions.AddRange(warnings.Select(w => new HrDashboardActionDto
+                {
+                    Id = $"warning-{w.Id}",
+                    Kind = "warning",
+                    Badge = "Warning",
+                    BadgeClass = "badge-red",
+                    Title = nameById.GetValueOrDefault(w.EmployeeId, "Unknown"),
+                    Subtitle = w.Type,
+                    Detail = w.Reason,
+                    Date = w.IssuedAt,
+                    GymId = scopedEmployees.FirstOrDefault(e => e.Id == w.EmployeeId)?.GymId,
+                    Gym = gymNameById.GetValueOrDefault(scopedEmployees.FirstOrDefault(e => e.Id == w.EmployeeId)?.GymId ?? 0),
+                }));
+                actions.AddRange(bonuses.Select(b => new HrDashboardActionDto
+                {
+                    Id = $"bonus-{b.Id}",
+                    Kind = "bonus",
+                    Badge = "Bonus",
+                    BadgeClass = "badge-green",
+                    Title = nameById.GetValueOrDefault(b.EmployeeId, "Unknown"),
+                    Subtitle = b.Reason,
+                    Detail = b.Note,
+                    Date = b.IssuedAt,
+                    GymId = scopedEmployees.FirstOrDefault(e => e.Id == b.EmployeeId)?.GymId,
+                    Gym = gymNameById.GetValueOrDefault(scopedEmployees.FirstOrDefault(e => e.Id == b.EmployeeId)?.GymId ?? 0),
+                }));
+            }
+
+            if (await CanAsync("employees.contract.manage"))
+            {
+                actions.AddRange(expiringContracts.Select(e => new HrDashboardActionDto
+                {
+                    Id = $"contract-{e.Id}",
+                    Kind = "contract",
+                    Badge = "Contract",
+                    BadgeClass = "badge-orange",
+                    Title = e.FullName,
+                    Subtitle = "Contract Expiry",
+                    Detail = $"Expires {e.ContractEndDate:yyyy-MM-dd}",
+                    Date = e.ContractEndDate.Value.ToDateTime(TimeOnly.MinValue),
+                    GymId = e.GymId,
+                    Gym = gymNameById.GetValueOrDefault(e.GymId),
+                }));
+            }
+
+            if (await CanAsync("payroll.approve"))
+            {
+                actions.AddRange(openPeriods.Select(p => new HrDashboardActionDto
+                {
+                    Id = $"payroll-{p.Id}",
+                    Kind = "payroll",
+                    Badge = "Payroll",
+                    BadgeClass = "badge-brand",
+                    Title = gymNameById.GetValueOrDefault(p.GymId, "Gym"),
+                    Subtitle = "Payroll Approval",
+                    Detail = "Period open — awaiting HR Manager sign-off.",
+                    Date = p.StartDate.ToDateTime(TimeOnly.MinValue),
+                    GymId = p.GymId,
+                    Gym = gymNameById.GetValueOrDefault(p.GymId),
+                }));
+            }
+
+            var ordered = actions.OrderByDescending(a => a.Date).ToList();
+
+            // ---- branches oversight rows (headcount + per-gym pending summary) ----
+            var branches = scopedGyms.Select(g =>
+            {
+                var gymRequests = pendingRequests.Count(r => scopedEmployees.FirstOrDefault(e => e.Id == r.EmployeeId)?.GymId == g.Id);
+                var gymDeductions = deductions.Count(d => scopedEmployees.FirstOrDefault(e => e.Id == d.EmployeeId)?.GymId == g.Id);
+                var gymWarnings = warnings.Count(w => scopedEmployees.FirstOrDefault(e => e.Id == w.EmployeeId)?.GymId == g.Id);
+                var gymBonuses = bonuses.Count(b => scopedEmployees.FirstOrDefault(e => e.Id == b.EmployeeId)?.GymId == g.Id);
+                var gymVacancies = vacancies.Count(v => v.GymId == g.Id);
+                var parts = new List<string>();
+                if (gymRequests > 0) parts.Add($"{gymRequests} request{(gymRequests == 1 ? "" : "s")}");
+                if (gymVacancies > 0) parts.Add($"{gymVacancies} vacanc{(gymVacancies == 1 ? "y" : "ies")}");
+                if (gymDeductions > 0) parts.Add($"{gymDeductions} deduction{(gymDeductions == 1 ? "" : "s")}");
+                if (gymWarnings > 0) parts.Add($"{gymWarnings} warning{(gymWarnings == 1 ? "" : "s")}");
+                if (gymBonuses > 0) parts.Add($"{gymBonuses} bonus{(gymBonuses == 1 ? "" : "es")}");
+
+                return new HrDashboardBranchDto
+                {
+                    GymId = g.Id,
+                    Name = g.Name,
+                    Location = g.Location,
+                    Headcount = scopedEmployees.Count(e => e.GymId == g.Id),
+                    PendingActions = parts.Count,
+                    Summary = parts.Count == 0 ? "All clear" : string.Join(" · ", parts),
+                };
+            }).ToList();
+
+            var greeting = DateTime.UtcNow.Hour < 12 ? "Good morning"
+                : DateTime.UtcNow.Hour < 17 ? "Good afternoon"
+                : "Good evening";
+
+            return new HrDashboardDto
+            {
+                Greeting = greeting,
+                UserName = user.UserName,
+                Kpis = new HrDashboardKpisDto
+                {
+                    TotalGyms = scopedGyms.Count,
+                    TotalStaff = scopedEmployees.Count,
+                    TotalPendingRequests = pendingRequests.Count,
+                    ActionsNeeded = ordered.Count,
+                },
+                Actions = ordered,
+                Branches = branches,
             };
         }
 

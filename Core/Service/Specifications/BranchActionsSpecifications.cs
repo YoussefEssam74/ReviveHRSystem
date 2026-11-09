@@ -1,5 +1,6 @@
 using DomainLayer.Contracts;
 using DomainLayer.Models.EmployeeModule;
+using DomainLayer.Models.EmployeeModule.Enums;
 using DomainLayer.Models.PayrollModule;
 
 namespace Service.Specifications
@@ -81,6 +82,54 @@ namespace Service.Specifications
             AddInclude(b => b.Employee);
             AddInclude(b => b.IssuedByUser);
             OrderByDescending = b => b.IssuedAt;
+        }
+    }
+
+    /// <summary>
+    /// The HR warning-notice review queue (GET /api/warning-notices): optional
+    /// status filter, gym scope through the owning employee, ordered newest-first
+    /// with employee/issuer/reviewer included. A take of 0 = count query.
+    /// </summary>
+    public sealed class WarningNoticeListSpec : BaseSpecification<WarningNotice, int>
+    {
+        public WarningNoticeListSpec(int[]? gymIds, int? gymId, ProposalStatus? status, int skip, int take)
+        {
+            Criteria = w =>
+                (gymIds == null || gymIds.Length == 0 || gymIds.Contains(w.Employee.GymId)) &&
+                (gymId == null || w.Employee.GymId == gymId) &&
+                (status == null || w.Status == status);
+
+            AddInclude(w => w.Employee);
+            AddInclude(w => w.IssuedByUser);
+            AddInclude(w => w.Reviewer!);
+            OrderByDescending = w => w.IssuedAt;
+
+            if (take > 0)
+            {
+                ApplyPaging(skip, take);
+            }
+        }
+    }
+
+    /// <summary>The HR bonus-proposal review queue (GET /api/bonus-proposals) — same shape as the warning queue.</summary>
+    public sealed class BonusProposalListSpec : BaseSpecification<BonusProposal, int>
+    {
+        public BonusProposalListSpec(int[]? gymIds, int? gymId, ProposalStatus? status, int skip, int take)
+        {
+            Criteria = b =>
+                (gymIds == null || gymIds.Length == 0 || gymIds.Contains(b.Employee.GymId)) &&
+                (gymId == null || b.Employee.GymId == gymId) &&
+                (status == null || b.Status == status);
+
+            AddInclude(b => b.Employee);
+            AddInclude(b => b.IssuedByUser);
+            AddInclude(b => b.Reviewer!);
+            OrderByDescending = b => b.IssuedAt;
+
+            if (take > 0)
+            {
+                ApplyPaging(skip, take);
+            }
         }
     }
 }

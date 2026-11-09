@@ -1,5 +1,7 @@
 using DomainLayer.Contracts;
+using DomainLayer.Exceptions;
 using DomainLayer.Models.UserModule;
+using DomainLayer.Models.UserModule.Enums;
 
 namespace Service.Specifications
 {
@@ -60,6 +62,57 @@ namespace Service.Specifications
         public PermissionCatalogSpec()
         {
             OrderBy = p => p.Area;
+        }
+    }
+
+    /// <summary>
+    /// The HR Team member list (GET /api/users): scoped to the actor's gyms,
+    /// staff-only by default (non-Employee user types — the screen lists HR staff,
+    /// the Employees directory covers the rest), optional name/email/username
+    /// search and an Active/Suspended filter, ordered by display name with the
+    /// EmployeeProfile included so names hydrate. Role, gym and permission data
+    /// come from IUserAccessRepository (join tables not reachable via the generic
+    /// repository). A take of 0 means "no paging" — the companion count query.
+    /// </summary>
+    public sealed class UserListSpec : BaseSpecification<User, int>
+    {
+        public UserListSpec(int[]? gymIds, string? type, string? search, bool? isActive, int skip, int take)
+        {
+            var term = string.IsNullOrWhiteSpace(search) ? null : search.Trim().ToLower();
+            var isAll = string.Equals(type?.Trim(), "all", StringComparison.OrdinalIgnoreCase);
+
+            UserType? userType = type?.Trim().ToLowerInvariant() switch
+            {
+                null or "" or "staff" or "all" => null,
+                "hr" => UserType.HR,
+                "topmanagement" => UserType.TopManagement,
+                "employee" => UserType.Employee,
+                var other => throw new BadRequestException($"Unknown user type '{other}'."),
+            };
+
+            // Staff-only default: the screen lists HR staff, the Employees
+            // directory covers self-service accounts.
+            var staffOnly = userType is null && !isAll;
+
+            // One predicate so EF can translate the whole thing to SQL —
+            // null locals are captured as parameters (constant conditions).
+            Criteria = u =>
+                (gymIds == null || gymIds.Length == 0 || u.UserGymAccesses.Any(ug => gymIds.Contains(ug.GymId))) &&
+                (userType == null || u.UserType == userType) &&
+                (!staffOnly || u.UserType != UserType.Employee) &&
+                (term == null
+                    || u.Email.ToLower().Contains(term)
+                    || u.UserName.ToLower().Contains(term)
+                    || (u.EmployeeProfile != null && u.EmployeeProfile.FullName.ToLower().Contains(term)))
+                && (isActive == null || u.IsActive == isActive);
+
+            AddInclude(u => u.EmployeeProfile!);
+            OrderBy = u => u.EmployeeProfile != null ? u.EmployeeProfile.FullName : u.UserName;
+
+            if (take > 0)
+            {
+                ApplyPaging(skip, take);
+            }
         }
     }
 }

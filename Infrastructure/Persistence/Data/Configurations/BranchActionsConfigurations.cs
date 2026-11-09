@@ -27,6 +27,13 @@ namespace Presistence.Data.Configurations
                    .HasForeignKey(w => w.IssuedBy)
                    .OnDelete(DeleteBehavior.Restrict);
 
+            builder.HasOne(w => w.Reviewer)
+                   .WithMany()
+                   .HasForeignKey(w => w.ReviewedBy)
+                   .OnDelete(DeleteBehavior.Restrict);
+
+            builder.Property(w => w.ReviewNote).HasMaxLength(1000);
+
             builder.HasIndex(w => new { w.EmployeeId, w.IssuedAt });
         }
     }
@@ -53,6 +60,13 @@ namespace Presistence.Data.Configurations
                    .WithMany()
                    .HasForeignKey(b => b.IssuedBy)
                    .OnDelete(DeleteBehavior.Restrict);
+
+            builder.HasOne(b => b.Reviewer)
+                   .WithMany()
+                   .HasForeignKey(b => b.ReviewedBy)
+                   .OnDelete(DeleteBehavior.Restrict);
+
+            builder.Property(b => b.ReviewNote).HasMaxLength(1000);
 
             builder.HasIndex(b => new { b.EmployeeId, b.IssuedAt });
         }

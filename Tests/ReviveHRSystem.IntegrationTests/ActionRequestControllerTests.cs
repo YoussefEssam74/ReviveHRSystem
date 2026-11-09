@@ -17,8 +17,9 @@ namespace ReviveHRSystem.IntegrationTests
     /// permission and is filtered per action type + gym; approve executes the
     /// proposed effect (gym move / compensation / role assign / offboard case /
     /// import audit) and marks the row Approved; reject requires a comment and
-    /// audits "{Label} Request Rejected". There is no create endpoint (E20 is out
-    /// of scope) — rows are seeded directly through TestDataBuilder.
+    /// audits "{Label} Request Rejected". POST creates the Pending escalation
+    /// the mock's "Request …" modals submit (E20), gated by the action type's
+    /// own meta key on the employee's gym.
     /// </summary>
     [Collection(ApiTestFixture.CollectionName)]
     public class ActionRequestControllerTests
@@ -383,6 +384,175 @@ namespace ReviveHRSystem.IntegrationTests
                 new { comment = "Changed my mind" }, scene.Token);
             var message = await AssertErrorAsync(again, HttpStatusCode.BadRequest);
             Assert.Contains("already been decided", message);
+        }
+
+        // ------------------------------------------------------------------
+        // POST /api/action-requests — the mock's "Request …" modals (E20)
+        // ------------------------------------------------------------------
+
+        [Fact]
+        public async Task Create_Transfer_Returns201Pending_FeedsTab_AndApprovesEndToEnd()
+        {
+            var destination = await NewBuilder().CreateGymWithStationAsync();
+            var scene = await CreateSceneAsync(new[] { destination }, "employees.transfer");
+
+            var response = await SendAsync(HttpMethod.Post, "/api/action-requests", new
+            {
+                employeeId = scene.Employee.EmployeeId,
+                actionType = "Transfer",
+                proposedDetails = new
+                {
+                    fromGym = scene.Gym.Name,
+                    toGym = destination.Name,
+                    effectiveDate = Days(3).ToString("yyyy-MM-dd"),
+                },
+                justification = "Shorter commute for the team",
+            }, scene.Token);
+
+            Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+            var data = (await ReadAsync(response)).GetProperty("data");
+            var requestId = data.GetProperty("id").GetInt32();
+            Assert.True(requestId > 0);
+            Assert.Equal("Pending", data.GetProperty("status").GetString());
+            Assert.Equal("Transfer", data.GetProperty("actionType").GetString());
+            Assert.Equal(scene.Employee.FullName, data.GetProperty("employee").GetString());
+            Assert.Equal("Shorter commute for the team", data.GetProperty("justification").GetString());
+            Assert.Equal(scene.Hr.Email.Split('@')[0], data.GetProperty("requestedBy").GetString());
+            var details = data.GetProperty("proposedDetails");
+            Assert.Equal(destination.Name, details.GetProperty("toGym").GetString());
+
+            // Feeds the Escalated tab…
+            var visible = await GetAsync("/api/action-requests?status=Pending", scene.Token);
+            Assert.Contains(ItemsOf(visible), i => i.GetProperty("id").GetInt32() == requestId);
+
+            // …is audited on submission…
+            Assert.True(await Db.AuditLogs.AnyAsync(a =>
+                a.Action == "Transfer Gym Request Created" && a.UserId == scene.Hr.UserId));
+
+            // …and approves end-to-end (the effect executes).
+            var approve = await SendAsync(HttpMethod.Put, $"/api/action-requests/{requestId}/approve", null, scene.Token);
+            Assert.Equal(HttpStatusCode.OK, approve.StatusCode);
+            var employee = await Db.Employees.AsNoTracking().SingleAsync(e => e.Id == scene.Employee.EmployeeId);
+            Assert.Equal(destination.GymId, employee.GymId);
+        }
+
+        [Fact]
+        public async Task Create_WithoutMetaKey_Returns401()
+        {
+            var scene = await CreateSceneAsync("events.view"); // read-only key, no transfer meta key
+
+            var response = await SendAsync(HttpMethod.Post, "/api/action-requests", new
+            {
+                employeeId = scene.Employee.EmployeeId,
+                actionType = "Transfer",
+                proposedDetails = new { toGym = "Anywhere" },
+                justification = "Should not be allowed",
+            }, scene.Token);
+
+            await AssertErrorAsync(response, HttpStatusCode.Unauthorized);
+        }
+
+        [Fact]
+        public async Task Create_ForEmployeeOutsideActorGymScope_Returns401()
+        {
+            var scene = await CreateSceneAsync("employees.transfer");
+            var otherGym = await NewBuilder().CreateGymWithStationAsync();
+            var outsider = await NewBuilder().CreateEmployeeAsync(otherGym); // HR has no access row here
+
+            var response = await SendAsync(HttpMethod.Post, "/api/action-requests", new
+            {
+                employeeId = outsider.EmployeeId,
+                actionType = "Transfer",
+                proposedDetails = new { toGym = scene.Gym.Name },
+                justification = "Cross-gym escalation attempt",
+            }, scene.Token);
+
+            await AssertErrorAsync(response, HttpStatusCode.Unauthorized);
+        }
+
+        [Fact]
+        public async Task Create_InvalidBodies_Return400()
+        {
+            var scene = await CreateSceneAsync("employees.transfer", "employees.bulk_import");
+
+            // Unknown action type.
+            var unknown = await SendAsync(HttpMethod.Post, "/api/action-requests", new
+            {
+                employeeId = scene.Employee.EmployeeId,
+                actionType = "Explosion",
+                justification = "Nope",
+            }, scene.Token);
+            var unknownMessage = await AssertErrorAsync(unknown, HttpStatusCode.BadRequest);
+            Assert.Contains("Unknown action type", unknownMessage);
+
+            // Transfer without a destination gym.
+            var noDestination = await SendAsync(HttpMethod.Post, "/api/action-requests", new
+            {
+                employeeId = scene.Employee.EmployeeId,
+                actionType = "Transfer",
+                proposedDetails = new { },
+                justification = "Where to?",
+            }, scene.Token);
+            var destinationMessage = await AssertErrorAsync(noDestination, HttpStatusCode.BadRequest);
+            Assert.Contains("destination gym", destinationMessage);
+
+            // Transfer to a gym that does not exist.
+            var badGym = await SendAsync(HttpMethod.Post, "/api/action-requests", new
+            {
+                employeeId = scene.Employee.EmployeeId,
+                actionType = "Transfer",
+                proposedDetails = new { toGym = "No Such Gym" },
+                justification = "Typo",
+            }, scene.Token);
+            var badGymMessage = await AssertErrorAsync(badGym, HttpStatusCode.BadRequest);
+            Assert.Contains("Unknown gym", badGymMessage);
+
+            // Bulk import without a source.
+            var noSource = await SendAsync(HttpMethod.Post, "/api/action-requests", new
+            {
+                actionType = "BulkImport",
+                proposedDetails = new { },
+                justification = "Import something",
+            }, scene.Token);
+            var sourceMessage = await AssertErrorAsync(noSource, HttpStatusCode.BadRequest);
+            Assert.Contains("source", sourceMessage);
+
+            // Missing justification (DataAnnotations → 400 envelope).
+            var noJustification = await SendAsync(HttpMethod.Post, "/api/action-requests", new
+            {
+                employeeId = scene.Employee.EmployeeId,
+                actionType = "Transfer",
+                proposedDetails = new { toGym = scene.Gym.Name },
+            }, scene.Token);
+            await AssertErrorAsync(noJustification, HttpStatusCode.BadRequest);
+        }
+
+        [Fact]
+        public async Task Create_CompensationChange_RequiresProposedSalary()
+        {
+            var scene = await CreateSceneAsync("employees.compensation.manage");
+
+            var missing = await SendAsync(HttpMethod.Post, "/api/action-requests", new
+            {
+                employeeId = scene.Employee.EmployeeId,
+                actionType = "CompensationChange",
+                proposedDetails = new { currentSalary = 10000 },
+                justification = "Raise request",
+            }, scene.Token);
+            var message = await AssertErrorAsync(missing, HttpStatusCode.BadRequest);
+            Assert.Contains("salary", message);
+
+            var ok = await SendAsync(HttpMethod.Post, "/api/action-requests", new
+            {
+                employeeId = scene.Employee.EmployeeId,
+                actionType = "CompensationChange",
+                proposedDetails = new { currentSalary = 10000, newSalary = 12500, effectiveDate = Days(5).ToString("yyyy-MM-dd") },
+                justification = "Promotion raise",
+            }, scene.Token);
+            Assert.Equal(HttpStatusCode.Created, ok.StatusCode);
+            var data = (await ReadAsync(ok)).GetProperty("data");
+            Assert.Equal("Pending", data.GetProperty("status").GetString());
+            Assert.Equal(12500m, data.GetProperty("proposedDetails").GetProperty("newSalary").GetDecimal());
         }
     }
 }

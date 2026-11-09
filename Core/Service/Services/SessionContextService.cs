@@ -4,6 +4,7 @@ using DomainLayer.Exceptions;
 using DomainLayer.Models.OrganizationModule;
 using DomainLayer.Models.OrganizationModule.Enums;
 using DomainLayer.Models.UserModule;
+using DomainLayer.Models.UserModule.Enums;
 using Microsoft.EntityFrameworkCore;
 using Service.Specifications;
 using ServiceAbstraction.Services;
@@ -162,6 +163,15 @@ namespace Service.Services
                 ledTeamId = await teamScopeService.GetLedTeamIdAsync(user.Id, activeGym.GymId, cancellationToken);
             }
 
+            // Feature levels follow the same key resolution the access token is issued
+            // with (GetPermissionKeysForGymAsync), so the SPA's gates and the API's
+            // guards can never disagree. Without a gym scope the global keys apply —
+            // the pre-selection case for multi-gym accounts.
+            var featureLevels = user.UserType == UserType.TopManagement
+                ? FeatureLevelCatalog.AllAtEdit()
+                : FeatureLevelCatalog.Resolve(
+                    await userAccess.GetPermissionKeysForGymAsync(user.Id, activeGym?.GymId, cancellationToken));
+
             return new MeResponse
             {
                 UserId = user.Id,
@@ -172,7 +182,8 @@ namespace Service.Services
                 Gyms = gyms,
                 RoleInActiveGym = roleInActiveGym,
                 LedTeamId = ledTeamId,
-                EmployeeId = employeeId
+                EmployeeId = employeeId,
+                FeatureLevels = featureLevels
             };
         }
 
