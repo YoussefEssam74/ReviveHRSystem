@@ -23,7 +23,7 @@ import { Button } from '../../../components/ui/button'
 import { useToast } from '../../../components/ui/toast'
 import { usePortalSession } from '../../../contexts/PortalSessionContext'
 import { ApiError, describeApiError } from '../../../lib/api-client'
-import { formatDate, formatDateWithYear, formatMoney, formatNumber, formatTime } from '../../../lib/format'
+import { formatDate, formatDateWithYear, formatMoney, formatNumber, formatTime, formatTimeLabel, formatTimeOfDay } from '../../../lib/format'
 import { getEmployeeDirectory } from '../api/branch.api'
 
 import { cn } from '../../../lib/utils'
@@ -264,11 +264,11 @@ function HrRow({ row, status }: { row: HrRequestItem; status: HrTab }) {
             </div>
             <p className="mt-0.5 text-[10px] text-charcoal-500">
               {row.type} · {rangeLabel(row.requestedDate, row.endDate)} · Submitted {formatDate(row.submittedDate)}
-              {row.requestTime ? ` · ${row.requestTime.slice(0, 5)}` : ''}
+              {row.requestTime ? ` · ${formatTimeOfDay(row.requestTime)}` : ''}
               {row.amount != null ? ` · ${formatMoney(row.amount)}` : ''}
             </p>
             {row.gym && <p className="mt-0.5 text-[10px] text-charcoal-400">Gym · {row.gym}</p>}
-            {row.reason && <p className="mt-0.5 line-clamp-2 text-[10px] text-charcoal-400">{row.reason}</p>}
+            {row.reason && <p className="mt-0.5 line-clamp-2 text-[10px] text-charcoal-400">{formatTimeLabel(row.reason)}</p>}
             {row.payment && !(row.type === 'Unscheduled Attendance' && isCoverDaysPayment(row.payment)) && (
               <p className="mt-0.5 text-[10px] text-charcoal-500">Payment: {row.payment}</p>
             )}
@@ -437,7 +437,7 @@ function HrDetailDrawer({ requestId, onClose }: { requestId: number; onClose: ()
           <Field label="Submitted on" value={formatDateWithYear(detail.submittedDate)} />
           <Field label="Requested for" value={rangeLabel(detail.requestedDate, detail.endDate)} />
           {detail.requestTime && (
-            <Field label="Time" value={detail.requestTime.slice(0, 5)} />
+            <Field label="Time" value={formatTimeOfDay(detail.requestTime)} />
           )}
           {detail.amount != null && (
             <Field label="Amount" value={formatMoney(detail.amount)} />
@@ -462,7 +462,7 @@ function HrDetailDrawer({ requestId, onClose }: { requestId: number; onClose: ()
         {detail.hasAttachment && <RequestAttachmentCard requestId={detail.id} type={detail.type} />}
         <div className="rounded-lg bg-charcoal-50 p-3">
           <p className="bento-label text-charcoal-500">Reason</p>
-          <p className="mt-1 text-xs text-charcoal-700">{detail.reason || 'No reason provided.'}</p>
+          <p className="mt-1 text-xs text-charcoal-700">{detail.reason ? formatTimeLabel(detail.reason) : 'No reason provided.'}</p>
         </div>
         <div>
           <p className="bento-label mb-1.5 text-charcoal-500">TIMELINE</p>
@@ -471,7 +471,7 @@ function HrDetailDrawer({ requestId, onClose }: { requestId: number; onClose: ()
               <li key={index} className="flex items-center gap-2 text-xs">
                 <span className={`h-1.5 w-1.5 rounded-full ${step.done ? 'bg-brand-500' : 'bg-charcoal-300'}`} />
                 <span className={step.done ? 'font-medium text-charcoal-900' : 'text-charcoal-500'}>{step.step}</span>
-                {step.date && <span className="text-[10px] text-charcoal-400">{step.date}</span>}
+                {step.date && <span className="text-[10px] text-charcoal-400">{formatTimeLabel(step.date)}</span>}
               </li>
             ))}
           </ol>
@@ -885,10 +885,10 @@ function DeskRow({ row, status }: { row: DeskRequestRow; status: DeskTab }) {
             </div>
             <p className="mt-0.5 text-[10px] text-charcoal-500">
               {row.type} · {rangeLabel(row.requestedDate, row.endDate)} · Submitted {formatDate(row.submittedDate)}
-              {row.requestTime ? ` · ${row.requestTime.slice(0, 5)}` : ''}
+              {row.requestTime ? ` · ${formatTimeOfDay(row.requestTime)}` : ''}
               {row.amount != null ? ` · ${formatMoney(row.amount)}` : ''}
             </p>
-            {row.reason && <p className="mt-0.5 line-clamp-2 text-[10px] text-charcoal-400">{row.reason}</p>}
+            {row.reason && <p className="mt-0.5 line-clamp-2 text-[10px] text-charcoal-400">{formatTimeLabel(row.reason)}</p>}
             {row.hasAttachment && (
               <span className="mt-1 inline-flex items-center gap-1 rounded-full bg-brand-50 px-2 py-0.5 text-[10px] font-medium text-brand-700">
                 <Paperclip className="h-3 w-3" aria-hidden="true" />
@@ -994,7 +994,7 @@ function DeskRow({ row, status }: { row: DeskRequestRow; status: DeskTab }) {
                   </p>
                   <p className="mt-0.5 text-xs font-semibold text-charcoal-900">
                     {row.requestTime
-                      ? row.requestTime.slice(0, 5)
+                      ? formatTimeOfDay(row.requestTime)
                       : row.submittedAt
                         ? formatTime(row.submittedAt)
                         : '—'}
@@ -1033,7 +1033,7 @@ function DeskRow({ row, status }: { row: DeskRequestRow; status: DeskTab }) {
               {row.reason && (
                 <div className="rounded-lg bg-charcoal-50 p-2.5">
                   <p className="bento-label text-charcoal-500">Reason</p>
-                  <p className="mt-0.5 text-xs text-charcoal-700">{row.reason}</p>
+                  <p className="mt-0.5 text-xs text-charcoal-700">{formatTimeLabel(row.reason)}</p>
                 </div>
               )}
               {decision === 'Approve' && row.type === 'Unscheduled Attendance' && (
@@ -1240,7 +1240,7 @@ function RequestDetailDrawer({
             </div>
           )}
           {detail.requestTime && (
-            <Field label="Time" value={detail.requestTime.slice(0, 5)} />
+            <Field label="Time" value={formatTimeOfDay(detail.requestTime)} />
           )}
           {detail.amount != null && (
             <Field label="Amount" value={formatMoney(detail.amount)} />
@@ -1265,7 +1265,7 @@ function RequestDetailDrawer({
         {detail.hasAttachment && <RequestAttachmentCard requestId={detail.id} type={detail.type} />}
         <div className="rounded-lg bg-charcoal-50 p-3">
           <p className="bento-label text-charcoal-500">Reason</p>
-          <p className="mt-1 text-xs text-charcoal-700">{detail.reason || 'No reason provided.'}</p>
+          <p className="mt-1 text-xs text-charcoal-700">{detail.reason ? formatTimeLabel(detail.reason) : 'No reason provided.'}</p>
         </div>
         <div>
           <p className="bento-label mb-1.5 text-charcoal-500">TIMELINE</p>
@@ -1274,7 +1274,7 @@ function RequestDetailDrawer({
               <li key={index} className="flex items-center gap-2 text-xs">
                 <span className={`h-1.5 w-1.5 rounded-full ${step.done ? 'bg-brand-500' : 'bg-charcoal-300'}`} />
                 <span className={step.done ? 'font-medium text-charcoal-900' : 'text-charcoal-500'}>{step.step}</span>
-                {step.date && <span className="text-[10px] text-charcoal-400">{step.date}</span>}
+                {step.date && <span className="text-[10px] text-charcoal-400">{formatTimeLabel(step.date)}</span>}
               </li>
             ))}
           </ol>

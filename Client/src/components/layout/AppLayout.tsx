@@ -55,7 +55,7 @@ export function AppLayout() {
             )}
 
             {session && canManageStationCodes(session.user.userType) && (
-              <NavLink to="/station-code" className={navLinkClass}>
+              <NavLink to="/console/station-code" className={navLinkClass}>
                 Station code
               </NavLink>
             )}

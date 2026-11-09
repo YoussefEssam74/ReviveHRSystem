@@ -118,3 +118,52 @@ roles guide described a 2-gym cap.
 employees (previously HR-only) and must refetch per-gym feature levels
 on switch (`GET /api/me` semantics). Tokens stay short-lived; a stolen
 switch-gym response only ever exposes one gym's data.
+
+---
+
+## Amendment 2 — 2026-11-09: Silent renewal is a session-level, cross-tab operation
+
+**Context.** Users reported being signed out 15–30 minutes after sign-in — i.e.
+exactly when the access token (15 min configured, 30 min default) expires. The
+API was behaving as designed; the SPA was destroying the session. Three
+client-side defects compounded:
+
+1. The shared silent refresh (`tryRefreshSession`) inherited the `AbortSignal` of
+   whichever request happened to trigger it. When that request was cancelled —
+   dev StrictMode remounting query observers, a route change, or a page unload —
+   the refresh `fetch` was aborted **after** the server had already rotated the
+   credential. The rotated token was discarded.
+2. Any `401`/`403` from `/api/auth/refresh` was treated as proof that the refresh
+   credential was dead, so the client called `clearSession()` — wiping the shared
+   `localStorage` session and bouncing every tab to `/login`. That is precisely
+   the "rotation grace" answer the server gives for a *benign* re-presentation,
+   which does **not** revoke the chain.
+3. Two tabs refreshing at the same moment both presented the same refresh token;
+   the loser received that same grace `401` and signed the user out. Measured at
+   4 of 6 runs before the fix.
+
+**Decisions (client only — the API contract below is unchanged):**
+
+1. **The silent refresh is never bound to a caller's abort signal.** It runs under
+   its own timeout and, because it mints the session's next credential and is
+   shared by every waiting request, a cancelled request must never cancel it.
+   The successful result is persisted even if the originating request is gone.
+2. **Refreshes are serialised across tabs** with the Web Locks API
+   (`navigator.locks`, lock name `revive.session.refresh`). A tab that waits for
+   the lock re-reads storage first and adopts the winner's rotated session
+   instead of presenting a spent token.
+3. **A `401`/`403` from the refresh endpoint ends the session only if the
+   presented credential is still the stored one.** Storage is re-read before that
+   conclusion; a newer session written by a sibling tab is adopted and the
+   request is retried with it.
+4. The server keeps rotation, the 60-second rotation grace, and the
+   single-live-chain sweep exactly as described above; nothing in this amendment
+   weakens refresh-token reuse detection.
+
+**Consequences.** No cancellation-driven path can discard a rotated credential or
+clear the session any more, and concurrent tabs converge on one live chain.
+Residual: if the browser loses the refresh response entirely (tab killed or a
+full document unload while the request is in flight), the client cannot recover
+the successor token without weakening reuse detection, and the user signs in
+again. `Client/e2e/ui/session-expiry-renewal.spec.ts` covers the slow-renewal,
+two-tab, and dead-credential cases.

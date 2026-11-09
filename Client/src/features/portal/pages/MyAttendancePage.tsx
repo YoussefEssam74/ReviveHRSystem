@@ -20,7 +20,7 @@ import { StatusBadge } from '../../../components/ui/badge'
 import { Badge, type BadgeColor } from '../../../components/ui/badge'
 import { usePortalSession } from '../../../contexts/PortalSessionContext'
 import { describeApiError } from '../../../lib/api-client'
-import { formatDate, formatDateWithYear, formatMoney } from '../../../lib/format'
+import { formatDate, formatDateWithYear, formatMoney, formatTimeLabel } from '../../../lib/format'
 import { PAGE_PATHS } from '../portal-nav'
 import { cn } from '../../../lib/utils'
 
@@ -738,7 +738,7 @@ function AttendanceDetailDrawer({
           <div>
             <p className="bento-label mb-1.5 text-charcoal-500">ATTENDANCE</p>
             <div className="space-y-2">
-              <DayRow label="Scheduled Shift" value={detail.shift} />
+              <DayRow label="Scheduled Shift" value={formatTimeLabel(detail.shift)} />
               <DayRow label="Check In" value={time12(detail.checkIn)} valueClass={detail.checkIn ? 'text-brand-600' : 'text-charcoal-400'} bold />
               <DayRow label="Check Out" value={time12(detail.checkOut)} bold />
               {detail.coverDays != null && (

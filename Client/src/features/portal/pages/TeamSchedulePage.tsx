@@ -28,6 +28,7 @@ import { Button } from '../../../components/ui/button'
 import { useToast } from '../../../components/ui/toast'
 import { usePortalSession } from '../../../contexts/PortalSessionContext'
 import { describeApiError } from '../../../lib/api-client'
+import { formatTimeOfDay } from '../../../lib/format'
 import { cn } from '../../../lib/utils'
 import { invalidateScheduleQueries, scheduleKeys } from '../api/schedule-keys'
 
@@ -1607,7 +1608,7 @@ function ShiftTemplateManagerModal({ gymId, onClose }: { gymId: number; onClose:
                       {t.name}
                     </span>
                     <span className="whitespace-nowrap text-[11px] text-charcoal-500">
-                      {t.start.slice(0, 5)} – {t.end.slice(0, 5)}
+                      {formatTimeOfDay(t.start)} – {formatTimeOfDay(t.end)}
                       {t.end < t.start ? ' (+1 day)' : ''}
                     </span>
                     <div className="ml-auto flex shrink-0 gap-1">

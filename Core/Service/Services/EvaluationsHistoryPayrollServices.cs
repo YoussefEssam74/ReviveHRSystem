@@ -757,7 +757,16 @@ namespace Service.Services
                 throw new NotFoundException("Payroll sheet not found.");
             }
 
-            return new PayslipResponse { Data = PayrollService.BuildPayslip(entry, onlyApproved: true) };
+            var summaries = await PayrollService.LoadAttendanceSummariesAsync(
+                unitOfWork, entry.PayrollPeriod, [employeeId], cancellationToken);
+
+            return new PayslipResponse
+            {
+                Data = PayrollService.BuildPayslip(
+                    entry,
+                    onlyApproved: true,
+                    summaries.GetValueOrDefault(employeeId)),
+            };
         }
 
         /// <summary>

@@ -18,7 +18,7 @@ import { useToast } from '../../../components/ui/toast'
 import { usePortalSession } from '../../../contexts/PortalSessionContext'
 import { apiRequest, describeApiError } from '../../../lib/api-client'
 import { cn } from '../../../lib/utils'
-import { formatDateWithYear, formatMoney, humanize } from '../../../lib/format'
+import { formatDateWithYear, formatMoney, formatTimeOfDay, humanize } from '../../../lib/format'
 
 /** MyTeamPage hands the viewer-known header data through location.state so a
  * Team Leader (no employees.view key) still gets a usable title bar. */
@@ -1193,7 +1193,7 @@ function AttendanceTab({ memberId }: { memberId: number }) {
                   )}
                 </p>
                 <p className="truncate text-[10px] text-charcoal-500">
-                  {item.checkIn ?? '—'} → {item.checkOut ?? '—'}
+                  {formatTimeOfDay(item.checkIn)} → {formatTimeOfDay(item.checkOut)}
                   {item.notes ? ` · ${item.notes}` : ''}
                 </p>
               </div>
@@ -1586,7 +1586,7 @@ function EditShiftModal({
                   {initialFor(day) == null && <option value={SHIFT_KEEP}>Not assigned</option>}
                   {templates.map((template) => (
                     <option key={template.id} value={String(template.id)}>
-                      {template.name} ({template.start.slice(0, 5)}–{template.end.slice(0, 5)})
+                      {template.name} ({formatTimeOfDay(template.start)}–{formatTimeOfDay(template.end)})
                     </option>
                   ))}
                   <option value={SHIFT_OFF}>Off</option>

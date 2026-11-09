@@ -162,8 +162,88 @@ type RefreshOutcome =
 
 let refreshPromise: Promise<RefreshOutcome> | null = null
 
-/** Attempts a single refresh using the stored refresh token; dedupes concurrent calls. */
-async function tryRefreshSession(session: StoredSession, signal?: AbortSignal): Promise<RefreshOutcome> {
+/**
+ * Origin-wide lock serialising silent refreshes across tabs. Every tab shares
+ * `revive.session`, so two tabs that 401 at the same moment would otherwise
+ * present the same refresh token: the winner rotates it and the loser is
+ * refused (the server's rotation grace answers a spent token with a plain 401,
+ * not a chain revocation) — which wiped the shared session and signed every
+ * tab out.
+ */
+const REFRESH_LOCK_NAME = 'revive.session.refresh'
+
+/** Runs `task` under the cross-tab refresh lock (directly where it is unavailable). */
+function withRefreshLock<T>(task: () => Promise<T>): Promise<T> {
+  const locks = (navigator as Navigator & { locks?: LockManager }).locks
+  return locks ? (locks.request(REFRESH_LOCK_NAME, task) as Promise<T>) : task()
+}
+
+/**
+ * One rotation attempt. Storage is re-read on both sides of the request: before
+ * it (a sibling tab may have rotated while this one waited for the lock) and
+ * after a 401/403 (a sibling may have rotated while this request was in
+ * flight). In both cases the sibling's session is adopted — the server refusing
+ * an already-rotated token does NOT mean the chain is dead.
+ */
+async function refreshOnce(initial: StoredSession, controller: AbortController): Promise<RefreshOutcome> {
+  let session = initial
+  const storedAtLock = loadStoredSession()
+  if (storedAtLock) {
+    if (storedAtLock.accessToken !== session.accessToken && storedAtLock.expiresAt > Date.now()) {
+      return { kind: 'refreshed', session: storedAtLock }
+    }
+    if (storedAtLock.refreshToken && storedAtLock.refreshToken !== session.refreshToken) session = storedAtLock
+  }
+  if (!session.refreshToken) return { kind: 'rejected' }
+
+  const response = await fetch(BASE_URL + '/api/auth/refresh', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+    body: JSON.stringify({ refreshToken: session.refreshToken }),
+    signal: controller.signal,
+  })
+
+  if (response.status === 401 || response.status === 403) {
+    const storedNow = loadStoredSession()
+    if (storedNow && storedNow.accessToken !== session.accessToken && storedNow.expiresAt > Date.now()) {
+      return { kind: 'refreshed', session: storedNow }
+    }
+    // Only now does the auth answer prove the stored refresh credential is dead.
+    return { kind: 'rejected' }
+  }
+  if (!response.ok) return { kind: 'unavailable' }
+  const json = (await response.json()) as {
+    accessToken?: string
+    expiresInSeconds?: number
+    refreshExpiresInSeconds?: number
+    refreshToken?: string
+    user?: StoredSession['user']
+  }
+  if (!json.accessToken) return { kind: 'unavailable' }
+  const next: StoredSession = {
+    accessToken: json.accessToken,
+    refreshToken: json.refreshToken ?? session.refreshToken,
+    expiresAt: Date.now() + (json.expiresInSeconds ?? 3600) * 1000,
+    refreshExpiresAt: json.refreshExpiresInSeconds
+      ? Date.now() + json.refreshExpiresInSeconds * 1000
+      : undefined,
+    user: json.user ?? session.user,
+  }
+  saveSession(next)
+  return { kind: 'refreshed', session: next }
+}
+
+/**
+ * Attempts a single silent refresh; dedupes concurrent callers in this tab.
+ *
+ * Deliberately NOT bound to any caller's AbortSignal: this refresh mints the
+ * session's next credential and is shared by every waiting request, so a
+ * navigation that cancels one of them must never cancel the rotation the server
+ * is already performing. Discarding that response left storage holding a spent
+ * token, and the next refresh was refused — the "signed out after 15–30 min"
+ * report this window removes.
+ */
+async function tryRefreshSession(session: StoredSession): Promise<RefreshOutcome> {
   if (!session.refreshToken) return { kind: 'rejected' }
   if (refreshPromise) return refreshPromise
   // Bound the refresh like every other request: a stalled refresh must settle
@@ -172,45 +252,12 @@ async function tryRefreshSession(session: StoredSession, signal?: AbortSignal): 
   refreshPromise = (async (): Promise<RefreshOutcome> => {
     const controller = new AbortController()
     const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
-    const onExternalAbort = () => controller.abort()
-    if (signal) {
-      if (signal.aborted) controller.abort()
-      else signal.addEventListener('abort', onExternalAbort, { once: true })
-    }
     try {
-      const response = await fetch(BASE_URL + '/api/auth/refresh', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-        body: JSON.stringify({ refreshToken: session.refreshToken }),
-        signal: controller.signal,
-      })
-      // Only an auth answer proves the refresh credential itself is dead.
-      if (response.status === 401 || response.status === 403) return { kind: 'rejected' }
-      if (!response.ok) return { kind: 'unavailable' }
-      const json = (await response.json()) as {
-        accessToken?: string
-        expiresInSeconds?: number
-        refreshExpiresInSeconds?: number
-        refreshToken?: string
-        user?: StoredSession['user']
-      }
-      if (!json.accessToken) return { kind: 'unavailable' }
-      const next: StoredSession = {
-        accessToken: json.accessToken,
-        refreshToken: json.refreshToken ?? session.refreshToken,
-        expiresAt: Date.now() + (json.expiresInSeconds ?? 3600) * 1000,
-        refreshExpiresAt: json.refreshExpiresInSeconds
-          ? Date.now() + json.refreshExpiresInSeconds * 1000
-          : undefined,
-        user: json.user ?? session.user,
-      }
-      saveSession(next)
-      return { kind: 'refreshed', session: next }
+      return await withRefreshLock(() => refreshOnce(session, controller))
     } catch {
       return { kind: 'unavailable' }
     } finally {
       clearTimeout(timer)
-      signal?.removeEventListener('abort', onExternalAbort)
       refreshPromise = null
     }
   })()
@@ -229,16 +276,16 @@ interface RenewalResult {
  * another tab already rotated — the captured session's refresh token is then
  * stale, and presenting it again trips the server's reuse detection.
  */
-async function renewBearer(session: StoredSession, signal?: AbortSignal): Promise<RenewalResult> {
+async function renewBearer(session: StoredSession): Promise<RenewalResult> {
   const storedNow = loadStoredSession()
   if (storedNow && storedNow.accessToken !== session.accessToken) {
     if (storedNow.expiresAt > Date.now()) return { retryToken: storedNow.accessToken, rejected: false }
-    const outcome = await tryRefreshSession(storedNow, signal)
+    const outcome = await tryRefreshSession(storedNow)
     if (outcome.kind === 'refreshed') return { retryToken: outcome.session.accessToken, rejected: false }
     return { retryToken: null, rejected: outcome.kind === 'rejected' }
   }
 
-  const outcome = await tryRefreshSession(session, signal)
+  const outcome = await tryRefreshSession(session)
   if (outcome.kind === 'refreshed') return { retryToken: outcome.session.accessToken, rejected: false }
   if (outcome.kind === 'rejected') return { retryToken: null, rejected: true }
 
@@ -315,7 +362,7 @@ export async function apiRequest<T>(path: string, options: RequestOptions & { fo
     if (response.status === 401 && !accessToken && !stationToken && !stationAuth
         && session && isAuthChallenge(response)
         && path !== '/api/auth/refresh' && path !== '/api/auth/login' && path !== '/api/auth/login/select-gym') {
-      const renewal = await renewBearer(session, signal)
+      const renewal = await renewBearer(session)
       if (renewal.retryToken) {
         return apiRequest<T>(path, { ...options, accessToken: renewal.retryToken })
       }
@@ -381,7 +428,7 @@ export async function apiDownload(
     // implicit session credential may end the session, and only once the server
     // has actually refused the refresh.
     if (response.status === 401 && !accessToken && isAuthChallenge(response) && session) {
-      const renewal = await renewBearer(session, signal)
+      const renewal = await renewBearer(session)
       if (renewal.retryToken) return apiDownload(path, signal, renewal.retryToken)
       if (renewal.rejected) {
         const storedOnChallenge = loadStoredSession()

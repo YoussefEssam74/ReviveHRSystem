@@ -24,7 +24,7 @@ import { usePortalSession } from '../../../contexts/PortalSessionContext'
 import { describeApiError } from '../../../lib/api-client'
 import { fetchAllPages } from '../../../lib/paged'
 import { cn } from '../../../lib/utils'
-import { formatDate, formatDateWithYear, formatMoney, humanize } from '../../../lib/format'
+import { formatDate, formatDateWithYear, formatMoney, formatTimeOfDay, humanize } from '../../../lib/format'
 
 /**
  * Employees Performance (mock §25 renderEmployeesPerformance): the whole roster
@@ -965,7 +965,7 @@ function DrillDeductions({
                         className="inline-flex items-center gap-1 rounded-md border border-charcoal-200 bg-charcoal-50 px-1.5 py-0.5 text-[10px] font-medium text-charcoal-700"
                       >
                         {request.type}
-                        {request.requestTime ? ` · ${request.requestTime.slice(0, 5)}` : ''}
+                        {request.requestTime ? ` · ${formatTimeOfDay(request.requestTime)}` : ''}
                         <StatusBadge status={requestStatusLabel(request.status)} />
                       </span>
                     ))}
@@ -1225,7 +1225,7 @@ function AttendanceRows({ history }: { history: EmployeeAttendanceResponse | und
             <div className="min-w-0">
               <p className="text-xs font-medium text-charcoal-900">{formatDateWithYear(item.date)}</p>
               <p className="truncate text-[10px] text-charcoal-500">
-                {item.checkIn ?? '—'} → {item.checkOut ?? '—'}
+                {formatTimeOfDay(item.checkIn)} → {formatTimeOfDay(item.checkOut)}
               </p>
             </div>
             <StatusBadge status={humanize(item.status)} />

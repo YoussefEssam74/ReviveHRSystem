@@ -32,6 +32,13 @@ export function getMe(signal?: AbortSignal): Promise<MeResponse> {
 export interface SwitchGymResponse {
   accessToken: string
   expiresInSeconds: number
+  /**
+   * The switch rotates the refresh credential to the target gym's scope. It must
+   * be persisted: without it the session has no silent refresh left and the user
+   * is signed out the moment the new access token expires.
+   */
+  refreshToken?: string
+  refreshExpiresInSeconds?: number
   me: MeResponse
 }
 

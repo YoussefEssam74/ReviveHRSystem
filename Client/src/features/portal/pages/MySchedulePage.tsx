@@ -10,6 +10,7 @@ import { ErrorState, LoadingState } from '../../../components/async-state'
 import { StatusBadge } from '../../../components/ui/badge'
 import { usePortalSession } from '../../../contexts/PortalSessionContext'
 import { describeApiError } from '../../../lib/api-client'
+import { formatTimeOfDay } from '../../../lib/format'
 import { cn } from '../../../lib/utils'
 
 const WEEKDAYS = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT']
@@ -50,14 +51,7 @@ function time12(value: string | null): string {
   return `${display}:${m ?? '00'} ${suffix}`
 }
 
-/** Short "8:00" → used inside tight calendar cells. */
-function timeShort(value: string | null): string {
-  if (!value) return '—'
-  const [h, m] = value.split(':')
-  const hour = Number(h)
-  if (Number.isNaN(hour)) return value
-  return `${hour % 12 === 0 ? 12 : hour % 12}:${m ?? '00'}`
-}
+/** Short "8:00 AM" → used inside tight calendar cells. */
 
 interface CellModel {
   date: string
@@ -193,7 +187,7 @@ export default function MySchedulePage() {
             : 'text-brand-600'
       return (
         <span className={cn('text-[8px] font-semibold', statusColor)}>
-          {timeShort(cell.att.checkIn)} → {timeShort(cell.att.checkOut)}
+          {formatTimeOfDay(cell.att.checkIn)} → {formatTimeOfDay(cell.att.checkOut)}
         </span>
       )
     }
@@ -383,7 +377,7 @@ function ScheduleCell({
         ) : cell.shiftName ? (
           <span className={cn('inline-flex rounded px-1 py-0.5', shiftPillClass(cell))}>
             <span className="text-[8px] font-bold leading-none">
-              {cell.shiftName} · {timeShort(cell.start)}–{timeShort(cell.end)}
+              {cell.shiftName} · {formatTimeOfDay(cell.start)}–{formatTimeOfDay(cell.end)}
             </span>
           </span>
         ) : (
@@ -550,7 +544,7 @@ function MobileDayCard({ cell, onNewRequest }: { cell: CellModel; onNewRequest: 
             {cell.isOff
               ? 'Off day'
               : cell.shiftName
-                ? `${cell.shiftName} · ${timeShort(cell.start)}–${timeShort(cell.end)}`
+                ? `${cell.shiftName} · ${formatTimeOfDay(cell.start)}–${formatTimeOfDay(cell.end)}`
                 : 'No shift published'}
           </p>
         </div>
@@ -562,7 +556,7 @@ function MobileDayCard({ cell, onNewRequest }: { cell: CellModel; onNewRequest: 
           )}
           {cell.att && (
             <p className="mt-1 text-[10px] text-charcoal-600">
-              {timeShort(cell.att.checkIn)} → {timeShort(cell.att.checkOut)}
+              {formatTimeOfDay(cell.att.checkIn)} → {formatTimeOfDay(cell.att.checkOut)}
             </p>
           )}
         </div>

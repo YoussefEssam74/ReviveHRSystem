@@ -24,6 +24,7 @@ import {
 import { useMe } from '../../../contexts/MeContext'
 import { describeApiError } from '../../../lib/api-client'
 import { cn } from '../../../lib/utils'
+import { formatTimeOfDay } from '../../../lib/format'
 import type { ShiftTemplate } from '../api/schedule.api'
 
 const WEEK_DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
@@ -319,7 +320,7 @@ export default function SchedulePage() {
                                 >
                                   {template.name}
                                   <span className="block text-[10px] opacity-80">
-                                    {template.start.slice(0, 5)}–{template.end.slice(0, 5)}
+                                    {formatTimeOfDay(template.start)}–{formatTimeOfDay(template.end)}
                                   </span>
                                 </span>
                               ) : (
@@ -372,7 +373,7 @@ export default function SchedulePage() {
                       <div className="min-w-0">
                         <p className="truncate text-sm font-medium text-slate-900">{template.name}</p>
                         <p className="text-xs text-slate-500">
-                          {template.start.slice(0, 5)} – {template.end.slice(0, 5)}
+                          {formatTimeOfDay(template.start)} – {formatTimeOfDay(template.end)}
                           {template.isOff ? ' · Off day' : ''}
                         </p>
                       </div>
@@ -515,7 +516,7 @@ export default function SchedulePage() {
         title="Delete shift template"
         description={
           deletingTemplate
-            ? `${deletingTemplate.name} · ${deletingTemplate.start.slice(0, 5)}–${deletingTemplate.end.slice(0, 5)}`
+            ? `${deletingTemplate.name} · ${formatTimeOfDay(deletingTemplate.start)}–${formatTimeOfDay(deletingTemplate.end)}`
             : undefined
         }
         footer={

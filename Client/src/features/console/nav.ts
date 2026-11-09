@@ -16,6 +16,7 @@ import {
   Sparkles,
   ShieldCheck,
   KeyRound,
+  Smartphone,
   type LucideIcon,
 } from 'lucide-react'
 import type { FeatureCode } from '../../lib/permissions'
@@ -47,6 +48,7 @@ export const ADMIN_NAV: NavItem[] = [
   { to: '/console/reports', label: 'Reports & Analytics', icon: BarChart3, feature: 'reports' },
   { to: '/console/positions', label: 'Positions & Levels', icon: Building2 },
   { to: '/console/schedule', label: 'Schedule', icon: CalendarDays, feature: 'schedule' },
+  { to: '/console/station-code', label: 'Station Code', icon: Smartphone },
   { to: '/console/events', label: 'Events', icon: Sparkles, feature: 'announcements' },
   { to: '/console/notifications', label: 'Notifications', icon: Bell },
   { to: '/console/audit', label: 'Audit Log', icon: ScrollText, feature: 'audit' },

@@ -61,6 +61,8 @@ const STATUS_COLORS: Record<string, BadgeColor> = {
   'on leave': 'orange',
   'notice period': 'orange',
   'early checkout': 'orange',
+  'covering (extra shift)': 'purple',
+  'cover / extra day': 'purple',
   off: 'gray',
   inactive: 'gray',
   disabled: 'gray',

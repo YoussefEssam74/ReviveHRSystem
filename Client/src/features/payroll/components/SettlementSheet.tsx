@@ -258,9 +258,13 @@ export default function SettlementSheet({ periodId, canEdit, onBack }: Settlemen
                     </div>
                   </div>
 
-                  <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-3 lg:grid-cols-6">
+                  <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-3 lg:grid-cols-4">
+                    <Fact label="Days worked" value={String(entry.days)} />
+                    <Fact label="Cover days" value={String(entry.coverDays)} />
+                    <Fact label="Extra shifts" value={String(entry.extraShiftDays)} />
                     <Fact label="Base salary" value={formatMoney(entry.baseSalary)} />
                     <Fact label="Overtime" value={`${entry.overtime} h`} />
+                    <Fact label="Cover pay" value={formatMoney(entry.coverPay)} />
                     <div>
                       <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Bonus</p>
                       {canEdit && !locked ? (

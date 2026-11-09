@@ -35,7 +35,8 @@ export function MeProvider({ children }: { children: ReactNode }) {
     queryKey: ['me'],
     queryFn: ({ signal }) => getMe(signal),
     enabled: authenticated,
-    // A 401 here means the token expired; api-client already cleared the session.
+    // A 401 here means the token expired; api-client renews it silently, and
+    // only clears the session once the refresh credential itself is refused.
     retry: false,
     staleTime: 60_000,
   })
@@ -65,9 +66,15 @@ export function MeProvider({ children }: { children: ReactNode }) {
       setIsSwitching(true)
       try {
         const response = await postSwitchGym(gymId)
-        // Store the rotated token scoped to the new gym.
+        // Store the rotated token scoped to the new gym — together with the
+        // rotated refresh credential. Dropping the refresh token here left the
+        // session unable to renew and signed the user out at access-token expiry.
         signIn({
           accessToken: response.accessToken,
+          refreshToken: response.refreshToken ?? session.refreshToken,
+          refreshExpiresAt: response.refreshExpiresInSeconds
+            ? Date.now() + response.refreshExpiresInSeconds * 1000
+            : session.refreshExpiresAt,
           expiresAt: Date.now() + (response.expiresInSeconds ?? DEFAULT_EXPIRES_IN_SECONDS) * 1000,
           user: {
             ...session.user,

@@ -101,7 +101,7 @@ export const router = createBrowserRouter([
       // HR-side: register faces for Face-ID attendance (auth session required).
       { path: '/enrollment', element: <Page><EnrollmentPage /></Page> },
       // HR/TopManagement: view + rotate the gym's station enrollment code.
-      { path: '/station-code', element: <Page><StationCodePage /></Page> },
+      { path: '/station-code', element: <Navigate to="/console/station-code" replace /> },
       // Role dashboards - /dashboard sends each role to its own page.
       { path: '/dashboard', element: <Page><DashboardPage /></Page> },
       { path: '/dashboard/top-management', element: <Page><RoleDashboardPage role="top-management" /></Page> },
@@ -136,6 +136,8 @@ export const router = createBrowserRouter([
       { path: 'reports', element: <Page><ReportsPage /></Page> },
       { path: 'positions', element: <Page><PositionsPage /></Page> },
       { path: 'schedule', element: <Page><SchedulePage /></Page> },
+      // HR/TopManagement: generate the 6-digit kiosk pairing code.
+      { path: 'station-code', element: <Page><StationCodePage /></Page> },
       { path: 'events', element: <Page><EventsPage /></Page> },
       { path: 'notifications', element: <Page><ConsoleNotificationsPage /></Page> },
       { path: 'audit', element: <Page><AuditPage /></Page> },

@@ -29,7 +29,7 @@ import { Drawer } from '../../../components/ui/drawer'
 import { StatusBadge, Badge, type BadgeColor } from '../../../components/ui/badge'
 import { usePortalSession } from '../../../contexts/PortalSessionContext'
 import { describeApiError } from '../../../lib/api-client'
-import { formatDate, formatMoney } from '../../../lib/format'
+import { formatDate, formatMoney, formatTimeOfDay } from '../../../lib/format'
 import { cn } from '../../../lib/utils'
 
 export default function MyPayrollPage() {
@@ -819,9 +819,9 @@ function detailSubline(row: PayrollDeductionDetail): string {
     pieces.push(row.shift)
   }
   if (row.kind === 'late' && row.minutesLate != null && row.minutesLate > 0) {
-    pieces.push(`${formatLateSpan(row.minutesLate)} late${row.checkInAt ? ` (${row.checkInAt} check-in)` : ''}`)
+    pieces.push(`${formatLateSpan(row.minutesLate)} late${row.checkInAt ? ` (${formatTimeOfDay(row.checkInAt)} check-in)` : ''}`)
   } else if (row.checkInAt) {
-    pieces.push(`${row.checkInAt} check-in`)
+    pieces.push(`${formatTimeOfDay(row.checkInAt)} check-in`)
   }
   return pieces.join('\n')
 }

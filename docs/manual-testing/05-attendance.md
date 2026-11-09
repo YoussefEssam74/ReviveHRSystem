@@ -9,7 +9,7 @@ Actors: `hrm`, `hr` (gym1), `emp` (negative), `admin`.
 
 Grid composition rule: one row per (employee, day) — **stored record wins**, otherwise
 derived (future → `Scheduled`, scheduled-off/approved Day Off/on leave → `Off`,
-else `Absent`). Punches display as `HH:mm` in `Attendance:TimeZoneId` (Africa/Cairo).
+else `Absent`). Punches display as 12-hour `h:mm AM/PM` in `Attendance:TimeZoneId` (Africa/Cairo).
 
 ---
 

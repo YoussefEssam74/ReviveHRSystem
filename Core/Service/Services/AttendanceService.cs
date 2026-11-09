@@ -226,7 +226,7 @@ namespace Service.Services
                         EmployeeId = r.Employee?.EmployeeNumber ?? r.EmployeeId.ToString(),
                         EmployeeName = r.Employee?.FullName ?? $"Employee #{r.EmployeeId}",
                         Status = status,
-                        ShiftName = "Cover / Extra Day",
+                        ShiftName = AttendanceManagementService.CoverDayStatus,
                         ShiftStart = "—",
                         ShiftEnd = "—",
                         CheckIn = checkIn?.ToString("HH:mm", CultureInfo.InvariantCulture),

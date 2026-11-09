@@ -33,6 +33,31 @@ export function formatTime(value: Date | string | number | null | undefined): st
   return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
 }
 
+/**
+ * API clock value ("HH:mm" / "HH:mm:ss" TimeOnly) → "8:08 PM".
+ * Display only: <input type="time"> values stay 24-hour.
+ */
+export function formatTimeOfDay(value: string | null | undefined): string {
+  if (!value) return '—'
+  const match = /^(\d{1,2}):(\d{2})/.exec(value)
+  if (!match) return value
+  const hour = Number(match[1])
+  if (Number.isNaN(hour) || hour > 23) return value
+  const suffix = hour >= 12 ? 'PM' : 'AM'
+  return `${hour % 12 === 0 ? 12 : hour % 12}:${match[2]} ${suffix}`
+}
+
+/** Re-formats every clock value inside an API-composed label: "Morning 08:00–16:00" → "Morning 8:00 AM–4:00 PM". */
+export function formatTimeLabel(value: string | null | undefined): string {
+  if (!value) return '—'
+  return value.replace(/\b(\d{1,2}):(\d{2})\b/g, (clock, hourPart: string, minutePart: string) => {
+    const hour = Number(hourPart)
+    if (Number.isNaN(hour) || hour > 23) return clock
+    const suffix = hour >= 12 ? 'PM' : 'AM'
+    return `${hour % 12 === 0 ? 12 : hour % 12}:${minutePart} ${suffix}`
+  })
+}
+
 /** "Today · 9:14 AM" / "Oct 12 · 8:47 AM" */
 export function formatDayTime(value: Date | string | number | null | undefined): string {
   const date = toDate(value)

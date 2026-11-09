@@ -10,6 +10,7 @@ using DomainLayer.Models.EmployeeModule;
 using DomainLayer.Models.EmployeeModule.Enums;
 using DomainLayer.Models.PayrollModule;
 using DomainLayer.Models.PayrollModule.Enums;
+using DomainLayer.Models.RequestModule;
 using DomainLayer.Models.UserModule;
 using Service.Specifications;
 using ServiceAbstraction.Services;
@@ -92,7 +93,8 @@ namespace Service.Services
                 .OrderBy(e => e.Employee.FullName, StringComparer.OrdinalIgnoreCase)
                 .ToList();
 
-            var data = BuildPeriodDetail(period, entries);
+            var data = BuildPeriodDetail(period, entries, await LoadAttendanceSummariesAsync(
+                _unitOfWork, period, entries.Select(e => e.EmployeeId).ToList(), cancellationToken));
             return new PayrollPeriodDetailResponse { Data = data };
         }
 
@@ -593,7 +595,10 @@ namespace Service.Services
 
             return new PayslipResponse
             {
-                Data = BuildPayslip(entry),
+                Data = BuildPayslip(
+                    entry,
+                    summary: (await LoadAttendanceSummariesAsync(_unitOfWork, period, [employeeId], cancellationToken))
+                        .GetValueOrDefault(employeeId)),
             };
         }
 
@@ -601,10 +606,12 @@ namespace Service.Services
         /// The mock §8 payslip card (period, money lines, deductions with statuses)
         /// shared by the HR preview and the portal's self-service payslip.
         /// </summary>
-        internal static PayslipData BuildPayslip(PayrollEntry entry, bool onlyApproved = false)
+        internal static PayslipData BuildPayslip(
+            PayrollEntry entry, bool onlyApproved = false, PayrollAttendanceSummary? summary = null)
         {
             var gross = GrossOf(entry);
             var approved = ApprovedDeductionsOf(entry);
+            var coverDays = summary?.CoverDays ?? 0;
             // Mock §8's "Annual Increase (10%)" card — the gym policy's raise slice
             // displayed alongside base salary (display info; net stays gross − lines).
             var annualPercent = entry.PayrollPeriod.Gym.AnnualIncreasePercent;
@@ -643,7 +650,10 @@ namespace Service.Services
                     })
                     .ToList(),
                 Net = gross - approved,
-                Days = entry.DaysWorked,
+                Days = summary is { DaysWorked: > 0 } ? summary.DaysWorked : entry.DaysWorked,
+                CoverDays = coverDays,
+                ExtraShiftDays = summary?.ExtraShiftDays ?? 0,
+                CoverPay = CoverPay(entry, coverDays),
                 Status = entry.Status,
             };
         }
@@ -731,10 +741,78 @@ namespace Service.Services
                 .OrderByDescending(e => e.PayrollPeriod.StartDate)
                 .ToList();
 
+            var summariesByPeriod = new Dictionary<int, Dictionary<int, PayrollAttendanceSummary>>();
+            foreach (var entryPeriod in rows.Select(e => e.PayrollPeriod).DistinctBy(p => p.Id))
+            {
+                summariesByPeriod[entryPeriod.Id] = await LoadAttendanceSummariesAsync(
+                    _unitOfWork, entryPeriod, [employeeId], cancellationToken);
+            }
+
             return new EmployeePayrollResponse
             {
-                Items = rows.Select(e => MapEntry(e, PeriodLabel(e.PayrollPeriod))).ToList(),
+                Items = rows
+                    .Select(e => MapEntry(
+                        e,
+                        PeriodLabel(e.PayrollPeriod),
+                        summariesByPeriod[e.PayrollPeriod.Id].GetValueOrDefault(e.EmployeeId)))
+                    .ToList(),
             };
+        }
+
+        /// <summary>Attendance facts for one employee over a payroll period.</summary>
+        internal sealed record PayrollAttendanceSummary(int DaysWorked, int ExtraShiftDays, int CoverDays);
+
+        /// <summary>Cover pay at the daily rate (base ÷ 30) for the approved cover days.</summary>
+        private static decimal CoverPay(PayrollEntry entry, int coverDays) =>
+            coverDays > 0 && entry.BaseSalary > 0
+                ? Math.Round(entry.BaseSalary / DeductionPricing.StandardDays * coverDays, 2)
+                : 0m;
+
+        /// <summary>
+        /// Days worked, days worked outside the schedule (cover / extra shifts), and
+        /// approved cover-day credits for the period — the month-end facts HR reads
+        /// before closing a payroll account. One query set for the whole period.
+        /// </summary>
+        internal static async Task<Dictionary<int, PayrollAttendanceSummary>> LoadAttendanceSummariesAsync(
+            IUnitOfWork unitOfWork,
+            PayrollPeriod period,
+            IReadOnlyCollection<int> employeeIds,
+            CancellationToken cancellationToken = default)
+        {
+            var ids = employeeIds.Distinct().ToArray();
+            if (ids.Length == 0)
+            {
+                return [];
+            }
+
+            var records = await unitOfWork.GetRepository<AttendanceRecord, int>()
+                .GetAllAsync(new AttendanceRecordsByEmployeeIdsRangeSpec(ids, period.StartDate, period.EndDate), cancellationToken);
+
+            var worked = records
+                .Where(r => r.CheckInTime is not null)
+                .GroupBy(r => r.EmployeeId)
+                .ToDictionary(g => g.Key, g => g.Count());
+            // The record pins the shift it was punched against; a null template means
+            // the punch happened on a day with no scheduled shift.
+            var extra = records
+                .Where(r => r.CheckInTime is not null && r.ScheduledShiftTemplateId is null)
+                .GroupBy(r => r.EmployeeId)
+                .ToDictionary(g => g.Key, g => g.Count());
+
+            var coverRequests = await unitOfWork.GetRepository<EmployeeRequest, int>()
+                .GetAllAsync(new ApprovedUnscheduledAttendanceByEmployeeIdsSpec(ids, period.StartDate, period.EndDate), cancellationToken);
+            var cover = coverRequests
+                .GroupBy(r => r.EmployeeId)
+                .ToDictionary(
+                    g => g.Key,
+                    g => g.Sum(r => r.OvertimeHoursRequested is > 0 ? (int)r.OvertimeHoursRequested.Value : 1));
+
+            return ids.ToDictionary(
+                id => id,
+                id => new PayrollAttendanceSummary(
+                    worked.GetValueOrDefault(id),
+                    extra.GetValueOrDefault(id),
+                    cover.GetValueOrDefault(id)));
         }
 
         /// <summary>True when the employee row belongs to the caller's own login.</summary>
@@ -909,7 +987,10 @@ namespace Service.Services
             };
         }
 
-        private static PayrollPeriodDetailData BuildPeriodDetail(PayrollPeriod period, List<PayrollEntry> entries)
+        private static PayrollPeriodDetailData BuildPeriodDetail(
+            PayrollPeriod period,
+            List<PayrollEntry> entries,
+            IReadOnlyDictionary<int, PayrollAttendanceSummary>? summaries = null)
         {
             var item = BuildPeriodItem(period, entries);
             return new PayrollPeriodDetailData
@@ -924,14 +1005,20 @@ namespace Service.Services
                 TotalGross = item.TotalGross,
                 TotalDeductions = item.TotalDeductions,
                 TotalNet = item.TotalNet,
-                Items = entries.Select(e => MapEntry(e)).ToList(),
+                Items = entries
+                    .Select(e => MapEntry(e, summary: summaries?.GetValueOrDefault(e.EmployeeId)))
+                    .ToList(),
             };
         }
 
-        private static PayrollEntryItem MapEntry(PayrollEntry entry, string? periodLabel = null)
+        private static PayrollEntryItem MapEntry(
+            PayrollEntry entry,
+            string? periodLabel = null,
+            PayrollAttendanceSummary? summary = null)
         {
             var gross = GrossOf(entry);
             var approved = ApprovedDeductionsOf(entry);
+            var coverDays = summary?.CoverDays ?? 0;
             return new PayrollEntryItem
             {
                 EmployeeId = entry.EmployeeId,
@@ -940,8 +1027,13 @@ namespace Service.Services
                 Gym = entry.Employee.Gym?.Name ?? string.Empty,
                 Position = entry.Employee.Position?.Title ?? "None",
                 EmploymentStatus = FriendlyEmployment(entry.Employee.Status),
-                Days = entry.DaysWorked,
+                // A period with attendance on record reports the real count; a
+                // historical sheet with no attendance rows keeps its stored value.
+                Days = summary is { DaysWorked: > 0 } ? summary.DaysWorked : entry.DaysWorked,
                 Overtime = entry.OvertimeHours,
+                CoverDays = coverDays,
+                ExtraShiftDays = summary?.ExtraShiftDays ?? 0,
+                CoverPay = CoverPay(entry, coverDays),
                 BaseSalary = entry.BaseSalary,
                 Bonus = entry.TotalBonuses,
                 Gross = gross,

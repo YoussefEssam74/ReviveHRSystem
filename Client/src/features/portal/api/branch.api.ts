@@ -113,6 +113,8 @@ export interface AttendanceGridRow {
   correctedAt: string | null
   /** Approved cover/extra days for an unscheduled punch (1 or 2), null otherwise. */
   coverDays: number | null
+  /** True when the day was worked without a scheduled shift (cover / extra shift). */
+  isCoverDay: boolean
 }
 
 export interface AttendanceGridParams {

@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react'
-import { CheckCircle2, LogOut, XCircle } from 'lucide-react'
+import { CheckCircle2, Clock3, LogOut, XCircle } from 'lucide-react'
 import type { StationSummaryRecord } from '../api/attendance.api'
 import { Button } from '../../../components/ui/button'
+import { formatTime, formatTimeOfDay } from '../../../lib/format'
+import { cn } from '../../../lib/utils'
 import type { AttendanceResult, FaceMatchDetail } from '../types'
 
 const STATUS_BADGE: Record<string, string> = {
@@ -21,11 +23,8 @@ const STATUS_LABEL: Record<string, string> = {
 function formatClock(value: string | null | undefined): string {
   if (!value) return '—'
   // The API sends the kiosk-local "HH:mm"; tolerate an ISO stamp from older payloads.
-  if (!value.includes('T')) return value
-  const date = new Date(value)
-  return Number.isNaN(date.getTime())
-    ? '—'
-    : date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+  if (!value.includes('T')) return formatTimeOfDay(value)
+  return formatTime(value)
 }
 
 /** One row of the kiosk roster: shift, punches, and lateness/early-leave minutes. */
@@ -57,17 +56,37 @@ export function FeedRow({ row }: { row: StationSummaryRecord }) {
         </div>
       </div>
 
-      <div className="mt-1 flex items-center justify-between gap-2 text-[10px]">
-        <span className="truncate text-charcoal-500">
-          {row.shiftName || 'Shift'} ·{' '}
-          <span className="font-mono tabular-nums">
-            {row.shiftStart || '—'}–{row.shiftEnd || '—'}
+      {/* Shift + punches, each on its own labelled line so the roster reads at a glance */}
+      <div className="mt-1.5 space-y-1 text-[10px]">
+        <div className="flex items-center justify-between gap-2">
+          <span className="flex min-w-0 items-center gap-1">
+            <Clock3 className="h-3 w-3 shrink-0 text-charcoal-400" aria-hidden="true" />
+            <span className="truncate font-semibold text-charcoal-700">{row.shiftName || 'Shift'}</span>
           </span>
-        </span>
-        <span className="flex shrink-0 items-center gap-2 font-mono tabular-nums">
-          <span className={row.checkIn ? 'text-charcoal-700' : 'text-charcoal-400'}>in {formatClock(row.checkIn)}</span>
-          <span className={row.checkOut ? 'text-charcoal-700' : 'text-charcoal-400'}>out {formatClock(row.checkOut)}</span>
-        </span>
+          <span className="shrink-0 font-mono tabular-nums text-charcoal-600">
+            {formatTimeOfDay(row.shiftStart)} – {formatTimeOfDay(row.shiftEnd)}
+          </span>
+        </div>
+        <div className="grid grid-cols-2 gap-1.5">
+          <span
+            className={cn(
+              'inline-flex items-center justify-between gap-1 rounded px-1.5 py-0.5 font-mono tabular-nums',
+              row.checkIn ? 'bg-emerald-50 text-emerald-700' : 'bg-charcoal-50 text-charcoal-400',
+            )}
+          >
+            <span className="font-sans text-[9px] font-bold uppercase tracking-wide">In</span>
+            {formatClock(row.checkIn)}
+          </span>
+          <span
+            className={cn(
+              'inline-flex items-center justify-between gap-1 rounded px-1.5 py-0.5 font-mono tabular-nums',
+              row.checkOut ? 'bg-sky-50 text-sky-700' : 'bg-charcoal-50 text-charcoal-400',
+            )}
+          >
+            <span className="font-sans text-[9px] font-bold uppercase tracking-wide">Out</span>
+            {formatClock(row.checkOut)}
+          </span>
+        </div>
       </div>
 
       {(late > 0 || early > 0) && (
@@ -244,7 +263,7 @@ export function useClock(): { time: string; date: string } {
   }, [])
 
   return {
-    time: now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+    time: now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', second: '2-digit', hour12: true }),
     date: now.toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'short' }),
   }
 }

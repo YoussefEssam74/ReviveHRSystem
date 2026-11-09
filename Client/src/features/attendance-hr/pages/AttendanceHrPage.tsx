@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { CalendarCheck } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
+import { CalendarCheck, Smartphone } from 'lucide-react'
 import { PageHeader } from '../../../components/ui/page-header'
 import { Card } from '../../../components/ui/card'
 import { Input } from '../../../components/ui/input'
@@ -16,11 +17,11 @@ import { Pagination } from '../../../components/ui/pagination'
 import { Table, TBody, TD, TH, THead, TR } from '../../../components/ui/table'
 import { useAttendance, useCorrectAttendance } from '../hooks/useAttendanceHr'
 import { useMe } from '../../../contexts/MeContext'
-import { formatTime } from '../../../lib/format'
+import { formatTimeLabel, formatTimeOfDay } from '../../../lib/format'
 import { describeApiError } from '../../../lib/api-client'
 import type { AttendanceRow } from '../api/attendance-hr.api'
 
-const STATUSES = ['', 'On Time', 'Late', 'Absent', 'Early Checkout', 'Missing Checkout', 'Off']
+const STATUSES = ['', 'On Time', 'Late', 'Absent', 'Early Checkout', 'Missing Checkout', 'Covering (Extra Shift)', 'Off']
 
 function todayIso(): string {
   return new Date().toISOString().slice(0, 10)
@@ -29,6 +30,7 @@ function todayIso(): string {
 /** HR attendance logs (A1) — date-range grid with per-record correction. */
 export default function AttendanceHrPage() {
   const { can, me } = useMe()
+  const navigate = useNavigate()
   const [date, setDate] = useState(todayIso())
   const [status, setStatus] = useState('')
   const [page, setPage] = useState(1)
@@ -101,6 +103,14 @@ export default function AttendanceHrPage() {
               </option>
             ))}
           </Select>
+          <Button
+            variant="secondary"
+            className="sm:ml-auto"
+            onClick={() => navigate('/console/station-code')}
+          >
+            <Smartphone className="h-4 w-4" aria-hidden="true" />
+            Pair kiosk
+          </Button>
         </div>
 
         {isLoading ? (
@@ -133,9 +143,9 @@ export default function AttendanceHrPage() {
                         </div>
                       </div>
                     </TD>
-                    <TD className="text-slate-500">{row.shift ?? '—'}</TD>
-                    <TD className="font-medium text-slate-900">{formatTime(row.checkIn)}</TD>
-                    <TD className="font-medium text-slate-900">{formatTime(row.checkOut)}</TD>
+                    <TD className="text-slate-500">{formatTimeLabel(row.shift)}</TD>
+                    <TD className="font-medium text-slate-900">{formatTimeOfDay(row.checkIn)}</TD>
+                    <TD className="font-medium text-slate-900">{formatTimeOfDay(row.checkOut)}</TD>
                     <TD>
                       <StatusBadge status={row.status} />
                       {row.correctedBy && <Badge className="mt-0.5">Corrected</Badge>}

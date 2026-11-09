@@ -43,8 +43,14 @@ export default function PayslipDialog({ periodId, employeeId, employeeName, onCl
           </div>
 
           <dl className="divide-y divide-slate-100 rounded-xl border border-slate-200 text-sm">
+            <PayslipRow label="Days worked" value={String(data.days)} />
             <PayslipRow label="Base salary" value={formatMoney(data.baseSalary)} />
             <PayslipRow label="Overtime" value={`${data.overtime} h · ${formatMoney(data.overtimePay)}`} />
+            <PayslipRow
+              label="Cover / extra shifts"
+              value={`${data.extraShiftDays} day${data.extraShiftDays === 1 ? '' : 's'} · ${data.coverDays} cover day${data.coverDays === 1 ? '' : 's'}`}
+            />
+            <PayslipRow label="Cover pay" value={formatMoney(data.coverPay)} />
             <PayslipRow label="Bonus" value={formatMoney(data.bonus)} />
             <PayslipRow label="Gross" value={formatMoney(data.gross)} />
           </dl>

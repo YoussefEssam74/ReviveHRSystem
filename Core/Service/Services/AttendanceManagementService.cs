@@ -36,6 +36,13 @@ namespace Service.Services
         private const int DefaultPageSize = 20;
         private const int MaxRangeDays = 62;
 
+        /// <summary>
+        /// Display status for a day worked with no scheduled shift (cover / extra
+        /// shift). The stored record keeps its own status; this is the label every
+        /// attendance surface shows so HR never reads a cover day as a normal one.
+        /// </summary>
+        public const string CoverDayStatus = "Covering (Extra Shift)";
+
         private readonly IUnitOfWork _unitOfWork;
         private readonly IAccessControlService _accessControl;
         private readonly IUserAccessRepository _userAccess;
@@ -305,6 +312,7 @@ namespace Service.Services
                     Status = r.Status,
                     Notes = r.Notes,
                     CoverDays = r.CoverDays,
+                    IsCoverDay = r.IsCoverDay,
                 })
                 .ToList();
 
@@ -399,13 +407,16 @@ namespace Service.Services
                     if (recordIndex.TryGetValue((employee.Id, date), out var record))
                     {
                         correctionsByRecordId.TryGetValue(record.Id, out var correction);
-                        var statusOverride = isOffDay
-                            && record.CheckInTime is null
-                            && record.CheckOutTime is null
-                            ? "Off"
-                            : null;
+                        // Worked on a day with no scheduled shift → cover / extra shift.
+                        var isCoverDay = isOffDay
+                            && (record.CheckInTime is not null || record.CheckOutTime is not null);
+                        var statusOverride = isCoverDay
+                            ? CoverDayStatus
+                            : isOffDay && record.CheckInTime is null && record.CheckOutTime is null
+                                ? "Off"
+                                : null;
                         coverByEmployeeDate.TryGetValue((employee.Id, date), out var coverDays);
-                        rows.Add(MapRow(record, employee, employee.Gym?.Name ?? string.Empty, correction, shiftLabel, statusOverride, coverDays));
+                        rows.Add(MapRow(record, employee, employee.Gym?.Name ?? string.Empty, correction, shiftLabel, statusOverride, coverDays, isCoverDay));
                         continue;
                     }
 
@@ -550,6 +561,16 @@ namespace Service.Services
                     totals.Early++;
                 }
 
+                if (row.CheckIn is not null)
+                {
+                    totals.DaysWorked++;
+                }
+
+                if (row.IsCoverDay)
+                {
+                    totals.ExtraShiftDays++;
+                }
+
                 totals.Hours += WorkedHours(row);
                 totals.Expected += ExpectedHours(row.Shift);
                 totals.CoverDays += row.CoverDays ?? 0;
@@ -566,6 +587,8 @@ namespace Service.Services
                 Hours = (decimal)Math.Round(totals.Hours, 2),
                 Expected = (decimal)Math.Round(totals.Expected, 2),
                 CoverDays = totals.CoverDays,
+                DaysWorked = totals.DaysWorked,
+                ExtraShiftDays = totals.ExtraShiftDays,
             };
         }
 
@@ -580,6 +603,8 @@ namespace Service.Services
             public double Hours;
             public double Expected;
             public int CoverDays;
+            public int DaysWorked;
+            public int ExtraShiftDays;
         }
 
         /// <summary>Worked hours from the punches; overnight spans roll past midnight.</summary>
@@ -629,7 +654,8 @@ namespace Service.Services
             AttendanceCorrection? latestCorrection,
             string? shiftLabel = null,
             string? statusOverride = null,
-            int? coverDays = null)
+            int? coverDays = null,
+            bool isCoverDay = false)
         {
             var source = record.CheckInMethod.HasValue || record.CheckOutMethod.HasValue
                 ? ((record.CheckInMethod ?? record.CheckOutMethod) == AttendanceMethod.Manual ? "Manual" : "Biometric")
@@ -659,6 +685,7 @@ namespace Service.Services
                     ? null
                     : latestCorrection.CorrectedAt.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
                 CoverDays = coverDays,
+                IsCoverDay = isCoverDay,
             };
         }
 

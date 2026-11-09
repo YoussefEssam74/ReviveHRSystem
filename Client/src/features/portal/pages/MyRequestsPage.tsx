@@ -11,7 +11,7 @@ import { Button } from '../../../components/ui/button'
 import { useToast } from '../../../components/ui/toast'
 import { usePortalSession } from '../../../contexts/PortalSessionContext'
 import { apiDownload, describeApiError } from '../../../lib/api-client'
-import { formatDate, formatDateWithYear } from '../../../lib/format'
+import { formatDate, formatDateWithYear, formatTimeLabel } from '../../../lib/format'
 import { cn } from '../../../lib/utils'
 
 type StatusFilter = 'All' | 'Pending' | 'Approved' | 'Rejected'
@@ -341,7 +341,7 @@ function RequestDetailDrawer({
 
           <div>
             <p className="bento-label mb-1">REASON</p>
-            <p className="rounded-lg bg-charcoal-50 p-2.5 text-xs text-charcoal-700">{detail.reason}</p>
+            <p className="rounded-lg bg-charcoal-50 p-2.5 text-xs text-charcoal-700">{detail.reason && formatTimeLabel(detail.reason)}</p>
           </div>
 
           {detail.bmComment && (
@@ -373,7 +373,7 @@ function RequestDetailDrawer({
                   </div>
                   <div className="pb-3">
                     <p className={cn('text-xs font-medium', step.done ? 'text-charcoal-900' : 'text-charcoal-400')}>{step.step}</p>
-                    <p className={cn('text-[10px]', step.done ? 'text-charcoal-500' : 'text-charcoal-400')}>{step.date}</p>
+                    <p className={cn('text-[10px]', step.done ? 'text-charcoal-500' : 'text-charcoal-400')}>{formatTimeLabel(step.date)}</p>
                   </div>
                 </div>
               ))}

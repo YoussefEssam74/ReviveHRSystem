@@ -849,10 +849,6 @@ function renderAttendance() {
           <option value="all" ${_attGym === 'all' ? 'selected' : ''}>All Gyms</option>
           ${gyms.map(g => `<option value="${attEsc(g)}" ${_attGym === g ? 'selected' : ''}>${attEsc(g)}</option>`).join('')}
         </select>
-        <button onclick="attExportDay()" class="btn btn-sm btn-secondary" style="height:24px;font-size:10px" title="Export the selected day as CSV">
-          <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 15V3"/></svg>
-          Export
-        </button>
         <button onclick="openPairStationModal()" class="btn btn-sm btn-secondary flex items-center gap-1" style="height:24px;font-size:10px" title="Generate 6-digit code to pair attendance kiosk">
           <svg class="w-3 h-3 text-brand-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z"/></svg>
           Pair Kiosk

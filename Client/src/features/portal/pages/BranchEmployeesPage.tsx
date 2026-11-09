@@ -20,7 +20,7 @@ import { usePortalSession } from '../../../contexts/PortalSessionContext'
 import { describeApiError } from '../../../lib/api-client'
 import { fetchAllPages } from '../../../lib/paged'
 import { cn } from '../../../lib/utils'
-import { humanize } from '../../../lib/format'
+import { formatTimeOfDay, humanize } from '../../../lib/format'
 
 /**
  * Employees directory (mock §11 renderEmployees): the branch roster with the
@@ -321,8 +321,8 @@ function EmployeeRow({
         <StatusBadge status={employmentLabel(row.status)} />
       </td>
       <td>{todayRow ? <StatusBadge status={todayRow.status} /> : <span className="text-xs text-charcoal-400">—</span>}</td>
-      <td className="text-right text-xs">{todayRow?.checkIn ?? '—'}</td>
-      <td className="text-right text-xs">{todayRow?.checkOut ?? '—'}</td>
+      <td className="text-right text-xs">{formatTimeOfDay(todayRow?.checkIn)}</td>
+      <td className="text-right text-xs">{formatTimeOfDay(todayRow?.checkOut)}</td>
       <td>
         <ChevronRight className="ml-auto h-3.5 w-3.5 text-charcoal-300" />
       </td>
@@ -355,7 +355,7 @@ function DirectoryCard({
         <StatusBadge status={employmentLabel(row.status)} />
       </div>
       <div className="mt-2 flex items-center justify-between gap-2 text-[10px] text-charcoal-500">
-        <span>{todayRow ? `In ${todayRow.checkIn ?? '—'} · Out ${todayRow.checkOut ?? '—'}` : 'Not on today’s shift'}</span>
+        <span>{todayRow ? `In ${formatTimeOfDay(todayRow.checkIn)} · Out ${formatTimeOfDay(todayRow.checkOut)}` : 'Not on today’s shift'}</span>
         {todayRow && <StatusBadge status={todayRow.status} />}
       </div>
     </button>
