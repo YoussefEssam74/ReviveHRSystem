@@ -854,7 +854,7 @@ function renderDashboard() {
       id: r.id,
       type: 'request',
       badge: r.type,
-      badgeClass: r.type === 'Annual Leave' ? 'badge-blue' : r.type === 'Resignation' ? 'badge-red' : 'badge-yellow',
+      badgeClass: r.type === 'Day Off' ? 'badge-blue' : r.type === 'Resignation' ? 'badge-red' : 'badge-yellow',
       title: r.employee,
       subtitle: `${r.type} · ${r.gym}`,
       detail: `Date: ${r.requestedDate} · ${r.reason || 'Personal'} (BM: ${r.bmDecision || 'Approved'})`,
