@@ -229,6 +229,17 @@ async function refreshOnce(initial: StoredSession, controller: AbortController):
       : undefined,
     user: json.user ?? session.user,
   }
+  // Another tab may have stored a NEWER session while this request was in
+  // flight (a gym switch, a fresh login). Overwriting it would resurrect the
+  // scope this refresh was minted for — adopt the newer session instead.
+  const storedAfterRefresh = loadStoredSession()
+  if (
+    storedAfterRefresh &&
+    storedAfterRefresh.accessToken !== session.accessToken &&
+    storedAfterRefresh.accessToken !== next.accessToken
+  ) {
+    return { kind: 'refreshed', session: storedAfterRefresh }
+  }
   saveSession(next)
   return { kind: 'refreshed', session: next }
 }

@@ -163,7 +163,7 @@ export interface EmployeeDeduction {
   description: string
   /** Money deductions only (day-based follow-ups leave it null). */
   amount: number | null
-  /** Human status: In review | Branch approved | Resolved | Applied | Rejected. */
+  /** Human status: Pending | Pending HR | In review | Branch approved | Resolved | Applied | Rejected. */
   status: string
   detail: string | null
   correctionRequestId: number | null

@@ -10,7 +10,7 @@ export function Select({ className, children, ...props }: SelectProps) {
     <div className="relative">
       <select
         className={cn(
-          'h-10 w-full appearance-none rounded-lg border border-slate-300 bg-white pl-3 pr-9 text-sm text-slate-900 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400',
+          'h-10 w-full appearance-none rounded-lg border border-slate-300 bg-white pl-3 pr-9 text-base text-slate-900 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400 sm:text-sm',
           className,
         )}
         {...props}

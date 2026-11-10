@@ -163,23 +163,23 @@ function PerformanceList({ evals }: { evals: TeamEvaluation[] }) {
       <div className="divide-y divide-charcoal-50 overflow-hidden rounded-xl border border-charcoal-200 bg-white">
         {evals.map((e) => (
           <button key={e.id} className="block w-full p-3 text-left transition-colors hover:bg-charcoal-50/50" onClick={() => setDetail(e)}>
-            <div className="flex items-center justify-between gap-2">
+            <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-between sm:gap-2">
               <div className="flex min-w-0 items-center gap-2.5">
                 <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-brand-100 text-[10px] font-semibold text-brand-700">
                   {initialsOf(e.employeeName)}
                 </span>
                 <div className="min-w-0">
-                  <p className="text-xs font-semibold text-charcoal-900">{e.employeeName}</p>
+                  <p className="truncate text-xs font-semibold text-charcoal-900">{e.employeeName}</p>
                   <p className="text-[10px] text-charcoal-500">
                     {e.period} · {formatDateWithYear(e.date)} · Reviewer {e.reviewer || '—'}
                   </p>
                 </div>
               </div>
-              <div className="flex flex-shrink-0 items-center gap-2">
+              <div className="flex flex-wrap items-center gap-1.5 pl-[2.875rem] sm:flex-shrink-0 sm:pl-0">
                 <StarScore score={e.score} />
                 <span className={cn('badge', RESULT_COLORS[resultOf(e.score)])}>{resultOf(e.score)}</span>
                 <StatusBadge status={e.status} />
-                <ChevronRight className="h-3.5 w-3.5 text-charcoal-400" aria-hidden="true" />
+                <ChevronRight className="hidden h-3.5 w-3.5 text-charcoal-400 sm:block" aria-hidden="true" />
               </div>
             </div>
           </button>

@@ -24,7 +24,7 @@ import { usePortalSession } from '../../../contexts/PortalSessionContext'
 import { describeApiError } from '../../../lib/api-client'
 import { fetchAllPages } from '../../../lib/paged'
 import { cn } from '../../../lib/utils'
-import { formatDate, formatDateWithYear, formatMoney, formatTimeOfDay, humanize } from '../../../lib/format'
+import { formatDate, formatDateWithYear, formatMoney, formatNumber, formatTimeOfDay, humanize } from '../../../lib/format'
 
 /**
  * Employees Performance (mock §25 renderEmployeesPerformance): the whole roster
@@ -227,19 +227,18 @@ function PerformanceWorkspace() {
 
   return (
     <div className="space-y-3">
-      <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
-        <div>
-          <h1 className="text-xl font-bold text-charcoal-900">Employees Performance</h1>
-          <p className="mt-0.5 text-xs text-charcoal-500">
-            {rowSubline(roster)} · Click an employee to open their full performance history ·{' '}
-            {me?.activeGym?.gymName || 'your gym'}
-          </p>
+      {/* Title + month filter share one line so the roster stays high on a phone.
+          The title wraps instead of truncating when the filter needs its width. */}
+      <div className="flex items-center justify-between gap-2">
+        <h1 className="min-w-0 text-base font-bold leading-tight text-charcoal-900 sm:text-xl">Employees Performance</h1>
+        <div className="w-40 shrink-0 sm:w-44">
+          <MonthSelect month={month} months={months} onChange={setMonth} />
         </div>
-        <MonthSelect month={month} months={months} onChange={setMonth} />
       </div>
 
-      {/* The four real stat tiles */}
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+      {/* The four real stat tiles — one straight row on phones: a 2×2 grid read
+          as four separate cards and pushed the roster off the first screen. */}
+      <div className="grid grid-cols-4 gap-1.5 sm:gap-2">
         <PerfTile accent="border-l-brand-500" label="Employees" value={String(roster.length)} valueClass="text-brand-700" />
         <PerfTile
           label={`Requests${monthLabel ? ` · ${monthLabel}` : ''}`}
@@ -247,7 +246,8 @@ function PerformanceWorkspace() {
         />
         <PerfTile
           label={`Deductions${monthLabel ? ` · ${monthLabel}` : ''}`}
-          value={formatMoney(totals.deductions)}
+          value={formatNumber(totals.deductions)}
+          unit="EGP"
           valueClass={totals.deductions ? 'text-red-600' : 'text-charcoal-900'}
         />
         <PerfTile
@@ -377,7 +377,7 @@ function PerformanceWorkspace() {
                     </div>
                     <div className="rounded-lg bg-charcoal-50 py-1.5">
                       <p className={cn('text-xs font-bold', row.deductionTotal ? 'text-red-600' : 'text-charcoal-900')}>
-                        {row.deductionTotal}
+                        {formatNumber(row.deductionTotal)}
                       </p>
                       <p className="text-[9px] text-charcoal-500">Ded. EGP</p>
                     </div>
@@ -405,27 +405,31 @@ function PerformanceWorkspace() {
   )
 }
 
-function rowSubline(roster: EmployeeDirectoryRow[]): string {
-  return `${roster.length} employees`
-}
-
 /* ==================== shared bits ==================== */
 
 function PerfTile({
   label,
   value,
+  unit,
   valueClass = 'text-charcoal-900',
   accent,
+  className,
 }: {
   label: string
   value: string
+  /** Currency/unit rendered small next to the value so a long amount still fits. */
+  unit?: string
   valueClass?: string
   accent?: string
+  className?: string
 }) {
   return (
-    <div className={cn('rounded-xl border border-charcoal-200 border-l-4 bg-white p-3 text-center', accent)}>
-      <p className={cn('text-xl font-bold', valueClass)}>{value}</p>
-      <p className="text-[10px] text-charcoal-500">{label}</p>
+    <div className={cn('min-w-0 rounded-xl border border-charcoal-200 border-l-4 bg-white px-1 py-2 text-center sm:p-3', accent, className)}>
+      <p className={cn('break-words text-[11px] font-bold leading-tight tabular-nums sm:text-xl', valueClass)}>
+        {value}
+        {unit && <span className="ml-0.5 hidden text-[11px] font-semibold text-charcoal-400 sm:inline">{unit}</span>}
+      </p>
+      <p className="mt-0.5 text-[9px] leading-tight text-charcoal-500 sm:text-[10px]">{label}</p>
     </div>
   )
 }
@@ -601,45 +605,56 @@ function PerfDrillIn({
         </div>
       </div>
 
-      {/* Aggregated tiles (same algebra as the roster row) */}
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 xl:grid-cols-7">
+      {/* Aggregated tiles (same algebra as the roster row) — one swipeable row on
+          phones so the tabs and the tab's list stay above the fold. */}
+      <div className="flex gap-2 overflow-x-auto pb-1 sm:grid sm:grid-cols-4 sm:overflow-visible sm:pb-0 xl:grid-cols-7">
         <PerfTile
+          className="w-28 shrink-0 sm:w-auto"
           label="To act on"
           value={String(row.pending + row.pendingDeductions)}
           valueClass={row.pending + row.pendingDeductions ? 'text-amber-600' : 'text-charcoal-900'}
           accent="border-l-amber-400"
         />
         <PerfTile
+          className="w-28 shrink-0 sm:w-auto"
           label={`Requests${row.pending ? ` · ${row.pending} pending` : ''}`}
           value={String(row.requests)}
           accent="border-l-blue-400"
         />
         <PerfTile
+          className="w-28 shrink-0 sm:w-auto"
           label="Deductions"
-          value={formatMoney(row.deductionTotal)}
+          value={formatNumber(row.deductionTotal)}
+          unit="EGP"
           valueClass={row.deductionTotal ? 'text-red-600' : 'text-charcoal-900'}
           accent="border-l-red-400"
         />
         <PerfTile
+          className="w-28 shrink-0 sm:w-auto"
           label="Bonuses"
-          value={formatMoney(row.bonusTotal)}
+          value={formatNumber(row.bonusTotal)}
+          unit="EGP"
           valueClass={row.bonusTotal ? 'text-green-600' : 'text-charcoal-900'}
           accent="border-l-green-400"
         />
         <PerfTile
+          className="w-28 shrink-0 sm:w-auto"
           label="Warnings"
           value={String(row.warnings)}
           valueClass={row.warnings ? 'text-orange-600' : 'text-charcoal-900'}
           accent="border-l-orange-400"
         />
         <PerfTile
+          className="w-28 shrink-0 sm:w-auto"
           label="Eval avg"
           value={row.avgScore !== null ? `${row.avgScore.toFixed(1)} / 5` : '—'}
           accent="border-l-violet-400"
         />
         <PerfTile
+          className="w-28 shrink-0 sm:w-auto"
           label="Monthly salary"
-          value={row.employee.salary != null ? formatMoney(row.employee.salary) : '—'}
+          value={row.employee.salary != null ? formatNumber(row.employee.salary) : '—'}
+          unit={row.employee.salary != null ? 'EGP' : undefined}
           accent="border-l-brand-400"
         />
       </div>

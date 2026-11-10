@@ -207,7 +207,7 @@ export function PortalLayout() {
         </Link>
         <button
           type="button"
-          className="ml-auto rounded-lg p-1.5 text-charcoal-400 hover:bg-charcoal-100 hover:text-charcoal-700 lg:hidden"
+          className="touch-target ml-auto rounded-lg p-1.5 text-charcoal-400 hover:bg-charcoal-100 hover:text-charcoal-700 lg:hidden"
           onClick={() => setDrawerOpen(false)}
           aria-label="Close navigation"
         >
@@ -329,7 +329,7 @@ export function PortalLayout() {
       {drawerOpen && (
         <div className="fixed inset-0 z-50 lg:hidden">
           <div className="absolute inset-0 bg-black/50" onClick={() => setDrawerOpen(false)} />
-          <aside className="absolute inset-y-0 left-0 flex w-64 flex-col bg-white">{sidebar}</aside>
+          <aside className="safe-bottom absolute inset-y-0 left-0 flex w-64 max-w-[85vw] flex-col bg-white">{sidebar}</aside>
         </div>
       )}
 
@@ -337,13 +337,15 @@ export function PortalLayout() {
         <header className="sticky top-0 z-30 flex h-14 items-center gap-4 border-b border-charcoal-100 bg-white px-4 lg:px-5">
           <button
             type="button"
-            className="rounded-lg p-1.5 text-charcoal-500 hover:bg-charcoal-100 hover:text-charcoal-800 lg:hidden"
+            className="touch-target rounded-lg p-1.5 text-charcoal-500 hover:bg-charcoal-100 hover:text-charcoal-800 lg:hidden"
             onClick={() => setDrawerOpen(true)}
             aria-label="Open navigation"
           >
             <Menu className="h-5 w-5" aria-hidden="true" />
           </button>
-          <h1 className="truncate text-sm font-semibold text-charcoal-900">{title}</h1>
+          {/* The page renders its own H1; on phones this bar belongs to the
+              gym switcher, alerts and account menu. */}
+          <h1 className="hidden min-w-0 truncate text-sm font-semibold text-charcoal-900 sm:block">{title}</h1>
 
           <div className="ml-auto flex items-center gap-2.5">
             {portal.me.gyms.length > 1 && <GymSwitcher />}
@@ -352,7 +354,7 @@ export function PortalLayout() {
               <button
                 type="button"
                 onClick={() => setBellOpen((open) => !open)}
-                className="relative rounded-full p-1.5 text-charcoal-500 hover:bg-charcoal-100 hover:text-charcoal-800"
+                className="touch-target relative rounded-full p-1.5 text-charcoal-500 hover:bg-charcoal-100 hover:text-charcoal-800"
                 aria-label={`Notifications${unreadCount > 0 ? ` (${unreadCount} unread)` : ''}`}
                 aria-expanded={bellOpen}
               >
@@ -361,7 +363,7 @@ export function PortalLayout() {
               </button>
 
               {bellOpen && (
-                <div className="absolute right-0 z-40 mt-2 w-80 max-w-[calc(100vw-1.5rem)] rounded-xl border border-charcoal-200 bg-white p-3 shadow-xl">
+                <div className="fixed inset-x-3 top-16 z-40 rounded-xl border border-charcoal-200 bg-white p-3 shadow-xl lg:absolute lg:inset-x-auto lg:right-0 lg:top-auto lg:mt-2 lg:w-80">
                   <div className="flex items-center justify-between gap-2">
                     <p className="text-sm font-semibold text-charcoal-900">Notifications</p>
                     {unreadCount > 0 && (
@@ -398,7 +400,7 @@ export function PortalLayout() {
               <button
                 type="button"
                 onClick={() => setProfileOpen((open) => !open)}
-                className="flex items-center gap-1.5 rounded-full p-1 hover:bg-charcoal-100"
+                className="touch-target flex items-center gap-1.5 rounded-full p-1 hover:bg-charcoal-100"
                 aria-label="Account menu"
                 aria-expanded={profileOpen}
               >
@@ -458,7 +460,7 @@ export function PortalLayout() {
                 key={item.id}
                 to={item.path}
                 className={({ isActive }) =>
-                  cn('flex flex-1 flex-col items-center gap-0.5 py-2 text-[10px] font-medium', isActive ? 'text-brand-600' : 'text-charcoal-500')
+                  cn('flex min-h-14 flex-1 flex-col items-center justify-center gap-0.5 px-1 py-2 text-xs font-medium', isActive ? 'text-brand-600' : 'text-charcoal-500')
                 }
               >
                 <span className="relative">

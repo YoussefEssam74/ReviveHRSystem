@@ -149,6 +149,20 @@ function cellLabel(template: ShiftTemplateItem): string {
   return `${clock12(template.start)}–${clock12(template.end)}`
 }
 
+/** Compact "7a–3p" label for the mobile grid's narrow day columns. */
+function shortCellLabel(template: ShiftTemplateItem): string {
+  if (template.isOff) return 'OFF'
+  const compact = (value: string) => {
+    const [hourPart, minutePart] = value.split(':')
+    const hour = Number(hourPart)
+    if (Number.isNaN(hour)) return value
+    const suffix = hour >= 12 ? 'p' : 'a'
+    const display = hour % 12 === 0 ? 12 : hour % 12
+    return minutePart && minutePart !== '00' ? `${display}:${minutePart}${suffix}` : `${display}${suffix}`
+  }
+  return `${compact(template.start)}–${compact(template.end)}`
+}
+
 /* ==================== page ==================== */
 
 export default function TeamSchedulePage() {
@@ -310,7 +324,7 @@ function ScheduleWorkspace({
           </span>
           <Button
             size="sm"
-            className="ml-auto shrink-0"
+            className="shrink-0 sm:ml-auto"
             variant={view === 'month' ? 'primary' : 'secondary'}
             onClick={() => setView(view === 'month' ? 'week' : 'month')}
             title={
@@ -324,9 +338,10 @@ function ScheduleWorkspace({
           </Button>
         </div>
 
-        {/* Period strip */}
+        {/* Period strip — stacked on phones so a second period is never clipped
+            mid-chip; a row from sm up. */}
         {monthCycles.length > 0 ? (
-          <div className="flex gap-1.5 overflow-x-auto px-4 pb-3">
+          <div className="grid grid-cols-1 gap-1.5 px-4 pb-3 sm:flex sm:flex-wrap">
             {monthCycles.map((cycle) => {
               const active = cycle.id === selectedId
               return (
@@ -338,7 +353,7 @@ function ScheduleWorkspace({
                     setView('week')
                   }}
                   className={cn(
-                    'shrink-0 rounded-lg border px-2.5 py-1.5 text-left transition-all',
+                    'rounded-lg border px-2.5 py-1.5 text-left transition-all sm:shrink-0',
                     active
                       ? 'border-brand-500 bg-brand-50/60 shadow-sm ring-1 ring-brand-500'
                       : 'border-charcoal-200 hover:border-charcoal-300 hover:bg-charcoal-50/60',
@@ -719,23 +734,20 @@ function CycleDetailPanel({
   return (
     <>
       {/* Toolbar */}
-      <div className="flex flex-wrap items-center gap-2 border-t border-charcoal-100 px-4 py-2">
-        <div className="flex items-center gap-2 text-[10px] text-charcoal-500">
-          <span>{statsLabel}</span>
-          <span>·</span>
+      <div className="flex flex-col gap-2 border-t border-charcoal-100 px-4 py-2 sm:flex-row sm:flex-wrap sm:items-center">
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-charcoal-500">
+          <span className="font-semibold text-charcoal-700">{statsLabel}</span>
+          <span className="text-charcoal-300">·</span>
           <span>{detail.assignments.length} employees</span>
-          <span>·</span>
+          <span className="text-charcoal-300">·</span>
           <span>{assignedCount} shifts assigned</span>
           {employeesWithMissingDays > 0 && (
-            <>
-              <span>·</span>
-              <span className="badge badge-yellow" title="Employees who still have weekdays marked Not assigned">
-                {employeesWithMissingDays} with missing days
-              </span>
-            </>
+            <span className="badge badge-yellow" title="Employees who still have weekdays marked Not assigned">
+              {employeesWithMissingDays} with missing days
+            </span>
           )}
         </div>
-        <div className="ml-auto flex flex-wrap items-center gap-1.5">
+        <div className="flex flex-wrap items-center gap-1.5 sm:ml-auto">
           {detail.conflicts.length > 0 && (
             <span className="badge badge-red flex items-center gap-1">
               <AlertTriangle className="h-3 w-3" aria-hidden="true" /> {detail.conflicts.length} conflict
@@ -748,7 +760,7 @@ function CycleDetailPanel({
             </Button>
           )}
           {manage && (
-            <Button size="sm" variant="danger" onClick={() => setConfirmDelete(true)}>
+            <Button size="sm" variant="dangerOutline" onClick={() => setConfirmDelete(true)}>
               <Trash2 className="h-3.5 w-3.5" aria-hidden="true" /> Delete Schedule
             </Button>
           )}
@@ -790,8 +802,9 @@ function CycleDetailPanel({
         </div>
       )}
 
-      {/* Hint */}
-      <div className="border-t border-charcoal-100 px-4 py-2">
+      {/* Hint — the full instructions are desktop-only: phones get the one-liner
+          above the employee cards instead. */}
+      <div className="hidden border-t border-charcoal-100 px-4 py-2 sm:block">
         <p className="text-[10px] text-charcoal-400">
           {editing
             ? isDraft
@@ -807,7 +820,7 @@ function CycleDetailPanel({
 
       {/* Paint palette */}
       {editing && (
-        <div className="flex items-center gap-1.5 overflow-x-auto border-t border-charcoal-100 bg-brand-50/40 px-4 py-2">
+        <div className="flex flex-wrap items-center gap-1.5 border-t border-charcoal-100 bg-brand-50/40 px-4 py-2 sm:flex-nowrap sm:overflow-x-auto">
           <span className="mr-1 shrink-0 text-[10px] font-semibold text-charcoal-600">Paint shift:</span>
           {activeTemplates.map((t) => {
             const selected = paintPick.kind === 'tpl' && paintPick.id === t.id
@@ -827,7 +840,7 @@ function CycleDetailPanel({
                   style={{ background: t.bgColor, borderColor: `${t.color}40` }}
                 />
                 {t.name}
-                <span className="ml-1 font-normal text-charcoal-400">{cellLabel(t)}</span>
+                <span className="ml-1 hidden font-normal text-charcoal-400 sm:inline">{cellLabel(t)}</span>
               </button>
             )
           })}
@@ -849,8 +862,9 @@ function CycleDetailPanel({
         </div>
       )}
 
-      {/* Legend */}
-      <div className="flex flex-wrap items-center gap-3 border-t border-charcoal-100 bg-charcoal-50/40 px-4 py-2 text-[10px] text-charcoal-500">
+      {/* Legend — desktop only: on phones the cells spell out their own label
+          ("OFF", "8a–4p") and the paint palette already lists the shifts. */}
+      <div className="hidden flex-wrap items-center gap-3 border-t border-charcoal-100 bg-charcoal-50/40 px-4 py-2 text-[10px] text-charcoal-500 sm:flex">
         {activeTemplates.map((t) => (
           <span key={t.id} className="inline-flex items-center gap-1">
             <span className="inline-block h-2.5 w-2.5 rounded border" style={{ background: t.bgColor, borderColor: `${t.color}40` }} />
@@ -879,6 +893,7 @@ function CycleDetailPanel({
         <ScheduleGrid
           detail={detail}
           cols={cols}
+          view={view}
           editing={editing}
           templateById={gridTemplateById}
           cellValueForDate={cellValueAtDate}
@@ -961,6 +976,7 @@ function dirtyCountOf(edits: Map<string, number | null>): number {
 function ScheduleGrid({
   detail,
   cols,
+  view,
   editing,
   templateById,
   cellValueForDate,
@@ -973,6 +989,7 @@ function ScheduleGrid({
 }: {
   detail: ShiftCycleDetail
   cols: ISODate[]
+  view: 'week' | 'month'
   editing: boolean
   templateById: Map<number, ShiftTemplateItem>
   cellValueForDate: (employeeId: number, date: string) => CellPaint
@@ -1104,52 +1121,123 @@ function ScheduleGrid({
         </table>
       </div>
 
-      {/* Mobile cards */}
-      <div className="space-y-1.5 p-3 lg:hidden">
-        {detail.assignments.map((row) => (
-          <div key={row.employeeId} className="rounded-xl border border-charcoal-200 bg-white p-3">
-            <div className="mb-2 flex items-center gap-2">
-              <span className="flex h-7 w-7 items-center justify-center rounded-full bg-brand-100 text-[10px] font-semibold text-brand-700">
-                {row.initials}
-              </span>
-              <span className="min-w-0 truncate text-xs font-medium text-charcoal-900">{row.name}</span>
-              {row.employeeId === selfEmployeeId && selfBadge}
-              <MissingDaysBadge count={missingDaysOf(row.employeeId)} compact />
-              {editing && (
-                <Button size="sm" variant="ghost" className="ml-auto" onClick={() => onRowFill(row)}>
-                  Fill visible
-                </Button>
-              )}
-            </div>
-            <div className="flex flex-wrap gap-1">
+      {/* Mobile: one card per employee, days laid out as a 7-column grid that
+          fits the screen. The old sideways grid pinned the name column on top
+          of the shift cells — it hid them and blocked painting on a phone. */}
+      <div className="px-3 pb-4 lg:hidden">
+        <p className="pb-1.5 text-[10px] text-charcoal-400">
+          {editing ? 'Tap a day to paint the selected shift.' : 'Read-only preview — press “Assign Shifts” to edit.'}
+        </p>
+
+        {/* Week view adds a shared weekday bar (shifts repeat weekly, so the
+            weekday is what a manager reasons about); the date itself lives in
+            each cell, so it stays readable once the bar scrolls away. */}
+        {view === 'week' && (
+          <div className="mb-2 border-y border-charcoal-100 bg-charcoal-50/70 py-1.5">
+            <div className="grid grid-cols-7 gap-1 px-2">
               {cols.map((col) => {
                 const day = weekdayIndex(col.date)
                 const foreign = readOnlyDates.has(col.date)
-                const value = cellValueForDate(row.employeeId, col.date)
-                const unassigned = value === 'unassigned'
-                const template = typeof value === 'number' ? templateById.get(value) : undefined
-                const off = !unassigned && (value === null || template?.isOff === true)
-                const label = `${col.num}/${col.dow}: ${unassigned ? 'Not assigned' : off ? 'OFF' : cellLabel(template ?? unknownTemplate())}`
-                const style = unassigned ? UNASSIGNED_CELL : cellStyle(template, off)
-                return editing && !foreign ? (
-                  <button
-                    key={col.date}
-                    type="button"
-                    onClick={() => onCell(row.employeeId, day)}
-                    className="schedule-shift-badge border text-[9px]"
-                    style={style}
-                  >
-                    {label}
-                  </button>
-                ) : (
-                  <span key={col.date} className="schedule-shift-badge border text-[9px]" style={style}>
-                    {label}
-                  </span>
+                return (
+                  <div key={col.date} className={cn('text-center', foreign && 'opacity-60')}>
+                    <span className="block text-[9px] font-bold uppercase leading-none tracking-wide text-charcoal-500">
+                      {col.dow}
+                    </span>
+                    {editing && !foreign && (
+                      <button
+                        type="button"
+                        onClick={() => onDayFill(day)}
+                        title={`Apply the selected shift to everyone on ${col.dow} ${col.num}`}
+                        aria-label={`Apply the selected shift to everyone on ${col.dow} ${col.num}`}
+                        className="mx-auto mt-1 flex rounded p-0.5 text-charcoal-400 hover:bg-brand-100 hover:text-brand-600"
+                      >
+                        <Square className="h-2.5 w-2.5" aria-hidden="true" />
+                      </button>
+                    )}
+                  </div>
                 )
               })}
             </div>
           </div>
-        ))}
+        )}
+
+        <div className="space-y-2">
+          {detail.assignments.map((row) => {
+            const missing = missingDaysOf(row.employeeId)
+            return (
+              <div key={row.employeeId} className="rounded-xl border border-charcoal-200 bg-white p-2">
+                <div className="flex items-center gap-1.5 pb-1.5">
+                  <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-brand-100 text-[9px] font-semibold text-brand-700">
+                    {row.initials}
+                  </span>
+                  <span className="min-w-0 flex-1 truncate text-[11px] font-medium text-charcoal-900">{row.name}</span>
+                  {row.employeeId === selfEmployeeId && (
+                    <span className="shrink-0 rounded bg-brand-100 px-1 text-[8px] font-semibold text-brand-700">You</span>
+                  )}
+                  {/* Only flag gaps: a "Complete" chip on every row was pure noise. */}
+                  {missing > 0 && <MissingDaysBadge count={missing} compact />}
+                  {editing && (
+                    <button
+                      type="button"
+                      onClick={() => onRowFill(row)}
+                      title="Fill the visible days for this employee"
+                      aria-label={`Fill the visible days for ${row.name}`}
+                      className="shrink-0 rounded p-1 text-charcoal-400 hover:bg-brand-100 hover:text-brand-600"
+                    >
+                      <Square className="h-3 w-3 rotate-180" aria-hidden="true" />
+                    </button>
+                  )}
+                </div>
+                <div className="grid grid-cols-7 gap-1">
+                  {cols.map((col) => {
+                    const day = weekdayIndex(col.date)
+                    const foreign = readOnlyDates.has(col.date)
+                    const value = cellValueForDate(row.employeeId, col.date)
+                    const unassigned = value === 'unassigned'
+                    const template = typeof value === 'number' ? templateById.get(value) : undefined
+                    const off = !unassigned && (value === null || template?.isOff === true)
+                    const label = unassigned ? '—' : off ? 'OFF' : shortCellLabel(template ?? unknownTemplate())
+                    const style = unassigned ? UNASSIGNED_CELL : cellStyle(template, off)
+                    const cellClass =
+                      'flex h-10 flex-col items-center justify-center rounded-md border text-[9px] font-semibold leading-none tabular-nums'
+                    const describe = `${row.name}, ${col.dow} ${col.num}: ${
+                      unassigned ? 'not assigned' : off ? 'off' : (template?.name ?? 'shift')
+                    }`
+                    // Every cell carries its own date: the weekday bar scrolls
+                    // away with the page, so the column must identify itself.
+                    const body = (
+                      <>
+                        <span className="text-[8px] font-bold opacity-70">{col.num}</span>
+                        <span className="mt-0.5">{label}</span>
+                      </>
+                    )
+                    return editing && !foreign ? (
+                      <button
+                        key={col.date}
+                        type="button"
+                        onClick={() => onCell(row.employeeId, day)}
+                        className={cn(cellClass, 'transition-opacity hover:opacity-85')}
+                        style={style}
+                        aria-label={describe}
+                      >
+                        {body}
+                      </button>
+                    ) : (
+                      <div
+                        key={col.date}
+                        className={cn(cellClass, foreign && 'opacity-60')}
+                        style={style}
+                        title={describe}
+                      >
+                        {body}
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )
+          })}
+        </div>
       </div>
     </>
   )

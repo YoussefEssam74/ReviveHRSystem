@@ -204,7 +204,7 @@ export default function MySchedulePage() {
       <div className="flex flex-shrink-0 items-center justify-between gap-2">
         <div>
           <h1 className="text-sm font-bold text-charcoal-900">My Schedule &amp; Attendance</h1>
-          <p className="text-[9px] text-charcoal-500">Monthly view of your shifts, check-ins and requests</p>
+          <p className="text-[11px] text-charcoal-500">Monthly view of your shifts, check-ins and requests</p>
         </div>
         {!hasScheduleData && schedule && (
           <p className="rounded-lg bg-yellow-50 px-2 py-1 text-[9px] font-medium text-yellow-700">
@@ -220,7 +220,7 @@ export default function MySchedulePage() {
             type="button"
             onClick={() => navigateMonth(-1)}
             aria-label="Previous month"
-            className="rounded-lg p-1 transition-colors hover:bg-charcoal-50"
+            className="touch-target rounded-lg p-1.5 transition-colors hover:bg-charcoal-50"
           >
             <ChevronLeft className="h-4 w-4 text-charcoal-600" aria-hidden="true" />
           </button>
@@ -232,7 +232,7 @@ export default function MySchedulePage() {
             type="button"
             onClick={() => navigateMonth(1)}
             aria-label="Next month"
-            className="rounded-lg p-1 transition-colors hover:bg-charcoal-50"
+            className="touch-target rounded-lg p-1.5 transition-colors hover:bg-charcoal-50"
           >
             <ChevronRight className="h-4 w-4 text-charcoal-600" aria-hidden="true" />
           </button>
@@ -255,7 +255,7 @@ export default function MySchedulePage() {
       </div>
 
       {/* Legend */}
-      <div className="flex flex-shrink-0 flex-wrap items-center gap-3 px-1 text-[9px] text-charcoal-500">
+      <div className="flex flex-shrink-0 flex-wrap items-center gap-x-3 gap-y-1 px-1 text-[10px] text-charcoal-500">
         <span className="inline-flex items-center gap-1">
           <span className="schedule-shift-morning inline-block h-2.5 w-2.5 rounded border border-blue-200" />
           Morning
@@ -308,12 +308,41 @@ export default function MySchedulePage() {
         </div>
       </div>
 
-      {/* Mobile list */}
-      <div className="flex-shrink-0 space-y-1.5 lg:hidden">
-        {cells.filter(Boolean).length === 0 ? (
-          <EmptyState title="No published schedule for this month" />
+      {/* Mobile: compact month grid + the selected day underneath. The month
+          stays visible (7 columns) instead of turning into a long day list. */}
+      <div className="flex-shrink-0 space-y-2 lg:hidden">
+        {cells.some(Boolean) ? (
+          <>
+            <div className="rounded-xl border border-charcoal-200 bg-white p-1.5">
+              <div className="grid grid-cols-7 gap-1">
+                {WEEKDAYS.map((weekday, index) => (
+                  <div
+                    key={index}
+                    className="py-0.5 text-center text-[9px] font-bold uppercase tracking-wider text-charcoal-400"
+                  >
+                    {weekday.slice(0, 1)}
+                  </div>
+                ))}
+              </div>
+              <div className="mt-1 grid grid-cols-7 gap-1">
+                {cells.map((cell, index) =>
+                  cell ? (
+                    <MobileDayCell
+                      key={cell.date}
+                      cell={cell}
+                      selected={cell.date === selected?.date}
+                      onSelect={() => setSelectedDate(cell.date)}
+                    />
+                  ) : (
+                    <div key={`lead-${index}`} aria-hidden="true" />
+                  ),
+                )}
+              </div>
+            </div>
+            {selected && <DayDetailPanel cell={selected} onNewRequest={() => setDayRequestDate(selected.date)} />}
+          </>
         ) : (
-          cells.filter(Boolean).map((cell) => <MobileDayCard key={cell!.date} cell={cell!} onNewRequest={() => setDayRequestDate(cell!.date)} />)
+          <EmptyState title="No published schedule for this month" />
         )}
       </div>
 
@@ -534,63 +563,42 @@ function DetailRow({ label, value }: { label: string; value: React.ReactNode }) 
   )
 }
 
-function MobileDayCard({ cell, onNewRequest }: { cell: CellModel; onNewRequest: () => void }) {
+function MobileDayCell({ cell, selected, onSelect }: { cell: CellModel; selected: boolean; onSelect: () => void }) {
+  const shiftTone = cell.isOff || !cell.shiftName
+    ? 'bg-charcoal-200'
+    : cell.shiftName.toLowerCase().includes('morning')
+      ? 'bg-blue-400'
+      : cell.shiftName.toLowerCase().includes('evening')
+        ? 'bg-brand-500'
+        : 'bg-charcoal-300'
+  const attTone = !cell.att || cell.att.status === 'Off'
+    ? 'bg-transparent'
+    : cell.att.status === 'Absent'
+      ? 'bg-red-500'
+      : cell.att.status === 'Late'
+        ? 'bg-yellow-500'
+        : 'bg-brand-500'
+
   return (
-    <div className="card card-interactive p-3">
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="text-xs font-bold text-charcoal-900">{cell.dayNum}</p>
-          <p className="text-[10px] text-charcoal-500">
-            {cell.isOff
-              ? 'Off day'
-              : cell.shiftName
-                ? `${cell.shiftName} · ${formatTimeOfDay(cell.start)}–${formatTimeOfDay(cell.end)}`
-                : 'No shift published'}
-          </p>
-        </div>
-        <div className="text-right">
-          {cell.att ? (
-            <StatusBadge status={cell.att.status} />
-          ) : (
-            <span className="text-[10px] text-charcoal-400">{cell.isFuture ? 'Not yet' : 'No record'}</span>
-          )}
-          {cell.att && (
-            <p className="mt-1 text-[10px] text-charcoal-600">
-              {formatTimeOfDay(cell.att.checkIn)} → {formatTimeOfDay(cell.att.checkOut)}
-            </p>
-          )}
-        </div>
-      </div>
-      {cell.requests.length > 0 && (
-        <div className="mt-2 flex flex-wrap gap-1">
-          {cell.requests.map((request) => (
-            <span
-              key={request.id}
-              className={cn(
-                'inline-flex items-center rounded px-1.5 py-0.5 text-[9px] font-semibold',
-                request.status === 'Approved'
-                  ? 'bg-brand-100 text-brand-700'
-                  : request.status === 'Rejected'
-                    ? 'bg-red-100 text-red-700'
-                    : 'bg-yellow-100 text-yellow-700',
-              )}
-            >
-              {request.type}
-            </span>
-          ))}
-        </div>
+    <button
+      type="button"
+      onClick={onSelect}
+      aria-pressed={selected}
+      aria-label={`Day ${cell.dayNum}${cell.isOff ? ', off day' : cell.shiftName ? `, ${cell.shiftName} shift` : ', no shift published'}`}
+      className={cn(
+        'flex aspect-square w-full flex-col items-center justify-center gap-1 rounded-lg border transition-colors',
+        selected
+          ? 'border-brand-400 bg-brand-50 ring-1 ring-brand-400'
+          : cell.isToday
+            ? 'border-brand-200 bg-brand-50/40 ring-1 ring-brand-200'
+            : 'border-charcoal-100 bg-white hover:bg-charcoal-50',
       )}
-      <div className="mt-2 flex items-center justify-between">
-        <p className="text-[9px] text-charcoal-400">{cell.isToday ? 'Today' : ''}</p>
-        <button
-          type="button"
-          onClick={onNewRequest}
-          className="inline-flex items-center gap-1 rounded border border-charcoal-200 px-2 py-1 text-[9px] font-semibold text-charcoal-600 transition-colors hover:border-brand-200 hover:bg-brand-50 hover:text-brand-700"
-        >
-          <Plus className="h-2.5 w-2.5" aria-hidden="true" />
-          Request
-        </button>
-      </div>
-    </div>
+    >
+      <span className={cn('text-[11px] font-bold leading-none', cell.isToday ? 'text-brand-700' : 'text-charcoal-800')}>
+        {cell.dayNum}
+      </span>
+      <span className={cn('h-1 w-4 rounded-full', shiftTone)} aria-hidden="true" />
+      <span className={cn('h-1 w-1 rounded-full', attTone)} aria-hidden="true" />
+    </button>
   )
 }

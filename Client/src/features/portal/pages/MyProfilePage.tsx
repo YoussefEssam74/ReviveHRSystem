@@ -67,7 +67,14 @@ export default function MyProfilePage() {
     enabled: employeeId != null,
   })
 
-  const invalidateProfile = () => queryClient.invalidateQueries({ queryKey: ['portal', 'profile'] })
+  // Avatar blobs are cached per employee (the roster renders one per row), so a
+  // new photo has to evict that entry too or the old image lingers.
+  const invalidateProfile = async () => {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ['portal', 'profile'] }),
+      queryClient.invalidateQueries({ queryKey: ['portal', 'avatar'] }),
+    ])
+  }
 
   const photoMutation = useMutation({
     mutationFn: (file: File) => uploadProfilePhoto(employeeId!, file),
@@ -101,8 +108,8 @@ export default function MyProfilePage() {
     <div className="space-y-2">
       {/* Profile header card */}
       <div className="flex flex-col items-center gap-3 rounded-xl border border-charcoal-200 bg-white p-3 sm:flex-row sm:items-start">
-        <div className="relative h-20 w-20 shrink-0">
-          <div className="flex h-20 w-20 items-center justify-center overflow-hidden rounded-full border-4 border-white bg-brand-100 text-2xl font-bold text-brand-700 shadow-sm">
+        <div className="relative h-16 w-16 shrink-0 sm:h-20 sm:w-20">
+          <div className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-full border-4 border-white bg-brand-100 text-xl font-bold text-brand-700 shadow-sm sm:h-20 sm:w-20 sm:text-2xl">
             {avatarUrl ? (
               <img src={avatarUrl} alt={profile?.fullName ?? ''} className="h-full w-full object-cover" />
             ) : (
@@ -133,7 +140,7 @@ export default function MyProfilePage() {
         <div className="flex-1 text-center sm:text-left">
           <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
             <div>
-              <h2 className="text-xl font-bold text-charcoal-900">{profile?.fullName}</h2>
+              <h2 className="text-lg font-bold text-charcoal-900 sm:text-xl">{profile?.fullName}</h2>
               <p className="mt-0.5 text-xs text-charcoal-500">
                 {profile?.position} · {profile?.gym.name} {profile?.gym.branch}
               </p>
@@ -366,9 +373,11 @@ export function ContactEditModal({
 
 function InfoField({ label, value }: { label: string; value: string | null | undefined }) {
   return (
-    <div>
-      <label className="bento-label text-charcoal-500">{label}</label>
-      <p className="mt-0.5 text-xs text-charcoal-900">{value || '—'}</p>
+    <div className="flex items-baseline justify-between gap-3 border-b border-charcoal-100 pb-1.5 last:border-0 last:pb-0 sm:block sm:border-0 sm:pb-0">
+      <label className="bento-label shrink-0 text-charcoal-500">{label}</label>
+      <p className="min-w-0 break-words text-right text-xs font-medium text-charcoal-900 sm:mt-0.5 sm:text-left sm:font-normal">
+        {value || '—'}
+      </p>
     </div>
   )
 }

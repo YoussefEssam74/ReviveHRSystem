@@ -1,6 +1,7 @@
-import { useEffect, useRef, type ReactNode } from 'react'
+import { useRef, type ReactNode } from 'react'
 import { X } from 'lucide-react'
 import { cn } from '../../lib/utils'
+import { useOverlay } from '../../lib/use-overlay'
 import { Button } from './button'
 
 export interface ModalProps {
@@ -17,19 +18,8 @@ export interface ModalProps {
 /** Mock modal shell: backdrop + white rounded card with scale-in animation. */
 export function Modal({ open, title, subtitle, onClose, width = 'md', footer, children }: ModalProps) {
   const backdropRef = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    if (!open) return
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose()
-    }
-    document.addEventListener('keydown', onKey)
-    document.body.style.overflow = 'hidden'
-    return () => {
-      document.removeEventListener('keydown', onKey)
-      document.body.style.overflow = ''
-    }
-  }, [open, onClose])
+  const panelRef = useRef<HTMLDivElement>(null)
+  useOverlay(open, onClose, panelRef)
 
   if (!open) return null
 
@@ -38,17 +28,19 @@ export function Modal({ open, title, subtitle, onClose, width = 'md', footer, ch
   return (
     <div
       ref={backdropRef}
-      className="modal-backdrop fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-0 sm:items-center sm:p-4"
+      className="modal-backdrop fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
       onMouseDown={(event) => {
         if (event.target === backdropRef.current) onClose()
       }}
     >
       <div
+        ref={panelRef}
         role="dialog"
         aria-modal="true"
         aria-label={title}
+        tabIndex={-1}
         className={cn(
-          'modal-content flex max-h-[92vh] w-full flex-col overflow-hidden rounded-t-2xl bg-white shadow-xl sm:rounded-2xl',
+          'modal-content overlay-panel safe-bottom flex w-full flex-col overflow-hidden rounded-2xl bg-white shadow-xl outline-none',
           maxWidth,
         )}
       >
@@ -60,13 +52,13 @@ export function Modal({ open, title, subtitle, onClose, width = 'md', footer, ch
           <button
             type="button"
             onClick={onClose}
-            className="rounded-lg p-1.5 text-charcoal-400 hover:bg-charcoal-100 hover:text-charcoal-700"
+            className="touch-target -mr-1 rounded-lg p-1.5 text-charcoal-400 hover:bg-charcoal-100 hover:text-charcoal-700"
             aria-label="Close"
           >
             <X className="h-4 w-4" aria-hidden="true" />
           </button>
         </div>
-        <div className="flex-1 overflow-y-auto px-4 py-4">{children}</div>
+        <div className="flex-1 overflow-y-auto overscroll-contain px-4 py-4">{children}</div>
         {footer && <div className="flex items-center justify-end gap-2 border-t border-charcoal-100 px-4 py-3">{footer}</div>}
       </div>
     </div>

@@ -139,8 +139,9 @@ export default function NotificationsPage() {
         </Button>
       </div>
 
-      {/* Filters */}
-      <div className="flex flex-wrap items-center gap-1.5">
+      {/* Filters — a single line on phones: the chips scroll sideways instead of
+          wrapping to a second row. */}
+      <div className="-mx-4 flex items-center gap-1.5 overflow-x-auto px-4 pb-0.5 sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0 sm:pb-0">
         {FILTERS.map((filter) => {
           const active = filter === 'All' ? category == null && !onlyUnread : category === filter
           return (
@@ -153,7 +154,7 @@ export default function NotificationsPage() {
                 setPage(1)
               }}
               className={cn(
-                'rounded-full px-3 py-1 text-[11px] font-semibold transition-colors',
+                'shrink-0 whitespace-nowrap rounded-full px-3 py-1 text-[11px] font-semibold transition-colors',
                 active ? 'bg-charcoal-800 text-white' : 'bg-charcoal-100 text-charcoal-600 hover:bg-charcoal-200',
               )}
             >
@@ -168,7 +169,7 @@ export default function NotificationsPage() {
             setPage(1)
           }}
           className={cn(
-            'rounded-full px-3 py-1 text-[11px] font-semibold transition-colors',
+            'shrink-0 whitespace-nowrap rounded-full px-3 py-1 text-[11px] font-semibold transition-colors',
             onlyUnread ? 'bg-brand-600 text-white' : 'bg-charcoal-100 text-charcoal-600 hover:bg-charcoal-200',
           )}
         >

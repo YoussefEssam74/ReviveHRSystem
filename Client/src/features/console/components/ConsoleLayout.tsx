@@ -107,12 +107,12 @@ export function ConsoleLayout() {
       {mobileOpen && (
         <div className="fixed inset-0 z-40 lg:hidden">
           <div className="absolute inset-0 bg-slate-900/40" onClick={() => setMobileOpen(false)} aria-hidden="true" />
-          <aside className="absolute inset-y-0 left-0 w-72 bg-white shadow-xl">
+          <aside className="absolute inset-y-0 left-0 flex w-72 max-w-[85vw] flex-col bg-white shadow-xl">
             <button
               type="button"
               onClick={() => setMobileOpen(false)}
               aria-label="Close menu"
-              className="absolute right-3 top-4 rounded-lg p-1.5 text-slate-400 hover:bg-slate-100"
+              className="touch-target absolute right-2 top-2 rounded-lg p-1.5 text-slate-400 hover:bg-slate-100"
             >
               <X className="h-5 w-5" aria-hidden="true" />
             </button>
@@ -129,7 +129,7 @@ export function ConsoleLayout() {
               type="button"
               onClick={() => setMobileOpen(true)}
               aria-label="Open menu"
-              className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 lg:hidden"
+              className="touch-target rounded-lg p-2 text-slate-500 hover:bg-slate-100 lg:hidden"
             >
               <Menu className="h-5 w-5" aria-hidden="true" />
             </button>

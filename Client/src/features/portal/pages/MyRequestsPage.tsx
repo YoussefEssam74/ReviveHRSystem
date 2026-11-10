@@ -214,27 +214,27 @@ function RequestsWorkspace({
       <div className="space-y-1.5 lg:hidden">
         {filtered.map((request) => (
           <div key={request.id} className="card card-interactive cursor-pointer p-3" onClick={() => onDetail(request.id)}>
-            <div className="flex items-center justify-between">
-              <div className="flex min-w-0 items-center gap-2.5">
+            <div className="flex items-start justify-between gap-2">
+              <div className="flex min-w-0 items-start gap-2.5">
                 <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded bg-charcoal-100 text-charcoal-600">
                   <FileText className="h-4 w-4" aria-hidden="true" />
                 </div>
                 <div className="min-w-0">
                   <p className="flex flex-wrap items-center gap-1.5 text-xs font-medium text-charcoal-900">
-                    <span className="truncate">{request.type}</span>
+                    <span className="min-w-0 truncate">{request.type}</span>
                     {request.calculatedDays != null && (
                       <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
                         Cover: {request.calculatedDays}
                       </span>
                     )}
                   </p>
-                  <p className="text-[10px] text-charcoal-500">
+                  <p className="mt-0.5 text-[10px] text-charcoal-500">
                     #{request.id} · {formatDate(request.submittedDate)}
                   </p>
+                  <p className="text-[10px] text-charcoal-500">{rangeLabel(request.requestedDate, request.endDate)}</p>
                 </div>
               </div>
-              <div className="flex items-center gap-2">
-                <p className="hidden text-[10px] text-charcoal-700 sm:block">{rangeLabel(request.requestedDate, request.endDate)}</p>
+              <div className="flex shrink-0 items-center gap-1.5">
                 <StatusBadge status={request.status} />
                 <ChevronRight className="h-3.5 w-3.5 text-charcoal-400" aria-hidden="true" />
               </div>

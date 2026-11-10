@@ -203,16 +203,11 @@ namespace Service.Services
                     correctionStatus = candidateCorrection.Status.ToString();
                 }
 
-                // Employees see applied money only. A rejected deduction stays
-                // invisible unless the employee disputed it, in which case the row
-                // explains the correction's outcome. Pending and branch-approved
-                // rows are manager triage, not employee-facing facts.
-                if (candidate.Status != DeductionStatus.Approved
-                    && !(candidate.Status == DeductionStatus.Rejected && correctionId is not null))
-                {
-                    continue;
-                }
-
+                // Every raised deduction reaches the employee with the state it is
+                // in: Pending while the branch still has to decide, Pending HR once
+                // the branch approved it, Applied when HR booked it against payroll,
+                // and Rejected when it was waived — so each punished day answers
+                // "how much will I lose" from the moment the sweep raises it.
                 rows.Add(new EmployeeDeductionDto(
                     $"candidate-{candidate.Id}",
                     "candidate",
@@ -221,6 +216,8 @@ namespace Service.Services
                     candidate.Amount > 0 ? candidate.Amount : null,
                     candidate.Status switch
                     {
+                        DeductionStatus.Pending => "Pending",
+                        DeductionStatus.BranchApproved => "Pending HR",
                         DeductionStatus.Approved => "Applied",
                         _ => "Rejected"
                     },

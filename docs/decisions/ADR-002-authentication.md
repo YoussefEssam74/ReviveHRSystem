@@ -167,3 +167,42 @@ full document unload while the request is in flight), the client cannot recover
 the successor token without weakening reuse detection, and the user signs in
 again. `Client/e2e/ui/session-expiry-renewal.spec.ts` covers the slow-renewal,
 two-tab, and dead-credential cases.
+
+---
+
+## Amendment 3 — 2026-11-10: Sessions are per device, not per user
+
+**Context.** The symptom survived Amendment 2: a real 17-minute single-tab run
+showed a healthy session up to the access-token expiry, then
+`POST /api/auth/refresh → 401` and a bounce to `/login`. The database showed the
+cause — the chain had been **revoked**, not refused for reuse: `IssueTokensAsync`
+(and `SwitchGymAsync`) swept *every* other live chain of the user on each login,
+a discipline documented as "single-live-chain". Consequently **signing in
+anywhere else killed every open session**: its next silent refresh was answered
+"Your session has expired" and the SPA — correctly, per Amendment 2 — cleared the
+session. With the app open in a second browser/profile/device (or simply
+re-logging in after any glitch), the sessions destroy each other and the user is
+signed out one access-token lifetime later, which is exactly the reported
+"logged out every 15–30 minutes". Measured: session A's refresh returns `200`
+before B logs in and `401` immediately after.
+
+**Decision.** The sweep is narrowed from "every other chain" to **"every other
+chain minted for a different gym"**:
+
+1. A sign-in or gym switch no longer touches chains whose `ScopedGymId` matches
+   the new session — those belong to other devices/browsers and are legitimate
+   independent sessions.
+2. Chains minted for a **different** gym are still revoked. That preserves the
+   original guarantee: `RefreshAsync` preserves its chain's scope, so a stale
+   context holding a pre-switch chain can never silently refresh into a gym the
+   user has left. `SwitchGymTests` continues to assert this.
+3. Reuse detection is unchanged: replaying an already-rotated token outside the
+   60-second grace still revokes **all** of the user's chains (suspected theft).
+4. Termination/separation still revokes every chain (`UserSessionService`).
+
+**Consequences.** Multi-device and multi-browser sessions coexist, and a login
+can no longer sign the user out elsewhere. The cross-gym guarantee is enforced
+twice: server-side by the scoped sweep, client-side by `refreshOnce` adopting a
+newer stored session instead of overwriting it. Regression coverage:
+`AuthControllerTests.Login_SecondSessionSameGym_KeepsTheFirstSessionAlive` plus
+`SwitchGymTests` and the client session e2e specs.

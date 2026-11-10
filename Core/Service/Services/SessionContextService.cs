@@ -93,21 +93,21 @@ namespace Service.Services
                     ExpiresAtUtc = tokenService.RefreshTokenExpiresAtUtc
                 }, cancellationToken);
 
-            // Revoke every OTHER alive refresh chain of this user in the same
-            // transaction. Leaving old chains alive proved unsafe in practice: a
-            // stale SPA context (another tab, or a tab still running a previous
-            // build with an old in-memory session) kept one, hit its 401-retry,
-            // refreshed against it and got a token re-scoped to the PREVIOUS gym
-            // (RefreshAsync preserves chain scope), overwriting the persisted
-            // session so the UI silently flipped back to the old gym with no
-            // error — the exact "stays in the main gym" report. With
-            // single-live-chain discipline a stale credential is refused: its
-            // holder is signed out (visible state) instead of resurrecting the
-            // old gym scope. The new row is excluded by hash (its Id is not
-            // assigned until the save).
+            // Same-gym sessions coexist; only chains minted for a DIFFERENT gym are
+            // swept. Revoking every other chain (the former blanket "single-live-
+            // chain" sweep) signed the user out on every other device/browser one
+            // access-token lifetime later — the reported "logged out every 15–30
+            // minutes" — because their next silent refresh was refused.
+            //
+            // The guarantee the sweep exists for is preserved: a chain minted for the
+            // PREVIOUS gym is revoked, so a stale SPA context can never silently
+            // refresh into the gym the user has since left (RefreshAsync preserves
+            // its chain's ScopedGymId). A session already on the target gym — another
+            // device, or a second browser — is a legitimate independent session and
+            // survives the switch.
             var staleChain = await refreshRepo.GetAllAsync(
                 new RefreshTokensByUserActiveSpec(user.Id), cancellationToken);
-            foreach (var zombie in staleChain)
+            foreach (var zombie in staleChain.Where(t => t.ScopedGymId != gymId))
             {
                 zombie.RevokedAtUtc = DateTime.UtcNow;
                 refreshRepo.Update(zombie);

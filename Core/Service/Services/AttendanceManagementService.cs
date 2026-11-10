@@ -293,6 +293,16 @@ namespace Service.Services
             // The mock UI only shows elapsed days (past + today); future days are
             // excluded entirely rather than shown as Scheduled.
             var to = monthEnd < today ? monthEnd : today;
+
+            // Reconcile the viewed month's attendance deductions first: every late
+            // or absent day of the history is then raised and priced (Pending) by
+            // the same sweep the branch and dashboard use, so the day carries the
+            // amount it threatens whichever month is opened. Idempotent per day.
+            if (to >= monthStart)
+            {
+                await _deductionSweep.SweepAsync([employee.Id], monthStart, to, cancellationToken);
+            }
+
             var rows = to < monthStart
                 ? []
                 : await ComposeRowsAsync([employee], monthStart, to, cancellationToken);

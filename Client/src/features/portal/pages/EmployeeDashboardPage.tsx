@@ -22,16 +22,40 @@ function time12(value: string | null): string {
   return `${display}:${minutePart} ${suffix}`
 }
 
+/** "08:00" → "8a" — compact label for the phone 7-day strip. */
+function shortTime(value: string | null): string {
+  if (!value) return '—'
+  const [hourPart, minutePart] = value.split(':')
+  const hour = Number(hourPart)
+  if (Number.isNaN(hour)) return value
+  const suffix = hour >= 12 ? 'p' : 'a'
+  const display = hour % 12 === 0 ? 12 : hour % 12
+  return minutePart && minutePart !== '00' ? `${display}:${minutePart}${suffix}` : `${display}${suffix}`
+}
+
 /** Off-day card on the 7-day schedule strip. Shows check-in/out when a record exists. */
 function OffDayCard({ day }: { day: ScheduleDay }) {
   return (
-    <div className={cn('schedule-day-card', day.isToday && 'is-today', 'is-off')}>
-      <p className={cn('bento-label mb-1', day.isToday && '!text-brand-600')}>
-        {day.dayName.toUpperCase()} {day.date.slice(8)}
-        {day.isToday ? ' (TODAY)' : ''}
-      </p>
-      <p className="mt-2 flex items-center gap-1 text-xs font-semibold text-charcoal-500">OFF</p>
-      <ClockRow day={day} />
+    <div className={cn('w-[22%] shrink-0 snap-start rounded-lg border border-charcoal-200 bg-white sm:w-auto sm:shrink', day.isToday && 'border-brand-200 bg-brand-50', 'sm:p-3')}>
+      {/* Phone: ~4 days visible, the rest one swipe away. */}
+      <div className="flex flex-col items-center gap-0.5 px-1 py-2 text-center sm:hidden">
+        <p className={cn('text-[9px] font-bold uppercase leading-none text-charcoal-400', day.isToday && 'text-brand-600')}>
+          {day.dayName.slice(0, 3)}
+        </p>
+        <p className={cn('text-sm font-bold leading-none text-charcoal-900', day.isToday && 'text-brand-700')}>{day.date.slice(8)}</p>
+        <span className="mt-1 w-full rounded bg-charcoal-100 px-0.5 py-0.5 text-[9px] font-bold leading-tight text-charcoal-600">
+          OFF
+        </span>
+      </div>
+
+      <div className="hidden sm:block">
+        <p className={cn('bento-label mb-1', day.isToday && '!text-brand-600')}>
+          {day.dayName.toUpperCase()} {day.date.slice(8)}
+          {day.isToday ? ' (TODAY)' : ''}
+        </p>
+        <p className="mt-2 flex items-center gap-1 text-xs font-semibold text-charcoal-500">OFF</p>
+        <ClockRow day={day} />
+      </div>
     </div>
   )
 }
@@ -39,19 +63,34 @@ function OffDayCard({ day }: { day: ScheduleDay }) {
 function ScheduleShiftCard({ day }: { day: ScheduleDay }) {
   const shiftClass =
     day.shiftName === 'Morning' ? 'schedule-shift-morning' : day.shiftName === 'Evening' ? 'schedule-shift-evening' : 'schedule-shift-off'
+  const shiftTone =
+    day.shiftName === 'Morning' ? 'bg-blue-100 text-blue-800' : day.shiftName === 'Evening' ? 'bg-green-100 text-green-800' : 'bg-charcoal-100 text-charcoal-600'
   return (
-    <div className={cn('schedule-day-card', day.isToday && 'is-today')}>
-      <p className={cn('bento-label mb-1', day.isToday && '!text-brand-600')}>
-        {day.dayName.toUpperCase()} {day.date.slice(8)}
-        {day.isToday ? ' (TODAY)' : ''}
-      </p>
-      <span className={cn('schedule-shift-badge inline-block', shiftClass)}>{day.shiftName}</span>
-      <div className="mt-1.5">
-        <p className="text-[11px] font-bold leading-tight text-charcoal-900">{time12(day.start)}</p>
-        <ChevronRight className="my-0.5 h-3 w-3 rotate-90 text-charcoal-300" aria-hidden="true" />
-        <p className="text-[11px] font-semibold leading-tight text-charcoal-500">{time12(day.end)}</p>
+    <div className={cn('w-[22%] shrink-0 snap-start rounded-lg border border-charcoal-200 bg-white sm:w-auto sm:shrink', day.isToday && 'border-brand-200 bg-brand-50', 'sm:p-3')}>
+      {/* Phone: ~4 days visible, the rest one swipe away. */}
+      <div className="flex flex-col items-center gap-0.5 px-1 py-2 text-center sm:hidden">
+        <p className={cn('text-[9px] font-bold uppercase leading-none text-charcoal-400', day.isToday && 'text-brand-600')}>
+          {day.dayName.slice(0, 3)}
+        </p>
+        <p className={cn('text-sm font-bold leading-none text-charcoal-900', day.isToday && 'text-brand-700')}>{day.date.slice(8)}</p>
+        <span className={cn('mt-1 w-full rounded px-0.5 py-0.5 text-[9px] font-bold leading-tight', shiftTone)}>
+          {shortTime(day.start)}–{shortTime(day.end)}
+        </span>
       </div>
-      <ClockRow day={day} />
+
+      <div className="hidden sm:block">
+        <p className={cn('bento-label mb-1', day.isToday && '!text-brand-600')}>
+          {day.dayName.toUpperCase()} {day.date.slice(8)}
+          {day.isToday ? ' (TODAY)' : ''}
+        </p>
+        <span className={cn('schedule-shift-badge inline-block', shiftClass)}>{day.shiftName}</span>
+        <div className="mt-1.5">
+          <p className="text-[11px] font-bold leading-tight text-charcoal-900">{time12(day.start)}</p>
+          <ChevronRight className="my-0.5 h-3 w-3 rotate-90 text-charcoal-300" aria-hidden="true" />
+          <p className="text-[11px] font-semibold leading-tight text-charcoal-500">{time12(day.end)}</p>
+        </div>
+        <ClockRow day={day} />
+      </div>
     </div>
   )
 }
@@ -183,19 +222,19 @@ export default function EmployeeDashboardPage() {
       </div>
 
       <div className="flex flex-col gap-2">
-        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+        <div className="grid grid-cols-2 gap-2">
           {/* Today's shift */}
-          <button type="button" className="card card-interactive p-3 text-left" onClick={() => navigate(PAGE_PATHS.schedule)}>
-            <p className="bento-label mb-2">TODAY'S SHIFT</p>
-            <div className="flex items-start justify-between">
-              <div>
-                <p className="text-base font-bold text-charcoal-900">
-                  {today ? `${time12(today.start)} — ${time12(today.end)}` : '—'}
+          <button type="button" className="card card-interactive p-2.5 text-left sm:p-3" onClick={() => navigate(PAGE_PATHS.schedule)}>
+            <p className="bento-label mb-1.5 sm:mb-2">TODAY'S SHIFT</p>
+            <div className="flex items-start justify-between gap-1">
+              <div className="min-w-0">
+                <p className="text-sm font-bold leading-tight text-charcoal-900 sm:text-base">
+                  {today ? `${time12(today.start)}–${time12(today.end)}` : '—'}
                 </p>
-                <p className="mt-0.5 text-xs text-charcoal-500">{today ? `${today.shiftName} Shift` : 'No shift scheduled'}</p>
+                <p className="mt-0.5 text-[11px] text-charcoal-500 sm:text-xs">{today ? `${today.shiftName} Shift` : 'No shift scheduled'}</p>
               </div>
               {today && (
-                <span className="flex items-center gap-1 rounded bg-brand-50 px-2 py-0.5 text-[10px] font-semibold text-brand-700">
+                <span className="hidden items-center gap-1 rounded bg-brand-50 px-2 py-0.5 text-[10px] font-semibold text-brand-700 sm:flex">
                   <Calendar className="h-3 w-3" aria-hidden="true" />
                   Scheduled
                 </span>
@@ -204,14 +243,14 @@ export default function EmployeeDashboardPage() {
           </button>
 
           {/* Today's attendance */}
-          <button type="button" className="card card-interactive p-3 text-left" onClick={() => navigate(PAGE_PATHS.attendance)}>
-            <p className="bento-label mb-2">TODAY'S ATTENDANCE</p>
-            <div className="flex items-start justify-between">
-              <div>
-                <p className="text-base font-bold text-charcoal-900">{attendance?.checkedIn ? time12(attendance.checkIn) : '—'}</p>
-                <p className="mt-0.5 text-xs text-charcoal-500">{attendance?.checkedIn ? 'Checked In' : 'Not Checked In'}</p>
+          <button type="button" className="card card-interactive p-2.5 text-left sm:p-3" onClick={() => navigate(PAGE_PATHS.attendance)}>
+            <p className="bento-label mb-1.5 sm:mb-2">TODAY'S ATTENDANCE</p>
+            <div className="flex items-start justify-between gap-1">
+              <div className="min-w-0">
+                <p className="text-sm font-bold leading-tight text-charcoal-900 sm:text-base">{attendance?.checkedIn ? time12(attendance.checkIn) : '—'}</p>
+                <p className="mt-0.5 text-[11px] text-charcoal-500 sm:text-xs">{attendance?.checkedIn ? 'Checked In' : 'Not Checked In'}</p>
               </div>
-              <span className={cn('flex items-center gap-1 rounded px-2 py-0.5 text-[10px] font-semibold', attendanceTone)}>
+              <span className={cn('hidden items-center gap-1 rounded px-2 py-0.5 text-[10px] font-semibold sm:flex', attendanceTone)}>
                 <Clock className="h-3 w-3" aria-hidden="true" />
                 {attendanceLabel}
               </span>
@@ -235,7 +274,7 @@ export default function EmployeeDashboardPage() {
               hint="Your published shift days will appear here once manager publishes the cycle."
             />
           ) : (
-            <div className="schedule-scroll">
+            <div className="-mx-1 flex snap-x snap-mandatory gap-2 overflow-x-auto px-1 pb-1 sm:mx-0 sm:grid sm:grid-cols-7 sm:overflow-visible sm:px-0 sm:pb-0">
               {data.upcomingSchedule.map((day) =>
                 day.isOff ? <OffDayCard key={day.date} day={day} /> : <ScheduleShiftCard key={day.date} day={day} />,
               )}
@@ -244,29 +283,29 @@ export default function EmployeeDashboardPage() {
         </div>
 
         {/* Pending requests + latest payroll */}
-        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-          <button type="button" className="card card-interactive p-3 text-left" onClick={() => navigate(PAGE_PATHS.requests)}>
-            <p className="bento-label mb-2 flex items-center gap-1.5">
-              <Users className="h-3.5 w-3.5" aria-hidden="true" />
+        <div className="grid grid-cols-2 gap-2">
+          <button type="button" className="card card-interactive p-2.5 text-left sm:p-3" onClick={() => navigate(PAGE_PATHS.requests)}>
+            <p className="bento-label mb-1.5 flex items-center gap-1.5 sm:mb-2">
+              <Users className="hidden h-3.5 w-3.5 sm:block" aria-hidden="true" />
               PENDING REQUESTS
             </p>
-            <p className="text-2xl font-bold leading-none text-charcoal-900">{data.pendingRequestCount}</p>
-            <p className="mt-2 text-xs text-charcoal-500">
+            <p className="text-xl font-bold leading-none text-charcoal-900 sm:text-2xl">{data.pendingRequestCount}</p>
+            <p className="mt-1.5 text-[11px] text-charcoal-500 sm:mt-2 sm:text-xs">
               {data.pendingRequestCount === 0 ? 'All caught up!' : `${data.pendingRequestCount} awaiting review`}
             </p>
           </button>
 
-          <button type="button" className="card card-interactive relative overflow-hidden p-3 text-left" onClick={() => navigate(PAGE_PATHS.payroll)}>
-            <div className="absolute right-0 top-0 h-24 w-24 rounded-bl-full bg-brand-500 opacity-[0.07]" aria-hidden="true" />
-            <p className="bento-label relative z-10 mb-2 flex items-center gap-1.5">
-              <Wallet className="h-3.5 w-3.5" aria-hidden="true" />
+          <button type="button" className="card card-interactive relative overflow-hidden p-2.5 text-left sm:p-3" onClick={() => navigate(PAGE_PATHS.payroll)}>
+            <div className="absolute right-0 top-0 h-16 w-16 rounded-bl-full bg-brand-500 opacity-[0.07] sm:h-24 sm:w-24" aria-hidden="true" />
+            <p className="bento-label relative z-10 mb-1.5 flex items-center gap-1.5 sm:mb-2">
+              <Wallet className="hidden h-3.5 w-3.5 sm:block" aria-hidden="true" />
               LATEST PAYROLL
             </p>
             <div className="relative z-10">
-              <p className="text-base font-bold text-charcoal-900">{period?.period ?? 'No payroll yet'}</p>
-              <div className="mt-1.5 flex flex-wrap items-center gap-2">
+              <p className="text-sm font-bold leading-tight text-charcoal-900 sm:text-base">{period?.period ?? 'No payroll yet'}</p>
+              <div className="mt-1 flex flex-wrap items-center gap-1.5 sm:mt-1.5 sm:gap-2">
                 {period && <StatusBadge status={period.status} />}
-                {period && <span className="text-xs text-charcoal-600">{formatMoney(period.netSalary)}</span>}
+                {period && <span className="text-[11px] text-charcoal-600 sm:text-xs">{formatMoney(period.netSalary)}</span>}
               </div>
             </div>
           </button>

@@ -45,11 +45,11 @@ function isCoverDaysPayment(payment: string | null | undefined): boolean {
 /** The four real workflow states behind the mock's tab bar (mock §17). */
 type DeskTab = 'Pending' | 'PendingHRReview' | 'Approved' | 'Rejected'
 
-const TABS: { key: DeskTab; label: string; hint: string }[] = [
-  { key: 'Pending', label: 'NEED ACTION', hint: 'Waiting for your decision' },
-  { key: 'PendingHRReview', label: 'PENDING HR', hint: 'Approved to HR, awaiting sign-off' },
-  { key: 'Approved', label: 'APPROVED', hint: 'Signed off end-to-end' },
-  { key: 'Rejected', label: 'REJECTED', hint: 'Rejected at the desk or by HR' },
+const TABS: { key: DeskTab; label: string; short: string; hint: string }[] = [
+  { key: 'Pending', label: 'NEED ACTION', short: 'Action', hint: 'Waiting for your decision' },
+  { key: 'PendingHRReview', label: 'PENDING HR', short: 'With HR', hint: 'Approved to HR, awaiting sign-off' },
+  { key: 'Approved', label: 'APPROVED', short: 'Approved', hint: 'Signed off end-to-end' },
+  { key: 'Rejected', label: 'REJECTED', short: 'Rejected', hint: 'Rejected at the desk or by HR' },
 ]
 
 const TAB_STYLES: Record<DeskTab, { active: string; badge: string }> = {
@@ -98,10 +98,10 @@ function DeskWorkspace({ tab, onTab }: { tab: DeskTab; onTab: (tab: DeskTab) => 
 
 type HrTab = 'PendingHRReview' | 'Approved' | 'Rejected'
 
-const HR_TABS: { key: HrTab; label: string; hint: string }[] = [
-  { key: 'PendingHRReview', label: 'NEED ACTION', hint: 'Waiting for HR sign-off' },
-  { key: 'Approved', label: 'APPROVED', hint: 'Signed off end-to-end' },
-  { key: 'Rejected', label: 'REJECTED', hint: 'Rejected by HR' },
+const HR_TABS: { key: HrTab; label: string; short: string; hint: string }[] = [
+  { key: 'PendingHRReview', label: 'NEED ACTION', short: 'Action', hint: 'Waiting for HR sign-off' },
+  { key: 'Approved', label: 'APPROVED', short: 'Approved', hint: 'Signed off end-to-end' },
+  { key: 'Rejected', label: 'REJECTED', short: 'Rejected', hint: 'Rejected by HR' },
 ]
 
 function HrWorkspace({ tab, onTab }: { tab: HrTab; onTab: (tab: HrTab) => void }) {
@@ -141,9 +141,15 @@ function HrTabBar({ tab, onTab }: { tab: HrTab; onTab: (tab: HrTab) => void }) {
           <button
             key={t.key}
             onClick={() => onTab(t.key)}
-            className={cn('min-w-0 flex-1 rounded-lg px-2 py-2 text-[11px] font-semibold transition-colors', tab === t.key ? TAB_STYLES[t.key].active : 'text-charcoal-500 hover:bg-charcoal-50')}
+            className={cn(
+              'min-w-0 flex-1 rounded-lg px-1 py-2 text-[11px] font-semibold transition-colors',
+              tab === t.key ? TAB_STYLES[t.key].active : 'text-charcoal-500 hover:bg-charcoal-50',
+            )}
           >
-            <span className="block truncate text-[11px] font-semibold">{t.label}</span>
+            <span className="block text-[11px] font-semibold">
+              <span className="sm:hidden">{t.short}</span>
+              <span className="hidden sm:inline">{t.label}</span>
+            </span>
             <span className="mt-0.5 block text-[10px] font-bold">{totals ? totals[t.key] : '—'}</span>
           </button>
         ))}
@@ -247,7 +253,7 @@ function HrRow({ row, status }: { row: HrRequestItem; status: HrTab }) {
       className="cursor-pointer p-3 transition-colors hover:bg-charcoal-50/50"
       onClick={() => setDetailId(row.id)}
     >
-      <div className="flex items-start justify-between gap-2">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex min-w-0 items-start gap-3">
           <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-brand-100 text-[10px] font-semibold text-brand-700">
             {initialsOf(row.employee)}
@@ -276,7 +282,7 @@ function HrRow({ row, status }: { row: HrRequestItem; status: HrTab }) {
           </div>
         </div>
         <div
-          className="flex flex-shrink-0 items-center gap-1.5"
+          className="flex flex-wrap items-center gap-1.5 sm:flex-shrink-0"
           onClick={(event) => event.stopPropagation()}
         >
           {status === 'PendingHRReview' && (
@@ -510,9 +516,15 @@ function TabBar({ tab, onTab }: { tab: DeskTab; onTab: (tab: DeskTab) => void })
           <button
             key={t.key}
             onClick={() => onTab(t.key)}
-            className={cn('min-w-0 flex-1 rounded-lg px-2 py-2 text-[11px] font-semibold transition-colors', tab === t.key ? TAB_STYLES[t.key].active : 'text-charcoal-500 hover:bg-charcoal-50')}
+            className={cn(
+              'min-w-0 flex-1 rounded-lg px-1 py-2 text-[11px] font-semibold transition-colors',
+              tab === t.key ? TAB_STYLES[t.key].active : 'text-charcoal-500 hover:bg-charcoal-50',
+            )}
           >
-            <span className="block truncate text-[11px] font-semibold">{t.label}</span>
+            <span className="block text-[11px] font-semibold">
+              <span className="sm:hidden">{t.short}</span>
+              <span className="hidden sm:inline">{t.label}</span>
+            </span>
             <span className="mt-0.5 block text-[10px] font-bold">{totals ? totals[t.key] : '—'}</span>
           </button>
         ))}
@@ -868,7 +880,7 @@ function DeskRow({ row, status }: { row: DeskRequestRow; status: DeskTab }) {
       className="cursor-pointer p-3 transition-colors hover:bg-charcoal-50/50"
       onClick={() => setDetailId(row.id)}
     >
-      <div className="flex items-start justify-between gap-2">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex min-w-0 items-start gap-3">
           <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-brand-100 text-[10px] font-semibold text-brand-700">
             {initialsOf(row.employeeName)}
@@ -904,7 +916,7 @@ function DeskRow({ row, status }: { row: DeskRequestRow; status: DeskTab }) {
           </div>
         </div>
         <div
-          className="flex flex-shrink-0 items-center gap-1.5"
+          className="flex flex-wrap items-center gap-1.5 sm:flex-shrink-0"
           onClick={(event) => event.stopPropagation()}
         >
           {status === 'Pending' && (

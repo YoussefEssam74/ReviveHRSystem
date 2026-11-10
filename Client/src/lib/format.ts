@@ -101,10 +101,11 @@ export function formatMoney(value: number | null | undefined, currency = 'EGP'):
   return `${withSeparators} ${currency}`
 }
 
-/** 1450 → "1,450" (no currency) */
+/** 1450 → "1,450" · 4158.32 → "4,158.32" (grouped, no currency) */
 export function formatNumber(value: number | null | undefined): string {
   if (value === null || value === undefined) return '—'
-  return Number.isInteger(value) ? value.toLocaleString('en-US') : value.toFixed(2)
+  const rounded = Number.isInteger(value) ? value.toString() : value.toFixed(2)
+  return rounded.replace(/\B(?=(\d{3})+(?!\d))/g, ',')
 }
 
 /** 2_400_000 → "2.3 MB" (file sizes in upload feedback). */

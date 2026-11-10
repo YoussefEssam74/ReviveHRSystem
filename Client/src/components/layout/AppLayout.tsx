@@ -9,7 +9,7 @@ import { cn } from '../../lib/utils'
 
 function navLinkClass({ isActive }: { isActive: boolean }) {
   return cn(
-    'inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors',
+    'inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg px-3 py-1.5 text-sm font-medium transition-colors',
     isActive ? 'bg-emerald-50 text-emerald-700' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
   )
 }
@@ -25,10 +25,10 @@ export function AppLayout() {
   const isLoginPage = pathname === '/login'
 
   return (
-    <div className="app-background flex min-h-screen flex-col bg-slate-50 bg-cover bg-center bg-fixed">
+    <div className="flex min-h-screen flex-col bg-slate-50">
       <header className="sticky top-0 z-10 border-b border-slate-200 bg-white/90 backdrop-blur">
-        <div className="flex h-16 w-full items-center justify-between gap-4 px-4 sm:px-6 lg:px-8">
-          <Link to="/" className="flex min-w-0 items-center gap-2.5">
+        <div className="flex h-16 w-full items-center justify-between gap-2 px-4 sm:gap-4 sm:px-6 lg:px-8">
+          <Link to="/" className="flex min-w-0 shrink-0 items-center gap-2.5">
             <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-emerald-600 text-sm font-bold text-white">
               R
             </span>
@@ -47,7 +47,7 @@ export function AppLayout() {
             )}
           </Link>
 
-          <nav aria-label="Main" className="flex items-center gap-1 sm:gap-2">
+          <nav aria-label="Main" className="no-scrollbar flex min-w-0 items-center justify-end gap-1 overflow-x-auto sm:gap-2">
             {session && (
               <NavLink to="/enrollment" className={navLinkClass}>
                 Enroll face
@@ -61,16 +61,16 @@ export function AppLayout() {
             )}
 
             {session ? (
-              <div className="ml-1 flex items-center gap-2">
+              <div className="flex shrink-0 items-center gap-2 sm:ml-1">
                 <Link
                   to="/dashboard"
-                  className="hidden max-w-[10rem] truncate text-sm font-medium text-slate-600 hover:text-emerald-700 md:inline"
+                  className="max-w-[7rem] shrink-0 truncate text-sm font-medium text-slate-600 hover:text-emerald-700 sm:max-w-[10rem]"
                 >
                   Dashboard
                 </Link>
-                <Button variant="outline" size="sm" onClick={signOut}>
+                <Button variant="outline" size="sm" onClick={signOut} aria-label="Sign out" className="touch-target">
                   <LogOut className="h-3.5 w-3.5" aria-hidden="true" />
-                  Sign out
+                  <span className="hidden sm:inline">Sign out</span>
                 </Button>
               </div>
             ) : !isLoginPage ? (

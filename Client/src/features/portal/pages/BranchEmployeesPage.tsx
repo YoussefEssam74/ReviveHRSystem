@@ -10,6 +10,7 @@ import {
 } from '../api/branch.api'
 import { createOnBehalfRequest, getRequestTypes } from '../api/requests.api'
 import { BranchActionsPalette } from '../components/BranchActionsPalette'
+import { EmployeeAvatar } from '../components/EmployeeAvatar'
 import { EmptyState } from '../../../components/ui/primitives'
 import { StatusBadge } from '../../../components/ui/badge'
 import { ErrorState, LoadingState } from '../../../components/async-state'
@@ -129,28 +130,36 @@ function EmployeesWorkspace() {
 
   return (
     <div className="space-y-3">
-      <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
-        <div>
-          <h1 className="text-xl font-bold text-charcoal-900">Employees</h1>
-          <p className="mt-0.5 text-xs text-charcoal-500">
+      <div className="flex items-center justify-between gap-2">
+        <div className="min-w-0">
+          <h1 className="truncate text-lg font-bold text-charcoal-900 sm:text-xl">Employees</h1>
+          <p className="mt-0.5 hidden truncate text-xs text-charcoal-500 sm:block">
             {total} employees · {me?.activeGym?.gymName ?? 'Active gym'}
           </p>
         </div>
-        <div className="flex gap-1.5">
+        <div className="flex shrink-0 gap-1.5">
           {canOpenPalette && (
-            <Button size="sm" variant="secondary" onClick={() => setPaletteOpen(true)}>
-              <Zap className="h-3.5 w-3.5" /> Actions
+            <Button size="sm" variant="secondary" onClick={() => setPaletteOpen(true)} aria-label="Actions" title="Actions">
+              <Zap className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Actions</span>
             </Button>
           )}
           {can('requests.view') && (
-            <Button size="sm" variant="primary" onClick={() => setCreateRequestOpen(true)}>
-              <Plus className="h-3.5 w-3.5" /> Create Request
+            <Button
+              size="sm"
+              variant="primary"
+              onClick={() => setCreateRequestOpen(true)}
+              aria-label="Create Request"
+              title="Create Request"
+            >
+              <Plus className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Create Request</span>
             </Button>
           )}
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+      <div className="grid grid-cols-4 gap-1.5 sm:gap-2">
         <StatTile value={total} label="Employees" accent />
         <StatTile value={onShiftCount} label="On shift" />
         <StatTile value={scheduledCount} label="Upcoming today" />
@@ -284,12 +293,12 @@ function StatTile({ value, label, accent }: { value: number; label: string; acce
   return (
     <div
       className={cn(
-        'rounded-xl border border-charcoal-200 bg-white p-3 text-center',
+        'min-w-0 rounded-xl border border-charcoal-200 bg-white px-1 py-2 text-center sm:p-3',
         accent && 'border-l-4 border-l-brand-500',
       )}
     >
-      <p className={cn('text-xl font-bold', accent ? 'text-brand-700' : 'text-charcoal-900')}>{value}</p>
-      <p className="text-[10px] text-charcoal-500">{label}</p>
+      <p className={cn('text-base font-bold leading-tight sm:text-xl', accent ? 'text-brand-700' : 'text-charcoal-900')}>{value}</p>
+      <p className="text-[9px] leading-tight text-charcoal-500 sm:text-[10px]">{label}</p>
     </div>
   )
 }
@@ -307,7 +316,7 @@ function EmployeeRow({
     <tr className="cursor-pointer hover:bg-charcoal-50/50" onClick={onOpen}>
       <td>
         <div className="flex items-center gap-2.5">
-          <Avatar initials={row.initials} />
+          <EmployeeAvatar employeeId={row.id} initials={row.initials} />
           <div>
             <p className="text-xs font-medium text-charcoal-900">{row.name}</p>
             <p className="text-[10px] text-charcoal-500">
@@ -346,7 +355,7 @@ function DirectoryCard({
     >
       <div className="flex items-center justify-between gap-2">
         <div className="flex min-w-0 items-center gap-2.5">
-          <Avatar initials={row.initials} />
+          <EmployeeAvatar employeeId={row.id} initials={row.initials} />
           <div className="min-w-0">
             <p className="truncate text-xs font-medium text-charcoal-900">{row.name}</p>
             <p className="truncate text-[10px] text-charcoal-500">{row.position}</p>
@@ -359,14 +368,6 @@ function DirectoryCard({
         {todayRow && <StatusBadge status={todayRow.status} />}
       </div>
     </button>
-  )
-}
-
-function Avatar({ initials }: { initials: string }) {
-  return (
-    <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-brand-100 text-[10px] font-semibold text-brand-700">
-      {initials}
-    </div>
   )
 }
 

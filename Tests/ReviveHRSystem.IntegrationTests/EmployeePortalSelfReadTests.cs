@@ -600,6 +600,51 @@ namespace ReviveHRSystem.IntegrationTests
         }
 
         /// <summary>
+        /// A deduction the sweep has just raised is employee-facing from the start:
+        /// the day carries its priced amount in Pending state until the branch and HR
+        /// decide (Pending HR / Applied / Rejected), so the attendance history never
+        /// has to repeat the day's Absent/Late status to explain the money.
+        /// </summary>
+        [Fact]
+        public async Task EmployeeDeductions_PendingCandidate_IsVisibleWithPendingStatus()
+        {
+            var employeeId = await OwnEmployeeIdAsync("karim@revive.hr");
+            var token = await _fixture.LoginAsync("karim@revive.hr", "Revive!2026");
+
+            using var scope = _fixture.Services.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<ReviveHrDbContext>();
+            var gymId = await db.Employees.Where(e => e.Id == employeeId).Select(e => e.GymId).SingleAsync();
+
+            var builder = new TestDataBuilder(_fixture.Services);
+            var absentRecordId = await builder.CreateAttendanceRecordAsync(
+                employeeId, gymId, new DateOnly(2026, 3, 5),
+                status: DomainLayer.Models.AttendanceModule.Enums.AttendanceStatus.Absent);
+
+            var issuerId = await db.Users.Where(u => u.Email == "omar@revive.hr").Select(u => u.Id).SingleAsync();
+            db.DeductionCandidates.Add(new DomainLayer.Models.PayrollModule.DeductionCandidate
+            {
+                EmployeeId = employeeId,
+                AttendanceRecordId = absentRecordId,
+                DeductionDate = new DateOnly(2026, 3, 5),
+                DeductionDays = 1m,
+                Amount = 120m,
+                Reason = "Unapproved absence",
+                IssuedBy = issuerId,
+                IssuedAt = new DateTime(2026, 3, 6, 9, 0, 0, DateTimeKind.Utc),
+                Status = DomainLayer.Models.PayrollModule.Enums.DeductionStatus.Pending,
+            });
+            await db.SaveChangesAsync();
+
+            var rows = await GetJsonAsync($"/api/employees/{employeeId}/deductions", token);
+
+            var row = rows.EnumerateArray().Single(r =>
+                r.GetProperty("id").GetString()!.StartsWith("candidate-")
+                && r.GetProperty("date").GetString() == "2026-03-05");
+            Assert.Equal(120m, row.GetProperty("amount").GetDecimal());
+            Assert.Equal("Pending", row.GetProperty("status").GetString());
+        }
+
+        /// <summary>
         /// A "Deduction — 3 Days" absence follow-up prices at the sheet's daily rate
         /// (base ÷ 30) for the period covering the absence day, so the day drawer can
         /// answer "how much will be deducted".

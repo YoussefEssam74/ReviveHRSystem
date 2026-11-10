@@ -336,15 +336,21 @@ namespace Service.Services
                     ExpiresAtUtc = tokenService.RefreshTokenExpiresAtUtc
                 }, cancellationToken);
 
-            // Single-live-chain discipline (same rationale as SwitchGymAsync): a
-            // fresh login/selection revokes every other alive refresh chain of
-            // this user, so a stale SPA context can no longer silently refresh
-            // an old chain and re-mint a token scoped to a gym the user no
-            // longer selected. The new row is excluded by hash (its Id is not
-            // assigned until the save).
+            // Same-gym sessions coexist; only chains minted for a DIFFERENT gym are
+            // swept. Revoking every other chain (the former blanket "single-live-
+            // chain" sweep) meant that signing in on a second device, browser or
+            // profile silently destroyed the first session: its next silent refresh
+            // was refused with "Your session has expired", so the user was signed
+            // out one access-token lifetime later with no visible cause — the
+            // reported "logged out every 15–30 minutes".
+            //
+            // The scope guarantee this sweep exists for is preserved: a chain minted
+            // for another gym is still revoked, so a stale context can never silently
+            // refresh into a gym the user has since left (RefreshAsync preserves its
+            // chain's ScopedGymId). The new row is excluded by scope, not by Id.
             var staleChain = await refreshRepo.GetAllAsync(
                 new RefreshTokensByUserActiveSpec(user.Id), cancellationToken);
-            foreach (var zombie in staleChain)
+            foreach (var zombie in staleChain.Where(t => t.ScopedGymId != scopedGymId))
             {
                 zombie.RevokedAtUtc = DateTime.UtcNow;
                 refreshRepo.Update(zombie);

@@ -4,7 +4,9 @@ namespace Shared.DataTransferObject.EmployeeProfile
     /// One deduction hanging on an employee as he sees it: an absence follow-up raised
     /// by the sweep (or a manager) or a payroll deduction candidate issued for him —
     /// joined with the Deduction Correction request he filed against the same date, so
-    /// the card can show the whole trail in a single row.
+    /// the card can show the whole trail in a single row. A candidate is visible from
+    /// the moment it is raised (Pending) and stays visible through the branch/HR
+    /// decision (Pending HR, Applied, Rejected).
     /// </summary>
     /// <param name="Id">
     /// Scoped string id — follow-ups and candidates have separate integer id spaces,
@@ -20,7 +22,10 @@ namespace Shared.DataTransferObject.EmployeeProfile
     /// Candidates carry their money amount; follow-ups price their described
     /// day-multiple against the sheet's daily rate (null without a priced sheet).
     /// </param>
-    /// <param name="Status">Human status: In review / Resolved / Applied / Rejected.</param>
+    /// <param name="Status">
+    /// Human status: Pending / Pending HR (branch approved, HR to apply) / Applied /
+    /// Rejected / In review / Resolved (absence follow-ups).
+    /// </param>
     /// <param name="Detail">Extra line — the follow-up's last action or the candidate's note.</param>
     /// <param name="CorrectionRequestId">His correction request for this date, when one exists.</param>
     /// <param name="CorrectionStatus">Raw status of that request (Pending, PendingHRReview, ...).</param>
