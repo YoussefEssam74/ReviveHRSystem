@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
+import { useTranslation } from 'react-i18next'
 import {
   BadgeCheck,
   Banknote,
@@ -28,11 +29,13 @@ import { ErrorState, LoadingState } from '../../../components/async-state'
 import { Drawer } from '../../../components/ui/drawer'
 import { StatusBadge, Badge, type BadgeColor } from '../../../components/ui/badge'
 import { usePortalSession } from '../../../contexts/PortalSessionContext'
+import { translate } from '../../../i18n'
 import { describeApiError } from '../../../lib/api-client'
 import { formatDate, formatMoney, formatTimeOfDay } from '../../../lib/format'
 import { cn } from '../../../lib/utils'
 
 export default function MyPayrollPage() {
+  const { t } = useTranslation()
   const { me } = usePortalSession()
   const employeeId = me?.employeeId ?? null
 
@@ -54,12 +57,12 @@ export default function MyPayrollPage() {
   if (employeeId == null) {
     return (
       <EmptyState
-        title="No employee profile"
-        hint="This account is not linked to an employee profile, so it has no payroll history."
+        title={t('No employee profile')}
+        hint={t('This account is not linked to an employee profile, so it has no payroll history.')}
       />
     )
   }
-  if (sheetsQuery.isLoading) return <LoadingState label="Loading payroll…" />
+  if (sheetsQuery.isLoading) return <LoadingState label={t('Loading payroll…')} />
   if (sheetsQuery.isError) {
     return <ErrorState message={describeApiError(sheetsQuery.error)} onRetry={() => sheetsQuery.refetch()} />
   }
@@ -90,10 +93,10 @@ export default function MyPayrollPage() {
   if (allSheets.length === 0) {
     return (
       <div className="space-y-2.5">
-        <h1 className="text-lg font-bold text-charcoal-900">My Payroll</h1>
+        <h1 className="text-lg font-bold text-charcoal-900">{t('My Payroll')}</h1>
         <EmptyState
-          title="No payroll history yet"
-          hint="Sheets appear here once a payroll period has been processed for your gym."
+          title={t('No payroll history yet')}
+          hint={t('Sheets appear here once a payroll period has been processed for your gym.')}
         />
       </div>
     )
@@ -103,9 +106,9 @@ export default function MyPayrollPage() {
     <div className="space-y-2.5">
       <div>
         <h1 className="text-lg font-bold text-charcoal-900">
-          My Payroll{' '}
+          {t('My Payroll')}{' '}
           <span className="text-[11px] font-normal text-charcoal-400">
-            · {paid.length} payslips · {openSheet ? 1 : 0} open
+            · {t('{{count}} payslips', { count: paid.length })} · {openSheet ? 1 : 0} {t('open')}
           </span>
         </h1>
       </div>
@@ -114,8 +117,8 @@ export default function MyPayrollPage() {
       <SummaryPanel
         open={summaryOpen}
         onToggle={() => setSummaryOpen((current) => !current)}
-        summaryLabel={`EGP ${totalNet.toLocaleString()} net`}
-        note={`${paid.length} payslips · ${openSheet ? 1 : 0} open`}
+        summaryLabel={t('EGP {{amount}} net', { amount: totalNet.toLocaleString() })}
+        note={`${t('{{count}} payslips', { count: paid.length })} · ${openSheet ? 1 : 0} ${t('open')}`}
       >
         <SummaryBody
           paid={paid}
@@ -134,7 +137,7 @@ export default function MyPayrollPage() {
 
       {/* Monthly Breakdown — one collapsible card per month, newest first. */}
       <div>
-        <h2 className="mb-2 text-base font-bold text-charcoal-900">Monthly Breakdown</h2>
+        <h2 className="mb-2 text-base font-bold text-charcoal-900">{t('Monthly Breakdown')}</h2>
         <div className="space-y-2.5">
           {months.map((sheet) => (
             <SheetCard
@@ -147,7 +150,7 @@ export default function MyPayrollPage() {
             />
           ))}
         </div>
-        <p className="mt-2 text-[11px] text-charcoal-400">Tap a month to drop open its full breakdown.</p>
+        <p className="mt-2 text-[11px] text-charcoal-400">{t('Tap a month to drop open its full breakdown.')}</p>
       </div>
 
       <PayslipDrawer entryId={slipId} employeeId={employeeId} onClose={() => setSlipId(null)} />
@@ -170,16 +173,17 @@ function SummaryPanel({
   note: string
   children: React.ReactNode
 }) {
+  const { t } = useTranslation()
   return (
     <div className="overflow-hidden rounded-xl border border-charcoal-200 bg-white">
       <button
         type="button"
         onClick={onToggle}
         aria-expanded={open}
-        className="w-full px-3 py-2.5 text-left transition-colors hover:bg-charcoal-50/60"
+        className="w-full px-3 py-2.5 text-start transition-colors hover:bg-charcoal-50/60"
       >
         <div className="flex items-center gap-2">
-          <p className="bento-label min-w-0 flex-1 truncate text-charcoal-500">PAYROLL SUMMARY</p>
+          <p className="bento-label min-w-0 flex-1 truncate text-charcoal-500">{t('PAYROLL SUMMARY')}</p>
           <span className="hidden min-w-0 truncate text-[11px] text-charcoal-400 sm:block">{note}</span>
           <span className="whitespace-nowrap text-sm font-bold text-charcoal-900">{summaryLabel}</span>
           <ChevronDown
@@ -212,19 +216,20 @@ function SummaryBody({
   totalNet: number
   avgNet: number
 }) {
+  const { t } = useTranslation()
   return (
     <div className="space-y-2">
       {paid.length > 0 && (
         <div>
           <div className="mb-1 flex items-center justify-between">
-            <p className="bento-label text-charcoal-400">YEAR TO DATE</p>
-            <span className="text-[10px] font-semibold text-charcoal-400">{paid.length} months paid</span>
+            <p className="bento-label text-charcoal-400">{t('YEAR TO DATE')}</p>
+            <span className="text-[10px] font-semibold text-charcoal-400">{t('{{count}} months paid', { count: paid.length })}</span>
           </div>
           <div className="grid grid-cols-2 gap-1.5 lg:grid-cols-4">
-            <YtdCard icon={<Wallet className="h-4 w-4 text-brand-500" aria-hidden="true" />} tint="bg-brand-50" label="Earned" value={totalGross} color="text-brand-700" />
-            <YtdCard icon={<TrendingDown className="h-4 w-4 text-red-400" aria-hidden="true" />} tint="bg-red-50" label="Deductions" value={totalDed} color="text-red-600" />
-            <YtdCard icon={<PiggyBank className="h-4 w-4 text-green-500" aria-hidden="true" />} tint="bg-green-50" label="Net Pay" value={totalNet} color="text-green-700" />
-            <YtdCard icon={<TrendingUp className="h-4 w-4 text-purple-500" aria-hidden="true" />} tint="bg-purple-50" label="Avg / Month" value={avgNet} color="text-purple-700" />
+            <YtdCard icon={<Wallet className="h-4 w-4 text-brand-500" aria-hidden="true" />} tint="bg-brand-50" label={t('Earned')} value={totalGross} color="text-brand-700" />
+            <YtdCard icon={<TrendingDown className="h-4 w-4 text-red-400" aria-hidden="true" />} tint="bg-red-50" label={t('Deductions')} value={totalDed} color="text-red-600" />
+            <YtdCard icon={<PiggyBank className="h-4 w-4 text-green-500" aria-hidden="true" />} tint="bg-green-50" label={t('Net Pay')} value={totalNet} color="text-green-700" />
+            <YtdCard icon={<TrendingUp className="h-4 w-4 text-purple-500" aria-hidden="true" />} tint="bg-purple-50" label={t('Avg / Month')} value={avgNet} color="text-purple-700" />
           </div>
         </div>
       )}
@@ -232,14 +237,14 @@ function SummaryBody({
       {latest && (
         <div>
           <div className="mb-1 flex items-center justify-between">
-            <p className="bento-label text-charcoal-400">SALARY &amp; SCHEDULE</p>
+            <p className="bento-label text-charcoal-400">{t('SALARY & SCHEDULE')}</p>
             <span className="text-[10px] font-semibold text-charcoal-400">{latest.period}</span>
           </div>
           <div className="space-y-1.5 rounded-xl border border-charcoal-100 bg-white p-2">
             <div className="flex items-center justify-between">
               <span className="flex items-center gap-2 text-[13px] text-charcoal-600">
                 <Banknote className="h-4 w-4 text-charcoal-400" aria-hidden="true" />
-                Basic Salary
+                {t('Basic Salary')}
               </span>
               <span className="text-[13px] font-bold text-charcoal-900">{formatMoney(latest.baseSalary)}</span>
             </div>
@@ -247,7 +252,7 @@ function SummaryBody({
               <div className="flex items-center justify-between">
                 <span className="flex items-center gap-2 text-[13px] text-charcoal-600">
                   <TrendingUp className="h-4 w-4 text-green-500" aria-hidden="true" />
-                  Annual Increase ({increasePercentLabel(latest)})
+                  {t('Annual Increase ({{percent}})', { percent: increasePercentLabel(latest) })}
                 </span>
                 <span className="text-[13px] font-bold text-green-600">
                   +{formatMoney(latest.annualIncrease ?? 0)}
@@ -255,7 +260,7 @@ function SummaryBody({
               </div>
             )}
             <div className="flex items-center justify-between rounded-lg border border-brand-100 bg-brand-50 px-2.5 py-1.5">
-              <p className="text-[13px] font-bold text-brand-700">Contractual Salary / month</p>
+              <p className="text-[13px] font-bold text-brand-700">{t('Contractual Salary / month')}</p>
               <p className="text-sm font-bold text-brand-700">
                 {formatMoney(latest.baseSalary + (latest.annualIncrease ?? 0))}
               </p>
@@ -263,16 +268,16 @@ function SummaryBody({
             <div className="grid grid-cols-2 gap-1.5 pt-0.5 text-center sm:grid-cols-4">
               <div className="rounded-lg bg-charcoal-50 p-1.5">
                 <p className="text-base font-bold text-charcoal-900">{latest.workingDays ?? 0}</p>
-                <p className="mt-0.5 text-[10px] leading-tight text-charcoal-500">Scheduled Work Days</p>
+                <p className="mt-0.5 text-[10px] leading-tight text-charcoal-500">{t('Scheduled Work Days')}</p>
               </div>
               <div className="rounded-lg bg-charcoal-50 p-1.5">
                 <p className="text-base font-bold text-charcoal-900">{latest.scheduledWeeklyDays ?? 6}</p>
-                <p className="mt-0.5 text-[10px] leading-tight text-charcoal-500">Weekly Days</p>
+                <p className="mt-0.5 text-[10px] leading-tight text-charcoal-500">{t('Weekly Days')}</p>
               </div>
               <div className="rounded-lg bg-charcoal-50 p-1.5">
                 <p className="text-base font-bold text-brand-700">{latest.daysWorked ?? 0}</p>
                 <p className="mt-0.5 text-[10px] leading-tight text-charcoal-500">
-                  Attendance · {attendancePct(latest)}%
+                  {t('Attendance · {{percent}}%', { percent: attendancePct(latest) })}
                 </p>
               </div>
               <div className="rounded-lg bg-charcoal-50 p-1.5">
@@ -284,7 +289,7 @@ function SummaryBody({
                 >
                   {latest.overtimeHours ?? 0}h
                 </p>
-                <p className="mt-0.5 text-[10px] leading-tight text-charcoal-500">Overtime</p>
+                <p className="mt-0.5 text-[10px] leading-tight text-charcoal-500">{t('Overtime')}</p>
               </div>
             </div>
           </div>
@@ -293,7 +298,7 @@ function SummaryBody({
 
       <div>
         <div className="mb-1 flex items-center justify-between">
-          <p className="bento-label text-charcoal-400">ANNUAL LEAVE</p>
+          <p className="bento-label text-charcoal-400">{t('ANNUAL LEAVE')}</p>
           <span className="text-[10px] font-semibold text-charcoal-400">
             {openPeriodLabel(latest)}
           </span>
@@ -332,15 +337,18 @@ type EarningRow = { label: string; amount: number; reason?: string | null }
  * "* Bonus" lines are folded into the canonical rows so nothing shows twice.
  */
 function buildEarningsRows(sheet: PayrollSheet): EarningRow[] {
-  const rows: EarningRow[] = [{ label: 'Basic Salary', amount: sheet.baseSalary }]
+  const rows: EarningRow[] = [{ label: translate('Basic Salary'), amount: sheet.baseSalary }]
   if ((sheet.annualIncrease ?? 0) > 0) {
-    rows.push({ label: `Annual Increase (${increasePercentLabel(sheet)})`, amount: sheet.annualIncrease ?? 0 })
+    rows.push({
+      label: translate('Annual Increase ({{percent}})', { percent: increasePercentLabel(sheet) }),
+      amount: sheet.annualIncrease ?? 0,
+    })
   }
   if ((sheet.overtimeHours ?? 0) > 0) {
-    rows.push({ label: `Overtime Pay (${sheet.overtimeHours} hrs)`, amount: sheet.overtimePay ?? 0 })
+    rows.push({ label: translate('Overtime Pay ({{hours}} hrs)', { hours: sheet.overtimeHours }), amount: sheet.overtimePay ?? 0 })
   }
   if ((sheet.totalBonuses ?? 0) > 0) {
-    rows.push({ label: 'Bonus', amount: sheet.totalBonuses })
+    rows.push({ label: translate('Bonus'), amount: sheet.totalBonuses })
   }
   const overtimeShown = (sheet.overtimeHours ?? 0) > 0
   const bonusShown = (sheet.totalBonuses ?? 0) > 0
@@ -455,11 +463,12 @@ function payItemIcon(label: string, earning: boolean): React.ReactNode {
 }
 
 function LeaveQuotaBody({ balance, error }: { balance: LeaveBalanceResponse | null; error: string | null }) {
+  const { t } = useTranslation()
   if (error) {
     return <p className="text-[11px] text-red-600">{error}</p>
   }
   if (!balance) {
-    return <p className="text-[11px] text-charcoal-400">Loading annual leave balance…</p>
+    return <p className="text-[11px] text-charcoal-400">{t('Loading annual leave balance…')}</p>
   }
   const total = balance.dayOff.total
   const used = balance.dayOff.used
@@ -471,19 +480,22 @@ function LeaveQuotaBody({ balance, error }: { balance: LeaveBalanceResponse | nu
       <div className="grid grid-cols-3 gap-1">
         <div className="rounded-lg bg-charcoal-50 p-1.5 text-center">
           <p className="text-lg font-bold leading-none text-charcoal-900">{quota}</p>
-          <p className="mt-0.5 text-[9px] text-charcoal-500">Accrues / month</p>
+          <p className="mt-0.5 text-[9px] text-charcoal-500">{t('Accrues / month')}</p>
         </div>
         <div className="rounded-lg bg-charcoal-50 p-1.5 text-center">
           <p className="text-lg font-bold leading-none text-charcoal-900">{used}</p>
-          <p className="mt-0.5 text-[9px] text-charcoal-500">Used this year</p>
+          <p className="mt-0.5 text-[9px] text-charcoal-500">{t('Used this year')}</p>
         </div>
         <div className="rounded-lg bg-charcoal-50 p-1.5 text-center">
           <p className="text-lg font-bold leading-none text-brand-700">{remaining}</p>
-          <p className="mt-0.5 text-[9px] text-charcoal-500">Days left</p>
+          <p className="mt-0.5 text-[9px] text-charcoal-500">{t('Days left')}</p>
         </div>
       </div>
       <p className="mt-1.5 text-[10px] leading-snug text-charcoal-500">
-        Annual leave accrues monthly against your {total}-day allowance — you have {remaining} of {total} days left this year.
+        {t('Annual leave accrues monthly against your {{total}}-day allowance — you have {{remaining}} of {{total}} days left this year.', {
+          total,
+          remaining,
+        })}
       </p>
       <div className="mt-1.5 flex items-center gap-2">
         <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-charcoal-100">
@@ -526,26 +538,27 @@ function YtdCard({
 /* ==================== Current period card ==================== */
 
 function CurrentPeriodCard({ sheet }: { sheet: PayrollSheet }) {
+  const { t } = useTranslation()
   return (
     <div className="relative overflow-hidden rounded-2xl border border-brand-200 bg-gradient-to-br from-brand-50 via-white to-brand-50/50 p-3.5">
-      <div className="absolute right-0 top-0 h-28 w-28 translate-x-1/2 -translate-y-1/2 rounded-full bg-brand-100/40" />
+      <div className="absolute end-0 top-0 h-28 w-28 translate-x-1/2 -translate-y-1/2 rounded-full bg-brand-100/40" />
       <div className="relative flex items-center gap-3.5">
         <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-2xl bg-brand-500 shadow-md shadow-brand-200">
           <Clock className="h-6 w-6 text-white" aria-hidden="true" />
         </div>
         <div className="min-w-0 flex-1">
-          <p className="text-[11px] font-bold uppercase tracking-wider text-brand-600">Current Period</p>
+          <p className="text-[11px] font-bold uppercase tracking-wider text-brand-600">{t('Current Period')}</p>
           <p className="mt-0.5 text-xl font-bold text-charcoal-900">{sheet.period}</p>
           <div className="mt-1 flex items-center gap-2">
             <StatusBadge status={sheet.status} />
-            <span className="text-xs text-charcoal-400">· Payout pending</span>
+            <span className="text-xs text-charcoal-400">{t('· Payout pending')}</span>
           </div>
         </div>
-        <div className="hidden flex-shrink-0 text-right sm:block">
+        <div className="hidden flex-shrink-0 text-end sm:block">
           <div className="h-2.5 w-32 overflow-hidden rounded-full bg-brand-100">
             <div className="h-full w-2/3 rounded-full bg-brand-400" />
           </div>
-          <p className="mt-1.5 text-[11px] text-charcoal-400">Being processed…</p>
+          <p className="mt-1.5 text-[11px] text-charcoal-400">{t('Being processed…')}</p>
         </div>
       </div>
     </div>
@@ -567,6 +580,7 @@ function SheetCard({
   onToggle: () => void
   onSlip: () => void
 }) {
+  const { t } = useTranslation()
   const openPeriod = !sheet.visible
   const earnings = buildEarningsRows(sheet)
   const earningsTotal = earnings.reduce((sum, row) => sum + row.amount, 0)
@@ -579,7 +593,7 @@ function SheetCard({
         type="button"
         onClick={onToggle}
         aria-expanded={open}
-        className="w-full px-3 py-2.5 text-left transition-colors hover:bg-charcoal-50/60"
+        className="w-full px-3 py-2.5 text-start transition-colors hover:bg-charcoal-50/60"
       >
         <div className="flex items-center justify-between gap-3">
           <div className="flex min-w-0 items-center gap-2.5">
@@ -589,7 +603,7 @@ function SheetCard({
             <div className="min-w-0">
               <p className="truncate text-sm font-bold text-charcoal-900">{sheet.period}</p>
               <p className="mt-0.5 truncate text-[10px] text-charcoal-400">
-                {sheet.paidDate ? `Paid ${formatDate(sheet.paidDate)}` : 'Not paid yet'}
+                {sheet.paidDate ? t('Paid {{date}}', { date: formatDate(sheet.paidDate) }) : t('Not paid yet')}
               </p>
             </div>
           </div>
@@ -615,54 +629,54 @@ function SheetCard({
         <div className="space-y-2 border-t border-charcoal-100 bg-charcoal-50/40 px-3 py-2.5">
           {openPeriod || !sheet.visible ? (
             <p className="text-[11px] text-charcoal-400">
-              This period is still open — its payout is not visible yet.
+              {t('This period is still open — its payout is not visible yet.')}
             </p>
           ) : (
             <>
               <div className="rounded-xl border border-charcoal-100 bg-white p-2.5">
                 <div className="mb-1.5 flex items-center justify-between">
-                  <p className="bento-label text-charcoal-500">ATTENDANCE &amp; LEAVE</p>
+                  <p className="bento-label text-charcoal-500">{t('ATTENDANCE & LEAVE')}</p>
                   <span className="rounded-full bg-charcoal-100 px-2 py-0.5 text-[10px] font-bold text-charcoal-700">
-                    {sheet.daysWorked ?? 0}/{sheet.workingDays ?? 0} days
+                    {t('{{worked}}/{{total}} days', { worked: sheet.daysWorked ?? 0, total: sheet.workingDays ?? 0 })}
                   </span>
                 </div>
                 <div className="flex h-2 w-full overflow-hidden rounded-full bg-charcoal-100">
-                  <div className="h-full rounded-l-full bg-brand-500" style={{ width: `${workedPct}%` }} />
-                  {notWorked > 0 && <div className="h-full flex-1 rounded-r-full bg-charcoal-200" />}
+                  <div className="h-full rounded-s-full bg-brand-500" style={{ width: `${workedPct}%` }} />
+                  {notWorked > 0 && <div className="h-full flex-1 rounded-e-full bg-charcoal-200" />}
                 </div>
                 <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1">
                   <span className="flex items-center gap-1 text-[10px] text-charcoal-500">
                     <span className="inline-block h-2 w-2 rounded-full bg-brand-500" />
-                    {sheet.daysWorked ?? 0} worked
+                    {t('{{count}} worked', { count: sheet.daysWorked ?? 0 })}
                   </span>
                   <span className="flex items-center gap-1 text-[10px] text-charcoal-400">
                     <span className="inline-block h-2 w-2 rounded-full bg-charcoal-200" />
-                    {notWorked} not worked
+                    {t('{{count}} not worked', { count: notWorked })}
                   </span>
                   {(sheet.overtimeHours ?? 0) > 0 && (
                     <span className="flex items-center gap-1 text-[10px] text-charcoal-500">
                       <Clock className="h-3 w-3 text-charcoal-400" aria-hidden="true" />
-                      {sheet.overtimeHours}h overtime
+                      {t('{{count}}h overtime', { count: sheet.overtimeHours ?? 0 })}
                     </span>
                   )}
                   {(sheet.paidLeaveDays ?? 0) > 0 && (
                     <span className="flex items-center gap-1 text-[10px] text-charcoal-500">
                       <span className="inline-block h-2 w-2 rounded-full bg-sky-300" />
-                      {sheet.paidLeaveDays} paid leave
+                      {t('{{count}} paid leave', { count: sheet.paidLeaveDays ?? 0 })}
                     </span>
                   )}
                   {(sheet.unpaidLeaveDays ?? 0) > 0 && (
-                    <span className="text-[10px] text-red-600">{sheet.unpaidLeaveDays} unpaid</span>
+                    <span className="text-[10px] text-red-600">{t('{{count}} unpaid', { count: sheet.unpaidLeaveDays ?? 0 })}</span>
                   )}
                 </div>
                 <div className="mt-2 grid grid-cols-3 gap-1.5 sm:grid-cols-6">
-                  <StatTile label="Late" value={String(sheet.lateCount ?? 0)} bg="bg-amber-50" text="text-amber-600" />
-                  <StatTile label="Early Leave" value={String(sheet.earlyLeaveCount ?? 0)} />
-                  <StatTile label="Sick Leave" value={String(sheet.sickLeaveDays ?? 0)} bg="bg-blue-50" text="text-blue-600" />
-                  <StatTile label="Annual Leave" value={String(sheet.annualLeaveDays ?? 0)} bg="bg-blue-50" text="text-blue-600" />
-                  <StatTile label="Absent" value={String(sheet.absentDays ?? 0)} bg="bg-red-50" text="text-red-600" />
+                  <StatTile label={t('Late')} value={String(sheet.lateCount ?? 0)} bg="bg-amber-50" text="text-amber-600" />
+                  <StatTile label={t('Early Leave')} value={String(sheet.earlyLeaveCount ?? 0)} />
+                  <StatTile label={t('Sick Leave')} value={String(sheet.sickLeaveDays ?? 0)} bg="bg-blue-50" text="text-blue-600" />
+                  <StatTile label={t('Annual Leave')} value={String(sheet.annualLeaveDays ?? 0)} bg="bg-blue-50" text="text-blue-600" />
+                  <StatTile label={t('Absent')} value={String(sheet.absentDays ?? 0)} bg="bg-red-50" text="text-red-600" />
                   <StatTile
-                    label="Salary Advance"
+                    label={t('Salary Advance')}
                     value={(sheet.salaryAdvance ?? 0) > 0 ? formatMoney(sheet.salaryAdvance ?? 0) : '—'}
                     bg={(sheet.salaryAdvance ?? 0) > 0 ? 'bg-red-50' : undefined}
                     text={(sheet.salaryAdvance ?? 0) > 0 ? 'text-red-600' : undefined}
@@ -670,7 +684,7 @@ function SheetCard({
                 </div>
                 {(sheet.leaveDeduction ?? 0) > 0 && (
                   <div className="mt-2 flex items-center justify-between text-[11px]">
-                    <span className="text-charcoal-500">Leave deduction</span>
+                    <span className="text-charcoal-500">{t('Leave deduction')}</span>
                     <span className="font-semibold text-red-600">−{formatMoney(sheet.leaveDeduction ?? 0)}</span>
                   </div>
                 )}
@@ -678,21 +692,21 @@ function SheetCard({
 
               <ItemSection
                 tone="earnings"
-                title="Earnings"
+                title={t('Earnings')}
                 headerValue={`+${formatMoney(earningsTotal)}`}
                 rows={earnings}
               />
               <ItemSection
                 tone="deductions"
-                title="Deductions"
+                title={t('Deductions')}
                 headerValue={`−${formatMoney(sheet.totalDeductions)}`}
                 rows={deductionRows}
-                emptyHint="No deductions this period."
+                emptyHint={t('No deductions this period.')}
               />
               {/* Dark net bar with the payslip action (mock) */}
               <div className="flex items-center justify-between gap-2 rounded-xl bg-charcoal-900 px-3 py-2.5">
                 <div className="min-w-0">
-                  <p className="text-[10px] font-bold uppercase tracking-wider text-charcoal-400">Net Salary</p>
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-charcoal-400">{t('Net Salary')}</p>
                   <p className="whitespace-nowrap text-lg font-bold leading-tight text-white">{formatMoney(sheet.netSalary)}</p>
                 </div>
                 <button
@@ -837,6 +851,7 @@ function formatLateSpan(minutes: number): string {
 /* ==================== Payslip drawer (mock §8 modal) ==================== */
 
 function PayslipDrawer({ entryId, employeeId, onClose }: { entryId: number | null; employeeId: number; onClose: () => void }) {
+  const { t } = useTranslation()
   const query = useQuery({
     queryKey: ['portal', 'payslip', employeeId, entryId],
     queryFn: ({ signal }) => getOwnPayslip(employeeId, entryId!, signal),
@@ -846,17 +861,17 @@ function PayslipDrawer({ entryId, employeeId, onClose }: { entryId: number | nul
   const slip = query.data?.data ?? null
 
   return (
-    <Drawer open={entryId != null} title={slip ? `Payslip — ${slip.period}` : 'Payslip'} onClose={onClose}>
-      {query.isLoading && <LoadingState label="Loading payslip…" />}
+    <Drawer open={entryId != null} title={slip ? t('Payslip — {{period}}', { period: slip.period }) : t('Payslip')} onClose={onClose}>
+      {query.isLoading && <LoadingState label={t('Loading payslip…')} />}
       {query.isError && <ErrorState message={describeApiError(query.error)} onRetry={() => query.refetch()} />}
       {slip && (
         <div className="space-y-3">
           {/* Dark gradient header (mock) */}
           <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-charcoal-800 to-charcoal-900 p-5 text-white">
-            <div className="absolute right-0 top-0 h-32 w-32 translate-x-1/2 -translate-y-1/2 rounded-full bg-white/5" aria-hidden="true" />
-            <div className="absolute bottom-0 left-0 h-20 w-20 -translate-x-1/2 translate-y-1/2 rounded-full bg-white/5" aria-hidden="true" />
+            <div className="absolute end-0 top-0 h-32 w-32 translate-x-1/2 -translate-y-1/2 rounded-full bg-white/5" aria-hidden="true" />
+            <div className="absolute bottom-0 start-0 h-20 w-20 -translate-x-1/2 translate-y-1/2 rounded-full bg-white/5" aria-hidden="true" />
             <div className="relative text-center">
-              <p className="text-[10px] font-bold uppercase tracking-wider text-charcoal-300">Payslip</p>
+              <p className="text-[10px] font-bold uppercase tracking-wider text-charcoal-300">{t('Payslip')}</p>
               <p className="mt-1 text-lg font-bold">{slip.period}</p>
               <div className="mt-2 inline-flex items-center gap-1 rounded-full bg-white/10 px-2.5 py-0.5">
                 <BadgeCheck className="h-3.5 w-3.5 text-green-400" aria-hidden="true" />
@@ -880,23 +895,23 @@ function PayslipDrawer({ entryId, employeeId, onClose }: { entryId: number | nul
           </div>
 
           <div className="divide-y divide-charcoal-50 rounded-lg border border-charcoal-200 p-0.5">
-            <SlipRow label="Base Salary" value={formatMoney(slip.baseSalary)} />
+            <SlipRow label={t('Base Salary')} value={formatMoney(slip.baseSalary)} />
             {(slip.annualIncrease ?? 0) > 0 && (
               <SlipRow
-                label={`Annual Increase (${increasePercentLabel(slip)})`}
+                label={t('Annual Increase ({{percent}})', { percent: increasePercentLabel(slip) })}
                 value={`+${formatMoney(slip.annualIncrease ?? 0)}`}
                 color="text-green-600"
               />
             )}
-            <SlipRow label={`Overtime (${slip.overtime}h)`} value={formatMoney(slip.overtimePay)} color="text-blue-600" />
-            <SlipRow label="Bonus" value={formatMoney(slip.bonus)} color="text-green-600" />
-            <SlipRow label="Gross" value={formatMoney(slip.gross)} emphasis />
+            <SlipRow label={t('Overtime ({{hours}}h)', { hours: slip.overtime })} value={formatMoney(slip.overtimePay)} color="text-blue-600" />
+            <SlipRow label={t('Bonus')} value={formatMoney(slip.bonus)} color="text-green-600" />
+            <SlipRow label={t('Gross')} value={formatMoney(slip.gross)} emphasis />
           </div>
 
           <div>
-            <p className="bento-label mb-1">DEDUCTIONS</p>
+            <p className="bento-label mb-1">{t('DEDUCTIONS')}</p>
             {slip.deductions.length === 0 ? (
-              <p className="rounded-lg bg-charcoal-50 p-2.5 text-xs text-charcoal-500">No deductions this period.</p>
+              <p className="rounded-lg bg-charcoal-50 p-2.5 text-xs text-charcoal-500">{t('No deductions this period.')}</p>
             ) : (
               <div className="divide-y divide-charcoal-50 rounded-lg border border-charcoal-200 p-0.5">
                 {slip.deductions.map((deduction, index) => (
@@ -904,7 +919,7 @@ function PayslipDrawer({ entryId, employeeId, onClose }: { entryId: number | nul
                     <div className="flex items-center justify-between gap-2">
                       <p className="text-xs font-semibold text-charcoal-800">
                         {deduction.label}
-                        <span className="ml-1.5 text-[9px] font-medium uppercase text-charcoal-400">{deduction.source}</span>
+                        <span className="ms-1.5 text-[9px] font-medium uppercase text-charcoal-400">{deduction.source}</span>
                       </p>
                       <div className="flex items-center gap-2">
                         <StatusBadge status={deduction.status} />
@@ -922,7 +937,7 @@ function PayslipDrawer({ entryId, employeeId, onClose }: { entryId: number | nul
           </div>
 
           <div className="flex items-center justify-between rounded-lg border border-brand-200 bg-brand-50 px-3 py-2.5">
-            <p className="text-sm font-bold text-brand-700">Net Pay</p>
+            <p className="text-sm font-bold text-brand-700">{t('Net Pay')}</p>
             <p className="text-base font-bold text-brand-700">{formatMoney(slip.net)}</p>
           </div>
         </div>

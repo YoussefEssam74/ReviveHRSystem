@@ -1,6 +1,7 @@
 import { useState, useDeferredValue } from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { ChevronRight, Plus, Zap } from 'lucide-react'
 import {
   getAttendanceGrid,
@@ -46,13 +47,14 @@ function employmentLabel(status: string): string {
 }
 
 export default function BranchEmployeesPage() {
+  const { t } = useTranslation()
   const { isBranchManager, isTeamLeader } = usePortalSession()
 
   if (!isBranchManager && !isTeamLeader) {
     return (
       <EmptyState
-        title="Employees directory is for managers"
-        hint="The branch roster is guarded by the employees.view permission key."
+        title={t('Employees directory is for managers')}
+        hint={t('The branch roster is guarded by the employees.view permission key.')}
       />
     )
   }
@@ -61,6 +63,7 @@ export default function BranchEmployeesPage() {
 }
 
 function EmployeesWorkspace() {
+  const { t } = useTranslation()
   const navigate = useNavigate()
   const { me, can } = usePortalSession()
   const activeGymId = me?.activeGym?.gymId
@@ -132,16 +135,16 @@ function EmployeesWorkspace() {
     <div className="space-y-3">
       <div className="flex items-center justify-between gap-2">
         <div className="min-w-0">
-          <h1 className="truncate text-lg font-bold text-charcoal-900 sm:text-xl">Employees</h1>
+          <h1 className="truncate text-lg font-bold text-charcoal-900 sm:text-xl">{t('Employees')}</h1>
           <p className="mt-0.5 hidden truncate text-xs text-charcoal-500 sm:block">
-            {total} employees · {me?.activeGym?.gymName ?? 'Active gym'}
+            {t('{{count}} employees · {{gym}}', { count: total, gym: me?.activeGym?.gymName ?? t('Active gym') })}
           </p>
         </div>
         <div className="flex shrink-0 gap-1.5">
           {canOpenPalette && (
-            <Button size="sm" variant="secondary" onClick={() => setPaletteOpen(true)} aria-label="Actions" title="Actions">
+            <Button size="sm" variant="secondary" onClick={() => setPaletteOpen(true)} aria-label={t('Actions')} title={t('Actions')}>
               <Zap className="h-3.5 w-3.5" />
-              <span className="hidden sm:inline">Actions</span>
+              <span className="hidden sm:inline">{t('Actions')}</span>
             </Button>
           )}
           {can('requests.view') && (
@@ -149,21 +152,21 @@ function EmployeesWorkspace() {
               size="sm"
               variant="primary"
               onClick={() => setCreateRequestOpen(true)}
-              aria-label="Create Request"
-              title="Create Request"
+              aria-label={t('Create Request')}
+              title={t('Create Request')}
             >
               <Plus className="h-3.5 w-3.5" />
-              <span className="hidden sm:inline">Create Request</span>
+              <span className="hidden sm:inline">{t('Create Request')}</span>
             </Button>
           )}
         </div>
       </div>
 
       <div className="grid grid-cols-4 gap-1.5 sm:gap-2">
-        <StatTile value={total} label="Employees" accent />
-        <StatTile value={onShiftCount} label="On shift" />
-        <StatTile value={scheduledCount} label="Upcoming today" />
-        <StatTile value={offCount} label="Off today" />
+        <StatTile value={total} label={t('Employees')} accent />
+        <StatTile value={onShiftCount} label={t('On shift')} />
+        <StatTile value={scheduledCount} label={t('Upcoming today')} />
+        <StatTile value={offCount} label={t('Off today')} />
       </div>
 
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
@@ -174,9 +177,9 @@ function EmployeesWorkspace() {
             setSearchInput(e.target.value)
             setPage(1)
           }}
-          placeholder="Search name, email or phone..."
+          placeholder={t('Search name, email or phone...')}
           className="form-input sm:max-w-xs"
-          aria-label="Search employees"
+          aria-label={t('Search employees')}
         />
         <select
           value={status}
@@ -185,9 +188,9 @@ function EmployeesWorkspace() {
             setPage(1)
           }}
           className="form-input sm:w-40"
-          aria-label="Filter by status"
+          aria-label={t('Filter by status')}
         >
-          <option value="All">All statuses</option>
+          <option value="All">{t('All statuses')}</option>
           {EMPLOYMENT_STATUSES.map((s) => (
             <option key={s} value={s}>
               {employmentLabel(s)}
@@ -198,20 +201,20 @@ function EmployeesWorkspace() {
 
       {rows.length === 0 ? (
         <EmptyState
-          title="No employees match"
-          hint="Adjust the search or status filter — the list covers everyone in the active gym."
+          title={t('No employees match')}
+          hint={t('Adjust the search or status filter — the list covers everyone in the active gym.')}
         />
       ) : (
         <div className="hidden overflow-hidden rounded-xl border border-charcoal-200 bg-white lg:block">
           <table className="data-table">
             <thead>
               <tr>
-                <th>Employee</th>
-                <th>Position</th>
-                <th>Status</th>
-                <th>Today</th>
-                <th className="text-right">In</th>
-                <th className="text-right">Out</th>
+                <th>{t('Employee')}</th>
+                <th>{t('Position')}</th>
+                <th>{t('Status')}</th>
+                <th>{t('Today')}</th>
+                <th className="text-end">{t('In')}</th>
+                <th className="text-end">{t('Out')}</th>
                 <th className="w-8" />
               </tr>
             </thead>
@@ -261,10 +264,14 @@ function EmployeesWorkspace() {
       {envelope && envelope.totalPages > 1 && (
         <div className="flex items-center justify-between px-1">
           <Button size="sm" variant="secondary" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>
-            Previous
+            {t('Previous')}
           </Button>
           <p className="text-[10px] text-charcoal-500">
-            Page {envelope.page} of {envelope.totalPages} · {envelope.totalCount} total
+            {t('Page {{page}} of {{total}} · {{count}} total', {
+              page: envelope.page,
+              total: envelope.totalPages,
+              count: envelope.totalCount,
+            })}
           </p>
           <Button
             size="sm"
@@ -272,7 +279,7 @@ function EmployeesWorkspace() {
             disabled={page >= envelope.totalPages}
             onClick={() => setPage((p) => p + 1)}
           >
-            Next
+            {t('Next')}
           </Button>
         </div>
       )}
@@ -282,7 +289,7 @@ function EmployeesWorkspace() {
 
       {gridQuery.error && !gridQuery.data && (
         <p className="text-[10px] text-charcoal-400">
-          Today's attendance columns are unavailable: {describeApiError(gridQuery.error)}
+          {t("Today's attendance columns are unavailable: {{error}}", { error: describeApiError(gridQuery.error) })}
         </p>
       )}
     </div>
@@ -294,7 +301,7 @@ function StatTile({ value, label, accent }: { value: number; label: string; acce
     <div
       className={cn(
         'min-w-0 rounded-xl border border-charcoal-200 bg-white px-1 py-2 text-center sm:p-3',
-        accent && 'border-l-4 border-l-brand-500',
+        accent && 'border-s-4 border-s-brand-500',
       )}
     >
       <p className={cn('text-base font-bold leading-tight sm:text-xl', accent ? 'text-brand-700' : 'text-charcoal-900')}>{value}</p>
@@ -330,10 +337,10 @@ function EmployeeRow({
         <StatusBadge status={employmentLabel(row.status)} />
       </td>
       <td>{todayRow ? <StatusBadge status={todayRow.status} /> : <span className="text-xs text-charcoal-400">—</span>}</td>
-      <td className="text-right text-xs">{formatTimeOfDay(todayRow?.checkIn)}</td>
-      <td className="text-right text-xs">{formatTimeOfDay(todayRow?.checkOut)}</td>
+      <td className="text-end text-xs">{formatTimeOfDay(todayRow?.checkIn)}</td>
+      <td className="text-end text-xs">{formatTimeOfDay(todayRow?.checkOut)}</td>
       <td>
-        <ChevronRight className="ml-auto h-3.5 w-3.5 text-charcoal-300" />
+        <ChevronRight className="ms-auto h-3.5 w-3.5 text-charcoal-300 rtl:rotate-180" />
       </td>
     </tr>
   )
@@ -348,10 +355,11 @@ function DirectoryCard({
   todayRow: AttendanceGridRow | null
   onOpen: () => void
 }) {
+  const { t } = useTranslation()
   return (
     <button
       onClick={onOpen}
-      className="card-interactive w-full rounded-xl border border-charcoal-200 bg-white p-3 text-left"
+      className="card-interactive w-full rounded-xl border border-charcoal-200 bg-white p-3 text-start"
     >
       <div className="flex items-center justify-between gap-2">
         <div className="flex min-w-0 items-center gap-2.5">
@@ -364,7 +372,14 @@ function DirectoryCard({
         <StatusBadge status={employmentLabel(row.status)} />
       </div>
       <div className="mt-2 flex items-center justify-between gap-2 text-[10px] text-charcoal-500">
-        <span>{todayRow ? `In ${formatTimeOfDay(todayRow.checkIn)} · Out ${formatTimeOfDay(todayRow.checkOut)}` : 'Not on today’s shift'}</span>
+        <span>
+          {todayRow
+            ? t('In {{checkIn}} · Out {{checkOut}}', {
+                checkIn: formatTimeOfDay(todayRow.checkIn),
+                checkOut: formatTimeOfDay(todayRow.checkOut),
+              })
+            : t('Not on today’s shift')}
+        </span>
         {todayRow && <StatusBadge status={todayRow.status} />}
       </div>
     </button>
@@ -374,6 +389,7 @@ function DirectoryCard({
 /* Create Request for an Employee (mock §11 openNewEmployeeRequest) ---------- */
 
 function CreateRequestForEmployeeModal({ onClose }: { onClose: () => void }) {
+  const { t } = useTranslation()
   const { me } = usePortalSession()
   const activeGymId = me?.activeGym?.gymId
   const { toast } = useToast()
@@ -411,7 +427,7 @@ function CreateRequestForEmployeeModal({ onClose }: { onClose: () => void }) {
         reason: reason.trim(),
       }),
     onSuccess: (created) => {
-      toast(`Request #${created.data.id} filed for ${selected?.name} — pending HR review`)
+      toast(t('Request #{{id}} filed for {{name}} — pending HR review', { id: created.data.id, name: selected?.name }))
       onClose()
     },
     onError: (error) => toast(describeApiError(error), 'error'),
@@ -420,8 +436,8 @@ function CreateRequestForEmployeeModal({ onClose }: { onClose: () => void }) {
   return (
     <Modal
       open
-      title="Create Request for an Employee"
-      subtitle="Filed on the employee's own record and routed to HR for the final decision."
+      title={t('Create Request for an Employee')}
+      subtitle={t("Filed on the employee's own record and routed to HR for the final decision.")}
       onClose={onClose}
       width="md"
     >
@@ -429,15 +445,15 @@ function CreateRequestForEmployeeModal({ onClose }: { onClose: () => void }) {
         onSubmit={(e) => {
           e.preventDefault()
           if (save.isPending) return
-          if (!selected) return toast('Select the employee', 'error')
-          if (reason.trim().length === 0) return toast('Please add a reason for the request', 'error')
+          if (!selected) return toast(t('Select the employee'), 'error')
+          if (reason.trim().length === 0) return toast(t('Please add a reason for the request'), 'error')
           save.mutate()
         }}
         className="space-y-3"
       >
         <div>
           <label className="form-label" htmlFor="er-emp">
-            Employee
+            {t('Employee')}
           </label>
           {roster.isPending ? (
             <LoadingState />
@@ -449,9 +465,9 @@ function CreateRequestForEmployeeModal({ onClose }: { onClose: () => void }) {
               value={employeeId}
               onChange={(e) => setEmployeeId(e.target.value)}
               className="form-input"
-              aria-label="Employee"
+              aria-label={t('Employee')}
             >
-              <option value="">Select employee...</option>
+              <option value="">{t('Select employee...')}</option>
               {rosterOptions.map((e) => (
                 <option key={e.id} value={String(e.id)}>
                   {e.name} — {e.position}
@@ -462,7 +478,7 @@ function CreateRequestForEmployeeModal({ onClose }: { onClose: () => void }) {
         </div>
         <div>
           <label className="form-label" htmlFor="er-type">
-            Request Type
+            {t('Request Type')}
           </label>
           <select
             id="er-type"
@@ -470,7 +486,7 @@ function CreateRequestForEmployeeModal({ onClose }: { onClose: () => void }) {
             onChange={(e) => setTypeId(e.target.value)}
             className="form-input"
           >
-            {types.length === 0 && <option value="">Loading types…</option>}
+            {types.length === 0 && <option value="">{t('Loading types…')}</option>}
             {types.map((t) => (
               <option key={t.id} value={t.id}>
                 {t.label}
@@ -481,7 +497,7 @@ function CreateRequestForEmployeeModal({ onClose }: { onClose: () => void }) {
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className="form-label" htmlFor="er-date">
-              Requested Date
+              {t('Requested Date')}
             </label>
             <input
               id="er-date"
@@ -495,7 +511,7 @@ function CreateRequestForEmployeeModal({ onClose }: { onClose: () => void }) {
           {activeType?.fields.includes('date-from') || activeType?.fields.includes('date-to') ? (
             <div>
               <label className="form-label" htmlFor="er-end">
-                End date
+                {t('End date')}
               </label>
               <input
                 id="er-end"
@@ -510,7 +526,7 @@ function CreateRequestForEmployeeModal({ onClose }: { onClose: () => void }) {
         </div>
         <div>
           <label className="form-label" htmlFor="er-reason">
-            Reason
+            {t('Reason')}
           </label>
           <textarea
             id="er-reason"
@@ -518,7 +534,7 @@ function CreateRequestForEmployeeModal({ onClose }: { onClose: () => void }) {
             value={reason}
             onChange={(e) => setReason(e.target.value)}
             className="form-input"
-            placeholder="Why is this request being filed for them?"
+            placeholder={t('Why is this request being filed for them?')}
             required
           />
         </div>
@@ -528,10 +544,10 @@ function CreateRequestForEmployeeModal({ onClose }: { onClose: () => void }) {
         </div>
         <div className="flex justify-end gap-2 pt-1">
           <Button type="button" size="sm" variant="secondary" onClick={onClose}>
-            Cancel
+            {t('Cancel')}
           </Button>
           <Button type="submit" size="sm" variant="primary" loading={save.isPending}>
-            Submit Request
+            {t('Submit Request')}
           </Button>
         </div>
       </form>

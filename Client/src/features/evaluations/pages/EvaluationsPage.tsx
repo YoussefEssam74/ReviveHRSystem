@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { ClipboardCheck, FileText, Pencil, Plus, Send, Trash2 } from 'lucide-react'
 import { PageHeader } from '../../../components/ui/page-header'
 import { Card } from '../../../components/ui/card'
@@ -45,6 +46,7 @@ const RESPONSE_STATUSES = ['', 'Completed', 'In Progress']
 
 /** Form builder + evaluation history: templates, hiring forms, submitted evaluations. */
 export default function EvaluationsPage() {
+  const { t } = useTranslation()
   const { can, me } = useMe()
   const canView = can('evaluations', VIEW)
   const canEdit = can('evaluations', EDIT)
@@ -100,7 +102,7 @@ export default function EvaluationsPage() {
       if (deleting.kind === 'evaluation') await deleteEvaluation.mutateAsync(deleting.id)
       else await deleteHiring.mutateAsync(deleting.id)
       setDeleting(null)
-      setFlash(`“${deleting.name}” deleted.`)
+      setFlash(t('“{{name}}” deleted.', { name: deleting.name }))
     } catch (err) {
       setActionError(describeApiError(err))
     }
@@ -114,8 +116,12 @@ export default function EvaluationsPage() {
       setDispatching(null)
       setFlash(
         result.createdAssignments.length === 0
-          ? `“${dispatching.name}” was already routed — no new assignments were created.`
-          : `“${dispatching.name}” routed to ${result.routedEvaluators} evaluator(s) · ${result.evaluationsAssigned} evaluation(s) assigned.`,
+          ? t('“{{name}}” was already routed — no new assignments were created.', { name: dispatching.name })
+          : t('“{{name}}” routed to {{evaluators}} evaluator(s) · {{evaluations}} evaluation(s) assigned.', {
+              name: dispatching.name,
+              evaluators: result.routedEvaluators,
+              evaluations: result.evaluationsAssigned,
+            }),
       )
     } catch (err) {
       setActionError(describeApiError(err))
@@ -123,18 +129,20 @@ export default function EvaluationsPage() {
   }
 
   const description = me?.activeGym
-    ? `Form builder and evaluation history for ${me.activeGym.gymName}`
-    : 'Form builder and evaluation history'
+    ? t('Form builder and evaluation history for {{gym}}', { gym: me.activeGym.gymName })
+    : t('Form builder and evaluation history')
 
   if (!canView) {
     return (
       <div>
-        <PageHeader title="Evaluations" description={description} />
+        <PageHeader title={t('Evaluations')} description={description} />
         <Card>
           <EmptyState
             icon={ClipboardCheck}
-            title="No evaluations access"
-            message="You don't have permission to view evaluations for this gym. Ask an administrator for the evaluations feature."
+            title={t('No evaluations access')}
+            message={t(
+              "You don't have permission to view evaluations for this gym. Ask an administrator for the evaluations feature.",
+            )}
           />
         </Card>
       </div>
@@ -143,9 +151,14 @@ export default function EvaluationsPage() {
 
   return (
     <div>
-      <PageHeader title="Evaluations" description={description} />
+      <PageHeader title={t('Evaluations')} description={description} />
 
-      <Tabs items={TABS} value={tab} onChange={setTab} className="mb-4 w-fit" />
+      <Tabs
+        items={TABS.map((item) => ({ ...item, label: t(item.label) }))}
+        value={tab}
+        onChange={setTab}
+        className="mb-4 w-fit"
+      />
 
       {flash && (
         <p role="status" className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
@@ -157,14 +170,14 @@ export default function EvaluationsPage() {
         <Card>
           <div className="flex flex-col gap-3 border-b border-slate-100 p-4 sm:flex-row">
             <Input
-              placeholder="Filter by target position…"
+              placeholder={t('Filter by target position…')}
               value={formsPosition}
               onChange={(e) => {
                 setFormsPosition(e.target.value)
                 setFormsPage(1)
               }}
               className="sm:max-w-xs"
-              aria-label="Filter forms by position"
+              aria-label={t('Filter forms by position')}
             />
             <Select
               value={formsStatus}
@@ -173,31 +186,31 @@ export default function EvaluationsPage() {
                 setFormsPage(1)
               }}
               className="sm:w-44"
-              aria-label="Filter forms by status"
+              aria-label={t('Filter forms by status')}
             >
               {FORM_STATUSES.map((option) => (
                 <option key={option} value={option}>
-                  {option || 'All statuses'}
+                  {option ? t(option) : t('All statuses')}
                 </option>
               ))}
             </Select>
-            <div className="sm:ml-auto">
+            <div className="sm:ms-auto">
               <Button size="sm" onClick={() => openCreate('evaluation')} disabled={!canEdit}>
                 <Plus className="h-3.5 w-3.5" aria-hidden="true" />
-                New form
+                {t('New form')}
               </Button>
             </div>
           </div>
 
           {forms.isLoading ? (
-            <LoadingState label="Loading evaluation forms…" />
+            <LoadingState label={t('Loading evaluation forms…')} />
           ) : forms.error ? (
             <ErrorState message={describeApiError(forms.error)} />
           ) : (forms.data?.items?.length ?? 0) === 0 ? (
             <EmptyState
               icon={FileText}
-              title="No evaluation forms"
-              message="Build your first evaluation template to start routing reviews."
+              title={t('No evaluation forms')}
+              message={t('Build your first evaluation template to start routing reviews.')}
             />
           ) : (
             <>
@@ -209,8 +222,10 @@ export default function EvaluationsPage() {
                     status={form.status}
                     position={form.position}
                     gym={form.gym}
-                    meta={`${form.questions} questions · ${form.submissions} submissions · Created ${formatDate(form.createdDate)}${
-                      form.lastUsed ? ` · Last used ${formatDate(form.lastUsed)}` : ''
+                    meta={`${t('{{count}} questions', { count: form.questions })} · ${t('{{count}} submissions', {
+                      count: form.submissions,
+                    })} · ${t('Created {{date}}', { date: formatDate(form.createdDate) })}${
+                      form.lastUsed ? ` · ${t('Last used {{date}}', { date: formatDate(form.lastUsed) })}` : ''
                     }`}
                     canEdit={canEdit}
                     dispatchable={form.status === 'Active'}
@@ -232,7 +247,7 @@ export default function EvaluationsPage() {
                 total={forms.data!.total}
                 totalPages={forms.data!.totalPages}
                 onPageChange={setFormsPage}
-                noun="forms"
+                noun={t('forms')}
               />
             </>
           )}
@@ -249,31 +264,31 @@ export default function EvaluationsPage() {
                 setHiringPage(1)
               }}
               className="sm:w-44"
-              aria-label="Filter hiring forms by status"
+              aria-label={t('Filter hiring forms by status')}
             >
               {HIRING_STATUSES.map((option) => (
                 <option key={option} value={option}>
-                  {option || 'All statuses'}
+                  {option ? t(option) : t('All statuses')}
                 </option>
               ))}
             </Select>
-            <div className="sm:ml-auto">
+            <div className="sm:ms-auto">
               <Button size="sm" onClick={() => openCreate('hiring')} disabled={!canEdit}>
                 <Plus className="h-3.5 w-3.5" aria-hidden="true" />
-                New hiring form
+                {t('New hiring form')}
               </Button>
             </div>
           </div>
 
           {hiringForms.isLoading ? (
-            <LoadingState label="Loading hiring forms…" />
+            <LoadingState label={t('Loading hiring forms…')} />
           ) : hiringForms.error ? (
             <ErrorState message={describeApiError(hiringForms.error)} />
           ) : (hiringForms.data?.items?.length ?? 0) === 0 ? (
             <EmptyState
               icon={FileText}
-              title="No hiring forms"
-              message="Hiring forms published here appear on the public careers page."
+              title={t('No hiring forms')}
+              message={t('Hiring forms published here appear on the public careers page.')}
             />
           ) : (
             <>
@@ -285,8 +300,10 @@ export default function EvaluationsPage() {
                     status={form.status}
                     position={form.position}
                     gym={form.gym}
-                    meta={`${form.questions} questions · ${form.applicants} applicants · Created ${formatDate(form.createdDate)}${
-                      form.lastUsed ? ` · Last used ${formatDate(form.lastUsed)}` : ''
+                    meta={`${t('{{count}} questions', { count: form.questions })} · ${t('{{count}} applicants', {
+                      count: form.applicants,
+                    })} · ${t('Created {{date}}', { date: formatDate(form.createdDate) })}${
+                      form.lastUsed ? ` · ${t('Last used {{date}}', { date: formatDate(form.lastUsed) })}` : ''
                     }`}
                     canEdit={canEdit}
                     dispatchable={false}
@@ -304,7 +321,7 @@ export default function EvaluationsPage() {
                 total={hiringForms.data!.total}
                 totalPages={hiringForms.data!.totalPages}
                 onPageChange={setHiringPage}
-                noun="forms"
+                noun={t('forms')}
               />
             </>
           )}
@@ -321,25 +338,25 @@ export default function EvaluationsPage() {
                 setResponsesPage(1)
               }}
               className="sm:w-52"
-              aria-label="Filter evaluations by status"
+              aria-label={t('Filter evaluations by status')}
             >
               {RESPONSE_STATUSES.map((option) => (
                 <option key={option} value={option}>
-                  {option || 'All statuses'}
+                  {option ? t(option) : t('All statuses')}
                 </option>
               ))}
             </Select>
           </div>
 
           {responses.isLoading ? (
-            <LoadingState label="Loading evaluations…" />
+            <LoadingState label={t('Loading evaluations…')} />
           ) : responses.error ? (
             <ErrorState message={describeApiError(responses.error)} />
           ) : (responses.data?.items?.length ?? 0) === 0 ? (
             <EmptyState
               icon={ClipboardCheck}
-              title="No evaluations"
-              message="Dispatch a form to evaluators or launch a cycle to start collecting evaluations."
+              title={t('No evaluations')}
+              message={t('Dispatch a form to evaluators or launch a cycle to start collecting evaluations.')}
             />
           ) : (
             <>
@@ -361,11 +378,14 @@ export default function EvaluationsPage() {
                         {row.gym ? ` · ${row.gym}` : ''}
                       </p>
                       <p className="mt-1 text-xs text-slate-400">
-                        Reviewed by {row.reviewedBy || '—'} · {formatDateTime(row.reviewedDate)}
+                        {t('Reviewed by {{name}} · {{date}}', {
+                          name: row.reviewedBy || '—',
+                          date: formatDateTime(row.reviewedDate),
+                        })}
                       </p>
                     </div>
                     <Button variant="outline" size="sm" onClick={() => setSelectedResponse(row)}>
-                      View
+                      {t('View')}
                     </Button>
                   </li>
                 ))}
@@ -376,7 +396,7 @@ export default function EvaluationsPage() {
                 total={responses.data!.total}
                 totalPages={responses.data!.totalPages}
                 onPageChange={setResponsesPage}
-                noun="evaluations"
+                noun={t('evaluations')}
               />
             </>
           )}
@@ -398,28 +418,28 @@ export default function EvaluationsPage() {
       <Dialog
         open={deleting != null}
         onClose={() => setDeleting(null)}
-        title="Delete form"
+        title={t('Delete form')}
         description={deleting?.name}
         footer={
           <>
             <Button variant="outline" onClick={() => setDeleting(null)}>
-              Cancel
+              {t('Cancel')}
             </Button>
             <Button variant="danger" onClick={onDeleteConfirm} loading={deletingPending}>
-              Delete form
+              {t('Delete form')}
             </Button>
           </>
         }
       >
         <div className="space-y-3 text-sm text-slate-700">
-          <p>The form and its questions are removed permanently. This cannot be undone.</p>
+          <p>{t('The form and its questions are removed permanently. This cannot be undone.')}</p>
           {deleting?.kind === 'evaluation' && (
             <p className="text-slate-500">
-              Forms that already have responses cannot be deleted — set their status to Inactive instead.
+              {t('Forms that already have responses cannot be deleted — set their status to Inactive instead.')}
             </p>
           )}
           {deleting?.kind === 'hiring' && (
-            <p className="text-slate-500">Forms with applications cannot be deleted — close them instead.</p>
+            <p className="text-slate-500">{t('Forms with applications cannot be deleted — close them instead.')}</p>
           )}
           {actionError && (
             <p role="alert" className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-red-700">
@@ -432,23 +452,24 @@ export default function EvaluationsPage() {
       <Dialog
         open={dispatching != null}
         onClose={() => setDispatching(null)}
-        title="Dispatch form"
+        title={t('Dispatch form')}
         description={dispatching?.name}
         footer={
           <>
             <Button variant="outline" onClick={() => setDispatching(null)}>
-              Cancel
+              {t('Cancel')}
             </Button>
             <Button onClick={onDispatchConfirm} loading={dispatch.isPending}>
-              Dispatch to evaluators
+              {t('Dispatch to evaluators')}
             </Button>
           </>
         }
       >
         <div className="space-y-3 text-sm text-slate-700">
           <p>
-            Routes this form to every eligible evaluator in scope. Subjects are matched to the form's gym and target
-            position; assignments already routed are skipped.
+            {t(
+              "Routes this form to every eligible evaluator in scope. Subjects are matched to the form's gym and target position; assignments already routed are skipped.",
+            )}
           </p>
           {actionError && (
             <p role="alert" className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-red-700">
@@ -461,10 +482,10 @@ export default function EvaluationsPage() {
       <Dialog
         open={selectedResponse != null}
         onClose={() => setSelectedResponse(null)}
-        title="Evaluation"
+        title={t('Evaluation')}
         description={selectedResponse ? `${selectedResponse.employee} · ${selectedResponse.form}` : undefined}
         className="max-w-xl"
-        footer={<Button variant="outline" onClick={() => setSelectedResponse(null)}>Close</Button>}
+        footer={<Button variant="outline" onClick={() => setSelectedResponse(null)}>{t('Close')}</Button>}
       >
         {selectedResponse && (
           <div className="space-y-4">
@@ -477,19 +498,19 @@ export default function EvaluationsPage() {
 
             <dl className="divide-y divide-slate-100 rounded-xl border border-slate-200 text-sm">
               <div className="flex items-center justify-between px-4 py-2.5">
-                <dt className="text-slate-500">Reviewed by</dt>
+                <dt className="text-slate-500">{t('Reviewed by')}</dt>
                 <dd className="font-medium text-slate-900">{selectedResponse.reviewedBy || '—'}</dd>
               </div>
               <div className="flex items-center justify-between px-4 py-2.5">
-                <dt className="text-slate-500">Reviewed</dt>
+                <dt className="text-slate-500">{t('Reviewed')}</dt>
                 <dd className="font-medium text-slate-900">{formatDateTime(selectedResponse.reviewedDate)}</dd>
               </div>
             </dl>
 
             <div>
-              <p className="text-sm font-semibold text-slate-900">Answers</p>
+              <p className="text-sm font-semibold text-slate-900">{t('Answers')}</p>
               {selectedResponse.answers.length === 0 ? (
-                <p className="mt-1 text-sm text-slate-500">No answers recorded yet.</p>
+                <p className="mt-1 text-sm text-slate-500">{t('No answers recorded yet.')}</p>
               ) : (
                 <ul className="mt-2 divide-y divide-slate-100 rounded-xl border border-slate-200">
                   {selectedResponse.answers.map((answer, index) => (
@@ -504,13 +525,13 @@ export default function EvaluationsPage() {
 
             {selectedResponse.notes && (
               <div>
-                <p className="text-sm font-semibold text-slate-900">Notes</p>
+                <p className="text-sm font-semibold text-slate-900">{t('Notes')}</p>
                 <p className="mt-1 text-sm italic text-slate-600">“{selectedResponse.notes}”</p>
               </div>
             )}
 
             <p className="text-xs text-slate-500">
-              Scores at or above 60 pass; lower scores read “Below Target” on the employee file.
+              {t('Scores at or above 60 pass; lower scores read “Below Target” on the employee file.')}
             </p>
           </div>
         )}
@@ -543,6 +564,7 @@ function FormRow({
   onDelete: () => void
   onDispatch?: () => void
 }) {
+  const { t } = useTranslation()
   return (
     <li className="flex flex-col gap-3 p-4 sm:flex-row sm:items-start sm:justify-between">
       <div className="min-w-0">
@@ -551,7 +573,8 @@ function FormRow({
           <StatusBadge status={status} />
         </div>
         <p className="mt-0.5 text-sm text-slate-600">
-          {position && position !== 'All' ? position : 'Any position'} · {gym && gym !== 'All' ? gym : 'All gyms'}
+          {position && position !== 'All' ? position : t('Any position')} ·{' '}
+          {gym && gym !== 'All' ? gym : t('All gyms')}
         </p>
         <p className="mt-1 text-sm text-slate-500">{meta}</p>
       </div>
@@ -560,14 +583,14 @@ function FormRow({
           {onDispatch && (
             <Button variant="outline" size="sm" onClick={onDispatch} disabled={!dispatchable}>
               <Send className="h-3.5 w-3.5" aria-hidden="true" />
-              Dispatch
+              {t('Dispatch')}
             </Button>
           )}
           <Button variant="outline" size="sm" onClick={onEdit}>
             <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
-            Edit
+            {t('Edit')}
           </Button>
-          <Button variant="ghost" size="sm" onClick={onDelete} aria-label={`Delete ${title}`}>
+          <Button variant="ghost" size="sm" onClick={onDelete} aria-label={t('Delete {{name}}', { name: title })}>
             <Trash2 className="h-4 w-4 text-red-500" aria-hidden="true" />
           </Button>
         </div>

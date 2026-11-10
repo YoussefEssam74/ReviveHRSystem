@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Sparkles } from 'lucide-react'
 import { PageHeader } from '../../../components/ui/page-header'
 import { Card } from '../../../components/ui/card'
@@ -78,6 +79,7 @@ function urgencyClass(urgency: string): string {
 
 /** HR events queue (S5.6) — paged, gym/type/urgency/resolved filtered, read-only. */
 export default function EventsPage() {
+  const { t } = useTranslation()
   const { me } = useMe()
   const [tab, setTab] = useState<TypeTab>('')
   const [gym, setGym] = useState('')
@@ -103,16 +105,16 @@ export default function EventsPage() {
   return (
     <div>
       <PageHeader
-        title="Events"
+        title={t('Events')}
         description={
           me?.activeGym
-            ? `Pending HR action queue — active gym: ${me.activeGym.gymName}`
-            : 'Pending HR action queue across your branches'
+            ? t('Pending HR action queue — active gym: {{gym}}', { gym: me.activeGym.gymName })
+            : t('Pending HR action queue across your branches')
         }
       />
 
       <Tabs
-        items={TAB_ITEMS}
+        items={TAB_ITEMS.map((item) => ({ ...item, label: t(item.label) }))}
         value={tab}
         onChange={(value) => onFilter(() => setTab(value))}
         className="mb-4 w-fit"
@@ -124,9 +126,9 @@ export default function EventsPage() {
             value={gym}
             onChange={(e) => onFilter(() => setGym(e.target.value))}
             className="sm:w-52"
-            aria-label="Filter by branch"
+            aria-label={t('Filter by branch')}
           >
-            <option value="">All branches</option>
+            <option value="">{t('All branches')}</option>
             {(gyms.data ?? []).map((option) => (
               <option key={option.id} value={String(option.id)}>
                 {option.name}
@@ -137,11 +139,11 @@ export default function EventsPage() {
             value={urgency}
             onChange={(e) => onFilter(() => setUrgency(e.target.value))}
             className="sm:w-44"
-            aria-label="Filter by urgency"
+            aria-label={t('Filter by urgency')}
           >
             {URGENCIES.map((option) => (
               <option key={option.value} value={option.value}>
-                {option.label}
+                {t(option.label)}
               </option>
             ))}
           </Select>
@@ -149,38 +151,42 @@ export default function EventsPage() {
             value={showResolved ? 'resolved' : 'open'}
             onChange={(e) => onFilter(() => setShowResolved(e.target.value === 'resolved'))}
             className="sm:w-44"
-            aria-label="Filter by state"
+            aria-label={t('Filter by state')}
           >
-            <option value="open">Open</option>
-            <option value="resolved">Resolved</option>
+            <option value="open">{t('Open')}</option>
+            <option value="resolved">{t('Resolved')}</option>
           </Select>
         </div>
 
         {isLoading ? (
-          <LoadingState label="Loading events…" />
+          <LoadingState label={t('Loading events…')} />
         ) : error ? (
           <ErrorState message={describeApiError(error)} />
         ) : (data?.items?.length ?? 0) === 0 ? (
           <EmptyState
             icon={Sparkles}
-            title="No events"
-            message={showResolved ? 'Nothing is resolved in this view yet.' : 'The queue is clear — nothing needs attention.'}
+            title={t('No events')}
+            message={
+              showResolved
+                ? t('Nothing is resolved in this view yet.')
+                : t('The queue is clear — nothing needs attention.')
+            }
           />
         ) : (
           <>
             {data!.hidden > 0 && (
               <p className="border-b border-slate-100 bg-slate-50 px-4 py-2 text-xs text-slate-500">
-                {data!.hidden} event{data!.hidden === 1 ? '' : 's'} hidden from this view by your permissions.
+                {t('{{count}} events hidden from this view by your permissions.', { count: data!.hidden })}
               </p>
             )}
             <Table>
               <THead>
-                <TH>Event</TH>
-                <TH>Type</TH>
-                <TH>Urgency</TH>
-                <TH>Due</TH>
-                <TH>Branch</TH>
-                <TH>Status</TH>
+                <TH>{t('Event')}</TH>
+                <TH>{t('Type')}</TH>
+                <TH>{t('Urgency')}</TH>
+                <TH>{t('Due')}</TH>
+                <TH>{t('Branch')}</TH>
+                <TH>{t('Status')}</TH>
               </THead>
               <TBody>
                 {data!.items.map((item) => (
@@ -196,10 +202,10 @@ export default function EventsPage() {
                       )}
                     </TD>
                     <TD>
-                      <Badge>{typeLabel(item.type)}</Badge>
+                      <Badge>{t(typeLabel(item.type))}</Badge>
                     </TD>
                     <TD>
-                      <Badge className={urgencyClass(item.urgency)}>{urgencyLabel(item.urgency)}</Badge>
+                      <Badge className={urgencyClass(item.urgency)}>{t(urgencyLabel(item.urgency))}</Badge>
                     </TD>
                     <TD className="whitespace-nowrap text-slate-500">{formatDate(item.date)}</TD>
                     <TD className="text-slate-500">{item.branch ?? '—'}</TD>
@@ -211,7 +217,7 @@ export default function EventsPage() {
                             : 'bg-amber-50 text-amber-700 ring-amber-200'
                         }
                       >
-                        {item.resolved ? 'Resolved' : 'Open'}
+                        {item.resolved ? t('Resolved') : t('Open')}
                       </Badge>
                     </TD>
                   </TR>

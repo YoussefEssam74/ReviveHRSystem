@@ -1,5 +1,6 @@
 import { ApiError, apiRequest } from '../../../lib/api-client'
 import { loadStoredSession } from '../../../lib/session-store'
+import { translate } from '../../../i18n'
 
 /** The paged envelope every list endpoint returns. */
 export interface Paged<T> {
@@ -344,8 +345,8 @@ export async function downloadPeriodCsv(periodId: number, gymId?: number): Promi
       response.status,
       'HTTP_' + response.status,
       response.status === 401
-        ? 'You are not signed in, or your session has expired.'
-        : 'The payroll export failed. Please try again.',
+        ? translate('You are not signed in, or your session has expired.')
+        : translate('The payroll export failed. Please try again.'),
     )
   }
   const blob = await response.blob()

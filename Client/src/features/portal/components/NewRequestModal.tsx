@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useTranslation } from 'react-i18next'
 import { FileText, X } from 'lucide-react'
 import {
   createRequest,
@@ -79,6 +80,7 @@ export function NewRequestModal({
   presetDate?: string
   onClose: () => void
 }) {
+  const { t } = useTranslation()
   const { toast } = useToast()
   const queryClient = useQueryClient()
   const [form, setForm] = useState<NewRequestFormState>({
@@ -139,7 +141,7 @@ export function NewRequestModal({
       return createRequest(employeeId, fields, form.attachment)
     },
     onSuccess: async () => {
-      toast(`${selectedType?.label ?? 'Request'} submitted — pending review`)
+      toast(t('{{type}} submitted — pending review', { type: selectedType?.label ?? t('Request') }))
       await queryClient.invalidateQueries({ queryKey: ['portal', 'requests'] })
       await queryClient.invalidateQueries({ queryKey: ['portal', 'leave-balance'] })
       await queryClient.invalidateQueries({ queryKey: ['portal', 'excused-hours'] })
@@ -153,19 +155,19 @@ export function NewRequestModal({
   function handleSubmit() {
     setFormError(null)
     if (!form.typeId) {
-      setFormError('Please select a request type.')
+      setFormError(t('Please select a request type.'))
       return
     }
     if (!form.reason.trim()) {
-      setFormError('Please add a reason for your request.')
+      setFormError(t('Please add a reason for your request.'))
       return
     }
     if (selectedType?.consumesLeave === 'Annual' && annualRemaining !== null && annualRemaining <= 0) {
-      setFormError('No annual leave days remaining — you cannot submit an annual-leave request.')
+      setFormError(t('No annual leave days remaining — you cannot submit an annual-leave request.'))
       return
     }
     if (selectedType?.requiresAttachment && !form.attachment) {
-      setFormError('A medical certificate must be attached to a sick-leave request.')
+      setFormError(t('A medical certificate must be attached to a sick-leave request.'))
       return
     }
     if (form.attachment) {
@@ -184,16 +186,16 @@ export function NewRequestModal({
   return (
     <Modal
       open
-      title="New Request"
+      title={t('New Request')}
       width="wide"
       onClose={onClose}
       footer={
         <>
           <Button variant="secondary" size="sm" onClick={onClose}>
-            Cancel
+            {t('Cancel')}
           </Button>
           <Button size="sm" onClick={handleSubmit} loading={submitMutation.isPending} disabled={typesQuery.isLoading}>
-            {submitMutation.isPending ? 'Submitting…' : 'Submit'}
+            {submitMutation.isPending ? t('Submitting…') : t('Submit')}
           </Button>
         </>
       }
@@ -201,7 +203,7 @@ export function NewRequestModal({
       <div className="space-y-3">
         <div>
           <label htmlFor="req-type" className="form-label">
-            Request Type
+            {t('Request Type')}
           </label>
           <select
             id="req-type"
@@ -219,7 +221,7 @@ export function NewRequestModal({
               setFormError(null)
             }}
           >
-            <option value="">{typesQuery.isLoading ? 'Loading types…' : 'Select type...'}</option>
+            <option value="">{typesQuery.isLoading ? t('Loading types…') : t('Select type...')}</option>
             {manualTypes.map((type) => (
               <option key={type.id} value={type.id}>
                 {type.label}
@@ -238,7 +240,10 @@ export function NewRequestModal({
             <div className="flex items-center justify-between">
               <p className="text-xs font-bold text-charcoal-800">Excused Hours — {budgetQuery.data.month}</p>
               <span className="text-[10px] font-bold text-charcoal-700">
-                {budgetQuery.data.remainingHours} of {budgetQuery.data.capHours} h left
+                {t('{{remaining}} of {{cap}} h left', {
+                  remaining: budgetQuery.data.remainingHours,
+                  cap: budgetQuery.data.capHours,
+                })}
               </span>
             </div>
           </div>
@@ -248,27 +253,27 @@ export function NewRequestModal({
           <div className="space-y-3 border-t border-charcoal-100 pt-3">
             {selectedType.fields.map((field) => {
               if (field === 'date' || field === 'date-from') {
-                return <DateField key={field} id="req-date" label={FIELD_TO_LABEL[field]!} value={form.dateFrom} onChange={(v) => set('dateFrom', v)} />
+                return <DateField key={field} id="req-date" label={t(FIELD_TO_LABEL[field]!)} value={form.dateFrom} onChange={(v) => set('dateFrom', v)} />
               }
               if (field === 'date-to') {
-                return <DateField key={field} id="req-date-to" label="To Date" value={form.dateTo} onChange={(v) => set('dateTo', v)} />
+                return <DateField key={field} id="req-date-to" label={t('To Date')} value={form.dateTo} onChange={(v) => set('dateTo', v)} />
               }
               if (field === 'target-date') {
                 return (
                   <DateField
                     key={field}
                     id="req-target-date"
-                    label="Off Day Taken"
+                    label={t('Off Day Taken')}
                     value={form.targetDate}
                     onChange={(v) => set('targetDate', v)}
                   />
                 )
               }
               if (field === 'time' || field === 'time-from') {
-                return <TimeField key={field} id="req-time" label={FIELD_TO_LABEL[field]!} value={form.time} onChange={(v) => set('time', v)} />
+                return <TimeField key={field} id="req-time" label={t(FIELD_TO_LABEL[field]!)} value={form.time} onChange={(v) => set('time', v)} />
               }
               if (field === 'time-to') {
-                return <TimeField key={field} id="req-time-to" label="To Time" value={form.time} onChange={(v) => set('time', v)} />
+                return <TimeField key={field} id="req-time-to" label={t('To Time')} value={form.time} onChange={(v) => set('time', v)} />
               }
               if (field === 'colleague') {
                 if (colleaguesQuery.isError) {
@@ -281,7 +286,7 @@ export function NewRequestModal({
                 return (
                   <div key={field}>
                     <label htmlFor="req-colleague" className="form-label">
-                      Colleague
+                      {t('Colleague')}
                     </label>
                     <select
                       id="req-colleague"
@@ -290,7 +295,7 @@ export function NewRequestModal({
                       disabled={colleaguesQuery.isLoading}
                       onChange={(event) => set('colleagueId', event.target.value)}
                     >
-                      <option value="">{colleaguesQuery.isLoading ? 'Loading colleagues…' : 'Select...'}</option>
+                      <option value="">{colleaguesQuery.isLoading ? t('Loading colleagues…') : t('Select...')}</option>
                       {colleaguesQuery.data?.map((colleague) => (
                         <option key={colleague.id} value={String(colleague.id)}>
                           {colleague.fullName}
@@ -304,7 +309,7 @@ export function NewRequestModal({
                 return (
                   <div key={field}>
                     <label htmlFor="req-amount" className="form-label">
-                      Amount
+                      {t('Amount')}
                     </label>
                     <input
                       id="req-amount"
@@ -312,7 +317,7 @@ export function NewRequestModal({
                       min="1"
                       step="0.01"
                       className="form-input"
-                      placeholder="e.g. 2500"
+                      placeholder={t('e.g. 2500')}
                       value={form.amount}
                       onChange={(event) => set('amount', event.target.value)}
                     />
@@ -323,7 +328,7 @@ export function NewRequestModal({
                 return (
                   <div key={field}>
                     <label htmlFor="req-certificate" className="form-label">
-                      Medical Certificate
+                      {t('Medical Certificate')}
                     </label>
                     <label
                       htmlFor="req-certificate"
@@ -337,16 +342,16 @@ export function NewRequestModal({
                       <FileText className="h-4 w-4 shrink-0 text-charcoal-400" aria-hidden="true" />
                       <span className="min-w-0 flex-1">
                         <span className="block truncate text-xs font-medium text-charcoal-800">
-                          {form.attachment ? form.attachment.name : 'Attach a PDF, image or Word file'}
+                          {form.attachment ? form.attachment.name : t('Attach a PDF, image or Word file')}
                         </span>
                         <span className="block text-[10px] text-charcoal-500">
                           {form.attachment
-                            ? `${formatBytes(form.attachment.size)} · ready to submit`
-                            : `${REQUEST_ATTACHMENT_FORMATS_LABEL} up to 10 MB`}
+                            ? t('{{size}} · ready to submit', { size: formatBytes(form.attachment.size) })
+                            : t('{{formats}} up to 10 MB', { formats: REQUEST_ATTACHMENT_FORMATS_LABEL })}
                         </span>
                       </span>
                       <span className="shrink-0 text-[10px] font-semibold text-brand-600">
-                        {form.attachment ? 'Replace' : 'Browse'}
+                        {form.attachment ? t('Replace') : t('Browse')}
                       </span>
                     </label>
                     <input
@@ -373,7 +378,7 @@ export function NewRequestModal({
                     />
                     {form.attachment && (
                       <div className="mt-1 flex items-center justify-between gap-2 rounded bg-white px-2 py-1 text-[10px] text-charcoal-500">
-                        <span className="min-w-0 truncate">Attached · {form.attachment.name}</span>
+                        <span className="min-w-0 truncate">{t('Attached · {{name}}', { name: form.attachment.name })}</span>
                         <button
                           type="button"
                           onClick={() => {
@@ -383,7 +388,7 @@ export function NewRequestModal({
                           className="inline-flex shrink-0 items-center gap-0.5 font-semibold text-charcoal-600 transition-colors hover:text-red-600"
                         >
                           <X className="h-3 w-3" aria-hidden="true" />
-                          Remove
+                          {t('Remove')}
                         </button>
                       </div>
                     )}
@@ -394,13 +399,13 @@ export function NewRequestModal({
               return (
                 <div key={field}>
                   <label htmlFor="req-reason" className="form-label">
-                    {FIELD_TO_LABEL[field] ?? field.charAt(0).toUpperCase() + field.slice(1).replace(/-/g, ' ')}
+                    {FIELD_TO_LABEL[field] ? t(FIELD_TO_LABEL[field]) : field.charAt(0).toUpperCase() + field.slice(1).replace(/-/g, ' ')}
                   </label>
                   <textarea
                     id="req-reason"
                     rows={2}
                     className="form-input"
-                    placeholder="Details..."
+                    placeholder={t('Details...')}
                     value={form.reason}
                     onChange={(event) => set('reason', event.target.value)}
                   />
@@ -452,6 +457,7 @@ export function LeaveBalanceBanner({
   loading: boolean
   error: string | null
 }) {
+  const { t } = useTranslation()
   if (loading) return <Skeleton className="h-16 w-full rounded-lg" />
   if (error || !balance) return null
 
@@ -461,9 +467,11 @@ export function LeaveBalanceBanner({
     return (
       <div className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 p-3">
         <div>
-          <p className="text-xs font-bold text-red-800">Annual Leave Exhausted</p>
+          <p className="text-xs font-bold text-red-800">{t('Annual Leave Exhausted')}</p>
           <p className="mt-0.5 text-[10px] text-red-600">
-            You've used all {balance.dayOff.total} annual leave days. Day-off requests are blocked until next year.
+            {t("You've used all {{count}} annual leave days. Day-off requests are blocked until next year.", {
+              count: balance.dayOff.total,
+            })}
           </p>
         </div>
       </div>
@@ -473,16 +481,18 @@ export function LeaveBalanceBanner({
   return (
     <div className="rounded-lg border border-brand-200 bg-brand-50 p-3">
       <div className="mb-1.5 flex items-center justify-between">
-        <p className="text-xs font-bold text-brand-800">Annual Leave Balance</p>
+        <p className="text-xs font-bold text-brand-800">{t('Annual Leave Balance')}</p>
         <span className={cn('text-[10px] font-bold', remaining <= 2 ? 'text-yellow-700' : 'text-brand-700')}>
-          {remaining} of {balance.dayOff.total} days left
+          {t('{{remaining}} of {{total}} days left', { remaining, total: balance.dayOff.total })}
         </span>
       </div>
       <div className="h-1.5 w-full overflow-hidden rounded-full bg-brand-200">
         <div className={cn('h-full rounded-full', barColor)} style={{ width: `${usedPct}%` }} />
       </div>
       <p className="mt-1 text-[9px] text-brand-600">
-        {balance.dayOff.used} day{balance.dayOff.used !== 1 ? 's' : ''} used so far
+        {balance.dayOff.used === 1
+          ? t('{{count}} day used so far', { count: balance.dayOff.used })
+          : t('{{count}} days used so far', { count: balance.dayOff.used })}
       </p>
     </div>
   )

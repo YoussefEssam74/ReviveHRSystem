@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useCamera } from '../../../lib/use-camera'
 import { ApiError } from '../../../lib/api-client'
+import { translate } from '../../../i18n'
 import { postFaceScan, type FaceScanOutcome, type FaceScanResponse } from '../api/attendance.api'
 
 /** Lifecycle of the always-on kiosk scanner. */
@@ -75,7 +76,7 @@ export function useKioskScanner({ autoScan = true, onResult, onSessionExpired }:
   const { videoRef, error: cameraError, start: startCamera, stop: stopCamera, capture } = useCamera()
 
   const [phase, setPhase] = useState<ScannerPhase>('starting')
-  const [statusText, setStatusText] = useState('Starting camera')
+  const [statusText, setStatusText] = useState(translate('Starting camera'))
   const [rejection, setRejection] = useState<string | null>(null)
   const [frame, setFrame] = useState<FrameState | null>(null)
   const [checkoutPrompt, setCheckoutPrompt] = useState<CheckoutPrompt | null>(null)
@@ -119,7 +120,7 @@ export function useKioskScanner({ autoScan = true, onResult, onSessionExpired }:
     }
     if (cooldownRef.current.size === 0) cooldownUntilRef.current = 0
     if (now < cooldownUntilRef.current) {
-      setStatusText('Thanks — you are recorded. Please step away.')
+      setStatusText(translate('Thanks — you are recorded. Please step away.'))
       return
     }
 
@@ -149,7 +150,7 @@ export function useKioskScanner({ autoScan = true, onResult, onSessionExpired }:
           // it, pause, then resume.
           pausedRef.current = true
           setStatusText('')
-          setRejection(result.message || 'Attendance rejected.')
+          setRejection(result.message || translate('Attendance rejected.'))
           return
         }
 
@@ -197,8 +198,8 @@ export function useKioskScanner({ autoScan = true, onResult, onSessionExpired }:
       // Network trouble, throttling, server hiccup: keep watching, retry soon.
       setStatusText(
         error instanceof ApiError && error.status === 429
-          ? 'Server busy - retrying'
-          : 'Connection problem - retrying',
+          ? translate('Server busy - retrying')
+          : translate('Connection problem - retrying'),
       )
     } finally {
       inFlightRef.current = false
@@ -213,7 +214,7 @@ export function useKioskScanner({ autoScan = true, onResult, onSessionExpired }:
     setRejection(null)
     setFrame(null)
     setPhase('starting')
-    setStatusText('Starting camera')
+    setStatusText(translate('Starting camera'))
 
     const started = await startCamera()
     if (!started) {
@@ -223,7 +224,7 @@ export function useKioskScanner({ autoScan = true, onResult, onSessionExpired }:
     }
 
     setPhase('scanning')
-    setStatusText('Looking for a face')
+    setStatusText(translate('Looking for a face'))
     // Auto-scan only: the autoScan effect owns the loop, but it does not re-run on
     // a camera restart (sendFrame's deps are stable), so re-arm the interval here
     // when auto-scan is on. Manual mode must not send frames just because the
@@ -252,7 +253,7 @@ export function useKioskScanner({ autoScan = true, onResult, onSessionExpired }:
     pausedRef.current = false
     setFrame(null)
     setPhase('scanning')
-    setStatusText('Looking for a face')
+    setStatusText(translate('Looking for a face'))
   }, [])
 
   /** The employee confirmed "check out now": re-send the same frame with confirmation. */
@@ -288,7 +289,7 @@ export function useKioskScanner({ autoScan = true, onResult, onSessionExpired }:
       if (result.outcome === 'rejected') {
         pausedRef.current = true
         setStatusText('')
-        setRejection(result.message || 'Attendance rejected.')
+        setRejection(result.message || translate('Attendance rejected.'))
         return
       }
       resumeScanningAfterPrompt()
@@ -304,7 +305,7 @@ export function useKioskScanner({ autoScan = true, onResult, onSessionExpired }:
         onSessionExpiredRef.current()
         return
       }
-      setStatusText(error instanceof ApiError ? error.message : 'Connection problem - retrying')
+      setStatusText(error instanceof ApiError ? error.message : translate('Connection problem - retrying'))
       resumeScanningAfterPrompt()
     } finally {
       inFlightRef.current = false
@@ -332,7 +333,7 @@ export function useKioskScanner({ autoScan = true, onResult, onSessionExpired }:
     pausedRef.current = false
     setFrame(null)
     setPhase('scanning')
-    setStatusText('Looking for a face')
+    setStatusText(translate('Looking for a face'))
   }, [])
 
   // Start/stop the polling loop with the toggle (the camera itself stays on).

@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Check, ClipboardList, Wallet, X } from 'lucide-react'
 import { PageHeader } from '../../../components/ui/page-header'
 import { Card } from '../../../components/ui/card'
@@ -30,6 +31,7 @@ const CANDIDATE_STATUSES = ['Pending', 'Accepted', 'Approved', 'Rejected', '']
 
 /** Payroll console: period settlement sheets + the pending-deductions review queue. */
 export default function PayrollPage() {
+  const { t } = useTranslation()
   const { can, me } = useMe()
   const canView = can('payroll', VIEW)
   const canEdit = can('payroll', EDIT)
@@ -60,18 +62,20 @@ export default function PayrollPage() {
   }
 
   const description = me?.activeGym
-    ? `Settlement sheets and deductions for ${me.activeGym.gymName}`
-    : 'Payroll periods, settlement sheets and deduction reviews'
+    ? t('Settlement sheets and deductions for {{gym}}', { gym: me.activeGym.gymName })
+    : t('Payroll periods, settlement sheets and deduction reviews')
 
   if (!canView) {
     return (
       <div>
-        <PageHeader title="Payroll" description={description} />
+        <PageHeader title={t('Payroll')} description={description} />
         <Card>
           <EmptyState
             icon={Wallet}
-            title="No payroll access"
-            message="You don't have permission to view payroll for this gym. Ask an administrator for the payroll feature."
+            title={t('No payroll access')}
+            message={t(
+              "You don't have permission to view payroll for this gym. Ask an administrator for the payroll feature.",
+            )}
           />
         </Card>
       </div>
@@ -81,7 +85,7 @@ export default function PayrollPage() {
   if (openPeriodId != null) {
     return (
       <div>
-        <PageHeader title="Payroll" description={description} />
+        <PageHeader title={t('Payroll')} description={description} />
         <SettlementSheet periodId={openPeriodId} canEdit={canEdit} onBack={() => setOpenPeriodId(null)} />
       </div>
     )
@@ -89,9 +93,14 @@ export default function PayrollPage() {
 
   return (
     <div>
-      <PageHeader title="Payroll" description={description} />
+      <PageHeader title={t('Payroll')} description={description} />
 
-      <Tabs items={TABS} value={tab} onChange={setTab} className="mb-4 w-fit" />
+      <Tabs
+        items={TABS.map((item) => ({ ...item, label: t(item.label) }))}
+        value={tab}
+        onChange={setTab}
+        className="mb-4 w-fit"
+      />
 
       {tab === 'periods' ? (
         <Card>
@@ -103,25 +112,25 @@ export default function PayrollPage() {
                 setPage(1)
               }}
               className="sm:w-56"
-              aria-label="Filter by status"
+              aria-label={t('Filter by status')}
             >
               {PERIOD_STATUSES.map((option) => (
                 <option key={option} value={option}>
-                  {option || 'All statuses'}
+                  {option ? t(option) : t('All statuses')}
                 </option>
               ))}
             </Select>
           </div>
 
           {periods.isLoading ? (
-            <LoadingState label="Loading payroll periods…" />
+            <LoadingState label={t('Loading payroll periods…')} />
           ) : periods.error ? (
             <ErrorState message={describeApiError(periods.error)} />
           ) : (periods.data?.items?.length ?? 0) === 0 ? (
             <EmptyState
               icon={Wallet}
-              title="No payroll periods"
-              message="No settlement periods match this filter for your gyms."
+              title={t('No payroll periods')}
+              message={t('No settlement periods match this filter for your gyms.')}
             />
           ) : (
             <>
@@ -135,22 +144,29 @@ export default function PayrollPage() {
                       <div className="flex flex-wrap items-center gap-2">
                         <p className="font-semibold text-slate-900">{period.period}</p>
                         <StatusBadge status={period.status} />
-                        {period.locked && <Badge>Locked</Badge>}
+                        {period.locked && <Badge>{t('Locked')}</Badge>}
                         {period.publishedGyms.length > 0 && (
                           <Badge>{period.publishedGyms.join(', ')}</Badge>
                         )}
                       </div>
-                      <p className="mt-0.5 text-sm text-slate-600">{period.totalEmployees} employees</p>
+                      <p className="mt-0.5 text-sm text-slate-600">
+                        {t('{{count}} employees', { count: period.totalEmployees })}
+                      </p>
                       <p className="mt-1 text-sm text-slate-500">
-                        Gross {formatMoney(period.totalGross)} · Deductions {formatMoney(period.totalDeductions)} · Net{' '}
-                        {formatMoney(period.totalNet)}
+                        {t('Gross {{gross}} · Deductions {{deductions}} · Net {{net}}', {
+                          gross: formatMoney(period.totalGross),
+                          deductions: formatMoney(period.totalDeductions),
+                          net: formatMoney(period.totalNet),
+                        })}
                       </p>
                       {period.paidDate && (
-                        <p className="mt-0.5 text-xs text-slate-400">Paid {formatDate(period.paidDate)}</p>
+                        <p className="mt-0.5 text-xs text-slate-400">
+                          {t('Paid {{date}}', { date: formatDate(period.paidDate) })}
+                        </p>
                       )}
                     </div>
                     <Button variant="outline" size="sm" onClick={() => setOpenPeriodId(period.id)}>
-                      Open sheet
+                      {t('Open sheet')}
                     </Button>
                   </li>
                 ))}
@@ -161,7 +177,7 @@ export default function PayrollPage() {
                 total={periods.data!.total}
                 totalPages={periods.data!.totalPages}
                 onPageChange={setPage}
-                noun="periods"
+                noun={t('periods')}
               />
             </>
           )}
@@ -177,25 +193,25 @@ export default function PayrollPage() {
                 setReviewError(null)
               }}
               className="sm:w-56"
-              aria-label="Filter lines by status"
+              aria-label={t('Filter lines by status')}
             >
               {CANDIDATE_STATUSES.map((option) => (
                 <option key={option} value={option}>
-                  {option || 'All statuses'}
+                  {option ? t(option) : t('All statuses')}
                 </option>
               ))}
             </Select>
           </div>
 
           {candidates.isLoading ? (
-            <LoadingState label="Loading deduction lines…" />
+            <LoadingState label={t('Loading deduction lines…')} />
           ) : candidates.error ? (
             <ErrorState message={describeApiError(candidates.error)} />
           ) : (candidates.data?.items?.length ?? 0) === 0 ? (
             <EmptyState
               icon={ClipboardList}
-              title="No deduction lines"
-              message="There are no deduction lines in this view."
+              title={t('No deduction lines')}
+              message={t('There are no deduction lines in this view.')}
             />
           ) : (
             <>
@@ -222,7 +238,7 @@ export default function PayrollPage() {
                 total={candidates.data!.total}
                 totalPages={candidates.data!.totalPages}
                 onPageChange={setCandidatePage}
-                noun="lines"
+                noun={t('lines')}
               />
             </>
           )}
@@ -246,6 +262,7 @@ function CandidateRow({
   onAccept: () => void
   onWaive: () => void
 }) {
+  const { t } = useTranslation()
   return (
     <li className="flex flex-col gap-3 p-4 sm:flex-row sm:items-start sm:justify-between">
       <div className="flex min-w-0 gap-3">
@@ -259,7 +276,7 @@ function CandidateRow({
             {line.gym} · {line.period} · {formatDate(line.date)}
           </p>
           <p className="mt-1 text-sm text-slate-700">
-            {line.label || line.reason || 'Deduction'} · <span className="capitalize">{line.source}</span>
+            {line.label || line.reason || t('Deduction')} · <span className="capitalize">{line.source}</span>
           </p>
           {line.reason && line.label && <p className="mt-0.5 text-sm italic text-slate-500">“{line.reason}”</p>}
           <p className="mt-1 text-lg font-bold text-slate-900">{formatMoney(line.amount)}</p>
@@ -270,11 +287,11 @@ function CandidateRow({
         <div className="flex shrink-0 gap-2">
           <Button size="sm" onClick={onAccept} loading={reviewing}>
             <Check className="h-3.5 w-3.5" aria-hidden="true" />
-            Approve
+            {t('Approve')}
           </Button>
           <Button variant="outline" size="sm" onClick={onWaive} disabled={reviewing}>
             <X className="h-3.5 w-3.5" aria-hidden="true" />
-            Waive
+            {t('Waive')}
           </Button>
         </div>
       )}

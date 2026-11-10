@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next'
 import { Plus, X } from 'lucide-react'
 import { Button } from '../../../components/ui/button'
 import { Input } from '../../../components/ui/input'
@@ -20,6 +21,7 @@ export interface QuestionEditorProps {
  * `text` questions take no options; `choose`/`checkbox` need at least two.
  */
 export default function QuestionEditor({ questions, onChange }: QuestionEditorProps) {
+  const { t } = useTranslation()
   const update = (index: number, patch: Partial<QuestionDraft>) => {
     onChange(questions.map((question, i) => (i === index ? { ...question, ...patch } : question)))
   }
@@ -44,19 +46,21 @@ export default function QuestionEditor({ questions, onChange }: QuestionEditorPr
   return (
     <div>
       <div className="flex items-center justify-between">
-        <p className="text-sm font-semibold text-slate-900">Questions</p>
+        <p className="text-sm font-semibold text-slate-900">{t('Questions')}</p>
         <Button
           variant="outline"
           size="sm"
           onClick={() => onChange([...questions, { kind: 'text', text: '', options: [] }])}
         >
           <Plus className="h-3.5 w-3.5" aria-hidden="true" />
-          Add question
+          {t('Add question')}
         </Button>
       </div>
 
       {questions.length === 0 ? (
-        <p className="mt-2 text-sm text-slate-500">Add at least one question — rating, choice or checkbox.</p>
+        <p className="mt-2 text-sm text-slate-500">
+          {t('Add at least one question — rating, choice or checkbox.')}
+        </p>
       ) : (
         <ol className="mt-3 space-y-4">
           {questions.map((question, index) => (
@@ -66,26 +70,26 @@ export default function QuestionEditor({ questions, onChange }: QuestionEditorPr
                   value={question.kind}
                   onChange={(e) => setKind(index, e.target.value as QuestionKind)}
                   className="sm:w-44"
-                  aria-label={`Question ${index + 1} type`}
+                  aria-label={t('Question {{number}} type', { number: index + 1 })}
                 >
                   {KIND_OPTIONS.map((option) => (
                     <option key={option.value} value={option.value}>
-                      {option.label}
+                      {t(option.label)}
                     </option>
                   ))}
                 </Select>
                 <Input
                   value={question.text}
                   onChange={(e) => update(index, { text: e.target.value })}
-                  placeholder={`Question ${index + 1} text`}
-                  aria-label={`Question ${index + 1} text`}
+                  placeholder={t('Question {{number}} text', { number: index + 1 })}
+                  aria-label={t('Question {{number}} text', { number: index + 1 })}
                   className="flex-1"
                 />
                 <Button
                   variant="ghost"
                   size="sm"
                   onClick={() => onChange(questions.filter((_, i) => i !== index))}
-                  aria-label={`Remove question ${index + 1}`}
+                  aria-label={t('Remove question {{number}}', { number: index + 1 })}
                 >
                   <X className="h-4 w-4 text-red-500" aria-hidden="true" />
                 </Button>
@@ -98,15 +102,18 @@ export default function QuestionEditor({ questions, onChange }: QuestionEditorPr
                       <Input
                         value={option}
                         onChange={(e) => setOption(index, optionIndex, e.target.value)}
-                        placeholder={`Option ${optionIndex + 1}`}
-                        aria-label={`Question ${index + 1} option ${optionIndex + 1}`}
+                        placeholder={t('Option {{number}}', { number: optionIndex + 1 })}
+                        aria-label={t('Question {{question}} option {{option}}', {
+                          question: index + 1,
+                          option: optionIndex + 1,
+                        })}
                       />
                       <Button
                         variant="ghost"
                         size="sm"
                         onClick={() => removeOption(index, optionIndex)}
                         disabled={question.options.length <= 2}
-                        aria-label={`Remove option ${optionIndex + 1}`}
+                        aria-label={t('Remove option {{number}}', { number: optionIndex + 1 })}
                       >
                         <X className="h-4 w-4 text-slate-400" aria-hidden="true" />
                       </Button>
@@ -114,9 +121,9 @@ export default function QuestionEditor({ questions, onChange }: QuestionEditorPr
                   ))}
                   <Button variant="ghost" size="sm" onClick={() => addOption(index)}>
                     <Plus className="h-3.5 w-3.5" aria-hidden="true" />
-                    Add option
+                    {t('Add option')}
                   </Button>
-                  <p className="text-xs text-slate-500">Choice questions need at least two options.</p>
+                  <p className="text-xs text-slate-500">{t('Choice questions need at least two options.')}</p>
                 </div>
               )}
             </li>

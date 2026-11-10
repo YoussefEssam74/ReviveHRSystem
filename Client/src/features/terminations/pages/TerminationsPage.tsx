@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { UserX } from 'lucide-react'
 import { PageHeader } from '../../../components/ui/page-header'
 import { Card } from '../../../components/ui/card'
@@ -23,6 +24,7 @@ const TYPE_OPTIONS = ['', 'Resignation', 'Termination']
 
 /** Separation cases (S5.6/S9.4) — checklist, verdict and finalize workflow. */
 export default function TerminationsPage() {
+  const { t } = useTranslation()
   const { can, me } = useMe()
   const [status, setStatus] = useState('')
   const [type, setType] = useState('')
@@ -46,13 +48,17 @@ export default function TerminationsPage() {
   return (
     <div>
       <PageHeader
-        title="Terminations"
-        description={me?.activeGym ? `Separation cases at ${me.activeGym.gymName}` : 'Exit lifecycle: checklist, verdict and finalization'}
+        title={t('Terminations')}
+        description={
+          me?.activeGym
+            ? t('Separation cases at {{gym}}', { gym: me.activeGym.gymName })
+            : t('Exit lifecycle: checklist, verdict and finalization')
+        }
         actions={
           canManage ? (
             <Button onClick={() => setInitiating(true)}>
               <UserX className="h-4 w-4" aria-hidden="true" />
-              New separation
+              {t('New separation')}
             </Button>
           ) : undefined
         }
@@ -60,23 +66,23 @@ export default function TerminationsPage() {
 
       <Card>
         <div className="flex flex-col gap-3 border-b border-slate-100 p-4 sm:flex-row">
-          <Select value={status} onChange={(e) => { setStatus(e.target.value); setPage(1) }} className="sm:w-52" aria-label="Filter by status">
+          <Select value={status} onChange={(e) => { setStatus(e.target.value); setPage(1) }} className="sm:w-52" aria-label={t('Filter by status')}>
             {STATUS_OPTIONS.map((option) => (
               <option key={option} value={option}>
-                {option || 'All statuses'}
+                {option ? t(option) : t('All statuses')}
               </option>
             ))}
           </Select>
-          <Select value={type} onChange={(e) => { setType(e.target.value); setPage(1) }} className="sm:w-48" aria-label="Filter by type">
+          <Select value={type} onChange={(e) => { setType(e.target.value); setPage(1) }} className="sm:w-48" aria-label={t('Filter by type')}>
             {TYPE_OPTIONS.map((option) => (
               <option key={option} value={option}>
-                {option || 'All types'}
+                {option ? t(option) : t('All types')}
               </option>
             ))}
           </Select>
           {gymOptions.length > 0 && (
-            <Select value={gym} onChange={(e) => { setGym(e.target.value); setPage(1) }} className="sm:w-52" aria-label="Filter by gym">
-              <option value="">All gyms</option>
+            <Select value={gym} onChange={(e) => { setGym(e.target.value); setPage(1) }} className="sm:w-52" aria-label={t('Filter by gym')}>
+              <option value="">{t('All gyms')}</option>
               {gymOptions.map((option) => (
                 <option key={option.gymId} value={String(option.gymId)}>
                   {option.gymName}
@@ -87,26 +93,30 @@ export default function TerminationsPage() {
         </div>
 
         {isLoading ? (
-          <LoadingState label="Loading separation cases…" />
+          <LoadingState label={t('Loading separation cases…')} />
         ) : error ? (
           <ErrorState message={describeApiError(error)} />
         ) : (data?.items?.length ?? 0) === 0 ? (
           <EmptyState
             icon={UserX}
-            title="No separation cases"
-            message={status || type || gym ? 'Try adjusting your filters.' : 'No employee is currently going through offboarding.'}
+            title={t('No separation cases')}
+            message={
+              status || type || gym
+                ? t('Try adjusting your filters.')
+                : t('No employee is currently going through offboarding.')
+            }
           />
         ) : (
           <>
             {/* Desktop: table. Mobile: stacked cards. */}
             <Table className="hidden sm:block">
               <THead>
-                <TH>Employee</TH>
-                <TH>Gym</TH>
-                <TH>Type</TH>
-                <TH>Last day</TH>
-                <TH>Checklist</TH>
-                <TH>Status</TH>
+                <TH>{t('Employee')}</TH>
+                <TH>{t('Gym')}</TH>
+                <TH>{t('Type')}</TH>
+                <TH>{t('Last day')}</TH>
+                <TH>{t('Checklist')}</TH>
+                <TH>{t('Status')}</TH>
               </THead>
               <TBody>
                 {data!.items.map((separation) => (
@@ -149,7 +159,7 @@ export default function TerminationsPage() {
                   <button
                     type="button"
                     onClick={() => setSelectedId(separation.id)}
-                    className="flex w-full flex-col gap-2 px-4 py-3 text-left transition-colors hover:bg-slate-50"
+                    className="flex w-full flex-col gap-2 px-4 py-3 text-start transition-colors hover:bg-slate-50"
                   >
                     <div className="flex items-center justify-between gap-2">
                       <p className="truncate font-medium text-slate-900">{separation.employee}</p>
@@ -160,8 +170,8 @@ export default function TerminationsPage() {
                     </p>
                     <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500">
                       <Badge>{separation.separationType}</Badge>
-                      <span>Last day {formatDate(separation.lastDay)}</span>
-                      <span>{separation.progress}% checklist</span>
+                      <span>{t('Last day {{date}}', { date: formatDate(separation.lastDay) })}</span>
+                      <span>{t('{{percent}}% checklist', { percent: separation.progress })}</span>
                     </div>
                   </button>
                 </li>
@@ -173,7 +183,7 @@ export default function TerminationsPage() {
               total={data!.total}
               totalPages={data!.totalPages}
               onPageChange={setPage}
-              noun="cases"
+              noun={t('cases')}
             />
           </>
         )}

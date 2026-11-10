@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Mail, Phone } from 'lucide-react'
 import { Button } from '../../../components/ui/button'
 import { Badge, StatusBadge } from '../../../components/ui/badge'
@@ -13,6 +14,7 @@ import { formatDate } from '../../../lib/format'
 import { CANDIDATE_STAGES, type CandidateInterview } from '../api/recruitment.api'
 
 function InterviewRound({ label, interview }: { label: string; interview: CandidateInterview | null }) {
+  const { t } = useTranslation()
   return (
     <div className="rounded-lg border border-slate-200 px-3 py-2">
       <div className="flex items-center justify-between gap-2">
@@ -27,7 +29,7 @@ function InterviewRound({ label, interview }: { label: string; interview: Candid
           {interview.room ? ` · ${interview.room}` : ''}
         </p>
       ) : (
-        <p className="mt-0.5 text-xs text-slate-500">Not scheduled.</p>
+        <p className="mt-0.5 text-xs text-slate-500">{t('Not scheduled.')}</p>
       )}
     </div>
   )
@@ -42,6 +44,7 @@ export interface CandidateDetailDialogProps {
 
 /** The §5.2 applicant pane: card data, stage move and block/unblock. */
 export function CandidateDetailDialog({ candidateId, canManage, onClose }: CandidateDetailDialogProps) {
+  const { t } = useTranslation()
   const { data: candidate, isLoading, error } = useCandidate(candidateId)
   const moveStage = useMoveCandidateStage()
   const block = useBlockCandidate()
@@ -78,17 +81,17 @@ export function CandidateDetailDialog({ candidateId, canManage, onClose }: Candi
     <Dialog
       open
       onClose={onClose}
-      title={candidate ? candidate.name : 'Candidate'}
+      title={candidate ? candidate.name : t('Candidate')}
       description={candidate ? candidate.position : undefined}
       className="sm:max-w-2xl"
       footer={
         <Button variant="outline" onClick={onClose}>
-          Close
+          {t('Close')}
         </Button>
       }
     >
       {isLoading ? (
-        <LoadingState label="Loading candidate…" />
+        <LoadingState label={t('Loading candidate…')} />
       ) : error ? (
         <ErrorState message={describeApiError(error)} />
       ) : candidate ? (
@@ -101,14 +104,16 @@ export function CandidateDetailDialog({ candidateId, canManage, onClose }: Candi
 
           <div className="flex flex-wrap items-center gap-2">
             <StatusBadge status={candidate.stage} />
-            {candidate.blocked && <Badge>Banned</Badge>}
-            {candidate.rating != null && <Badge>Rating {candidate.rating}</Badge>}
-            <Badge>Applied {formatDate(candidate.appliedDate)}</Badge>
+            {candidate.blocked && <Badge>{t('Banned')}</Badge>}
+            {candidate.rating != null && <Badge>{t('Rating {{rating}}', { rating: candidate.rating })}</Badge>}
+            <Badge>{t('Applied {{date}}', { date: formatDate(candidate.appliedDate) })}</Badge>
           </div>
 
           {candidate.blocked && (
             <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-              This candidate is blocked{candidate.blockReason ? `: ${candidate.blockReason}` : '.'}
+              {candidate.blockReason
+                ? t('This candidate is blocked: {{reason}}', { reason: candidate.blockReason })
+                : t('This candidate is blocked.')}
             </p>
           )}
 
@@ -121,12 +126,12 @@ export function CandidateDetailDialog({ candidateId, canManage, onClose }: Candi
               <Mail className="h-4 w-4 shrink-0 text-slate-400" aria-hidden="true" />
               {candidate.form?.email ?? '—'}
             </p>
-            <p className="text-sm text-slate-700">Experience: {candidate.form?.expYears ?? 0} years</p>
-            <p className="text-sm text-slate-700">Education: {candidate.form?.education || '—'}</p>
-            <p className="text-sm text-slate-700">Preferred shift: {candidate.form?.shift ?? '—'}</p>
-            <p className="text-sm text-slate-700">Salary expectation: {candidate.form?.salaryExp ?? '—'}</p>
-            <p className="text-sm text-slate-700">Availability: {candidate.form?.availability ?? '—'}</p>
-            <p className="text-sm text-slate-700">Source: {candidate.form?.source ?? '—'}</p>
+            <p className="text-sm text-slate-700">{t('Experience: {{years}} years', { years: candidate.form?.expYears ?? 0 })}</p>
+            <p className="text-sm text-slate-700">{t('Education: {{value}}', { value: candidate.form?.education || '—' })}</p>
+            <p className="text-sm text-slate-700">{t('Preferred shift: {{value}}', { value: candidate.form?.shift ?? '—' })}</p>
+            <p className="text-sm text-slate-700">{t('Salary expectation: {{value}}', { value: candidate.form?.salaryExp ?? '—' })}</p>
+            <p className="text-sm text-slate-700">{t('Availability: {{value}}', { value: candidate.form?.availability ?? '—' })}</p>
+            <p className="text-sm text-slate-700">{t('Source: {{value}}', { value: candidate.form?.source ?? '—' })}</p>
           </div>
 
           {((candidate.form?.skills?.length ?? 0) > 0 || (candidate.form?.languages?.length ?? 0) > 0) && (
@@ -141,28 +146,28 @@ export function CandidateDetailDialog({ candidateId, canManage, onClose }: Candi
           )}
 
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <InterviewRound label="Screening" interview={candidate.screen} />
-            <InterviewRound label="First interview" interview={candidate.iv1} />
-            <InterviewRound label="Second interview" interview={candidate.iv2} />
+            <InterviewRound label={t('Screening')} interview={candidate.screen} />
+            <InterviewRound label={t('First interview')} interview={candidate.iv1} />
+            <InterviewRound label={t('Second interview')} interview={candidate.iv2} />
             <div className="rounded-lg border border-slate-200 px-3 py-2">
               <div className="flex items-center justify-between gap-2">
-                <p className="text-sm font-medium text-slate-900">Decision</p>
+                <p className="text-sm font-medium text-slate-900">{t('Decision')}</p>
                 {candidate.decision?.verdict && <StatusBadge status={candidate.decision.verdict} />}
               </div>
               <p className="mt-0.5 text-xs text-slate-500">
                 {candidate.decision
                   ? `${formatDate(candidate.decision.date)}${candidate.decision.by ? ` · ${candidate.decision.by}` : ''}`
-                  : 'No decision yet.'}
+                  : t('No decision yet.')}
               </p>
             </div>
           </div>
 
           {canManage && (
             <div className="rounded-lg border border-slate-200 p-4">
-              <p className="text-xs font-medium uppercase tracking-wide text-slate-400">Pipeline actions</p>
+              <p className="text-xs font-medium uppercase tracking-wide text-slate-400">{t('Pipeline actions')}</p>
               <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <div>
-                  <Label htmlFor="target-stage">Move to stage</Label>
+                  <Label htmlFor="target-stage">{t('Move to stage')}</Label>
                   <div className="flex gap-2">
                     <Select
                       id="target-stage"
@@ -172,7 +177,7 @@ export function CandidateDetailDialog({ candidateId, canManage, onClose }: Candi
                     >
                       {CANDIDATE_STAGES.map((stage) => (
                         <option key={stage} value={stage} disabled={stage === 'Hired'}>
-                          {stage === 'Hired' ? 'Hired (hire wizard only)' : stage}
+                          {stage === 'Hired' ? t('Hired (hire wizard only)') : t(stage)}
                         </option>
                       ))}
                     </Select>
@@ -188,22 +193,22 @@ export function CandidateDetailDialog({ candidateId, canManage, onClose }: Candi
                         targetStage === 'Hired'
                       }
                     >
-                      Move
+                      {t('Move')}
                     </Button>
                   </div>
                   <p className="mt-1 text-xs text-slate-500">
                     {!candidate.applicationId
-                      ? 'This card has no linked application, so its stage cannot move.'
+                      ? t('This card has no linked application, so its stage cannot move.')
                       : candidate.stage === 'Hired'
-                        ? 'This candidate is already hired.'
-                        : 'Hired is only reachable through the hire wizard.'}
+                        ? t('This candidate is already hired.')
+                        : t('Hired is only reachable through the hire wizard.')}
                   </p>
                 </div>
                 <div>
-                  <Label htmlFor="block-reason">{candidate.blocked ? 'Unblock' : 'Block candidate'}</Label>
+                  <Label htmlFor="block-reason">{candidate.blocked ? t('Unblock') : t('Block candidate')}</Label>
                   {candidate.blocked ? (
                     <Button variant="outline" onClick={() => onSetBlocked(false)} loading={block.isPending}>
-                      Unblock candidate
+                      {t('Unblock candidate')}
                     </Button>
                   ) : (
                     <div className="flex gap-2">
@@ -211,14 +216,14 @@ export function CandidateDetailDialog({ candidateId, canManage, onClose }: Candi
                         id="block-reason"
                         value={blockReason}
                         onChange={(e) => setBlockReason(e.target.value)}
-                        placeholder="Reason (optional)"
+                        placeholder={t('Reason (optional)')}
                       />
                       <Button variant="danger" onClick={() => onSetBlocked(true)} loading={block.isPending}>
-                        Block
+                        {t('Block')}
                       </Button>
                     </div>
                   )}
-                  <p className="mt-1 text-xs text-slate-500">Blocked candidates leave the active pipeline.</p>
+                  <p className="mt-1 text-xs text-slate-500">{t('Blocked candidates leave the active pipeline.')}</p>
                 </div>
               </div>
             </div>

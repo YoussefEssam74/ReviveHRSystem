@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { ChevronLeft, Download, Plus, Send, X } from 'lucide-react'
 import { Button } from '../../../components/ui/button'
 import { Card } from '../../../components/ui/card'
@@ -35,6 +36,7 @@ export interface SettlementSheetProps {
 
 /** One period's settlement sheets: bonus edits, Add-Line, close/reopen, publish, CSV. */
 export default function SettlementSheet({ periodId, canEdit, onBack }: SettlementSheetProps) {
+  const { t } = useTranslation()
   const { me } = useMe()
   const { data: period, isLoading, error } = usePayrollPeriod(periodId)
 
@@ -55,7 +57,7 @@ export default function SettlementSheet({ periodId, canEdit, onBack }: Settlemen
   const [confirmingPublish, setConfirmingPublish] = useState(false)
   const [actionError, setActionError] = useState<string | null>(null)
 
-  if (isLoading) return <LoadingState label="Loading settlement sheet…" />
+  if (isLoading) return <LoadingState label={t('Loading settlement sheet…')} />
   if (error) return <ErrorState message={describeApiError(error)} />
   if (!period) return null
 
@@ -85,7 +87,7 @@ export default function SettlementSheet({ periodId, canEdit, onBack }: Settlemen
     if (draft == null) return
     const value = Number(draft)
     if (!Number.isFinite(value) || value < 0) {
-      setActionError('Bonus must be zero or more.')
+      setActionError(t('Bonus must be zero or more.'))
       return
     }
     const ok = await runGuarded(() => updateBonus.mutateAsync({ employeeId: entry.employeeId, bonus: value }))
@@ -101,11 +103,11 @@ export default function SettlementSheet({ periodId, canEdit, onBack }: Settlemen
   const onAddLine = async (entry: PayrollEntry) => {
     const amount = Number(lineAmount)
     if (!lineReason.trim()) {
-      setActionError('A reason is required for every deduction line.')
+      setActionError(t('A reason is required for every deduction line.'))
       return
     }
     if (!Number.isFinite(amount) || amount <= 0) {
-      setActionError('The deduction amount must be greater than zero.')
+      setActionError(t('The deduction amount must be greater than zero.'))
       return
     }
     const ok = await runGuarded(() =>
@@ -136,7 +138,7 @@ export default function SettlementSheet({ periodId, canEdit, onBack }: Settlemen
         className="mb-4 inline-flex items-center gap-1 text-sm font-medium text-slate-600 transition-colors hover:text-slate-900"
       >
         <ChevronLeft className="h-4 w-4" aria-hidden="true" />
-        Back to periods
+        {t('Back to periods')}
       </button>
 
       <Card>
@@ -145,12 +147,16 @@ export default function SettlementSheet({ periodId, canEdit, onBack }: Settlemen
             <div className="flex flex-wrap items-center gap-2">
               <h2 className="text-lg font-bold text-slate-900">{period.period}</h2>
               <StatusBadge status={period.status} />
-              {period.locked && <Badge>Locked</Badge>}
+              {period.locked && <Badge>{t('Locked')}</Badge>}
             </div>
             <p className="mt-1 text-sm text-slate-500">
-              {period.totalEmployees} employees · Gross {formatMoney(period.totalGross)} · Deductions{' '}
-              {formatMoney(period.totalDeductions)} · Net {formatMoney(period.totalNet)}
-              {pendingLines > 0 ? ` · ${pendingLines} pending line${pendingLines === 1 ? '' : 's'}` : ''}
+              {t('{{employees}} employees · Gross {{gross}} · Deductions {{deductions}} · Net {{net}}', {
+                employees: period.totalEmployees,
+                gross: formatMoney(period.totalGross),
+                deductions: formatMoney(period.totalDeductions),
+                net: formatMoney(period.totalNet),
+              })}
+              {pendingLines > 0 ? ` · ${t('{{count}} pending lines', { count: pendingLines })}` : ''}
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -168,13 +174,13 @@ export default function SettlementSheet({ periodId, canEdit, onBack }: Settlemen
                 loading={exportCsv.isPending}
               >
                 <Download className="h-3.5 w-3.5" aria-hidden="true" />
-                Export CSV
+                {t('Export CSV')}
               </Button>
             )}
             {canEdit && !period.locked && (
               <Button size="sm" onClick={() => setConfirmingPublish(true)}>
                 <Send className="h-3.5 w-3.5" aria-hidden="true" />
-                Publish &amp; lock
+                {t('Publish & lock')}
               </Button>
             )}
           </div>
@@ -189,8 +195,8 @@ export default function SettlementSheet({ periodId, canEdit, onBack }: Settlemen
         {period.items.length === 0 ? (
           <EmptyState
             icon={Send}
-            title="No employees on this sheet"
-            message="This period has no entry sheets for the gyms in your scope."
+            title={t('No employees on this sheet')}
+            message={t('This period has no entry sheets for the gyms in your scope.')}
           />
         ) : (
           <ul className="divide-y divide-slate-100">
@@ -209,16 +215,19 @@ export default function SettlementSheet({ periodId, canEdit, onBack }: Settlemen
                       <div className="min-w-0">
                         <p className="truncate font-semibold text-slate-900">{entry.name}</p>
                         <p className="truncate text-sm text-slate-500">
-                          {entry.position} · {entry.days} days{entry.overtime > 0 ? ` · ${entry.overtime} h OT` : ''}
-                          {entry.relatedRequestIds.length > 0 ? ` · ${entry.relatedRequestIds.length} linked request(s)` : ''}
+                          {entry.position} · {t('{{count}} days', { count: entry.days })}
+                          {entry.overtime > 0 ? ` · ${t('{{count}} h OT', { count: entry.overtime })}` : ''}
+                          {entry.relatedRequestIds.length > 0
+                            ? ` · ${t('{{count}} linked requests', { count: entry.relatedRequestIds.length })}`
+                            : ''}
                         </p>
                       </div>
                     </div>
                     <div className="flex flex-wrap items-center gap-2">
                       <StatusBadge status={entry.status} />
-                      {pendingCount > 0 && <Badge status="Pending">{pendingCount} pending</Badge>}
+                      {pendingCount > 0 && <Badge status="Pending">{t('{{count}} pending', { count: pendingCount })}</Badge>}
                       <Button variant="ghost" size="sm" onClick={() => setPayslip({ employeeId: entry.employeeId, name: entry.name })}>
-                        Payslip
+                        {t('Payslip')}
                       </Button>
                       {canEdit && !locked && (
                         <>
@@ -228,7 +237,7 @@ export default function SettlementSheet({ periodId, canEdit, onBack }: Settlemen
                               onClick={() => runGuarded(() => closeEntry.mutateAsync(entry.employeeId))}
                               loading={closeEntry.isPending && closeEntry.variables === entry.employeeId}
                             >
-                              Close sheet
+                              {t('Close sheet')}
                             </Button>
                           ) : (
                             <Button
@@ -237,19 +246,19 @@ export default function SettlementSheet({ periodId, canEdit, onBack }: Settlemen
                               onClick={() => runGuarded(() => reopenEntry.mutateAsync(entry.employeeId))}
                               loading={reopenEntry.isPending && reopenEntry.variables === entry.employeeId}
                             >
-                              Reopen
+                              {t('Reopen')}
                             </Button>
                           )}
                           <Button variant="outline" size="sm" onClick={() => setAddingFor(adding ? null : entry.employeeId)}>
                             {adding ? (
                               <>
                                 <X className="h-3.5 w-3.5" aria-hidden="true" />
-                                Cancel
+                                {t('Cancel')}
                               </>
                             ) : (
                               <>
                                 <Plus className="h-3.5 w-3.5" aria-hidden="true" />
-                                Add deduction
+                                {t('Add deduction')}
                               </>
                             )}
                           </Button>
@@ -259,14 +268,14 @@ export default function SettlementSheet({ periodId, canEdit, onBack }: Settlemen
                   </div>
 
                   <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-3 lg:grid-cols-4">
-                    <Fact label="Days worked" value={String(entry.days)} />
-                    <Fact label="Cover days" value={String(entry.coverDays)} />
-                    <Fact label="Extra shifts" value={String(entry.extraShiftDays)} />
-                    <Fact label="Base salary" value={formatMoney(entry.baseSalary)} />
-                    <Fact label="Overtime" value={`${entry.overtime} h`} />
-                    <Fact label="Cover pay" value={formatMoney(entry.coverPay)} />
+                    <Fact label={t('Days worked')} value={String(entry.days)} />
+                    <Fact label={t('Cover days')} value={String(entry.coverDays)} />
+                    <Fact label={t('Extra shifts')} value={String(entry.extraShiftDays)} />
+                    <Fact label={t('Base salary')} value={formatMoney(entry.baseSalary)} />
+                    <Fact label={t('Overtime')} value={t('{{count}} h', { count: entry.overtime })} />
+                    <Fact label={t('Cover pay')} value={formatMoney(entry.coverPay)} />
                     <div>
-                      <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Bonus</p>
+                      <p className="text-xs font-medium uppercase tracking-wide text-slate-500">{t('Bonus')}</p>
                       {canEdit && !locked ? (
                         <div className="mt-1 flex items-center gap-2">
                           <Input
@@ -278,7 +287,7 @@ export default function SettlementSheet({ periodId, canEdit, onBack }: Settlemen
                               setBonusDrafts((previous) => ({ ...previous, [entry.employeeId]: e.target.value }))
                             }
                             className="h-8 w-28 text-sm"
-                            aria-label={`Bonus for ${entry.name}`}
+                            aria-label={t('Bonus for {{name}}', { name: entry.name })}
                           />
                           <Button
                             size="sm"
@@ -286,44 +295,44 @@ export default function SettlementSheet({ periodId, canEdit, onBack }: Settlemen
                             onClick={() => onSaveBonus(entry)}
                             loading={updateBonus.isPending && updateBonus.variables?.employeeId === entry.employeeId}
                           >
-                            Save
+                            {t('Save')}
                           </Button>
                         </div>
                       ) : (
                         <p className="mt-1 text-sm font-medium text-slate-900">{formatMoney(entry.bonus)}</p>
                       )}
                     </div>
-                    <Fact label="Gross" value={formatMoney(entry.gross)} />
-                    <Fact label="Deductions" value={formatMoney(entry.deductions)} />
-                    <Fact label="Net" value={formatMoney(entry.net)} strong />
+                    <Fact label={t('Gross')} value={formatMoney(entry.gross)} />
+                    <Fact label={t('Deductions')} value={formatMoney(entry.deductions)} />
+                    <Fact label={t('Net')} value={formatMoney(entry.net)} strong />
                   </div>
 
                   {adding && (
                     <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50/70 p-3">
-                      <p className="text-sm font-semibold text-slate-900">Add deduction line</p>
+                      <p className="text-sm font-semibold text-slate-900">{t('Add deduction line')}</p>
                       <div className="mt-2 grid gap-3 sm:grid-cols-[10rem_1fr_10rem_auto]">
                         <div>
-                          <Label htmlFor={`line-source-${entry.employeeId}`}>Source</Label>
+                          <Label htmlFor={`line-source-${entry.employeeId}`}>{t('Source')}</Label>
                           <Select
                             id={`line-source-${entry.employeeId}`}
                             value={lineSource}
                             onChange={(e) => setLineSource(e.target.value === 'biometric' ? 'biometric' : 'manager')}
                           >
-                            <option value="manager">Manager</option>
-                            <option value="biometric">Biometric</option>
+                            <option value="manager">{t('Manager')}</option>
+                            <option value="biometric">{t('Biometric')}</option>
                           </Select>
                         </div>
                         <div>
-                          <Label htmlFor={`line-reason-${entry.employeeId}`}>Reason</Label>
+                          <Label htmlFor={`line-reason-${entry.employeeId}`}>{t('Reason')}</Label>
                           <Input
                             id={`line-reason-${entry.employeeId}`}
                             value={lineReason}
                             onChange={(e) => setLineReason(e.target.value)}
-                            placeholder="Unapproved absence on Oct 14."
+                            placeholder={t('Unapproved absence on Oct 14.')}
                           />
                         </div>
                         <div>
-                          <Label htmlFor={`line-amount-${entry.employeeId}`}>Amount</Label>
+                          <Label htmlFor={`line-amount-${entry.employeeId}`}>{t('Amount')}</Label>
                           <Input
                             id={`line-amount-${entry.employeeId}`}
                             type="number"
@@ -336,12 +345,12 @@ export default function SettlementSheet({ periodId, canEdit, onBack }: Settlemen
                         </div>
                         <div className="flex items-end">
                           <Button onClick={() => onAddLine(entry)} loading={addDeduction.isPending}>
-                            Add line
+                            {t('Add line')}
                           </Button>
                         </div>
                       </div>
                       <p className="mt-2 text-xs text-slate-500">
-                        New lines start as Pending and do not reduce net pay until they are approved in the review queue.
+                        {t('New lines start as Pending and do not reduce net pay until they are approved in the review queue.')}
                       </p>
                     </div>
                   )}
@@ -380,23 +389,24 @@ export default function SettlementSheet({ periodId, canEdit, onBack }: Settlemen
       <Dialog
         open={confirmingPublish}
         onClose={() => setConfirmingPublish(false)}
-        title="Publish & lock period"
+        title={t('Publish & lock period')}
         description={sheetGym ? `${period.period} · ${sheetGym}` : period.period}
         footer={
           <>
             <Button variant="outline" onClick={() => setConfirmingPublish(false)}>
-              Cancel
+              {t('Cancel')}
             </Button>
             <Button onClick={onPublish} loading={approve.isPending} disabled={!sheetGym}>
-              Publish payroll
+              {t('Publish payroll')}
             </Button>
           </>
         }
       >
         <div className="space-y-3 text-sm text-slate-700">
           <p>
-            Every sheet must be settled (all lines decided, sheet closed). Publishing locks the period and its
-            entries — no further bonus, deduction or review changes will be accepted.
+            {t(
+              'Every sheet must be settled (all lines decided, sheet closed). Publishing locks the period and its entries — no further bonus, deduction or review changes will be accepted.',
+            )}
           </p>
           {actionError && (
             <p role="alert" className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
@@ -431,10 +441,11 @@ function DeductionLineRow({
   removing: boolean
   onRemove: () => void
 }) {
+  const { t } = useTranslation()
   return (
     <li className="flex items-center justify-between gap-3 px-3 py-2 text-sm">
       <div className="min-w-0">
-        <p className="truncate font-medium text-slate-800">{line.label || line.reason || 'Deduction'}</p>
+        <p className="truncate font-medium text-slate-800">{line.label || line.reason || t('Deduction')}</p>
         <p className="truncate text-xs text-slate-500">
           {formatDate(line.date)}
           {line.reason && line.label ? ` · ${line.reason}` : ''}
@@ -451,7 +462,7 @@ function DeductionLineRow({
             size="sm"
             onClick={onRemove}
             loading={removing}
-            aria-label={`Remove deduction ${line.id}`}
+            aria-label={t('Remove deduction {{id}}', { id: line.id })}
           >
             <X className="h-4 w-4 text-red-500" aria-hidden="true" />
           </Button>

@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { AlertTriangle, CalendarClock, CheckCircle2, ChevronLeft, ChevronRight, ClipboardCheck, Inbox, LogIn, LogOut, Zap } from 'lucide-react'
 import {
   getAttendanceGrid,
@@ -21,7 +22,7 @@ import { useToast } from '../../../components/ui/toast'
 import { usePortalSession } from '../../../contexts/PortalSessionContext'
 import { describeApiError } from '../../../lib/api-client'
 import { cn } from '../../../lib/utils'
-import { formatDate, formatMoney, formatTimeLabel, formatTimeOfDay, humanize } from '../../../lib/format'
+import { activeLocale, formatDate, formatMoney, formatTimeLabel, formatTimeOfDay, humanize } from '../../../lib/format'
 
 /**
  * Attendance Management (mock §16 renderAttendanceManagement): one date of the
@@ -51,13 +52,14 @@ function initialsOf(name: string): string {
 }
 
 export default function BranchAttendancePage() {
+  const { t } = useTranslation()
   const { isBranchManager, isTeamLeader } = usePortalSession()
 
   if (!isBranchManager && !isTeamLeader) {
     return (
       <EmptyState
-        title="Attendance Management is for managers"
-        hint="The day roster is guarded by the attendance.view permission key."
+        title={t('Attendance Management is for managers')}
+        hint={t('The day roster is guarded by the attendance.view permission key.')}
       />
     )
   }
@@ -110,6 +112,7 @@ function AttendanceBoard({
   canViewEmployees: boolean
   ledTeamId: number | null
 }) {
+  const { t } = useTranslation()
   const { me } = usePortalSession()
   const [detailRow, setDetailRow] = useState<AttendanceGridRow | null>(null)
   const [reviewRow, setReviewRow] = useState<AttendanceGridRow | null>(null)
@@ -175,9 +178,12 @@ function AttendanceBoard({
     <div className="space-y-3">
       <div className="flex flex-col justify-between gap-1.5 sm:flex-row sm:items-center sm:gap-2">
         <div>
-          <h1 className="text-base font-bold text-charcoal-900">Attendance Management</h1>
+          <h1 className="text-base font-bold text-charcoal-900">{t('Attendance Management')}</h1>
           <p className="text-[11px] leading-tight text-charcoal-500">
-            Today&apos;s branch attendance · {me?.activeGym?.gymName || 'your gym'} · {formatDate(date)}
+            {t("Today's branch attendance · {{gym}} · {{date}}", {
+              gym: me?.activeGym?.gymName || t('your gym'),
+              date: formatDate(date),
+            })}
           </p>
         </div>
         <input
@@ -185,7 +191,7 @@ function AttendanceBoard({
           value={date}
           onChange={(event) => onDateChange(event.target.value)}
           className="form-input h-8 w-32 py-1 text-xs"
-          aria-label="Attendance date"
+          aria-label={t('Attendance date')}
         />
       </div>
 
@@ -193,28 +199,28 @@ function AttendanceBoard({
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
         <StatTile
           value={presentCount}
-          label="Present"
-          accent="border-l-brand-500"
+          label={t('Present')}
+          accent="border-s-brand-500"
           numberClass="text-brand-600"
         />
         <StatTile
           value={lateRows.length}
-          label="Late"
+          label={t('Late')}
           numberClass="text-yellow-600"
         />
         <StatTile
           value={absentRows.length}
-          label="Absent"
+          label={t('Absent')}
           numberClass="text-red-600"
         />
         <StatTile
           value={coverRows.length}
-          label="Covering"
+          label={t('Covering')}
           numberClass="text-purple-600"
         />
         <StatTile
           value={missingCheckoutCount}
-          label="Missing Checkout"
+          label={t('Missing Checkout')}
           numberClass="text-blue-600"
         />
       </div>
@@ -222,44 +228,51 @@ function AttendanceBoard({
       {lateRows.length === 0 && absentRows.length === 0 && coverRows.length === 0 ? (
         <EmptyState
           icon={<CheckCircle2 className="h-8 w-8" aria-hidden="true" />}
-          title="No attendance exceptions"
-          hint="Everyone scheduled on this day checked in on time. Pick another date to review late or absent days."
+          title={t('No attendance exceptions')}
+          hint={t('Everyone scheduled on this day checked in on time. Pick another date to review late or absent days.')}
         />
       ) : (
         <div className="space-y-3">
           <ExceptionList
-            title="LATE CHECK-INS"
+            title={t('LATE CHECK-INS')}
             titleIcon={<AlertTriangle className="h-3.5 w-3.5" aria-hidden="true" />}
             headerClass="bg-yellow-50/50"
             titleClass="text-yellow-700"
             rows={lateRows}
             identities={identities}
-            hint={(row) => (row.checkIn ? `Checked in ${formatTimeOfDay(row.checkIn)}` : 'No check-in')}
+            hint={(row) =>
+              row.checkIn ? t('Checked in {{time}}', { time: formatTimeOfDay(row.checkIn) }) : t('No check-in')
+            }
             onView={setDetailRow}
             onFollowUp={openFollowUpFor}
           />
           <ExceptionList
-            title="ABSENT"
+            title={t('ABSENT')}
             titleIcon={<AlertTriangle className="h-3.5 w-3.5" aria-hidden="true" />}
             headerClass="bg-red-50/50"
             titleClass="text-red-700"
             rows={absentRows}
             identities={identities}
-            hint={() => 'No check-in'}
+            hint={() => t('No check-in')}
             onView={setDetailRow}
             onFollowUp={openFollowUpFor}
           />
           <ExceptionList
-            title="COVERING / EXTRA SHIFTS"
+            title={t('COVERING / EXTRA SHIFTS')}
             titleIcon={<Zap className="h-3.5 w-3.5" aria-hidden="true" />}
             headerClass="bg-purple-50/50"
             titleClass="text-purple-700"
             rows={coverRows}
             identities={identities}
             hint={(row) =>
-              `Covering (Extra Shift)${row.checkIn ? ` · in ${formatTimeOfDay(row.checkIn)}` : ''}${
-                row.coverDays ? ` · cover ${row.coverDays}d` : ''
-              }`
+              row.coverDays
+                ? t('Covering (Extra Shift) · in {{time}} · cover {{days}}d', {
+                    time: row.checkIn ? formatTimeOfDay(row.checkIn) : '—',
+                    days: row.coverDays,
+                  })
+                : row.checkIn
+                  ? t('Covering (Extra Shift) · in {{time}}', { time: formatTimeOfDay(row.checkIn) })
+                  : t('Covering (Extra Shift)')
             }
             onView={setDetailRow}
             onFollowUp={openFollowUpFor}
@@ -310,7 +323,7 @@ function StatTile({
   numberClass: string
 }) {
   return (
-    <div className={cn('rounded-lg border border-charcoal-200 border-l-4 bg-white px-3 py-2 text-center', accent)}>
+    <div className={cn('rounded-lg border border-charcoal-200 border-s-4 bg-white px-3 py-2 text-center', accent)}>
       <p className={cn('text-base font-bold leading-tight', numberClass)}>{value}</p>
       <p className="text-[10px] text-charcoal-500">{label}</p>
     </div>
@@ -393,6 +406,7 @@ function AttendanceRowActions({
   onFollowUp: () => void
   onReview?: () => void
 }) {
+  const { t } = useTranslation()
   return (
     <div className="flex flex-wrap items-center gap-1.5">
       {onReview && (
@@ -402,14 +416,14 @@ function AttendanceRowActions({
           className="border-purple-300 text-purple-700 hover:bg-purple-50 dark:border-purple-700 dark:text-purple-300 dark:hover:bg-purple-500/10"
           onClick={onReview}
         >
-          <ClipboardCheck className="h-3.5 w-3.5" aria-hidden="true" /> Review cover day
+          <ClipboardCheck className="h-3.5 w-3.5" aria-hidden="true" /> {t('Review cover day')}
         </Button>
       )}
       <Button size="sm" variant="secondary" onClick={onFollowUp}>
-        <Zap className="h-3.5 w-3.5" aria-hidden="true" /> Take action
+        <Zap className="h-3.5 w-3.5" aria-hidden="true" /> {t('Take action')}
       </Button>
       <Button size="sm" variant="secondary" onClick={onView}>
-        View
+        {t('View')}
       </Button>
     </div>
   )
@@ -432,6 +446,7 @@ function AttendanceDetailModal({
   onReview: () => void
   onClose: () => void
 }) {
+  const { t } = useTranslation()
   const navigate = useNavigate()
   const { toast } = useToast()
   const queryClient = useQueryClient()
@@ -460,7 +475,11 @@ function AttendanceDetailModal({
         input.decision === 'Approve' && input.type === 'Unscheduled Attendance' ? 1 : undefined,
       ),
     onSuccess: (_data, input) => {
-      toast(`Request #${input.requestId} ${input.decision === 'Approve' ? 'approved to HR review' : 'rejected'}.`)
+      toast(
+        input.decision === 'Approve'
+          ? t('Request #{{id}} approved to HR review', { id: input.requestId })
+          : t('Request #{{id}} rejected', { id: input.requestId }),
+      )
       void queryClient.invalidateQueries({ queryKey: ['portal', 'attendance-history', row.employeeId] })
       void queryClient.invalidateQueries({ queryKey: ['portal', 'employee-requests', row.employeeId] })
       // An approved cover day changes the day grid's counters.
@@ -501,7 +520,7 @@ function AttendanceDetailModal({
   return (
     <Modal
       open
-      title={`${row.name} — ${formatDate(row.date)} attendance`}
+      title={t('{{name}} — {{date}} attendance', { name: row.name, date: formatDate(row.date) })}
       subtitle={position}
       width="wide"
       onClose={onClose}
@@ -514,15 +533,15 @@ function AttendanceDetailModal({
               className="border-purple-300 text-purple-700 hover:bg-purple-50 dark:border-purple-700 dark:text-purple-300 dark:hover:bg-purple-500/10"
               onClick={onReview}
             >
-              <ClipboardCheck className="h-3.5 w-3.5" aria-hidden="true" /> Review cover day
+              <ClipboardCheck className="h-3.5 w-3.5" aria-hidden="true" /> {t('Review cover day')}
             </Button>
           )}
           <Button size="sm" variant="secondary" onClick={onFollowUp}>
-            Take action
+            {t('Take action')}
           </Button>
           {canViewEmployees && (
             <Button size="sm" onClick={() => navigate(`/employee/branch/employees/${row.employeeId}`)}>
-              Full profile
+              {t('Full profile')}
             </Button>
           )}
         </>
@@ -540,10 +559,10 @@ function AttendanceDetailModal({
             </p>
             <p className="text-[10px] text-charcoal-500">{gymLabel(row)}</p>
           </div>
-          <div className="ml-auto flex-shrink-0 text-right">
-            <p className="text-[10px] text-charcoal-400">Scheduled today</p>
+          <div className="ms-auto flex-shrink-0 text-end">
+            <p className="text-[10px] text-charcoal-400">{t('Scheduled today')}</p>
             <p className="text-xs font-semibold text-charcoal-900">
-              {row.isCoverDay ? 'Covering (Extra Shift)' : formatTimeLabel(row.shift)}
+              {row.isCoverDay ? t('Covering (Extra Shift)') : formatTimeLabel(row.shift)}
             </p>
           </div>
         </div>
@@ -551,19 +570,19 @@ function AttendanceDetailModal({
         {/* Check in / out / today */}
         <div className="grid grid-cols-3 gap-2 text-center">
           <div className="rounded-lg bg-charcoal-50 p-2">
-            <p className="bento-label text-charcoal-500">Check in</p>
+            <p className="bento-label text-charcoal-500">{t('Check in')}</p>
             <p className={cn('mt-0.5 text-sm font-bold', row.checkIn ? 'text-charcoal-900' : 'text-charcoal-400')}>
               {formatTimeOfDay(row.checkIn)}
             </p>
           </div>
           <div className="rounded-lg bg-charcoal-50 p-2">
-            <p className="bento-label text-charcoal-500">Check out</p>
+            <p className="bento-label text-charcoal-500">{t('Check out')}</p>
             <p className={cn('mt-0.5 text-sm font-bold', row.checkOut ? 'text-charcoal-900' : 'text-charcoal-400')}>
               {formatTimeOfDay(row.checkOut)}
             </p>
           </div>
           <div className="rounded-lg bg-charcoal-50 p-2">
-            <p className="bento-label text-charcoal-500">Today</p>
+            <p className="bento-label text-charcoal-500">{t('Today')}</p>
             <p
               className={cn(
                 'mt-0.5 text-sm font-bold',
@@ -583,7 +602,7 @@ function AttendanceDetailModal({
                 <CalendarClock className="h-4 w-4" aria-hidden="true" />
               </span>
               <div className="min-w-0 leading-tight">
-                <p className="bento-label">LATE / ABSENT HISTORY</p>
+                <p className="bento-label">{t('LATE / ABSENT HISTORY')}</p>
                 <p className="truncate text-[10px] text-charcoal-500">{monthLabel(month)}</p>
               </div>
             </div>
@@ -592,37 +611,37 @@ function AttendanceDetailModal({
                 <button
                   type="button"
                   onClick={() => setMonth(stepMonth(month, -1))}
-                  aria-label="Previous month"
-                  className="rounded-l-lg p-1 text-charcoal-500 transition-colors hover:bg-charcoal-50 hover:text-charcoal-800"
+                  aria-label={t('Previous month')}
+                  className="rounded-s-lg p-1 text-charcoal-500 transition-colors hover:bg-charcoal-50 hover:text-charcoal-800"
                 >
-                  <ChevronLeft className="h-3.5 w-3.5" aria-hidden="true" />
+                  <ChevronLeft className="h-3.5 w-3.5 rtl:rotate-180" aria-hidden="true" />
                 </button>
                 <input
                   type="month"
                   value={month}
                   max={currentMonth}
                   onChange={(event) => event.target.value && setMonth(event.target.value)}
-                  aria-label="History month"
+                  aria-label={t('History month')}
                   className="h-6 w-[7.5rem] border-0 bg-transparent px-1 text-center text-[11px] font-semibold text-charcoal-800 outline-none"
                 />
                 <button
                   type="button"
                   onClick={() => setMonth(stepMonth(month, 1))}
                   disabled={month >= currentMonth}
-                  aria-label="Next month"
-                  className="rounded-r-lg p-1 text-charcoal-500 transition-colors hover:bg-charcoal-50 hover:text-charcoal-800 disabled:cursor-not-allowed disabled:opacity-40"
+                  aria-label={t('Next month')}
+                  className="rounded-e-lg p-1 text-charcoal-500 transition-colors hover:bg-charcoal-50 hover:text-charcoal-800 disabled:cursor-not-allowed disabled:opacity-40"
                 >
-                  <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" />
+                  <ChevronRight className="h-3.5 w-3.5 rtl:rotate-180" aria-hidden="true" />
                 </button>
               </div>
-              <span className="badge badge-yellow">{lateCount} late</span>
-              <span className="badge badge-red">{absentCount} absent</span>
-              <span className="badge badge-purple">{coverCount} covering</span>
+              <span className="badge badge-yellow">{t('{{count}} late', { count: lateCount })}</span>
+              <span className="badge badge-red">{t('{{count}} absent', { count: absentCount })}</span>
+              <span className="badge badge-purple">{t('{{count}} covering', { count: coverCount })}</span>
             </div>
           </div>
           <div className="divide-y divide-charcoal-50">
             {historyQuery.isLoading ? (
-              <div className="p-3 text-center text-xs text-charcoal-500">Loading history…</div>
+              <div className="p-3 text-center text-xs text-charcoal-500">{t('Loading history…')}</div>
             ) : historyQuery.error ? (
               <p className="p-3 text-center text-[11px] text-red-600">{describeApiError(historyQuery.error)}</p>
             ) : historyItems.length === 0 ? (
@@ -630,8 +649,10 @@ function AttendanceDetailModal({
                 <span className="mx-auto mb-2 flex h-9 w-9 items-center justify-center rounded-full bg-charcoal-50 text-charcoal-400">
                   <Inbox className="h-4 w-4" aria-hidden="true" />
                 </span>
-                <p className="text-xs font-semibold text-charcoal-700">No late arrivals or absences</p>
-                <p className="mt-0.5 text-[10px] text-charcoal-500">{monthLabel(month)} is clean for {row.name}.</p>
+                <p className="text-xs font-semibold text-charcoal-700">{t('No late arrivals or absences')}</p>
+                <p className="mt-0.5 text-[10px] text-charcoal-500">
+                  {t('{{month}} is clean for {{name}}.', { month: monthLabel(month), name: row.name })}
+                </p>
               </div>
             ) : (
               historyItems.map((item) => {
@@ -660,35 +681,43 @@ function AttendanceDetailModal({
                       <div className="flex flex-wrap items-center gap-1.5">
                         <StatusBadge status={item.status} />
                         <span className="truncate text-[11px] font-medium text-charcoal-800">
-                          {item.isCoverDay ? 'Scheduled: Off — worked an extra shift' : formatTimeLabel(item.shift)}
+                          {item.isCoverDay
+                            ? t('Scheduled: Off — worked an extra shift')
+                            : formatTimeLabel(item.shift)}
                         </span>
                         {item.coverDays != null && item.coverDays > 0 && (
                           <span className="badge badge-purple">
-                            Cover {item.coverDays} day{item.coverDays === 1 ? '' : 's'}
+                            {item.coverDays === 1
+                              ? t('Cover {{count}} day', { count: item.coverDays })
+                              : t('Cover {{count}} days', { count: item.coverDays })}
                           </span>
                         )}
-                        {isViewedDay && <span className="badge badge-blue">This day</span>}
+                        {isViewedDay && <span className="badge badge-blue">{t('This day')}</span>}
                       </div>
                       <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[10px] text-charcoal-500">
                         <span className="inline-flex items-center gap-1">
                           <LogIn className="h-3 w-3 text-charcoal-400" aria-hidden="true" />
-                          In{' '}
+                          {t('In')}{' '}
                           <span className="font-mono font-semibold tabular-nums text-charcoal-800">
                             {formatTimeOfDay(item.checkIn)}
                           </span>
                         </span>
                         <span className="inline-flex items-center gap-1">
                           <LogOut className="h-3 w-3 text-charcoal-400" aria-hidden="true" />
-                          Out{' '}
+                          {t('Out')}{' '}
                           <span className="font-mono font-semibold tabular-nums text-charcoal-800">
                             {formatTimeOfDay(item.checkOut)}
                           </span>
                         </span>
                         {lateMinutes > 0 && (
-                          <span className="font-semibold text-amber-600">Late {lateMinutes}m</span>
+                          <span className="font-semibold text-amber-600">
+                            {t('Late {{count}}m', { count: lateMinutes })}
+                          </span>
                         )}
                         {earlyMinutes > 0 && (
-                          <span className="font-semibold text-orange-600">Left early {earlyMinutes}m</span>
+                          <span className="font-semibold text-orange-600">
+                            {t('Left early {{count}}m', { count: earlyMinutes })}
+                          </span>
                         )}
                       </div>
 
@@ -700,7 +729,7 @@ function AttendanceDetailModal({
                         >
                           <div className="flex items-center justify-between gap-2">
                             <p className="min-w-0 truncate text-[11px] font-semibold text-charcoal-800">
-                              Request #{request.id} · {request.type}
+                              {t('Request #{{id}} · {{type}}', { id: request.id, type: request.type })}
                             </p>
                             <StatusBadge status={humanize(request.status)} />
                           </div>
@@ -714,7 +743,7 @@ function AttendanceDetailModal({
                                   decideMutation.mutate({ requestId: request.id, decision: 'Approve', type: request.type })
                                 }
                               >
-                                Approve
+                                {t('Approve')}
                               </Button>
                               <Button
                                 size="sm"
@@ -724,7 +753,7 @@ function AttendanceDetailModal({
                                   decideMutation.mutate({ requestId: request.id, decision: 'Reject', type: request.type })
                                 }
                               >
-                                Reject
+                                {t('Reject')}
                               </Button>
                             </div>
                           )}
@@ -737,7 +766,7 @@ function AttendanceDetailModal({
             )}
             {requestsQuery.error && (
               <p className="border-t border-charcoal-100 px-3 py-2 text-[10px] text-red-600">
-                Requests could not be loaded: {describeApiError(requestsQuery.error)}
+                {t('Requests could not be loaded: {{error}}', { error: describeApiError(requestsQuery.error) })}
               </p>
             )}
           </div>
@@ -755,6 +784,7 @@ function AttendanceDetailModal({
  * never a disciplinary case, so this flow never raises a warning or deduction.
  */
 function CoverReviewDialog({ row, onClose }: { row: AttendanceGridRow; onClose: () => void }) {
+  const { t } = useTranslation()
   const { toast } = useToast()
   const queryClient = useQueryClient()
   const [days, setDays] = useState<1 | 2>(1)
@@ -784,8 +814,10 @@ function CoverReviewDialog({ row, onClose }: { row: AttendanceGridRow; onClose: 
     onSuccess: (_data, decision) => {
       toast(
         decision === 'Approve'
-          ? `Cover day approved for ${days} day${days === 1 ? '' : 's'} — sent to HR for sign-off.`
-          : 'Cover day rejected.',
+          ? days === 1
+            ? t('Cover day approved for {{count}} day — sent to HR for sign-off.', { count: days })
+            : t('Cover day approved for {{count}} days — sent to HR for sign-off.', { count: days })
+          : t('Cover day rejected.'),
       )
       void queryClient.invalidateQueries({ queryKey: ['portal', 'attendance-history', row.employeeId] })
       void queryClient.invalidateQueries({ queryKey: ['portal', 'employee-requests', row.employeeId] })
@@ -801,14 +833,14 @@ function CoverReviewDialog({ row, onClose }: { row: AttendanceGridRow; onClose: 
   return (
     <Modal
       open
-      title={`Cover day — ${row.name}`}
+      title={t('Cover day — {{name}}', { name: row.name })}
       subtitle={`${formatDate(row.date)} · ${row.gym}`}
       onClose={onClose}
       footer={
         requestsQuery.isLoading ? undefined : pending ? (
           <>
             <Button size="sm" variant="secondary" onClick={onClose}>
-              Cancel
+              {t('Cancel')}
             </Button>
             <Button
               size="sm"
@@ -816,15 +848,17 @@ function CoverReviewDialog({ row, onClose }: { row: AttendanceGridRow; onClose: 
               disabled={decide.isPending}
               onClick={() => decide.mutate('Reject')}
             >
-              Reject
+              {t('Reject')}
             </Button>
             <Button size="sm" disabled={decide.isPending} onClick={() => decide.mutate('Approve')}>
-              Approve {days} day{days === 1 ? '' : 's'}
+              {days === 1
+                ? t('Approve {{count}} day', { count: days })
+                : t('Approve {{count}} days', { count: days })}
             </Button>
           </>
         ) : (
           <Button size="sm" variant="secondary" onClick={onClose}>
-            Close
+            {t('Close')}
           </Button>
         )
       }
@@ -832,28 +866,28 @@ function CoverReviewDialog({ row, onClose }: { row: AttendanceGridRow; onClose: 
       <div className="space-y-3">
         <div className="grid grid-cols-3 gap-2 text-center">
           <div className="rounded-lg bg-charcoal-50 p-2">
-            <p className="bento-label text-charcoal-500">Scheduled</p>
-            <p className="mt-0.5 text-xs font-semibold text-charcoal-900">Off</p>
+            <p className="bento-label text-charcoal-500">{t('Scheduled')}</p>
+            <p className="mt-0.5 text-xs font-semibold text-charcoal-900">{t('Off')}</p>
           </div>
           <div className="rounded-lg bg-charcoal-50 p-2">
-            <p className="bento-label text-charcoal-500">Check in</p>
+            <p className="bento-label text-charcoal-500">{t('Check in')}</p>
             <p className="mt-0.5 text-xs font-semibold text-charcoal-900">{formatTimeOfDay(row.checkIn)}</p>
           </div>
           <div className="rounded-lg bg-charcoal-50 p-2">
-            <p className="bento-label text-charcoal-500">Check out</p>
+            <p className="bento-label text-charcoal-500">{t('Check out')}</p>
             <p className="mt-0.5 text-xs font-semibold text-charcoal-900">{formatTimeOfDay(row.checkOut)}</p>
           </div>
         </div>
 
         {requestsQuery.isLoading ? (
-          <p className="text-xs text-charcoal-500">Loading the cover request…</p>
+          <p className="text-xs text-charcoal-500">{t('Loading the cover request…')}</p>
         ) : requestsQuery.error ? (
           <p className="text-xs text-red-600">{describeApiError(requestsQuery.error)}</p>
         ) : !request ? (
           <div className="rounded-lg border border-charcoal-200 bg-charcoal-50/60 p-3">
-            <p className="text-xs font-semibold text-charcoal-800">No cover request on record</p>
+            <p className="text-xs font-semibold text-charcoal-800">{t('No cover request on record')}</p>
             <p className="mt-0.5 text-[10px] text-charcoal-500">
-              This punch raised no Unscheduled Attendance request, so there is nothing to approve or reject.
+              {t('This punch raised no Unscheduled Attendance request, so there is nothing to approve or reject.')}
             </p>
           </div>
         ) : (
@@ -861,9 +895,11 @@ function CoverReviewDialog({ row, onClose }: { row: AttendanceGridRow; onClose: 
             <div className="flex items-center justify-between gap-2 rounded-lg border border-charcoal-200 p-2.5">
               <div className="min-w-0">
                 <p className="truncate text-xs font-semibold text-charcoal-900">
-                  Request #{request.id} · {request.type}
+                  {t('Request #{{id}} · {{type}}', { id: request.id, type: request.type })}
                 </p>
-                <p className="text-[10px] text-charcoal-500">Submitted {formatDate(request.submittedDate)}</p>
+                <p className="text-[10px] text-charcoal-500">
+                  {t('Submitted {{date}}', { date: formatDate(request.submittedDate) })}
+                </p>
               </div>
               <StatusBadge status={humanize(request.status)} />
             </div>
@@ -871,7 +907,7 @@ function CoverReviewDialog({ row, onClose }: { row: AttendanceGridRow; onClose: 
             {pending ? (
               <>
                 <div>
-                  <p className="bento-label text-charcoal-500">Count this cover day as</p>
+                  <p className="bento-label text-charcoal-500">{t('Count this cover day as')}</p>
                   <div className="mt-1.5 grid grid-cols-2 gap-2">
                     {([1, 2] as const).map((value) => (
                       <button
@@ -879,17 +915,17 @@ function CoverReviewDialog({ row, onClose }: { row: AttendanceGridRow; onClose: 
                         type="button"
                         onClick={() => setDays(value)}
                         className={cn(
-                          'rounded-lg border px-3 py-2 text-left transition-colors',
+                          'rounded-lg border px-3 py-2 text-start transition-colors',
                           days === value
                             ? 'border-purple-400 bg-purple-50 dark:bg-purple-500/10'
                             : 'border-charcoal-200 hover:bg-charcoal-50',
                         )}
                       >
                         <span className="block text-xs font-semibold text-charcoal-900">
-                          {value} day{value === 1 ? '' : 's'}
+                          {value === 1 ? t('{{count}} day', { count: value }) : t('{{count}} days', { count: value })}
                         </span>
                         <span className="block text-[10px] text-charcoal-500">
-                          {value === 1 ? 'Single cover credit' : 'Double cover credit (long shift)'}
+                          {value === 1 ? t('Single cover credit') : t('Double cover credit (long shift)')}
                         </span>
                       </button>
                     ))}
@@ -898,34 +934,41 @@ function CoverReviewDialog({ row, onClose }: { row: AttendanceGridRow; onClose: 
 
                 <div className="rounded-lg bg-purple-50/70 p-2.5 dark:bg-purple-500/10">
                   <p className="flex items-center justify-between text-xs">
-                    <span className="font-medium text-charcoal-700">Cover pay</span>
+                    <span className="font-medium text-charcoal-700">{t('Cover pay')}</span>
                     <span className="font-bold text-purple-700 dark:text-purple-300">
                       {coverPay == null ? '—' : formatMoney(coverPay)}
                     </span>
                   </p>
                   <p className="mt-0.5 text-[10px] text-charcoal-500">
                     {salary && salary > 0
-                      ? `Base ${formatMoney(salary)} ÷ 30 × ${days} day${days === 1 ? '' : 's'}`
-                      : 'No base salary on record — HR prices the cover day.'}
+                      ? days === 1
+                        ? t('Base {{amount}} ÷ 30 × {{count}} day', { amount: formatMoney(salary), count: days })
+                        : t('Base {{amount}} ÷ 30 × {{count}} days', { amount: formatMoney(salary), count: days })
+                      : t('No base salary on record — HR prices the cover day.')}
                   </p>
                 </div>
 
                 <p className="text-[10px] text-charcoal-500">
-                  Approving sends it to HR for the final sign-off; the cover days count toward payroll once HR
-                  approves.
+                  {t('Approving sends it to HR for the final sign-off; the cover days count toward payroll once HR approves.')}
                 </p>
               </>
             ) : (
               <div className="rounded-lg border border-charcoal-200 bg-charcoal-50/60 p-2.5">
                 <p className="text-xs font-medium text-charcoal-800">
                   {request.status === 'Pending HR Review'
-                    ? 'Approved by the desk — waiting for HR sign-off.'
+                    ? t('Approved by the desk — waiting for HR sign-off.')
                     : request.status === 'Approved'
-                      ? `Approved${approvedDays ? ` · ${approvedDays} cover day${approvedDays === 1 ? '' : 's'}` : ''}.`
-                      : 'Rejected — no cover credit for this day.'}
+                      ? approvedDays === 1
+                        ? t('Approved · {{count}} cover day', { count: approvedDays })
+                        : approvedDays
+                          ? t('Approved · {{count}} cover days', { count: approvedDays })
+                          : t('Approved')
+                      : t('Rejected — no cover credit for this day.')}
                 </p>
                 {request.status === 'Approved' && approvedPay != null && (
-                  <p className="mt-0.5 text-[10px] text-charcoal-500">Cover pay: {formatMoney(approvedPay)}</p>
+                  <p className="mt-0.5 text-[10px] text-charcoal-500">
+                    {t('Cover pay: {{amount}}', { amount: formatMoney(approvedPay) })}
+                  </p>
                 )}
               </div>
             )}
@@ -940,7 +983,7 @@ function CoverReviewDialog({ row, onClose }: { row: AttendanceGridRow; onClose: 
 function monthLabel(month: string): string {
   const [year, monthNumber] = month.split('-').map(Number)
   if (!year || !monthNumber) return month
-  return new Date(year, monthNumber - 1, 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+  return new Date(year, monthNumber - 1, 1).toLocaleDateString(activeLocale(), { month: 'long', year: 'numeric' })
 }
 
 /** "2026-11" ± n months, keeping the "yyyy-MM" shape. */
@@ -954,7 +997,7 @@ function stepMonth(month: string, delta: number): string {
 function dayParts(iso: string): { weekday: string; day: string } {
   const date = new Date(iso + 'T00:00:00')
   return {
-    weekday: date.toLocaleDateString('en-US', { weekday: 'short' }),
+    weekday: date.toLocaleDateString(activeLocale(), { weekday: 'short' }),
     day: String(date.getDate()),
   }
 }

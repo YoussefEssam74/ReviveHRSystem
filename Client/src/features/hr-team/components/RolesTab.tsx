@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { ChevronDown, ShieldCheck } from 'lucide-react'
 import { Badge } from '../../../components/ui/badge'
 import { Button } from '../../../components/ui/button'
@@ -20,6 +21,7 @@ interface RolesTabProps {
 
 /** Roles — named permission presets with counters; expand for keys, Configure to edit (team.manage). */
 export function RolesTab({ canManage }: RolesTabProps) {
+  const { t } = useTranslation()
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(1)
   const [expandedId, setExpandedId] = useState<number | null>(null)
@@ -32,26 +34,26 @@ export function RolesTab({ canManage }: RolesTabProps) {
       <Card>
         <div className="border-b border-slate-100 p-4">
           <Input
-            placeholder="Search roles by name or description…"
+            placeholder={t('Search roles by name or description…')}
             value={search}
             onChange={(e) => {
               setSearch(e.target.value)
               setPage(1)
             }}
             className="sm:max-w-sm"
-            aria-label="Search roles"
+            aria-label={t('Search roles')}
           />
         </div>
 
         {isLoading ? (
-          <LoadingState label="Loading roles…" />
+          <LoadingState label={t('Loading roles…')} />
         ) : error ? (
           <ErrorState message={describeApiError(error)} />
         ) : (data?.items?.length ?? 0) === 0 ? (
           <EmptyState
             icon={ShieldCheck}
-            title="No roles found"
-            message={search ? 'Try a different search.' : 'Roles are permission presets you can assign to members.'}
+            title={t('No roles found')}
+            message={search ? t('Try a different search.') : t('Roles are permission presets you can assign to members.')}
           />
         ) : (
           <>
@@ -62,12 +64,15 @@ export function RolesTab({ canManage }: RolesTabProps) {
                     <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-2">
                         <p className="font-semibold text-slate-900">{role.name}</p>
-                        {role.isEmpty && <Badge status="Pending">Empty draft</Badge>}
-                        {role.isPreset && <Badge>Preset</Badge>}
+                        {role.isEmpty && <Badge status="Pending">{t('Empty draft')}</Badge>}
+                        {role.isPreset && <Badge>{t('Preset')}</Badge>}
                       </div>
                       {role.description && <p className="mt-0.5 text-sm text-slate-600">{role.description}</p>}
                       <p className="mt-1 text-xs text-slate-400">
-                        {role.permissionsCount} permissions · {role.usersCount} users
+                        {t('{{permissions}} permissions · {{users}} users', {
+                          permissions: role.permissionsCount,
+                          users: role.usersCount,
+                        })}
                       </p>
                     </div>
                     <div className="flex shrink-0 gap-2">
@@ -81,11 +86,11 @@ export function RolesTab({ canManage }: RolesTabProps) {
                           className={cn('h-3.5 w-3.5 transition-transform', expandedId === role.id && 'rotate-180')}
                           aria-hidden="true"
                         />
-                        Permissions
+                        {t('Permissions')}
                       </Button>
                       {canManage && (
                         <Button size="sm" onClick={() => setConfigTarget(role)}>
-                          Configure
+                          {t('Configure')}
                         </Button>
                       )}
                     </div>
@@ -94,7 +99,7 @@ export function RolesTab({ canManage }: RolesTabProps) {
                   {expandedId === role.id && (
                     <div className="mt-3 rounded-xl bg-slate-50 p-3">
                       {role.permissions.length === 0 ? (
-                        <p className="text-sm text-slate-500">This role grants no permissions yet.</p>
+                        <p className="text-sm text-slate-500">{t('This role grants no permissions yet.')}</p>
                       ) : (
                         <div className="flex flex-wrap gap-1.5">
                           {role.permissions.map((key) => (

@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Building2 } from 'lucide-react'
 import { PageHeader } from '../../../components/ui/page-header'
 import { Card } from '../../../components/ui/card'
@@ -20,6 +21,7 @@ const ACTIVE_OPTIONS = [
 
 /** Org-wide positions & levels catalog (§9.2) — read-only headcount / fill view. */
 export default function PositionsPage() {
+  const { t } = useTranslation()
   const { me } = useMe()
   const [gym, setGym] = useState('')
   const [search, setSearch] = useState('')
@@ -37,11 +39,11 @@ export default function PositionsPage() {
   return (
     <div>
       <PageHeader
-        title="Positions"
+        title={t('Positions')}
         description={
           me?.activeGym
-            ? `Positions, levels and headcount across your branches — active gym: ${me.activeGym.gymName}`
-            : 'Positions, levels and headcount across your branches'
+            ? t('Positions, levels and headcount across your branches — active gym: {{gym}}', { gym: me.activeGym.gymName })
+            : t('Positions, levels and headcount across your branches')
         }
       />
 
@@ -51,9 +53,9 @@ export default function PositionsPage() {
             value={gym}
             onChange={(e) => setGym(e.target.value)}
             className="sm:w-52"
-            aria-label="Filter by branch"
+            aria-label={t('Filter by branch')}
           >
-            <option value="">All branches</option>
+            <option value="">{t('All branches')}</option>
             {(gyms.data ?? []).map((option) => (
               <option key={option.id} value={String(option.id)}>
                 {option.name}
@@ -61,50 +63,52 @@ export default function PositionsPage() {
             ))}
           </Select>
           <Input
-            placeholder="Search by title…"
+            placeholder={t('Search by title…')}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="sm:max-w-xs"
-            aria-label="Search positions"
+            aria-label={t('Search positions')}
           />
           <Select
             value={active}
             onChange={(e) => setActive(e.target.value)}
             className="sm:w-44"
-            aria-label="Filter by active flag"
+            aria-label={t('Filter by active flag')}
           >
             {ACTIVE_OPTIONS.map((option) => (
               <option key={option.value} value={option.value}>
-                {option.label}
+                {t(option.label)}
               </option>
             ))}
           </Select>
           {positions.data && (
-            <p className="ml-auto self-center text-xs text-slate-500">
-              {positions.data.total} position{positions.data.total === 1 ? '' : 's'}
+            <p className="ms-auto self-center text-xs text-slate-500">
+              {t('{{count}} positions', { count: positions.data.total })}
             </p>
           )}
         </div>
 
         {positions.isLoading ? (
-          <LoadingState label="Loading positions…" />
+          <LoadingState label={t('Loading positions…')} />
         ) : positions.error ? (
           <ErrorState message={describeApiError(positions.error)} />
         ) : (positions.data?.items?.length ?? 0) === 0 ? (
           <EmptyState
             icon={Building2}
-            title="No positions found"
-            message={hasFilters ? 'Try adjusting your search or filters.' : 'No positions are defined in the catalog yet.'}
+            title={t('No positions found')}
+            message={
+              hasFilters ? t('Try adjusting your search or filters.') : t('No positions are defined in the catalog yet.')
+            }
           />
         ) : (
           <Table>
             <THead>
-              <TH>Position</TH>
-              <TH>Levels</TH>
-              <TH>Branch</TH>
-              <TH>Staff</TH>
-              <TH>Open</TH>
-              <TH>Fill</TH>
+              <TH>{t('Position')}</TH>
+              <TH>{t('Levels')}</TH>
+              <TH>{t('Branch')}</TH>
+              <TH>{t('Staff')}</TH>
+              <TH>{t('Open')}</TH>
+              <TH>{t('Fill')}</TH>
             </THead>
             <TBody>
               {positions.data!.items.map((position) => {
@@ -132,7 +136,9 @@ export default function PositionsPage() {
                     </TD>
                     <TD>
                       {position.open > 0 ? (
-                        <Badge className="bg-amber-50 text-amber-700 ring-amber-200">{position.open} open</Badge>
+                        <Badge className="bg-amber-50 text-amber-700 ring-amber-200">
+                          {t('{{count}} open', { count: position.open })}
+                        </Badge>
                       ) : (
                         <span className="text-slate-400">—</span>
                       )}

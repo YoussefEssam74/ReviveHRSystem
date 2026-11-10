@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import { useTranslation } from 'react-i18next'
 import { cn } from '../../lib/utils'
 
 export type BadgeColor = 'green' | 'yellow' | 'red' | 'blue' | 'gray' | 'purple' | 'orange'
@@ -89,13 +90,14 @@ export function statusColor(status: string): BadgeColor {
 
 /** Status pill; an empty status renders a neutral dash instead of a blank chip. */
 export function StatusBadge({ status, className }: { status: string | null | undefined; className?: string }) {
+  const { t } = useTranslation()
   if (!status) {
     return <span className={cn('badge', 'badge-gray', className)}>—</span>
   }
   const color = statusColor(status)
   return (
     <span className={cn('badge', `badge-${color}`, className)}>
-      {normalize(status) === 'missingcheckout' ? 'Missing Checkout' : status}
+      {normalize(status) === 'missingcheckout' ? t('Missing Checkout') : t(status)}
     </span>
   )
 }

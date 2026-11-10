@@ -1,3 +1,4 @@
+import { translate as t } from '../i18n'
 import { clearSession, loadStoredSession, saveSession } from './session-store'
 import type { StoredSession } from './session-store'
 
@@ -67,8 +68,10 @@ const STATUS_FALLBACK_MESSAGES: Record<number, string> = {
 }
 
 function fallbackMessage(status: number): string {
-  if (STATUS_FALLBACK_MESSAGES[status]) return STATUS_FALLBACK_MESSAGES[status]
-  return status >= 500 ? 'The server hit an unexpected error. Please try again.' : 'The request failed.'
+  if (STATUS_FALLBACK_MESSAGES[status]) return t(STATUS_FALLBACK_MESSAGES[status])
+  return status >= 500
+    ? t('The server hit an unexpected error. Please try again.')
+    : t('The request failed.')
 }
 
 function safeJsonParse(text: string): unknown {
@@ -98,13 +101,13 @@ function toApiError(status: number, body: unknown): ApiError {
       for (const item of errorBody.errors) {
         if (typeof item === 'object' && item !== null) {
           const fieldError = item as { field?: string; message?: string }
-          fieldErrors.push({ field: fieldError.field ?? '', message: fieldError.message ?? 'Invalid value.' })
+          fieldErrors.push({ field: fieldError.field ?? '', message: fieldError.message ?? t('Invalid value.') })
         }
       }
     } else if (typeof errorBody.errors === 'object' && errorBody.errors !== null) {
       // ASP.NET ProblemDetails validation envelope: { errors: { Field: ["msg"] } }
       for (const [field, messages] of Object.entries(errorBody.errors)) {
-        const message = Array.isArray(messages) && messages.length > 0 ? String(messages[0]) : 'Invalid value.'
+        const message = Array.isArray(messages) && messages.length > 0 ? String(messages[0]) : t('Invalid value.')
         fieldErrors.push({ field, message })
       }
     } else if (Array.isArray(errorBody.validationErrors)) {
@@ -116,7 +119,7 @@ function toApiError(status: number, body: unknown): ApiError {
           if (Array.isArray(entry.errors) && entry.errors.length > 0) {
             for (const message of entry.errors) fieldErrors.push({ field, message: String(message) })
           } else {
-            fieldErrors.push({ field, message: 'Invalid value.' })
+            fieldErrors.push({ field, message: t('Invalid value.') })
           }
         }
       }
@@ -135,7 +138,7 @@ function toApiError(status: number, body: unknown): ApiError {
 /** Human-readable message for any thrown request error. */
 export function describeApiError(error: unknown): string {
   if (error instanceof ApiError) return error.message
-  return 'Something went wrong. Please try again.'
+  return t('Something went wrong. Please try again.')
 }
 
 /**
@@ -355,8 +358,8 @@ export async function apiRequest<T>(path: string, options: RequestOptions & { fo
   } catch (error) {
     // A caller-initiated cancellation (navigation, unmount) is not an app error.
     if (signal?.aborted) throw error
-    if (timedOut) throw new ApiError(0, 'TIMEOUT', 'The request timed out. Please try again.')
-    throw new ApiError(0, 'NETWORK_ERROR', 'Could not reach the server. Check your connection and try again.')
+    if (timedOut) throw new ApiError(0, 'TIMEOUT', t('The request timed out. Please try again.'))
+    throw new ApiError(0, 'NETWORK_ERROR', t('Could not reach the server. Check your connection and try again.'))
   } finally {
     clearTimeout(timer)
     signal?.removeEventListener('abort', onExternalAbort)
@@ -429,7 +432,7 @@ export async function apiDownload(
   } catch (error) {
     // A caller-initiated cancellation (navigation, unmount) is not an app error.
     if (signal?.aborted) throw error
-    throw new ApiError(0, 'NETWORK_ERROR', 'Could not reach the server. Check your connection and try again.')
+    throw new ApiError(0, 'NETWORK_ERROR', t('Could not reach the server. Check your connection and try again.'))
   } finally {
     clearTimeout(timer)
   }

@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import { useTranslation } from 'react-i18next'
 import { cn } from '../../lib/utils'
 import { Badge, type BadgeColor } from './badge'
 import { Button } from './button'
@@ -72,8 +73,8 @@ export function StatTile({
     <Wrapper
       {...(onClick ? { type: 'button' as const, onClick } : {})}
       className={cn(
-        'card block px-3 py-2.5 text-left',
-        accent && 'stat-highlight border-l-4 border-l-brand-600',
+        'card block px-3 py-2.5 text-start',
+        accent && 'stat-highlight border-s-4 border-s-brand-600',
         onClick && 'card-interactive',
         className,
       )}
@@ -115,6 +116,7 @@ export function Tabs<T extends string>({
   onChange: (id: T) => void
   className?: string
 }) {
+  const { t } = useTranslation()
   return (
     <div className={cn('flex items-center gap-1 overflow-x-auto border-b border-charcoal-200', className)}>
       {tabs.map((tab) => (
@@ -124,8 +126,8 @@ export function Tabs<T extends string>({
           className={cn('tab-btn', value === tab.id && 'active')}
           onClick={() => onChange(tab.id)}
         >
-          {tab.label}
-          {typeof tab.count === 'number' && <span className="ml-1.5 text-[10px] text-charcoal-500">{tab.count}</span>}
+          {t(tab.label)}
+          {typeof tab.count === 'number' && <span className="ms-1.5 text-[10px] text-charcoal-500">{tab.count}</span>}
         </button>
       ))}
     </div>

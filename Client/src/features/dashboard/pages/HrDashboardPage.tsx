@@ -1,4 +1,5 @@
 import { useNavigate } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { Building2, Users, FileText, Sparkles, ArrowRight } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '../../../components/ui/card'
 import { Badge } from '../../../components/ui/badge'
@@ -28,10 +29,11 @@ function KpiCard({ icon: Icon, label, value }: { icon: typeof Users; label: stri
 /** HR portal dashboard — KPI strip, actions-needed feed, branch oversight. */
 export default function HrDashboardPage() {
   const navigate = useNavigate()
+  const { t } = useTranslation()
   const { me } = useMe()
   const { data, isLoading, error } = useHrDashboard()
 
-  if (isLoading) return <LoadingState label="Loading dashboard…" />
+  if (isLoading) return <LoadingState label={t('Loading dashboard…')} />
   if (error) return <ErrorState message={describeApiError(error)} />
 
   const dashboard = data!
@@ -40,27 +42,27 @@ export default function HrDashboardPage() {
     <div>
       <div className="mb-6">
         <h1 className="text-2xl font-bold tracking-tight text-slate-900">
-          {dashboard.greeting ?? `Welcome back, ${dashboard.userName ?? me?.userName ?? ''}`}
+          {dashboard.greeting ?? t('Welcome back, {{name}}', { name: dashboard.userName ?? me?.userName ?? '' })}
         </h1>
-        <p className="mt-1 text-sm text-slate-500">Here's what needs your attention today.</p>
+        <p className="mt-1 text-sm text-slate-500">{t("Here's what needs your attention today.")}</p>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <KpiCard icon={Building2} label="Branches" value={dashboard.kpis.totalGyms} />
-        <KpiCard icon={Users} label="Total staff" value={dashboard.kpis.totalStaff} />
-        <KpiCard icon={FileText} label="Pending requests" value={dashboard.kpis.totalPendingRequests} />
-        <KpiCard icon={Sparkles} label="Actions needed" value={dashboard.kpis.actionsNeeded} />
+        <KpiCard icon={Building2} label={t('Branches')} value={dashboard.kpis.totalGyms} />
+        <KpiCard icon={Users} label={t('Total staff')} value={dashboard.kpis.totalStaff} />
+        <KpiCard icon={FileText} label={t('Pending requests')} value={dashboard.kpis.totalPendingRequests} />
+        <KpiCard icon={Sparkles} label={t('Actions needed')} value={dashboard.kpis.actionsNeeded} />
       </div>
 
       <div className="mt-6 grid gap-6 lg:grid-cols-3">
         {/* Actions needed */}
         <Card className="lg:col-span-2">
           <CardHeader>
-            <CardTitle>Actions needed</CardTitle>
+            <CardTitle>{t('Actions needed')}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-1">
             {dashboard.actions.length === 0 ? (
-              <p className="py-8 text-center text-sm text-slate-500">Nothing needs your attention right now.</p>
+              <p className="py-8 text-center text-sm text-slate-500">{t('Nothing needs your attention right now.')}</p>
             ) : (
               <ul className="divide-y divide-slate-100">
                 {dashboard.actions.map((action) => (
@@ -85,11 +87,11 @@ export default function HrDashboardPage() {
         {/* Branches oversight */}
         <Card>
           <CardHeader>
-            <CardTitle>Branches</CardTitle>
+            <CardTitle>{t('Branches')}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-1">
             {dashboard.branches.length === 0 ? (
-              <p className="py-8 text-center text-sm text-slate-500">No branches to show.</p>
+              <p className="py-8 text-center text-sm text-slate-500">{t('No branches to show.')}</p>
             ) : (
               <ul className="divide-y divide-slate-100">
                 {dashboard.branches.map((branch) => (
@@ -101,13 +103,15 @@ export default function HrDashboardPage() {
                         onClick={() => navigate('/console/employees')}
                         className="inline-flex items-center gap-1 text-xs font-medium text-emerald-600 hover:text-emerald-700"
                       >
-                        View
-                        <ArrowRight className="h-3 w-3" aria-hidden="true" />
+                        {t('View')}
+                        <ArrowRight className="h-3 w-3 rtl:rotate-180" aria-hidden="true" />
                       </button>
                     </div>
                     <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-slate-500">
-                      <span>{branch.headcount} staff</span>
-                      {branch.pendingActions > 0 && <span className="text-amber-600">{branch.pendingActions} pending</span>}
+                      <span>{t('{{count}} staff', { count: branch.headcount })}</span>
+                      {branch.pendingActions > 0 && (
+                        <span className="text-amber-600">{t('{{count}} pending', { count: branch.pendingActions })}</span>
+                      )}
                     </div>
                     {branch.summary && <p className="mt-0.5 text-xs text-slate-400">{branch.summary}</p>}
                   </li>

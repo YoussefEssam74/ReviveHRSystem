@@ -1,6 +1,7 @@
 import { useMemo, useState, type ReactNode } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useLocation, useNavigate, useParams } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { AlertTriangle, ArrowLeft, BadgeCheck, Briefcase, CalendarDays, Check, ChevronsLeft, CreditCard, Lock, MapPin, Pencil, X } from 'lucide-react'
 import { getShiftCycle, getTeamToday, setShiftAssignments, type SetAssignmentInput, type TeamMemberDay } from '../api/team.api'
 import { getOwnAttendance, getOwnLeaveBalance, getOwnSchedule, manualAttendance, type EmployeeScheduleDto, type EmployeeAttendanceResponse } from '../api/attendance.api'
@@ -94,6 +95,7 @@ function initialsOf(name: string): string {
 }
 
 export default function MemberProfilePage() {
+  const { t } = useTranslation()
   const params = useParams()
   const navigate = useNavigate()
   const location = useLocation()
@@ -114,7 +116,7 @@ export default function MemberProfilePage() {
   })
 
   if (!valid) {
-    return <EmptyState title="Employee not found" hint="The drill-in link is missing a valid employee id." />
+    return <EmptyState title={t('Employee not found')} hint={t('The drill-in link is missing a valid employee id.')} />
   }
 
   const member: MemberHeader | null =
@@ -280,11 +282,12 @@ export function PresentModal({
   onSaved?: () => void
   onClose: () => void
 }) {
+  const { t } = useTranslation()
   const { toast } = useToast()
   const queryClient = useQueryClient()
   const [checkIn, setCheckIn] = useState(row.shiftStart ? row.shiftStart.slice(0, 5) : '')
   const [checkOut, setCheckOut] = useState(row.shiftEnd && row.shiftEnd !== '00:00:00' ? row.shiftEnd.slice(0, 5) : '')
-  const [reason, setReason] = useState('Marked present by team manager')
+  const [reason, setReason] = useState(t('Marked present by team manager'))
 
   const saveMutation = useMutation({
     // Today's date resolves at save time (event), not during render.
@@ -301,7 +304,7 @@ export function PresentModal({
       })
     },
     onSuccess: () => {
-      toast('Saved.')
+      toast(t('Saved.'))
       onSaved?.()
       void queryClient.invalidateQueries({ queryKey: ['portal', 'team', 'today'] })
       onClose()
@@ -312,16 +315,16 @@ export function PresentModal({
   return (
     <Modal
       open
-      title={`Mark Present — ${row.name.split(' ')[0]}`}
-      subtitle="Upserts today's attendance record."
+      title={t('Mark Present — {{name}}', { name: row.name.split(' ')[0] })}
+      subtitle={t("Upserts today's attendance record.")}
       onClose={onClose}
       footer={
         <>
           <Button size="sm" variant="secondary" onClick={onClose}>
-            Cancel
+            {t('Cancel')}
           </Button>
           <Button size="sm" loading={saveMutation.isPending} onClick={() => saveMutation.mutate()}>
-            Save
+            {t('Save')}
           </Button>
         </>
       }
@@ -330,20 +333,20 @@ export function PresentModal({
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className="form-label" htmlFor="mp-in">
-              Check in (HH:mm)
+              {t('Check in (HH:mm)')}
             </label>
             <input id="mp-in" type="time" value={checkIn} onChange={(e) => setCheckIn(e.target.value)} className="form-input" />
           </div>
           <div>
             <label className="form-label" htmlFor="mp-out">
-              Check out (HH:mm)
+              {t('Check out (HH:mm)')}
             </label>
             <input id="mp-out" type="time" value={checkOut} onChange={(e) => setCheckOut(e.target.value)} className="form-input" />
           </div>
         </div>
         <div>
           <label className="form-label" htmlFor="mp-reason">
-            Reason
+            {t('Reason')}
           </label>
           <input id="mp-reason" type="text" value={reason} onChange={(e) => setReason(e.target.value)} className="form-input" />
         </div>
@@ -353,22 +356,23 @@ export function PresentModal({
 }
 
 function ProfileBody({ memberId, member }: { memberId: number; member: MemberHeader | null }) {
+  const { t } = useTranslation()
   return (
     <div className="space-y-3">
       {/* Employment & contact (employees.view) */}
       {member && (
         <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-          <SectionCard title="Employment">
+          <SectionCard title={t('Employment')}>
             <dl className="grid grid-cols-2 gap-2 text-xs">
-              <Field label="Hire Date" value={member.hireDate ? formatDateWithYear(member.hireDate) : '—'} />
-              <Field label="Level" value={member.level ?? '—'} />
-              <Field label="Email" value={member.email ?? '—'} />
-              <Field label="Phone" value={member.phone ?? '—'} />
-              <Field label="Employee #" value={member.employeeNumber ?? '—'} />
-              <Field label="Gym" value={member.gym ?? '—'} />
+              <Field label={t('Hire Date')} value={member.hireDate ? formatDateWithYear(member.hireDate) : '—'} />
+              <Field label={t('Level')} value={member.level ?? '—'} />
+              <Field label={t('Email')} value={member.email ?? '—'} />
+              <Field label={t('Phone')} value={member.phone ?? '—'} />
+              <Field label={t('Employee #')} value={member.employeeNumber ?? '—'} />
+              <Field label={t('Gym')} value={member.gym ?? '—'} />
             </dl>
           </SectionCard>
-          <SectionCard title="Today">
+          <SectionCard title={t('Today')}>
             <TodaysAttendance memberId={memberId} />
           </SectionCard>
         </div>
@@ -383,6 +387,7 @@ function ProfileBody({ memberId, member }: { memberId: number; member: MemberHea
 }
 
 function TodaysAttendance({ memberId }: { memberId: number }) {
+  const { t } = useTranslation()
   const { me } = usePortalSession()
   const ledTeamId = me?.ledTeamId ?? null
   const todayQuery = useQuery({
@@ -393,43 +398,45 @@ function TodaysAttendance({ memberId }: { memberId: number }) {
 
   const row = todayQuery.data?.members.find((m) => m.employeeId === memberId) ?? null
   if (!row) {
-    return <p className="text-xs text-charcoal-500">No live team row for today.</p>
+    return <p className="text-xs text-charcoal-500">{t('No live team row for today.')}</p>
   }
   return (
     <dl className="grid grid-cols-2 gap-2 text-xs">
       <Field
-        label="Scheduled"
+        label={t('Scheduled')}
         value={
           row.isOff || !row.shiftName
-            ? 'Off'
-            : `${row.shiftName} ${time12(row.shiftStart)} – ${time12(row.shiftEnd)}`
+            ? t('Off')
+            : `${t(row.shiftName)} ${time12(row.shiftStart)} – ${time12(row.shiftEnd)}`
         }
       />
-      <Field label="Check In" value={time12(row.checkIn)} />
-      <Field label="Shift" value={row.shiftName ?? '—'} />
-      <Field label="Status" value={row.status} />
+      <Field label={t('Check In')} value={time12(row.checkIn)} />
+      <Field label={t('Shift')} value={row.shiftName ? t(row.shiftName) : '—'} />
+      <Field label={t('Status')} value={row.status} />
     </dl>
   )
 }
 
 function TodaysAttendanceCard({ memberId }: { memberId: number }) {
+  const { t } = useTranslation()
   return (
-    <SectionCard title="Today">
+    <SectionCard title={t('Today')}>
       <TodaysAttendance memberId={memberId} />
     </SectionCard>
   )
 }
 
 function UpcomingSchedule({ memberId }: { memberId: number }) {
+  const { t } = useTranslation()
   const scheduleQuery = useQuery({
     queryKey: scheduleKeys.member(memberId),
     queryFn: ({ signal }) => getOwnSchedule(memberId, {}, signal),
   })
 
-  if (scheduleQuery.isLoading) return <SectionCard title="Upcoming shifts"><LoadingState /></SectionCard>
+  if (scheduleQuery.isLoading) return <SectionCard title={t('Upcoming shifts')}><LoadingState /></SectionCard>
   if (scheduleQuery.error)
     return (
-      <SectionCard title="Upcoming shifts">
+      <SectionCard title={t('Upcoming shifts')}>
         <ErrorState message={describeApiError(scheduleQuery.error)} onRetry={() => scheduleQuery.refetch()} />
       </SectionCard>
     )
@@ -438,7 +445,7 @@ function UpcomingSchedule({ memberId }: { memberId: number }) {
   const upcoming = (schedule?.days ?? []).slice(0, 7)
   return (
     <SectionCard
-      title="Upcoming shifts"
+      title={t('Upcoming shifts')}
       subtitle={
         (schedule?.cycles ?? [])
           .map((c) => `${formatDateWithYear(c.start)} – ${formatDateWithYear(c.end)} (${c.status})`)
@@ -446,7 +453,7 @@ function UpcomingSchedule({ memberId }: { memberId: number }) {
       }
     >
       {upcoming.length === 0 ? (
-        <p className="text-xs text-charcoal-500">No published shifts for this month.</p>
+        <p className="text-xs text-charcoal-500">{t('No published shifts for this month.')}</p>
       ) : (
         <ul className="space-y-1.5">
           {upcoming.map((day) => (
@@ -455,33 +462,38 @@ function UpcomingSchedule({ memberId }: { memberId: number }) {
                 <p className="w-24 text-xs font-semibold text-charcoal-900">
                   {day.dayName.slice(0, 3)} {day.date.slice(8)}
                 </p>
-                {day.isToday && <span className="badge badge-green">Today</span>}
+                {day.isToday && <span className="badge badge-green">{t('Today')}</span>}
               </div>
               <span className="schedule-shift-badge border border-charcoal-200 text-[10px]">
-                {day.isOff || !day.shiftName ? 'OFF' : `${day.shiftName} ${time12(day.start)} – ${time12(day.end)}`}
+                {day.isOff || !day.shiftName
+                  ? t('OFF')
+                  : `${t(day.shiftName)} ${time12(day.start)} – ${time12(day.end)}`}
               </span>
             </li>
           ))}
         </ul>
       )}
       {!schedule?.cycles.length && (
-        <p className="mt-2 text-[10px] text-charcoal-400">No published cycles for {schedule?.month ?? 'this month'}.</p>
+        <p className="mt-2 text-[10px] text-charcoal-400">
+          {t('No published cycles for {{month}}.', { month: schedule?.month ?? t('this month') })}
+        </p>
       )}
     </SectionCard>
   )
 }
 
 function MemberRequests({ memberId }: { memberId: number }) {
+  const { t } = useTranslation()
   const { can } = usePortalSession()
   const requestsQuery = useQuery({
     queryKey: ['portal', 'member', 'requests', memberId],
     queryFn: ({ signal }) => getOwnRequests(memberId, signal),
   })
 
-  if (requestsQuery.isLoading) return <SectionCard title="Requests"><LoadingState /></SectionCard>
+  if (requestsQuery.isLoading) return <SectionCard title={t('Requests')}><LoadingState /></SectionCard>
   if (requestsQuery.error)
     return (
-      <SectionCard title="Requests">
+      <SectionCard title={t('Requests')}>
         <ErrorState message={describeApiError(requestsQuery.error)} onRetry={() => requestsQuery.refetch()} />
       </SectionCard>
     )
@@ -489,9 +501,9 @@ function MemberRequests({ memberId }: { memberId: number }) {
   const requests: EmployeeRequestItem[] = requestsQuery.data ?? []
   const canDecide = can('requests.view') || can('employees.view')
   return (
-    <SectionCard title={`Requests (${requests.length})`}>
+    <SectionCard title={t('Requests ({{count}})', { count: requests.length })}>
       {requests.length === 0 ? (
-        <p className="text-xs text-charcoal-500">No requests found.</p>
+        <p className="text-xs text-charcoal-500">{t('No requests found.')}</p>
       ) : (
         <ul className="divide-y divide-charcoal-50">
           {requests.slice(0, 6).map((r) => (
@@ -500,7 +512,9 @@ function MemberRequests({ memberId }: { memberId: number }) {
         </ul>
       )}
       {requests.length > 6 && (
-        <p className="mt-1 text-[10px] text-charcoal-400">Showing the 6 most recent of {requests.length}.</p>
+        <p className="mt-1 text-[10px] text-charcoal-400">
+          {t('Showing the 6 most recent of {{count}}.', { count: requests.length })}
+        </p>
       )}
     </SectionCard>
   )
@@ -517,6 +531,7 @@ function MemberRequestRow({
   request: EmployeeRequestItem
   canDecide: boolean
 }) {
+  const { t } = useTranslation()
   const { toast } = useToast()
   const queryClient = useQueryClient()
   const [decision, setDecision] = useState<'Approve' | 'Reject' | null>(null)
@@ -528,7 +543,11 @@ function MemberRequestRow({
     onSuccess: (_data, variables) => {
       void queryClient.invalidateQueries({ queryKey: ['portal', 'member', 'requests', memberId] })
       void queryClient.invalidateQueries({ queryKey: ['portal', 'requests'] })
-      toast(`Request #${request.id} ${variables.decision === 'Approve' ? 'approved to HR review' : 'rejected'}.`)
+      toast(
+        variables.decision === 'Approve'
+          ? t('Request #{{id}} approved to HR review', { id: request.id })
+          : t('Request #{{id}} rejected', { id: request.id }),
+      )
       setDecision(null)
     },
     onError: (error) => toast(describeApiError(error), 'error'),
@@ -539,7 +558,7 @@ function MemberRequestRow({
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['portal', 'member', 'requests', memberId] })
       void queryClient.invalidateQueries({ queryKey: ['portal', 'requests'] })
-      toast(`Request #${request.id} decision undone.`)
+      toast(t('Request #{{id}} decision undone.', { id: request.id }))
     },
     onError: (error) => toast(describeApiError(error), 'error'),
   })
@@ -560,12 +579,17 @@ function MemberRequestRow({
           {request.type}
           {request.calculatedDays != null && (
             <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
-              Cover: {request.calculatedDays} day{request.calculatedDays === 1 ? '' : 's'}
+              {request.calculatedDays === 1
+                ? t('Cover: {{count}} day', { count: request.calculatedDays })
+                : t('Cover: {{count}} days', { count: request.calculatedDays })}
             </span>
           )}
         </p>
         <p className="text-[10px] text-charcoal-500">
-          {formatDateWithYear(request.requestedDate)} · Submitted {formatDateWithYear(request.submittedDate)}
+          {t('{{date}} · Submitted {{submitted}}', {
+            date: formatDateWithYear(request.requestedDate),
+            submitted: formatDateWithYear(request.submittedDate),
+          })}
         </p>
         {request.reason && <p className="text-[10px] text-charcoal-400">{request.reason}</p>}
       </div>
@@ -575,19 +599,19 @@ function MemberRequestRow({
           <div className="flex gap-1.5">
             {canApprove && (
               <Button size="sm" variant="primary" onClick={() => setDecision('Approve')}>
-                <Check className="h-3.5 w-3.5" aria-hidden="true" /> Approve
+                <Check className="h-3.5 w-3.5" aria-hidden="true" /> {t('Approve')}
               </Button>
             )}
             {canReject && (
               <Button size="sm" variant="dangerOutline" onClick={() => setDecision('Reject')}>
-                <X className="h-3.5 w-3.5" aria-hidden="true" /> Reject
+                <X className="h-3.5 w-3.5" aria-hidden="true" /> {t('Reject')}
               </Button>
             )}
           </div>
         )}
         {canDecide && (request.status === 'PendingHRReview' || request.status === 'Rejected') && !undoDeadlinePassed && (
           <Button size="sm" variant="secondary" loading={undoMutation.isPending} onClick={() => undoMutation.mutate()}>
-            Undo
+            {t('Undo')}
           </Button>
         )}
       </div>
@@ -595,17 +619,17 @@ function MemberRequestRow({
       {decision && (
         <Modal
           open
-          title={`${decision} request #${request.id}`}
+          title={t('{{decision}} request #{{id}}', { decision: t(decision), id: request.id })}
           subtitle={
             decision === 'Approve'
-              ? 'Approves to HR review — HR gives the final sign-off.'
-              : 'Rejects the request; reserved leave days are released.'
+              ? t('Approves to HR review — HR gives the final sign-off.')
+              : t('Rejects the request; reserved leave days are released.')
           }
           onClose={() => setDecision(null)}
           footer={
             <div className="flex justify-end gap-2">
               <Button variant="secondary" onClick={() => setDecision(null)}>
-                Cancel
+                {t('Cancel')}
               </Button>
               <Button
                 variant={decision === 'Reject' ? 'danger' : 'primary'}
@@ -620,20 +644,20 @@ function MemberRequestRow({
                   })
                 }
               >
-                {decision === 'Approve' ? 'Confirm approve' : 'Confirm reject'}
+                {decision === 'Approve' ? t('Confirm approve') : t('Confirm reject')}
               </Button>
             </div>
           }
         >
           <p className="text-sm text-charcoal-600">
             {decision === 'Approve'
-              ? 'The request moves to HR review for the final sign-off.'
-              : 'Reject this request? Reserved leave days are released.'}
+              ? t('The request moves to HR review for the final sign-off.')
+              : t('Reject this request? Reserved leave days are released.')}
           </p>
           {decision === 'Approve' && request.type === 'Unscheduled Attendance' && (
             <div className="mt-3 rounded-lg border border-brand-200 bg-brand-50 p-2.5">
               <label className="form-label" htmlFor={`member-calculated-days-${request.id}`}>
-                Count this cover/extra day as
+                {t('Count this cover/extra day as')}
               </label>
               <select
                 id={`member-calculated-days-${request.id}`}
@@ -641,8 +665,8 @@ function MemberRequestRow({
                 onChange={(event) => setCalculatedDays(Number(event.target.value) as 1 | 2)}
                 className="form-input mt-1"
               >
-                <option value={1}>1 day</option>
-                <option value={2}>2 days</option>
+                <option value={1}>{t('{{count}} day', { count: 1 })}</option>
+                <option value={2}>{t('{{count}} days', { count: 2 })}</option>
               </select>
               <p className="mt-1 text-[10px] text-charcoal-500">
                 This does not reduce the employee&apos;s monthly day-off balance.
@@ -656,24 +680,25 @@ function MemberRequestRow({
 }
 
 function MemberEvaluations({ memberId }: { memberId: number }) {
+  const { t } = useTranslation()
   const evalsQuery = useQuery({
     queryKey: ['portal', 'member', 'evaluations', memberId],
     queryFn: ({ signal }) => getOwnEvaluationDetails(memberId, signal),
   })
 
-  if (evalsQuery.isLoading) return <SectionCard title="Evaluations"><LoadingState /></SectionCard>
+  if (evalsQuery.isLoading) return <SectionCard title={t('Evaluations')}><LoadingState /></SectionCard>
   if (evalsQuery.error)
     return (
-      <SectionCard title="Evaluations">
+      <SectionCard title={t('Evaluations')}>
         <ErrorState message={describeApiError(evalsQuery.error)} onRetry={() => evalsQuery.refetch()} />
       </SectionCard>
     )
 
   const evals: EvaluationDetail[] = evalsQuery.data ?? []
   return (
-    <SectionCard title={`Evaluations (${evals.length})`}>
+    <SectionCard title={t('Evaluations ({{count}})', { count: evals.length })}>
       {evals.length === 0 ? (
-        <p className="text-xs text-charcoal-500">No evaluations yet.</p>
+        <p className="text-xs text-charcoal-500">{t('No evaluations yet.')}</p>
       ) : (
         <ul className="divide-y divide-charcoal-50">
           {evals.map((e) => (
@@ -681,7 +706,12 @@ function MemberEvaluations({ memberId }: { memberId: number }) {
               <div className="min-w-0">
                 <p className="text-xs font-medium text-charcoal-900">{e.period}</p>
                 <p className="text-[10px] text-charcoal-500">
-                  Score {e.score.toFixed(1)}/{e.maxScore} · {formatDateWithYear(e.date)} · Reviewer {e.reviewer || '—'}
+                  {t('Score {{score}}/{{max}} · {{date}} · Reviewer {{reviewer}}', {
+                    score: e.score.toFixed(1),
+                    max: e.maxScore,
+                    date: formatDateWithYear(e.date),
+                    reviewer: e.reviewer || '—',
+                  })}
                 </p>
               </div>
               <span className="flex items-center gap-1.5">
@@ -827,12 +857,13 @@ function HrRow({
 }
 
 function PersonalTab({ memberId, member }: { memberId: number; member: MemberHeader }) {
+  const { t } = useTranslation()
   const profileQuery = useQuery({
     queryKey: ['portal', 'member', 'profile', memberId],
     queryFn: ({ signal }) => getOwnProfile(memberId, signal),
   })
 
-  if (profileQuery.isLoading) return <LoadingState label="Loading profile…" />
+  if (profileQuery.isLoading) return <LoadingState label={t('Loading profile…')} />
   if (profileQuery.error)
     return <ErrorState message={describeApiError(profileQuery.error)} onRetry={() => profileQuery.refetch()} />
 
@@ -857,8 +888,8 @@ function PersonalTab({ memberId, member }: { memberId: number; member: MemberHea
         <div className="overflow-hidden rounded-xl border border-charcoal-200 bg-white">
           <div className="flex items-center justify-between border-b border-charcoal-100 bg-charcoal-50/50 px-3 py-2">
             <div>
-              <p className="bento-label">PROFILE DETAILS</p>
-              <h3 className="mt-0.5 text-sm font-bold text-charcoal-900">Personal Info</h3>
+              <p className="bento-label">{t('PROFILE DETAILS')}</p>
+              <h3 className="mt-0.5 text-sm font-bold text-charcoal-900">{t('Personal Info')}</h3>
             </div>
             <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-charcoal-400">
               <Lock className="h-3 w-3" aria-hidden="true" />
@@ -866,10 +897,13 @@ function PersonalTab({ memberId, member }: { memberId: number; member: MemberHea
             </span>
           </div>
           <div className="grid grid-cols-1 gap-2 p-3 sm:grid-cols-2">
-            <InfoField label="Full Name" value={profile?.fullName ?? member.name ?? null} />
-            <InfoField label="Date of Birth" value={profile?.dateOfBirth ? formatDateWithYear(profile.dateOfBirth) : null} />
-            <InfoField label="National ID" value={profile?.nationalId ?? null} />
-            <InfoField label="Gender" value={profile?.gender ?? null} />
+            <InfoField label={t('Full Name')} value={profile?.fullName ?? member.name ?? null} />
+            <InfoField
+              label={t('Date of Birth')}
+              value={profile?.dateOfBirth ? formatDateWithYear(profile.dateOfBirth) : null}
+            />
+            <InfoField label={t('National ID')} value={profile?.nationalId ?? null} />
+            <InfoField label={t('Gender')} value={profile?.gender ?? null} />
           </div>
         </div>
 
@@ -877,14 +911,14 @@ function PersonalTab({ memberId, member }: { memberId: number; member: MemberHea
         <div className="overflow-hidden rounded-xl border border-charcoal-200 bg-white">
           <div className="flex items-center justify-between border-b border-charcoal-100 bg-charcoal-50/50 px-3 py-2">
             <div>
-              <p className="bento-label">COMMUNICATION</p>
-              <h3 className="mt-0.5 text-sm font-bold text-charcoal-900">Contact Info</h3>
+              <p className="bento-label">{t('COMMUNICATION')}</p>
+              <h3 className="mt-0.5 text-sm font-bold text-charcoal-900">{t('Contact Info')}</h3>
             </div>
           </div>
           <div className="grid grid-cols-1 gap-2 p-3 sm:grid-cols-2">
-            <InfoField label="Mobile Number" value={member.phone ?? profile?.phone ?? null} />
-            <InfoField label="Personal Email" value={member.email ?? profile?.email ?? null} />
-            <InfoField label="Residential Address" value={profile?.address ?? null} className="sm:col-span-2" />
+            <InfoField label={t('Mobile Number')} value={member.phone ?? profile?.phone ?? null} />
+            <InfoField label={t('Personal Email')} value={member.email ?? profile?.email ?? null} />
+            <InfoField label={t('Residential Address')} value={profile?.address ?? null} className="sm:col-span-2" />
           </div>
         </div>
       </div>
@@ -902,25 +936,25 @@ function PersonalTab({ memberId, member }: { memberId: number; member: MemberHea
                 <Lock className="h-3 w-3" aria-hidden="true" />
                 HR CONTROLLED
               </p>
-              <h3 className="mt-0.5 text-sm font-bold text-charcoal-900">Employment Info</h3>
+              <h3 className="mt-0.5 text-sm font-bold text-charcoal-900">{t('Employment Info')}</h3>
             </div>
           </div>
           <div className="relative z-10 space-y-2 p-3">
-            <HrRow label="Employee ID" value={employeeId} icon={<CreditCard className={iconClass} aria-hidden="true" />} />
-            <HrRow label="Primary Location" value={gymLabel} icon={<MapPin className={iconClass} aria-hidden="true" />} />
+            <HrRow label={t('Employee ID')} value={employeeId} icon={<CreditCard className={iconClass} aria-hidden="true" />} />
+            <HrRow label={t('Primary Location')} value={gymLabel} icon={<MapPin className={iconClass} aria-hidden="true" />} />
             <HrRow
-              label="Job Title / Position"
+              label={t('Job Title / Position')}
               value={member.position ?? profile?.position ?? null}
               icon={<Briefcase className={iconClass} aria-hidden="true" />}
             />
-            <HrRow label="Employment Level" value={member.level ?? null} />
+            <HrRow label={t('Employment Level')} value={member.level ?? null} />
             <HrRow
-              label="Monthly Salary"
+              label={t('Monthly Salary')}
               value={profile?.baseSalary != null ? formatMoney(profile.baseSalary) : member.salary != null ? formatMoney(member.salary) : null}
             />
-            <HrRow label="Hire Date" value={hireDate} icon={<CalendarDays className={iconClass} aria-hidden="true" />} />
+            <HrRow label={t('Hire Date')} value={hireDate} icon={<CalendarDays className={iconClass} aria-hidden="true" />} />
             <HrRow
-              label="Current Status"
+              label={t('Current Status')}
               divider={false}
               valueClassName="flex items-center gap-1.5"
               value={
@@ -943,6 +977,7 @@ function PersonalTab({ memberId, member }: { memberId: number; member: MemberHea
 /* ==================== documents ==================== */
 
 function DocumentsTab({ memberId }: { memberId: number }) {
+  const { t } = useTranslation()
   const docsQuery = useQuery({
     queryKey: ['portal', 'member', 'documents', memberId],
     queryFn: ({ signal }) => getOwnDocuments(memberId, signal),
@@ -962,11 +997,11 @@ function DocumentsTab({ memberId }: { memberId: number }) {
       <div>
         <p className="bento-label mb-1.5 text-charcoal-400">EMPLOYEE DOCUMENTS ({docs.length})</p>
         {docsQuery.isLoading ? (
-          <LoadingState label="Loading documents…" />
+          <LoadingState label={t('Loading documents…')} />
         ) : docsQuery.error ? (
           <p className="text-[11px] text-red-600">{describeApiError(docsQuery.error)}</p>
         ) : docs.length === 0 ? (
-          <p className="text-xs text-charcoal-500">No documents on record.</p>
+          <p className="text-xs text-charcoal-500">{t('No documents on record.')}</p>
         ) : (
           <div className="divide-y divide-charcoal-50 rounded-lg border border-charcoal-200">
             {docs.map((doc) => (
@@ -978,11 +1013,11 @@ function DocumentsTab({ memberId }: { memberId: number }) {
       <div>
         <p className="bento-label mb-1.5 text-charcoal-400">HR FILES ({hrDocs.length})</p>
         {hrDocsQuery.isLoading ? (
-          <LoadingState label="Loading HR files…" />
+          <LoadingState label={t('Loading HR files…')} />
         ) : hrDocsQuery.error ? (
           <p className="text-[11px] text-red-600">{describeApiError(hrDocsQuery.error)}</p>
         ) : hrDocs.length === 0 ? (
-          <p className="text-xs text-charcoal-500">HR has not attached any files.</p>
+          <p className="text-xs text-charcoal-500">{t('HR has not attached any files.')}</p>
         ) : (
           <div className="divide-y divide-charcoal-50 rounded-lg border border-charcoal-200">
             {hrDocs.map((doc) => (
@@ -1008,13 +1043,14 @@ function DocumentsTab({ memberId }: { memberId: number }) {
 }
 
 function DocumentRow({ memberId, doc }: { memberId: number; doc: EmployeeDocument }) {
+  const { t } = useTranslation()
   return (
     <div className="flex items-center justify-between gap-2 p-2.5">
       <div className="min-w-0">
         <p className="text-xs font-semibold text-charcoal-900">{doc.name}</p>
         <p className="text-[10px] text-charcoal-500">
-          {doc.category} · Uploaded {formatDateWithYear(doc.uploadDate)}
-          {doc.expiryDate ? ` · Expires ${formatDateWithYear(doc.expiryDate)}` : ''}
+          {doc.category} · {t('Uploaded {{date}}', { date: formatDateWithYear(doc.uploadDate) })}
+          {doc.expiryDate ? ` · ${t('Expires {{date}}', { date: formatDateWithYear(doc.expiryDate) })}` : ''}
         </p>
       </div>
       <div className="flex flex-shrink-0 items-center gap-2">
@@ -1030,17 +1066,18 @@ function DocumentRow({ memberId, doc }: { memberId: number; doc: EmployeeDocumen
 /* ==================== employment ==================== */
 
 function EmploymentTab({ memberId }: { memberId: number }) {
+  const { t } = useTranslation()
   const historyQuery = useQuery({
     queryKey: ['portal', 'member', 'history', memberId],
     queryFn: ({ signal }) => getOwnHistory(memberId, signal),
   })
 
-  if (historyQuery.isLoading) return <LoadingState label="Loading employment history…" />
+  if (historyQuery.isLoading) return <LoadingState label={t('Loading employment history…')} />
   if (historyQuery.error)
     return <ErrorState message={describeApiError(historyQuery.error)} onRetry={() => historyQuery.refetch()} />
 
   const rows: EmployeeHistoryItem[] = historyQuery.data ?? []
-  if (rows.length === 0) return <p className="text-xs text-charcoal-500">No employment changes recorded yet.</p>
+  if (rows.length === 0) return <p className="text-xs text-charcoal-500">{t('No employment changes recorded yet.')}</p>
 
   return (
     <div>
@@ -1073,6 +1110,7 @@ function currentMonthValue(): string {
 }
 
 function AttendanceTab({ memberId }: { memberId: number }) {
+  const { t } = useTranslation()
   const [month, setMonth] = useState(currentMonthValue())
 
   const historyQuery = useQuery({
@@ -1085,7 +1123,7 @@ function AttendanceTab({ memberId }: { memberId: number }) {
     queryFn: ({ signal }) => getOwnLeaveBalance(memberId, signal),
   })
 
-  if (historyQuery.isLoading) return <LoadingState label="Loading attendance…" />
+  if (historyQuery.isLoading) return <LoadingState label={t('Loading attendance…')} />
   if (historyQuery.error)
     return <ErrorState message={describeApiError(historyQuery.error)} onRetry={() => historyQuery.refetch()} />
 
@@ -1114,13 +1152,13 @@ function AttendanceTab({ memberId }: { memberId: number }) {
   return (
     <div>
       <div className="mb-2 flex items-center justify-between">
-        <p className="bento-label text-charcoal-400">ATTENDANCE</p>
+        <p className="bento-label text-charcoal-400">{t('ATTENDANCE')}</p>
         <input
           type="month"
           value={month}
           onChange={(event) => setMonth(event.target.value)}
           className="form-input w-36"
-          aria-label="Attendance month"
+          aria-label={t('Attendance month')}
         />
       </div>
 
@@ -1147,38 +1185,38 @@ function AttendanceTab({ memberId }: { memberId: number }) {
         <div className="mt-2 grid grid-cols-2 gap-2 text-center sm:grid-cols-7">
           <div className="rounded-lg bg-charcoal-50 p-2">
             <p className="text-base font-bold text-brand-700">{onTime} days</p>
-            <p className="text-[10px] text-charcoal-500">On time</p>
+            <p className="text-[10px] text-charcoal-500">{t('On time')}</p>
           </div>
           <div className="rounded-lg bg-charcoal-50 p-2">
             <p className="text-base font-bold text-yellow-600">{late} days</p>
-            <p className="text-[10px] text-charcoal-500">Late</p>
+            <p className="text-[10px] text-charcoal-500">{t('Late')}</p>
           </div>
           <div className="rounded-lg bg-charcoal-50 p-2">
             <p className="text-base font-bold text-blue-600">{sick} days</p>
-            <p className="text-[10px] text-charcoal-500">Sick Leave</p>
+            <p className="text-[10px] text-charcoal-500">{t('Sick Leave')}</p>
           </div>
           <div className="rounded-lg bg-charcoal-50 p-2">
             <p className="text-base font-bold text-emerald-600">{annual} days</p>
-            <p className="text-[10px] text-charcoal-500">Annual Leave</p>
+            <p className="text-[10px] text-charcoal-500">{t('Annual Leave')}</p>
           </div>
           <div className="rounded-lg bg-charcoal-50 p-2">
             <p className="text-base font-bold text-red-600">{absent} days</p>
-            <p className="text-[10px] text-charcoal-500">Absent</p>
+            <p className="text-[10px] text-charcoal-500">{t('Absent')}</p>
           </div>
           <div className="rounded-lg bg-charcoal-50 p-2">
             <p className="text-base font-bold text-charcoal-600">{balance?.unpaid?.used ?? 0} days</p>
-            <p className="text-[10px] text-charcoal-500">Unpaid Leave</p>
+            <p className="text-[10px] text-charcoal-500">{t('Unpaid Leave')}</p>
           </div>
           <div className="rounded-lg bg-charcoal-50 p-2">
             <p className="text-base font-bold text-violet-600">{totals?.coverDays ?? 0} days</p>
-            <p className="text-[10px] text-charcoal-500">Cover days</p>
+            <p className="text-[10px] text-charcoal-500">{t('Cover days')}</p>
           </div>
         </div>
         {totals && <p className="mt-1 text-[10px] text-charcoal-400">{totals.hours.toFixed(0)}h — {early} early leaving {early === 1 ? 'day' : 'days'} this month.</p>}
       </div>
 
       {items.length === 0 ? (
-        <p className="text-xs text-charcoal-500">No attendance rows for this month.</p>
+        <p className="text-xs text-charcoal-500">{t('No attendance rows for this month.')}</p>
       ) : (
         <div className="divide-y divide-charcoal-50 rounded-lg border border-charcoal-200">
           {items.slice(0, 12).map((item) => (
@@ -1211,7 +1249,7 @@ function AttendanceTab({ memberId }: { memberId: number }) {
 
       {/* Deductions raised on this employee — full trail with branch actions */}
       <div className="mt-3">
-        <p className="bento-label mb-1.5 text-charcoal-400">DEDUCTIONS</p>
+        <p className="bento-label mb-1.5 text-charcoal-400">{t('DEDUCTIONS')}</p>
         <MemberDeductions memberId={memberId} />
       </div>
     </div>
@@ -1225,6 +1263,7 @@ function AttendanceTab({ memberId }: { memberId: number }) {
  * the line is still open.
  */
 function MemberDeductions({ memberId }: { memberId: number }) {
+  const { t } = useTranslation()
   const { toast } = useToast()
   const queryClient = useQueryClient()
   const [editingId, setEditingId] = useState<number | null>(null)
@@ -1253,7 +1292,7 @@ function MemberDeductions({ memberId }: { memberId: number }) {
   })
 
   if (deductionsQuery.isLoading) {
-    return <LoadingState label="Loading deductions…" />
+    return <LoadingState label={t('Loading deductions…')} />
   }
   if (deductionsQuery.isError) {
     return <ErrorState message={describeApiError(deductionsQuery.error)} onRetry={() => deductionsQuery.refetch()} />
@@ -1261,7 +1300,7 @@ function MemberDeductions({ memberId }: { memberId: number }) {
 
   const rows = deductionsQuery.data ?? []
   if (rows.length === 0) {
-    return <p className="text-xs text-charcoal-500">No deductions raised on this employee.</p>
+    return <p className="text-xs text-charcoal-500">{t('No deductions raised on this employee.')}</p>
   }
 
   // Open rows get the whole decision (approve / re-price / reject); a branch-approved
@@ -1354,7 +1393,7 @@ function MemberDeductions({ memberId }: { memberId: number }) {
                 step="0.01"
                 value={amount}
                 onChange={(event) => setAmount(event.target.value)}
-                placeholder="New amount (EGP)"
+                placeholder={t('New amount (EGP)')}
                 className="w-28 rounded-md border border-charcoal-200 px-2 py-1 text-[11px] text-charcoal-800 focus:border-brand-400 focus:outline-none"
               />
               <button
@@ -1384,12 +1423,13 @@ function MemberDeductions({ memberId }: { memberId: number }) {
 /* ==================== shift ==================== */
 
 function ShiftTab({ memberId }: { memberId: number }) {
+  const { t } = useTranslation()
   const { can } = usePortalSession()
   const [editCycleId, setEditCycleId] = useState<number | null>(null)
 
   const scheduleQuery = useQuery(memberWeekQuery(memberId))
 
-  if (scheduleQuery.isLoading) return <LoadingState label="Loading shift…" />
+  if (scheduleQuery.isLoading) return <LoadingState label={t('Loading shift…')} />
   if (scheduleQuery.error)
     return <ErrorState message={describeApiError(scheduleQuery.error)} onRetry={() => scheduleQuery.refetch()} />
 
@@ -1414,7 +1454,7 @@ function ShiftTab({ memberId }: { memberId: number }) {
   return (
     <div>
       <div className="mb-1.5 flex items-center justify-between gap-2">
-        <p className="bento-label text-charcoal-400">CURRENT WEEK</p>
+        <p className="bento-label text-charcoal-400">{t('CURRENT WEEK')}</p>
         {can('schedule.manage') && editableCycle && (
           <Button size="sm" variant="secondary" onClick={() => setEditCycleId(editableCycle.id)}>
             <Pencil className="h-3.5 w-3.5" aria-hidden="true" /> Edit shift
@@ -1493,6 +1533,7 @@ function EditShiftModal({
   cycleId: number
   onClose: () => void
 }) {
+  const { t } = useTranslation()
   const { toast } = useToast()
   const queryClient = useQueryClient()
   const detailQuery = useQuery({
@@ -1525,7 +1566,7 @@ function EditShiftModal({
     mutationFn: (payload: SetAssignmentInput[]) => setShiftAssignments(cycleId, payload),
     onSuccess: () => {
       void invalidateScheduleQueries(queryClient)
-      toast('Weekly shift pattern saved.')
+      toast(t('Weekly shift pattern saved.'))
       onClose()
     },
     onError: (error) => toast(describeApiError(error), 'error'),
@@ -1538,13 +1579,13 @@ function EditShiftModal({
   return (
     <Modal
       open
-      title="Edit shift"
-      subtitle={`${detail?.label ?? 'Current cycle'} — Mondays to Sundays.`}
+      title={t('Edit shift')}
+      subtitle={t('{{cycle}} — Mondays to Sundays.', { cycle: detail?.label ?? t('Current cycle') })}
       onClose={onClose}
       footer={
         <div className="flex justify-end gap-2">
           <Button variant="secondary" onClick={onClose}>
-            Cancel
+            {t('Cancel')}
           </Button>
           <Button
             variant="primary"
@@ -1560,19 +1601,19 @@ function EditShiftModal({
               )
             }
           >
-            Save
+            {t('Save')}
           </Button>
         </div>
       }
     >
-      {detailQuery.isLoading && <LoadingState label="Loading cycle…" />}
+      {detailQuery.isLoading && <LoadingState label={t('Loading cycle…')} />}
       {detailQuery.error && (
         <ErrorState message={describeApiError(detailQuery.error)} onRetry={() => detailQuery.refetch()} />
       )}
       {!detailQuery.isLoading && !detailQuery.error && (
         <>
           <p className="mb-3 text-[11px] text-charcoal-600">
-            &ldquo;Not assigned&rdquo; leaves the day untouched; &ldquo;Off&rdquo; books an explicit rest day.
+            {t('“Not assigned” leaves the day untouched; “Off” books an explicit rest day.')}
           </p>
           <div className="space-y-2">
             {Array.from({ length: 7 }, (_, day) => (
@@ -1583,13 +1624,13 @@ function EditShiftModal({
                   value={values[day]}
                   onChange={(event) => setSelected({ ...values, [day]: event.target.value })}
                 >
-                  {initialFor(day) == null && <option value={SHIFT_KEEP}>Not assigned</option>}
+                  {initialFor(day) == null && <option value={SHIFT_KEEP}>{t('Not assigned')}</option>}
                   {templates.map((template) => (
                     <option key={template.id} value={String(template.id)}>
                       {template.name} ({formatTimeOfDay(template.start)}–{formatTimeOfDay(template.end)})
                     </option>
                   ))}
-                  <option value={SHIFT_OFF}>Off</option>
+                  <option value={SHIFT_OFF}>{t('Off')}</option>
                 </select>
               </div>
             ))}
@@ -1603,12 +1644,13 @@ function EditShiftModal({
 /* ==================== payroll snapshot ==================== */
 
 function PayrollTab({ memberId, member }: { memberId: number; member: MemberHeader }) {
+  const { t } = useTranslation()
   const sheetsQuery = useQuery({
     queryKey: ['portal', 'member', 'payroll', memberId],
     queryFn: ({ signal }) => getOwnPayrollSheets(memberId, signal),
   })
 
-  if (sheetsQuery.isLoading) return <LoadingState label="Loading payroll snapshot…" />
+  if (sheetsQuery.isLoading) return <LoadingState label={t('Loading payroll snapshot…')} />
   if (sheetsQuery.error)
     return <ErrorState message={describeApiError(sheetsQuery.error)} onRetry={() => sheetsQuery.refetch()} />
 
@@ -1619,7 +1661,7 @@ function PayrollTab({ memberId, member }: { memberId: number; member: MemberHead
     <div className="space-y-2">
       <div className="flex items-center justify-between rounded-lg bg-charcoal-50 p-3">
         <div>
-          <p className="text-[10px] text-charcoal-500">LATEST PAYSLIP</p>
+          <p className="text-[10px] text-charcoal-500">{t('LATEST PAYSLIP')}</p>
           <p className="mt-0.5 text-xs font-semibold text-charcoal-900">
             {latest
               ? `${latest.period}${latest.paidDate ? ` · Paid ${formatDateWithYear(latest.paidDate)}` : ''}`

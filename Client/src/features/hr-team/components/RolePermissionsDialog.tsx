@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Button } from '../../../components/ui/button'
 import { Dialog } from '../../../components/ui/dialog'
 import { ErrorState, LoadingState } from '../../../components/async-state'
@@ -13,6 +14,7 @@ interface RolePermissionsDialogProps {
 
 /** PUT /api/roles/{id}/permissions — the Configure action: wholesale replacement (team.manage). */
 export function RolePermissionsDialog({ role, onClose }: RolePermissionsDialogProps) {
+  const { t } = useTranslation()
   const [selected, setSelected] = useState<string[]>(role.permissions)
   const [error, setError] = useState<string | null>(null)
   const catalog = usePermissionCatalog()
@@ -40,16 +42,20 @@ export function RolePermissionsDialog({ role, onClose }: RolePermissionsDialogPr
     <Dialog
       open
       onClose={onClose}
-      title={`Configure — ${role.name}`}
-      description={`${selected.length}${totalTracked != null ? ` of ${totalTracked}` : ''} permissions selected`}
+      title={t('Configure — {{name}}', { name: role.name })}
+      description={
+        totalTracked != null
+          ? t('{{selected}} of {{total}} permissions selected', { selected: selected.length, total: totalTracked })
+          : t('{{selected}} permissions selected', { selected: selected.length })
+      }
       className="sm:max-w-2xl"
       footer={
         <>
           <Button variant="outline" onClick={onClose}>
-            Cancel
+            {t('Cancel')}
           </Button>
           <Button onClick={onSubmit} loading={save.isPending}>
-            Save permissions
+            {t('Save permissions')}
           </Button>
         </>
       }
@@ -62,7 +68,7 @@ export function RolePermissionsDialog({ role, onClose }: RolePermissionsDialogPr
         )}
 
         {catalog.isLoading ? (
-          <LoadingState label="Loading permission catalog…" />
+          <LoadingState label={t('Loading permission catalog…')} />
         ) : catalog.error ? (
           <ErrorState message={describeApiError(catalog.error)} />
         ) : (
@@ -73,14 +79,14 @@ export function RolePermissionsDialog({ role, onClose }: RolePermissionsDialogPr
                 size="sm"
                 onClick={() => setSelected((catalog.data?.items ?? []).map((item) => item.key))}
               >
-                Select all
+                {t('Select all')}
               </Button>
               <Button variant="outline" size="sm" onClick={() => setSelected([])}>
-                Clear
+                {t('Clear')}
               </Button>
             </div>
 
-            <div className="max-h-[55vh] space-y-5 overflow-y-auto pr-1">
+            <div className="max-h-[55vh] space-y-5 overflow-y-auto pe-1">
               {(catalog.data?.modules ?? []).map((group) => (
                 <section key={group.name}>
                   <h4 className="mb-1.5 border-b border-slate-100 pb-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500">

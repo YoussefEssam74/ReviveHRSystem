@@ -1,5 +1,6 @@
 import { ApiError, apiRequest } from '../../../lib/api-client'
 import { loadStoredSession } from '../../../lib/session-store'
+import { translate } from '../../../i18n'
 
 /** The overview window: last 30 days (default), last 90 days, or year to date. */
 export type ReportPeriod = '30d' | '90d' | 'ytd'
@@ -111,10 +112,12 @@ export interface ReportExportParams {
 const BASE_URL = (import.meta.env.VITE_API_URL as string | undefined) ?? ''
 
 function exportError(status: number): ApiError {
-  if (status === 401) return new ApiError(401, 'UNAUTHORIZED', 'You are not signed in, or your session has expired.')
-  if (status === 403) return new ApiError(403, 'FORBIDDEN', 'You do not have permission to perform this action.')
-  if (status === 400) return new ApiError(400, 'BAD_REQUEST', 'That reporting window is not supported.')
-  return new ApiError(status, 'HTTP_' + status, 'The report could not be exported. Please try again.')
+  if (status === 401)
+    return new ApiError(401, 'UNAUTHORIZED', translate('You are not signed in, or your session has expired.'))
+  if (status === 403)
+    return new ApiError(403, 'FORBIDDEN', translate('You do not have permission to perform this action.'))
+  if (status === 400) return new ApiError(400, 'BAD_REQUEST', translate('That reporting window is not supported.'))
+  return new ApiError(status, 'HTTP_' + status, translate('The report could not be exported. Please try again.'))
 }
 
 /**
@@ -139,7 +142,7 @@ export async function downloadReportsCsv(params: ReportExportParams = {}): Promi
       headers: { Accept: 'text/csv', ...(token ? { Authorization: 'Bearer ' + token } : {}) },
     })
   } catch {
-    throw new ApiError(0, 'NETWORK_ERROR', 'Could not reach the server. Check your connection and try again.')
+    throw new ApiError(0, 'NETWORK_ERROR', translate('Could not reach the server. Check your connection and try again.'))
   }
 
   if (!response.ok) throw exportError(response.status)

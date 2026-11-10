@@ -227,11 +227,31 @@ useAttendance({ gymId: selectedGym, employeeIds: teamMemberIds });
 useEmployees({ gymId: selectedGym });
 ```
 
-### RTL Support
-**Status: not implemented.** The product targets Arabic-speaking gyms, but the
-SPA is currently LTR-only: there is no `dir` toggle, no `rtl:` variants, and
-layouts use physical (`left`/`right`) rather than logical properties. Treat the
-earlier RTL claims as a future requirement, not current behaviour.
+### Internationalization & RTL Support
+**Status: implemented.** The SPA ships English (LTR) and Arabic (RTL).
+
+- **Library** — `i18next` + `react-i18next`, initialized in `src/i18n/index.ts`
+  and imported once from `src/main.tsx`.
+- **Keys** — the English copy *is* the key (`keySeparator: false`,
+  `nsSeparator: false`). Arabic lives in `src/i18n/locales/ar/*.ts` and is
+  merged in `src/i18n/locales/ar.ts`. A missing Arabic entry falls back to the
+  English text, so untranslated copy degrades gracefully instead of showing a
+  raw key.
+- **Usage** — components call `useTranslation()` and wrap copy in `t('...')`;
+  non-React modules import `translate` from `src/i18n`. Interpolation uses
+  `{{name}}` placeholders.
+- **Switching** — the account menu (bottom-left avatar) has a Language row that
+  toggles English ⇄ العربية. The choice persists in `localStorage` under
+  `revivehr-lang`.
+- **Direction** — switching sets `lang` + `dir` on `<html>`; a pre-paint script
+  in `index.html` applies the stored language before React mounts so an Arabic
+  session never flashes an LTR layout.
+- **Layout** — use Tailwind logical utilities (`ms-*`, `me-*`, `ps-*`, `pe-*`,
+  `start-*`, `end-*`, `border-s`, `border-e`, `text-start`, `text-end`) instead
+  of physical `left`/`right` ones so both directions lay out correctly. Mirror
+  directional icons with `rtl:rotate-180`.
+- **Formatting** — `src/lib/format.ts` localizes dates, times, weekdays, month
+  names, relative times and enum labels from the active language.
 
 ### Top Bar — Notifications & Settings
 - **Notifications bell** — redesigned visually in this MVP round, stays a dropdown (not a full page); permission/role-aware; shows System Notifications, Required Actions, Request Updates, Attendance Alerts, and (for Branch Manager/Team Leader) Management Notifications relevant to their scope. Purely informational — see the **Events** sidebar page (below) for items that need HR to actually act.
@@ -242,12 +262,19 @@ earlier RTL claims as a future requirement, not current behaviour.
   - **Rule:** never show an admin settings section purely because of a role label (e.g. "Branch Manager") — gate every section by its actual permission, same as page/button visibility elsewhere
 
 ### Profile Menu
-Clicking the profile picture (next to Settings) shows:
+Clicking the profile picture (next to the notifications bell) shows:
 - Employee Name, Position, Role, Gym (read-only header)
 - My Profile
 - Account Settings
 - Logout
 - (optional, future) Help & Support, Change Password shortcut
+
+### Sidebar Account Menu
+The avatar at the bottom of the portal sidebar opens a small menu with:
+- **Language** — toggles the whole UI between English and العربية (persisted)
+- **Dark mode** — light/dark theme toggle
+- (the previous **Settings** row was removed; the Settings page is still
+  reachable from the profile menu)
 
 ## Design System
 

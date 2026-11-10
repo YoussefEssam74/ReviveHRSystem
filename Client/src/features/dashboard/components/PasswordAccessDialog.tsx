@@ -1,5 +1,6 @@
 import { useMemo, useState, type FormEvent } from 'react'
 import { useQuery } from '@tanstack/react-query'
+import { useTranslation } from 'react-i18next'
 import { Loader2 } from 'lucide-react'
 import { Dialog } from '../../../components/ui/dialog'
 import { Button } from '../../../components/ui/button'
@@ -30,6 +31,7 @@ function quickPassword(): string {
  * and adjust their system role (POST /api/employees/{id}/role-change) when needed.
  */
 export default function PasswordAccessDialog({ onClose, toast }: PasswordAccessDialogProps) {
+  const { t } = useTranslation()
   const { data: staff } = useQuery({
     queryKey: ['employees', 'page', { page: 1, pageSize: 100 }],
     queryFn: ({ signal }) => getEmployees({ page: 1, pageSize: 100 }, signal),
@@ -59,15 +61,15 @@ export default function PasswordAccessDialog({ onClose, toast }: PasswordAccessD
   const onSubmit = async (event: FormEvent) => {
     event.preventDefault()
     if (!employee) {
-      setError('Select an employee first')
+      setError(t('Select an employee first'))
       return
     }
     if (newPassword.length < 8) {
-      setError('Passwords must be at least 8 characters')
+      setError(t('Passwords must be at least 8 characters'))
       return
     }
     if (!linkedUser) {
-      setError('This employee has no login account yet — accounts are created with the employee profile.')
+      setError(t('This employee has no login account yet — accounts are created with the employee profile.'))
       return
     }
 
@@ -79,10 +81,15 @@ export default function PasswordAccessDialog({ onClose, toast }: PasswordAccessD
         try {
           await postRoleChange(employee.id, { systemRole: role })
         } catch (roleError) {
-          toast(`Password changed, but the system role could not be updated: ${describeApiError(roleError)}`, 'warning')
+          toast(
+            t('Password changed, but the system role could not be updated: {{error}}', {
+              error: describeApiError(roleError),
+            }),
+            'warning',
+          )
         }
       }
-      toast(`Password & access updated for ${employee.name}!`, 'success')
+      toast(t('Password & access updated for {{name}}!', { name: employee.name }), 'success')
       onClose()
     } catch (submitError) {
       setError(describeApiError(submitError))
@@ -95,15 +102,15 @@ export default function PasswordAccessDialog({ onClose, toast }: PasswordAccessD
     <Dialog
       open
       onClose={onClose}
-      title="Change Password & System Access"
+      title={t('Change Password & System Access')}
       className="sm:max-w-lg"
       footer={
         <>
           <Button variant="outline" size="sm" onClick={onClose}>
-            Cancel
+            {t('Cancel')}
           </Button>
           <Button variant="primary" size="sm" onClick={onSubmit} loading={resolving || reset.isPending}>
-            Update Password &amp; Access
+            {t('Update Password & Access')}
           </Button>
         </>
       }
@@ -116,7 +123,7 @@ export default function PasswordAccessDialog({ onClose, toast }: PasswordAccessD
         )}
         <div>
           <Label className="mb-1 block text-xs font-bold text-charcoal-700" htmlFor="pwd-emp-select">
-            Select Employee
+            {t('Select Employee')}
           </Label>
           <Select
             id="pwd-emp-select"
@@ -132,7 +139,7 @@ export default function PasswordAccessDialog({ onClose, toast }: PasswordAccessD
           </Select>
           {userSearch.isFetching && (
             <p className="mt-1 flex items-center gap-1 text-[10px] text-charcoal-400">
-              <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" /> resolving login account…
+              <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" /> {t('resolving login account…')}
             </p>
           )}
         </div>
@@ -158,39 +165,41 @@ export default function PasswordAccessDialog({ onClose, toast }: PasswordAccessD
 
         <div className="space-y-1.5">
           <Label className="block text-xs font-semibold text-charcoal-700" htmlFor="pwd-new-pass">
-            Set New Password
+            {t('Set New Password')}
           </Label>
           <div className="flex gap-2">
             <Input
               id="pwd-new-pass"
               className="flex-1 font-mono text-xs"
-              placeholder="Enter new password"
+              placeholder={t('Enter new password')}
               value={newPassword}
               onChange={(e) => setNewPassword(e.target.value)}
             />
             <Button type="button" variant="outline" size="sm" className="px-2.5 text-xs" onClick={() => setNewPassword(quickPassword())}>
-              Generate
+              {t('Generate')}
             </Button>
           </div>
           {newPassword.length > 0 && newPassword.length < 8 && (
-            <p className="mt-1 text-[10px] text-amber-600">At least 8 characters.</p>
+            <p className="mt-1 text-[10px] text-amber-600">{t('At least 8 characters.')}</p>
           )}
         </div>
 
         <div className="space-y-1.5 pt-1">
           <Label className="block text-xs font-semibold text-charcoal-700" htmlFor="pwd-role">
-            System Role
+            {t('System Role')}
           </Label>
           <Select id="pwd-role" className="h-8 text-xs" value={role} onChange={(e) => setRole(e.target.value)}>
-            <option value="keep">Keep current role</option>
+            <option value="keep">{t('Keep current role')}</option>
             {ROLE_OPTIONS.map((option) => (
               <option key={option} value={option}>
-                {option}
+                {t(option)}
               </option>
             ))}
           </Select>
           <p className="text-[10px] text-charcoal-500">
-            Salary: {formatMoney(employee?.salary ?? null)} EGP · Portal actions follow the role’s permissions.
+            {t('Salary: {{salary}} EGP · Portal actions follow the role’s permissions.', {
+              salary: formatMoney(employee?.salary ?? null),
+            })}
           </p>
         </div>
       </form>

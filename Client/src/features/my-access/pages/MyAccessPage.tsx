@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { PageHeader } from '../../../components/ui/page-header'
 import { Card } from '../../../components/ui/card'
 import { Avatar } from '../../../components/ui/avatar'
@@ -49,6 +50,7 @@ function levelStatus(level: number): string {
 
 /** My Access — self-service, read-only: identity, gym switcher, levels and permission matrix. */
 export default function MyAccessPage() {
+  const { t } = useTranslation()
   const { me, isLoading: meLoading, featureLevels, switchGym, isSwitching } = useMe()
   const [selectedGym, setSelectedGym] = useState<number | null>(null)
   const [switchError, setSwitchError] = useState<string | null>(null)
@@ -90,10 +92,16 @@ export default function MyAccessPage() {
 
   return (
     <>
-      <PageHeader title="My Access" description="Your role, gyms, and access levels for the active gym" />
+      <PageHeader title={t('My Access')} description={t('Your role, gyms, and access levels for the active gym')} />
 
       {meLoading || !me ? (
-        <Card>{meLoading ? <LoadingState label="Loading your profile…" /> : <ErrorState message="Your session could not be loaded. Please sign in again." />}</Card>
+        <Card>
+          {meLoading ? (
+            <LoadingState label={t('Loading your profile…')} />
+          ) : (
+            <ErrorState message={t('Your session could not be loaded. Please sign in again.')} />
+          )}
+        </Card>
       ) : (
         <>
           {/* Identity + gym switcher */}
@@ -108,7 +116,7 @@ export default function MyAccessPage() {
                     <Badge className="bg-emerald-50 text-emerald-700 ring-emerald-200">
                       {profile.data?.role ?? me.roleInActiveGym ?? me.userType}
                     </Badge>
-                    <Badge>{me.activeGym?.gymName ?? 'No active gym'}</Badge>
+                    <Badge>{me.activeGym?.gymName ?? t('No active gym')}</Badge>
                   </div>
                 </div>
               </div>
@@ -116,17 +124,17 @@ export default function MyAccessPage() {
               <div className="flex items-end gap-2">
                 <div>
                   <Label htmlFor="my-access-gym" className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                    Active gym
+                    {t('Active gym')}
                   </Label>
                   <Select
                     id="my-access-gym"
-                    aria-label="Select gym"
+                    aria-label={t('Select gym')}
                     className="sm:w-56"
                     value={String(selectedValue ?? '')}
                     onChange={(e) => setSelectedGym(Number(e.target.value))}
                     disabled={isSwitching || gymOptions.length === 0}
                   >
-                    {gymOptions.length === 0 && <option value="">No gyms available</option>}
+                    {gymOptions.length === 0 && <option value="">{t('No gyms available')}</option>}
                     {gymOptions.map((gym) => (
                       <option key={gym.id} value={gym.id}>
                         {gym.name}
@@ -140,7 +148,7 @@ export default function MyAccessPage() {
                   loading={isSwitching}
                   disabled={selectedValue == null || selectedValue === activeGymId}
                 >
-                  Switch
+                  {t('Switch')}
                 </Button>
               </div>
             </div>
@@ -154,7 +162,7 @@ export default function MyAccessPage() {
           {/* Access summary + assigned gyms */}
           <Card className="mb-4">
             {profile.isLoading ? (
-              <LoadingState label="Loading your access…" />
+              <LoadingState label={t('Loading your access…')} />
             ) : profile.error ? (
               <ErrorState message={describeApiError(profile.error)} />
             ) : (
@@ -162,9 +170,9 @@ export default function MyAccessPage() {
                 <div>
                   <div className="flex items-center justify-between gap-3">
                     <div className="min-w-0">
-                      <p className="text-sm font-bold text-slate-900">Permission access</p>
+                      <p className="text-sm font-bold text-slate-900">{t('Permission access')}</p>
                       <p className="text-sm text-slate-500">
-                        {grantedCount} of {tracked} tracked permissions granted
+                        {t('{{granted}} of {{tracked}} tracked permissions granted', { granted: grantedCount, tracked })}
                       </p>
                     </div>
                     <span className="text-sm font-semibold text-emerald-700">{percent}%</span>
@@ -173,13 +181,15 @@ export default function MyAccessPage() {
                     <div className="h-2 rounded-full bg-emerald-500 transition-all" style={{ width: `${percent}%` }} />
                   </div>
                   <p className="mt-1.5 text-xs text-slate-400">
-                    {profile.data?.permissions.length ?? 0} direct ·{' '}
-                    {profile.data?.effectivePermissions.length ?? 0} effective (including your role)
+                    {t('{{direct}} direct · {{effective}} effective (including your role)', {
+                      direct: profile.data?.permissions.length ?? 0,
+                      effective: profile.data?.effectivePermissions.length ?? 0,
+                    })}
                   </p>
                 </div>
 
                 <div>
-                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Assigned gyms</p>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">{t('Assigned gyms')}</p>
                   <div className="mt-1.5 flex flex-wrap gap-1.5">
                     {(profile.data?.gyms ?? []).map((gym) => (
                       <Badge key={gym.id}>
@@ -188,7 +198,7 @@ export default function MyAccessPage() {
                       </Badge>
                     ))}
                     {profile.data && profile.data.gyms.length === 0 && (
-                      <span className="text-sm text-slate-500">No gyms assigned to your account.</span>
+                      <span className="text-sm text-slate-500">{t('No gyms assigned to your account.')}</span>
                     )}
                   </div>
                 </div>
@@ -199,25 +209,27 @@ export default function MyAccessPage() {
           {/* Feature access levels (None / View / Edit) */}
           <Card className="mb-4">
             <div className="border-b border-slate-100 px-4 py-3">
-              <h2 className="text-sm font-bold text-slate-900">Feature access</h2>
+              <h2 className="text-sm font-bold text-slate-900">{t('Feature access')}</h2>
               <p className="text-xs text-slate-500">
-                Your access level per console feature{me.activeGym ? ` at ${me.activeGym.gymName}` : ''}.
+                {me.activeGym
+                  ? t('Your access level per console feature at {{gym}}.', { gym: me.activeGym.gymName })
+                  : t('Your access level per console feature.')}
               </p>
             </div>
             <div className="hidden md:block">
               <Table>
                 <THead>
-                  <TH>Feature</TH>
-                  <TH>Access level</TH>
+                  <TH>{t('Feature')}</TH>
+                  <TH>{t('Access level')}</TH>
                 </THead>
                 <TBody>
                   {FEATURE_ROWS.map((row) => {
                     const level = levelOf(featureLevels, row.code)
                     return (
                       <TR key={row.code}>
-                        <TD className="font-medium text-slate-900">{row.label}</TD>
+                        <TD className="font-medium text-slate-900">{t(row.label)}</TD>
                         <TD>
-                          <Badge status={levelStatus(level)}>{levelLabel(level)}</Badge>
+                          <Badge status={levelStatus(level)}>{t(levelLabel(level))}</Badge>
                         </TD>
                       </TR>
                     )
@@ -230,8 +242,8 @@ export default function MyAccessPage() {
                 const level = levelOf(featureLevels, row.code)
                 return (
                   <li key={row.code} className="flex items-center justify-between gap-3 px-4 py-3">
-                    <span className="text-sm font-medium text-slate-900">{row.label}</span>
-                    <Badge status={levelStatus(level)}>{levelLabel(level)}</Badge>
+                    <span className="text-sm font-medium text-slate-900">{t(row.label)}</span>
+                    <Badge status={levelStatus(level)}>{t(levelLabel(level))}</Badge>
                   </li>
                 )
               })}
@@ -242,8 +254,8 @@ export default function MyAccessPage() {
           <Card>
             <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 px-4 py-3">
               <div>
-                <h2 className="text-sm font-bold text-slate-900">Permission detail</h2>
-                <p className="text-xs text-slate-500">Every tracked permission key and whether it is granted to you.</p>
+                <h2 className="text-sm font-bold text-slate-900">{t('Permission detail')}</h2>
+                <p className="text-xs text-slate-500">{t('Every tracked permission key and whether it is granted to you.')}</p>
               </div>
               {profile.data && (
                 <Badge className="bg-emerald-50 text-emerald-700 ring-emerald-200">
@@ -253,12 +265,12 @@ export default function MyAccessPage() {
             </div>
 
             {catalog.isLoading ? (
-              <LoadingState label="Loading permissions…" />
+              <LoadingState label={t('Loading permissions…')} />
             ) : catalog.error ? (
               // team.view is required for the full catalog — degrade to your granted set.
               <div className="space-y-3 p-4">
                 <p className="text-sm text-slate-500">
-                  The full catalog needs the team.view permission — showing your effective permissions instead.
+                  {t('The full catalog needs the team.view permission — showing your effective permissions instead.')}
                 </p>
                 <div className="flex flex-wrap gap-1.5">
                   {(profile.data?.effectivePermissions ?? []).map((key) => (
@@ -268,7 +280,7 @@ export default function MyAccessPage() {
                   ))}
                 </div>
                 {profile.data && profile.data.effectivePermissions.length === 0 && (
-                  <p className="text-sm text-slate-500">No permissions are granted to your account.</p>
+                  <p className="text-sm text-slate-500">{t('No permissions are granted to your account.')}</p>
                 )}
               </div>
             ) : (
@@ -280,7 +292,7 @@ export default function MyAccessPage() {
                       <div className="mb-2 flex items-center justify-between border-b border-slate-100 pb-1.5">
                         <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">{group.name}</h3>
                         <span className="text-xs text-slate-400">
-                          {groupGranted} of {group.permissions.length} granted
+                          {t('{{granted}} of {{total}} granted', { granted: groupGranted, total: group.permissions.length })}
                         </span>
                       </div>
                       <ul className="grid gap-2 sm:grid-cols-2">
@@ -299,7 +311,7 @@ export default function MyAccessPage() {
                                   {key}
                                 </span>
                                 <Badge status={isGranted ? 'Active' : 'Draft'} className="shrink-0">
-                                  {isGranted ? 'Granted' : 'None'}
+                                  {isGranted ? t('Granted') : t('None')}
                                 </Badge>
                               </div>
                               {descriptions.get(key) && (

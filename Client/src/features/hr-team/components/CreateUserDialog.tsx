@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Button } from '../../../components/ui/button'
 import { Dialog } from '../../../components/ui/dialog'
 import { Input } from '../../../components/ui/input'
@@ -15,6 +16,7 @@ interface CreateUserDialogProps {
 
 /** POST /api/users — name + email + gym access + optional role preset (team.manage). */
 export function CreateUserDialog({ open, onClose }: CreateUserDialogProps) {
+  const { t } = useTranslation()
   const [fullName, setFullName] = useState('')
   const [email, setEmail] = useState('')
   const [gymIds, setGymIds] = useState<number[]>([])
@@ -51,15 +53,15 @@ export function CreateUserDialog({ open, onClose }: CreateUserDialogProps) {
     <Dialog
       open={open}
       onClose={onClose}
-      title="Add team member"
-      description="Create an HR account with gym access and an optional role."
+      title={t('Add team member')}
+      description={t('Create an HR account with gym access and an optional role.')}
       footer={
         <>
           <Button variant="outline" onClick={onClose}>
-            Cancel
+            {t('Cancel')}
           </Button>
           <Button onClick={onSubmit} loading={create.isPending} disabled={!valid}>
-            Create member
+            {t('Create member')}
           </Button>
         </>
       }
@@ -72,18 +74,18 @@ export function CreateUserDialog({ open, onClose }: CreateUserDialogProps) {
         )}
 
         <div>
-          <Label htmlFor="member-name">Full name</Label>
+          <Label htmlFor="member-name">{t('Full name')}</Label>
           <Input
             id="member-name"
             value={fullName}
             onChange={(e) => setFullName(e.target.value)}
-            placeholder="Mona Hassan"
+            placeholder={t('Mona Hassan')}
             autoComplete="off"
           />
         </div>
 
         <div>
-          <Label htmlFor="member-email">Email</Label>
+          <Label htmlFor="member-email">{t('Email')}</Label>
           <Input
             id="member-email"
             type="email"
@@ -95,9 +97,9 @@ export function CreateUserDialog({ open, onClose }: CreateUserDialogProps) {
         </div>
 
         <div>
-          <Label>Gym access (at least one)</Label>
+          <Label>{t('Gym access (at least one)')}</Label>
           {gyms.isLoading ? (
-            <p className="mt-1 text-sm text-slate-500">Loading gyms…</p>
+            <p className="mt-1 text-sm text-slate-500">{t('Loading gyms…')}</p>
           ) : gyms.error ? (
             <p className="mt-1 text-sm text-red-600">{describeApiError(gyms.error)}</p>
           ) : (
@@ -112,22 +114,22 @@ export function CreateUserDialog({ open, onClose }: CreateUserDialogProps) {
                       className="h-4 w-4 rounded border-slate-300 accent-emerald-600"
                     />
                     <span className="truncate">{gym.name}</span>
-                    <span className="ml-auto shrink-0 text-xs text-slate-400">{gym.branch}</span>
+                    <span className="ms-auto shrink-0 text-xs text-slate-400">{gym.branch}</span>
                   </label>
                 </li>
               ))}
               {(gyms.data ?? []).length === 0 && (
-                <li className="px-2 py-1.5 text-sm text-slate-500">No gyms available for your account.</li>
+                <li className="px-2 py-1.5 text-sm text-slate-500">{t('No gyms available for your account.')}</li>
               )}
             </ul>
           )}
-          {gymIds.length === 0 && <p className="mt-1 text-xs text-amber-600">Select at least one gym.</p>}
+          {gymIds.length === 0 && <p className="mt-1 text-xs text-amber-600">{t('Select at least one gym.')}</p>}
         </div>
 
         <div>
-          <Label htmlFor="member-role">Role (optional)</Label>
+          <Label htmlFor="member-role">{t('Role (optional)')}</Label>
           <Select id="member-role" value={rolePreset} onChange={(e) => setRolePreset(e.target.value)}>
-            <option value="">No role — custom permissions</option>
+            <option value="">{t('No role — custom permissions')}</option>
             {(roles.data?.items ?? []).map((role) => (
               <option key={role.id} value={role.name}>
                 {role.name}
@@ -137,7 +139,7 @@ export function CreateUserDialog({ open, onClose }: CreateUserDialogProps) {
         </div>
 
         <p className="rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-500">
-          A temporary password is configured automatically for the new account and is never displayed in the console.
+          {t('A temporary password is configured automatically for the new account and is never displayed in the console.')}
         </p>
       </div>
     </Dialog>

@@ -1,4 +1,5 @@
 import { useRef, type ReactNode } from 'react'
+import { useTranslation } from 'react-i18next'
 import { X } from 'lucide-react'
 import { cn } from '../../lib/utils'
 import { useOverlay } from '../../lib/use-overlay'
@@ -20,6 +21,7 @@ export interface DialogProps {
  * backdrop click, and the header ✕.
  */
 export function Dialog({ open, onClose, title, description, children, footer, className }: DialogProps) {
+  const { t } = useTranslation()
   const panelRef = useRef<HTMLDivElement>(null)
   useOverlay(open, onClose, panelRef)
 
@@ -50,8 +52,8 @@ export function Dialog({ open, onClose, title, description, children, footer, cl
           <button
             type="button"
             onClick={onClose}
-            aria-label="Close"
-            className="touch-target -mr-1 rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600"
+            aria-label={t('Close')}
+            className="touch-target -me-1 rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600"
           >
             <X className="h-4 w-4" aria-hidden="true" />
           </button>

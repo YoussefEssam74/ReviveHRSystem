@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Navigate } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { useMutation } from '@tanstack/react-query'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -22,6 +23,7 @@ type EnrollmentFormValues = z.infer<typeof enrollmentSchema>
 
 /** HR-side face enrollment: one live frame per employee, stored in the database. */
 export default function EnrollmentPage() {
+  const { t } = useTranslation()
   const { session } = useAuthSession()
   const camera = useCamera()
   const [enrolled, setEnrolled] = useState<FaceEnrollmentResponse | null>(null)
@@ -47,7 +49,7 @@ export default function EnrollmentPage() {
     setEnrolled(null)
     const image = camera.capture()
     if (!image) {
-      setFormError('Start the camera first, then capture.')
+      setFormError(t('Start the camera first, then capture.'))
       return
     }
     try {
@@ -65,20 +67,20 @@ export default function EnrollmentPage() {
         <span className="mx-auto mb-3 flex h-11 w-11 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-600">
           <ScanFace className="h-5 w-5" aria-hidden="true" />
         </span>
-        <h1 className="text-2xl font-bold tracking-tight text-slate-900">Face enrollment</h1>
-        <p className="mt-1 text-sm text-slate-500">Register an employee's face for Face-ID attendance check-in.</p>
+        <h1 className="text-2xl font-bold tracking-tight text-slate-900">{t('Face enrollment')}</h1>
+        <p className="mt-1 text-sm text-slate-500">{t("Register an employee's face for Face-ID attendance check-in.")}</p>
       </div>
 
       <Card>
         <CardHeader>
-          <CardTitle>Enroll a face</CardTitle>
+          <CardTitle>{t('Enroll a face')}</CardTitle>
           <CardDescription>
-            Enter the employee number, start the camera, then capture while they face it.
+            {t('Enter the employee number, start the camera, then capture while they face it.')}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div>
-            <Label htmlFor="enroll-employee-number">Employee number</Label>
+            <Label htmlFor="enroll-employee-number">{t('Employee number')}</Label>
             <Input
               id="enroll-employee-number"
               autoComplete="off"
@@ -87,7 +89,7 @@ export default function EnrollmentPage() {
               aria-invalid={Boolean(errors.employeeNumber)}
               {...register('employeeNumber')}
             />
-            {errors.employeeNumber && <p role="alert" className="mt-1 text-xs text-red-600">{errors.employeeNumber.message}</p>}
+            {errors.employeeNumber && <p role="alert" className="mt-1 text-xs text-red-600">{t(errors.employeeNumber.message ?? '')}</p>}
           </div>
 
           <div className="relative overflow-hidden rounded-xl border border-slate-200 bg-slate-900">
@@ -101,7 +103,7 @@ export default function EnrollmentPage() {
             {!camera.active && (
               <div className="flex aspect-video w-full flex-col items-center justify-center gap-2 text-slate-400">
                 <Camera className="h-10 w-10" aria-hidden="true" />
-                <p className="text-sm">Camera is off</p>
+                <p className="text-sm">{t('Camera is off')}</p>
               </div>
             )}
           </div>
@@ -121,7 +123,7 @@ export default function EnrollmentPage() {
             <div className="rounded-xl border border-emerald-200 bg-emerald-50/60 px-4 py-3 text-sm">
               <p className="flex items-center gap-2 font-bold text-emerald-700">
                 <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
-                Face enrolled
+                {t('Face enrolled')}
               </p>
               <p className="mt-1 text-slate-700">{enrolled.fullName} · {enrolled.employeeNumber}</p>
             </div>
@@ -131,16 +133,16 @@ export default function EnrollmentPage() {
             {camera.active ? (
               <Button variant="outline" size="lg" onClick={camera.stop}>
                 <CameraOff className="h-4 w-4" aria-hidden="true" />
-                Stop camera
+                {t('Stop camera')}
               </Button>
             ) : (
               <Button size="lg" onClick={() => void camera.start()}>
                 <Camera className="h-4 w-4" aria-hidden="true" />
-                Start camera
+                {t('Start camera')}
               </Button>
             )}
             <Button size="lg" loading={enroll.isPending} onClick={(event) => void onCapture(event)}>
-              Capture &amp; enroll
+              {t('Capture & enroll')}
             </Button>
           </div>
         </CardContent>

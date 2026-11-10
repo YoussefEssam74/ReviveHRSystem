@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useTranslation } from 'react-i18next'
 import { FileWarning, Pencil, Plus, Undo2 } from 'lucide-react'
 import {
   closeOffboardingCase,
@@ -37,13 +38,14 @@ function initialsOf(name: string): string {
 }
 
 export default function BranchLeavingPage() {
+  const { t } = useTranslation()
   const { can } = usePortalSession()
 
   if (!can('employees.offboard')) {
     return (
       <EmptyState
-        title="Employee Leaving needs the offboarding key"
-        hint="Initiating a leaving process is guarded by employees.offboard on /api/auth/me."
+        title={t('Employee Leaving needs the offboarding key')}
+        hint={t('Initiating a leaving process is guarded by employees.offboard on /api/auth/me.')}
       />
     )
   }
@@ -52,6 +54,7 @@ export default function BranchLeavingPage() {
 }
 
 function LeavingWorkspace() {
+  const { t } = useTranslation()
   const { me } = usePortalSession()
   const [page, setPage] = useState(1)
   const [initiateOpen, setInitiateOpen] = useState(false)
@@ -74,21 +77,24 @@ function LeavingWorkspace() {
     <div className="space-y-3">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-bold text-charcoal-900">Employee Leaving</h1>
+          <h1 className="text-xl font-bold text-charcoal-900">{t('Employee Leaving')}</h1>
           <p className="mt-0.5 text-xs text-charcoal-500">
-            {total} active processes · {me?.activeGym?.gymName || 'your gym'}
+            {t('{{count}} active processes · {{gym}}', {
+              count: total,
+              gym: me?.activeGym?.gymName || t('your gym'),
+            })}
           </p>
         </div>
         <Button size="sm" onClick={() => setInitiateOpen(true)}>
           <Plus className="h-3.5 w-3.5" aria-hidden="true" />
-          Initiate
+          {t('Initiate')}
         </Button>
       </div>
 
       {rows.length === 0 ? (
         <div className="rounded-xl border border-charcoal-200 bg-white p-8 text-center">
           <FileWarning className="mx-auto mb-2 h-10 w-10 text-charcoal-300" aria-hidden="true" />
-          <p className="text-xs text-charcoal-500">No active leaving processes</p>
+          <p className="text-xs text-charcoal-500">{t('No active leaving processes')}</p>
         </div>
       ) : (
         <div className="space-y-1.5">
@@ -101,13 +107,13 @@ function LeavingWorkspace() {
       {totalPages > 1 && (
         <div className="flex items-center justify-between">
           <Button size="sm" variant="secondary" disabled={page <= 1} onClick={() => setPage((value) => Math.max(1, value - 1))}>
-            Previous
+            {t('Previous')}
           </Button>
           <span className="text-[11px] text-charcoal-500">
-            Page {casesQuery.data?.page ?? 1} of {totalPages}
+            {t('Page {{page}} of {{total}}', { page: casesQuery.data?.page ?? 1, total: totalPages })}
           </span>
           <Button size="sm" variant="secondary" disabled={page >= totalPages} onClick={() => setPage((value) => value + 1)}>
-            Next
+            {t('Next')}
           </Button>
         </div>
       )}
@@ -124,6 +130,7 @@ function LeavingWorkspace() {
 
 /** one case row (mock: initials chip · name · position · last day · reason · status) + BM controls. */
 function CaseCard({ row }: { row: OffboardingCaseRow }) {
+  const { t } = useTranslation()
   const { toast } = useToast()
   const queryClient = useQueryClient()
   const [rescheduleOpen, setRescheduleOpen] = useState(false)
@@ -139,7 +146,7 @@ function CaseCard({ row }: { row: OffboardingCaseRow }) {
   const rescheduleMutation = useMutation({
     mutationFn: (lastWorkingDate: string) => updateOffboardingLastDay(row.id, lastWorkingDate),
     onSuccess: (updated) => {
-      toast(`Last working day moved for ${updated.employee}.`)
+      toast(t('Last working day moved for {{name}}.', { name: updated.employee }))
       setRescheduleOpen(false)
       void invalidate()
     },
@@ -149,7 +156,7 @@ function CaseCard({ row }: { row: OffboardingCaseRow }) {
   const closeMutation = useMutation({
     mutationFn: () => closeOffboardingCase(row.id),
     onSuccess: (closed) => {
-      toast(`Leaving process closed — ${closed.employee} stays employed.`)
+      toast(t('Leaving process closed — {{name}} stays employed.', { name: closed.employee }))
       setCloseConfirmOpen(false)
       void invalidate()
     },
@@ -166,7 +173,7 @@ function CaseCard({ row }: { row: OffboardingCaseRow }) {
           <div className="min-w-0">
             <p className="text-xs font-semibold text-charcoal-900">{row.employee}</p>
             <p className="truncate text-[10px] text-charcoal-500">
-              {row.position} · Last Day: {formatDate(row.lastWorkingDate)} · {row.reason}
+              {row.position} · {t('Last Day: {{date}}', { date: formatDate(row.lastWorkingDate) })} · {row.reason}
             </p>
           </div>
         </div>
@@ -176,11 +183,11 @@ function CaseCard({ row }: { row: OffboardingCaseRow }) {
             <>
               <Button size="sm" variant="secondary" onClick={() => setRescheduleOpen(true)}>
                 <Pencil className="h-3 w-3" aria-hidden="true" />
-                Last day
+                {t('Last day')}
               </Button>
               <Button size="sm" variant="secondary" onClick={() => setCloseConfirmOpen(true)}>
                 <Undo2 className="h-3 w-3" aria-hidden="true" />
-                Close
+                {t('Close')}
               </Button>
             </>
           )}
@@ -197,10 +204,12 @@ function CaseCard({ row }: { row: OffboardingCaseRow }) {
       )}
       <ConfirmDialog
         open={closeConfirmOpen}
-        title="Close leaving process?"
+        title={t('Close leaving process?')}
         danger
-        message={`Close ${row.employee}'s leaving process? The person stays employed and a new process can be initiated later.`}
-        confirmLabel="Close process"
+        message={t("Close {{name}}'s leaving process? The person stays employed and a new process can be initiated later.", {
+          name: row.employee,
+        })}
+        confirmLabel={t('Close process')}
         loading={closeMutation.isPending}
         onCancel={() => setCloseConfirmOpen(false)}
         onConfirm={() => closeMutation.mutate()}
@@ -222,16 +231,17 @@ function RescheduleModal({
   onSubmit: (lastWorkingDate: string) => void
 }) {
   const [lastDay, setLastDay] = useState(row.lastWorkingDate)
+  const { t } = useTranslation()
 
   return (
-    <Modal open title="Change Last Working Day" onClose={onClose}>
+    <Modal open title={t('Change Last Working Day')} onClose={onClose}>
       <div className="space-y-3">
         <p className="text-xs text-charcoal-500">
-          Move the last working day of {row.employee}'s leaving process.
+          {t("Move the last working day of {{name}}'s leaving process.", { name: row.employee })}
         </p>
         <div>
           <label className="form-label" htmlFor="leaving-last-day">
-            Last Working Day
+            {t('Last Working Day')}
           </label>
           <input
             id="leaving-last-day"
@@ -243,7 +253,7 @@ function RescheduleModal({
         </div>
         <div className="flex justify-end gap-2 pt-1">
           <Button size="sm" variant="secondary" onClick={onClose}>
-            Cancel
+            {t('Cancel')}
           </Button>
           <Button
             size="sm"
@@ -252,7 +262,7 @@ function RescheduleModal({
             loading={pending}
             onClick={() => onSubmit(lastDay)}
           >
-            Save new date
+            {t('Save new date')}
           </Button>
         </div>
       </div>
@@ -262,6 +272,7 @@ function RescheduleModal({
 
 /** Initiate modal (mock openNewLeaving) — real roster + real post. */
 function InitiateModal({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) {
+  const { t } = useTranslation()
   const { toast } = useToast()
   const [employeeId, setEmployeeId] = useState<number | null>(null)
   const [lastDay, setLastDay] = useState('')
@@ -289,7 +300,7 @@ function InitiateModal({ onClose, onSaved }: { onClose: () => void; onSaved: () 
         reason: reason.trim(),
       }),
     onSuccess: (created) => {
-      toast(`Leaving process initiated for ${created.employee}.`)
+      toast(t('Leaving process initiated for {{name}}.', { name: created.employee }))
       onSaved()
       onClose()
     },
@@ -297,18 +308,17 @@ function InitiateModal({ onClose, onSaved }: { onClose: () => void; onSaved: () 
   })
 
   return (
-    <Modal open title="Initiate Employee Leaving" onClose={onClose}>
+    <Modal open title={t('Initiate Employee Leaving')} onClose={onClose}>
       <div className="space-y-3">
         <div className="flex items-start gap-2 rounded-lg border border-yellow-200 bg-yellow-50 p-3">
           <FileWarning className="mt-0.5 h-4 w-4 flex-shrink-0 text-yellow-600" aria-hidden="true" />
           <p className="text-xs text-yellow-800">
-            This will initiate the offboarding process for the selected employee — recorded in his employment
-            history and visible to HR.
+            {t('This will initiate the offboarding process for the selected employee — recorded in his employment history and visible to HR.')}
           </p>
         </div>
         <div>
           <label className="form-label" htmlFor="leave-emp">
-            Employee
+            {t('Employee')}
           </label>
           <select
             id="leave-emp"
@@ -325,7 +335,7 @@ function InitiateModal({ onClose, onSaved }: { onClose: () => void; onSaved: () 
         </div>
         <div>
           <label className="form-label" htmlFor="leave-day">
-            Last Working Day
+            {t('Last Working Day')}
           </label>
           <input
             id="leave-day"
@@ -337,20 +347,20 @@ function InitiateModal({ onClose, onSaved }: { onClose: () => void; onSaved: () 
         </div>
         <div>
           <label className="form-label" htmlFor="leave-reason">
-            Reason
+            {t('Reason')}
           </label>
           <textarea
             id="leave-reason"
             rows={2}
             className="form-input"
-            placeholder="Reason for leaving..."
+            placeholder={t('Reason for leaving...')}
             value={reason}
             onChange={(event) => setReason(event.target.value)}
           />
         </div>
         <div className="flex justify-end gap-2 pt-1">
           <Button size="sm" variant="secondary" onClick={onClose}>
-            Cancel
+            {t('Cancel')}
           </Button>
           <Button
             size="sm"
@@ -364,7 +374,7 @@ function InitiateModal({ onClose, onSaved }: { onClose: () => void; onSaved: () 
             loading={initiateMutation.isPending}
             onClick={() => initiateMutation.mutate()}
           >
-            Initiate Leaving
+            {t('Initiate Leaving')}
           </Button>
         </div>
         {selected && (

@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Briefcase, FileText, Users } from 'lucide-react'
 import { PageHeader } from '../../../components/ui/page-header'
 import { Card } from '../../../components/ui/card'
@@ -38,6 +39,7 @@ const STAGE_OPTIONS = ['', ...CANDIDATE_STAGES]
 
 /** Recruitment & hiring (S5.1) — vacancies, candidate pipeline, vacancy requests. */
 export default function RecruitmentPage() {
+  const { t } = useTranslation()
   const { can, me } = useMe()
   // UX gate only — the API enforces the recruitment.* keys server-side
   // (vacancies.manage / candidates.manage / vacancy_request.approve share this level).
@@ -107,40 +109,49 @@ export default function RecruitmentPage() {
   return (
     <div>
       <PageHeader
-        title="Recruitment"
-        description={me?.activeGym ? `Hiring at ${me.activeGym.gymName}` : 'Vacancies, candidate pipeline and vacancy requests'}
+        title={t('Recruitment')}
+        description={
+          me?.activeGym
+            ? t('Hiring at {{gym}}', { gym: me.activeGym.gymName })
+            : t('Vacancies, candidate pipeline and vacancy requests')
+        }
         actions={
           canManage && tab === 'vacancies' ? (
             <Button onClick={() => setEditingVacancy('new')}>
               <Briefcase className="h-4 w-4" aria-hidden="true" />
-              New vacancy
+              {t('New vacancy')}
             </Button>
           ) : undefined
         }
       />
 
-      <Tabs items={TABS} value={tab} onChange={setTab} className="mb-4 w-fit" />
+      <Tabs
+        items={TABS.map((item) => ({ ...item, label: t(item.label) }))}
+        value={tab}
+        onChange={setTab}
+        className="mb-4 w-fit"
+      />
 
       {tab === 'vacancies' && (
         <Card>
           <div className="flex flex-col gap-3 border-b border-slate-100 p-4 sm:flex-row">
             <Input
-              placeholder="Search position…"
+              placeholder={t('Search position…')}
               value={vSearch}
               onChange={(e) => { setVSearch(e.target.value); setVPage(1) }}
               className="sm:max-w-xs"
-              aria-label="Search vacancies"
+              aria-label={t('Search vacancies')}
             />
-            <Select value={vStatus} onChange={(e) => { setVStatus(e.target.value); setVPage(1) }} className="sm:w-44" aria-label="Filter by status">
+            <Select value={vStatus} onChange={(e) => { setVStatus(e.target.value); setVPage(1) }} className="sm:w-44" aria-label={t('Filter by status')}>
               {VACANCY_STATUS_OPTIONS.map((option) => (
                 <option key={option} value={option}>
-                  {option || 'All statuses'}
+                  {option ? t(option) : t('All statuses')}
                 </option>
               ))}
             </Select>
             {gymOptions.length > 0 && (
-              <Select value={vGym} onChange={(e) => { setVGym(e.target.value); setVPage(1) }} className="sm:w-52" aria-label="Filter by gym">
-                <option value="">All gyms</option>
+              <Select value={vGym} onChange={(e) => { setVGym(e.target.value); setVPage(1) }} className="sm:w-52" aria-label={t('Filter by gym')}>
+                <option value="">{t('All gyms')}</option>
                 {gymOptions.map((option) => (
                   <option key={option.gymId} value={String(option.gymId)}>
                     {option.gymName}
@@ -151,27 +162,31 @@ export default function RecruitmentPage() {
           </div>
 
           {vacancies.isLoading ? (
-            <LoadingState label="Loading vacancies…" />
+            <LoadingState label={t('Loading vacancies…')} />
           ) : vacancies.error ? (
             <ErrorState message={describeApiError(vacancies.error)} />
           ) : (vacancies.data?.items?.length ?? 0) === 0 ? (
             <EmptyState
               icon={Briefcase}
-              title="No vacancies"
-              message={vSearch || vStatus || vGym ? 'Try adjusting your search or filters.' : 'No vacancy has been opened yet.'}
+              title={t('No vacancies')}
+              message={
+                vSearch || vStatus || vGym
+                  ? t('Try adjusting your search or filters.')
+                  : t('No vacancy has been opened yet.')
+              }
             />
           ) : (
             <>
               <Table className="hidden sm:block">
                 <THead>
-                  <TH>Position</TH>
-                  <TH>Gym</TH>
-                  <TH>Headcount</TH>
-                  <TH>Candidates</TH>
-                  <TH>Urgency</TH>
-                  <TH>Status</TH>
-                  <TH>Created</TH>
-                  {canManage && <TH className="text-right">Action</TH>}
+                  <TH>{t('Position')}</TH>
+                  <TH>{t('Gym')}</TH>
+                  <TH>{t('Headcount')}</TH>
+                  <TH>{t('Candidates')}</TH>
+                  <TH>{t('Urgency')}</TH>
+                  <TH>{t('Status')}</TH>
+                  <TH>{t('Created')}</TH>
+                  {canManage && <TH className="text-end">{t('Action')}</TH>}
                 </THead>
                 <TBody>
                   {vacancies.data!.items.map((vacancy) => (
@@ -191,7 +206,7 @@ export default function RecruitmentPage() {
                       </TD>
                       <TD className="text-slate-500">{formatDate(vacancy.createdDate)}</TD>
                       {canManage && (
-                        <TD className="text-right">
+                        <TD className="text-end">
                           <Button
                             variant="outline"
                             size="sm"
@@ -200,7 +215,7 @@ export default function RecruitmentPage() {
                               setEditingVacancy(vacancy)
                             }}
                           >
-                            Edit
+                            {t('Edit')}
                           </Button>
                         </TD>
                       )}
@@ -214,7 +229,7 @@ export default function RecruitmentPage() {
                     <button
                       type="button"
                       onClick={() => setDetailVacancyId(vacancy.id)}
-                      className="flex w-full flex-col gap-2 px-4 py-3 text-left transition-colors hover:bg-slate-50"
+                      className="flex w-full flex-col gap-2 px-4 py-3 text-start transition-colors hover:bg-slate-50"
                     >
                       <div className="flex items-center justify-between gap-2">
                         <p className="truncate font-medium text-slate-900">{vacancy.position}</p>
@@ -222,9 +237,9 @@ export default function RecruitmentPage() {
                       </div>
                       <p className="text-sm text-slate-600">{vacancy.gym}</p>
                       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500">
-                        <Badge>{vacancy.urgency ?? '—'} urgency</Badge>
-                        <span>{vacancy.headcount} openings</span>
-                        <span>{vacancy.candidates} candidates</span>
+                        <Badge>{t('{{urgency}} urgency', { urgency: vacancy.urgency ?? '—' })}</Badge>
+                        <span>{t('{{count}} openings', { count: vacancy.headcount })}</span>
+                        <span>{t('{{count}} candidates', { count: vacancy.candidates })}</span>
                         <span>{formatDate(vacancy.createdDate)}</span>
                       </div>
                     </button>
@@ -237,7 +252,7 @@ export default function RecruitmentPage() {
                 total={vacancies.data!.total}
                 totalPages={vacancies.data!.totalPages}
                 onPageChange={setVPage}
-                noun="vacancies"
+                noun={t('vacancies')}
               />
             </>
           )}
@@ -248,40 +263,44 @@ export default function RecruitmentPage() {
         <Card>
           <div className="flex flex-col gap-3 border-b border-slate-100 p-4 sm:flex-row">
             <Input
-              placeholder="Search name, email, phone…"
+              placeholder={t('Search name, email, phone…')}
               value={pSearch}
               onChange={(e) => { setPSearch(e.target.value); setPPage(1) }}
               className="sm:max-w-xs"
-              aria-label="Search candidates"
+              aria-label={t('Search candidates')}
             />
-            <Select value={pStage} onChange={(e) => { setPStage(e.target.value); setPPage(1) }} className="sm:w-56" aria-label="Filter by stage">
+            <Select value={pStage} onChange={(e) => { setPStage(e.target.value); setPPage(1) }} className="sm:w-56" aria-label={t('Filter by stage')}>
               {STAGE_OPTIONS.map((option) => (
                 <option key={option} value={option}>
-                  {option || 'All stages'}
+                  {option ? t(option) : t('All stages')}
                 </option>
               ))}
             </Select>
           </div>
 
           {candidates.isLoading ? (
-            <LoadingState label="Loading candidates…" />
+            <LoadingState label={t('Loading candidates…')} />
           ) : candidates.error ? (
             <ErrorState message={describeApiError(candidates.error)} />
           ) : (candidates.data?.items?.length ?? 0) === 0 ? (
             <EmptyState
               icon={Users}
-              title="No candidates"
-              message={pSearch || pStage ? 'Try adjusting your search or stage filter.' : 'The pipeline is empty.'}
+              title={t('No candidates')}
+              message={
+                pSearch || pStage
+                  ? t('Try adjusting your search or stage filter.')
+                  : t('The pipeline is empty.')
+              }
             />
           ) : (
             <>
               <Table className="hidden sm:block">
                 <THead>
-                  <TH>Candidate</TH>
-                  <TH>Position</TH>
-                  <TH>Stage</TH>
-                  <TH>Applied</TH>
-                  <TH>Phone</TH>
+                  <TH>{t('Candidate')}</TH>
+                  <TH>{t('Position')}</TH>
+                  <TH>{t('Stage')}</TH>
+                  <TH>{t('Applied')}</TH>
+                  <TH>{t('Phone')}</TH>
                 </THead>
                 <TBody>
                   {candidates.data!.items.map((candidate) => (
@@ -291,7 +310,7 @@ export default function RecruitmentPage() {
                           <Avatar name={candidate.initials} size="sm" />
                           <div className="min-w-0">
                             <p className="truncate font-medium text-slate-900">{candidate.name}</p>
-                            {candidate.blocked && <Badge className="mt-0.5">Banned</Badge>}
+                            {candidate.blocked && <Badge className="mt-0.5">{t('Banned')}</Badge>}
                           </div>
                         </div>
                       </TD>
@@ -311,7 +330,7 @@ export default function RecruitmentPage() {
                     <button
                       type="button"
                       onClick={() => setCandidateId(candidate.id)}
-                      className="flex w-full flex-col gap-2 px-4 py-3 text-left transition-colors hover:bg-slate-50"
+                      className="flex w-full flex-col gap-2 px-4 py-3 text-start transition-colors hover:bg-slate-50"
                     >
                       <div className="flex items-center justify-between gap-2">
                         <p className="truncate font-medium text-slate-900">{candidate.name}</p>
@@ -319,9 +338,9 @@ export default function RecruitmentPage() {
                       </div>
                       <p className="text-sm text-slate-600">{candidate.position}</p>
                       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500">
-                        <span>Applied {formatDate(candidate.appliedDate)}</span>
+                        <span>{t('Applied {{date}}', { date: formatDate(candidate.appliedDate) })}</span>
                         <span>{candidate.phone ?? '—'}</span>
-                        {candidate.blocked && <Badge>Banned</Badge>}
+                        {candidate.blocked && <Badge>{t('Banned')}</Badge>}
                       </div>
                     </button>
                   </li>
@@ -333,7 +352,7 @@ export default function RecruitmentPage() {
                 total={candidates.data!.total}
                 totalPages={candidates.data!.totalPages}
                 onPageChange={setPPage}
-                noun="candidates"
+                noun={t('candidates')}
               />
             </>
           )}
@@ -343,16 +362,16 @@ export default function RecruitmentPage() {
       {tab === 'requests' && (
         <Card>
           <div className="flex flex-col gap-3 border-b border-slate-100 p-4 sm:flex-row">
-            <Select value={rStatus} onChange={(e) => { setRStatus(e.target.value); setRPage(1) }} className="sm:w-48" aria-label="Filter by status">
+            <Select value={rStatus} onChange={(e) => { setRStatus(e.target.value); setRPage(1) }} className="sm:w-48" aria-label={t('Filter by status')}>
               {REQUEST_STATUS_OPTIONS.map((option) => (
                 <option key={option} value={option}>
-                  {option || 'All statuses'}
+                  {option ? t(option) : t('All statuses')}
                 </option>
               ))}
             </Select>
             {gymOptions.length > 0 && (
-              <Select value={rGym} onChange={(e) => { setRGym(e.target.value); setRPage(1) }} className="sm:w-52" aria-label="Filter by gym">
-                <option value="">All gyms</option>
+              <Select value={rGym} onChange={(e) => { setRGym(e.target.value); setRPage(1) }} className="sm:w-52" aria-label={t('Filter by gym')}>
+                <option value="">{t('All gyms')}</option>
                 {gymOptions.map((option) => (
                   <option key={option.gymId} value={String(option.gymId)}>
                     {option.gymName}
@@ -363,26 +382,30 @@ export default function RecruitmentPage() {
           </div>
 
           {requests.isLoading ? (
-            <LoadingState label="Loading vacancy requests…" />
+            <LoadingState label={t('Loading vacancy requests…')} />
           ) : requests.error ? (
             <ErrorState message={describeApiError(requests.error)} />
           ) : (requests.data?.items?.length ?? 0) === 0 ? (
             <EmptyState
               icon={FileText}
-              title="No vacancy requests"
-              message={rStatus || rGym ? 'Try adjusting your filters.' : 'Branch managers have not submitted any requests.'}
+              title={t('No vacancy requests')}
+              message={
+                rStatus || rGym
+                  ? t('Try adjusting your filters.')
+                  : t('Branch managers have not submitted any requests.')
+              }
             />
           ) : (
             <>
               <Table className="hidden sm:block">
                 <THead>
-                  <TH>Position</TH>
-                  <TH>Gym</TH>
-                  <TH>Headcount</TH>
-                  <TH>Urgency</TH>
-                  <TH>Submitted</TH>
-                  <TH>Status</TH>
-                  {canManage && <TH className="text-right">Action</TH>}
+                  <TH>{t('Position')}</TH>
+                  <TH>{t('Gym')}</TH>
+                  <TH>{t('Headcount')}</TH>
+                  <TH>{t('Urgency')}</TH>
+                  <TH>{t('Submitted')}</TH>
+                  <TH>{t('Status')}</TH>
+                  {canManage && <TH className="text-end">{t('Action')}</TH>}
                 </THead>
                 <TBody>
                   {requests.data!.items.map((request) => (
@@ -402,10 +425,10 @@ export default function RecruitmentPage() {
                       </TD>
                       <TD>
                         <StatusBadge status={request.status} />
-                        {request.decidedBy && <p className="mt-0.5 text-xs text-slate-400">by {request.decidedBy}</p>}
+                        {request.decidedBy && <p className="mt-0.5 text-xs text-slate-400">{t('by {{name}}', { name: request.decidedBy })}</p>}
                       </TD>
                       {canManage && (
-                        <TD className="text-right">
+                        <TD className="text-end">
                           {request.status === 'Pending' && (
                             <div className="flex justify-end gap-2">
                               <Button
@@ -413,7 +436,7 @@ export default function RecruitmentPage() {
                                 onClick={() => onDecide(request.id, 'Approved')}
                                 loading={decide.isPending && decide.variables?.id === request.id}
                               >
-                                Approve
+                                {t('Approve')}
                               </Button>
                               <Button
                                 variant="danger"
@@ -424,7 +447,7 @@ export default function RecruitmentPage() {
                                   setRejecting(request)
                                 }}
                               >
-                                Reject
+                                {t('Reject')}
                               </Button>
                             </div>
                           )}
@@ -443,17 +466,22 @@ export default function RecruitmentPage() {
                     </div>
                     <p className="text-sm text-slate-600">
                       {request.gym}
-                      {request.headcount != null ? ` · ${request.headcount} openings` : ''}
+                      {request.headcount != null ? ` · ${t('{{count}} openings', { count: request.headcount })}` : ''}
                     </p>
                     {request.reason && <p className="mt-1 text-sm italic text-slate-500">“{request.reason}”</p>}
                     <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-400">
-                      <Badge>{request.urgency ?? '—'} urgency</Badge>
-                      <span>By {request.submittedBy ?? '—'} · {formatDate(request.submittedDate)}</span>
+                      <Badge>{t('{{urgency}} urgency', { urgency: request.urgency ?? '—' })}</Badge>
+                      <span>
+                        {t('By {{name}} · {{date}}', {
+                          name: request.submittedBy ?? '—',
+                          date: formatDate(request.submittedDate),
+                        })}
+                      </span>
                     </div>
                     {canManage && request.status === 'Pending' && (
                       <div className="mt-2 flex gap-2">
                         <Button size="sm" onClick={() => onDecide(request.id, 'Approved')} loading={decide.isPending}>
-                          Approve
+                          {t('Approve')}
                         </Button>
                         <Button
                           variant="danger"
@@ -464,7 +492,7 @@ export default function RecruitmentPage() {
                             setRejecting(request)
                           }}
                         >
-                          Reject
+                          {t('Reject')}
                         </Button>
                       </div>
                     )}
@@ -482,7 +510,7 @@ export default function RecruitmentPage() {
                 total={requests.data!.total}
                 totalPages={requests.data!.totalPages}
                 onPageChange={setRPage}
-                noun="requests"
+                noun={t('requests')}
               />
             </>
           )}
@@ -517,15 +545,15 @@ export default function RecruitmentPage() {
       <Dialog
         open={rejecting != null}
         onClose={() => setRejecting(null)}
-        title="Reject vacancy request"
+        title={t('Reject vacancy request')}
         description={rejecting ? `${rejecting.position} · ${rejecting.gym}` : undefined}
         footer={
           <>
             <Button variant="outline" onClick={() => setRejecting(null)}>
-              Cancel
+              {t('Cancel')}
             </Button>
             <Button variant="danger" onClick={() => rejecting && onDecide(rejecting.id, 'Rejected', rejectComment)} loading={decide.isPending}>
-              Reject request
+              {t('Reject request')}
             </Button>
           </>
         }
@@ -537,13 +565,13 @@ export default function RecruitmentPage() {
             </p>
           )}
           <div>
-            <Label htmlFor="reject-comment">Comment (optional)</Label>
+            <Label htmlFor="reject-comment">{t('Comment (optional)')}</Label>
             <Textarea
               id="reject-comment"
               rows={3}
               value={rejectComment}
               onChange={(e) => setRejectComment(e.target.value)}
-              placeholder="Why is this request being rejected?"
+              placeholder={t('Why is this request being rejected?')}
             />
           </div>
         </div>

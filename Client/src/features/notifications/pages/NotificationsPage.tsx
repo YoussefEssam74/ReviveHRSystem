@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Bell, CheckCheck } from 'lucide-react'
 import { PageHeader } from '../../../components/ui/page-header'
 import { Card } from '../../../components/ui/card'
@@ -25,6 +26,7 @@ type InboxTab = 'all' | 'unread'
  * announcements.manage (hidden otherwise); everything else is self-service.
  */
 export default function NotificationsPage() {
+  const { t } = useTranslation()
   const [section, setSection] = useState<Section>('notifications')
   const [tab, setTab] = useState<InboxTab>('all')
   const [category, setCategory] = useState('')
@@ -43,12 +45,12 @@ export default function NotificationsPage() {
 
   const unreadCount = unread?.count ?? 0
   const sectionTabs: TabItem<Section>[] = [
-    { value: 'notifications', label: 'Notifications', count: unreadCount > 0 ? unreadCount : undefined },
-    { value: 'announcements', label: 'Announcements' },
+    { value: 'notifications', label: t('Notifications'), count: unreadCount > 0 ? unreadCount : undefined },
+    { value: 'announcements', label: t('Announcements') },
   ]
   const inboxTabs: TabItem<InboxTab>[] = [
-    { value: 'all', label: 'All' },
-    { value: 'unread', label: 'Unread', count: unreadCount > 0 ? unreadCount : undefined },
+    { value: 'all', label: t('All') },
+    { value: 'unread', label: t('Unread'), count: unreadCount > 0 ? unreadCount : undefined },
   ]
 
   const onSection = (value: Section) => {
@@ -85,19 +87,19 @@ export default function NotificationsPage() {
   return (
     <div>
       <PageHeader
-        title="Notifications & Announcements"
+        title={t('Notifications & Announcements')}
         description={
           section === 'notifications'
             ? unreadCount > 0
-              ? `You have ${unreadCount} unread notification${unreadCount === 1 ? '' : 's'}.`
-              : 'You are all caught up.'
-            : 'System notifications and company announcements.'
+              ? t('You have {{count}} unread notifications.', { count: unreadCount })
+              : t('You are all caught up.')
+            : t('System notifications and company announcements.')
         }
         actions={
           section === 'notifications' ? (
             <Button variant="outline" onClick={onMarkAll} loading={markAll.isPending} disabled={unreadCount === 0}>
               <CheckCheck className="h-4 w-4" aria-hidden="true" />
-              Mark all read
+              {t('Mark all read')}
             </Button>
           ) : undefined
         }
@@ -112,12 +114,12 @@ export default function NotificationsPage() {
               value={category}
               onChange={(e) => onCategory(e.target.value)}
               className="sm:w-56"
-              aria-label="Filter by category"
+              aria-label={t('Filter by category')}
             >
-              <option value="">All categories</option>
+              <option value="">{t('All categories')}</option>
               {NOTIFICATION_CATEGORIES.map((option) => (
                 <option key={option} value={option}>
-                  {option}
+                  {t(option)}
                 </option>
               ))}
             </Select>
@@ -130,14 +132,14 @@ export default function NotificationsPage() {
       ) : (
         <Card>
           {isLoading ? (
-            <LoadingState label="Loading notifications…" />
+            <LoadingState label={t('Loading notifications…')} />
           ) : error ? (
             <ErrorState message={describeApiError(error)} />
           ) : (data?.items?.length ?? 0) === 0 ? (
             <EmptyState
               icon={Bell}
-              title={tab === 'unread' ? 'No unread notifications' : 'No notifications'}
-              message={tab === 'unread' || category ? 'Try adjusting your filters.' : "You're all caught up."}
+              title={tab === 'unread' ? t('No unread notifications') : t('No notifications')}
+              message={tab === 'unread' || category ? t('Try adjusting your filters.') : t("You're all caught up.")}
             />
           ) : (
             <>

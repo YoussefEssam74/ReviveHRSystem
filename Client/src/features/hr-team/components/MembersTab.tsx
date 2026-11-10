@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { UserPlus, Users } from 'lucide-react'
 import { Avatar } from '../../../components/ui/avatar'
 import { Badge, StatusBadge } from '../../../components/ui/badge'
@@ -27,6 +28,7 @@ interface MembersTabProps {
 
 /** Members — paged user list with create / status / reset-password actions (team.manage writes). */
 export function MembersTab({ canManage }: MembersTabProps) {
+  const { t } = useTranslation()
   const [search, setSearch] = useState('')
   const [status, setStatus] = useState('')
   const [page, setPage] = useState(1)
@@ -51,50 +53,50 @@ export function MembersTab({ canManage }: MembersTabProps) {
     setPage(1)
   }
 
-  const statusLabel = (member: TeamMember) => (member.status === 'Active' ? 'Suspend' : 'Reactivate')
+  const statusLabel = (member: TeamMember) => (member.status === 'Active' ? t('Suspend') : t('Reactivate'))
 
   return (
     <Card>
       <div className="flex flex-col gap-3 border-b border-slate-100 p-4 sm:flex-row">
         <Input
-          placeholder="Search by name or email…"
+          placeholder={t('Search by name or email…')}
           value={search}
           onChange={(e) => onSearch(e.target.value)}
           className="sm:max-w-xs"
-          aria-label="Search team members"
+          aria-label={t('Search team members')}
         />
         <Select
           value={status}
           onChange={(e) => onStatus(e.target.value)}
           className="sm:w-48"
-          aria-label="Filter by status"
+          aria-label={t('Filter by status')}
         >
           {STATUS_OPTIONS.map((option) => (
             <option key={option} value={option}>
-              {option || 'All statuses'}
+              {option ? t(option) : t('All statuses')}
             </option>
           ))}
         </Select>
         {canManage && (
-          <Button size="sm" className="sm:ml-auto" onClick={() => setCreating(true)}>
+          <Button size="sm" className="sm:ms-auto" onClick={() => setCreating(true)}>
             <UserPlus className="h-4 w-4" aria-hidden="true" />
-            Add member
+            {t('Add member')}
           </Button>
         )}
       </div>
 
       {isLoading ? (
-        <LoadingState label="Loading members…" />
+        <LoadingState label={t('Loading members…')} />
       ) : error ? (
         <ErrorState message={describeApiError(error)} />
       ) : (data?.items?.length ?? 0) === 0 ? (
         <EmptyState
           icon={Users}
-          title="No team members found"
+          title={t('No team members found')}
           message={
             search || status
-              ? 'Try adjusting your search or filters.'
-              : 'Create the first HR account to start building your team.'
+              ? t('Try adjusting your search or filters.')
+              : t('Create the first HR account to start building your team.')
           }
         />
       ) : (
@@ -103,13 +105,13 @@ export function MembersTab({ canManage }: MembersTabProps) {
           <div className="hidden md:block">
             <Table>
               <THead>
-                <TH>Member</TH>
-                <TH>Role</TH>
-                <TH>Gyms</TH>
-                <TH>Access</TH>
-                <TH>Status</TH>
-                <TH>Last active</TH>
-                <TH className="text-right">Actions</TH>
+                <TH>{t('Member')}</TH>
+                <TH>{t('Role')}</TH>
+                <TH>{t('Gyms')}</TH>
+                <TH>{t('Access')}</TH>
+                <TH>{t('Status')}</TH>
+                <TH>{t('Last active')}</TH>
+                <TH className="text-end">{t('Actions')}</TH>
               </THead>
               <TBody>
                 {data!.items.map((member) => (
@@ -126,12 +128,12 @@ export function MembersTab({ canManage }: MembersTabProps) {
                     <TD>
                       <p className="text-slate-900">{member.role}</p>
                       {member.roles.length > 1 && (
-                        <p className="text-xs text-slate-500">+{member.roles.length - 1} more</p>
+                        <p className="text-xs text-slate-500">{t('+{{count}} more', { count: member.roles.length - 1 })}</p>
                       )}
                     </TD>
                     <TD>
                       {member.gyms.length === 0 ? (
-                        <span className="text-xs text-slate-400">None</span>
+                        <span className="text-xs text-slate-400">{t('None')}</span>
                       ) : (
                         <div className="flex flex-wrap gap-1">
                           {member.gyms.slice(0, 2).map((gym) => (
@@ -141,23 +143,23 @@ export function MembersTab({ canManage }: MembersTabProps) {
                         </div>
                       )}
                     </TD>
-                    <TD className="text-slate-600">{member.permissionsCount} permissions</TD>
+                    <TD className="text-slate-600">{t('{{count}} permissions', { count: member.permissionsCount })}</TD>
                     <TD>
                       <StatusBadge status={member.status} />
                     </TD>
                     <TD className="text-slate-500">{formatDateTime(member.lastLoginAt)}</TD>
-                    <TD className="text-right">
+                    <TD className="text-end">
                       {canManage ? (
                         <div className="flex justify-end gap-2">
                           <Button variant="outline" size="sm" onClick={() => setStatusTarget(member)}>
                             {statusLabel(member)}
                           </Button>
                           <Button variant="ghost" size="sm" onClick={() => setResetTarget(member)}>
-                            Reset password
+                            {t('Reset password')}
                           </Button>
                         </div>
                       ) : (
-                        <span className="text-xs text-slate-400">View only</span>
+                        <span className="text-xs text-slate-400">{t('View only')}</span>
                       )}
                     </TD>
                   </TR>
@@ -182,8 +184,8 @@ export function MembersTab({ canManage }: MembersTabProps) {
                 </div>
                 <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500">
                   <span className="font-medium text-slate-700">{member.role}</span>
-                  <span>{member.permissionsCount} permissions</span>
-                  <span>Last active {formatDateTime(member.lastLoginAt)}</span>
+                  <span>{t('{{count}} permissions', { count: member.permissionsCount })}</span>
+                  <span>{t('Last active {{date}}', { date: formatDateTime(member.lastLoginAt) })}</span>
                 </div>
                 {member.gyms.length > 0 && (
                   <div className="flex flex-wrap gap-1">
@@ -199,7 +201,7 @@ export function MembersTab({ canManage }: MembersTabProps) {
                       {statusLabel(member)}
                     </Button>
                     <Button variant="ghost" size="sm" onClick={() => setResetTarget(member)}>
-                      Reset password
+                      {t('Reset password')}
                     </Button>
                   </div>
                 )}

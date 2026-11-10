@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { CheckCircle2, Clock3, LogOut, XCircle } from 'lucide-react'
 import type { StationSummaryRecord } from '../api/attendance.api'
 import { Button } from '../../../components/ui/button'
-import { formatTime, formatTimeOfDay } from '../../../lib/format'
+import { activeLocale, formatTime, formatTimeOfDay } from '../../../lib/format'
 import { cn } from '../../../lib/utils'
 import type { AttendanceResult, FaceMatchDetail } from '../types'
 
@@ -13,6 +14,7 @@ const STATUS_BADGE: Record<string, string> = {
   ABSENT: 'bg-red-100 text-red-700',
 }
 
+/** English labels double as i18next keys; they are translated where rendered. */
 const STATUS_LABEL: Record<string, string> = {
   PRESENT: 'Present',
   LEFT: 'Left',
@@ -29,6 +31,7 @@ function formatClock(value: string | null | undefined): string {
 
 /** One row of the kiosk roster: shift, punches, and lateness/early-leave minutes. */
 export function FeedRow({ row }: { row: StationSummaryRecord }) {
+  const { t } = useTranslation()
   const status = (row.status ?? '').toUpperCase()
   const isManual = (row.method ?? '').toUpperCase() === 'MANUAL'
   const late = row.lateMinutes ?? 0
@@ -43,7 +46,7 @@ export function FeedRow({ row }: { row: StationSummaryRecord }) {
         </div>
         <div className="flex shrink-0 items-center gap-1.5">
           {isManual && (
-            <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-800">manual</span>
+            <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-800">{t('manual')}</span>
           )}
           <span
             className={
@@ -51,7 +54,7 @@ export function FeedRow({ row }: { row: StationSummaryRecord }) {
               (STATUS_BADGE[status] ?? 'bg-slate-100 text-slate-500')
             }
           >
-            {STATUS_LABEL[status] ?? status}
+            {t(STATUS_LABEL[status] ?? status)}
           </span>
         </div>
       </div>
@@ -61,7 +64,7 @@ export function FeedRow({ row }: { row: StationSummaryRecord }) {
         <div className="flex items-center justify-between gap-2">
           <span className="flex min-w-0 items-center gap-1">
             <Clock3 className="h-3 w-3 shrink-0 text-charcoal-400" aria-hidden="true" />
-            <span className="truncate font-semibold text-charcoal-700">{row.shiftName || 'Shift'}</span>
+            <span className="truncate font-semibold text-charcoal-700">{row.shiftName || t('Shift')}</span>
           </span>
           <span className="shrink-0 font-mono tabular-nums text-charcoal-600">
             {formatTimeOfDay(row.shiftStart)} – {formatTimeOfDay(row.shiftEnd)}
@@ -74,7 +77,7 @@ export function FeedRow({ row }: { row: StationSummaryRecord }) {
               row.checkIn ? 'bg-emerald-50 text-emerald-700' : 'bg-charcoal-50 text-charcoal-400',
             )}
           >
-            <span className="font-sans text-[9px] font-bold uppercase tracking-wide">In</span>
+            <span className="font-sans text-[9px] font-bold uppercase tracking-wide">{t('In')}</span>
             {formatClock(row.checkIn)}
           </span>
           <span
@@ -83,7 +86,7 @@ export function FeedRow({ row }: { row: StationSummaryRecord }) {
               row.checkOut ? 'bg-sky-50 text-sky-700' : 'bg-charcoal-50 text-charcoal-400',
             )}
           >
-            <span className="font-sans text-[9px] font-bold uppercase tracking-wide">Out</span>
+            <span className="font-sans text-[9px] font-bold uppercase tracking-wide">{t('Out')}</span>
             {formatClock(row.checkOut)}
           </span>
         </div>
@@ -93,12 +96,12 @@ export function FeedRow({ row }: { row: StationSummaryRecord }) {
         <div className="mt-1 flex flex-wrap items-center gap-1">
           {late > 0 && (
             <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-800">
-              Late {late}m
+              {t('Late {{minutes}}m', { minutes: late })}
             </span>
           )}
           {early > 0 && (
             <span className="rounded bg-orange-100 px-1.5 py-0.5 text-[10px] font-semibold text-orange-800">
-              Left early {early}m
+              {t('Left early {{minutes}}m', { minutes: early })}
             </span>
           )}
         </div>
@@ -123,6 +126,7 @@ export function ResultOverlay({
   rejection: string | null
   onDismiss: () => void
 }) {
+  const { t } = useTranslation()
   const isError = rejection !== null && rejection !== undefined
   if (!result && !isError) return null
 
@@ -135,7 +139,7 @@ export function ResultOverlay({
       <div
         role="alertdialog"
         aria-modal="true"
-        aria-label={isError ? 'Attendance rejected' : 'Attendance recorded'}
+        aria-label={isError ? t('Attendance rejected') : t('Attendance recorded')}
         className={
           'w-full max-w-md rounded-2xl border p-6 shadow-2xl ' +
           (isError
@@ -147,7 +151,7 @@ export function ResultOverlay({
           <>
             <div className="flex items-center gap-3">
               <XCircle className="h-8 w-8 text-red-400" aria-hidden="true" />
-              <h2 className="text-lg font-bold">Attendance rejected</h2>
+              <h2 className="text-lg font-bold">{t('Attendance rejected')}</h2>
             </div>
             <p className="mt-3 text-sm text-[#fecaca]">{rejection}</p>
           </>
@@ -157,43 +161,46 @@ export function ResultOverlay({
               <div className="flex items-center gap-3">
                 <CheckCircle2 className="h-8 w-8 text-emerald-400" aria-hidden="true" />
                 <h2 className="text-lg font-bold">
-                  {result.type === 'OUT' ? 'Check-out recorded' : 'Check-in recorded'}
+                  {result.type === 'OUT' ? t('Check-out recorded') : t('Check-in recorded')}
                 </h2>
               </div>
               <p className="mt-3 text-base font-semibold">{result.employeeName ?? result.employeeId}</p>
               <dl className="mt-2 space-y-1 text-sm text-[#a7f3d0]">
                 <div className="flex justify-between gap-3">
-                  <dt>Employee</dt>
+                  <dt>{t('Employee')}</dt>
                   <dd className="font-mono">{result.employeeId}</dd>
                 </div>
                 <div className="flex justify-between gap-3">
-                  <dt>Branch</dt>
+                  <dt>{t('Branch')}</dt>
                   <dd>{result.gymName}</dd>
                 </div>
                 <div className="flex justify-between gap-3">
-                  <dt>Time</dt>
+                  <dt>{t('Time')}</dt>
                   <dd>{formatClock(result.timestamp)}</dd>
                 </div>
                 <div className="flex justify-between gap-3">
-                  <dt>Status</dt>
+                  <dt>{t('Status')}</dt>
                   <dd>{result.attendanceStatus}</dd>
                 </div>
                 {result.shiftComparison === 'UNSCHEDULED' && (
                   <div className="mt-2 rounded-lg border border-amber-400/40 bg-amber-500/10 p-2.5 text-xs text-[#fde68a]">
-                    <p className="font-semibold">Unscheduled / off day</p>
-                    <p className="mt-0.5">No shift was scheduled for today — a request was sent to the branch manager and HR for cover/extra-day approval (1 or 2 days).</p>
+                    <p className="font-semibold">{t('Unscheduled / off day')}</p>
+                    <p className="mt-0.5">{t('No shift was scheduled for today — a request was sent to the branch manager and HR for cover/extra-day approval (1 or 2 days).')}</p>
                   </div>
                 )}
                 {face && (
                   <div className="flex justify-between gap-3">
-                    <dt>Face match</dt>
+                    <dt>{t('Face match')}</dt>
                     <dd>
-                      {Math.round(face.similarity * 100)}% - liveness {Math.round(face.livenessScore * 100)}%
+                      {t('{{similarity}}% - liveness {{liveness}}%', {
+                        similarity: Math.round(face.similarity * 100),
+                        liveness: Math.round(face.livenessScore * 100),
+                      })}
                     </dd>
                   </div>
                 )}
                 <div className="flex justify-between gap-3">
-                  <dt>Record</dt>
+                  <dt>{t('Record')}</dt>
                   <dd className="font-mono">{result.recordId}</dd>
                 </div>
               </dl>
@@ -202,7 +209,7 @@ export function ResultOverlay({
         )}
 
         <Button variant="outline" size="sm" className="mt-5 w-full" onClick={onDismiss}>
-          Dismiss
+          {t('Dismiss')}
         </Button>
       </div>
     </div>
@@ -225,28 +232,29 @@ export function CheckoutConfirmCard({
   onConfirm: () => void
   onCancel: () => void
 }) {
+  const { t } = useTranslation()
   return (
     <div className="absolute inset-0 z-20 flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm fade-in">
       <div
         role="alertdialog"
         aria-modal="true"
-        aria-label="Confirm check-out"
+        aria-label={t('Confirm check-out')}
         className="w-full max-w-md rounded-2xl border border-amber-500/30 bg-amber-950/95 p-6 text-[#fffbeb] shadow-2xl"
       >
         <div className="flex items-center gap-3">
-          <LogOut className="h-8 w-8 text-amber-400" aria-hidden="true" />
-          <h2 className="text-lg font-bold">Check out now?</h2>
+          <LogOut className="h-8 w-8 text-amber-400 rtl:rotate-180" aria-hidden="true" />
+          <h2 className="text-lg font-bold">{t('Check out now?')}</h2>
         </div>
-        <p className="mt-3 text-base font-semibold">{employeeName ?? employeeId ?? 'This employee'}</p>
+        <p className="mt-3 text-base font-semibold">{employeeName ?? employeeId ?? t('This employee')}</p>
         <p className="mt-1 text-sm text-[#fde68a]">
-          You are checked in for today. Confirming records your check-out with the current time.
+          {t('You are checked in for today. Confirming records your check-out with the current time.')}
         </p>
         <div className="mt-5 flex gap-2">
           <Button size="sm" className="flex-1" onClick={onConfirm}>
-            Check out now
+            {t('Check out now')}
           </Button>
           <Button variant="outline" size="sm" className="flex-1" onClick={onCancel}>
-            Not yet
+            {t('Not yet')}
           </Button>
         </div>
       </div>
@@ -263,7 +271,7 @@ export function useClock(): { time: string; date: string } {
   }, [])
 
   return {
-    time: now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', second: '2-digit', hour12: true }),
+    time: now.toLocaleTimeString(activeLocale(), { hour: 'numeric', minute: '2-digit', second: '2-digit', hour12: true }),
     date: now.toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'short' }),
   }
 }

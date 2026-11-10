@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Check, X } from 'lucide-react'
 import { Button } from '../../../components/ui/button'
 import { Badge, StatusBadge } from '../../../components/ui/badge'
@@ -8,6 +9,7 @@ import { useFinalizeSeparation, useSeparation, useToggleChecklist } from '../hoo
 import { VerdictDialog } from './VerdictDialog'
 import { describeApiError } from '../../../lib/api-client'
 import { formatDate, formatMoney } from '../../../lib/format'
+import { translate } from '../../../i18n'
 import type { Separation } from '../api/terminations.api'
 
 function Detail({ label, value }: { label: string; value: string }) {
@@ -24,9 +26,13 @@ function verdictSummary(separation: Separation): string {
   if (!verdict) return '—'
   const parts = [verdict.finalReason ?? '—']
   if (verdict.settlement && verdict.settlement.direction !== 'none') {
-    parts.push(`${verdict.settlement.direction === 'owedToEmployee' ? 'Owed to employee' : 'Employee owes'} ${formatMoney(verdict.settlement.amount)}`)
+    const direction =
+      verdict.settlement.direction === 'owedToEmployee'
+        ? translate('Owed to employee')
+        : translate('Employee owes')
+    parts.push(`${direction} ${formatMoney(verdict.settlement.amount)}`)
   }
-  if (verdict.rehire) parts.push(`Rehire: ${verdict.rehire.status}`)
+  if (verdict.rehire) parts.push(translate('Rehire: {{status}}', { status: translate(verdict.rehire.status) }))
   return parts.join(' · ')
 }
 
@@ -39,6 +45,7 @@ export interface SeparationDetailDialogProps {
 
 /** The separation case drawer: checklist, verdict and finalize in one place. */
 export function SeparationDetailDialog({ separationId, canManage, onClose }: SeparationDetailDialogProps) {
+  const { t } = useTranslation()
   const { data: separation, isLoading, error } = useSeparation(separationId)
   const toggle = useToggleChecklist(separationId)
   const finalize = useFinalizeSeparation(separationId)
@@ -72,18 +79,18 @@ export function SeparationDetailDialog({ separationId, canManage, onClose }: Sep
     <Dialog
       open
       onClose={onClose}
-      title={separation ? separation.employee : 'Separation'}
+      title={separation ? separation.employee : t('Separation')}
       description={separation ? `${separation.position} · ${separation.gym}` : undefined}
       className="sm:max-w-2xl"
       footer={
         <>
           <Button variant="outline" onClick={onClose}>
-            Close
+            {t('Close')}
           </Button>
           {canManage && separation && separation.status !== 'Completed' && (
             <>
               <Button variant="secondary" onClick={() => setVerdictOpen(true)}>
-                Save verdict
+                {t('Save verdict')}
               </Button>
               <Button
                 onClick={() => setConfirming(true)}
@@ -91,10 +98,10 @@ export function SeparationDetailDialog({ separationId, canManage, onClose }: Sep
                 title={
                   checklistComplete && separation.verdict
                     ? undefined
-                    : 'The whole checklist must be done and a verdict saved before finalizing.'
+                    : t('The whole checklist must be done and a verdict saved before finalizing.')
                 }
               >
-                Finalize
+                {t('Finalize')}
               </Button>
             </>
           )}
@@ -102,7 +109,7 @@ export function SeparationDetailDialog({ separationId, canManage, onClose }: Sep
       }
     >
       {isLoading ? (
-        <LoadingState label="Loading case…" />
+        <LoadingState label={t('Loading case…')} />
       ) : error ? (
         <ErrorState message={describeApiError(error)} />
       ) : separation ? (
@@ -116,13 +123,13 @@ export function SeparationDetailDialog({ separationId, canManage, onClose }: Sep
           <div className="flex flex-wrap items-center gap-2">
             <StatusBadge status={separation.status} />
             <Badge>{separation.separationType}</Badge>
-            {separation.verdict && <Badge>Verdict saved</Badge>}
+            {separation.verdict && <Badge>{t('Verdict saved')}</Badge>}
           </div>
 
           <div>
             <div className="flex items-center justify-between text-sm">
-              <p className="font-medium text-slate-700">Exit checklist</p>
-              <p className="text-slate-500">{separation.progress}% complete</p>
+              <p className="font-medium text-slate-700">{t('Exit checklist')}</p>
+              <p className="text-slate-500">{t('{{percent}}% complete', { percent: separation.progress })}</p>
             </div>
             <div className="mt-1.5 h-2 w-full rounded-full bg-slate-100">
               <div
@@ -156,7 +163,7 @@ export function SeparationDetailDialog({ separationId, canManage, onClose }: Sep
                       onClick={() => onToggle(index, !done)}
                       loading={toggle.isPending && toggle.variables?.index === index}
                     >
-                      {done ? 'Undo' : 'Mark done'}
+                      {done ? t('Undo') : t('Mark done')}
                     </Button>
                   )}
                 </li>
@@ -165,17 +172,17 @@ export function SeparationDetailDialog({ separationId, canManage, onClose }: Sep
           </div>
 
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
-            <Detail label="Last day" value={formatDate(separation.lastDay)} />
-            <Detail label="Type" value={separation.separationType} />
-            <Detail label="Leave taken" value={separation.leaveTaken != null ? String(separation.leaveTaken) : '—'} />
-            <Detail label="Reason" value={separation.reason ?? '—'} />
-            <Detail label="Requested by" value={separation.requestedBy ?? '—'} />
-            <Detail label="Requested by user" value={separation.requestedByUser ?? '—'} />
-            <Detail label="Submitted" value={formatDate(separation.submittedDate)} />
+            <Detail label={t('Last day')} value={formatDate(separation.lastDay)} />
+            <Detail label={t('Type')} value={separation.separationType} />
+            <Detail label={t('Leave taken')} value={separation.leaveTaken != null ? String(separation.leaveTaken) : '—'} />
+            <Detail label={t('Reason')} value={separation.reason ?? '—'} />
+            <Detail label={t('Requested by')} value={separation.requestedBy ?? '—'} />
+            <Detail label={t('Requested by user')} value={separation.requestedByUser ?? '—'} />
+            <Detail label={t('Submitted')} value={formatDate(separation.submittedDate)} />
           </div>
 
           <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
-            <p className="text-xs font-medium uppercase tracking-wide text-slate-400">Exit verdict</p>
+            <p className="text-xs font-medium uppercase tracking-wide text-slate-400">{t('Exit verdict')}</p>
             {separation.verdict ? (
               <>
                 <p className="mt-1 text-sm text-slate-900">{verdictSummary(separation)}</p>
@@ -186,21 +193,23 @@ export function SeparationDetailDialog({ separationId, canManage, onClose }: Sep
                 )}
               </>
             ) : (
-              <p className="mt-1 text-sm text-slate-500">No verdict has been recorded yet.</p>
+              <p className="mt-1 text-sm text-slate-500">{t('No verdict has been recorded yet.')}</p>
             )}
           </div>
 
           {canManage && confirming && (
             <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
               <p className="text-sm text-amber-800">
-                Finalizing sets {separation.employee} to Terminated and deactivates their login. This cannot be undone.
+                {t('Finalizing sets {{name}} to Terminated and deactivates their login. This cannot be undone.', {
+                  name: separation.employee,
+                })}
               </p>
               <div className="mt-2 flex gap-2">
                 <Button variant="danger" size="sm" onClick={onFinalize} loading={finalize.isPending}>
-                  Confirm finalize
+                  {t('Confirm finalize')}
                 </Button>
                 <Button variant="outline" size="sm" onClick={() => setConfirming(false)}>
-                  Cancel
+                  {t('Cancel')}
                 </Button>
               </div>
             </div>

@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next'
 import { useRef, type ReactNode } from 'react'
 import { X } from 'lucide-react'
 import { cn } from '../../lib/utils'
@@ -17,6 +18,7 @@ export interface ModalProps {
 
 /** Mock modal shell: backdrop + white rounded card with scale-in animation. */
 export function Modal({ open, title, subtitle, onClose, width = 'md', footer, children }: ModalProps) {
+  const { t } = useTranslation()
   const backdropRef = useRef<HTMLDivElement>(null)
   const panelRef = useRef<HTMLDivElement>(null)
   useOverlay(open, onClose, panelRef)
@@ -52,8 +54,8 @@ export function Modal({ open, title, subtitle, onClose, width = 'md', footer, ch
           <button
             type="button"
             onClick={onClose}
-            className="touch-target -mr-1 rounded-lg p-1.5 text-charcoal-400 hover:bg-charcoal-100 hover:text-charcoal-700"
-            aria-label="Close"
+            className="touch-target -me-1 rounded-lg p-1.5 text-charcoal-400 hover:bg-charcoal-100 hover:text-charcoal-700"
+            aria-label={t('Close')}
           >
             <X className="h-4 w-4" aria-hidden="true" />
           </button>
@@ -81,13 +83,14 @@ export function ConfirmDialog({
   open,
   title,
   message,
-  confirmLabel = 'Confirm',
-  cancelLabel = 'Cancel',
+  confirmLabel,
+  cancelLabel,
   danger = false,
   loading = false,
   onConfirm,
   onCancel,
 }: ConfirmDialogProps) {
+  const { t } = useTranslation()
   return (
     <Modal
       open={open}
@@ -96,10 +99,10 @@ export function ConfirmDialog({
       footer={
         <>
           <Button variant="secondary" onClick={onCancel} disabled={loading}>
-            {cancelLabel}
+            {cancelLabel ?? t('Cancel')}
           </Button>
           <Button variant={danger ? 'danger' : 'primary'} onClick={onConfirm} loading={loading}>
-            {confirmLabel}
+            {confirmLabel ?? t('Confirm')}
           </Button>
         </>
       }

@@ -1,10 +1,12 @@
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Building2, Check, ChevronDown, Loader2 } from 'lucide-react'
 import { useMe } from '../../../contexts/MeContext'
 import { cn } from '../../../lib/utils'
 
 /** Header gym switcher backed by POST /api/auth/switch-gym. */
 export function GymSwitcher() {
+  const { t } = useTranslation()
   const { me, switchGym, isSwitching } = useMe()
   const [open, setOpen] = useState(false)
 
@@ -16,7 +18,7 @@ export function GymSwitcher() {
     return (
       <span className="inline-flex max-w-[12rem] items-center gap-1.5 truncate rounded-lg bg-slate-100 px-2.5 py-1.5 text-sm font-medium text-slate-700">
         <Building2 className="h-4 w-4 shrink-0 text-slate-400" aria-hidden="true" />
-        <span className="truncate">{active?.gymName ?? 'No gym'}</span>
+        <span className="truncate">{active?.gymName ?? t('No gym')}</span>
       </span>
     )
   }
@@ -42,7 +44,7 @@ export function GymSwitcher() {
         ) : (
           <Building2 className="h-4 w-4 shrink-0 text-slate-400" aria-hidden="true" />
         )}
-        <span className="truncate">{active?.gymName ?? 'Select gym'}</span>
+        <span className="truncate">{active?.gymName ?? t('Select gym')}</span>
         <ChevronDown className="h-3.5 w-3.5 shrink-0 text-slate-400" aria-hidden="true" />
       </button>
 
@@ -51,7 +53,7 @@ export function GymSwitcher() {
           <div className="fixed inset-0 z-30" onClick={() => setOpen(false)} aria-hidden="true" />
           <div
             role="menu"
-            className="absolute right-0 z-40 mt-2 w-60 rounded-xl border border-slate-200 bg-white p-1 shadow-lg"
+            className="absolute end-0 z-40 mt-2 w-60 rounded-xl border border-slate-200 bg-white p-1 shadow-lg"
           >
             {gyms.map((gym) => (
               <button
@@ -60,7 +62,7 @@ export function GymSwitcher() {
                 role="menuitem"
                 onClick={() => onSelect(gym.gymId)}
                 className={cn(
-                  'flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm transition-colors hover:bg-slate-50',
+                  'flex w-full items-center justify-between rounded-lg px-3 py-2 text-start text-sm transition-colors hover:bg-slate-50',
                   gym.gymId === active?.gymId ? 'text-emerald-700' : 'text-slate-700',
                 )}
               >

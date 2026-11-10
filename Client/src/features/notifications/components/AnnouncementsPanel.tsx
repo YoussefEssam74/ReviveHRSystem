@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Megaphone, Send } from 'lucide-react'
 import { Card } from '../../../components/ui/card'
 import { Button } from '../../../components/ui/button'
@@ -29,6 +30,7 @@ import { useAnnouncements, useCreateAnnouncement } from '../hooks/useNotificatio
  * enforces both regardless).
  */
 export function AnnouncementsPanel() {
+  const { t } = useTranslation()
   const { can, me } = useMe()
   const canManage = can('announcements', EDIT)
   const [page, setPage] = useState(1)
@@ -39,30 +41,30 @@ export function AnnouncementsPanel() {
     <>
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <p className="text-sm text-slate-500">
-          {data ? `${data.total} announcement${data.total === 1 ? '' : 's'} sent` : 'Company-wide broadcasts'}
+          {data ? t('{{count}} announcements sent', { count: data.total }) : t('Company-wide broadcasts')}
         </p>
         {canManage ? (
           <Button onClick={() => setComposeOpen(true)}>
             <Megaphone className="h-4 w-4" aria-hidden="true" />
-            Compose announcement
+            {t('Compose announcement')}
           </Button>
         ) : (
           <p className="text-xs text-slate-400">
-            Composing requires <code className="rounded bg-slate-100 px-1">announcements.manage</code>.
+            {t('Composing requires')} <code className="rounded bg-slate-100 px-1">announcements.manage</code>.
           </p>
         )}
       </div>
 
       <Card>
         {isLoading ? (
-          <LoadingState label="Loading announcements…" />
+          <LoadingState label={t('Loading announcements…')} />
         ) : error ? (
           <ErrorState message={describeApiError(error)} />
         ) : (data?.items?.length ?? 0) === 0 ? (
           <EmptyState
             icon={Megaphone}
-            title="No announcements"
-            message="Broadcasts sent to staff will appear here with their read rate."
+            title={t('No announcements')}
+            message={t('Broadcasts sent to staff will appear here with their read rate.')}
           />
         ) : (
           <>
@@ -91,8 +93,8 @@ export function AnnouncementsPanel() {
                         style={{ width: `${Math.max(0, Math.min(100, item.readRate))}%` }}
                       />
                     </div>
-                    <span className="w-24 shrink-0 text-right text-[11px] font-medium text-slate-500">
-                      Read rate {item.readRate}%
+                    <span className="w-24 shrink-0 text-end text-[11px] font-medium text-slate-500">
+                      {t('Read rate {{rate}}%', { rate: item.readRate })}
                     </span>
                   </div>
                 </li>
@@ -121,6 +123,7 @@ export function AnnouncementsPanel() {
 }
 
 function ComposeDialog({ audiences, onClose }: { audiences: string[]; onClose: () => void }) {
+  const { t } = useTranslation()
   const create = useCreateAnnouncement()
   const [title, setTitle] = useState('')
   const [audience, setAudience] = useState(audiences[0] ?? ANNOUNCEMENT_ALL_AUDIENCE)
@@ -151,35 +154,35 @@ function ComposeDialog({ audiences, onClose }: { audiences: string[]; onClose: (
     <Dialog
       open
       onClose={onClose}
-      title="Compose announcement"
-      description="Sends a notification to every user in the selected audience."
+      title={t('Compose announcement')}
+      description={t('Sends a notification to every user in the selected audience.')}
       className="sm:max-w-lg"
       footer={
         <>
           <Button variant="outline" onClick={onClose}>
-            Cancel
+            {t('Cancel')}
           </Button>
           <Button onClick={onSubmit} loading={create.isPending} disabled={!valid}>
             <Send className="h-4 w-4" aria-hidden="true" />
-            Send announcement
+            {t('Send announcement')}
           </Button>
         </>
       }
     >
       <div className="space-y-4">
         <div>
-          <Label htmlFor="announcement-title">Title</Label>
+          <Label htmlFor="announcement-title">{t('Title')}</Label>
           <Input
             id="announcement-title"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            placeholder="Announcement title"
+            placeholder={t('Announcement title')}
             className="mt-1"
           />
         </div>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
-            <Label htmlFor="announcement-audience">Audience</Label>
+            <Label htmlFor="announcement-audience">{t('Audience')}</Label>
             <Select
               id="announcement-audience"
               value={audience}
@@ -188,13 +191,13 @@ function ComposeDialog({ audiences, onClose }: { audiences: string[]; onClose: (
             >
               {audiences.map((option) => (
                 <option key={option} value={option}>
-                  {option}
+                  {option === ANNOUNCEMENT_ALL_AUDIENCE ? t('All Employees') : option}
                 </option>
               ))}
             </Select>
           </div>
           <div>
-            <Label htmlFor="announcement-type">Type</Label>
+            <Label htmlFor="announcement-type">{t('Type')}</Label>
             <Select
               id="announcement-type"
               value={type}
@@ -203,20 +206,20 @@ function ComposeDialog({ audiences, onClose }: { audiences: string[]; onClose: (
             >
               {ANNOUNCEMENT_TYPES.map((option) => (
                 <option key={option} value={option}>
-                  {option}
+                  {t(option)}
                 </option>
               ))}
             </Select>
           </div>
         </div>
         <div>
-          <Label htmlFor="announcement-message">Message</Label>
+          <Label htmlFor="announcement-message">{t('Message')}</Label>
           <Textarea
             id="announcement-message"
             rows={4}
             value={message}
             onChange={(e) => setMessage(e.target.value)}
-            placeholder="What should everyone know?"
+            placeholder={t('What should everyone know?')}
             className="mt-1"
           />
         </div>

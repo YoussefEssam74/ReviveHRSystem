@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { CalendarCheck, Smartphone } from 'lucide-react'
 import { PageHeader } from '../../../components/ui/page-header'
 import { Card } from '../../../components/ui/card'
@@ -29,6 +30,7 @@ function todayIso(): string {
 
 /** HR attendance logs (A1) — date-range grid with per-record correction. */
 export default function AttendanceHrPage() {
+  const { t } = useTranslation()
   const { can, me } = useMe()
   const navigate = useNavigate()
   const [date, setDate] = useState(todayIso())
@@ -84,52 +86,56 @@ export default function AttendanceHrPage() {
   return (
     <div>
       <PageHeader
-        title="Attendance"
-        description={me?.activeGym ? `Daily records for ${me.activeGym.gymName}` : 'Attendance logs'}
+        title={t('Attendance')}
+        description={
+          me?.activeGym
+            ? t('Daily records for {{gym}}', { gym: me.activeGym.gymName })
+            : t('Attendance logs')
+        }
       />
 
       <Card>
         <div className="flex flex-col gap-3 border-b border-slate-100 p-4 sm:flex-row">
           <div>
             <Label htmlFor="date" className="sr-only">
-              Date
+              {t('Date')}
             </Label>
             <Input id="date" type="date" value={date} onChange={(e) => { setDate(e.target.value); setPage(1) }} className="sm:w-44" />
           </div>
-          <Select value={status} onChange={(e) => { setStatus(e.target.value); setPage(1) }} className="sm:w-52" aria-label="Filter by status">
+          <Select value={status} onChange={(e) => { setStatus(e.target.value); setPage(1) }} className="sm:w-52" aria-label={t('Filter by status')}>
             {STATUSES.map((option) => (
               <option key={option} value={option}>
-                {option || 'All statuses'}
+                {option ? t(option) : t('All statuses')}
               </option>
             ))}
           </Select>
           <Button
             variant="secondary"
-            className="sm:ml-auto"
+            className="sm:ms-auto"
             onClick={() => navigate('/console/station-code')}
           >
             <Smartphone className="h-4 w-4" aria-hidden="true" />
-            Pair kiosk
+            {t('Pair kiosk')}
           </Button>
         </div>
 
         {isLoading ? (
-          <LoadingState label="Loading attendance…" />
+          <LoadingState label={t('Loading attendance…')} />
         ) : error ? (
           <ErrorState message={describeApiError(error)} />
         ) : (data?.items?.length ?? 0) === 0 ? (
-          <EmptyState icon={CalendarCheck} title="No records" message="No attendance was recorded for this day." />
+          <EmptyState icon={CalendarCheck} title={t('No records')} message={t('No attendance was recorded for this day.')} />
         ) : (
           <>
             <Table>
               <THead>
-                <TH>Employee</TH>
-                <TH>Shift</TH>
-                <TH>In</TH>
-                <TH>Out</TH>
-                <TH>Status</TH>
-                <TH>Source</TH>
-                {canEdit && <TH className="text-right">Action</TH>}
+                <TH>{t('Employee')}</TH>
+                <TH>{t('Shift')}</TH>
+                <TH>{t('In')}</TH>
+                <TH>{t('Out')}</TH>
+                <TH>{t('Status')}</TH>
+                <TH>{t('Source')}</TH>
+                {canEdit && <TH className="text-end">{t('Action')}</TH>}
               </THead>
               <TBody>
                 {data!.items.map((row, index) => (
@@ -148,14 +154,14 @@ export default function AttendanceHrPage() {
                     <TD className="font-medium text-slate-900">{formatTimeOfDay(row.checkOut)}</TD>
                     <TD>
                       <StatusBadge status={row.status} />
-                      {row.correctedBy && <Badge className="mt-0.5">Corrected</Badge>}
+                      {row.correctedBy && <Badge className="mt-0.5">{t('Corrected')}</Badge>}
                     </TD>
                     <TD className="text-slate-500">{row.source ?? '—'}</TD>
                     {canEdit && (
-                      <TD className="text-right">
+                      <TD className="text-end">
                         {row.id != null && (
                           <Button variant="outline" size="sm" onClick={() => openCorrect(row)}>
-                            Correct
+                            {t('Correct')}
                           </Button>
                         )}
                       </TD>
@@ -170,7 +176,7 @@ export default function AttendanceHrPage() {
               total={data!.total}
               totalPages={data!.totalPages}
               onPageChange={setPage}
-              noun="records"
+              noun={t('records')}
             />
           </>
         )}
@@ -179,15 +185,15 @@ export default function AttendanceHrPage() {
       <Dialog
         open={correcting != null}
         onClose={() => setCorrecting(null)}
-        title="Correct record"
+        title={t('Correct record')}
         description={correcting ? `${correcting.name} · ${correcting.date}` : undefined}
         footer={
           <>
             <Button variant="outline" onClick={() => setCorrecting(null)}>
-              Cancel
+              {t('Cancel')}
             </Button>
             <Button onClick={onSubmitCorrect} loading={correct.isPending}>
-              Save correction
+              {t('Save correction')}
             </Button>
           </>
         }
@@ -200,32 +206,32 @@ export default function AttendanceHrPage() {
           )}
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <Label htmlFor="check-in">Check in</Label>
+              <Label htmlFor="check-in">{t('Check in')}</Label>
               <Input id="check-in" type="time" value={correctIn} onChange={(e) => setCorrectIn(e.target.value)} />
             </div>
             <div>
-              <Label htmlFor="check-out">Check out</Label>
+              <Label htmlFor="check-out">{t('Check out')}</Label>
               <Input id="check-out" type="time" value={correctOut} onChange={(e) => setCorrectOut(e.target.value)} />
             </div>
           </div>
           <div>
-            <Label htmlFor="correct-status">Status</Label>
+            <Label htmlFor="correct-status">{t('Status')}</Label>
             <Select id="correct-status" value={correctStatus} onChange={(e) => setCorrectStatus(e.target.value)}>
               {STATUSES.filter(Boolean).map((option) => (
                 <option key={option} value={option}>
-                  {option}
+                  {t(option)}
                 </option>
               ))}
             </Select>
           </div>
           <div>
-            <Label htmlFor="reason">Reason (required)</Label>
+            <Label htmlFor="reason">{t('Reason (required)')}</Label>
             <Textarea
               id="reason"
               rows={3}
               value={correctReason}
               onChange={(e) => setCorrectReason(e.target.value)}
-              placeholder="Why is this record being corrected?"
+              placeholder={t('Why is this record being corrected?')}
             />
           </div>
         </div>

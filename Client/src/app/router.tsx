@@ -1,5 +1,6 @@
 import { lazy, Suspense, type ReactNode } from 'react'
 import { createBrowserRouter, Navigate } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { AppLayout } from '../components/layout/AppLayout'
 import { KioskLayout } from '../components/layout/KioskLayout'
 import { ConsoleLayout } from '../features/console/components/ConsoleLayout'
@@ -73,11 +74,12 @@ function RequireAuth({ children }: { children: ReactNode }) {
 
 /** Shown for console routes whose module isn't built yet. */
 function ConsolePlaceholder() {
-  const path = window.location.pathname.replace(/^\/console\/?/, '') || 'this section'
+  const { t } = useTranslation()
+  const path = window.location.pathname.replace(/^\/console\/?/, '') || t('this section')
   return (
     <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-12 text-center">
       <h2 className="text-lg font-semibold capitalize text-slate-900">{path.replace(/-/g, ' ')}</h2>
-      <p className="mt-1 text-sm text-slate-500">This module is coming soon.</p>
+      <p className="mt-1 text-sm text-slate-500">{t('This module is coming soon.')}</p>
     </div>
   )
 }

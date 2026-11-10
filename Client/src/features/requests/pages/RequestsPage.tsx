@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { FileText, Check, X } from 'lucide-react'
 import { PageHeader } from '../../../components/ui/page-header'
 import { Card } from '../../../components/ui/card'
@@ -16,6 +17,7 @@ import { useActionRequests, useApproveRequest, useRejectRequest } from '../hooks
 import { useMe } from '../../../contexts/MeContext'
 import { actionTypeLabel, formatDate, formatMoney } from '../../../lib/format'
 import { describeApiError } from '../../../lib/api-client'
+import { translate } from '../../../i18n'
 import type { ActionRequest } from '../api/requests.api'
 
 type StatusTab = 'Pending' | 'Approved' | 'Rejected' | ''
@@ -39,7 +41,7 @@ function detailSummary(request: ActionRequest): string {
     case 'RoleAssign':
       return d.systemRole ?? '—'
     case 'Offboard':
-      return d.lastDay ? `Last day ${formatDate(d.lastDay)}` : '—'
+      return d.lastDay ? translate('Last day {{date}}', { date: formatDate(d.lastDay) }) : '—'
     case 'BulkImport':
       return d.source ?? '—'
     default:
@@ -49,6 +51,7 @@ function detailSummary(request: ActionRequest): string {
 
 /** Escalated action-request queue (E20/§5.6) — approve / reject pending rows. */
 export default function RequestsPage() {
+  const { t } = useTranslation()
   const { can } = useMe()
   const [tab, setTab] = useState<StatusTab>('Pending')
   const [page, setPage] = useState(1)
@@ -96,17 +99,22 @@ export default function RequestsPage() {
 
   return (
     <div>
-      <PageHeader title="Requests" description="Escalated action requests awaiting review" />
+      <PageHeader title={t('Requests')} description={t('Escalated action requests awaiting review')} />
 
-      <Tabs items={TABS} value={tab} onChange={(value) => { setTab(value); setPage(1) }} className="mb-4 w-fit" />
+      <Tabs
+        items={TABS.map((item) => ({ ...item, label: t(item.label) }))}
+        value={tab}
+        onChange={(value) => { setTab(value); setPage(1) }}
+        className="mb-4 w-fit"
+      />
 
       <Card>
         {isLoading ? (
-          <LoadingState label="Loading requests…" />
+          <LoadingState label={t('Loading requests…')} />
         ) : error ? (
           <ErrorState message={describeApiError(error)} />
         ) : (data?.items?.length ?? 0) === 0 ? (
-          <EmptyState icon={FileText} title="No requests" message="There are no requests in this view." />
+          <EmptyState icon={FileText} title={t('No requests')} message={t('There are no requests in this view.')} />
         ) : (
           <>
             <ul className="divide-y divide-slate-100">
@@ -128,9 +136,11 @@ export default function RequestsPage() {
                         <p className="mt-1 text-sm italic text-slate-500">“{request.justification}”</p>
                       )}
                       <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-400">
-                        <span>By {request.requestedBy ?? '—'}</span>
+                        <span>{t('By {{name}}', { name: request.requestedBy ?? '—' })}</span>
                         <span>{formatDate(request.submittedDate)}</span>
-                        {request.reviewedBy && <span>· Reviewed by {request.reviewedBy}</span>}
+                        {request.reviewedBy && (
+                          <span>· {t('Reviewed by {{name}}', { name: request.reviewedBy })}</span>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -139,11 +149,11 @@ export default function RequestsPage() {
                     <div className="flex shrink-0 gap-2">
                       <Button size="sm" onClick={() => onApprove(request.id)} loading={approve.isPending && approve.variables === request.id}>
                         <Check className="h-3.5 w-3.5" aria-hidden="true" />
-                        Approve
+                        {t('Approve')}
                       </Button>
                       <Button variant="danger" size="sm" onClick={() => openReject(request)}>
                         <X className="h-3.5 w-3.5" aria-hidden="true" />
-                        Reject
+                        {t('Reject')}
                       </Button>
                     </div>
                   )}
@@ -161,7 +171,7 @@ export default function RequestsPage() {
               total={data!.total}
               totalPages={data!.totalPages}
               onPageChange={setPage}
-              noun="requests"
+              noun={t('requests')}
             />
           </>
         )}
@@ -170,15 +180,15 @@ export default function RequestsPage() {
       <Dialog
         open={rejecting != null}
         onClose={() => setRejecting(null)}
-        title="Reject request"
+        title={t('Reject request')}
         description={rejecting ? `${actionTypeLabel(rejecting.ActionType)} · ${rejecting.employee ?? '—'}` : undefined}
         footer={
           <>
             <Button variant="outline" onClick={() => setRejecting(null)}>
-              Cancel
+              {t('Cancel')}
             </Button>
             <Button variant="danger" onClick={onReject} loading={reject.isPending} disabled={comment.trim().length === 0}>
-              Reject request
+              {t('Reject request')}
             </Button>
           </>
         }
@@ -190,13 +200,13 @@ export default function RequestsPage() {
             </p>
           )}
           <div>
-            <Label htmlFor="comment">Comment (required)</Label>
+            <Label htmlFor="comment">{t('Comment (required)')}</Label>
             <Textarea
               id="comment"
               rows={3}
               value={comment}
               onChange={(e) => setComment(e.target.value)}
-              placeholder="Why is this request being rejected?"
+              placeholder={t('Why is this request being rejected?')}
             />
           </div>
         </div>

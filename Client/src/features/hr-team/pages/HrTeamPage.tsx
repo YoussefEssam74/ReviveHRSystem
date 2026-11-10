@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Lock } from 'lucide-react'
 import { PageHeader } from '../../../components/ui/page-header'
 import { Card } from '../../../components/ui/card'
@@ -28,6 +29,7 @@ const TABS: { value: TeamTab; label: string }[] = [
  * the TopManagement bypass. The API re-checks every call server-side.
  */
 export default function HrTeamPage() {
+  const { t } = useTranslation()
   const { me, isLoading: meLoading } = useMe()
   const [tab, setTab] = useState<TeamTab>('members')
 
@@ -43,23 +45,23 @@ export default function HrTeamPage() {
 
   return (
     <>
-      <PageHeader title="HR Team" description="Manage team members, roles, and portal permissions" />
+      <PageHeader title={t('HR Team')} description={t('Manage team members, roles, and portal permissions')} />
 
       {loading ? (
         <Card>
-          <LoadingState label="Checking your access…" />
+          <LoadingState label={t('Checking your access…')} />
         </Card>
       ) : !canView ? (
         <Card>
           <EmptyState
             icon={Lock}
-            title="You don't have access to the HR Team"
-            message="Ask your administrator for the team.view permission to open this page."
+            title={t("You don't have access to the HR Team")}
+            message={t('Ask your administrator for the team.view permission to open this page.')}
           />
         </Card>
       ) : (
         <>
-          <Tabs items={TABS} value={tab} onChange={setTab} className="mb-4 w-fit" />
+          <Tabs items={TABS.map((item) => ({ ...item, label: t(item.label) }))} value={tab} onChange={setTab} className="mb-4 w-fit" />
           {tab === 'members' && <MembersTab canManage={canManage} />}
           {tab === 'roles' && <RolesTab canManage={canManage} />}
           {tab === 'permissions' && <PermissionsTab canManage={canManage} />}

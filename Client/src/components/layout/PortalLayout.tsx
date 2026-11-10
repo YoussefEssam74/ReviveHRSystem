@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
-import { AlertTriangle, Bell, Check, ChevronDown, LogOut, Menu, Moon, RefreshCw, Settings, Sun, X } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
+import { AlertTriangle, Bell, Check, ChevronDown, Languages, LogOut, Menu, Moon, RefreshCw, Sun, X } from 'lucide-react'
 import { useAuthSession } from '../../contexts/AuthSessionContext'
 import { usePortalSession } from '../../contexts/PortalSessionContext'
 import { useTheme } from '../../contexts/ThemeContext'
+import { useLanguage } from '../../i18n/useLanguage'
 import {
   BRANCH_ITEMS,
   DROPDOWN_ITEMS,
@@ -24,7 +26,6 @@ import {
   type NotificationRow,
 } from '../../features/notifications/hooks/use-notifications'
 import { usePortalAvatar } from '../../features/portal/hooks/use-portal-avatar'
-import { BUILD_STAMP } from '../../lib/build-stamp'
 import { cn } from '../../lib/utils'
 import { timeAgo } from '../../lib/format'
 import { describeApiError } from '../../lib/api-client'
@@ -119,12 +120,14 @@ function useDismissable(open: boolean, close: () => void) {
 /* ------------------------------------------------------------------ */
 
 export function PortalLayout() {
+  const { t } = useTranslation()
+  const { language, toggleLanguage } = useLanguage()
   const { session, signOut } = useAuthSession()
   const portal = usePortalSession()
   const { isDark, toggleTheme } = useTheme()
   const navigate = useNavigate()
   const location = useLocation()
-  const title = titleForPath(location.pathname)
+  const title = t(titleForPath(location.pathname))
 
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [bellOpen, setBellOpen] = useState(false)
@@ -162,7 +165,7 @@ export function PortalLayout() {
       <div className="flex min-h-screen items-center justify-center bg-charcoal-50">
         <div className="flex flex-col items-center gap-3">
           <Spinner className="h-8 w-8 text-brand-600" />
-          <p className="text-xs text-charcoal-500">Loading your session…</p>
+          <p className="text-xs text-charcoal-500">{t('Loading your session…')}</p>
         </div>
       </div>
     )
@@ -173,15 +176,15 @@ export function PortalLayout() {
       <div className="flex min-h-screen items-center justify-center bg-charcoal-50 px-4">
         <div className="card max-w-sm p-6 text-center">
           <AlertTriangle className="mx-auto h-8 w-8 text-red-500" aria-hidden="true" />
-          <h1 className="mt-3 text-sm font-semibold text-charcoal-900">Session could not be loaded</h1>
-          <p className="mt-1 text-xs text-charcoal-500">{portal.error ?? 'Your session context is unavailable.'}</p>
+          <h1 className="mt-3 text-sm font-semibold text-charcoal-900">{t('Session could not be loaded')}</h1>
+          <p className="mt-1 text-xs text-charcoal-500">{portal.error ?? t('Your session context is unavailable.')}</p>
           <div className="mt-4 flex items-center justify-center gap-2">
             <button type="button" className="btn btn-primary btn-md" onClick={portal.reload}>
               <RefreshCw className="h-3.5 w-3.5" aria-hidden="true" />
-              Try again
+              {t('Try again')}
             </button>
             <button type="button" className="btn btn-secondary btn-md" onClick={signOut}>
-              Sign out
+              {t('Sign out')}
             </button>
           </div>
         </div>
@@ -202,14 +205,14 @@ export function PortalLayout() {
         <Link to="/employee/dashboard" className="flex min-w-0 items-center gap-2.5">
           <GymLogo gym={portal.me.activeGym} className="h-9 w-9 rounded-xl" />
           <span className="min-w-0 truncate text-sm font-bold leading-tight text-charcoal-900">
-            {portal.me.activeGym?.gymName ?? 'Workforce portal'}
+            {portal.me.activeGym?.gymName ?? t('Workforce portal')}
           </span>
         </Link>
         <button
           type="button"
-          className="touch-target ml-auto rounded-lg p-1.5 text-charcoal-400 hover:bg-charcoal-100 hover:text-charcoal-700 lg:hidden"
+          className="touch-target ms-auto rounded-lg p-1.5 text-charcoal-400 hover:bg-charcoal-100 hover:text-charcoal-700 lg:hidden"
           onClick={() => setDrawerOpen(false)}
-          aria-label="Close navigation"
+          aria-label={t('Close navigation')}
         >
           <X className="h-4 w-4" aria-hidden="true" />
         </button>
@@ -219,7 +222,7 @@ export function PortalLayout() {
         {sections.map((section) => (
           <div key={section.title}>
             <div className="mt-3 px-2 pb-1 text-[10px] font-semibold uppercase tracking-wider text-charcoal-400 first:mt-0">
-              {section.title}
+              {t(section.title)}
             </div>
             {section.items.map((item) => {
               const badge: NavBadge | undefined = counters[item.id]
@@ -231,11 +234,11 @@ export function PortalLayout() {
                   className={({ isActive }) => cn('nav-item', isActive && 'active')}
                 >
                   <item.icon className="h-4 w-4 flex-shrink-0" aria-hidden="true" />
-                  <span className="text-xs">{item.label}</span>
+                  <span className="text-xs">{t(item.label)}</span>
                   {badge && (
                     <span
-                      title={badge.label}
-                      className="ml-auto flex-shrink-0 inline-flex items-center rounded-md bg-amber-50 px-1.5 py-0.5 text-[10px] font-semibold leading-none text-amber-600 ring-1 ring-inset ring-amber-200"
+                      title={t(badge.label)}
+                      className="ms-auto flex-shrink-0 inline-flex items-center rounded-md bg-amber-50 px-1.5 py-0.5 text-[10px] font-semibold leading-none text-amber-600 ring-1 ring-inset ring-amber-200"
                     >
                       {badge.count > 99 ? '99+' : badge.count}
                     </span>
@@ -249,21 +252,13 @@ export function PortalLayout() {
       </nav>
 
       <div className="relative flex-shrink-0 border-t border-charcoal-100 p-3" ref={userMenuRef}>
-        {import.meta.env.DEV && BUILD_STAMP && (
-          <p
-            className="mb-1 px-1 text-[9px] leading-none text-charcoal-300"
-            title="When this tab's JavaScript was loaded. An old stamp vs. other tabs = the tab is running stale code — hard-reload it (Ctrl+Shift+R)."
-          >
-            dev bundle · loaded {BUILD_STAMP}
-          </p>
-        )}
         <button
           type="button"
-          className="flex w-full items-center gap-2.5 rounded-lg p-1 text-left transition-colors hover:bg-charcoal-50"
+          className="flex w-full items-center gap-2.5 rounded-lg p-1 text-start transition-colors hover:bg-charcoal-50"
           onClick={() => setUserMenuOpen((open) => !open)}
           aria-haspopup="menu"
           aria-expanded={userMenuOpen}
-          aria-label="Account menu"
+          aria-label={t('Account menu')}
         >
           <Avatar initials={initials} src={avatarUrl} />
           <span className="min-w-0 flex-1">
@@ -277,16 +272,24 @@ export function PortalLayout() {
         </button>
 
         {userMenuOpen && (
-          <div className="absolute bottom-full left-3 z-40 mb-2 w-52 rounded-xl border border-charcoal-200 bg-white py-1.5 shadow-xl" role="menu">
-            <Link
-              to={PAGE_PATHS.settings}
-              role="menuitem"
-              onClick={() => setUserMenuOpen(false)}
-              className="flex items-center gap-2 px-3 py-1.5 text-xs text-charcoal-700 hover:bg-charcoal-50"
+          <div className="absolute bottom-full start-3 z-40 mb-2 w-52 rounded-xl border border-charcoal-200 bg-white py-1.5 shadow-xl" role="menu">
+            <button
+              type="button"
+              role="menuitemradio"
+              aria-checked={language === 'ar'}
+              aria-label={t('Change language')}
+              onClick={() => {
+                toggleLanguage()
+                setUserMenuOpen(false)
+              }}
+              className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-charcoal-700 hover:bg-charcoal-50"
             >
-              <Settings className="h-3.5 w-3.5 text-charcoal-400" aria-hidden="true" />
-              Settings
-            </Link>
+              <Languages className="h-3.5 w-3.5 text-charcoal-400" aria-hidden="true" />
+              <span className="flex-1 text-start">{t('Language')}</span>
+              <span className="rounded-md border border-charcoal-200 px-1.5 py-0.5 text-[10px] font-semibold text-charcoal-600">
+                {language === 'ar' ? 'العربية' : 'English'}
+              </span>
+            </button>
             <div className="my-1 border-t border-charcoal-100" />
             <button
               type="button"
@@ -300,7 +303,7 @@ export function PortalLayout() {
               ) : (
                 <Moon className="h-3.5 w-3.5 text-charcoal-400" aria-hidden="true" />
               )}
-              <span className="flex-1 text-left">Dark mode</span>
+              <span className="flex-1 text-start">{t('Dark mode')}</span>
               <span
                 aria-hidden="true"
                 className={cn('relative h-4 w-7 flex-shrink-0 rounded-full transition-colors', isDark ? 'bg-brand-500' : 'bg-charcoal-300')}
@@ -324,22 +327,22 @@ export function PortalLayout() {
       {/* Soft brand backdrop behind all portal pages (fixed, non-interactive) */}
       <div className="portal-backdrop" aria-hidden="true" />
 
-      <aside className="fixed inset-y-0 left-0 z-40 hidden w-56 border-r border-charcoal-200 bg-white lg:block">{sidebar}</aside>
+      <aside className="fixed inset-y-0 start-0 z-40 hidden w-56 border-e border-charcoal-200 bg-white lg:block">{sidebar}</aside>
 
       {drawerOpen && (
         <div className="fixed inset-0 z-50 lg:hidden">
           <div className="absolute inset-0 bg-black/50" onClick={() => setDrawerOpen(false)} />
-          <aside className="safe-bottom absolute inset-y-0 left-0 flex w-64 max-w-[85vw] flex-col bg-white">{sidebar}</aside>
+          <aside className="safe-bottom absolute inset-y-0 start-0 flex w-64 max-w-[85vw] flex-col bg-white">{sidebar}</aside>
         </div>
       )}
 
-      <div className="lg:pl-56">
+      <div className="lg:ps-56">
         <header className="sticky top-0 z-30 flex h-14 items-center gap-4 border-b border-charcoal-100 bg-white px-4 lg:px-5">
           <button
             type="button"
             className="touch-target rounded-lg p-1.5 text-charcoal-500 hover:bg-charcoal-100 hover:text-charcoal-800 lg:hidden"
             onClick={() => setDrawerOpen(true)}
-            aria-label="Open navigation"
+            aria-label={t('Open navigation')}
           >
             <Menu className="h-5 w-5" aria-hidden="true" />
           </button>
@@ -347,7 +350,7 @@ export function PortalLayout() {
               gym switcher, alerts and account menu. */}
           <h1 className="hidden min-w-0 truncate text-sm font-semibold text-charcoal-900 sm:block">{title}</h1>
 
-          <div className="ml-auto flex items-center gap-2.5">
+          <div className="ms-auto flex items-center gap-2.5">
             {portal.me.gyms.length > 1 && <GymSwitcher />}
 
             <div className="relative" ref={bellRef}>
@@ -355,17 +358,17 @@ export function PortalLayout() {
                 type="button"
                 onClick={() => setBellOpen((open) => !open)}
                 className="touch-target relative rounded-full p-1.5 text-charcoal-500 hover:bg-charcoal-100 hover:text-charcoal-800"
-                aria-label={`Notifications${unreadCount > 0 ? ` (${unreadCount} unread)` : ''}`}
+                aria-label={`${t('Notifications')}${unreadCount > 0 ? ` (${t('{{count}} unread', { count: unreadCount })})` : ''}`}
                 aria-expanded={bellOpen}
               >
                 <Bell className="h-5 w-5" aria-hidden="true" />
-                {unreadCount > 0 && <span className="absolute right-1 top-1 h-2 w-2 rounded-full bg-brand-500" aria-hidden="true" />}
+                {unreadCount > 0 && <span className="absolute end-1 top-1 h-2 w-2 rounded-full bg-brand-500" aria-hidden="true" />}
               </button>
 
               {bellOpen && (
-                <div className="fixed inset-x-3 top-16 z-40 rounded-xl border border-charcoal-200 bg-white p-3 shadow-xl lg:absolute lg:inset-x-auto lg:right-0 lg:top-auto lg:mt-2 lg:w-80">
+                <div className="fixed inset-x-3 top-16 z-40 rounded-xl border border-charcoal-200 bg-white p-3 shadow-xl lg:absolute lg:inset-x-auto lg:end-0 lg:top-auto lg:mt-2 lg:w-80">
                   <div className="flex items-center justify-between gap-2">
-                    <p className="text-sm font-semibold text-charcoal-900">Notifications</p>
+                    <p className="text-sm font-semibold text-charcoal-900">{t('Notifications')}</p>
                     {unreadCount > 0 && (
                       <button
                         type="button"
@@ -373,7 +376,7 @@ export function PortalLayout() {
                         onClick={() => markAllRead.mutate()}
                         disabled={markAllRead.isPending}
                       >
-                        Mark all read
+                        {t('Mark all read')}
                       </button>
                     )}
                   </div>
@@ -390,7 +393,7 @@ export function PortalLayout() {
                     onClick={() => setBellOpen(false)}
                     className="mt-2 block border-t border-charcoal-100 pt-2 text-center text-xs font-medium text-brand-600 hover:text-brand-700"
                   >
-                    View all notifications
+                    {t('View all notifications')}
                   </Link>
                 </div>
               )}
@@ -401,7 +404,7 @@ export function PortalLayout() {
                 type="button"
                 onClick={() => setProfileOpen((open) => !open)}
                 className="touch-target flex items-center gap-1.5 rounded-full p-1 hover:bg-charcoal-100"
-                aria-label="Account menu"
+                aria-label={t('Account menu')}
                 aria-expanded={profileOpen}
               >
                 <Avatar initials={initials} src={avatarUrl} size="sm" />
@@ -409,7 +412,7 @@ export function PortalLayout() {
               </button>
 
               {profileOpen && (
-                <div className="absolute right-0 z-40 mt-2 w-52 rounded-xl border border-charcoal-200 bg-white py-1.5 shadow-xl">
+                <div className="absolute end-0 z-40 mt-2 w-52 rounded-xl border border-charcoal-200 bg-white py-1.5 shadow-xl">
                   <div className="px-3 py-1.5">
                     <p className="truncate text-xs font-semibold text-charcoal-900">{fullName}</p>
                     <p className="truncate text-[11px] text-charcoal-500">{portal.me.email}</p>
@@ -423,7 +426,7 @@ export function PortalLayout() {
                       className="flex items-center gap-2 px-3 py-1.5 text-xs text-charcoal-700 hover:bg-charcoal-50"
                     >
                       <item.icon className="h-3.5 w-3.5 text-charcoal-400" aria-hidden="true" />
-                      {item.label}
+                      {t(item.label)}
                     </Link>
                   ))}
                   <div className="my-1 border-t border-charcoal-100" />
@@ -436,7 +439,7 @@ export function PortalLayout() {
                     className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-red-600 hover:bg-red-50"
                   >
                     <LogOut className="h-3.5 w-3.5" aria-hidden="true" />
-                    Sign out
+                    {t('Sign out')}
                   </button>
                 </div>
               )}
@@ -450,8 +453,8 @@ export function PortalLayout() {
         </main>
 
         <nav
-          className="safe-bottom fixed bottom-0 left-0 right-0 z-30 flex border-t border-charcoal-200 bg-white lg:hidden"
-          aria-label="Mobile"
+          className="safe-bottom fixed bottom-0 start-0 end-0 z-30 flex border-t border-charcoal-200 bg-white lg:hidden"
+          aria-label={t('Mobile')}
         >
           {MOBILE_ITEMS.map((item) => {
             const isNotifications = item.id === 'notifications'
@@ -466,10 +469,10 @@ export function PortalLayout() {
                 <span className="relative">
                     <item.icon className="h-5 w-5" aria-hidden="true" />
                   {isNotifications && unreadCount > 0 && (
-                    <span className="absolute -right-1.5 -top-0.5 h-2 w-2 rounded-full bg-brand-500" aria-hidden="true" />
+                    <span className="absolute -end-1.5 -top-0.5 h-2 w-2 rounded-full bg-brand-500" aria-hidden="true" />
                   )}
                 </span>
-                {item.label}
+                {t(item.label)}
               </NavLink>
             )
           })}
@@ -478,9 +481,9 @@ export function PortalLayout() {
 
       <ConfirmDialog
         open={logoutOpen}
-        title="Sign out?"
-        message="You will need to sign in again to use the portal."
-        confirmLabel="Sign out"
+        title={t('Sign out?')}
+        message={t('You will need to sign in again to use the portal.')}
+        confirmLabel={t('Sign out')}
         danger
         onConfirm={() => {
           setLogoutOpen(false)
@@ -508,6 +511,7 @@ function BellList({
   onNavigate: () => void
   onMarkRead: (id: number) => void
 }) {
+  const { t } = useTranslation()
   if (loading) {
     return (
       <div className="flex items-center justify-center py-6">
@@ -517,7 +521,7 @@ function BellList({
   }
 
   if (items.length === 0) {
-    return <p className="py-6 text-center text-xs text-charcoal-500">No notifications yet.</p>
+    return <p className="py-6 text-center text-xs text-charcoal-500">{t('No notifications yet.')}</p>
   }
 
   return (
@@ -555,6 +559,7 @@ function BellList({
 /* ------------------------------------------------------------------ */
 
 function GymSwitcher() {
+  const { t } = useTranslation()
   const portal = usePortalSession()
   const navigate = useNavigate()
   const { toast } = useToast()
@@ -570,23 +575,23 @@ function GymSwitcher() {
         onClick={() => setOpen((value) => !value)}
         disabled={portal.switching}
         className="flex max-w-40 items-center gap-1 rounded-lg border border-charcoal-200 px-2.5 py-1.5 text-xs font-medium text-charcoal-700 hover:bg-charcoal-50 lg:max-w-none"
-        aria-label="Switch gym"
+        aria-label={t('Switch gym')}
         aria-expanded={open}
       >
-        <span className="truncate">{portal.me.activeGym?.gymName ?? 'Choose gym'}</span>
+        <span className="truncate">{portal.me.activeGym?.gymName ?? t('Choose gym')}</span>
         {portal.switching ? <Spinner className="h-3 w-3" /> : <ChevronDown className="h-3 w-3 flex-shrink-0 text-charcoal-400" aria-hidden="true" />}
       </button>
 
       {open && (
-        <div className="absolute right-0 z-40 mt-2 w-56 rounded-xl border border-charcoal-200 bg-white py-1.5 shadow-xl">
-          <p className="px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-charcoal-400">Your gyms</p>
+        <div className="absolute end-0 z-40 mt-2 w-56 rounded-xl border border-charcoal-200 bg-white py-1.5 shadow-xl">
+          <p className="px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-charcoal-400">{t('Your gyms')}</p>
           {portal.me.gyms.map((gym) => {
             const active = gym.gymId === portal.me?.activeGym?.gymId
             return (
               <button
                 key={gym.gymId}
                 type="button"
-                className="flex w-full items-center justify-between gap-2 px-3 py-1.5 text-left text-xs text-charcoal-700 hover:bg-charcoal-50 disabled:opacity-60"
+                className="flex w-full items-center justify-between gap-2 px-3 py-1.5 text-start text-xs text-charcoal-700 hover:bg-charcoal-50 disabled:opacity-60"
                 onClick={async () => {
                   setOpen(false)
                   if (active) return
@@ -600,7 +605,7 @@ function GymSwitcher() {
                     // A failed switch leaves the session on the current gym, so
                     // say why instead of looking like a dead button (e.g. the
                     // API was unreachable for a moment).
-                    toast(`Could not switch gym — ${describeApiError(error)}`, 'error')
+                    toast(t('Could not switch gym — {{error}}', { error: describeApiError(error) }), 'error')
                   }
                 }}
               >

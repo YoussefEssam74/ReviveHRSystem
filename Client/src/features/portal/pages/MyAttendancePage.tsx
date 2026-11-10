@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
+import { useTranslation } from 'react-i18next'
 import { Plus, SquarePen } from 'lucide-react'
 import { getEmployeeDashboard } from '../api/dashboard.api'
 import {
@@ -186,6 +187,7 @@ function dayDisplayStatus(item: EmployeeAttendanceItem, deductions: EmployeeDedu
 }
 
 export default function MyAttendancePage() {
+  const { t } = useTranslation()
   const { me } = usePortalSession()
   const employeeId = me?.employeeId ?? null
 
@@ -241,12 +243,12 @@ export default function MyAttendancePage() {
   if (employeeId == null) {
     return (
       <EmptyState
-        title="No employee profile"
-        hint="This account is not linked to an employee profile, so it has no attendance to show."
+        title={t('No employee profile')}
+        hint={t('This account is not linked to an employee profile, so it has no attendance to show.')}
       />
     )
   }
-  if (attendanceQuery.isLoading) return <LoadingState label="Loading attendance…" />
+  if (attendanceQuery.isLoading) return <LoadingState label={t('Loading attendance…')} />
   if (attendanceQuery.isError) {
     return <ErrorState message={describeApiError(attendanceQuery.error)} onRetry={() => attendanceQuery.refetch()} />
   }
@@ -330,7 +332,7 @@ export default function MyAttendancePage() {
         <div className="card overflow-hidden">
           <div className="flex flex-col justify-between gap-1 border-b border-charcoal-100 px-4 py-2 sm:flex-row sm:items-center">
             <div>
-              <p className="text-sm font-bold text-charcoal-900">Today's View</p>
+              <p className="text-sm font-bold text-charcoal-900">{t("Today's View")}</p>
               <p className="text-[10px] text-charcoal-500">
                 {formatDateWithYear(todayIso)} · {dashboard.user.gymName}
               </p>
@@ -341,14 +343,14 @@ export default function MyAttendancePage() {
           </div>
           <div className="grid grid-cols-2 gap-px bg-charcoal-100 lg:grid-cols-5">
             <div className="bg-white px-3 py-2.5">
-              <p className="bento-label mb-1 text-charcoal-400">ASSIGNED SHIFT</p>
+              <p className="bento-label mb-1 text-charcoal-400">{t('ASSIGNED SHIFT')}</p>
               <p className="text-sm font-bold leading-snug text-charcoal-900">{dashboard.todayShift?.shiftName ?? 'Off'}</p>
               <p className="mt-0.5 text-[10px] leading-snug text-charcoal-500">
                 {dashboard.todayShift ? `${time12(dashboard.todayShift.start)} – ${time12(dashboard.todayShift.end)}` : 'no shift today'}
               </p>
             </div>
             <div className="bg-white px-3 py-2.5">
-              <p className="bento-label mb-1 text-charcoal-400">CHECK-IN</p>
+              <p className="bento-label mb-1 text-charcoal-400">{t('CHECK-IN')}</p>
               <p className={cn('text-sm font-bold leading-snug', today?.checkIn ? 'text-brand-600' : 'text-charcoal-400')}>
                 {time12(today?.checkIn ?? null)}
               </p>
@@ -357,19 +359,19 @@ export default function MyAttendancePage() {
               </p>
             </div>
             <div className="bg-white px-3 py-2.5">
-              <p className="bento-label mb-1 text-charcoal-400">CHECK-OUT</p>
+              <p className="bento-label mb-1 text-charcoal-400">{t('CHECK-OUT')}</p>
               <p className={cn('text-sm font-bold leading-snug', today?.checkOut ? 'text-charcoal-900' : 'text-charcoal-400')}>
                 {time12(today?.checkOut ?? null)}
               </p>
               <p className="mt-0.5 text-[10px] leading-snug text-charcoal-500">{today?.checkOut ? 'completed' : 'in progress'}</p>
             </div>
             <div className="bg-white px-3 py-2.5">
-              <p className="bento-label mb-1 text-charcoal-400">WORKING HOURS</p>
+              <p className="bento-label mb-1 text-charcoal-400">{t('WORKING HOURS')}</p>
               <p className="text-sm font-bold leading-snug text-charcoal-900">{workedLabel(workedToday)}</p>
               <p className="mt-0.5 text-[10px] leading-snug text-charcoal-500">{today?.checkOut ? 'day complete' : 'updating live'}</p>
             </div>
             <div className="col-span-2 bg-white px-3 py-2.5 lg:col-span-1">
-              <p className="bento-label mb-1 text-charcoal-400">ATTENDANCE STATUS</p>
+              <p className="bento-label mb-1 text-charcoal-400">{t('ATTENDANCE STATUS')}</p>
               <div className="mt-0.5">
                 {today ? <StatusBadge status={today.status} /> : <StatusBadge status="Off" />}
               </div>
@@ -383,33 +385,33 @@ export default function MyAttendancePage() {
           pushed to a second row or clipped by the page edge. */}
       {dashboard && (
         <div className="grid grid-cols-7 gap-1 sm:gap-2">
-          <StatPill value={`${Math.round(dashboard.monthSummary.rate)}%`} label="Attendance Rate" color="text-brand-700" accent="border-l-brand-500" />
-          <StatPill value={dashboard.monthSummary.present} label="Present" color="text-brand-600" accent="border-l-brand-500" />
-          <StatPill value={dashboard.monthSummary.late} label="Late" color="text-yellow-600" accent="border-l-yellow-500" />
-          <StatPill value={dashboard.monthSummary.absent} label="Absent" color="text-red-600" accent="border-l-red-500" />
-          <StatPill value={dashboard.monthSummary.earlyCheckout} label="Early Out" color="text-blue-600" accent="border-l-blue-500" />
-          <StatPill value={dashboard.monthSummary.missingCheckout} label="Missing Out" color="text-charcoal-600" accent="border-l-charcoal-400" />
-          <StatPill value={dashboard.monthSummary.coverDays} label="Cover days" color="text-violet-600" accent="border-l-violet-500" />
+          <StatPill value={`${Math.round(dashboard.monthSummary.rate)}%`} label={t('Attendance Rate')} color="text-brand-700" accent="border-s-brand-500" />
+          <StatPill value={dashboard.monthSummary.present} label={t('Present')} color="text-brand-600" accent="border-s-brand-500" />
+          <StatPill value={dashboard.monthSummary.late} label={t('Late')} color="text-yellow-600" accent="border-s-yellow-500" />
+          <StatPill value={dashboard.monthSummary.absent} label={t('Absent')} color="text-red-600" accent="border-s-red-500" />
+          <StatPill value={dashboard.monthSummary.earlyCheckout} label={t('Early Out')} color="text-blue-600" accent="border-s-blue-500" />
+          <StatPill value={dashboard.monthSummary.missingCheckout} label={t('Missing Out')} color="text-charcoal-600" accent="border-s-charcoal-400" />
+          <StatPill value={dashboard.monthSummary.coverDays} label={t('Cover days')} color="text-violet-600" accent="border-s-violet-500" />
         </div>
       )}
 
       {/* Leave balance + quick request launch */}
       <div className="grid grid-cols-1 gap-2 lg:grid-cols-3">
         <div className="card px-3 py-2">
-          <p className="bento-label mb-1.5">LEAVE BALANCE</p>
+          <p className="bento-label mb-1.5">{t('LEAVE BALANCE')}</p>
           <div className="space-y-1.5">
             {balance ? (
               <>
-                <BalanceRow label="Annual" used={balance.dayOff.used} total={balance.dayOff.total} color="bg-brand-500" />
-                <BalanceRow label="Sick" used={balance.sick.used} total={balance.sick.total} color="bg-red-400" />
-                <BalanceRow label="Unpaid" used={balance.unpaid.used} total={balance.unpaid.total} color="bg-blue-500" />
+                <BalanceRow label={t('Annual')} used={balance.dayOff.used} total={balance.dayOff.total} color="bg-brand-500" />
+                <BalanceRow label={t('Sick')} used={balance.sick.used} total={balance.sick.total} color="bg-red-400" />
+                <BalanceRow label={t('Unpaid')} used={balance.unpaid.used} total={balance.unpaid.total} color="bg-blue-500" />
               </>
             ) : (
               balanceQuery.isError && <p className="text-[11px] text-red-600">{describeApiError(balanceQuery.error)}</p>
             )}
             {budget && (
               <BalanceRow
-                label="Excused hours"
+                label={t('Excused hours')}
                 used={budget.usedHours}
                 total={budget.capHours}
                 color="bg-purple-400"
@@ -421,7 +423,7 @@ export default function MyAttendancePage() {
 
         <div className="card px-3 py-2 lg:col-span-2">
           <div className="mb-1.5 flex items-center justify-between">
-            <p className="bento-label">NEW REQUEST</p>
+            <p className="bento-label">{t('NEW REQUEST')}</p>
             <Link to={PAGE_PATHS.requests} className="text-[10px] font-semibold text-brand-600 hover:underline">
               View All
             </Link>
@@ -432,7 +434,7 @@ export default function MyAttendancePage() {
             <Button size="sm" onClick={() => setRequestDraft({})}>
               <SquarePen className="h-3.5 w-3.5" aria-hidden="true" /> New Request
             </Button>
-            <p className="text-[10px] text-charcoal-500">Choose the request type in the form — leave, swap, correction or advance.</p>
+            <p className="text-[10px] text-charcoal-500">{t('Choose the request type in the form — leave, swap, correction or advance.')}</p>
           </div>
 
           {/* Tablet / desktop: the type chips. Deduction disputes start from the
@@ -464,11 +466,11 @@ export default function MyAttendancePage() {
 
       {/* Attendance history */}
       <div className="flex flex-col gap-2 pt-1 sm:flex-row sm:items-center sm:justify-between">
-        <p className="text-xs font-bold text-charcoal-900">Attendance History</p>
+        <p className="text-xs font-bold text-charcoal-900">{t('Attendance History')}</p>
         <div className="w-full shrink-0 sm:w-44">
           <select
             className="form-select"
-            aria-label="Select month"
+            aria-label={t('Select month')}
             value={month}
             onChange={(event) => setMonth(event.target.value)}
           >
@@ -483,19 +485,19 @@ export default function MyAttendancePage() {
 
       <div className="card hidden overflow-hidden lg:block">
         {history.length === 0 ? (
-          <EmptyState title="No attendance records for this month" />
+          <EmptyState title={t('No attendance records for this month')} />
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs">
               <thead>
                 <tr className="border-b border-charcoal-100 text-charcoal-500 dark:text-charcoal-700">
-                  <th className="px-4 py-2.5 font-medium">Date</th>
-                  <th className="px-4 py-2.5 font-medium">Shift</th>
-                  <th className="px-4 py-2.5 font-medium">Check In</th>
-                  <th className="px-4 py-2.5 font-medium">Check Out</th>
-                  <th className="px-4 py-2.5 font-medium">Status</th>
-                  <th className="px-4 py-2.5 font-medium">Warnings & Deductions</th>
-                  <th className="px-4 py-2.5 font-medium">Requests</th>
+                  <th className="px-4 py-2.5 font-medium">{t('Date')}</th>
+                  <th className="px-4 py-2.5 font-medium">{t('Shift')}</th>
+                  <th className="px-4 py-2.5 font-medium">{t('Check In')}</th>
+                  <th className="px-4 py-2.5 font-medium">{t('Check Out')}</th>
+                  <th className="px-4 py-2.5 font-medium">{t('Status')}</th>
+                  <th className="px-4 py-2.5 font-medium">{t('Warnings & Deductions')}</th>
+                  <th className="px-4 py-2.5 font-medium">{t('Requests')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -548,7 +550,7 @@ export default function MyAttendancePage() {
       </div>
 
       <div className="space-y-2 lg:hidden">
-        {history.length === 0 && <EmptyState title="No attendance records for this month" />}
+        {history.length === 0 && <EmptyState title={t('No attendance records for this month')} />}
         {history.map((item) => {
           const leave = leaveOn(item.date)
           const others = requestsOn(item.date).filter((r) => r !== leave)
@@ -722,8 +724,9 @@ function AttendanceDetailDrawer({
   /** Opens the New Request modal with no type pre-picked. */
   onNewRequest: () => void
 }) {
+  const { t } = useTranslation()
   return (
-    <Drawer open={detailDate != null} title="Attendance Details" onClose={onClose}>
+    <Drawer open={detailDate != null} title={t('Attendance Details')} onClose={onClose}>
       {detail && (
         <div className="space-y-4">
           <div className="border-b border-charcoal-100 py-2 text-center">
@@ -735,14 +738,14 @@ function AttendanceDetailDrawer({
 
           {/* Section 1 — the day's attendance facts, with its own correction action */}
           <div>
-            <p className="bento-label mb-1.5 text-charcoal-500">ATTENDANCE</p>
+            <p className="bento-label mb-1.5 text-charcoal-500">{t('ATTENDANCE')}</p>
             <div className="space-y-2">
-              <DayRow label="Scheduled Shift" value={formatTimeLabel(detail.shift)} />
-              <DayRow label="Check In" value={time12(detail.checkIn)} valueClass={detail.checkIn ? 'text-brand-600' : 'text-charcoal-400'} bold />
-              <DayRow label="Check Out" value={time12(detail.checkOut)} bold />
+              <DayRow label={t('Scheduled Shift')} value={formatTimeLabel(detail.shift)} />
+              <DayRow label={t('Check In')} value={time12(detail.checkIn)} valueClass={detail.checkIn ? 'text-brand-600' : 'text-charcoal-400'} bold />
+              <DayRow label={t('Check Out')} value={time12(detail.checkOut)} bold />
               {detail.coverDays != null && (
                 <DayRow
-                  label="Cover / Extra Days"
+                  label={t('Cover / Extra Days')}
                   value={`${detail.coverDays} day${detail.coverDays === 1 ? '' : 's'}`}
                   valueClass="text-violet-600"
                   bold
@@ -750,7 +753,7 @@ function AttendanceDetailDrawer({
               )}
               {detail.notes ? (
                 <div className="py-1.5 text-xs">
-                  <span className="mb-1 flex items-center gap-1.5 text-charcoal-500">Notes</span>
+                  <span className="mb-1 flex items-center gap-1.5 text-charcoal-500">{t('Notes')}</span>
                   <p className="rounded-lg bg-charcoal-50 p-2.5 text-charcoal-700">{detail.notes}</p>
                 </div>
               ) : null}
@@ -785,7 +788,7 @@ function AttendanceDetailDrawer({
 
           {/* Section 2 — warnings & deductions raised on the day, each disputable on its own */}
           <div>
-            <p className="bento-label mb-1.5 text-charcoal-500">WARNINGS & DEDUCTIONS</p>
+            <p className="bento-label mb-1.5 text-charcoal-500">{t('WARNINGS & DEDUCTIONS')}</p>
             <div className="space-y-2">
               {warning && (
                 <div className="rounded-lg border border-orange-200 bg-orange-50 p-2.5">
@@ -820,7 +823,7 @@ function AttendanceDetailDrawer({
                 </div>
               ))}
               {!warning && deductions.length === 0 && (
-                <p className="text-[11px] text-charcoal-400">No warnings or deductions on this day.</p>
+                <p className="text-[11px] text-charcoal-400">{t('No warnings or deductions on this day.')}</p>
               )}
             </div>
           </div>

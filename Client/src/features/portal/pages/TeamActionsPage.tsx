@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useTranslation } from 'react-i18next'
 import { Megaphone, Zap } from 'lucide-react'
 import {
   createTeamFollowUp,
@@ -25,9 +26,9 @@ const SEVERITIES = ['Low', 'Medium', 'High'] as const
 type Severity = (typeof SEVERITIES)[number]
 
 const SEV_CLASS: Record<Severity, { border: string; bg: string; badge: string }> = {
-  High: { border: 'border-l-red-400', bg: 'bg-red-50/50', badge: 'badge-red' },
-  Medium: { border: 'border-l-yellow-400', bg: 'bg-yellow-50/50', badge: 'badge-yellow' },
-  Low: { border: 'border-l-blue-400', bg: 'bg-blue-50/50', badge: 'badge-blue' },
+  High: { border: 'border-s-red-400', bg: 'bg-red-50/50', badge: 'badge-red' },
+  Medium: { border: 'border-s-yellow-400', bg: 'bg-yellow-50/50', badge: 'badge-yellow' },
+  Low: { border: 'border-s-blue-400', bg: 'bg-blue-50/50', badge: 'badge-blue' },
 }
 
 /** The action vocabulary the backend accepts — see FollowUpActionType. */
@@ -55,14 +56,15 @@ const OPEN_ACTIONS: ActionKind[] = ['Deduction', 'Warning', 'EscalateToHR', 'Rem
 const DEDUCTION_AMOUNTS = ['Quarter Day', 'Half Day', 'Day', '3 Days'] as const
 
 export default function TeamActionsPage() {
+  const { t } = useTranslation()
   const { me, isTeamLeader, isBranchManager } = usePortalSession()
   const ledTeamId = me?.ledTeamId ?? null
 
   if (!isTeamLeader && !isBranchManager) {
     return (
       <EmptyState
-        title="Team Actions is for managers"
-        hint="Follow-ups scope to the team you lead in the active gym."
+        title={t('Team Actions is for managers')}
+        hint={t('Follow-ups scope to the team you lead in the active gym.')}
       />
     )
   }
@@ -71,8 +73,8 @@ export default function TeamActionsPage() {
   if (!isBranchManager && ledTeamId == null) {
     return (
       <EmptyState
-        title="No team in this gym"
-        hint="You have no led team in the active gym, so there is no one to follow up on."
+        title={t('No team in this gym')}
+        hint={t('You have no led team in the active gym, so there is no one to follow up on.')}
       />
     )
   }
@@ -81,6 +83,7 @@ export default function TeamActionsPage() {
 }
 
 function ActionsWorkspace({ scopeTeamId }: { scopeTeamId: number | null }) {
+  const { t } = useTranslation()
   const { isBranchManager } = usePortalSession()
   const [severity, setSeverity] = useState<'All' | Severity>('All')
   const [createOpen, setCreateOpen] = useState(false)
@@ -135,11 +138,11 @@ function ActionsWorkspace({ scopeTeamId }: { scopeTeamId: number | null }) {
     <div className="space-y-3">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-bold text-charcoal-900">Team Actions</h1>
-          <p className="mt-0.5 text-xs text-charcoal-500">{open.length} items requiring attention</p>
+          <h1 className="text-xl font-bold text-charcoal-900">{t('Team Actions')}</h1>
+          <p className="mt-0.5 text-xs text-charcoal-500">{t('{{count}} items requiring attention', { count: open.length })}</p>
         </div>
         <Button size="sm" onClick={() => setCreateOpen(true)}>
-          <Zap className="h-3.5 w-3.5" aria-hidden="true" /> Take Action
+          <Zap className="h-3.5 w-3.5" aria-hidden="true" /> {t('Take Action')}
         </Button>
       </div>
 
@@ -153,7 +156,7 @@ function ActionsWorkspace({ scopeTeamId }: { scopeTeamId: number | null }) {
               severity === option ? 'bg-charcoal-800 text-white' : 'bg-charcoal-100 text-charcoal-600 hover:bg-charcoal-200',
             )}
           >
-            {option === 'All' ? 'All' : option}
+            {option === 'All' ? t('All') : t(option)}
           </button>
         ))}
       </div>
@@ -167,8 +170,8 @@ function ActionsWorkspace({ scopeTeamId }: { scopeTeamId: number | null }) {
       ) : (
         <EmptyState
           icon={<Megaphone className="h-8 w-8" aria-hidden="true" />}
-          title={severity === 'All' ? 'No open follow-ups' : `No open ${severity} follow-ups`}
-          hint="Raised follow-ups appear here until someone records a Resolution."
+          title={severity === 'All' ? t('No open follow-ups') : t('No open {{severity}} follow-ups', { severity: t(severity) })}
+          hint={t('Raised follow-ups appear here until someone records a Resolution.')}
         />
       )}
 
@@ -183,6 +186,7 @@ function ActionsWorkspace({ scopeTeamId }: { scopeTeamId: number | null }) {
 }
 
 function FollowUpRow({ item }: { item: TeamFollowUp }) {
+  const { t } = useTranslation()
   const { toast } = useToast()
   const queryClient = useQueryClient()
   const [actionOpen, setActionOpen] = useState(false)
@@ -191,7 +195,7 @@ function FollowUpRow({ item }: { item: TeamFollowUp }) {
   const remindMutation = useMutation({
     mutationFn: () => sendReminder(item.employeeId),
     onSuccess: () => {
-      toast(`Reminder sent to ${first(item.employee)}.`)
+      toast(t('Reminder sent to {{name}}.', { name: first(item.employee) }))
       setRemindOpen(false)
     },
     onError: (error) => toast(describeApiError(error), 'error'),
@@ -200,7 +204,7 @@ function FollowUpRow({ item }: { item: TeamFollowUp }) {
   const sev = rowSeverity(item)
 
   return (
-    <div className={cn('rounded-xl border border-charcoal-200 border-l-4 p-3', SEV_CLASS[sev].border, item.isResolved ? 'bg-charcoal-50/50' : SEV_CLASS[sev].bg)}>
+    <div className={cn('rounded-xl border border-charcoal-200 border-s-4 p-3', SEV_CLASS[sev].border, item.isResolved ? 'bg-charcoal-50/50' : SEV_CLASS[sev].bg)}>
       <div className="flex items-start justify-between">
         <div className="flex min-w-0 items-start gap-3">
           <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-brand-100 text-[10px] font-semibold text-brand-700">
@@ -212,20 +216,20 @@ function FollowUpRow({ item }: { item: TeamFollowUp }) {
             {item.note && !item.note.startsWith('auto-absence:') &&
               <p className="mt-1 text-xs text-charcoal-600">{item.note}</p>}
             {item.lastAction && (
-              <p className="mt-0.5 text-[10px] text-charcoal-400">Last action: {item.lastAction}</p>
+              <p className="mt-0.5 text-[10px] text-charcoal-400">{t('Last action: {{action}}', { action: item.lastAction })}</p>
             )}
           </div>
         </div>
-        <div className="ml-2 flex flex-shrink-0 items-center gap-1.5">
+        <div className="ms-2 flex flex-shrink-0 items-center gap-1.5">
           {!item.isResolved ? (
             <>
-              <span className={cn('badge', SEV_CLASS[sev].badge)}>{sev}</span>
+              <span className={cn('badge', SEV_CLASS[sev].badge)}>{t(sev)}</span>
               <Button size="sm" onClick={() => setActionOpen(true)}>
-                Action
+                {t('Action')}
               </Button>
             </>
           ) : (
-            <span className="badge badge-green">Resolved</span>
+            <span className="badge badge-green">{t('Resolved')}</span>
           )}
         </div>
       </div>
@@ -243,16 +247,16 @@ function FollowUpRow({ item }: { item: TeamFollowUp }) {
       {remindOpen && (
         <Modal
           open
-          title={`Remind ${first(item.employee)}?`}
-          subtitle="Sends a reminder notification for this item."
+          title={t('Remind {{name}}?', { name: first(item.employee) })}
+          subtitle={t('Sends a reminder notification for this item.')}
           onClose={() => setRemindOpen(false)}
           footer={
             <>
               <Button size="sm" variant="secondary" onClick={() => setRemindOpen(false)}>
-                Cancel
+                {t('Cancel')}
               </Button>
               <Button size="sm" loading={remindMutation.isPending} onClick={() => remindMutation.mutate()}>
-                Send reminder
+                {t('Send reminder')}
               </Button>
             </>
           }
@@ -280,6 +284,7 @@ function ActionModal({
   onClose: () => void
   onSaved: () => void
 }) {
+  const { t } = useTranslation()
   const { toast } = useToast()
   const [action, setAction] = useState<ActionKind>('Deduction')
   const [note, setNote] = useState('')
@@ -287,7 +292,11 @@ function ActionModal({
   const saveMutation = useMutation({
     mutationFn: () => updateTeamFollowUp(item.id, { action, note: note.trim() || null }),
     onSuccess: (updated) => {
-      toast(updated.isResolved ? 'Follow-up resolved.' : `${ACTION_LABELS[action]} recorded.`)
+      toast(
+        updated.isResolved
+          ? t('Follow-up resolved.')
+          : t('{{action}} recorded.', { action: t(ACTION_LABELS[action]) }),
+      )
       onSaved()
       onClose()
     },
@@ -297,16 +306,16 @@ function ActionModal({
   return (
     <Modal
       open
-      title={`Action — ${item.employee}`}
+      title={t('Action — {{name}}', { name: item.employee })}
       subtitle={item.description}
       onClose={onClose}
       footer={
         <>
           <Button size="sm" variant="secondary" onClick={onClose}>
-            Cancel
+            {t('Cancel')}
           </Button>
           <Button size="sm" loading={saveMutation.isPending} onClick={() => saveMutation.mutate()}>
-            Record
+            {t('Record')}
           </Button>
         </>
       }
@@ -314,7 +323,7 @@ function ActionModal({
       <div className="space-y-3">
         <div>
           <label className="form-label" htmlFor="action-kind">
-            Action
+            {t('Action')}
           </label>
           <select
             id="action-kind"
@@ -324,26 +333,26 @@ function ActionModal({
           >
             {ACTIONS.map((option) => (
               <option key={option} value={option}>
-                {ACTION_LABELS[option]} — {ACTION_HINTS[option]}
+                {t(ACTION_LABELS[option])} — {t(ACTION_HINTS[option])}
               </option>
             ))}
           </select>
         </div>
         <div>
           <label className="form-label" htmlFor="action-note">
-            Note (optional)
+            {t('Note (optional)')}
           </label>
           <textarea
             id="action-note"
             rows={3}
             value={note}
             onChange={(e) => setNote(e.target.value)}
-            placeholder="What happened / what was agreed…"
+            placeholder={t('What happened / what was agreed…')}
             className="form-input"
           />
         </div>
         {action === 'Resolution' && (
-          <p className="text-[10px] text-charcoal-400">Recording a Resolution closes this follow-up.</p>
+          <p className="text-[10px] text-charcoal-400">{t('Recording a Resolution closes this follow-up.')}</p>
         )}
       </div>
     </Modal>
@@ -360,6 +369,7 @@ export function CreateFollowUpModal({
   defaultMember?: TeamMemberDay | null
   onClose: () => void
 }) {
+  const { t } = useTranslation()
   const { toast } = useToast()
   const queryClient = useQueryClient()
   const [employeeId, setEmployeeId] = useState<number | null>(null)
@@ -390,7 +400,7 @@ export function CreateFollowUpModal({
         deductionSize: action === 'Deduction' ? deductionAmount : null,
       }),
     onSuccess: (created) => {
-      toast(`Follow-up raised for ${first(created.employee)}.`)
+      toast(t('Follow-up raised for {{name}}.', { name: first(created.employee) }))
       void queryClient.invalidateQueries({ queryKey: ['portal', 'follow-ups'] })
       onClose()
     },
@@ -410,17 +420,17 @@ export function CreateFollowUpModal({
   return (
     <Modal
       open
-      title="Raise follow-up"
+      title={t('Raise follow-up')}
       subtitle={
         defaultMember
-          ? `About ${defaultMember.name} — spot something on the floor, log an action.`
-          : 'Spot something on the floor — log an action about one team member.'
+          ? t('About {{name}} — spot something on the floor, log an action.', { name: defaultMember.name })
+          : t('Spot something on the floor — log an action about one team member.')
       }
       onClose={onClose}
       footer={
         <>
           <Button size="sm" variant="secondary" onClick={onClose}>
-            Cancel
+            {t('Cancel')}
           </Button>
           <Button
             size="sm"
@@ -432,21 +442,21 @@ export function CreateFollowUpModal({
             loading={createMutation.isPending}
             onClick={() => createMutation.mutate()}
           >
-            Save
+            {t('Save')}
           </Button>
         </>
       }
     >
       {options.length === 0 ? (
         <EmptyState
-          title="No employees to act on"
-          hint="Nobody in your scope is available for a follow-up yet."
+          title={t('No employees to act on')}
+          hint={t('Nobody in your scope is available for a follow-up yet.')}
         />
       ) : (
         <div className="space-y-3">
           <div>
             <label className="form-label" htmlFor="fu-emp">
-              Team member
+              {t('Team member')}
             </label>
             <select
               id="fu-emp"
@@ -456,7 +466,7 @@ export function CreateFollowUpModal({
             >
               {effectiveEmployeeId == null && (
                 <option value="" disabled>
-                  Select an employee…
+                  {t('Select an employee…')}
                 </option>
               )}
               {options.map((m) => (
@@ -469,7 +479,7 @@ export function CreateFollowUpModal({
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="form-label" htmlFor="fu-action">
-                Action
+                {t('Action')}
               </label>
               <select
                 id="fu-action"
@@ -479,14 +489,14 @@ export function CreateFollowUpModal({
               >
                 {OPEN_ACTIONS.map((option) => (
                   <option key={option} value={option}>
-                    {ACTION_LABELS[option]}
+                    {t(ACTION_LABELS[option])}
                   </option>
                 ))}
               </select>
             </div>
             <div>
               <label className="form-label" htmlFor="fu-sev">
-                Severity
+                {t('Severity')}
               </label>
               <select
                 id="fu-sev"
@@ -496,7 +506,7 @@ export function CreateFollowUpModal({
               >
                 {SEVERITIES.map((option) => (
                   <option key={option} value={option}>
-                    {option}
+                    {t(option)}
                   </option>
                 ))}
               </select>
@@ -506,7 +516,7 @@ export function CreateFollowUpModal({
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="form-label" htmlFor="fu-deduction-date">
-                  Deduction date
+                  {t('Deduction date')}
                 </label>
                 <input
                   id="fu-deduction-date"
@@ -517,12 +527,12 @@ export function CreateFollowUpModal({
                   className="form-input"
                 />
                 {deductionDate === '' && (
-                  <p className="mt-1 text-[10px] text-red-500">Deduction date is required.</p>
+                  <p className="mt-1 text-[10px] text-red-500">{t('Deduction date is required.')}</p>
                 )}
               </div>
               <div>
                 <label className="form-label" htmlFor="fu-deduction">
-                  Deduction amount
+                  {t('Deduction amount')}
                 </label>
                 <select
                   id="fu-deduction"
@@ -530,39 +540,39 @@ export function CreateFollowUpModal({
                   onChange={(e) => setDeductionAmount(e.target.value as (typeof DEDUCTION_AMOUNTS)[number] | '')}
                   className="form-input"
                 >
-                  <option value="">Choose deduction…</option>
+                  <option value="">{t('Choose deduction…')}</option>
                   {DEDUCTION_AMOUNTS.map((amount) => (
                     <option key={amount} value={amount}>
-                      {amount}
+                      {t(amount)}
                     </option>
                   ))}
                 </select>
                 {deductionAmount === '' && (
-                  <p className="mt-1 text-[10px] text-red-500">Deduction amount is required.</p>
+                  <p className="mt-1 text-[10px] text-red-500">{t('Deduction amount is required.')}</p>
                 )}
               </div>
             </div>
           ) : (
             <div>
               <label className="form-label" htmlFor="fu-desc">
-                Description
+                {t('Description')}
               </label>
               <textarea
                 id="fu-desc"
                 rows={3}
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
-                placeholder="What the follow-up is about…"
+                placeholder={t('What the follow-up is about…')}
                 className="form-input"
               />
               {description.trim().length === 0 && (
-                <p className="mt-1 text-[10px] text-red-500">Description is required.</p>
+                <p className="mt-1 text-[10px] text-red-500">{t('Description is required.')}</p>
               )}
             </div>
           )}
           <div>
             <label className="form-label" htmlFor="fu-note">
-              Note (optional)
+              {t('Note (optional)')}
             </label>
             <input
               id="fu-note"

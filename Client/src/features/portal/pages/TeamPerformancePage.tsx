@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
+import { useTranslation } from 'react-i18next'
 import { ChevronRight, Star } from 'lucide-react'
 import { getMyTeams, getTeamEvaluations, type TeamEvaluation } from '../api/team.api'
 import { getOwnEvaluationDetails, type EvaluationDetail } from '../api/employee-file.api'
@@ -25,16 +26,23 @@ const RESULT_COLORS: Record<string, string> = {
 }
 
 export default function TeamPerformancePage() {
+  const { t } = useTranslation()
   const { me, isTeamLeader, isBranchManager } = usePortalSession()
   const ledTeamId = me?.ledTeamId ?? null
 
   if (!isTeamLeader && !isBranchManager) {
-    return <EmptyState title="Team Performance is for managers" hint="Evaluations drill-ins scope to the team you lead." />
+    return (
+      <EmptyState
+        title={t('Team Performance is for managers')}
+        hint={t('Evaluations drill-ins scope to the team you lead.')}
+      />
+    )
   }
   return <TeamsLoader ledTeamId={ledTeamId} />
 }
 
 function TeamsLoader({ ledTeamId }: { ledTeamId: number | null }) {
+  const { t } = useTranslation()
   const teamsQuery = useQuery({
     queryKey: ['portal', 'teams'],
     queryFn: ({ signal }) => getMyTeams(signal),
@@ -48,8 +56,8 @@ function TeamsLoader({ ledTeamId }: { ledTeamId: number | null }) {
   if (teams.length === 0) {
     return (
       <EmptyState
-        title="No team in this gym"
-        hint="Team Performance scopes to the teams you lead or belong to in the active gym."
+        title={t('No team in this gym')}
+        hint={t('Team Performance scopes to the teams you lead or belong to in the active gym.')}
       />
     )
   }
@@ -58,6 +66,7 @@ function TeamsLoader({ ledTeamId }: { ledTeamId: number | null }) {
 }
 
 function TeamPerformanceView({ teams, preferredTeamId }: { teams: { id: number; name: string; memberCount: number }[]; preferredTeamId: number | null }) {
+  const { t } = useTranslation()
   const [teamId, setTeamId] = useState<number>(preferredTeamId ?? teams[0].id)
   const team = teams.find((t) => t.id === teamId) ?? teams[0]
 
@@ -65,9 +74,12 @@ function TeamPerformanceView({ teams, preferredTeamId }: { teams: { id: number; 
     <div className="space-y-3">
       <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
         <div>
-          <h1 className="text-xl font-bold text-charcoal-900">Team Performance</h1>
+          <h1 className="text-xl font-bold text-charcoal-900">{t('Team Performance')}</h1>
           <p className="mt-0.5 text-xs text-charcoal-500">
-            {team.name} · {team.memberCount} members · evaluations submitted for the team
+            {t('{{team}} · {{count}} members · evaluations submitted for the team', {
+              team: team.name,
+              count: team.memberCount,
+            })}
           </p>
         </div>
         <TeamSelect teams={teams} value={team.id} onChange={setTeamId} />
@@ -87,12 +99,13 @@ function TeamSelect({
   value: number
   onChange: (id: number) => void
 }) {
+  const { t } = useTranslation()
   if (teams.length === 1) {
     return <span className="badge badge-blue shrink-0">{teams[0].name}</span>
   }
   return (
     <select
-      aria-label="Team"
+      aria-label={t('Team')}
       value={value}
       onChange={(e) => onChange(Number(e.target.value))}
       className="form-input max-w-[240px] text-[13px]"
@@ -107,6 +120,7 @@ function TeamSelect({
 }
 
 function EvaluationsPanel({ teamId }: { teamId: number }) {
+  const { t } = useTranslation()
   const evalsQuery = useQuery({
     queryKey: ['portal', 'team-evaluations', teamId],
     queryFn: ({ signal }) => getTeamEvaluations(teamId, signal),
@@ -120,8 +134,8 @@ function EvaluationsPanel({ teamId }: { teamId: number }) {
   if (evals.length === 0) {
     return (
       <EmptyState
-        title="No evaluations yet"
-        hint="Team rows appear once evaluations are submitted for the team's members."
+        title={t('No evaluations yet')}
+        hint={t("Team rows appear once evaluations are submitted for the team's members.")}
       />
     )
   }
@@ -130,6 +144,7 @@ function EvaluationsPanel({ teamId }: { teamId: number }) {
 }
 
 function PerformanceList({ evals }: { evals: TeamEvaluation[] }) {
+  const { t } = useTranslation()
   const [detail, setDetail] = useState<TeamEvaluation | null>(null)
 
   const stats = useMemo(() => {
@@ -142,27 +157,27 @@ function PerformanceList({ evals }: { evals: TeamEvaluation[] }) {
   return (
     <div className="space-y-3">
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-        <div className="rounded-xl border border-charcoal-200 border-l-4 border-l-brand-500 bg-white p-3 text-center">
+        <div className="rounded-xl border border-charcoal-200 border-s-4 border-s-brand-500 bg-white p-3 text-center">
           <p className="text-lg font-bold text-brand-600">{stats.avg.toFixed(1)}</p>
-          <p className="text-[10px] text-charcoal-500">Avg Score</p>
+          <p className="text-[10px] text-charcoal-500">{t('Avg Score')}</p>
         </div>
         <div className="rounded-xl border border-charcoal-200 bg-white p-3 text-center">
           <p className="text-lg font-bold text-green-600">{stats.counts.Exceeds}</p>
-          <p className="text-[10px] text-charcoal-500">Exceeds</p>
+          <p className="text-[10px] text-charcoal-500">{t('Exceeds')}</p>
         </div>
         <div className="rounded-xl border border-charcoal-200 bg-white p-3 text-center">
           <p className="text-lg font-bold text-blue-600">{stats.counts.Meets}</p>
-          <p className="text-[10px] text-charcoal-500">Meets</p>
+          <p className="text-[10px] text-charcoal-500">{t('Meets')}</p>
         </div>
         <div className="rounded-xl border border-charcoal-200 bg-white p-3 text-center">
           <p className="text-lg font-bold text-red-600">{stats.counts.Below}</p>
-          <p className="text-[10px] text-charcoal-500">Below</p>
+          <p className="text-[10px] text-charcoal-500">{t('Below')}</p>
         </div>
       </div>
 
       <div className="divide-y divide-charcoal-50 overflow-hidden rounded-xl border border-charcoal-200 bg-white">
         {evals.map((e) => (
-          <button key={e.id} className="block w-full p-3 text-left transition-colors hover:bg-charcoal-50/50" onClick={() => setDetail(e)}>
+          <button key={e.id} className="block w-full p-3 text-start transition-colors hover:bg-charcoal-50/50" onClick={() => setDetail(e)}>
             <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-between sm:gap-2">
               <div className="flex min-w-0 items-center gap-2.5">
                 <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-brand-100 text-[10px] font-semibold text-brand-700">
@@ -171,13 +186,13 @@ function PerformanceList({ evals }: { evals: TeamEvaluation[] }) {
                 <div className="min-w-0">
                   <p className="truncate text-xs font-semibold text-charcoal-900">{e.employeeName}</p>
                   <p className="text-[10px] text-charcoal-500">
-                    {e.period} · {formatDateWithYear(e.date)} · Reviewer {e.reviewer || '—'}
+                    {e.period} · {formatDateWithYear(e.date)} · {t('Reviewer {{name}}', { name: e.reviewer || '—' })}
                   </p>
                 </div>
               </div>
-              <div className="flex flex-wrap items-center gap-1.5 pl-[2.875rem] sm:flex-shrink-0 sm:pl-0">
+              <div className="flex flex-wrap items-center gap-1.5 ps-[2.875rem] sm:flex-shrink-0 sm:ps-0">
                 <StarScore score={e.score} />
-                <span className={cn('badge', RESULT_COLORS[resultOf(e.score)])}>{resultOf(e.score)}</span>
+                <span className={cn('badge', RESULT_COLORS[resultOf(e.score)])}>{t(resultOf(e.score))}</span>
                 <StatusBadge status={e.status} />
                 <ChevronRight className="hidden h-3.5 w-3.5 text-charcoal-400 sm:block" aria-hidden="true" />
               </div>
@@ -212,6 +227,7 @@ function StarScore({ score }: { score: number }) {
 }
 
 function TeamEvaluationModal({ evaluation, onClose }: { evaluation: TeamEvaluation; onClose: () => void }) {
+  const { t } = useTranslation()
   // The rich criteria live on the B5 detail endpoint; the list row already has
   // them — but re-fetch by employee id to guarantee the freshest answers.
   const detailQuery = useQuery({
@@ -239,11 +255,14 @@ function TeamEvaluationModal({ evaluation, onClose }: { evaluation: TeamEvaluati
     <Modal
       open
       title={`${evaluation.employeeName} — ${shown.period}`}
-      subtitle={`Submitted ${formatDateWithYear(shown.date)} · Reviewer ${shown.reviewer || '—'}`}
+      subtitle={t('Submitted {{date}} · Reviewer {{name}}', {
+        date: formatDateWithYear(shown.date),
+        name: shown.reviewer || '—',
+      })}
       onClose={onClose}
       footer={
         <Button size="sm" variant="secondary" onClick={onClose}>
-          Close
+          {t('Close')}
         </Button>
       }
     >
@@ -297,8 +316,8 @@ function TeamEvaluationModal({ evaluation, onClose }: { evaluation: TeamEvaluati
             })}
           </div>
           <div className="rounded-lg bg-charcoal-50 p-3">
-            <p className="bento-label text-charcoal-500">OVERALL COMMENT</p>
-            <p className="mt-1 text-xs text-charcoal-700">{shown.overallComment || 'No comment'}</p>
+            <p className="bento-label text-charcoal-500">{t('OVERALL COMMENT')}</p>
+            <p className="mt-1 text-xs text-charcoal-700">{shown.overallComment || t('No comment')}</p>
           </div>
         </div>
       )}

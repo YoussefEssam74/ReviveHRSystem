@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useTranslation } from 'react-i18next'
 import {
   ClipboardList,
   ExternalLink,
@@ -40,6 +41,7 @@ const PREFERENCE_ROWS: ReadonlyArray<{
 ]
 
 export default function SettingsPage() {
+  const { t } = useTranslation()
   const { toast } = useToast()
   const navigate = useNavigate()
   const { session, signOut } = useAuthSession()
@@ -57,7 +59,7 @@ export default function SettingsPage() {
     mutationFn: (preferences: NotificationPreference) => updatePreferences(preferences),
     onSuccess: async (updated) => {
       queryClient.setQueryData(['portal', 'settings'], updated)
-      toast('Preferences saved')
+      toast(t('Preferences saved'))
     },
     onError: (error) => toast(describeApiError(error), 'error'),
   })
@@ -73,14 +75,14 @@ export default function SettingsPage() {
     <div className="max-w-xl space-y-1.5">
       {/* Header */}
       <div>
-        <h1 className="text-lg font-bold text-charcoal-900">Settings</h1>
-        <p className="mt-0.5 text-[11px] text-charcoal-500">Manage your account and preferences</p>
+        <h1 className="text-lg font-bold text-charcoal-900">{t('Settings')}</h1>
+        <p className="mt-0.5 text-[11px] text-charcoal-500">{t('Manage your account and preferences')}</p>
       </div>
 
       {/* Account */}
       <div className="overflow-hidden rounded-xl border border-charcoal-200 bg-white">
         <div className="border-b border-charcoal-100 bg-charcoal-50/50 px-3 py-1.5">
-          <p className="bento-label">ACCOUNT</p>
+          <p className="bento-label">{t('ACCOUNT')}</p>
           <p className="mt-0.5 text-[10px] text-charcoal-500">{session?.user.email ?? ''}</p>
         </div>
         <div className="space-y-0.5 p-2">
@@ -93,7 +95,7 @@ export default function SettingsPage() {
               <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-charcoal-100">
                 <ExternalLink className="h-4 w-4 text-charcoal-600" aria-hidden="true" />
               </span>
-              <span className="text-left font-medium text-charcoal-900">My Documents</span>
+              <span className="text-start font-medium text-charcoal-900">{t('My Documents')}</span>
             </span>
             <ExternalLink className="h-4 w-4 text-charcoal-400" aria-hidden="true" />
           </button>
@@ -106,7 +108,7 @@ export default function SettingsPage() {
               <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-charcoal-100">
                 <KeyRound className="h-4 w-4 text-charcoal-600" aria-hidden="true" />
               </span>
-              <span className="text-left font-medium text-charcoal-900">Change Password</span>
+              <span className="text-start font-medium text-charcoal-900">{t('Change Password')}</span>
             </span>
             <ShieldCheck className="h-4 w-4 text-charcoal-400" aria-hidden="true" />
           </button>
@@ -119,7 +121,7 @@ export default function SettingsPage() {
               <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-red-100">
                 <LogOut className="h-4 w-4 text-red-500" aria-hidden="true" />
               </span>
-              <span className="font-medium text-red-600">Sign out</span>
+              <span className="font-medium text-red-600">{t('Sign out')}</span>
             </span>
           </button>
         </div>
@@ -128,11 +130,11 @@ export default function SettingsPage() {
       {/* Notifications */}
       <div className="overflow-hidden rounded-xl border border-charcoal-200 bg-white">
         <div className="border-b border-charcoal-100 bg-charcoal-50/50 px-3 py-1.5">
-          <p className="bento-label">NOTIFICATIONS</p>
+          <p className="bento-label">{t('NOTIFICATIONS')}</p>
         </div>
         <div className="p-2">
           {prefsQuery.isLoading ? (
-            <LoadingState label="Loading preferences…" />
+            <LoadingState label={t('Loading preferences…')} />
           ) : prefsQuery.isError ? (
             <ErrorState message={describeApiError(prefsQuery.error)} onRetry={() => prefsQuery.refetch()} />
           ) : preferences ? (
@@ -150,9 +152,9 @@ export default function SettingsPage() {
                     <div>
                       <p className="flex items-center gap-1.5 text-xs font-medium text-charcoal-900">
                         <row.Icon className="h-3.5 w-3.5 text-charcoal-400" aria-hidden="true" />
-                        {row.label}
+                        {t(row.label)}
                       </p>
-                      <p className="mt-0.5 text-[10px] text-charcoal-500">{row.description}</p>
+                      <p className="mt-0.5 text-[10px] text-charcoal-500">{t(row.description)}</p>
                     </div>
                     <Toggle checked={value} busy={prefsMutation.isPending} onChange={() => toggle(row.key, value)} />
                   </div>
@@ -166,7 +168,7 @@ export default function SettingsPage() {
       {passwordOpen && (
         <ChangePasswordModal
           onDone={async () => {
-            toast('Password changed')
+            toast(t('Password changed'))
             setPasswordOpen(false)
           }}
           onClose={() => setPasswordOpen(false)}
@@ -177,12 +179,12 @@ export default function SettingsPage() {
       {logoutOpen && (
         <Modal
           open
-          title="Sign out?"
+          title={t('Sign out?')}
           onClose={() => setLogoutOpen(false)}
           footer={
             <>
               <Button variant="secondary" size="sm" onClick={() => setLogoutOpen(false)}>
-                Cancel
+                {t('Cancel')}
               </Button>
               <Button
                 variant="danger"
@@ -192,12 +194,12 @@ export default function SettingsPage() {
                   navigate('/login', { replace: true })
                 }}
               >
-                Sign out
+                {t('Sign out')}
               </Button>
             </>
           }
         >
-          <p className="text-xs text-charcoal-600">You will need to sign in again to use the portal.</p>
+          <p className="text-xs text-charcoal-600">{t('You will need to sign in again to use the portal.')}</p>
         </Modal>
       )}
     </div>
@@ -205,6 +207,7 @@ export default function SettingsPage() {
 }
 
 function Toggle({ checked, busy, onChange }: { checked: boolean; busy?: boolean; onChange: () => void }) {
+  const { t } = useTranslation()
   return (
     <button
       type="button"
@@ -212,7 +215,7 @@ function Toggle({ checked, busy, onChange }: { checked: boolean; busy?: boolean;
       aria-checked={checked}
       disabled={busy}
       onClick={onChange}
-      aria-label="Toggle notification preference"
+      aria-label={t('Toggle notification preference')}
       data-on={checked ? '' : undefined}
       className={cn(
         'relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer items-center rounded-full transition-colors',
@@ -222,8 +225,8 @@ function Toggle({ checked, busy, onChange }: { checked: boolean; busy?: boolean;
     >
       <span
         className={cn(
-          'absolute left-[2px] h-4 w-4 rounded-full bg-white shadow transition-all',
-          checked && 'translate-x-4',
+          'absolute start-[2px] h-4 w-4 rounded-full bg-white shadow transition-all',
+          checked && 'translate-x-4 rtl:-translate-x-4',
         )}
       />
     </button>
@@ -233,6 +236,7 @@ function Toggle({ checked, busy, onChange }: { checked: boolean; busy?: boolean;
 /* ==================== Change password (mock openChangePassword) ==================== */
 
 function ChangePasswordModal({ onDone, onClose }: { onDone: () => Promise<void>; onClose: () => void }) {
+  const { t } = useTranslation()
   const [currentPassword, setCurrentPassword] = useState('')
   const [newPassword, setNewPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
@@ -248,12 +252,12 @@ function ChangePasswordModal({ onDone, onClose }: { onDone: () => Promise<void>;
   return (
     <Modal
       open
-      title="Change Password"
+      title={t('Change Password')}
       onClose={onClose}
       footer={
         <>
           <Button variant="secondary" size="sm" onClick={onClose} disabled={mutation.isPending}>
-            Cancel
+            {t('Cancel')}
           </Button>
           <Button
             size="sm"
@@ -261,13 +265,13 @@ function ChangePasswordModal({ onDone, onClose }: { onDone: () => Promise<void>;
             onClick={() => {
               setError(null)
               if (!currentPassword || !newPassword) {
-                setError('Fill in both fields.')
+                setError(t('Fill in both fields.'))
                 return
               }
               mutation.mutate()
             }}
           >
-            Save
+            {t('Save')}
           </Button>
         </>
       }
@@ -278,7 +282,7 @@ function ChangePasswordModal({ onDone, onClose }: { onDone: () => Promise<void>;
           event.preventDefault()
           setError(null)
           if (!currentPassword || !newPassword) {
-            setError('Fill in both fields.')
+            setError(t('Fill in both fields.'))
             return
           }
           mutation.mutate()
@@ -287,12 +291,12 @@ function ChangePasswordModal({ onDone, onClose }: { onDone: () => Promise<void>;
         <div className="flex items-start gap-2 rounded-lg border border-blue-200 bg-blue-50 p-3">
           <ShieldCheck className="mt-0.5 h-4 w-4 flex-shrink-0 text-blue-600" aria-hidden="true" />
           <p className="text-xs text-blue-800">
-            Password must be at least 8 characters with uppercase, lowercase, and numbers.
+            {t('Password must be at least 8 characters with uppercase, lowercase, and numbers.')}
           </p>
         </div>
         <div>
           <label htmlFor="pw-current" className="form-label">
-            Current Password
+            {t('Current Password')}
           </label>
           <input
             id="pw-current"
@@ -306,7 +310,7 @@ function ChangePasswordModal({ onDone, onClose }: { onDone: () => Promise<void>;
         </div>
         <div>
           <label htmlFor="pw-new" className="form-label">
-            New Password
+            {t('New Password')}
           </label>
           <input
             id="pw-new"
