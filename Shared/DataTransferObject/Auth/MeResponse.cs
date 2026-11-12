@@ -25,14 +25,6 @@ public sealed class MeResponse
     public int? LedTeamId { get; init; }
 
     /// <summary>
-    /// Effective access level per feature in the active gym: <c>0</c> none,
-    /// <c>1</c> view, <c>2</c> edit. Derived from the gym's permission keys
-    /// (<c>payroll.view</c> → 1, <c>payroll.edit</c>/<c>.approve</c> → 2). Empty when
-    /// the session has no gym scope. The SPA gates navigation and actions on it.
-    /// </summary>
-    public Dictionary<string, int> FeatureLevels { get; init; } = new();
-
-    /// <summary>
     /// The employee profile linked 1:1 to this account (User ↔ Employee), when one
     /// exists. Every self-service route (/api/employees/{id}/schedule, /requests, …)
     /// is addressed by this id — the SPA could not reach them without it.
