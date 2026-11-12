@@ -191,6 +191,12 @@ export const shellUi: Record<string, string> = {
   'Unscheduled / off day': 'غير مجدول / يوم راحة',
   'No shift was scheduled for today — a request was sent to the branch manager and HR for cover/extra-day approval (1 or 2 days).':
     'لم تُجدول وردية لهذا اليوم — أُرسل طلب إلى مدير الفرع والموارد البشرية للموافقة على تغطية/يوم إضافي (يوم أو يومان).',
+  'Early leaving warning': 'تحذير انصراف مبكر',
+  'You checked out {{minutes}} min before your shift ends — your branch manager and HR were notified.':
+    'سجلت الانصراف قبل نهاية ورديتك بـ {{minutes}} دقيقة — تم إخطار مدير الفرع والموارد البشرية.',
+  'Early leave request on file': 'يوجد طلب انصراف مبكر',
+  'You checked out {{minutes}} min before your shift ends — your early leave request covers it.':
+    'سجلت الانصراف قبل نهاية ورديتك بـ {{minutes}} دقيقة — طلب الانصراف المبكر الخاص بك يغطيه.',
   '{{similarity}}% - liveness {{liveness}}%': '{{similarity}}% - حيوية {{liveness}}%',
   Dismiss: 'إغلاق',
   'Confirm check-out': 'تأكيد الانصراف',

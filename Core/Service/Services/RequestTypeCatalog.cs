@@ -26,6 +26,9 @@ namespace Service.Services
     /// </summary>
     public static class RequestTypeCatalog
     {
+        /// <summary>Most days a single cover / unscheduled-attendance day may be credited as.</summary>
+        public const int MaxCoverDays = 5;
+
         public const string AnnualLeaveId = "annual-leave";
         public const string SickLeaveId = "sick-leave";
         public const string LateAttendanceId = "late-attendance";

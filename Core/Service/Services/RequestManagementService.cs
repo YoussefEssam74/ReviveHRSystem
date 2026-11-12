@@ -166,9 +166,10 @@ namespace Service.Services
         private static int ValidateUnscheduledAttendanceDays(int? calculatedDays)
         {
             var days = calculatedDays ?? 1;
-            if (days is not (1 or 2))
+            // A cover/extra day can be credited as more than two days (HR decides).
+            if (days is < 1 or > RequestTypeCatalog.MaxCoverDays)
             {
-                throw new BadRequestException("Unscheduled attendance can be counted as 1 or 2 days.");
+                throw new BadRequestException($"Unscheduled attendance can be counted as 1 to {RequestTypeCatalog.MaxCoverDays} days.");
             }
 
             return days;

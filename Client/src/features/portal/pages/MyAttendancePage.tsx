@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { Plus, SquarePen } from 'lucide-react'
@@ -7,23 +6,20 @@ import { getEmployeeDashboard } from '../api/dashboard.api'
 import {
   getEmployeeDeductions,
   getOwnAttendance,
-  getOwnLeaveBalance,
   type EmployeeAttendanceItem,
   type EmployeeDeduction,
 } from '../api/attendance.api'
-import { getExcusedHoursBudget, getOwnRequests, getRequestTypes } from '../api/requests.api'
+import { getOwnRequests } from '../api/requests.api'
 import { listWarningNotices, type WarningNoticeRow } from '../api/branch.api'
 import { NewRequestModal } from '../components/NewRequestModal'
 import { EmptyState } from '../../../components/ui/primitives'
 import { ErrorState, LoadingState } from '../../../components/async-state'
 import { Drawer } from '../../../components/ui/drawer'
-import { Button } from '../../../components/ui/button'
 import { StatusBadge } from '../../../components/ui/badge'
 import { Badge, type BadgeColor } from '../../../components/ui/badge'
 import { usePortalSession } from '../../../contexts/PortalSessionContext'
 import { describeApiError } from '../../../lib/api-client'
 import { formatDate, formatDateWithYear, formatMoney, formatTimeLabel } from '../../../lib/format'
-import { PAGE_PATHS } from '../portal-nav'
 import { cn } from '../../../lib/utils'
 
 /** "09:12" | "09:12:30" → 552 minutes (null when absent). */
@@ -208,22 +204,6 @@ export default function MyAttendancePage() {
     queryFn: ({ signal }) => getOwnAttendance(employeeId!, month, 1, signal),
     enabled: employeeId != null,
   })
-  const balanceQuery = useQuery({
-    queryKey: ['portal', 'leave-balance', employeeId],
-    queryFn: ({ signal }) => getOwnLeaveBalance(employeeId!, signal),
-    enabled: employeeId != null,
-  })
-  const budgetQuery = useQuery({
-    queryKey: ['portal', 'excused-hours', employeeId],
-    queryFn: ({ signal }) => getExcusedHoursBudget(employeeId!, signal),
-    enabled: employeeId != null,
-  })
-  const typesQuery = useQuery({
-    queryKey: ['portal', 'request-types'],
-    queryFn: ({ signal }) => getRequestTypes(signal),
-    staleTime: 10 * 60_000,
-    enabled: employeeId != null,
-  })
   const requestsQuery = useQuery({
     queryKey: ['portal', 'requests', employeeId, 'list'],
     queryFn: ({ signal }) => getOwnRequests(employeeId!, signal),
@@ -255,8 +235,6 @@ export default function MyAttendancePage() {
 
   const dashboard = dashboardQuery.data ?? null
   const attendance = attendanceQuery.data
-  const balance = balanceQuery.data ?? null
-  const budget = budgetQuery.data ?? null
   const requests = requestsQuery.data ?? []
   const deductions = deductionsQuery.data ?? []
   // Deductions grouped by their date — several can share one day, and every one
@@ -394,75 +372,6 @@ export default function MyAttendancePage() {
           <StatPill value={dashboard.monthSummary.coverDays} label={t('Cover days')} color="text-violet-600" accent="border-s-violet-500" />
         </div>
       )}
-
-      {/* Leave balance + quick request launch */}
-      <div className="grid grid-cols-1 gap-2 lg:grid-cols-3">
-        <div className="card px-3 py-2">
-          <p className="bento-label mb-1.5">{t('LEAVE BALANCE')}</p>
-          <div className="space-y-1.5">
-            {balance ? (
-              <>
-                <BalanceRow label={t('Annual')} used={balance.dayOff.used} total={balance.dayOff.total} color="bg-brand-500" />
-                <BalanceRow label={t('Sick')} used={balance.sick.used} total={balance.sick.total} color="bg-red-400" />
-                <BalanceRow label={t('Unpaid')} used={balance.unpaid.used} total={balance.unpaid.total} color="bg-blue-500" />
-              </>
-            ) : (
-              balanceQuery.isError && <p className="text-[11px] text-red-600">{describeApiError(balanceQuery.error)}</p>
-            )}
-            {budget && (
-              <BalanceRow
-                label={t('Excused hours')}
-                used={budget.usedHours}
-                total={budget.capHours}
-                color="bg-purple-400"
-                time
-              />
-            )}
-          </div>
-        </div>
-
-        <div className="card px-3 py-2 lg:col-span-2">
-          <div className="mb-1.5 flex items-center justify-between">
-            <p className="bento-label">{t('NEW REQUEST')}</p>
-            <Link to={PAGE_PATHS.requests} className="text-[10px] font-semibold text-brand-600 hover:underline">
-              View All
-            </Link>
-          </div>
-
-          {/* Phone: a single launcher — the form itself asks for the type. */}
-          <div className="flex flex-wrap items-center gap-2 sm:hidden">
-            <Button size="sm" onClick={() => setRequestDraft({})}>
-              <SquarePen className="h-3.5 w-3.5" aria-hidden="true" /> New Request
-            </Button>
-            <p className="text-[10px] text-charcoal-500">{t('Choose the request type in the form — leave, swap, correction or advance.')}</p>
-          </div>
-
-          {/* Tablet / desktop: the type chips. Deduction disputes start from the
-              deduction itself (day drawer → Request correction), so that type is
-              not offered as a standalone chip here. */}
-          <div className="hidden sm:block">
-            {typesQuery.isError ? (
-              <p className="text-[11px] text-red-600">{describeApiError(typesQuery.error)}</p>
-            ) : (
-              <div className="grid grid-cols-3 gap-1.5">
-                {(typesQuery.data ?? [])
-                  .filter((type) => type.id !== 'unscheduled-attendance' && type.id !== DEDUCTION_CORRECTION_ID)
-                  .map((type) => (
-                    <button
-                      key={type.id}
-                      type="button"
-                      onClick={() => setRequestDraft({ typeId: type.id })}
-                      className="flex min-w-0 items-center gap-1.5 rounded-lg border border-charcoal-200 px-2 py-1.5 text-left transition-colors hover:border-brand-300 hover:bg-brand-50"
-                    >
-                      <SquarePen className="h-3.5 w-3.5 flex-shrink-0 text-brand-600" aria-hidden="true" />
-                      <span className="truncate text-[10px] font-semibold text-charcoal-700">{type.label}</span>
-                    </button>
-                  ))}
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
 
       {/* Attendance history */}
       <div className="flex flex-col gap-2 pt-1 sm:flex-row sm:items-center sm:justify-between">
@@ -652,41 +561,6 @@ function StatPill({
     <div className={cn('card flex min-w-0 flex-col items-center rounded-xl border-l-2 px-0.5 py-2 text-center sm:border-l-4 sm:px-2', accent)}>
       <p className={cn('text-[11px] font-bold leading-none sm:text-base', color)}>{value}</p>
       <p className="mt-1 text-[7px] leading-[1.15] text-charcoal-500 sm:text-[9px]">{label}</p>
-    </div>
-  )
-}
-
-function BalanceRow({
-  label,
-  used,
-  total,
-  color,
-  time = false,
-}: {
-  label: string
-  used: number
-  total: number
-  color: string
-  time?: boolean
-}) {
-  const remaining = Math.max(0, total - used)
-  const pct = total > 0 ? Math.min(100, Math.round((used / total) * 100)) : 0
-  const fmtHours = (hours: number) =>
-    hours < 1 ? `${Math.round(hours * 60)} min` : `${Math.round(hours * 10) / 10} hr${Math.round(hours * 10) / 10 !== 1 ? 's' : ''}`
-  const remText = time ? fmtHours(remaining) : String(remaining)
-  const totText = time ? fmtHours(total) : String(total)
-  const spent = remaining <= 0
-  const low = !spent && pct >= 75
-  return (
-    <div className="flex items-center gap-2">
-      <span className="w-20 flex-shrink-0 truncate text-[10px] font-medium text-charcoal-600">{label}</span>
-      <div className="h-1.5 min-w-0 flex-1 overflow-hidden rounded-full bg-charcoal-100">
-        <div className={cn('h-full rounded-full transition-all', spent ? 'bg-red-500' : low ? 'bg-yellow-500' : color)} style={{ width: `${pct}%` }} />
-      </div>
-      <span className={cn('whitespace-nowrap text-[11px] font-bold', spent ? 'text-red-600' : low ? 'text-yellow-600' : 'text-charcoal-900')}>
-        {remText}
-        <span className="text-[9px] font-medium text-charcoal-400">/{totText}</span>
-      </span>
     </div>
   )
 }

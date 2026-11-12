@@ -422,6 +422,21 @@ namespace Service.Specifications
         }
     }
 
+    /// <summary>
+    /// Every unscheduled-attendance (cover / extra) request in the range, whatever its
+    /// outcome — a rejected one still has to be reported to HR as an unapproved cover day.
+    /// </summary>
+    public class UnscheduledAttendanceByEmployeeIdsSpec : BaseSpecification<EmployeeRequest, int>
+    {
+        public UnscheduledAttendanceByEmployeeIdsSpec(int[] employeeIds, DateOnly from, DateOnly to)
+        {
+            Criteria = r => employeeIds.Contains(r.EmployeeId)
+                && r.Type == Service.Services.RequestTypeCatalog.UnscheduledAttendanceLabel
+                && (r.TargetStartDate ?? r.RequestDate) <= to
+                && (r.TargetEndDate ?? r.RequestDate) >= from;
+        }
+    }
+
     /// <summary>Finds active Branch Managers and HR users who have access to this gym.</summary>
     public class BranchManagersAndHrForGymSpec : BaseSpecification<User, int>
     {

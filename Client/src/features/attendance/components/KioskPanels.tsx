@@ -188,6 +188,26 @@ export function ResultOverlay({
                     <p className="mt-0.5">{t('No shift was scheduled for today — a request was sent to the branch manager and HR for cover/extra-day approval (1 or 2 days).')}</p>
                   </div>
                 )}
+                {result.shiftComparison === 'EARLY_LEAVE' && (
+                  <div className="mt-2 rounded-lg border border-amber-400/40 bg-amber-500/10 p-2.5 text-xs text-[#fde68a]">
+                    <p className="font-semibold">{t('Early leaving warning')}</p>
+                    <p className="mt-0.5">
+                      {t('You checked out {{minutes}} min before your shift ends — your branch manager and HR were notified.', {
+                        minutes: result.earlyLeaveMinutes ?? 0,
+                      })}
+                    </p>
+                  </div>
+                )}
+                {result.shiftComparison === 'EARLY_LEAVE_COVERED' && (
+                  <div className="mt-2 rounded-lg border border-emerald-400/40 bg-emerald-500/10 p-2.5 text-xs text-[#bbf7d0]">
+                    <p className="font-semibold">{t('Early leave request on file')}</p>
+                    <p className="mt-0.5">
+                      {t('You checked out {{minutes}} min before your shift ends — your early leave request covers it.', {
+                        minutes: result.earlyLeaveMinutes ?? 0,
+                      })}
+                    </p>
+                  </div>
+                )}
                 {face && (
                   <div className="flex justify-between gap-3">
                     <dt>{t('Face match')}</dt>

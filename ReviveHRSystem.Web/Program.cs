@@ -257,6 +257,17 @@ namespace ReviveHRSystem.Web
             var attendanceTimeZone = TimeZoneInfo.FindSystemTimeZoneById(attendanceTimeZoneId);
             builder.Services.AddSingleton(attendanceTimeZone);
 
+            // Grace windows that decide when a punch is late or a check-out counts as
+            // early leaving (AttendanceOptions defaults apply when a key is missing).
+            static int GraceMinutes(IConfiguration configuration, string key, int fallback) =>
+                int.TryParse(configuration[key], out var minutes) && minutes >= 0 ? minutes : fallback;
+
+            builder.Services.AddSingleton(new AttendanceOptions
+            {
+                LateGraceMinutes = GraceMinutes(builder.Configuration, "Attendance:LateGraceMinutes", AttendanceOptions.DefaultLateGraceMinutes),
+                EarlyLeaveGraceMinutes = GraceMinutes(builder.Configuration, "Attendance:EarlyLeaveGraceMinutes", AttendanceOptions.DefaultEarlyLeaveGraceMinutes),
+            });
+
             // --- Application services ---
             // AutoMapper scans the service assembly for MappingProfile.
             builder.Services.AddAutoMapper(cfg => cfg.AddProfile<MappingProfile>(), typeof(AuthService).Assembly);

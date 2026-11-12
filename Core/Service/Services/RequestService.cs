@@ -356,9 +356,9 @@ namespace Service.Services
                 if (decision == DecisionOutcome.Approved)
                 {
                     var days = request.CalculatedDays ?? (entity.OvertimeHoursRequested.HasValue ? (int)entity.OvertimeHoursRequested.Value : (request.Payment?.Contains("2") == true ? 2 : 1));
-                    if (days is not (1 or 2))
+                    if (days is < 1 or > RequestTypeCatalog.MaxCoverDays)
                     {
-                        throw new BadRequestException("Unscheduled attendance can be counted as 1 or 2 days.");
+                        throw new BadRequestException($"Unscheduled attendance can be counted as 1 to {RequestTypeCatalog.MaxCoverDays} days.");
                     }
 
                     payment = $"{days} day{(days > 1 ? "s" : "")}";
@@ -444,8 +444,11 @@ namespace Service.Services
             }
 
             var lastDate = entity.TargetEndDate ?? entity.RequestDate;
-            if (lastDate < DateOnly.FromDateTime(DateTime.UtcNow.Date))
+            if (lastDate < DateOnly.FromDateTime(DateTime.UtcNow.Date)
+                && !await _accessControl.HasPermissionForGymAsync(actor.Id, "payroll.edit", entity.Employee.GymId, cancellationToken))
             {
+                // Settlement reconciles the month that just ended, so payroll editors may
+                // still undo there; everyone else is bound to the date still being ahead.
                 throw new BadRequestException("The requested date has passed — the decision can no longer be changed.");
             }
 
@@ -713,16 +716,49 @@ namespace Service.Services
             var requests = await _unitOfWork.GetRepository<EmployeeRequest, int>()
                 .GetAllAsync(new EmployeeRequestsSpec(employeeId), cancellationToken);
 
-            return requests.Select(r => new EmployeeRequestItem
+            // The card names the branch manager who decided the request, so resolve the
+            // deciders in one lookup instead of a user query per row.
+            var deciderIds = requests
+                .SelectMany(r => r.Decisions)
+                .Select(d => d.DecidedBy)
+                .Where(id => id > 0)
+                .Distinct()
+                .ToList();
+            var deciders = new Dictionary<int, string>();
+            if (deciderIds.Count > 0)
             {
-                Id = r.Id,
-                Type = r.Type,
-                RequestedDate = r.RequestDate,
-                EndDate = r.TargetEndDate is { } end && end != r.RequestDate ? end : null,
-                SubmittedDate = DateOnly.FromDateTime(r.CreatedAt),
-                Status = StatusDisplay(r.Status),
-                Reason = r.Details,
-                BmComment = LastDecision(r, ApprovalStage.BranchManager)?.Comment,
+                var users = await _unitOfWork.GetRepository<User, int>()
+                    .GetAllAsync(new UsersByIdsWithProfileSpec(deciderIds), cancellationToken);
+                foreach (var user in users)
+                {
+                    deciders[user.Id] = user.EmployeeProfile?.FullName ?? user.UserName;
+                }
+            }
+
+            return requests.Select(r =>
+            {
+                var bm = LastDecision(r, ApprovalStage.BranchManager);
+                var hr = LastDecision(r, ApprovalStage.HR);
+                return new EmployeeRequestItem
+                {
+                    Id = r.Id,
+                    Type = r.Type,
+                    RequestedDate = r.RequestDate,
+                    EndDate = r.TargetEndDate is { } end && end != r.RequestDate ? end : null,
+                    SubmittedDate = DateOnly.FromDateTime(r.CreatedAt),
+                    SubmittedAt = r.CreatedAt,
+                    Status = StatusDisplay(r.Status),
+                    Reason = r.Details,
+                    Payment = r.Payment,
+                    CalculatedDays = r.OvertimeHoursRequested is { } hours
+                        ? (int)hours
+                        : r.Payment?.Contains('2') == true ? 2 : r.Payment?.Contains('1') == true ? 1 : null,
+                    BmDecision = bm?.Decision.ToString(),
+                    BmApprover = bm is not null && deciders.TryGetValue(bm.DecidedBy, out var name) ? name : null,
+                    BmDecidedAt = bm?.DecidedAt,
+                    BmComment = bm?.Comment,
+                    HrDecision = hr?.Decision.ToString(),
+                };
             }).ToList();
         }
 
@@ -781,7 +817,10 @@ namespace Service.Services
         private async Task<string> ResolvePaymentAsync(EmployeeRequest entity, string? requested, CancellationToken cancellationToken)
         {
             var balance = await LoadBalanceForTypeAsync(entity.Type, entity.EmployeeId, cancellationToken);
-            var leftDays = balance is null ? 0 : balance.RemainingDays;
+            // The days earned so far — without this request's own reservation, which is
+            // still held as pending at this point and would otherwise read as "no balance"
+            // (turn a partly-earned request into a fully unpaid one).
+            var leftDays = balance is null ? 0 : balance.TotalEntitlement - balance.UsedDays;
             return ResolvePayment(requested, leftDays);
         }
 
@@ -831,7 +870,8 @@ namespace Service.Services
                         EmployeeId = entity.EmployeeId,
                         LeaveType = leaveType,
                         Year = DateTime.UtcNow.Year,
-                        TotalEntitlement = LeaveBalanceReservation.DefaultEntitlement(leaveType),
+                        TotalEntitlement = await LeaveBalanceReservation.EntitlementForAsync(
+                            _unitOfWork, entity.EmployeeId, leaveType, cancellationToken),
                         PendingDays = 0,
                         UsedDays = 0,
                     };
@@ -1033,9 +1073,14 @@ namespace Service.Services
             var balance = entity.Employee?.LeaveBalances?
                 .FirstOrDefault(b => b.LeaveType == leaveType && b.Year == year);
 
-            var total = (int)Math.Round(balance?.TotalEntitlement ?? 0);
+            // Annual leave accrues with service, so its stored total can lag the
+            // entitlement in force today; every other type keeps its granted total.
+            var total = leaveType == LeaveType.Annual && entity.Employee is not null
+                ? (int)Math.Round(AnnualLeaveAccrual.EntitledDays(entity.Employee.HireDate, DateOnly.FromDateTime(DateTime.UtcNow)))
+                : (int)Math.Round(balance?.TotalEntitlement ?? 0);
             var used = (int)Math.Round(balance?.UsedDays ?? 0);
-            var left = Math.Max(0, (int)Math.Round(balance?.RemainingDays ?? 0));
+            var reserved = (int)Math.Round(balance?.PendingDays ?? 0);
+            var left = Math.Max(0, total - used - reserved);
             var pending = entity.Status == RequestStatus.PendingHRReview;
 
             return new RequestLeaveBalance

@@ -66,6 +66,11 @@ export function MeProvider({ children }: { children: ReactNode }) {
       setIsSwitching(true)
       try {
         const response = await postSwitchGym(gymId)
+        // A /api/me fetch started before this switch (window-focus or stale
+        // refetch) still carries the OLD token. If it lands after we seed the
+        // new gym it overwrites the cache with the previous one, and the switch
+        // silently appears to do nothing. Cancel in-flight work first.
+        await queryClient.cancelQueries()
         // Store the rotated token scoped to the new gym — together with the
         // rotated refresh credential. Dropping the refresh token here left the
         // session unable to renew and signed the user out at access-token expiry.
@@ -83,8 +88,9 @@ export function MeProvider({ children }: { children: ReactNode }) {
           },
         })
         // Feature levels are per-gym: seed the cache from the switch response and
-        // invalidate everything scoped to the old gym so lists refetch.
-        queryClient.setQueryData(['me'], response.me)
+        // invalidate everything scoped to the old gym so lists refetch. The seed
+        // is stamped now so the refetch below cannot be mistaken for stale data.
+        queryClient.setQueryData(['me'], response.me, { updatedAt: Date.now() })
         await queryClient.invalidateQueries()
       } finally {
         setIsSwitching(false)
@@ -102,14 +108,17 @@ export function MeProvider({ children }: { children: ReactNode }) {
       autoScoped.current = false
       return
     }
-    if (
-      autoScoped.current ||
-      !me ||
-      me.activeGym ||
-      me.userType === 'TopManagement' ||
-      me.gyms.length === 0 ||
-      isSwitching
-    ) {
+    if (!me) {
+      return
+    }
+    // A session that already carries a gym scope has that choice already (the
+    // login selection or an explicit switch). Latch it off for the rest of the
+    // session: this effect must never yank the user back to gyms[0] later.
+    if (me.activeGym) {
+      autoScoped.current = true
+      return
+    }
+    if (autoScoped.current || me.userType === 'TopManagement' || me.gyms.length === 0 || isSwitching) {
       return
     }
     autoScoped.current = true

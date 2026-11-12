@@ -62,6 +62,20 @@ namespace Service.Specifications
         }
     }
 
+    /// <summary>
+    /// Warning fan-out rows carrying one attendance token ("[ATT-12]") in their
+    /// message — the early-leaving dispatcher reads them so each manager is notified
+    /// only once per punch, however many times the kiosk replays the check-out.
+    /// </summary>
+    public sealed class NotificationsByMessageTokenSpec : BaseSpecification<Notification, int>
+    {
+        public NotificationsByMessageTokenSpec(string token)
+        {
+            var clean = token.Trim();
+            Criteria = n => n.Message.Contains(clean);
+        }
+    }
+
     /// <summary>Announcement history, optionally gym-scoped through its audience target.</summary>
     public sealed class AnnouncementListSpec : BaseSpecification<Announcement, int>
     {

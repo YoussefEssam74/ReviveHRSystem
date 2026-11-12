@@ -3,7 +3,7 @@ namespace Shared.DataTransferObject.EmployeeProfile;
 /// <summary>
 /// Monthly excused-hours budget of one employee for late attendance / early leave
 /// (mock §6 attendance card). The cap is HR-set per gym and static for all employees;
-/// both request types share one budget.
+/// both request types share this one budget.
 /// </summary>
 public sealed class ExcusedHoursBudgetDto
 {
@@ -16,6 +16,12 @@ public sealed class ExcusedHoursBudgetDto
     /// <summary>Hours still available this month, never negative.</summary>
     public decimal RemainingHours { get; init; }
 
+    /// <summary>Late-attendance hours spent this month (part of <see cref="UsedHours"/>).</summary>
+    public decimal LateUsedHours { get; init; }
+
+    /// <summary>Early-leave hours spent this month (the rest of <see cref="UsedHours"/>).</summary>
+    public decimal EarlyUsedHours { get; init; }
+
     /// <summary>The month these numbers describe (yyyy-MM).</summary>
     public string Month { get; init; } = string.Empty;
 }
@@ -26,7 +32,7 @@ public sealed class AttendancePolicyDto
     public int GymId { get; init; }
     public string GymName { get; init; } = string.Empty;
 
-    /// <summary>Monthly cap of excused late attendance / early leave hours per employee.</summary>
+    /// <summary>Monthly cap of excused late-attendance / early-leave hours per employee.</summary>
     public decimal ExcusedLateHoursCapPerMonth { get; init; }
 }
 

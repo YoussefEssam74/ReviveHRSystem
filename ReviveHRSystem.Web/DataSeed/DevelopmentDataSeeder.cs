@@ -549,12 +549,6 @@ namespace ReviveHRSystem.Web.DataSeed
             if (gym is not null)
             {
                 // Backfill the mock's 10% raise policy on gyms seeded before it existed,
-                // so the payroll page's "Annual Increase (10%)" row has data to show.
-                if (gym.AnnualIncreasePercent is null)
-                {
-                    gym.AnnualIncreasePercent = 10m;
-                    await db.SaveChangesAsync();
-                }
                 return gym;
             }
 
@@ -564,7 +558,6 @@ namespace ReviveHRSystem.Web.DataSeed
                 Location = location,
                 ShiftCycleLengthDays = 10,
                 Status = GymStatus.Active,
-                AnnualIncreasePercent = 10m
             };
             db.Gyms.Add(gym);
             await db.SaveChangesAsync();

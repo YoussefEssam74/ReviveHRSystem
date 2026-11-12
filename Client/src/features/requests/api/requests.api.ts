@@ -189,6 +189,36 @@ export function getRequest(id: number, signal?: AbortSignal): Promise<RequestLis
   return apiRequest<{ data: RequestListItem }>(`/api/requests/${id}`, { signal }).then((r) => r.data)
 }
 
+/** One row of GET /api/employees/{id}/requests — the employee's whole request log. */
+export interface EmployeeRequestRow {
+  id: number
+  type: string
+  status: string
+  requestedDate: string
+  endDate: string | null
+  submittedDate: string
+  /** Date + clock time the request was filed. */
+  submittedAt: string
+  reason: string | null
+  payment: string | null
+  calculatedDays: number | null
+  /** Branch-manager stage: outcome, approver name and when it was decided. */
+  bmDecision: string | null
+  bmApprover: string | null
+  bmDecidedAt: string | null
+  bmComment: string | null
+  hrDecision: string | null
+}
+
+/**
+ * GET /api/employees/{id}/requests — every request the employee ever filed, whatever
+ * its status. The settlement sheet reads it to show the month's whole conversation
+ * (pending, approved, rejected) rather than only the rows linked to a deduction.
+ */
+export function getEmployeeRequestRows(employeeId: number, signal?: AbortSignal): Promise<EmployeeRequestRow[]> {
+  return apiRequest<EmployeeRequestRow[]>(`/api/employees/${employeeId}/requests`, { signal })
+}
+
 export interface CreateRequestBody {
   employee: string
   type: string
@@ -222,6 +252,8 @@ export interface DecideRequestBody {
   comment?: string
   /** Only Day Off / Sick Leave approvals. */
   payment?: 'paid' | 'unpaid'
+  /** Only cover / unscheduled-attendance approvals: how many days the day is worth. */
+  calculatedDays?: number
 }
 
 /** POST /api/requests/{id}/decide — HR stage decision (requires requests.approve). */
@@ -233,7 +265,7 @@ export function postDecide(id: number, body: DecideRequestBody, signal?: AbortSi
   })
 }
 
-/** POST /api/requests/{id}/undo-decision — allowed only while the requested date is ahead. */
+/** POST /api/requests/{id}/undo-decision — payroll editors may also undo a past-dated request at settlement. */
 export function postUndoDecision(id: number, comment?: string, signal?: AbortSignal): Promise<RequestDecisionResult> {
   return apiRequest<RequestDecisionResult>(`/api/requests/${id}/undo-decision`, {
     method: 'POST',

@@ -28,6 +28,17 @@ namespace Service.Specifications
         }
     }
 
+    /// <summary>Users by id with the employee standing (display name) alongside.</summary>
+    public class UsersByIdsWithProfileSpec : BaseSpecification<User, int>
+    {
+        public UsersByIdsWithProfileSpec(IReadOnlyCollection<int> ids)
+        {
+            var set = ids.ToArray();
+            Criteria = u => set.Contains(u.Id);
+            AddInclude(u => u.EmployeeProfile!);
+        }
+    }
+
     /// <summary>
     /// Finds a user with only the employee standing needed for session eligibility.
     /// Read-only (no tracking) — this runs on every authenticated request.

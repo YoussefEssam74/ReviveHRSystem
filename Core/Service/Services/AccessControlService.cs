@@ -71,8 +71,24 @@ namespace Service.Services
             }
         }
 
-        private async Task<User> GetActiveActorAsync(int? actorUserId, CancellationToken cancellationToken)
+        public async Task<bool> HasPermissionForGymAsync(int? actorUserId, string permissionKey, int? gymId, CancellationToken cancellationToken = default)
         {
+            var user = await GetActiveActorAsync(actorUserId, cancellationToken);
+            if (user.UserType == UserType.TopManagement)
+            {
+                return true;
+            }
+
+            var permissionKeys = await userAccess.GetPermissionKeysForGymAsync(user.Id, gymId, cancellationToken);
+            if (!permissionKeys.Contains(permissionKey, StringComparer.Ordinal))
+            {
+                return false;
+            }
+
+            return !gymId.HasValue || await userAccess.HasGymAccessAsync(user.Id, gymId.Value, cancellationToken);
+        }
+
+        private async Task<User> GetActiveActorAsync(int? actorUserId, CancellationToken cancellationToken)        {
             if (actorUserId is null or <= 0)
             {
                 throw new UnAuthorizedException("Your session is invalid. Please sign in again.");

@@ -1,8 +1,9 @@
 import { useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
-import { CalendarX2, ChevronRight, Download, FileText, Plus } from 'lucide-react'
-import { cancelRequest, getOwnRequests, getRequestDetail, type RequestDetail } from '../api/requests.api'
+import { AlertCircle, CalendarX2, ChevronRight, Download, FileText, Plus } from 'lucide-react'
+import { cancelRequest, getExcusedHoursBudget, getOwnRequests, getRequestDetail, type RequestDetail } from '../api/requests.api'
+import { getOwnLeaveBalance } from '../api/attendance.api'
 import { NewRequestModal } from '../components/NewRequestModal'
 import { EmptyState } from '../../../components/ui/primitives'
 import { ErrorState, LoadingState } from '../../../components/async-state'
@@ -37,6 +38,126 @@ export function rangeLabel(start: string, end: string | null): string {
   return `${formatDate(start)} – ${formatDateWithYear(end)}`
 }
 
+/** 1.5 → "1.5 hrs", 0.5 → "30 min", 0 → "0 hrs" — the excused-hours bucket is measured in hours. */
+function hoursLabel(hours: number): string {
+  if (hours <= 0) return '0 hrs'
+  if (hours < 1) return `${Math.round(hours * 60)} min`
+  const rounded = Math.round(hours * 10) / 10
+  return `${rounded} hr${rounded === 1 ? '' : 's'}`
+}
+
+/**
+ * What the employee can still ask for. This sits on the requests page because
+ * the balance is the number every leave request is judged against — it is
+ * reference material for the form below it, not for the attendance history.
+ */
+function LeaveBalancePanel({ employeeId }: { employeeId: number }) {
+  const { t } = useTranslation()
+  const balanceQuery = useQuery({
+    queryKey: ['portal', 'leave-balance', employeeId],
+    queryFn: ({ signal }) => getOwnLeaveBalance(employeeId, signal),
+  })
+  const budgetQuery = useQuery({
+    queryKey: ['portal', 'excused-hours', employeeId],
+    queryFn: ({ signal }) => getExcusedHoursBudget(employeeId, signal),
+  })
+
+  const balance = balanceQuery.data ?? null
+  const budget = budgetQuery.data ?? null
+  const loading = balanceQuery.isLoading || budgetQuery.isLoading
+  const error = balanceQuery.isError ? describeApiError(balanceQuery.error) : null
+  const unpaidDays = balance?.unpaid.used ?? 0
+
+  const tiles = [
+    balance && {
+      key: 'annual', label: t('Annual'), used: balance.dayOff.used, total: balance.dayOff.total, bar: 'bg-brand-500',
+      // Nothing is released before six completed months of service.
+      note: balance.dayOff.total <= 0 ? t('After 6 months of service') : undefined,
+    },
+    balance && { key: 'sick', label: t('Sick'), used: balance.sick.used, total: balance.sick.total, bar: 'bg-red-400' },
+    budget && {
+      key: 'excused', label: t('Excused hours'), used: budget.usedHours, total: budget.capHours, bar: 'bg-violet-400', hours: true,
+      // One shared monthly allowance: late arrival and early leave draw on the same pool.
+      note: t('Late arrival + early leave'),
+    },
+  ].filter((tile): tile is NonNullable<typeof tile> => Boolean(tile))
+
+  return (
+    <div className="card px-3 py-2.5">
+      <div className="mb-2 flex flex-wrap items-baseline justify-between gap-x-2 gap-y-0.5">
+        <p className="bento-label">{t('LEAVE BALANCE')}</p>
+        <p className="text-[10px] text-charcoal-400">{t('What you can still request this year')}</p>
+      </div>
+
+      {error && <p className="text-[11px] text-red-600">{error}</p>}
+
+      {!error && tiles.length === 0 && loading && (
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+          {[0, 1, 2].map((index) => (
+            <div key={index} className="h-[68px] animate-pulse rounded-lg bg-charcoal-50" aria-hidden="true" />
+          ))}
+          <span className="sr-only">{t('Loading leave balance…')}</span>
+        </div>
+      )}
+
+      {tiles.length > 0 && (
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+          {tiles.map((tile) => {
+            const remaining = Math.max(0, tile.total - tile.used)
+            const usedPct = tile.total > 0 ? Math.min(100, Math.round((tile.used / tile.total) * 100)) : 0
+            const exhausted = tile.total > 0 && remaining <= 0
+            const low = !exhausted && usedPct >= 75
+            // "used / allowance" — the note below already states what is left, so the
+            // fraction reports what has been consumed.
+            const value = tile.hours ? hoursLabel(tile.used) : String(tile.used)
+            const cap = tile.hours ? hoursLabel(tile.total) : String(tile.total)
+            // The note still reports what is left, so the fraction and the note answer
+            // different questions (used vs remaining).
+            const leftValue = tile.hours ? hoursLabel(remaining) : String(remaining)
+            return (
+              <div key={tile.key} className="rounded-lg bg-charcoal-50 px-2.5 py-2">
+                <p className="bento-label truncate text-charcoal-500">{tile.label}</p>
+                <p
+                  className={cn(
+                    'mt-0.5 flex items-baseline gap-1 leading-none',
+                    exhausted ? 'text-red-600' : low ? 'text-yellow-600' : 'text-charcoal-900',
+                  )}
+                >
+                  <span className="text-lg font-bold">{value}</span>
+                  <span className="text-[10px] font-medium text-charcoal-400">/ {cap}</span>
+                </p>
+                <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-charcoal-200">
+                  <div
+                    className={cn('h-full rounded-full transition-all', exhausted ? 'bg-red-500' : low ? 'bg-yellow-500' : tile.bar)}
+                    style={{ width: `${usedPct}%` }}
+                  />
+                </div>
+                <p className="mt-1 truncate text-[9px] font-medium text-charcoal-400">
+                  {tile.note ??
+                    (exhausted ? t('None left') : low ? t('{{percent}}% used', { percent: usedPct }) : t('{{value}} left', { value: leftValue }))}
+                </p>
+                {/* Days taken ahead of what the monthly accrual has earned: they even out
+                    as the following months accrue, and only cost money if he leaves first. */}
+                {tile.key === 'annual' && unpaidDays > 0 && (
+                  <p
+                    className="mt-0.5 flex items-center gap-1 text-[9px] font-bold text-red-600"
+                    title={t('Deducted if you leave')}
+                  >
+                    <AlertCircle className="h-2.5 w-2.5 shrink-0" aria-hidden="true" />
+                    {unpaidDays === 1
+                      ? t('{{count}} unpaid day', { count: unpaidDays })
+                      : t('{{count}} unpaid days', { count: unpaidDays })}
+                  </p>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function MyRequestsPage() {
   const { t } = useTranslation()
   const { me } = usePortalSession()
@@ -61,6 +182,7 @@ export default function MyRequestsPage() {
           hint={t('This account is not linked to an employee profile, so it has no self-service requests.')}
         />
       )}
+      {employeeId != null && <LeaveBalancePanel employeeId={employeeId} />}
       {employeeId != null && (
         <RequestsWorkspace
           employeeId={employeeId}

@@ -108,9 +108,13 @@ export interface LeaveBalanceResponse {
 }
 
 export interface ExcusedHoursBudget {
+  /** One shared monthly allowance covering late arrival and early leave. */
   capHours: number
   usedHours: number
   remainingHours: number
+  /** How much of usedHours came from late attendance (the rest is early leave). */
+  lateUsedHours: number
+  earlyUsedHours: number
   month: string
 }
 

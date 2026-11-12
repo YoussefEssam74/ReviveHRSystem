@@ -520,14 +520,16 @@ namespace Service.Services
                 .GetByIdAsync(employee.GymId, cancellationToken);
 
             var today = DateOnly.FromDateTime(DateTime.UtcNow);
-            var used = await ExcusedHoursUsedInMonthAsync(employee.Id, today, cancellationToken);
+            var usage = await ExcusedHoursUsedInMonthAsync(employee.Id, today, cancellationToken);
             var cap = gym?.ExcusedLateHoursCapPerMonth ?? 0;
 
             return new ExcusedHoursBudgetDto
             {
                 CapHours = cap,
-                UsedHours = used,
-                RemainingHours = Math.Max(0, cap - used),
+                UsedHours = usage.Total,
+                RemainingHours = Math.Max(0, cap - usage.Total),
+                LateUsedHours = usage.LateHours,
+                EarlyUsedHours = usage.EarlyHours,
                 Month = $"{today.Year:D4}-{today.Month:D2}"
             };
         }
@@ -623,6 +625,10 @@ namespace Service.Services
                         : "The departure time is required.");
             }
 
+            // The requested wall-clock time is what the check-out comparison uses:
+            // leaving before it is a warning even when the request exists.
+            entity.TargetTime = request.RequestTime;
+
             var template = await ScheduledShiftAsync(employee.GymId, employee.Id, entity.RequestDate, cancellationToken)
                 ?? throw new BadRequestException(
                     "No published shift is scheduled for this date — late attendance and early leave require a scheduled shift.");
@@ -631,8 +637,10 @@ namespace Service.Services
                 ? LateHours(template, request.RequestTime.Value)
                 : EarlyHours(template, request.RequestTime.Value);
 
-            var used = await ExcusedHoursUsedInMonthAsync(employee.Id, entity.RequestDate, cancellationToken);
+            // Late attendance and early leave draw on the same monthly allowance.
+            var usage = await ExcusedHoursUsedInMonthAsync(employee.Id, entity.RequestDate, cancellationToken);
             var cap = gym.ExcusedLateHoursCapPerMonth;
+            var used = usage.Total;
             if (used + hours > cap)
             {
                 throw new BadRequestException(
@@ -695,18 +703,34 @@ namespace Service.Services
         }
 
         /// <summary>Hours already held this calendar month by pending and approved capped requests.</summary>
-        private async Task<decimal> ExcusedHoursUsedInMonthAsync(
+        private async Task<ExcusedHoursUsage> ExcusedHoursUsedInMonthAsync(
             int employeeId, DateOnly anyDateInMonth, CancellationToken cancellationToken)
         {
             var requests = await unitOfWork.GetRepository<EmployeeRequest, int>()
                 .GetAllAsync(new RequestsByEmployeeSpec(employeeId), cancellationToken);
 
-            return requests
+            var counted = requests
                 .Where(r => RequestTypeCatalog.CountsAgainstExcusedHoursCap(r.Type)
                     && r.RequestDate.Year == anyDateInMonth.Year
                     && r.RequestDate.Month == anyDateInMonth.Month
                     && r.Status is RequestStatus.Pending or RequestStatus.PendingHRReview or RequestStatus.Approved)
-                .Sum(r => r.RequestedHours ?? 0m);
+                .ToList();
+
+            // Late attendance and early leave hold separate caps, so each bucket only
+            // ever sums its own requests — a heavy late month cannot eat the early-leave
+            // allowance.
+            return new ExcusedHoursUsage(
+                LateHours: counted
+                    .Where(r => RequestTypeCatalog.Find(r.Type)?.Id == RequestTypeCatalog.LateAttendanceId)
+                    .Sum(r => r.RequestedHours ?? 0m),
+                EarlyHours: counted
+                    .Where(r => RequestTypeCatalog.Find(r.Type)?.Id == RequestTypeCatalog.EarlyLeaveId)
+                    .Sum(r => r.RequestedHours ?? 0m));
+        }
+
+        private readonly record struct ExcusedHoursUsage(decimal LateHours, decimal EarlyHours)
+        {
+            public decimal Total => LateHours + EarlyHours;
         }
 
         private async Task<int> ResolveColleagueIdAsync(

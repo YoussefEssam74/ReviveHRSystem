@@ -209,9 +209,24 @@ namespace Shared.DataTransferObject.Request
         public DateOnly? EndDate { get; init; }
 
         public DateOnly SubmittedDate { get; init; }
+
+        /// <summary>Date and clock time the request was filed, so the sheet card can
+        /// print when it came in without a second call.</summary>
+        public DateTime SubmittedAt { get; init; }
+
         public required string Status { get; init; }
         public string Reason { get; init; } = string.Empty;
+        public string? Payment { get; init; }
+        public int? CalculatedDays { get; init; }
+
+        /// <summary>Branch-manager stage: outcome, who decided it and when.</summary>
+        public string? BmDecision { get; init; }
+        public string? BmApprover { get; init; }
+        public DateTime? BmDecidedAt { get; init; }
         public string? BmComment { get; init; }
+
+        /// <summary>HR stage outcome (null until HR decides).</summary>
+        public string? HrDecision { get; init; }
     }
 
     /// <summary>One type-pill count on the inbox (R10).</summary>

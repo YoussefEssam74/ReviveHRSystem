@@ -19,11 +19,32 @@ namespace Service.Services
         /// <summary>Entitlement a fresh balance row starts with when HR granted none.</summary>
         internal static decimal DefaultEntitlement(LeaveType leaveType) => leaveType switch
         {
-            LeaveType.Annual => 21,
             LeaveType.Sick => 10,
             LeaveType.Emergency => 6,
+            // Annual is never a flat default: it accrues with completed service
+            // (see AnnualLeaveAccrual). Callers must use EntitlementForAsync.
             _ => 0
         };
+
+        /// <summary>
+        /// The entitlement actually in force for one employee and leave type. Annual
+        /// leave accrues from the hire date; every other type keeps its flat default.
+        /// </summary>
+        internal static async Task<decimal> EntitlementForAsync(
+            IUnitOfWork unitOfWork, int employeeId, LeaveType leaveType, CancellationToken cancellationToken)
+        {
+            if (leaveType != LeaveType.Annual)
+            {
+                return DefaultEntitlement(leaveType);
+            }
+
+            var employee = await unitOfWork.GetRepository<Employee, int>()
+                .GetByIdAsync(new EmployeeByIdSpec(employeeId), cancellationToken);
+
+            return employee is null
+                ? 0m
+                : AnnualLeaveAccrual.EntitledDays(employee.HireDate, DateOnly.FromDateTime(DateTime.UtcNow));
+        }
 
         /// <summary>Leave type a request consumes, or null when it consumes none.</summary>
         internal static LeaveType? LeaveTypeFor(EmployeeRequest request) =>
@@ -63,11 +84,18 @@ namespace Service.Services
                     EmployeeId = employeeId,
                     LeaveType = leaveType,
                     Year = year,
-                    TotalEntitlement = DefaultEntitlement(leaveType),
+                    TotalEntitlement = await EntitlementForAsync(unitOfWork, employeeId, leaveType, cancellationToken),
                     UsedDays = 0,
                     PendingDays = 0
                 };
                 await unitOfWork.GetRepository<LeaveBalance, int>().AddAsync(balance, cancellationToken);
+            }
+            else if (leaveType == LeaveType.Annual)
+            {
+                // Keep the stored annual total in step with the accrual so any reader
+                // that only sees the row (e.g. the inbox's balance-alert filter) agrees
+                // with the entitlement the request paths enforce.
+                balance.TotalEntitlement = await EntitlementForAsync(unitOfWork, employeeId, leaveType, cancellationToken);
             }
 
             balance!.PendingDays = Math.Max(0, balance.PendingDays + days);
@@ -83,7 +111,8 @@ namespace Service.Services
 
         /// <summary>
         /// Days still available to request for a leave type: entitlement minus consumed
-        /// minus already-reserved pending days. Reads without creating anything.
+        /// minus already-reserved pending days. Reads without creating anything. The
+        /// entitlement is the one in force today, not the stale stored total.
         /// </summary>
         internal static async Task<decimal> RemainingDaysAsync(
             IUnitOfWork unitOfWork, int employeeId, LeaveType leaveType, CancellationToken cancellationToken)
@@ -93,24 +122,50 @@ namespace Service.Services
                 .GetAllAsync(new LeaveBalancesByEmployeeSpec(employeeId, year), cancellationToken);
 
             var balance = balances.FirstOrDefault(b => b.LeaveType == leaveType);
-            var entitlement = balance?.TotalEntitlement ?? DefaultEntitlement(leaveType);
+            var entitlement = await EntitlementForAsync(unitOfWork, employeeId, leaveType, cancellationToken);
 
             return entitlement - (balance?.UsedDays ?? 0) - (balance?.PendingDays ?? 0);
         }
 
         /// <summary>
-        /// Refuses a submission whose days exceed what the employee has left, so the
-        /// employee can never lock more days than his entitlement allows.
+        /// Refuses a submission that would exceed the leave the employee may still take.
+        ///
+        /// Annual leave is capped by the year, not by the accrual: he may book up to the
+        /// twelve days a full year earns even before they are all accrued ("12 days in one
+        /// month"), and whatever exceeds the accrued balance is recorded as an unpaid day.
+        /// The accrual still governs how many of those days are paid.
         /// </summary>
         internal static async Task EnsureDaysAvailableAsync(
             IUnitOfWork unitOfWork, int employeeId, LeaveType leaveType, decimal days,
             CancellationToken cancellationToken)
         {
+            if (leaveType == LeaveType.Annual)
+            {
+                var year = DateTime.UtcNow.Year;
+                var rows = await unitOfWork.GetRepository<LeaveBalance, int>()
+                    .GetAllAsync(new LeaveBalancesByEmployeeSpec(employeeId, year), cancellationToken);
+                var annual = rows.FirstOrDefault(b => b.LeaveType == LeaveType.Annual);
+                var used = annual?.UsedDays ?? 0;
+
+                // Booked days that are still waiting on a decision also hold their slots.
+                var held = annual?.PendingDays ?? 0;
+                var yearlyLeft = Math.Max(0m, AnnualLeaveAccrual.MaxDaysPerYear - used - held);
+                if (days > yearlyLeft)
+                {
+                    throw new BadRequestException(
+                        $"Annual leave is limited to {AnnualLeaveAccrual.MaxDaysPerYear} days a year — {yearlyLeft} day(s) left. " +
+                        "Days beyond your accrued balance are recorded as unpaid.");
+                }
+
+                return;
+            }
+
             var remaining = await RemainingDaysAsync(unitOfWork, employeeId, leaveType, cancellationToken);
             if (days > remaining)
             {
+                var available = Math.Max(0m, remaining);
                 throw new BadRequestException(
-                    $"This request covers {days} day(s) but only {remaining} {leaveType} day(s) remain — you cannot submit more than your remaining balance.");
+                    $"This request covers {days} day(s) but only {available} {leaveType} day(s) remain — you cannot submit more than your remaining balance.");
             }
         }
     }

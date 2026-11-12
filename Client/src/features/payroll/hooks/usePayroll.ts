@@ -153,8 +153,8 @@ export function useApprovePeriod() {
 export function useReviewCandidate() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: ({ id, decision }: { id: number; decision: 'Accepted' | 'Rejected' }) =>
-      postCandidateReview(id, decision),
+    mutationFn: ({ id, decision, amount, days }: { id: number; decision?: 'Accepted' | 'Rejected'; amount?: number; days?: number }) =>
+      postCandidateReview(id, { decision, amount, days }),
     onSuccess: () => invalidatePayroll(queryClient),
   })
 }

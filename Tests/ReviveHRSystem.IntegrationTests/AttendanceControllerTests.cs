@@ -269,7 +269,249 @@ namespace ReviveHRSystem.IntegrationTests
             Assert.Equal(HttpStatusCode.Created, checkOut.Status);
             // The shift ends at 05:00 *tomorrow*, so leaving at any time today is early —
             // comparing bare clock times against 05:00 would get this wrong most of the day.
-            Assert.Equal("EARLY_CHECKOUT", checkOut.Body.GetProperty("shiftComparison").GetString());
+            Assert.Equal("EARLY_LEAVE", checkOut.Body.GetProperty("shiftComparison").GetString());
+            Assert.True(checkOut.Body.GetProperty("earlyLeaveWarning").GetBoolean());
+        }
+
+        /// <summary>
+        /// A shift window around "now" whose end sits <paramref name="endsAfterCheckoutMinutes"/>
+        /// after the check-out instant, with both punches in the recent past. Keeps the
+        /// grace/warning tests independent of the clock the suite runs at.
+        /// </summary>
+        private (DateTime CheckInUtc, DateTime CheckOutUtc, TimeOnly CheckOutLocal, DateOnly Date, TimeOnly Start, TimeOnly End) RecentShift(
+            int endsAfterCheckoutMinutes, int shiftMinutes = 480)
+        {
+            var attendanceTimeZone = _fixture.Services.GetRequiredService<TimeZoneInfo>();
+            var nowLocal = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, attendanceTimeZone);
+            var checkOutLocal = nowLocal.AddMinutes(-2);
+            var endLocal = checkOutLocal.AddMinutes(endsAfterCheckoutMinutes);
+            var startLocal = endLocal.AddMinutes(-shiftMinutes);
+            return (
+                TimeZoneInfo.ConvertTimeToUtc(startLocal, attendanceTimeZone),
+                TimeZoneInfo.ConvertTimeToUtc(checkOutLocal, attendanceTimeZone),
+                TimeOnly.FromDateTime(checkOutLocal),
+                DateOnly.FromDateTime(startLocal),
+                TimeOnly.FromDateTime(startLocal),
+                TimeOnly.FromDateTime(endLocal));
+        }
+
+        private DateTime LocalUtc(DateOnly date, int hour, int minute)
+        {
+            var attendanceTimeZone = _fixture.Services.GetRequiredService<TimeZoneInfo>();
+            return TimeZoneInfo.ConvertTimeToUtc(date.ToDateTime(new TimeOnly(hour, minute)), attendanceTimeZone);
+        }
+
+        private async Task SeedEarlyLeaveRequestAsync(
+            int employeeId,
+            DateOnly date,
+            TimeOnly requestedTime,
+            DomainLayer.Models.RequestModule.Enums.RequestStatus status =
+                DomainLayer.Models.RequestModule.Enums.RequestStatus.Pending)
+        {
+            using var scope = _fixture.Services.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<ReviveHrDbContext>();
+            db.EmployeeRequests.Add(new DomainLayer.Models.RequestModule.EmployeeRequest
+            {
+                EmployeeId = employeeId,
+                Type = "Early Leave",
+                RequestDate = date,
+                TargetStartDate = date,
+                TargetTime = requestedTime,
+                Status = status,
+                Details = "Integration test early leave request.",
+                SubmittedAt = DateTime.UtcNow,
+                CreatedAt = DateTime.UtcNow,
+            });
+            await db.SaveChangesAsync();
+        }
+
+        private async Task<List<DomainLayer.Models.NotificationModule.Notification>> EarlyLeaveWarningsAsync(int userId)
+        {
+            using var scope = _fixture.Services.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<ReviveHrDbContext>();
+            return await db.Notifications
+                .Where(n => n.UserId == userId && n.Title == "Early Leaving Warning")
+                .ToListAsync();
+        }
+
+        [Fact]
+        public async Task Event_CheckOutInsideGrace_DoesNotRaiseWarning()
+        {
+            var builder = NewBuilder();
+            var gym = await builder.CreateGymWithStationAsync();
+            var employee = await builder.CreateEmployeeAsync(gym);
+            var hr = await builder.CreateUserAsync(DomainLayer.Models.UserModule.Enums.UserType.HR, [gym]);
+            var stationToken = await _fixture.GetStationTokenAsync(gym.StationCode);
+
+            // Ends 5 minutes after the check-out: inside the 10-minute grace window.
+            var window = RecentShift(endsAfterCheckoutMinutes: 5);
+            await builder.AssignShiftAsync(
+                employee.EmployeeId, gym.GymId, window.Date, "IT Grace", window.Start, window.End);
+
+            await PostEventAsync(EventPayload(employee.EmployeeNumber, "IN", timestamp: window.CheckInUtc), stationToken);
+            var checkOut = await PostEventAsync(
+                EventPayload(employee.EmployeeNumber, "OUT", timestamp: window.CheckOutUtc), stationToken);
+
+            Assert.Equal(HttpStatusCode.Created, checkOut.Status);
+            Assert.Equal("ON_SCHEDULE", checkOut.Body.GetProperty("shiftComparison").GetString());
+            Assert.False(checkOut.Body.GetProperty("earlyLeaveWarning").GetBoolean());
+            Assert.Empty(await EarlyLeaveWarningsAsync(hr.UserId));
+        }
+
+        [Fact]
+        public async Task Event_CheckOutPastGrace_WarnsBranchManagerAndHr()
+        {
+            var builder = NewBuilder();
+            var gym = await builder.CreateGymWithStationAsync();
+            var employee = await builder.CreateEmployeeAsync(gym);
+            var hr = await builder.CreateUserAsync(DomainLayer.Models.UserModule.Enums.UserType.HR, [gym]);
+            var stationToken = await _fixture.GetStationTokenAsync(gym.StationCode);
+
+            // Ends 40 minutes after the check-out: well past the grace window.
+            var window = RecentShift(endsAfterCheckoutMinutes: 40);
+            await builder.AssignShiftAsync(
+                employee.EmployeeId, gym.GymId, window.Date, "IT Warn", window.Start, window.End);
+
+            await PostEventAsync(EventPayload(employee.EmployeeNumber, "IN", timestamp: window.CheckInUtc), stationToken);
+            var checkOut = await PostEventAsync(
+                EventPayload(employee.EmployeeNumber, "OUT", timestamp: window.CheckOutUtc), stationToken);
+
+            Assert.Equal(HttpStatusCode.Created, checkOut.Status);
+            Assert.Equal("EARLY_LEAVE", checkOut.Body.GetProperty("shiftComparison").GetString());
+            Assert.True(checkOut.Body.GetProperty("earlyLeaveWarning").GetBoolean());
+            Assert.True(checkOut.Body.GetProperty("earlyLeaveMinutes").GetInt32() >= 40);
+
+            var warnings = await EarlyLeaveWarningsAsync(hr.UserId);
+            Assert.Single(warnings);
+            Assert.Contains("No early leave request was filed.", warnings[0].Message);
+        }
+
+        [Fact]
+        public async Task Event_CheckOutBeforeRequestedEarlyLeaveTime_StillWarns()
+        {
+            var builder = NewBuilder();
+            var gym = await builder.CreateGymWithStationAsync();
+            var employee = await builder.CreateEmployeeAsync(gym);
+            var hr = await builder.CreateUserAsync(DomainLayer.Models.UserModule.Enums.UserType.HR, [gym]);
+            var stationToken = await _fixture.GetStationTokenAsync(gym.StationCode);
+
+            var window = RecentShift(endsAfterCheckoutMinutes: 40);
+            await builder.AssignShiftAsync(
+                employee.EmployeeId, gym.GymId, window.Date, "IT BeforeRequest", window.Start, window.End);
+
+            // The employee asked to leave 20 minutes after the punch he actually made.
+            await SeedEarlyLeaveRequestAsync(
+                employee.EmployeeId, window.Date, window.CheckOutLocal.Add(TimeSpan.FromMinutes(20)));
+
+            await PostEventAsync(EventPayload(employee.EmployeeNumber, "IN", timestamp: window.CheckInUtc), stationToken);
+            var checkOut = await PostEventAsync(
+                EventPayload(employee.EmployeeNumber, "OUT", timestamp: window.CheckOutUtc), stationToken);
+
+            Assert.Equal(HttpStatusCode.Created, checkOut.Status);
+            Assert.Equal("EARLY_LEAVE", checkOut.Body.GetProperty("shiftComparison").GetString());
+            Assert.True(checkOut.Body.GetProperty("earlyLeaveWarning").GetBoolean());
+
+            var warnings = await EarlyLeaveWarningsAsync(hr.UserId);
+            Assert.Single(warnings);
+            Assert.Contains("before the requested", warnings[0].Message);
+        }
+
+        [Theory]
+        [InlineData(DomainLayer.Models.RequestModule.Enums.RequestStatus.Pending)]
+        [InlineData(DomainLayer.Models.RequestModule.Enums.RequestStatus.Approved)]
+        public async Task Event_CheckOutNotBeforeRequestedEarlyLeaveTime_IsCovered(DomainLayer.Models.RequestModule.Enums.RequestStatus requestStatus)
+        {
+            var builder = NewBuilder();
+            var gym = await builder.CreateGymWithStationAsync();
+            var employee = await builder.CreateEmployeeAsync(gym);
+            var hr = await builder.CreateUserAsync(DomainLayer.Models.UserModule.Enums.UserType.HR, [gym]);
+            var stationToken = await _fixture.GetStationTokenAsync(gym.StationCode);
+
+            var window = RecentShift(endsAfterCheckoutMinutes: 40);
+            await builder.AssignShiftAsync(
+                employee.EmployeeId, gym.GymId, window.Date, "IT Covered", window.Start, window.End);
+
+            // The request asked to leave 30 minutes before the actual check-out.
+            await SeedEarlyLeaveRequestAsync(
+                employee.EmployeeId, window.Date, window.CheckOutLocal.Add(TimeSpan.FromMinutes(-30)), requestStatus);
+
+            await PostEventAsync(EventPayload(employee.EmployeeNumber, "IN", timestamp: window.CheckInUtc), stationToken);
+            var checkOut = await PostEventAsync(
+                EventPayload(employee.EmployeeNumber, "OUT", timestamp: window.CheckOutUtc), stationToken);
+
+            Assert.Equal(HttpStatusCode.Created, checkOut.Status);
+            Assert.Equal("EARLY_LEAVE_COVERED", checkOut.Body.GetProperty("shiftComparison").GetString());
+            Assert.False(checkOut.Body.GetProperty("earlyLeaveWarning").GetBoolean());
+            Assert.Empty(await EarlyLeaveWarningsAsync(hr.UserId));
+        }
+
+        [Fact]
+        public async Task Event_ThirdEarlyLeaveOfMonth_DraftsWarningNotice()
+        {
+            var builder = NewBuilder();
+            var gym = await builder.CreateGymWithStationAsync();
+            var employee = await builder.CreateEmployeeAsync(gym);
+            await builder.CreateUserAsync(DomainLayer.Models.UserModule.Enums.UserType.HR, [gym]);
+            var stationToken = await _fixture.GetStationTokenAsync(gym.StationCode);
+
+            var attendanceTimeZone = _fixture.Services.GetRequiredService<TimeZoneInfo>();
+            var today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, attendanceTimeZone));
+            var monthStart = new DateOnly(today.Year, today.Month, 1);
+            var window = RecentShift(endsAfterCheckoutMinutes: 40);
+
+            // Two prior unexcused early departures in the same month (never today or
+            // the shift date today's punch will use).
+            var priorDates = Enumerable.Range(0, DateTime.DaysInMonth(today.Year, today.Month))
+                .Select(monthStart.AddDays)
+                .Where(day => day != today && day != window.Date)
+                .OrderBy(day => day < today ? 0 : 1)
+                .ThenByDescending(day => day)
+                .Take(2)
+                .ToList();
+
+            int templateId;
+            using (var scope = _fixture.Services.CreateScope())
+            {
+                var db = scope.ServiceProvider.GetRequiredService<ReviveHrDbContext>();
+                foreach (var day in priorDates)
+                {
+                    await builder.AssignShiftAsync(
+                        employee.EmployeeId, gym.GymId, day, "IT Seeded", new TimeOnly(8, 0), new TimeOnly(16, 0));
+                    await db.AttendanceRecords.AddAsync(new AttendanceRecord
+                    {
+                        EmployeeId = employee.EmployeeId,
+                        GymId = gym.GymId,
+                        Date = day,
+                        Status = DomainLayer.Models.AttendanceModule.Enums.AttendanceStatus.EarlyCheckout,
+                        ScheduledShiftTemplateId = (await db.ShiftTemplates
+                            .FirstAsync(t => t.GymId == gym.GymId && t.Name == "IT Seeded")).Id,
+                        CheckInTime = LocalUtc(day, 8, 0),
+                        CheckOutTime = LocalUtc(day, 14, 0),
+                    });
+                    await db.SaveChangesAsync();
+                }
+
+                templateId = (await db.ShiftTemplates.FirstAsync(t => t.GymId == gym.GymId && t.Name == "IT Seeded")).Id;
+            }
+            Assert.True(templateId > 0);
+
+            // Today's third warning is what triggers the auto-drafted notice.
+            await builder.AssignShiftAsync(
+                employee.EmployeeId, gym.GymId, window.Date, "IT ThirdWarn", window.Start, window.End);
+
+            await PostEventAsync(EventPayload(employee.EmployeeNumber, "IN", timestamp: window.CheckInUtc), stationToken);
+            var checkOut = await PostEventAsync(
+                EventPayload(employee.EmployeeNumber, "OUT", timestamp: window.CheckOutUtc), stationToken);
+            Assert.Equal("EARLY_LEAVE", checkOut.Body.GetProperty("shiftComparison").GetString());
+
+            using var verifyScope = _fixture.Services.CreateScope();
+            var verifyDb = verifyScope.ServiceProvider.GetRequiredService<ReviveHrDbContext>();
+            var notice = await verifyDb.WarningNotices
+                .FirstOrDefaultAsync(w => w.EmployeeId == employee.EmployeeId
+                    && w.Reason == "Repeated early leaving");
+            Assert.NotNull(notice);
+            Assert.Equal(DomainLayer.Models.EmployeeModule.Enums.ProposalStatus.Pending, notice!.Status);
+            Assert.Equal("Attendance", notice.Type);
         }
 
         [Fact]

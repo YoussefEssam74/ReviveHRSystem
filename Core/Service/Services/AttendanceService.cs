@@ -6,6 +6,7 @@ using DomainLayer.Models.AttendanceModule;
 using DomainLayer.Models.AttendanceModule.Enums;
 using DomainLayer.Models.AuditModule;
 using DomainLayer.Models.EmployeeModule;
+using DomainLayer.Models.EmployeeModule.Enums;
 using DomainLayer.Models.OrganizationModule.Enums;
 using DomainLayer.Models.NotificationModule;
 using DomainLayer.Models.NotificationModule.Enums;
@@ -36,10 +37,20 @@ namespace Service.Services
     /// Failures reject the event without creating any AttendanceRecord. Each record
     /// stores both GymId and the StationSessionId that issued it.
     /// </summary>
-    public class AttendanceService(IUnitOfWork unitOfWork, IUserAccessRepository userAccess, IStationSessionService stationSessions, TimeZoneInfo? attendanceTimeZone = null) : IAttendanceService
+    public class AttendanceService(IUnitOfWork unitOfWork, IUserAccessRepository userAccess, IStationSessionService stationSessions, TimeZoneInfo? attendanceTimeZone = null, AttendanceOptions? attendanceOptions = null) : IAttendanceService
     {
         private const double MinimumLivenessScore = 0.70;
         private static readonly TimeSpan MaxFutureSkew = TimeSpan.FromMinutes(10);
+
+        /// <summary>Request label stored on the Early Leave submission rows.</summary>
+        private static readonly string EarlyLeaveRequestType =
+            RequestTypeCatalog.Find(RequestTypeCatalog.EarlyLeaveId)?.Label ?? "Early Leave";
+
+        private const string EarlyLeaveWarningTitle = "Early Leaving Warning";
+
+        /// <summary>Auto-drafts a WarningNotice once this many unexcused early departures land in one month.</summary>
+        private const int RepeatedEarlyLeavingThreshold = 3;
+        private const string RepeatedEarlyLeavingReason = "Repeated early leaving";
 
         // An AUTO scan shortly after an overnight shift ends should close that
         // shift's still-open record instead of opening a new check-in for today.
@@ -52,6 +63,9 @@ namespace Service.Services
 
         // Primary-constructor optional parameter: resolve the fallback once at construction.
         private readonly TimeZoneInfo _attendanceTimeZone = attendanceTimeZone ?? TimeZoneInfo.Local;
+
+        // Minutes a check-out may run before the shift end without being an early leave.
+        private readonly int _earlyLeaveGraceMinutes = (attendanceOptions ?? new AttendanceOptions()).EarlyLeaveGraceMinutes;
 
         public async Task<StationLoginResponse> StationLoginAsync(StationLoginRequest request, CancellationToken cancellationToken = default)
         {
@@ -418,6 +432,8 @@ namespace Service.Services
                     "This employee already has an attendance record at another gym for this shift.");
             }
 
+            EarlyLeaveAssessment? earlyLeave = null;
+
             if (type == "IN")
             {
                 if (record?.CheckInTime is not null && record.CheckOutTime is null)
@@ -485,13 +501,28 @@ namespace Service.Services
                 record.CheckOutTime = utcTimestamp;
                 record.CheckOutMethod = method;
 
-                // Lateness outranks early checkout; otherwise leaving before the shift's
-                // end (the next day for overnight shifts) marks the record as EarlyCheckout.
-                if (record.Status != AttendanceStatus.Late && template is not null && localEvent < shiftEndsAt)
+                // Lateness outranks early checkout. Leaving beyond the configured grace
+                // window is an early leave: an active Early Leave request covers it only
+                // when the departure is not before the time the employee asked for;
+                // otherwise the punch raises a Branch Manager + HR warning.
+                if (template is not null)
                 {
-                    record.Status = AttendanceStatus.EarlyCheckout;
+                    var minutesEarly = (int)Math.Ceiling((shiftEndsAt - localEvent).TotalMinutes);
+                    if (minutesEarly > _earlyLeaveGraceMinutes)
+                    {
+                        earlyLeave = await AssessEarlyLeaveAsync(
+                            employee.Id, attendanceDate, localEvent, minutesEarly, shiftEndsAt, template, cancellationToken);
+                        if (record.Status != AttendanceStatus.Late)
+                        {
+                            record.Status = AttendanceStatus.EarlyCheckout;
+                        }
+                    }
+                    else if (record.Status == AttendanceStatus.EarlyCheckout)
+                    {
+                        record.Status = AttendanceStatus.OnTime;
+                    }
                 }
-                else if (record.Status == AttendanceStatus.EarlyCheckout && (template is null || localEvent >= shiftEndsAt))
+                else if (record.Status == AttendanceStatus.EarlyCheckout)
                 {
                     record.Status = AttendanceStatus.OnTime;
                 }
@@ -538,6 +569,18 @@ namespace Service.Services
                 await unitOfWork.SaveChangesAsync(cancellationToken);
             }
 
+            if (earlyLeave is { Covered: false })
+            {
+                try
+                {
+                    await DispatchEarlyLeaveWarningAsync(gymId, employee, record, attendanceDate, earlyLeave.Value, cancellationToken);
+                }
+                catch
+                {
+                    // Notification/escalation failure must not block the attendance punch.
+                }
+            }
+
             return new AttendanceResponse
             {
                 RecordId = $"ATT-{record.Id}",
@@ -549,13 +592,238 @@ namespace Service.Services
                 Method = method.ToString(),
                 Timestamp = utcTimestamp,
                 AttendanceStatus = record.Status.ToString().ToUpperInvariant(),
+                EarlyLeaveMinutes = earlyLeave?.MinutesEarly ?? 0,
+                EarlyLeaveWarning = earlyLeave is { Covered: false },
                 ShiftComparison = isUnscheduledAttendance
                     ? "UNSCHEDULED"
                     : (type == "IN"
                         ? (localEvent > shiftStartsAt ? "LATE" : "ON_SCHEDULE")
-                        : (localEvent < shiftEndsAt ? "EARLY_CHECKOUT" : "ON_SCHEDULE"))
+                        : earlyLeave is { } leave
+                            ? (leave.Covered ? "EARLY_LEAVE_COVERED" : "EARLY_LEAVE")
+                            : "ON_SCHEDULE")
             };
         }
+
+        /// <summary>
+        /// Evaluates a check-out that ran past the early-leave grace: the day's latest
+        /// Early Leave request (any status) explains the departure, while only a
+        /// pending/approved one — and only when the employee did not leave before the
+        /// time he asked for — covers it. A rejected or earlier-than-requested
+        /// departure is the warning BM and HR must adjudicate.
+        /// </summary>
+        private async Task<EarlyLeaveAssessment> AssessEarlyLeaveAsync(
+            int employeeId,
+            DateOnly date,
+            DateTime localEvent,
+            int minutesEarly,
+            DateTime shiftEndsAt,
+            ShiftTemplate template,
+            CancellationToken cancellationToken)
+        {
+            var requests = await unitOfWork.GetRepository<EmployeeRequest, int>()
+                .GetAllAsync(new EmployeeRequestsByDateAndTypeSpec(employeeId, date, EarlyLeaveRequestType), cancellationToken);
+
+            var latest = requests.FirstOrDefault();
+            var active = requests.FirstOrDefault(r =>
+                r.Status is RequestStatus.Pending or RequestStatus.PendingHRReview or RequestStatus.Approved);
+
+            var checkOutLocal = TimeOnly.FromDateTime(localEvent);
+            var leftBeforeRequested = active?.TargetTime is { } requested
+                && localEvent < ResolveRequestedDeparture(date, template, requested);
+
+            return new EarlyLeaveAssessment(
+                minutesEarly,
+                checkOutLocal,
+                TimeOnly.FromDateTime(shiftEndsAt),
+                latest,
+                active is not null && !leftBeforeRequested,
+                leftBeforeRequested,
+                active?.TargetTime);
+        }
+
+        /// <summary>
+        /// Anchors a requested wall-clock departure to the shift's calendar window:
+        /// on an overnight shift a time before the start (e.g. 00:34) is the next
+        /// morning, so comparing bare clock times cannot misfile it as the previous day.
+        /// </summary>
+        private static DateTime ResolveRequestedDeparture(DateOnly shiftDate, ShiftTemplate template, TimeOnly requested)
+        {
+            var at = shiftDate.ToDateTime(requested);
+            return template.EndTime <= template.StartTime && requested < template.StartTime
+                ? at.AddDays(1)
+                : at;
+        }
+
+        /// <summary>
+        /// Fans one low-noise warning out to the gym's Branch Managers and HR (deduped
+        /// per attendance record) and, once a month reaches the repeat threshold, drafts
+        /// the formal warning notice for them to review.
+        /// </summary>
+        private async Task DispatchEarlyLeaveWarningAsync(
+            int gymId,
+            Employee employee,
+            AttendanceRecord record,
+            DateOnly date,
+            EarlyLeaveAssessment assessment,
+            CancellationToken cancellationToken)
+        {
+            var management = (await unitOfWork.GetRepository<User, int>()
+                .GetAllAsync(new BranchManagersAndHrForGymSpec(gymId), cancellationToken))
+                .ToList();
+            if (management.Count == 0)
+            {
+                return;
+            }
+
+            var token = $"[ATT-{record.Id}]";
+            var alreadySent = await unitOfWork.GetRepository<Notification, int>()
+                .GetAllAsync(new NotificationsByMessageTokenSpec(token), cancellationToken);
+            var notified = alreadySent.Select(n => n.UserId).ToHashSet();
+
+            var detail = assessment.LatestRequest switch
+            {
+                null => "No early leave request was filed.",
+                { Status: RequestStatus.Rejected } => "The early leave request was rejected.",
+                _ when assessment.LeftBeforeRequested && assessment.RequestedTime is { } requested =>
+                    $"Left at {assessment.CheckOutLocal:HH:mm}, before the requested {requested:HH:mm}.",
+                _ => string.Empty,
+            };
+
+            var message = $"{employee.FullName} checked out {assessment.MinutesEarly} min before shift end "
+                + $"({assessment.ShiftEndLocal:HH:mm}) on {date:yyyy-MM-dd} at {assessment.CheckOutLocal:HH:mm}. "
+                + $"{detail} {token}".Trim();
+
+            var notificationRepository = unitOfWork.GetRepository<Notification, int>();
+            var added = false;
+            foreach (var user in management.Where(u => !notified.Contains(u.Id)))
+            {
+                await notificationRepository.AddAsync(new Notification
+                {
+                    UserId = user.Id,
+                    Title = EarlyLeaveWarningTitle,
+                    Message = message,
+                    Type = NotificationType.AttendanceIssue,
+                    IsRead = false,
+                    LinkTo = "payroll",
+                    CreatedAt = DateTime.UtcNow
+                }, cancellationToken);
+                added = true;
+            }
+
+            if (added)
+            {
+                await unitOfWork.SaveChangesAsync(cancellationToken);
+            }
+
+            await EnsureRepeatedEarlyLeavingNoticeAsync(employee, management, date, cancellationToken);
+        }
+
+        /// <summary>
+        /// Third unexcused early departure of the month drafts a Pending warning notice
+        /// (Attendance / "Repeated early leaving") for BM-HR review. Days covered by an
+        /// active Early Leave request never count, and one draft per month is enough.
+        /// </summary>
+        private async Task EnsureRepeatedEarlyLeavingNoticeAsync(
+            Employee employee,
+            IReadOnlyCollection<User> management,
+            DateOnly date,
+            CancellationToken cancellationToken)
+        {
+            var monthStart = new DateOnly(date.Year, date.Month, 1);
+            var monthEnd = monthStart.AddMonths(1).AddDays(-1);
+
+            var records = await unitOfWork.GetRepository<AttendanceRecord, int>()
+                .GetAllAsync(new AttendanceByEmployeesRangeSpec([employee.Id], monthStart, monthEnd), cancellationToken);
+            var earlyDepartures = records
+                .Where(r => r.CheckOutTime is not null && r.ScheduledShiftTemplate is not null)
+                .ToList();
+            if (earlyDepartures.Count < RepeatedEarlyLeavingThreshold)
+            {
+                return;
+            }
+
+            var requests = (await unitOfWork.GetRepository<EmployeeRequest, int>()
+                .GetAllAsync(new RequestsByEmployeesSpec([employee.Id], null, EarlyLeaveRequestType, monthStart, monthEnd), cancellationToken))
+                .ToList();
+
+            var warningDays = earlyDepartures
+                .Where(r => IsUnexcusedEarlyLeaving(r, requests))
+                .ToList();
+            if (warningDays.Count < RepeatedEarlyLeavingThreshold)
+            {
+                return;
+            }
+
+            var notices = await unitOfWork.GetRepository<WarningNotice, int>()
+                .GetAllAsync(new WarningNoticesByEmployeesSpec([employee.Id]), cancellationToken);
+            if (notices.Any(n => n.Reason == RepeatedEarlyLeavingReason
+                && n.IssuedAt.Year == date.Year && n.IssuedAt.Month == date.Month))
+            {
+                return;
+            }
+
+            // The notice is auto-drafted on the branch's behalf: the gym's HR owner is
+            // preferred (the spec's role rows are not loaded with their Role), and any
+            // management recipient the spec returned is a safe fallback.
+            var issuer = management.FirstOrDefault(u => u.UserType == UserType.HR) ?? management.First();
+
+            var days = string.Join(", ", warningDays
+                .OrderBy(r => r.Date)
+                .Select(r => $"{r.Date:yyyy-MM-dd} ({r.CheckOutTime:HH\\:mm} UTC)"));
+
+            await unitOfWork.GetRepository<WarningNotice, int>().AddAsync(new WarningNotice
+            {
+                EmployeeId = employee.Id,
+                Type = "Attendance",
+                Reason = RepeatedEarlyLeavingReason,
+                Note = $"Auto-drafted after {warningDays.Count} unexcused early departures in "
+                    + $"{monthStart:MMMM yyyy}: {days}. Review and file or decline.",
+                IssuedBy = issuer.Id,
+                IssuedAt = DateTime.UtcNow,
+                Status = ProposalStatus.Pending
+            }, cancellationToken);
+            await unitOfWork.SaveChangesAsync(cancellationToken);
+        }
+
+        /// <summary>True when the day ended past the grace window and no active request covers it.</summary>
+        private bool IsUnexcusedEarlyLeaving(AttendanceRecord record, IReadOnlyCollection<EmployeeRequest> requests)
+        {
+            if (record.CheckOutTime is not { } checkOutUtc || record.ScheduledShiftTemplate is not { } template)
+            {
+                return false;
+            }
+
+            var checkOutLocal = TimeZoneInfo.ConvertTimeFromUtc(checkOutUtc, _attendanceTimeZone);
+            var shiftEndsAt = ShiftWindowEndsAt(record.Date, template);
+            var minutesEarly = (int)Math.Ceiling((shiftEndsAt - checkOutLocal).TotalMinutes);
+            if (minutesEarly <= _earlyLeaveGraceMinutes)
+            {
+                return false;
+            }
+
+            var active = requests
+                .Where(r => r.RequestDate == record.Date
+                    && r.Status is RequestStatus.Pending or RequestStatus.PendingHRReview or RequestStatus.Approved)
+                .OrderByDescending(r => r.CreatedAt)
+                .FirstOrDefault();
+            if (active is null)
+            {
+                return true;
+            }
+
+            return active.TargetTime is { } requested
+                && checkOutLocal < ResolveRequestedDeparture(record.Date, template, requested);
+        }
+
+        /// <summary>Outcome of comparing one check-out against the shift end and the day's request.</summary>
+        private readonly record struct EarlyLeaveAssessment(
+            int MinutesEarly,
+            TimeOnly CheckOutLocal,
+            TimeOnly ShiftEndLocal,
+            EmployeeRequest? LatestRequest,
+            bool Covered,
+            bool LeftBeforeRequested,
+            TimeOnly? RequestedTime);
 
         private async Task EnsureUnscheduledRequestAndNotificationsAsync(
             int gymId, Employee employee, DateOnly date, DateTime localEvent, CancellationToken cancellationToken)

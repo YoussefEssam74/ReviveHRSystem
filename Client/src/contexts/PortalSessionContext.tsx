@@ -59,8 +59,13 @@ export function PortalSessionProvider({ children }: { children: ReactNode }) {
 
   const switchMutation = useMutation({
     mutationFn: (gymId: number) => postSwitchGym(gymId),
-    onSuccess: (response) => {
+    onSuccess: async (response) => {
       if (!session) return
+      // Cancel in-flight portal reads before rotating the credential. A /api/me
+      // (or any per-gym list) started with the OLD token would otherwise land
+      // after the seed below and repaint the previous gym — the switch would
+      // look like it never happened.
+      await queryClient.cancelQueries({ queryKey: ['portal'] })
       // Persist the fresh token + session user snapshot before any refetch —
       // subsequent /api calls must carry the newly-scoped token.
       const next: StoredSession = {
@@ -89,8 +94,10 @@ export function PortalSessionProvider({ children }: { children: ReactNode }) {
       // from the old gym would otherwise serve for up to 45–60s). Seed the
       // me context under the NEW token to avoid a layout loading-flash, then
       // invalidate everything so all active portal queries refetch per gym.
-      queryClient.setQueryData(['portal', 'me', next.accessToken], response.me)
-      void queryClient.invalidateQueries({ queryKey: ['portal'] })
+      // Await it: the caller navigates right after, and it must land on a page
+      // that already sees the new gym's role and permissions.
+      queryClient.setQueryData(['portal', 'me', next.accessToken], response.me, { updatedAt: Date.now() })
+      await queryClient.invalidateQueries({ queryKey: ['portal'] })
     },
   })
 

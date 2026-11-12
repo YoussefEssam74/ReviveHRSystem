@@ -2,16 +2,19 @@ import { useState } from 'react'
 import { Badge, type BadgeColor } from '../../../components/ui/badge'
 import { Button } from '../../../components/ui/button'
 import { Dialog } from '../../../components/ui/dialog'
-import { dateParts, formatDate } from '../../../lib/format'
+import { dateParts, formatDate, formatEGP } from '../../../lib/format'
 import { cn } from '../../../lib/utils'
 import type { PayrollAttendance, PayrollAttendanceDay } from '../api/payroll.api'
 import PunchAuditDialog from './PunchAuditDialog'
 
-/** The six counter rows of the settlement sheet's attendance card. */
+/** The counter rows of the settlement sheet's attendance card. */
 export type AttendanceBucket =
   | 'daysAttended'
   | 'weeklyOffs'
-  | 'approvedLeaves'
+  | 'annualLeaves'
+  | 'sickLeaves'
+  | 'coverDays'
+  | 'unapprovedCover'
   | 'overtime'
   | 'lateArrivals'
   | 'unexcusedAbsences'
@@ -19,17 +22,23 @@ export type AttendanceBucket =
 const BUCKETS: { value: AttendanceBucket; label: string }[] = [
   { value: 'daysAttended', label: 'Days Attended' },
   { value: 'weeklyOffs', label: 'Weekly Offs' },
-  { value: 'approvedLeaves', label: 'Approved Leaves' },
+  { value: 'annualLeaves', label: 'Annual Leave' },
+  { value: 'sickLeaves', label: 'Sick Leave' },
+  { value: 'coverDays', label: 'Cover Days' },
+  { value: 'unapprovedCover', label: 'Unapproved cover' },
   { value: 'overtime', label: 'Overtime' },
   { value: 'lateArrivals', label: 'Late Arrivals' },
-  { value: 'unexcusedAbsences', label: 'Unexcused Absences' },
+  { value: 'unexcusedAbsences', label: 'Absent' },
 ]
 
 /** Which day kinds each counter sums up. */
 const BUCKET_KINDS: Record<AttendanceBucket, string[]> = {
-  daysAttended: ['Attended', 'Late', 'EarlyCheckout', 'MissingCheckout'],
+  daysAttended: ['Attended', 'Late', 'EarlyCheckout', 'EarlyLeave', 'MissingCheckout'],
   weeklyOffs: ['WeeklyOff'],
-  approvedLeaves: ['ApprovedLeave'],
+  annualLeaves: ['AnnualLeave', 'ApprovedLeave'],
+  sickLeaves: ['SickLeave'],
+  coverDays: ['Cover'],
+  unapprovedCover: ['CoverRejected'],
   overtime: [],
   lateArrivals: ['Late'],
   unexcusedAbsences: ['Absent'],
@@ -43,10 +52,15 @@ const KIND_TONE: Record<string, BadgeColor> = {
   Attended: 'green',
   Late: 'yellow',
   EarlyCheckout: 'orange',
+  EarlyLeave: 'purple',
   MissingCheckout: 'gray',
   Absent: 'red',
   WeeklyOff: 'blue',
+  AnnualLeave: 'purple',
+  SickLeave: 'purple',
   ApprovedLeave: 'purple',
+  Cover: 'green',
+  CoverRejected: 'red',
 }
 
 /** The counter the sheet prints for a bucket (used to explain an empty log). */
@@ -54,8 +68,14 @@ function bucketDaysInSheet(attendance: PayrollAttendance, bucket: AttendanceBuck
   switch (bucket) {
     case 'weeklyOffs':
       return attendance.weeklyOffs
-    case 'approvedLeaves':
-      return attendance.approvedLeaves
+    case 'annualLeaves':
+      return attendance.annualLeaves
+    case 'sickLeaves':
+      return attendance.sickLeaves
+    case 'coverDays':
+      return attendance.coverDays
+    case 'unapprovedCover':
+      return attendance.unapprovedCoverDays
     case 'lateArrivals':
       return attendance.lateArrivals
     case 'unexcusedAbsences':
@@ -73,8 +93,14 @@ function bucketValue(attendance: PayrollAttendance, bucket: AttendanceBucket): s
       return `${attendance.daysAttended} day${attendance.daysAttended === 1 ? '' : 's'}`
     case 'weeklyOffs':
       return `${attendance.weeklyOffs} day${attendance.weeklyOffs === 1 ? '' : 's'}`
-    case 'approvedLeaves':
-      return `${attendance.approvedLeaves} day${attendance.approvedLeaves === 1 ? '' : 's'}`
+    case 'annualLeaves':
+      return `${attendance.annualLeaves} day${attendance.annualLeaves === 1 ? '' : 's'}`
+    case 'sickLeaves':
+      return `${attendance.sickLeaves} day${attendance.sickLeaves === 1 ? '' : 's'}`
+    case 'coverDays':
+      return `${attendance.coverDays} day${attendance.coverDays === 1 ? '' : 's'}`
+    case 'unapprovedCover':
+      return `${attendance.unapprovedCoverDays} day${attendance.unapprovedCoverDays === 1 ? '' : 's'}`
     case 'overtime':
       return `${attendance.overtimeHours} hrs`
     case 'lateArrivals':
@@ -90,6 +116,8 @@ export interface AttendanceDaysDialogProps {
   periodLabel: string
   attendance: PayrollAttendance
   initialBucket: AttendanceBucket
+  /** The sheet's deduction lines, so each day can show what it was charged. */
+  deductions?: { date: string; amount: number }[]
   onClose: () => void
 }
 
@@ -103,6 +131,7 @@ export default function AttendanceDaysDialog({
   periodLabel,
   attendance,
   initialBucket,
+  deductions,
   onClose,
 }: AttendanceDaysDialogProps) {
   const [bucket, setBucket] = useState<AttendanceBucket>(initialBucket)
@@ -112,6 +141,13 @@ export default function AttendanceDaysDialog({
   const totalOvertime = days.reduce((sum, day) => sum + day.overtimeHours, 0)
   // True when the sheet counts something the day log cannot show (e.g. a manual fix).
   const hasSheetValue = bucketDaysInSheet(attendance, bucket) > 0
+
+  // Every deduction line charged to a date (a day can carry more than one).
+  const deductionByDate = new Map<string, number>()
+  for (const line of deductions ?? []) {
+    deductionByDate.set(line.date, (deductionByDate.get(line.date) ?? 0) + line.amount)
+  }
+  const deductionOf = (date: string) => deductionByDate.get(date) ?? 0
 
   return (
     <>
@@ -228,6 +264,7 @@ export default function AttendanceDaysDialog({
                     <th className="px-2.5 py-2 text-right">Worked</th>
                     <th className="px-2.5 py-2 text-right">OT</th>
                     <th className="px-2.5 py-2">Status</th>
+                    <th className="px-2.5 py-2 text-right">Deduction</th>
                     <th className="px-2.5 py-2">Note</th>
                     <th className="px-2.5 py-2" />
                   </tr>
@@ -262,6 +299,13 @@ export default function AttendanceDaysDialog({
                           <Badge color={KIND_TONE[day.kind] ?? 'gray'} className="text-[9px]">
                             {day.status}
                           </Badge>
+                        </td>
+                        <td className="whitespace-nowrap px-2.5 py-1.5 text-right font-semibold">
+                          {deductionOf(day.date) ? (
+                            <span className="text-red-600">− {formatEGP(deductionOf(day.date))}</span>
+                          ) : (
+                            <span className="text-charcoal-300">—</span>
+                          )}
                         </td>
                         <td
                           className="max-w-[180px] truncate px-2.5 py-1.5 text-[10px] text-charcoal-500"

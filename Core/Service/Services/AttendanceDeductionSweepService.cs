@@ -140,10 +140,21 @@ namespace Service.Services
                     .Where(a => !IsOffAssignment(a))
                     .Select(a => a.Date)
                     .ToHashSet();
-                var scheduledOff = employeeAssignments
-                    .Where(IsOffAssignment)
-                    .Select(a => a.Date)
-                    .ToHashSet();
+
+                // Weekly offs read exactly like the payroll day log: a day is a working day
+                // only when it carries a real shift. With no published schedule the gym's
+                // standard week applies (Friday off); with one, every unassigned day is off.
+                // Otherwise a stale "absent" record on a rest day would charge a day the
+                // card itself prints as "Weekly off".
+                var hasSchedule = employeeAssignments.Any(a => a.ShiftTemplateId is not null);
+                var scheduledOff = new HashSet<DateOnly>();
+                for (var date = from; date <= to; date = date.AddDays(1))
+                {
+                    if (hasSchedule ? !scheduled.Contains(date) : date.DayOfWeek == DayOfWeek.Friday)
+                    {
+                        scheduledOff.Add(date);
+                    }
+                }
                 var leaveDates = ApprovedLeaveDates(leaveRequests, employee.Id, from, to);
 
                 var own = candidates.Where(c => c.EmployeeId == employee.Id).ToList();
@@ -173,9 +184,12 @@ namespace Service.Services
                         continue;
                     }
 
-                    if (record is not null && scheduledOff.Contains(date) && record.CheckInTime is null && record.CheckOutTime is null)
+                    if (scheduledOff.Contains(date))
                     {
-                        changed |= Drop(own, date, record.Id);
+                        // A weekly off can never be an absence or a late arrival: work done
+                        // on it is a cover/extra day, and the sheet prints it as "Weekly off".
+                        // Keeping a stale row here would charge a day the card calls off.
+                        changed |= Drop(own, date, record?.Id);
                         continue;
                     }
 
@@ -263,9 +277,10 @@ namespace Service.Services
                 }
 
                 var isLate = record.Status == AttendanceStatus.Late;
+                var recordLateMinutes = isLate ? LateMinutesOf(record, assignments) : null;
                 if (anchored.Status == DeductionStatus.Pending && anchored.Amount <= 0)
                 {
-                    return (0, TryRepriceUnpriced(anchored, employee, date, sheets, assignments));
+                    return (0, TryRepriceUnpriced(anchored, employee, date, sheets, assignments, recordLateMinutes));
                 }
 
                 // The day was derived as an absence and the punch now proves a late
@@ -274,10 +289,13 @@ namespace Service.Services
                 if (anchored.Status == DeductionStatus.Pending
                     && anchored.Reason != (isLate ? "Late arrival" : "Unapproved absence"))
                 {
-                    var (repriced, repricedNote) = Price(employee, date, sheets, assignments, isLate);
+                    var (repriced, repricedNote) = Price(employee, date, sheets, assignments, isLate, recordLateMinutes);
                     anchored.AttendanceRecordId = record.Id;
                     anchored.Reason = isLate ? "Late arrival" : "Unapproved absence";
                     anchored.Amount = repriced;
+                    anchored.DeductionDays = isLate
+                        ? PayrollService.LatePenalty(recordLateMinutes).Days
+                        : PayrollService.AbsenceDayMultiplier;
                     anchored.Note = PayrollService.ParseAbsenceMarker(anchored.Note) == date
                         ? $"{PayrollService.AbsenceMarker(date)} · {repricedNote}"
                         : repricedNote;
@@ -292,7 +310,10 @@ namespace Service.Services
                     return (0, true);
                 }
 
-                return (0, false);
+                // Still pending on an unchanged rule? Then it was raised under an older
+                // price list (a flat quarter day, a single day per absence) — bring it
+                // in line with the rule the sheet now shows.
+                return (0, TryRepriceUnpriced(anchored, employee, date, sheets, assignments, recordLateMinutes));
             }
 
             if (systemUserId is null)
@@ -301,7 +322,8 @@ namespace Service.Services
             }
 
             var late = record.Status == AttendanceStatus.Late;
-            var (amount, pricedNote) = Price(employee, date, sheets, assignments, late);
+            var lateMinutes = late ? LateMinutesOf(record, assignments) : null;
+            var (amount, pricedNote) = Price(employee, date, sheets, assignments, late, lateMinutes);
             var candidate = new DeductionCandidate
             {
                 EmployeeId = employee.Id,
@@ -309,7 +331,7 @@ namespace Service.Services
                 DeductionDate = date,
                 IsSystemGenerated = true,
                 Amount = amount,
-                DeductionDays = late ? 0.25m : PayrollService.AbsenceDayMultiplier,
+                DeductionDays = late ? PayrollService.LatePenalty(lateMinutes).Days : PayrollService.AbsenceDayMultiplier,
                 Reason = late ? "Late arrival" : "Unapproved absence",
                 Note = pricedNote,
                 IssuedBy = systemUserId.Value,
@@ -382,33 +404,47 @@ namespace Service.Services
         }
 
         /// <summary>
-        /// Prices a pending auto row that was raised before any salary was on file:
-        /// as soon as a salary source exists (a recorded salary, a sheet covering the
-        /// day) the branch sees the real amount instead of a bare 0. Anything the
-        /// branch has already priced or decided on is left exactly as it is.
+        /// Re-prices a still-pending auto row: it was raised before any salary was on file
+        /// (amount 0), or under an older price list (a flat quarter day for lateness, one
+        /// day per absence). Anything the branch has already decided is left untouched.
         /// </summary>
         private bool TryRepriceUnpriced(
             DeductionCandidate candidate,
             Employee employee,
             DateOnly date,
             IReadOnlyList<PayrollEntry> sheets,
-            IReadOnlyList<ShiftAssignment> assignments)
+            IReadOnlyList<ShiftAssignment> assignments,
+            int? lateMinutes = null)
         {
-            if (candidate.Status != DeductionStatus.Pending
-                || candidate.Amount > 0
-                || !candidate.IsSystemGenerated)
+            if (candidate.Status != DeductionStatus.Pending || !candidate.IsSystemGenerated)
             {
                 return false;
             }
 
-            var (amount, note) = Price(
-                employee, date, sheets, assignments, isLate: candidate.Reason == "Late arrival");
+            // The branch already priced this row (day count or amount): leave it alone.
+            if (candidate.ReviewedAt is not null)
+            {
+                return false;
+            }
+
+            var late = candidate.Reason == "Late arrival";
+            var expectedDays = late
+                ? PayrollService.LatePenalty(lateMinutes).Days
+                : PayrollService.AbsenceDayMultiplier;
+            var unpriced = candidate.Amount <= 0;
+            if (!unpriced && candidate.DeductionDays == expectedDays)
+            {
+                return false;
+            }
+
+            var (amount, note) = Price(employee, date, sheets, assignments, late, lateMinutes);
             if (amount <= 0)
             {
                 return false;
             }
 
             candidate.Amount = amount;
+            candidate.DeductionDays = expectedDays;
             candidate.DeductionDate = date;
             // Keep the row shaped the way it was raised (marker for a derived day).
             candidate.Note = PayrollService.ParseAbsenceMarker(candidate.Note) == date
@@ -555,10 +591,14 @@ namespace Service.Services
             DateOnly date,
             IReadOnlyList<PayrollEntry> sheets,
             IReadOnlyList<ShiftAssignment> assignments,
-            bool isLate)
+            bool isLate,
+            int? lateMinutes = null)
         {
             var (daily, divisor) = DeductionPricing.DailyRate(employee, date, sheets, assignments);
-            var amount = isLate ? Math.Round(daily / 4m, 2) : Math.Round(daily * PayrollService.AbsenceDayMultiplier, 2);
+            var (lateDays, lateLabel) = PayrollService.LatePenalty(lateMinutes);
+            var amount = isLate
+                ? Math.Round(daily * lateDays, 2)
+                : Math.Round(daily * PayrollService.AbsenceDayMultiplier, 2);
             if (amount <= 0)
             {
                 return (0m, "No salary on file — the branch must price this deduction manually.");
@@ -566,8 +606,27 @@ namespace Service.Services
 
             var basis = $"{divisor} calendar days";
             return (amount, isLate
-                ? $"Auto-priced: quarter day (base ÷ {basis} ÷ 4)."
+                ? $"Auto-priced: {lateLabel} (base ÷ {basis} × {lateDays})."
                 : $"Auto-priced: {PayrollService.AbsenceDayMultiplier} days (base ÷ {basis} × {PayrollService.AbsenceDayMultiplier}).");
+        }
+
+        /// <summary>Minutes the punch was late against the day's shift start, when both are known.</summary>
+        private static int? LateMinutesOf(AttendanceRecord record, IReadOnlyList<ShiftAssignment> assignments)
+        {
+            if (record.CheckInTime is not { } checkIn)
+            {
+                return null;
+            }
+
+            var start = record.ScheduledShiftTemplate?.StartTime
+                ?? assignments.FirstOrDefault(a => a.EmployeeId == record.EmployeeId && a.Date == record.Date)?.ShiftTemplate?.StartTime;
+            if (start is not { } shiftStart)
+            {
+                return null;
+            }
+
+            var minutes = (int)Math.Round((TimeOnly.FromDateTime(checkIn) - shiftStart).TotalMinutes);
+            return minutes > 0 ? minutes : 0;
         }
 
         private async Task NotifyAsync(

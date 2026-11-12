@@ -4,6 +4,8 @@ using DomainLayer.Models.EmployeeModule;
 using DomainLayer.Models.EmployeeModule.Enums;
 using DomainLayer.Models.OrganizationModule;
 using DomainLayer.Models.OrganizationModule.Enums;
+using DomainLayer.Models.RequestModule;
+using DomainLayer.Models.RequestModule.Enums;
 using DomainLayer.Models.UserModule;
 using DomainLayer.Models.UserModule.Enums;
 using Service.Specifications;
@@ -521,17 +523,25 @@ namespace Service.Services
             var year = DateTime.UtcNow.Year;
             var rows = await _unitOfWork.GetRepository<LeaveBalance, int>()
                 .GetAllAsync(new LeaveBalancesForYearSpec(employeeId, year), cancellationToken);
+            var employee = await _unitOfWork.GetRepository<Employee, int>()
+                .GetByIdAsync(new EmployeeByIdSpec(employeeId), cancellationToken);
 
             LeaveBalanceBucket Bucket(LeaveType type)
             {
                 var row = rows.FirstOrDefault(b => b.LeaveType == type);
-                // A brand-new employee has no balance row yet; reporting 0 entitlement
-                // blocked every leave request in the portal. The submission path already
-                // assumes the type's default entitlement, so the read must match it.
+                // Annual leave is earned, not granted: its entitlement follows completed
+                // service (AnnualLeaveAccrual), so the stored total is never trusted for
+                // it. Every other type keeps the row's total or the type's default.
+                var total = type == LeaveType.Annual
+                    ? (employee is null
+                        ? 0m
+                        : AnnualLeaveAccrual.EntitledDays(employee.HireDate, DateOnly.FromDateTime(DateTime.UtcNow)))
+                    : row?.TotalEntitlement ?? LeaveBalanceReservation.DefaultEntitlement(type);
+
                 return new LeaveBalanceBucket
                 {
                     Used = row?.UsedDays ?? 0,
-                    Total = row?.TotalEntitlement ?? LeaveBalanceReservation.DefaultEntitlement(type),
+                    Total = total,
                 };
             }
 
@@ -540,7 +550,49 @@ namespace Service.Services
                 EmployeeId = employeeId,
                 DayOff = Bucket(LeaveType.Annual),
                 Sick = Bucket(LeaveType.Sick),
-                Unpaid = Bucket(LeaveType.Unpaid),
+                Unpaid = await UnpaidDaysAsync(employeeId, year, rows, employee, cancellationToken),
+            };
+        }
+
+        /// <summary>
+        /// The unpaid buffer, not a grant.
+        ///
+        /// Annual leave is earned one day per month of service. When an employee takes
+        /// more days than he has earned so far, the extra days cannot be paid: they sit
+        /// here as a running deficit and are covered by the following months' accrual
+        /// (take two days while one is earned → the second is unpaid until next month
+        /// earns another day). The deficit only turns into money if the employee leaves
+        /// while it is still open — then it is deducted from the final salary.
+        ///
+        /// It is reported as <c>Used</c> with a zero allowance, because there is no cap.
+        /// </summary>
+        private async Task<LeaveBalanceBucket> UnpaidDaysAsync(
+            int employeeId, int year, IEnumerable<LeaveBalance> rows, Employee? employee, CancellationToken cancellationToken)
+        {
+            var requests = await _unitOfWork.GetRepository<EmployeeRequest, int>()
+                .GetAllAsync(new RequestsByEmployeeSpec(employeeId), cancellationToken);
+
+            // Days HR deliberately settled unpaid never entered UsedDays, so they are
+            // counted from the decision itself; they are just as deductible at exit.
+            var settledUnpaid = requests
+                .Where(r => r.RequestDate.Year == year
+                    && r.Status == RequestStatus.Approved
+                    && LeaveBalanceReservation.LeaveTypeFor(r) is not null
+                    && string.Equals(r.Payment, "unpaid", StringComparison.OrdinalIgnoreCase))
+                .Sum(r => LeaveBalanceReservation.DaysRequested(r));
+
+            // Reported "used" days are the ones settled as paid. Whatever they exceed the
+            // accrual by was borrowed from months not yet earned — the open deficit.
+            var annualUsed = rows.FirstOrDefault(b => b.LeaveType == LeaveType.Annual)?.UsedDays ?? 0;
+            var annualEntitled = employee is null
+                ? 0m
+                : AnnualLeaveAccrual.EntitledDays(employee.HireDate, DateOnly.FromDateTime(DateTime.UtcNow));
+            var openDeficit = Math.Max(0m, annualUsed - annualEntitled);
+
+            return new LeaveBalanceBucket
+            {
+                Used = openDeficit + settledUnpaid,
+                Total = 0,
             };
         }
 

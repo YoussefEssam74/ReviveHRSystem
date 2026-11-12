@@ -8,9 +8,11 @@ using DomainLayer.Models.AttendanceModule;
 using DomainLayer.Models.AttendanceModule.Enums;
 using DomainLayer.Models.EmployeeModule;
 using DomainLayer.Models.EmployeeModule.Enums;
+using DomainLayer.Models.OrganizationModule;
 using DomainLayer.Models.PayrollModule;
 using DomainLayer.Models.PayrollModule.Enums;
 using DomainLayer.Models.RequestModule;
+using DomainLayer.Models.SchedulingModule;
 using DomainLayer.Models.UserModule;
 using Service.Specifications;
 using ServiceAbstraction.Services;
@@ -30,8 +32,11 @@ namespace Service.Services
         IAccessControlService _accessControl,
         IUserAccessRepository _userAccess,
         ITeamScopeService _teamScope,
-        IAttendanceDeductionSweepService _deductionSweep) : IPayrollService
+        IAttendanceDeductionSweepService _deductionSweep,
+        TimeZoneInfo? attendanceTimeZone = null) : IPayrollService
     {
+        // Interpret the shift template's wall-clock window in the organization timezone.
+        private readonly TimeZoneInfo _attendanceTimeZone = attendanceTimeZone ?? TimeZoneInfo.Local;
         // ==================================================================
         // Period directory + detail
         // ==================================================================
@@ -97,9 +102,14 @@ namespace Service.Services
             // rides with the detail so the page renders from a single call; the cover
             // summary (unscheduled-attendance days) rides along for the same reason.
             var evidence = await LoadAttendanceEvidenceAsync(period, entries, cancellationToken);
+
+            // The day log is the authority on which days may be charged, so the pending
+            // deduction lines are reconciled against it before the sheet is rendered.
+            var candidateDays = await SyncPendingDeductionLinesAsync(period, entries, evidence, cancellationToken);
+
             var summaries = await LoadAttendanceSummariesAsync(
                 _unitOfWork, period, entries.Select(e => e.EmployeeId).ToList(), cancellationToken);
-            var data = BuildPeriodDetail(period, entries, evidence, summaries);
+            var data = BuildPeriodDetail(period, entries, evidence, summaries, candidateDays);
             return new PayrollPeriodDetailResponse { Data = data };
         }
 
@@ -175,6 +185,8 @@ namespace Service.Services
                 .ToDictionary(g => g.Key, g => g.Count());
 
             var added = 0;
+            // The policy lives on the gym; the period may be brand new and carry no navigation.
+            var gym = await _unitOfWork.GetRepository<Gym, int>().GetByIdAsync(gymId, cancellationToken);
             foreach (var employee in employees)
             {
                 var compensation = await _unitOfWork.GetRepository<Compensation, int>()
@@ -184,7 +196,11 @@ namespace Service.Services
                 {
                     PayrollPeriodId = period.Id,
                     EmployeeId = employee.Id,
-                    BaseSalary = compensation?.Amount ?? 0m,
+                    BaseSalary = BaseWithRaises(
+                        compensation?.Amount ?? 0m,
+                        employee.HireDate,
+                        period.EndDate,
+                        gym?.AnnualIncreasePercent),
                     DaysWorked = daysByEmployee.GetValueOrDefault(employee.Id),
                     OvertimeHours = 0m,
                     TotalBonuses = 0m,
@@ -339,6 +355,21 @@ namespace Service.Services
             var line = entry.LineItems.FirstOrDefault(l => l.Id == lineId)
                 ?? throw new BadRequestException("Deduction line not found on this sheet.");
 
+            // A line raised from an attendance candidate takes the candidate with it: a
+            // removed row must not be re-materialized on the next sheet load.
+            if (line.DeductionCandidateId is int candidateId)
+            {
+                var candidate = await _unitOfWork.GetRepository<DeductionCandidate, int>()
+                    .GetByIdAsync(new DeductionCandidateByIdSpec(candidateId), cancellationToken);
+                if (candidate is not null)
+                {
+                    candidate.Status = DeductionStatus.Rejected;
+                    candidate.ReviewedBy = actor.Id;
+                    candidate.ReviewedAt = DateTime.UtcNow;
+                    _unitOfWork.GetRepository<DeductionCandidate, int>().Update(candidate);
+                }
+            }
+
             _unitOfWork.GetRepository<PayrollEntryLineItem, int>().Remove(line);
             entry.LineItems.Remove(line);
             SyncTotals(entry);
@@ -355,28 +386,91 @@ namespace Service.Services
             };
         }
 
-        public async Task<CloseEntryResponse> CloseEntryAsync(int? actorUserId, int periodId, int employeeId, CancellationToken cancellationToken = default)
+        /// <summary>
+        /// Raises every open absence/late of the period as a Pending deduction line, so the
+        /// sheet prices the month as soon as it opens instead of only on close. Idempotent:
+        /// applied candidates and days that already carry a line are skipped, and an
+        /// untouched Pending line is dropped once its day stops being chargeable.
+        /// </summary>
+        private async Task<Dictionary<int, decimal>> SyncPendingDeductionLinesAsync(
+            PayrollPeriod period,
+            IReadOnlyList<PayrollEntry> entries,
+            IReadOnlyDictionary<int, PayrollAttendanceItem> evidence,
+            CancellationToken cancellationToken)
         {
-            var actor = await HrPortalHelpers.ResolveActorAsync(_unitOfWork, actorUserId, cancellationToken);
-            await _accessControl.EnsurePermissionAsync(actor.Id, "payroll.edit", cancellationToken);
-            var (_, entry) = await LoadEntryAsync(actor, periodId, employeeId, requireOpen: true, cancellationToken);
-            var period = await _unitOfWork.GetRepository<PayrollPeriod, int>().GetByIdAsync(periodId, cancellationToken)
-                ?? throw new NotFoundException("Payroll period not found.");
+            var daysByCandidate = new Dictionary<int, decimal>();
 
-            // Reconcile first through the one attendance → deduction path: the same
-            // sweep the branch tab and dashboards run, so a month closed without
-            // opening the deductions tab still carries every late/absence of the
-            // period (idempotent per employee/day).
-            await _deductionSweep.SweepAsync([entry.EmployeeId], period.StartDate, period.EndDate, cancellationToken);
+            // A locked run is finalized for payment: its lines are frozen with the sheet.
+            if (period.Status is PayrollPeriodStatus.Locked)
+            {
+                return daysByCandidate;
+            }
 
+            var openEntries = entries
+                .Where(e => !string.Equals(e.Status, "Locked", StringComparison.OrdinalIgnoreCase))
+                .ToList();
+            if (openEntries.Count == 0)
+            {
+                return daysByCandidate;
+            }
+
+            await _deductionSweep.SweepAsync(
+                openEntries.Select(e => e.EmployeeId).ToList(), period.StartDate, period.EndDate, cancellationToken);
+
+            var changed = false;
+            foreach (var entry in openEntries)
+            {
+                // Only an absence or a late arrival may be charged for that employee.
+                var deductible = evidence.TryGetValue(entry.EmployeeId, out var attendance)
+                    ? attendance.Days
+                        .Where(d => d.Kind is "Absent" or "Late")
+                        .Select(d => d.Date)
+                        .ToHashSet()
+                    : null;
+
+                var (entryChanged, entryDays) = await MaterializeCandidatesAsync(entry, period, deductible, cancellationToken);
+                changed |= entryChanged;
+                foreach (var pair in entryDays)
+                {
+                    daysByCandidate[pair.Key] = pair.Value;
+                }
+            }
+
+            if (changed)
+            {
+                foreach (var entry in openEntries)
+                {
+                    SyncTotals(entry);
+                    _unitOfWork.GetRepository<PayrollEntry, int>().Update(entry);
+                }
+
+                await _unitOfWork.SaveChangesAsync(cancellationToken);
+            }
+
+            return daysByCandidate;
+        }
+
+        /// <summary>
+        /// Copies the employee's still-open candidates into Pending lines. Rejected
+        /// candidates are final and never re-materialized; a day that already carries a
+        /// line is never charged twice.
+        /// </summary>
+        private async Task<(bool Changed, Dictionary<int, decimal> DaysByCandidate)> MaterializeCandidatesAsync(
+            PayrollEntry entry,
+            PayrollPeriod period,
+            IReadOnlySet<DateOnly>? deductibleDays,
+            CancellationToken cancellationToken)
+        {
             var candidates = (await _unitOfWork.GetRepository<DeductionCandidate, int>()
                     .GetAllAsync(new DeductionCandidatesByEmployeesSpec([entry.EmployeeId]), cancellationToken))
                 .Where(c => CandidateDayOf(c) >= period.StartDate && CandidateDayOf(c) <= period.EndDate)
                 .ToList();
+            var daysByCandidate = candidates.ToDictionary(c => c.Id, c => c.DeductionDays);
+            if (candidates.Count == 0)
+            {
+                return (false, daysByCandidate);
+            }
 
-            // Every candidate still alive becomes a deduction line in Pending state:
-            // the branch has had its triage, HR makes the final call on the review
-            // queue. Rejected candidates are final and never re-materialized.
             var lines = entry.LineItems
                 .Where(l => l.Type.Equals("Deduction", StringComparison.OrdinalIgnoreCase))
                 .ToList();
@@ -384,20 +478,84 @@ namespace Service.Services
                 .Where(l => l.DeductionCandidateId is not null)
                 .Select(l => l.DeductionCandidateId!.Value)
                 .ToHashSet();
+            var linesByCandidate = lines
+                .Where(l => l.DeductionCandidateId is not null)
+                .ToDictionary(l => l.DeductionCandidateId!.Value);
             var takenDays = lines.Select(l => l.EffectiveDate).ToHashSet();
+
+            var changed = false;
+
+            // A day that stopped being an absence (the punch was corrected, the day turned
+            // into a weekly off) has no candidate left: its untouched Pending line must go
+            // with it, or the sheet would charge a day the employee did not miss.
+            var liveCandidateIds = candidates
+                .Where(c => c.Status != DeductionStatus.Rejected)
+                .Select(c => c.Id)
+                .ToHashSet();
+            foreach (var orphan in lines
+                .Where(l => l.DeductionCandidateId is int candidateId
+                    && !liveCandidateIds.Contains(candidateId)
+                    && string.Equals(l.Status, "Pending", StringComparison.OrdinalIgnoreCase))
+                .ToList())
+            {
+                _unitOfWork.GetRepository<PayrollEntryLineItem, int>().Remove(orphan);
+                entry.LineItems.Remove(orphan);
+                appliedCandidateIds.Remove(orphan.DeductionCandidateId!.Value);
+                takenDays.Remove(orphan.EffectiveDate);
+                changed = true;
+            }
+
+            // Same for a pending line whose day the attendance log no longer charges
+            // (e.g. it turned out to be a weekly off): the employee never owed it.
+            if (deductibleDays is not null)
+            {
+                foreach (var stale in lines
+                    .Where(l => l.DeductionCandidateId is not null
+                        && !deductibleDays.Contains(l.EffectiveDate)
+                        && string.Equals(l.Status, "Pending", StringComparison.OrdinalIgnoreCase))
+                    .ToList())
+                {
+                    _unitOfWork.GetRepository<PayrollEntryLineItem, int>().Remove(stale);
+                    entry.LineItems.Remove(stale);
+                    appliedCandidateIds.Remove(stale.DeductionCandidateId!.Value);
+                    takenDays.Remove(stale.EffectiveDate);
+                    changed = true;
+                }
+            }
 
             foreach (var candidate in candidates)
             {
-                if (candidate.Status == DeductionStatus.Rejected
-                    || appliedCandidateIds.Contains(candidate.Id))
+                if (candidate.Status == DeductionStatus.Rejected)
                 {
                     continue;
                 }
 
-                // An older line already punishes this day (manual line, or an earlier
-                // close): never charge the same day twice.
+                if (appliedCandidateIds.Contains(candidate.Id))
+                {
+                    // The price list may have moved under a line that is still waiting
+                    // for HR: follow the candidate so the two never disagree.
+                    if (linesByCandidate.TryGetValue(candidate.Id, out var existing)
+                        && string.Equals(existing.Status, "Pending", StringComparison.OrdinalIgnoreCase)
+                        && existing.Amount != candidate.Amount)
+                    {
+                        existing.Amount = candidate.Amount;
+                        existing.Reason = StripAbsenceMarker(candidate.Note) ?? candidate.Reason;
+                        _unitOfWork.GetRepository<PayrollEntryLineItem, int>().Update(existing);
+                        changed = true;
+                    }
+
+                    continue;
+                }
+
                 var day = CandidateDayOf(candidate);
                 if (takenDays.Contains(day))
+                {
+                    continue;
+                }
+
+                // The attendance log decides what is chargeable: a candidate for a day the
+                // log no longer calls an absence or a late arrival is never turned into a line.
+                if (deductibleDays is not null && !deductibleDays.Contains(day))
                 {
                     continue;
                 }
@@ -420,9 +578,41 @@ namespace Service.Services
                 };
 
                 await _unitOfWork.GetRepository<PayrollEntryLineItem, int>().AddAsync(line, cancellationToken);
-                entry.LineItems.Add(line);
+                // EF's fix-up may already have pushed the row into the tracked entry's
+                // collection — adding it again would list every day twice.
+                if (!entry.LineItems.Contains(line))
+                {
+                    entry.LineItems.Add(line);
+                }
+
+                appliedCandidateIds.Add(candidate.Id);
                 takenDays.Add(day);
+                changed = true;
             }
+
+            return (changed, daysByCandidate);
+        }
+
+        public async Task<CloseEntryResponse> CloseEntryAsync(int? actorUserId, int periodId, int employeeId, CancellationToken cancellationToken = default)
+        {
+            var actor = await HrPortalHelpers.ResolveActorAsync(_unitOfWork, actorUserId, cancellationToken);
+            await _accessControl.EnsurePermissionAsync(actor.Id, "payroll.edit", cancellationToken);
+            var (_, entry) = await LoadEntryAsync(actor, periodId, employeeId, requireOpen: true, cancellationToken);
+            var period = await _unitOfWork.GetRepository<PayrollPeriod, int>().GetByIdAsync(periodId, cancellationToken)
+                ?? throw new NotFoundException("Payroll period not found.");
+
+            // Reconcile first through the one attendance → deduction path: the same
+            // sweep the branch tab and dashboards run, so a month closed without
+            // opening the deductions tab still carries every late/absence of the
+            // period (idempotent per employee/day).
+            await _deductionSweep.SweepAsync([entry.EmployeeId], period.StartDate, period.EndDate, cancellationToken);
+
+            // Charge only what the attendance log itself calls an absence or a late arrival.
+            var closingEvidence = await LoadAttendanceEvidenceAsync(period, [entry], cancellationToken);
+            var closingDeductible = closingEvidence.TryGetValue(entry.EmployeeId, out var closingAttendance)
+                ? closingAttendance.Days.Where(d => d.Kind is "Absent" or "Late").Select(d => d.Date).ToHashSet()
+                : null;
+            await MaterializeCandidatesAsync(entry, period, closingDeductible, cancellationToken);
 
             // Closing settles the branch sheet; the pending deduction lines stay in
             // HR's review queue and publishing waits for their decision.
@@ -628,17 +818,47 @@ namespace Service.Services
             }
 
             var decision = HrPortalHelpers.NullIfBlank(request.Decision)?.ToLowerInvariant();
-            line.Status = decision switch
+            if (decision is not null and not ("accepted" or "rejected"))
             {
-                "accepted" => "Accepted",
-                "rejected" => "Rejected",
-                _ => throw new BadRequestException("Decision must be \"Accepted\" or \"Rejected\"."),
-            };
+                throw new BadRequestException("Decision must be \"Accepted\" or \"Rejected\".");
+            }
+
+            if (decision is null && request.Days is null && request.Amount is null)
+            {
+                throw new BadRequestException("A decision, a day count or an amount is required.");
+            }
+
+            // A decision-less call only re-prices the line (the branch may still be
+            // waiting on its approval): the status it already carries stays.
+            if (decision is not null)
+            {
+                line.Status = decision == "accepted" ? "Accepted" : "Rejected";
+            }
+
+            var source = await FindCandidateForLineAsync(line, cancellationToken);
+
+            // HR thinks in days — an absence is 3, a late arrival a quarter, half or one
+            // hour — so a day edit is converted with the price the line already carries.
+            if (request.Days is { } newDays)
+            {
+                if (newDays <= 0)
+                {
+                    throw new BadRequestException("The deduction days must be greater than zero.");
+                }
+
+                var previousDays = source?.DeductionDays;
+                if (previousDays is null or <= 0)
+                {
+                    throw new BadRequestException("This line has no day basis — set the amount instead.");
+                }
+
+                line.Amount = Math.Round(line.Amount / previousDays.Value * newDays, 2);
+                source!.DeductionDays = newDays;
+            }
 
             // HR's end-of-month re-price: the review may carry the amount the sheet
             // should actually charge, in which case the line and the candidate it
             // materialized from both move to it before the totals recompute.
-            var source = await FindCandidateForLineAsync(line, cancellationToken);
             if (request.Amount is { } revised)
             {
                 if (revised <= 0)
@@ -658,7 +878,12 @@ namespace Service.Services
             if (source is not null)
             {
                 source.Amount = line.Amount;
-                source.Status = line.Status == "Accepted" ? DeductionStatus.Approved : DeductionStatus.Rejected;
+                if (decision is not null)
+                {
+                    source.Status = line.Status == "Accepted" ? DeductionStatus.Approved : DeductionStatus.Rejected;
+                }
+                // A reviewed row is priced by the branch: the attendance sweep must not
+                // put its own day count back over this one.
                 source.ReviewedBy = actor.Id;
                 source.ReviewedAt = line.ReviewedAt;
                 _unitOfWork.GetRepository<DeductionCandidate, int>().Update(source);
@@ -1145,9 +1370,33 @@ namespace Service.Services
                 .Where(r => r.Type is "Annual Leave" or "Day Off" or "Sick Leave")
                 .ToList();
 
+            // Cover / extra requests of every outcome: an approved one makes the day a
+            // credited cover day, a rejected one is reported to HR as unapproved cover.
+            var coverRequests = (await _unitOfWork.GetRepository<DomainLayer.Models.RequestModule.EmployeeRequest, int>()
+                    .GetAllAsync(
+                        new UnscheduledAttendanceByEmployeeIdsSpec(employeeIds, period.StartDate, period.EndDate),
+                        cancellationToken))
+                .ToList();
+
+            // Early Leave requests of every outcome: a pending/approved one excuses the
+            // departure it asked for; a rejected one (or leaving before the requested
+            // time) stays the warning BM and HR were notified about.
+            var earlyLeaveRequests = (await _unitOfWork.GetRepository<DomainLayer.Models.RequestModule.EmployeeRequest, int>()
+                    .GetAllAsync(
+                        new RequestsByEmployeesSpec(employeeIds, null, "Early Leave", period.StartDate, period.EndDate),
+                        cancellationToken))
+                .ToList();
+
             var recordsByEmployee = records
                 .GroupBy(r => r.EmployeeId)
                 .ToDictionary(g => g.Key, g => g.ToList());
+
+            // The schedule is what decides a weekly off: a day with no shift (or an
+            // off-template one) is off whether or not he was punched in that day.
+            var assignmentsByEmployee = (await _unitOfWork.GetRepository<ShiftAssignment, int>()
+                    .GetAllAsync(new ShiftAssignmentsByEmployeeIdsRangeSpec(employeeIds, period.StartDate, period.EndDate), cancellationToken))
+                .GroupBy(a => a.EmployeeId)
+                .ToDictionary(g => g.Key, g => g.ToDictionary(a => a.Date));
 
             return entries.ToDictionary(
                 e => e.EmployeeId,
@@ -1155,20 +1404,81 @@ namespace Service.Services
                 {
                     var rows = recordsByEmployee.GetValueOrDefault(e.EmployeeId) ?? [];
                     var leaves = approvedLeaves.Where(l => l.EmployeeId == e.EmployeeId).ToList();
+                    var schedule = assignmentsByEmployee.GetValueOrDefault(e.EmployeeId) ?? [];
+
+                    // day → true when a cover request covering it was approved, false when it
+                    // was rejected / still pending. Missing means no request was ever filed.
+                    var coverOutcome = new Dictionary<DateOnly, bool>();
+                    foreach (var request in coverRequests.Where(r => r.EmployeeId == e.EmployeeId))
+                    {
+                        var approved = request.Status == DomainLayer.Models.RequestModule.Enums.RequestStatus.Approved;
+                        var from = request.TargetStartDate ?? request.RequestDate;
+                        var to = request.TargetEndDate ?? request.RequestDate;
+                        for (var day = from < period.StartDate ? period.StartDate : from;
+                             day <= (to > period.EndDate ? period.EndDate : to);
+                             day = day.AddDays(1))
+                        {
+                            // A later approval always wins over an earlier rejection.
+                            coverOutcome[day] = coverOutcome.TryGetValue(day, out var already) ? already || approved : approved;
+                        }
+                    }
+
+                    // A day with no published shift (or an off-template one) is the weekly
+                    // off. Without a real published schedule the gym's standard week applies:
+                    // Friday is the weekly off. "Real" means at least one working assignment —
+                    // a month of pure off rows is a missing schedule, not a month off.
+                    var hasSchedule = schedule.Values.Any(a => a.ShiftTemplateId is not null);
+                    bool ScheduledOff(DateOnly date) =>
+                        !hasSchedule
+                            ? date.DayOfWeek == DayOfWeek.Friday
+                            : !schedule.TryGetValue(date, out var assignment)
+                                || assignment.ShiftTemplateId is null
+                                || assignment.ShiftTemplate is null
+                                || assignment.ShiftTemplate.Name.Contains("off", StringComparison.OrdinalIgnoreCase);
+
+                    // The published shift of the day, from the schedule rather than from the
+                    // punch: an absent or future day still shows the shift he was given.
+                    string? ScheduledShift(DateOnly date) =>
+                        schedule.TryGetValue(date, out var planned)
+                            && planned.ShiftTemplate is { } template
+                            && planned.ShiftTemplateId is not null
+                            && !template.Name.Contains("off", StringComparison.OrdinalIgnoreCase)
+                                ? $"{template.StartTime.ToString("HH:mm", CultureInfo.InvariantCulture)}–{template.EndTime.ToString("HH:mm", CultureInfo.InvariantCulture)}"
+                                : null;
+
+                    // The day log is the month's single source of truth: every counter below
+                    // is counted from it, so the drill-down always adds up to the cards.
+                    var today = DateOnly.FromDateTime(DateTime.UtcNow);
+                    var days = BuildAttendanceDays(
+                        rows, leaves, period.StartDate, period.EndDate, ScheduledOff, ScheduledShift, hasSchedule, today,
+                        coverOutcome, earlyLeaveRequests, _attendanceTimeZone);
+
+                    int CountOf(params string[] kinds) => days.Count(d => kinds.Contains(d.Kind));
+
                     // Without a manual correction the counters are derived from the
                     // records; a seeded or stale DaysWorked must not outlive its evidence.
                     var adjusted = e.AttendanceAdjustedAt is not null;
+                    var annualLeaves = CountOf("AnnualLeave");
+                    var sickLeaves = CountOf("SickLeave");
+
                     return new PayrollAttendanceItem
                     {
                         AdjustedAt = e.AttendanceAdjustedAt,
-                        DaysAttended = adjusted ? e.DaysWorked : rows.Count(r => r.CheckInTime is not null),
+                        // Only days worked on a real shift: cover work has its own counters.
+                        DaysAttended = adjusted
+                            ? e.DaysWorked
+                            : CountOf("Attended", "Late", "EarlyCheckout", "EarlyLeave", "MissingCheckout"),
                         // A hand correction wins over the derived count; the day log and
                         // punch proof below stay untouched as the raw evidence.
-                        WeeklyOffs = e.WeeklyOffsOverride ?? rows.Count(r => r.Status == AttendanceStatus.Off),
-                        ApprovedLeaves = e.ApprovedLeavesOverride ?? leaves.Sum(RequestSpanDays),
+                        WeeklyOffs = e.WeeklyOffsOverride ?? CountOf("WeeklyOff"),
+                        AnnualLeaves = annualLeaves,
+                        SickLeaves = sickLeaves,
+                        ApprovedLeaves = e.ApprovedLeavesOverride ?? (annualLeaves + sickLeaves),
+                        CoverDays = CountOf("Cover"),
+                        UnapprovedCoverDays = CountOf("CoverRejected"),
                         OvertimeHours = e.OvertimeHours,
-                        LateArrivals = e.LateArrivalsOverride ?? rows.Count(r => r.Status == AttendanceStatus.Late),
-                        UnexcusedAbsences = e.UnexcusedAbsencesOverride ?? rows.Count(r => r.Status == AttendanceStatus.Absent),
+                        LateArrivals = e.LateArrivalsOverride ?? CountOf("Late"),
+                        UnexcusedAbsences = e.UnexcusedAbsencesOverride ?? CountOf("Absent"),
                         Punches = rows
                             .Where(r => r.CheckInTime is not null)
                             .OrderByDescending(r => r.Status is AttendanceStatus.Late or AttendanceStatus.EarlyCheckout)
@@ -1177,7 +1487,7 @@ namespace Service.Services
                             .Select(ToPunch)
                             .ToList(),
                         // The per-day log behind the counters (click-through).
-                        Days = BuildAttendanceDays(rows, leaves, period.StartDate, period.EndDate),
+                        Days = days,
                     };
                 });
         }
@@ -1202,7 +1512,14 @@ namespace Service.Services
             IReadOnlyCollection<AttendanceRecord> records,
             IReadOnlyCollection<DomainLayer.Models.RequestModule.EmployeeRequest> leaves,
             DateOnly start,
-            DateOnly end)
+            DateOnly end,
+            Func<DateOnly, bool> scheduledOff,
+            Func<DateOnly, string?> scheduledShift,
+            bool hasSchedule,
+            DateOnly today,
+            IReadOnlyDictionary<DateOnly, bool>? coverOutcome = null,
+            IReadOnlyCollection<DomainLayer.Models.RequestModule.EmployeeRequest>? earlyLeaveRequests = null,
+            TimeZoneInfo? attendanceTimeZone = null)
         {
             var days = new List<PayrollAttendanceDay>();
             var covered = new HashSet<DateOnly>(records.Select(r => r.Date));
@@ -1231,19 +1548,78 @@ namespace Service.Services
                     }
                 }
 
+                // How the day counts is decided by its cover/extra request first: an
+                // approved one is a credited cover day, a rejected (or missing) one is
+                // reported to HR as unapproved cover. Otherwise the punch is an ordinary
+                // attendance until the schedule says the day was a rest day.
+                var punched = record.CheckInTime is not null;
+                bool? coverApproved = coverOutcome is not null && coverOutcome.TryGetValue(record.Date, out var approval)
+                    ? approval
+                    : null;
+                var offDuty = scheduledOff(record.Date)
+                    || (shift is not null && shift.Name.Contains("off", StringComparison.OrdinalIgnoreCase));
+
+                var kind = coverApproved switch
+                {
+                    true when punched => "Cover",
+                    false when punched => "CoverRejected",
+                    null when punched && offDuty => "CoverRejected",
+                    _ => AttendanceKind(record.Status),
+                };
+
+                var status = FriendlyAttendance(record.Status);
+                string? note = record.Notes;
+                var earlyLeaveMinutes = 0;
+
+                if (record.Status == AttendanceStatus.EarlyCheckout && earlyLeaveRequests is not null)
+                {
+                    var early = AssessEarlyLeave(
+                        record, earlyLeaveRequests, attendanceTimeZone ?? TimeZoneInfo.Local);
+                    if (early is { } earlyLeave)
+                    {
+                        earlyLeaveMinutes = earlyLeave.MinutesEarly;
+                        var requestRef = earlyLeave.LatestRequest is { } latest
+                            ? $" Early leave request #{latest.Id} {RequestStatusLabel(latest.Status)}."
+                            : " No early leave request was filed.";
+
+                        var derived = earlyLeave.Covered
+                            ? $"Left at {earlyLeave.CheckOutLocal:HH:mm} instead of the shift end "
+                                + $"{earlyLeave.ShiftEndLocal:HH:mm}.{requestRef}"
+                            : $"Left {earlyLeave.MinutesEarly} min before shift end.{requestRef}"
+                                + (earlyLeave.LeftBeforeRequested && earlyLeave.RequestedTime is { } requested
+                                    ? $" Requested time was {requested:HH:mm}."
+                                    : string.Empty);
+
+                        if (earlyLeave.Covered)
+                        {
+                            kind = "EarlyLeave";
+                            status = "Early Leave";
+                        }
+                        else
+                        {
+                            status = "Early Leaving";
+                        }
+
+                        note = string.IsNullOrWhiteSpace(record.Notes) ? derived : $"{derived} {record.Notes}";
+                    }
+                }
+
                 days.Add(new PayrollAttendanceDay
                 {
                     Date = record.Date,
-                    Kind = AttendanceKind(record.Status),
-                    Status = FriendlyAttendance(record.Status),
-                    Shift = shift is null
-                        ? null
-                        : $"{shift.StartTime.ToString("HH:mm", CultureInfo.InvariantCulture)}–{shift.EndTime.ToString("HH:mm", CultureInfo.InvariantCulture)}",
+                    Kind = kind,
+                    Status = status,
+                    // The punch's own shift wins; otherwise the day still shows what the
+                    // published schedule planned for it.
+                    Shift = shift is not null
+                        ? $"{shift.StartTime.ToString("HH:mm", CultureInfo.InvariantCulture)}–{shift.EndTime.ToString("HH:mm", CultureInfo.InvariantCulture)}"
+                        : scheduledShift(record.Date),
                     CheckIn = record.CheckInTime?.ToString("HH:mm", CultureInfo.InvariantCulture),
                     CheckOut = record.CheckOutTime?.ToString("HH:mm", CultureInfo.InvariantCulture),
                     WorkedHours = worked,
                     OvertimeHours = overtime,
-                    Note = record.Notes,
+                    EarlyLeaveMinutes = earlyLeaveMinutes,
+                    Note = note,
                     AttendanceRef = record.CheckInTime is not null ? $"ATT-{record.Id}" : null,
                 });
             }
@@ -1270,11 +1646,65 @@ namespace Service.Services
                     days.Add(new PayrollAttendanceDay
                     {
                         Date = day,
-                        Kind = "ApprovedLeave",
+                        Kind = leave.Type == "Sick Leave" ? "SickLeave" : "AnnualLeave",
                         Status = leave.Type,
+                        Shift = scheduledShift(day),
                         Note = string.IsNullOrWhiteSpace(leave.Details) ? null : leave.Details,
                     });
                 }
+            }
+
+            // Days the schedule leaves empty are the weekly offs behind that counter —
+            // they carry no attendance record, so they are derived here too.
+            for (var day = start; day <= end; day = day.AddDays(1))
+            {
+                if (scheduledOff(day) && covered.Add(day))
+                {
+                    days.Add(new PayrollAttendanceDay
+                    {
+                        Date = day,
+                        Kind = "WeeklyOff",
+                        Status = "Off",
+                        Note = "Weekly off — no shift scheduled.",
+                    });
+                }
+            }
+
+            // Whatever is still unclaimed is the rest of the month: a scheduled working day
+            // with no punch is an absence, and a day with no published schedule at all is
+            // reported as unscheduled rather than invented as an absence.
+            for (var day = start; day <= end; day = day.AddDays(1))
+            {
+                if (!covered.Add(day))
+                {
+                    continue;
+                }
+
+                days.Add(day > today
+                    ? new PayrollAttendanceDay
+                    {
+                        Date = day,
+                        Kind = "Scheduled",
+                        Status = "Scheduled",
+                        Shift = scheduledShift(day),
+                        Note = "Upcoming shift — not due yet.",
+                    }
+                    : hasSchedule
+                        ? new PayrollAttendanceDay
+                        {
+                            Date = day,
+                            Kind = "Absent",
+                            Status = "Absent",
+                            Shift = scheduledShift(day),
+                            Note = "No punch recorded for this scheduled shift.",
+                        }
+                        : new PayrollAttendanceDay
+                        {
+                            Date = day,
+                            Kind = "Unscheduled",
+                            Status = "No schedule",
+                            Note = "No published schedule covers this day.",
+                        });
             }
 
             return days.OrderBy(day => day.Date).ToList();
@@ -1333,7 +1763,8 @@ namespace Service.Services
             PayrollPeriod period,
             List<PayrollEntry> entries,
             IReadOnlyDictionary<int, PayrollAttendanceItem>? evidence = null,
-            IReadOnlyDictionary<int, PayrollAttendanceSummary>? summaries = null)
+            IReadOnlyDictionary<int, PayrollAttendanceSummary>? summaries = null,
+            IReadOnlyDictionary<int, decimal>? candidateDays = null)
         {
             var item = BuildPeriodItem(period, entries);
             return new PayrollPeriodDetailData
@@ -1354,7 +1785,8 @@ namespace Service.Services
                     .Select(e => MapEntry(
                         e,
                         attendance: evidence?.GetValueOrDefault(e.EmployeeId),
-                        summary: summaries?.GetValueOrDefault(e.EmployeeId)))
+                        summary: summaries?.GetValueOrDefault(e.EmployeeId),
+                        candidateDays: candidateDays))
                     .ToList(),
             };
         }
@@ -1363,7 +1795,8 @@ namespace Service.Services
             PayrollEntry entry,
             string? periodLabel = null,
             PayrollAttendanceItem? attendance = null,
-            PayrollAttendanceSummary? summary = null)
+            PayrollAttendanceSummary? summary = null,
+            IReadOnlyDictionary<int, decimal>? candidateDays = null)
         {
             var gross = GrossOf(entry);
             var approved = ApprovedDeductionsOf(entry);
@@ -1402,14 +1835,15 @@ namespace Service.Services
                     .Where(l => l.Type.Equals("Deduction", StringComparison.OrdinalIgnoreCase))
                     .OrderBy(l => l.EffectiveDate)
                     .ThenBy(l => l.Id)
-                    .Select(MapLine)
+                    .Select(line => MapLine(line, candidateDays))
                     .ToList(),
                 Attendance = attendance,
                 Period = periodLabel,
             };
         }
 
-        private static DeductionLineItem MapLine(PayrollEntryLineItem line)
+        private static DeductionLineItem MapLine(
+            PayrollEntryLineItem line, IReadOnlyDictionary<int, decimal>? candidateDays = null)
         {
             var source = UiSource(line.Source);
             return new DeductionLineItem
@@ -1420,6 +1854,13 @@ namespace Service.Services
                 Reason = line.Reason,
                 Source = source,
                 Amount = line.Amount,
+                // How many days the line charges, carried from the attendance candidate so
+                // HR edits days (not a hand-made amount) when re-pricing.
+                Days = line.DeductionCandidateId is int candidateId
+                    && candidateDays is not null
+                    && candidateDays.TryGetValue(candidateId, out var days)
+                        ? days
+                        : null,
                 Status = line.Status,
                 AttendanceRef = line.AttendanceRecordId is int recordId
                     ? $"ATT-{recordId}"
@@ -1465,20 +1906,33 @@ namespace Service.Services
                 : Math.Round(entry.BaseSalary / 176m * 1.5m * entry.OvertimeHours, 2);
 
         /// <summary>
-        /// Gross = base + the annual-increase raise slice + bonuses + overtime. Folding
-        /// the raise into gross keeps Net = Gross − deductions, so the sheet's net bar
-        /// always reconciles with its Earnings header minus its Deductions header.
+        /// Gross = base + bonuses + overtime. The annual raise is NOT added here: it is a
+        /// once-a-year step that folds into the base salary (see <see cref="BaseWithRaises"/>),
+        /// so a month never shows a raise slice of its own.
         /// </summary>
         internal static decimal GrossOf(PayrollEntry entry) =>
-            entry.BaseSalary + AnnualIncreaseOf(entry) + entry.TotalBonuses + OvertimePay(entry);
+            entry.BaseSalary + entry.TotalBonuses + OvertimePay(entry);
 
-        /// <summary>This period's raise slice from the gym's annual-increase policy.</summary>
-        private static decimal AnnualIncreaseOf(PayrollEntry entry)
+        /// <summary>
+        /// The base salary in force for a period: the compensation amount grown by one
+        /// policy raise per completed year of service, compounding on itself.
+        /// </summary>
+        internal static decimal BaseWithRaises(decimal compensation, DateOnly? hireDate, DateOnly periodEnd, decimal? percent)
         {
-            var percent = entry.PayrollPeriod?.Gym?.AnnualIncreasePercent;
-            return percent is > 0 && entry.BaseSalary > 0
-                ? Math.Round(entry.BaseSalary * percent.Value / 100m, 2)
-                : 0m;
+            if (compensation <= 0 || hireDate is not { } hire || percent is not > 0 || hire <= DateOnly.MinValue)
+            {
+                return compensation;
+            }
+
+            var years = 0;
+            for (var anniversary = hire.AddYears(1); anniversary <= periodEnd; anniversary = anniversary.AddYears(1))
+            {
+                years++;
+            }
+
+            return years == 0
+                ? compensation
+                : Math.Round(compensation * (decimal)Math.Pow((double)(1 + percent.Value / 100m), years), 2);
         }
 
         private static decimal ApprovedDeductionsOf(PayrollEntry entry) =>
@@ -1528,8 +1982,20 @@ namespace Service.Services
                 daily > 0 ? Math.Round(daily * AbsenceDayMultiplier, 2) : 0m);
         }
 
-        /// <summary>Workdays an unapproved absence levies (the sweep, payroll close and the manager's view all price it the same).</summary>
-        internal const int AbsenceDayMultiplier = 1;
+        /// <summary>Workdays an unapproved absence levies — one absent day costs three days of pay.</summary>
+        internal const int AbsenceDayMultiplier = 3;
+
+        /// <summary>
+        /// Days of pay a late arrival costs, by how late it was: up to a quarter of an
+        /// hour is an hour of pay, up to half an hour a quarter day, beyond that half a day.
+        /// </summary>
+        internal static (decimal Days, string Label) LatePenalty(int? lateMinutes) => lateMinutes switch
+        {
+            null => (0.25m, "quarter day"),
+            <= 15 => (0.125m, "one hour"),
+            <= 30 => (0.25m, "quarter day"),
+            _ => (0.5m, "half day"),
+        };
 
         /// <summary>The marker the absence sweep stamps into a candidate's note so a derived-absent day stays identifiable.</summary>
         internal const string AbsenceMarkerPrefix = "auto-absence:";
@@ -1611,10 +2077,92 @@ namespace Service.Services
         private static string FriendlyAttendance(AttendanceStatus status) => status switch
         {
             AttendanceStatus.OnTime => "On Time",
-            AttendanceStatus.EarlyCheckout => "Early Checkout",
+            AttendanceStatus.EarlyCheckout => "Early Leaving",
             AttendanceStatus.MissingCheckout => "Missing Checkout",
             _ => status.ToString(),
         };
+
+        /// <summary>Request status shown next to the early-leave evidence.</summary>
+        private static string RequestStatusLabel(DomainLayer.Models.RequestModule.Enums.RequestStatus status) => status switch
+        {
+            DomainLayer.Models.RequestModule.Enums.RequestStatus.Approved => "approved",
+            DomainLayer.Models.RequestModule.Enums.RequestStatus.Rejected => "rejected",
+            DomainLayer.Models.RequestModule.Enums.RequestStatus.Pending or
+                DomainLayer.Models.RequestModule.Enums.RequestStatus.PendingHRReview => "pending",
+            _ => "closed",
+        };
+
+        /// <summary>
+        /// Compares one early check-out with the shift window and the day's Early Leave
+        /// requests. A pending/approved request covers the departure only when it does
+        /// not run before the time the employee asked for — the same rule the station
+        /// applies when it raises the warning.
+        /// </summary>
+        private static EarlyLeaveEvidence? AssessEarlyLeave(
+            AttendanceRecord record,
+            IReadOnlyCollection<DomainLayer.Models.RequestModule.EmployeeRequest> requests,
+            TimeZoneInfo attendanceTimeZone)
+        {
+            if (record.CheckOutTime is not { } checkOutUtc || record.ScheduledShiftTemplate is not { } template)
+            {
+                return null;
+            }
+
+            var checkOutLocal = TimeZoneInfo.ConvertTimeFromUtc(checkOutUtc, attendanceTimeZone);
+            var shiftEndsAt = ShiftWindowEndsAt(record.Date, template);
+            var minutesEarly = (int)Math.Ceiling((shiftEndsAt - checkOutLocal).TotalMinutes);
+            if (minutesEarly <= 0)
+            {
+                return null;
+            }
+
+            var dayRequests = requests
+                .Where(r => r.RequestDate == record.Date)
+                .OrderByDescending(r => r.CreatedAt)
+                .ToList();
+            var active = dayRequests.FirstOrDefault(r =>
+                r.Status is DomainLayer.Models.RequestModule.Enums.RequestStatus.Pending
+                    or DomainLayer.Models.RequestModule.Enums.RequestStatus.PendingHRReview
+                    or DomainLayer.Models.RequestModule.Enums.RequestStatus.Approved);
+            var leftBeforeRequested = active?.TargetTime is { } requested
+                && checkOutLocal < ResolveRequestedDeparture(record.Date, template, requested);
+
+            return new EarlyLeaveEvidence(
+                minutesEarly,
+                TimeOnly.FromDateTime(checkOutLocal),
+                TimeOnly.FromDateTime(shiftEndsAt),
+                dayRequests.FirstOrDefault(),
+                active is not null && !leftBeforeRequested,
+                leftBeforeRequested,
+                active?.TargetTime);
+        }
+
+        /// <summary>Wall-clock shift end; overnight templates end on the following day.</summary>
+        private static DateTime ShiftWindowEndsAt(DateOnly date, ShiftTemplate template) =>
+            template.EndTime > template.StartTime
+                ? date.ToDateTime(template.EndTime)
+                : date.AddDays(1).ToDateTime(template.EndTime);
+
+        /// <summary>
+        /// Anchors a requested departure time to the shift window: on an overnight
+        /// shift a time before the start belongs to the following morning.
+        /// </summary>
+        private static DateTime ResolveRequestedDeparture(DateOnly shiftDate, ShiftTemplate template, TimeOnly requested)
+        {
+            var at = shiftDate.ToDateTime(requested);
+            return template.EndTime <= template.StartTime && requested < template.StartTime
+                ? at.AddDays(1)
+                : at;
+        }
+
+        private readonly record struct EarlyLeaveEvidence(
+            int MinutesEarly,
+            TimeOnly CheckOutLocal,
+            TimeOnly ShiftEndLocal,
+            DomainLayer.Models.RequestModule.EmployeeRequest? LatestRequest,
+            bool Covered,
+            bool LeftBeforeRequested,
+            TimeOnly? RequestedTime);
 
         private static string? NormalizeLineStatus(string? status) => status?.Trim().ToLowerInvariant() switch
         {

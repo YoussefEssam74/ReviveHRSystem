@@ -268,26 +268,31 @@ namespace Service.Services
             DomainLayer.Models.UserModule.User user, Employee employee, int activeGymId, DateOnly today, CancellationToken cancellationToken)
         {
             var ledTeamId = await teamScopeService.GetLedTeamIdAsync(user.Id, activeGymId, cancellationToken);
+            var roleNames = await userAccess.GetGymRoleNamesAsync(user.Id, activeGymId, cancellationToken);
+            var isBranchManager = roleNames.Contains(RoleNames.BranchManager, StringComparer.Ordinal);
+            // A TeamLeaders row alone is not a role: the seeded roster carries leaders
+            // who only hold the plain Employee role, and they must not see a manager strip.
+            var isTeamLeader = roleNames.Contains(RoleNames.TeamLeader, StringComparer.Ordinal);
 
             List<Employee> scoped;
             string scope;
-            if (ledTeamId is not null)
+            if (isTeamLeader && ledTeamId is not null)
             {
                 scoped = (await unitOfWork.GetRepository<Employee, int>()
                     .GetAllAsync(new EmployeesByTeamSpec(ledTeamId.Value), cancellationToken)).ToList();
                 scope = "team";
             }
-            else
+            else if (isBranchManager)
             {
-                // Gym-wide strip is a manager view: only a Branch Manager of the
-                // active gym gets it; a plain employee gets no overview block at all.
-                var roleNames = await userAccess.GetGymRoleNamesAsync(user.Id, activeGymId, cancellationToken);
-                if (!roleNames.Contains(RoleNames.BranchManager))
-                    return null;
-
                 scoped = (await unitOfWork.GetRepository<Employee, int>()
                     .GetAllAsync(new EmployeesByGymSpec(activeGymId), cancellationToken)).ToList();
                 scope = "branch";
+            }
+            else
+            {
+                // The strip is a manager view: Branch Manager = the gym, Team Leader =
+                // the team he leads, everyone else gets no overview block at all.
+                return null;
             }
 
             var scopedIds = scoped.Select(e => e.Id).ToArray();

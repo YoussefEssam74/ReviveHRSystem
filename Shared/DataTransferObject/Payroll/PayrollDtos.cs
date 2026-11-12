@@ -74,6 +74,8 @@ namespace Shared.DataTransferObject.Payroll
         /// <summary>biometric | manager (legacy "Manual" rows map to manager).</summary>
         public string Source { get; set; } = "manager";
         public decimal Amount { get; set; }
+        /// <summary>Days the line charges (absence = 3, late = 0.125 / 0.25 / 0.5); null for manual rows.</summary>
+        public decimal? Days { get; set; }
         /// <summary>Pending | Accepted | Approved | Rejected.</summary>
         public string Status { get; set; } = "Pending";
         /// <summary>ATT-{recordId}, "ATT-MANUAL" for biometric ad-hoc lines, or "".</summary>
@@ -107,8 +109,9 @@ namespace Shared.DataTransferObject.Payroll
         public DateOnly Date { get; set; }
 
         /// <summary>
-        /// Attended | WeeklyOff | ApprovedLeave | Late | Absent | EarlyCheckout |
-        /// MissingCheckout — the bucket the counter row sums up.
+        /// Attended | WeeklyOff | ApprovedLeave | Late | Absent | EarlyCheckout | EarlyLeave |
+        /// MissingCheckout — the bucket the counter row sums up. EarlyCheckout is the
+        /// Early Leaving warning; EarlyLeave is an early departure an Early Leave request covers.
         /// </summary>
         public string Kind { get; set; } = "Attended";
 
@@ -127,6 +130,9 @@ namespace Shared.DataTransferObject.Payroll
 
         /// <summary>Hours worked past the scheduled shift end (0 when none).</summary>
         public decimal OvertimeHours { get; set; }
+
+        /// <summary>Minutes the check-out ran before the shift end (0 when not early).</summary>
+        public int EarlyLeaveMinutes { get; set; }
 
         /// <summary>Leave reason / manual-entry note, when there is one.</summary>
         public string? Note { get; set; }
@@ -162,7 +168,19 @@ namespace Shared.DataTransferObject.Payroll
 
         public int DaysAttended { get; set; }
         public int WeeklyOffs { get; set; }
+        /// <summary>Approved annual-leave days in the period (the legacy "Day Off" label included).</summary>
+        public int AnnualLeaves { get; set; }
+        /// <summary>Approved sick-leave days in the period.</summary>
+        public int SickLeaves { get; set; }
+        /// <summary>Approved leave days in the period; the manual correction may override this total.</summary>
         public int ApprovedLeaves { get; set; }
+        /// <summary>Days worked on a scheduled weekly off — i.e. extra / cover shifts.</summary>
+        public int CoverDays { get; set; }
+        /// <summary>
+        /// Days worked outside the schedule whose cover/extra request was rejected (or never
+        /// filed): the employee showed up, but the day is not credited as an approved cover day.
+        /// </summary>
+        public int UnapprovedCoverDays { get; set; }
         public decimal OvertimeHours { get; set; }
         public int LateArrivals { get; set; }
         public int UnexcusedAbsences { get; set; }
@@ -391,6 +409,12 @@ namespace Shared.DataTransferObject.Payroll
 
         /// <summary>HR's end-of-month amount override — the line and its source candidate both move to it.</summary>
         public decimal? Amount { get; set; }
+
+        /// <summary>
+        /// HR's day count for the line (absence = 3, late = 0.125 / 0.25 / 0.5). The amount is
+        /// re-derived from the line's own price per day, and the sweep stops re-pricing it.
+        /// </summary>
+        public decimal? Days { get; set; }
     }
 
     /// <summary>Recomputed totals with the acting employee, as echoed by review.</summary>

@@ -145,6 +145,7 @@ export const router = createBrowserRouter([
       { path: 'audit', element: <Page><AuditPage /></Page> },
       { path: 'hr-team', element: <Page><HrTeamPage /></Page> },
       { path: 'my-access', element: <Page><MyAccessPage /></Page> },
+      { path: 'settings', element: <Page><SettingsPage /></Page> },
       // Fallback for any unknown console sub-path.
       { path: '*', element: <ConsolePlaceholder /> },
     ],

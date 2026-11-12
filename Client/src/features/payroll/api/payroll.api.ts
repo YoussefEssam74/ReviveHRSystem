@@ -63,6 +63,7 @@ export interface DeductionLine {
   /** biometric | manager. */
   source: DeductionSource
   amount: number
+  days?: number | null
   /** Pending | Accepted | Approved | Rejected. */
   status: DeductionLineStatus
   /** ATT-{recordId}, ATT-MANUAL for ad-hoc biometric lines, or "". */
@@ -92,11 +93,13 @@ export interface PayrollAttendanceDay {
   /** ISO date (yyyy-MM-dd). */
   date: string
   /**
-   * Attended | WeeklyOff | ApprovedLeave | Late | Absent | EarlyCheckout |
-   * MissingCheckout — the counter row this day belongs to.
+   * Attended | WeeklyOff | Cover | CoverRejected | AnnualLeave | SickLeave | Late |
+     * Absent | EarlyCheckout | EarlyLeave | MissingCheckout — the counter row this day
+     * belongs to. EarlyCheckout is the Early Leaving warning; EarlyLeave is an early
+     * departure an Early Leave request covers.
    */
   kind: string
-  /** Friendly status ("On Time", "Late", "Off", …). */
+    /** Friendly status ("On Time", "Late", "Early Leaving", "Off", …). */
   status: string
   /** Shift window ("08:00–16:00"). */
   shift: string | null
@@ -104,6 +107,8 @@ export interface PayrollAttendanceDay {
   checkOut: string | null
   workedHours: number
   overtimeHours: number
+    /** Minutes the check-out ran before the shift end (0 when not early). */
+    earlyLeaveMinutes?: number | null
   note: string | null
   /** ATT-{recordId} when the day has a punch. */
   attendanceRef: string | null
@@ -115,7 +120,19 @@ export interface PayrollAttendance {
   adjustedAt: string | null
   daysAttended: number
   weeklyOffs: number
+  /** Approved annual-leave days (legacy "Day Off" included). */
+  annualLeaves: number
+  /** Approved sick-leave days. */
+  sickLeaves: number
+  /** Approved leave days in total; a manual correction may override this figure. */
   approvedLeaves: number
+  /** Days worked on a scheduled weekly off — extra / cover shifts. */
+  coverDays: number
+  /**
+   * Days worked outside the schedule whose cover/extra request was rejected (or never
+   * filed): he showed up, but HR has not credited the day as an approved cover day.
+   */
+  unapprovedCoverDays: number
   overtimeHours: number
   lateArrivals: number
   unexcusedAbsences: number
@@ -432,10 +449,14 @@ export interface ReviewCandidateResult {
   entry: EntrySummary & { employeeId: number }
 }
 
-export function postCandidateReview(id: number, decision: 'Accepted' | 'Rejected', signal?: AbortSignal): Promise<ReviewCandidateResult> {
+export function postCandidateReview(
+  id: number,
+  body: { decision?: 'Accepted' | 'Rejected'; amount?: number; days?: number },
+  signal?: AbortSignal,
+): Promise<ReviewCandidateResult> {
   return apiRequest<Wrapped<ReviewCandidateResult>>(`/api/deduction-candidates/${id}/review`, {
     method: 'POST',
-    body: { decision },
+    body,
     signal,
   }).then((r) => r.data)
 }

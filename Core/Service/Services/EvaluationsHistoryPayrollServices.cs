@@ -706,9 +706,9 @@ namespace Service.Services
                     WorkingDays = Math.Max(dto.DaysWorked + absent + unpaid, dto.DaysWorked),
                     ScheduledWeeklyDays = PayrollService.WeeklyWorkDays,
                     AnnualIncreasePercent = annualIncreasePercent,
-                    AnnualIncrease = annualIncreasePercent is > 0 && dto.BaseSalary > 0
-                        ? Math.Round(dto.BaseSalary * annualIncreasePercent.Value / 100m, 2)
-                        : 0m,
+                    // The raise is folded into the base salary once a year instead of being
+                    // reported as a monthly slice, so there is no separate amount to show.
+                    AnnualIncrease = 0m,
                     OvertimePay = PayrollService.OvertimePay(e),
                     PaidLeaveDays = annual + sick,
                     AnnualLeaveDays = annual,
@@ -724,9 +724,6 @@ namespace Service.Services
                     // Earnings header (base + raise + bonuses + OT). Recomputed here so the
                     // net bar always reconciles with the two section headers above it.
                     NetSalary = dto.BaseSalary
-                        + (annualIncreasePercent is > 0 && dto.BaseSalary > 0
-                            ? Math.Round(dto.BaseSalary * annualIncreasePercent.Value / 100m, 2)
-                            : 0m)
                         + dto.TotalBonuses
                         + PayrollService.OvertimePay(e)
                         - dto.TotalDeductions,

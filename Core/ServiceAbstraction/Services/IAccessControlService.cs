@@ -27,5 +27,12 @@ namespace ServiceAbstraction.Services
         /// always passes.
         /// </summary>
         Task EnsurePermissionForGymAsync(int? actorUserId, string permissionKey, int? gymId, CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// Non-throwing form of <see cref="EnsurePermissionForGymAsync"/>, for rules that
+        /// widen an action for a role instead of requiring it (payroll editors undoing a
+        /// past-dated request at settlement). Top Management always returns true.
+        /// </summary>
+        Task<bool> HasPermissionForGymAsync(int? actorUserId, string permissionKey, int? gymId, CancellationToken cancellationToken = default);
     }
 }

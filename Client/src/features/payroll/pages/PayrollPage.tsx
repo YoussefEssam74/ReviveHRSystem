@@ -21,6 +21,7 @@ import {
 } from '../hooks/usePayroll'
 import type { PayrollPeriod } from '../api/payroll.api'
 import SettlementSheet from '../components/SettlementSheet'
+import { useConsoleHeaderInfo } from '../../console/components/ConsoleHeaderSlot'
 import PublishPayrollDialog from '../components/PublishPayrollDialog'
 import { entryStatusLabel, entryStatusTone, isEntryClosed, overtimePayOf } from '../lib/payroll-calc'
 
@@ -104,6 +105,22 @@ export default function PayrollPage() {
   const locked = Boolean(period?.locked)
   const allClosed = items.length > 0 && closedCount === items.length
 
+  // In the settlement sheet the header carries the way back and names the employee
+  // being settled, so the sheet itself needs no toolbar of its own.
+  const settledEmployee = view.mode === 'detail' ? items.find((item) => item.employeeId === view.employeeId) : undefined
+  const headerInfo = useMemo(
+    () =>
+      view.mode === 'detail'
+        ? {
+            onBack: () => setView({ mode: 'overview' }),
+            label: settledEmployee ? `${settledEmployee.name} · ${settledEmployee.position}` : 'Settlement sheet',
+            hint: `${period?.period ?? ''} · ${settledEmployee ? entryStatusLabel(settledEmployee) : ''}`.trim(),
+          }
+        : null,
+    [view, settledEmployee, period?.period],
+  )
+  useConsoleHeaderInfo(headerInfo)
+
   const publish = async () => {
     if (!period || !gymId) return
     try {
@@ -123,8 +140,7 @@ export default function PayrollPage() {
     )
   }
 
-  if (!canView) {
-    return (
+  if (!canView) {    return (
       <div className="rounded-2xl border border-dashed border-charcoal-300 bg-white p-12 text-center">
         <Wallet className="mx-auto mb-2 h-8 w-8 text-charcoal-300" aria-hidden="true" />
         <h2 className="text-base font-bold text-charcoal-900">No payroll access</h2>
@@ -163,7 +179,6 @@ export default function PayrollPage() {
       </>
     )
   }
-
   return (
     <div className="space-y-2.5">
       <div className="flex flex-wrap items-center justify-between gap-2">
