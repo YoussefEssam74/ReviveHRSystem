@@ -26,13 +26,33 @@ namespace Service.Services
             await employeeAccess.EnsureCanAccessAsync(
                 actorUserId, employeeId, activeGymId, cancellationToken);
 
+            var monthStart = ParseMonth(month);
             var records = await unitOfWork.GetRepository<AttendanceRecord, int>()
-                .GetAllAsync(new AttendanceByEmployeeSpec(employeeId, ParseMonth(month)), cancellationToken);
+                .GetAllAsync(new AttendanceByEmployeeSpec(employeeId, monthStart), cancellationToken);
+
+            var coverByDate = await LoadCoverDaysAsync(
+                [employeeId], monthStart, monthStart.AddMonths(1).AddDays(-1), cancellationToken);
 
             // AttendanceByEmployeeSpec already ordered by Date descending in SQL —
             // re-sorting the month in memory would double the work for nothing.
             var items = records
-                .Select(r => mapper.Map<AttendanceRecordDto>(r))
+                .Select(r =>
+                {
+                    var dto = mapper.Map<AttendanceRecordDto>(r);
+                    coverByDate.TryGetValue(r.Date, out var coverDays);
+                    return new AttendanceRecordDto
+                    {
+                        Date = dto.Date,
+                        Shift = dto.Shift,
+                        ShiftName = dto.ShiftName,
+                        CheckIn = dto.CheckIn,
+                        CheckOut = dto.CheckOut,
+                        Status = dto.Status,
+                        Source = dto.Source,
+                        Notes = r.Notes,
+                        CoverDays = coverDays,
+                    };
+                })
                 .ToList();
 
             var today = DateOnly.FromDateTime(DateTime.UtcNow);
@@ -42,6 +62,29 @@ namespace Service.Services
                 Today = items.FirstOrDefault(r => r.Date == today),
                 Records = items
             };
+        }
+
+        /// <summary>Approved cover/extra days per (employee, date) for a range.
+        /// Only HR-final approvals count; the value is display-only.</summary>
+        internal async Task<Dictionary<DateOnly, int>> LoadCoverDaysAsync(
+            int[] employeeIds, DateOnly from, DateOnly to, CancellationToken cancellationToken)
+        {
+            var requests = await unitOfWork.GetRepository<DomainLayer.Models.RequestModule.EmployeeRequest, int>()
+                .GetAllAsync(new ApprovedUnscheduledAttendanceByEmployeeIdsSpec(employeeIds, from, to), cancellationToken);
+
+            var map = new Dictionary<DateOnly, int>();
+            foreach (var request in requests)
+            {
+                var days = request.OvertimeHoursRequested.HasValue
+                    ? (int)request.OvertimeHoursRequested.Value
+                    : (request.Payment?.Contains("2") == true ? 2 : 1);
+                if (days is 1 or 2)
+                {
+                    map[request.RequestDate] = days;
+                }
+            }
+
+            return map;
         }
 
         public async Task<LeaveBalanceOverviewDto> GetLeaveBalanceAsync(
@@ -83,7 +126,8 @@ namespace Service.Services
                 Late = late,
                 Absent = absent,
                 EarlyCheckout = early,
-                MissingCheckout = records.Count(r => r.CheckIn is not null && r.CheckOut is null)
+                MissingCheckout = records.Count(r => r.CheckIn is not null && r.CheckOut is null),
+                CoverDays = records.Sum(r => r.CoverDays ?? 0)
             };
         }
     }

@@ -1271,6 +1271,16 @@ namespace Persistence.Data.Migrations
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)");
 
+                    b.Property<string>("ReviewNote")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<DateTime?>("ReviewedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int?>("ReviewedBy")
+                        .HasColumnType("integer");
+
                     b.Property<int>("Status")
                         .HasColumnType("integer");
 
@@ -1288,6 +1298,8 @@ namespace Persistence.Data.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("IssuedBy");
+
+                    b.HasIndex("ReviewedBy");
 
                     b.HasIndex("EmployeeId", "IssuedAt");
 
@@ -2267,6 +2279,16 @@ namespace Persistence.Data.Migrations
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)");
 
+                    b.Property<string>("ReviewNote")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<DateTime?>("ReviewedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int?>("ReviewedBy")
+                        .HasColumnType("integer");
+
                     b.Property<int>("Status")
                         .HasColumnType("integer");
 
@@ -2284,6 +2306,8 @@ namespace Persistence.Data.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("IssuedBy");
+
+                    b.HasIndex("ReviewedBy");
 
                     b.HasIndex("EmployeeId", "IssuedAt");
 
@@ -2313,10 +2337,24 @@ namespace Persistence.Data.Migrations
                     b.Property<int?>("CreatedBy")
                         .HasColumnType("integer");
 
+                    b.Property<DateOnly>("DeductionDate")
+                        .HasColumnType("date");
+
+                    b.Property<decimal>("DeductionDays")
+                        .ValueGeneratedOnAdd()
+                        .HasPrecision(9, 2)
+                        .HasColumnType("numeric(9,2)")
+                        .HasDefaultValue(1m);
+
                     b.Property<int>("EmployeeId")
                         .HasColumnType("integer");
 
                     b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
+
+                    b.Property<bool>("IsSystemGenerated")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("boolean")
                         .HasDefaultValue(false);
@@ -2362,6 +2400,10 @@ namespace Persistence.Data.Migrations
                     b.HasIndex("ReviewedBy");
 
                     b.HasIndex("Status");
+
+                    b.HasIndex("EmployeeId", "DeductionDate")
+                        .IsUnique()
+                        .HasFilter("\"IsDeleted\" = false");
 
                     b.ToTable("DeductionCandidates", (string)null);
                 });
@@ -2461,6 +2503,9 @@ namespace Persistence.Data.Migrations
                     b.Property<int?>("CreatedBy")
                         .HasColumnType("integer");
 
+                    b.Property<int?>("DeductionCandidateId")
+                        .HasColumnType("integer");
+
                     b.Property<DateOnly>("EffectiveDate")
                         .HasColumnType("date");
 
@@ -2514,6 +2559,8 @@ namespace Persistence.Data.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("AttendanceRecordId");
+
+                    b.HasIndex("DeductionCandidateId");
 
                     b.HasIndex("EmployeeRequestId");
 
@@ -4382,9 +4429,16 @@ namespace Persistence.Data.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.HasOne("DomainLayer.Models.UserModule.User", "Reviewer")
+                        .WithMany()
+                        .HasForeignKey("ReviewedBy")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.Navigation("Employee");
 
                     b.Navigation("IssuedByUser");
+
+                    b.Navigation("Reviewer");
                 });
 
             modelBuilder.Entity("DomainLayer.Models.EvaluationModule.EvaluationAnswer", b =>
@@ -4665,9 +4719,16 @@ namespace Persistence.Data.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.HasOne("DomainLayer.Models.UserModule.User", "Reviewer")
+                        .WithMany()
+                        .HasForeignKey("ReviewedBy")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.Navigation("Employee");
 
                     b.Navigation("IssuedByUser");
+
+                    b.Navigation("Reviewer");
                 });
 
             modelBuilder.Entity("DomainLayer.Models.PayrollModule.DeductionCandidate", b =>
@@ -4729,6 +4790,11 @@ namespace Persistence.Data.Migrations
                         .HasForeignKey("AttendanceRecordId")
                         .OnDelete(DeleteBehavior.SetNull);
 
+                    b.HasOne("DomainLayer.Models.PayrollModule.DeductionCandidate", "DeductionCandidate")
+                        .WithMany()
+                        .HasForeignKey("DeductionCandidateId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
                     b.HasOne("DomainLayer.Models.RequestModule.EmployeeRequest", "EmployeeRequest")
                         .WithMany()
                         .HasForeignKey("EmployeeRequestId")
@@ -4746,6 +4812,8 @@ namespace Persistence.Data.Migrations
                         .OnDelete(DeleteBehavior.SetNull);
 
                     b.Navigation("AttendanceRecord");
+
+                    b.Navigation("DeductionCandidate");
 
                     b.Navigation("EmployeeRequest");
 

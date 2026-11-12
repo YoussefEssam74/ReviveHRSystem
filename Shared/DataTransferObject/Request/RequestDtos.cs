@@ -51,12 +51,15 @@ namespace Shared.DataTransferObject.Request
 
         /// <summary>End of a leave/swap range (annual, sick, shift swap), null on single-day types.</summary>
         public DateOnly? EndDate { get; init; }
+        public TimeOnly? RequestTime { get; init; }
+        public decimal? Amount { get; init; }
         public required string Status { get; init; }
         public string? BmDecision { get; init; }
         public string? BmComment { get; init; }
         public string? HrDecision { get; init; }
         public string? HrComment { get; init; }
         public string? Payment { get; init; }
+        public int? CalculatedDays { get; init; }
         public string Reason { get; init; } = string.Empty;
 
         /// <summary>A file (the sick-leave medical certificate) rides with this request.</summary>
@@ -118,6 +121,7 @@ namespace Shared.DataTransferObject.Request
         public string? Decision { get; init; }
         public string? Comment { get; init; }
         public string? Payment { get; init; }
+        public int? CalculatedDays { get; init; }
     }
 
     /// <summary>

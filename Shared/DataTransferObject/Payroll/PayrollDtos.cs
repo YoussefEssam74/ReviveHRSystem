@@ -70,6 +70,12 @@ namespace Shared.DataTransferObject.Payroll
         public string EmploymentStatus { get; set; } = string.Empty;
         public int Days { get; set; }
         public decimal Overtime { get; set; }
+        /// <summary>Approved cover/extra day credits in the period (1 or 2 per approved request).</summary>
+        public int CoverDays { get; set; }
+        /// <summary>Days actually worked outside the schedule (cover / extra shifts).</summary>
+        public int ExtraShiftDays { get; set; }
+        /// <summary>Cover pay: base salary ÷ 30 × approved cover days.</summary>
+        public decimal CoverPay { get; set; }
         public decimal BaseSalary { get; set; }
         public decimal Bonus { get; set; }
         /// <summary>base + bonus + OT pay ((base/176)×1.5×overtime).</summary>
@@ -146,6 +152,19 @@ namespace Shared.DataTransferObject.Payroll
     public class CreateDeductionResponse
     {
         public CreateDeductionData Data { get; set; } = null!;
+    }
+
+    /// <summary>DELETE …/entries/{employeeId}/deductions/{lineId} → removed line id + the recomputed entry.</summary>
+    public class RemoveDeductionData
+    {
+        /// <summary>The removed line's id.</summary>
+        public int Id { get; set; }
+        public DeductionEntrySummary Entry { get; set; } = null!;
+    }
+
+    public class RemoveDeductionResponse
+    {
+        public RemoveDeductionData Data { get; set; } = null!;
     }
 
     /// <summary>POST …/entries/{employeeId}/close → `{ data: { employeeId, status, reviewed, reviewedAt, gross, deductions, net } }`.</summary>
@@ -298,6 +317,12 @@ namespace Shared.DataTransferObject.Payroll
         public List<PayslipDeductionLine> Deductions { get; set; } = [];
         public decimal Net { get; set; }
         public int Days { get; set; }
+        /// <summary>Approved cover/extra day credits in the period (1 or 2 per approved request).</summary>
+        public int CoverDays { get; set; }
+        /// <summary>Days actually worked outside the schedule (cover / extra shifts).</summary>
+        public int ExtraShiftDays { get; set; }
+        /// <summary>Cover pay: base salary ÷ 30 × approved cover days.</summary>
+        public decimal CoverPay { get; set; }
         public string Status { get; set; } = "Draft";
     }
 

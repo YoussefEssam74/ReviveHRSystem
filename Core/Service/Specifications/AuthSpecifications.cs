@@ -41,6 +41,16 @@ namespace Service.Specifications
         }
     }
 
+    /// <summary>Finds a user by username (case-insensitive) for new-account uniqueness checks.</summary>
+    public class UserByUserNameSpec : BaseSpecification<User, int>
+    {
+        public UserByUserNameSpec(string userName)
+        {
+            var normalized = userName.Trim().ToLower();
+            Criteria = u => u.UserName.ToLower() == normalized;
+        }
+    }
+
     /// <summary>Finds a user by id including the employee profile and its position.</summary>
     public class UserByIdWithProfileSpec : BaseSpecification<User, int>
     {

@@ -10,6 +10,7 @@ using DomainLayer.Models.EmployeeModule;
 using DomainLayer.Models.EmployeeModule.Enums;
 using DomainLayer.Models.PayrollModule;
 using DomainLayer.Models.PayrollModule.Enums;
+using DomainLayer.Models.RequestModule;
 using DomainLayer.Models.UserModule;
 using Service.Specifications;
 using ServiceAbstraction.Services;
@@ -28,7 +29,8 @@ namespace Service.Services
         IUnitOfWork _unitOfWork,
         IAccessControlService _accessControl,
         IUserAccessRepository _userAccess,
-        ITeamScopeService _teamScope) : IPayrollService
+        ITeamScopeService _teamScope,
+        IAttendanceDeductionSweepService _deductionSweep) : IPayrollService
     {
         // ==================================================================
         // Period directory + detail
@@ -91,7 +93,8 @@ namespace Service.Services
                 .OrderBy(e => e.Employee.FullName, StringComparer.OrdinalIgnoreCase)
                 .ToList();
 
-            var data = BuildPeriodDetail(period, entries);
+            var data = BuildPeriodDetail(period, entries, await LoadAttendanceSummariesAsync(
+                _unitOfWork, period, entries.Select(e => e.EmployeeId).ToList(), cancellationToken));
             return new PayrollPeriodDetailResponse { Data = data };
         }
 
@@ -184,6 +187,31 @@ namespace Service.Services
             };
         }
 
+        public async Task<RemoveDeductionResponse> RemoveDeductionAsync(int? actorUserId, int periodId, int employeeId, int lineId, CancellationToken cancellationToken = default)
+        {
+            var actor = await HrPortalHelpers.ResolveActorAsync(_unitOfWork, actorUserId, cancellationToken);
+            await _accessControl.EnsurePermissionAsync(actor.Id, "payroll.edit", cancellationToken);
+            var (_, entry) = await LoadEntryAsync(actor, periodId, employeeId, requireOpen: true, cancellationToken);
+
+            var line = entry.LineItems.FirstOrDefault(l => l.Id == lineId)
+                ?? throw new BadRequestException("Deduction line not found on this sheet.");
+
+            _unitOfWork.GetRepository<PayrollEntryLineItem, int>().Remove(line);
+            entry.LineItems.Remove(line);
+            SyncTotals(entry);
+            _unitOfWork.GetRepository<PayrollEntry, int>().Update(entry);
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+            return new RemoveDeductionResponse
+            {
+                Data = new RemoveDeductionData
+                {
+                    Id = lineId,
+                    Entry = BuildEntrySummary(entry),
+                },
+            };
+        }
+
         public async Task<CloseEntryResponse> CloseEntryAsync(int? actorUserId, int periodId, int employeeId, CancellationToken cancellationToken = default)
         {
             var actor = await HrPortalHelpers.ResolveActorAsync(_unitOfWork, actorUserId, cancellationToken);
@@ -192,66 +220,69 @@ namespace Service.Services
             var period = await _unitOfWork.GetRepository<PayrollPeriod, int>().GetByIdAsync(periodId, cancellationToken)
                 ?? throw new NotFoundException("Payroll period not found.");
 
-            // Month-end: price any attendance exception that never got its candidate,
-            // then finalize every open candidate into a real deduction line
-            // (features.md §10's "finalized in payroll"). Rejected candidates are
-            // waived; already-applied ones are skipped, so a reopen→close stays
-            // idempotent. The branch can approve / re-price candidates until here.
-            var records = (await _unitOfWork.GetRepository<AttendanceRecord, int>()
-                    .GetAllAsync(new AttendanceRecordsWithShiftByEmployeeIdsRangeSpec(
-                        [entry.EmployeeId], period.StartDate, period.EndDate), cancellationToken))
-                .ToList();
+            // Reconcile first through the one attendance → deduction path: the same
+            // sweep the branch tab and dashboards run, so a month closed without
+            // opening the deductions tab still carries every late/absence of the
+            // period (idempotent per employee/day).
+            await _deductionSweep.SweepAsync([entry.EmployeeId], period.StartDate, period.EndDate, cancellationToken);
+
             var candidates = (await _unitOfWork.GetRepository<DeductionCandidate, int>()
                     .GetAllAsync(new DeductionCandidatesByEmployeesSpec([entry.EmployeeId]), cancellationToken))
                 .Where(c => CandidateDayOf(c) >= period.StartDate && CandidateDayOf(c) <= period.EndDate)
                 .ToList();
 
-            foreach (var candidate in EnsureAttendanceCandidates(
-                entry.EmployeeId, actor.Id, period, entry.BaseSalary, records, candidates))
-            {
-                await _unitOfWork.GetRepository<DeductionCandidate, int>().AddAsync(candidate, cancellationToken);
-                candidates.Add(candidate);
-            }
+            // Every candidate still alive becomes a deduction line in Pending state:
+            // the branch has had its triage, HR makes the final call on the review
+            // queue. Rejected candidates are final and never re-materialized.
+            var lines = entry.LineItems
+                .Where(l => l.Type.Equals("Deduction", StringComparison.OrdinalIgnoreCase))
+                .ToList();
+            var appliedCandidateIds = lines
+                .Where(l => l.DeductionCandidateId is not null)
+                .Select(l => l.DeductionCandidateId!.Value)
+                .ToHashSet();
+            var takenDays = lines.Select(l => l.EffectiveDate).ToHashSet();
 
             foreach (var candidate in candidates)
             {
-                if (candidate.Status is DeductionStatus.Rejected or DeductionStatus.Approved)
+                if (candidate.Status == DeductionStatus.Rejected
+                    || appliedCandidateIds.Contains(candidate.Id))
                 {
                     continue;
                 }
 
-                await _unitOfWork.GetRepository<PayrollEntryLineItem, int>().AddAsync(new PayrollEntryLineItem
+                // An older line already punishes this day (manual line, or an earlier
+                // close): never charge the same day twice.
+                var day = CandidateDayOf(candidate);
+                if (takenDays.Contains(day))
+                {
+                    continue;
+                }
+
+                var line = new PayrollEntryLineItem
                 {
                     PayrollEntryId = entry.Id,
                     Type = "Deduction",
                     Label = candidate.Reason,
-                    EffectiveDate = CandidateDayOf(candidate),
+                    EffectiveDate = day,
                     // Deduction lines carry a positive amount (see AddDeductionAsync) —
                     // the totals subtract them.
                     Amount = candidate.Amount,
                     // The sweep's dedupe marker is bookkeeping — never payslip text.
                     Reason = StripAbsenceMarker(candidate.Note) ?? candidate.Reason,
-                    Source = candidate.AttendanceRecordId is not null ? "biometric" : "manager",
+                    Source = candidate.IsSystemGenerated ? "biometric" : "manager",
                     AttendanceRecordId = candidate.AttendanceRecordId,
-                    Status = "Accepted",
-                    ReviewedBy = actor.Id,
-                    ReviewedAt = DateTime.UtcNow,
-                }, cancellationToken);
+                    DeductionCandidateId = candidate.Id,
+                    Status = "Pending",
+                };
 
-                candidate.Status = DeductionStatus.Approved;
-                candidate.ReviewedBy = actor.Id;
-                candidate.ReviewedAt = DateTime.UtcNow;
-                // Loaded candidates are tracked and freshly-created ones are already
-                // Added — SaveChanges persists both, and Update() would choke on a
-                // candidate that still carries a temporary key.
+                await _unitOfWork.GetRepository<PayrollEntryLineItem, int>().AddAsync(line, cancellationToken);
+                entry.LineItems.Add(line);
+                takenDays.Add(day);
             }
 
-            var pending = entry.LineItems.Count(l => l.Status == "Pending");
-            if (pending > 0)
-            {
-                throw new BadRequestException($"Settle the {pending} pending deduction line(s) before closing this sheet.");
-            }
-
+            // Closing settles the branch sheet; the pending deduction lines stay in
+            // HR's review queue and publishing waits for their decision.
             entry.Status = "Reviewed";
             entry.ReviewedAt = DateTime.UtcNow;
             SyncTotals(entry);
@@ -330,6 +361,17 @@ namespace Service.Services
             if (unsettled > 0)
             {
                 throw new BadRequestException($"All accounts must be settled before publishing ({unsettled} still open).");
+            }
+
+            // Closing a sheet hands its deductions to HR as Pending lines; publishing
+            // must wait until HR has made the final call on every one of them.
+            var pendingDeductions = entries
+                .SelectMany(e => e.LineItems)
+                .Count(l => l.Type.Equals("Deduction", StringComparison.OrdinalIgnoreCase) && l.Status == "Pending");
+            if (pendingDeductions > 0)
+            {
+                throw new BadRequestException(
+                    $"HR must review {pendingDeductions} pending deduction line(s) before publishing.");
             }
 
             period.Status = PayrollPeriodStatus.Locked;
@@ -453,6 +495,7 @@ namespace Service.Services
             // HR's end-of-month re-price: the review may carry the amount the sheet
             // should actually charge, in which case the line and the candidate it
             // materialized from both move to it before the totals recompute.
+            var source = await FindCandidateForLineAsync(line, cancellationToken);
             if (request.Amount is { } revised)
             {
                 if (revised <= 0)
@@ -460,11 +503,23 @@ namespace Service.Services
                     throw new BadRequestException("The deduction amount must be greater than zero.");
                 }
 
-                await RepriceDeductionAsync(line, revised, cancellationToken);
+                line.Amount = revised;
             }
 
             line.ReviewedBy = actor.Id;
             line.ReviewedAt = DateTime.UtcNow;
+
+            // The candidate is the employee-facing truth: only an Approved candidate
+            // is shown as an applied deduction, and a Rejected one is final (its day
+            // can never be re-issued).
+            if (source is not null)
+            {
+                source.Amount = line.Amount;
+                source.Status = line.Status == "Accepted" ? DeductionStatus.Approved : DeductionStatus.Rejected;
+                source.ReviewedBy = actor.Id;
+                source.ReviewedAt = line.ReviewedAt;
+                _unitOfWork.GetRepository<DeductionCandidate, int>().Update(source);
+            }
 
             SyncTotals(line.PayrollEntry);
             _unitOfWork.GetRepository<PayrollEntry, int>().Update(line.PayrollEntry);
@@ -492,30 +547,28 @@ namespace Service.Services
         }
 
         /// <summary>
-        /// HR's end-of-month re-price: the line moves to the new amount and so does the
-        /// candidate it materialized from — matched on the punished day, the linked
-        /// attendance record and the amount it used to carry — so the sheet, the
-        /// branch's tab and the employee's trail never disagree about what is owed.
+        /// Resolves the candidate a line materialized from: the explicit link first
+        /// (new rows), then the old day+amount+record match so legacy sheets keep
+        /// their employee-facing trail in sync.
         /// </summary>
-        private async Task RepriceDeductionAsync(PayrollEntryLineItem line, decimal revised, CancellationToken cancellationToken)
+        private async Task<DeductionCandidate?> FindCandidateForLineAsync(
+            PayrollEntryLineItem line, CancellationToken cancellationToken)
         {
-            var previous = line.Amount;
-            line.Amount = revised;
+            if (line.DeductionCandidateId is int candidateId)
+            {
+                return await _unitOfWork.GetRepository<DeductionCandidate, int>()
+                    .GetByIdAsync(new DeductionCandidateByIdSpec(candidateId), cancellationToken);
+            }
 
             var candidates = await _unitOfWork.GetRepository<DeductionCandidate, int>()
                 .GetAllAsync(new DeductionCandidatesByEmployeesSpec([line.PayrollEntry.EmployeeId]), cancellationToken);
 
-            var source = candidates.FirstOrDefault(c => CandidateDayOf(c) == line.EffectiveDate
-                    && c.Amount == previous
+            return candidates.FirstOrDefault(c => CandidateDayOf(c) == line.EffectiveDate
+                    && c.Amount == line.Amount
                     && (line.AttendanceRecordId is null || c.AttendanceRecordId == line.AttendanceRecordId))
                 ?? candidates.FirstOrDefault(c => CandidateDayOf(c) == line.EffectiveDate
+                    && c.Status is not (DeductionStatus.Rejected or DeductionStatus.Approved)
                     && (line.AttendanceRecordId is null || c.AttendanceRecordId == line.AttendanceRecordId));
-
-            if (source is not null && source.Amount != revised)
-            {
-                source.Amount = revised;
-                _unitOfWork.GetRepository<DeductionCandidate, int>().Update(source);
-            }
         }
 
         // ==================================================================
@@ -542,7 +595,10 @@ namespace Service.Services
 
             return new PayslipResponse
             {
-                Data = BuildPayslip(entry),
+                Data = BuildPayslip(
+                    entry,
+                    summary: (await LoadAttendanceSummariesAsync(_unitOfWork, period, [employeeId], cancellationToken))
+                        .GetValueOrDefault(employeeId)),
             };
         }
 
@@ -550,10 +606,12 @@ namespace Service.Services
         /// The mock §8 payslip card (period, money lines, deductions with statuses)
         /// shared by the HR preview and the portal's self-service payslip.
         /// </summary>
-        internal static PayslipData BuildPayslip(PayrollEntry entry)
+        internal static PayslipData BuildPayslip(
+            PayrollEntry entry, bool onlyApproved = false, PayrollAttendanceSummary? summary = null)
         {
             var gross = GrossOf(entry);
             var approved = ApprovedDeductionsOf(entry);
+            var coverDays = summary?.CoverDays ?? 0;
             // Mock §8's "Annual Increase (10%)" card — the gym policy's raise slice
             // displayed alongside base salary (display info; net stays gross − lines).
             var annualPercent = entry.PayrollPeriod.Gym.AnnualIncreasePercent;
@@ -578,7 +636,8 @@ namespace Service.Services
                 Bonus = entry.TotalBonuses,
                 Gross = gross,
                 Deductions = entry.LineItems
-                    .Where(l => l.Type.Equals("Deduction", StringComparison.OrdinalIgnoreCase))
+                    .Where(l => l.Type.Equals("Deduction", StringComparison.OrdinalIgnoreCase)
+                        && (!onlyApproved || l.Status is "Accepted" or "Approved"))
                     .OrderBy(l => l.EffectiveDate)
                     .ThenBy(l => l.Id)
                     .Select(l => new PayslipDeductionLine
@@ -591,7 +650,10 @@ namespace Service.Services
                     })
                     .ToList(),
                 Net = gross - approved,
-                Days = entry.DaysWorked,
+                Days = summary is { DaysWorked: > 0 } ? summary.DaysWorked : entry.DaysWorked,
+                CoverDays = coverDays,
+                ExtraShiftDays = summary?.ExtraShiftDays ?? 0,
+                CoverPay = CoverPay(entry, coverDays),
                 Status = entry.Status,
             };
         }
@@ -679,10 +741,78 @@ namespace Service.Services
                 .OrderByDescending(e => e.PayrollPeriod.StartDate)
                 .ToList();
 
+            var summariesByPeriod = new Dictionary<int, Dictionary<int, PayrollAttendanceSummary>>();
+            foreach (var entryPeriod in rows.Select(e => e.PayrollPeriod).DistinctBy(p => p.Id))
+            {
+                summariesByPeriod[entryPeriod.Id] = await LoadAttendanceSummariesAsync(
+                    _unitOfWork, entryPeriod, [employeeId], cancellationToken);
+            }
+
             return new EmployeePayrollResponse
             {
-                Items = rows.Select(e => MapEntry(e, PeriodLabel(e.PayrollPeriod))).ToList(),
+                Items = rows
+                    .Select(e => MapEntry(
+                        e,
+                        PeriodLabel(e.PayrollPeriod),
+                        summariesByPeriod[e.PayrollPeriod.Id].GetValueOrDefault(e.EmployeeId)))
+                    .ToList(),
             };
+        }
+
+        /// <summary>Attendance facts for one employee over a payroll period.</summary>
+        internal sealed record PayrollAttendanceSummary(int DaysWorked, int ExtraShiftDays, int CoverDays);
+
+        /// <summary>Cover pay at the daily rate (base ÷ 30) for the approved cover days.</summary>
+        private static decimal CoverPay(PayrollEntry entry, int coverDays) =>
+            coverDays > 0 && entry.BaseSalary > 0
+                ? Math.Round(entry.BaseSalary / DeductionPricing.StandardDays * coverDays, 2)
+                : 0m;
+
+        /// <summary>
+        /// Days worked, days worked outside the schedule (cover / extra shifts), and
+        /// approved cover-day credits for the period — the month-end facts HR reads
+        /// before closing a payroll account. One query set for the whole period.
+        /// </summary>
+        internal static async Task<Dictionary<int, PayrollAttendanceSummary>> LoadAttendanceSummariesAsync(
+            IUnitOfWork unitOfWork,
+            PayrollPeriod period,
+            IReadOnlyCollection<int> employeeIds,
+            CancellationToken cancellationToken = default)
+        {
+            var ids = employeeIds.Distinct().ToArray();
+            if (ids.Length == 0)
+            {
+                return [];
+            }
+
+            var records = await unitOfWork.GetRepository<AttendanceRecord, int>()
+                .GetAllAsync(new AttendanceRecordsByEmployeeIdsRangeSpec(ids, period.StartDate, period.EndDate), cancellationToken);
+
+            var worked = records
+                .Where(r => r.CheckInTime is not null)
+                .GroupBy(r => r.EmployeeId)
+                .ToDictionary(g => g.Key, g => g.Count());
+            // The record pins the shift it was punched against; a null template means
+            // the punch happened on a day with no scheduled shift.
+            var extra = records
+                .Where(r => r.CheckInTime is not null && r.ScheduledShiftTemplateId is null)
+                .GroupBy(r => r.EmployeeId)
+                .ToDictionary(g => g.Key, g => g.Count());
+
+            var coverRequests = await unitOfWork.GetRepository<EmployeeRequest, int>()
+                .GetAllAsync(new ApprovedUnscheduledAttendanceByEmployeeIdsSpec(ids, period.StartDate, period.EndDate), cancellationToken);
+            var cover = coverRequests
+                .GroupBy(r => r.EmployeeId)
+                .ToDictionary(
+                    g => g.Key,
+                    g => g.Sum(r => r.OvertimeHoursRequested is > 0 ? (int)r.OvertimeHoursRequested.Value : 1));
+
+            return ids.ToDictionary(
+                id => id,
+                id => new PayrollAttendanceSummary(
+                    worked.GetValueOrDefault(id),
+                    extra.GetValueOrDefault(id),
+                    cover.GetValueOrDefault(id)));
         }
 
         /// <summary>True when the employee row belongs to the caller's own login.</summary>
@@ -857,7 +987,10 @@ namespace Service.Services
             };
         }
 
-        private static PayrollPeriodDetailData BuildPeriodDetail(PayrollPeriod period, List<PayrollEntry> entries)
+        private static PayrollPeriodDetailData BuildPeriodDetail(
+            PayrollPeriod period,
+            List<PayrollEntry> entries,
+            IReadOnlyDictionary<int, PayrollAttendanceSummary>? summaries = null)
         {
             var item = BuildPeriodItem(period, entries);
             return new PayrollPeriodDetailData
@@ -872,14 +1005,20 @@ namespace Service.Services
                 TotalGross = item.TotalGross,
                 TotalDeductions = item.TotalDeductions,
                 TotalNet = item.TotalNet,
-                Items = entries.Select(e => MapEntry(e)).ToList(),
+                Items = entries
+                    .Select(e => MapEntry(e, summary: summaries?.GetValueOrDefault(e.EmployeeId)))
+                    .ToList(),
             };
         }
 
-        private static PayrollEntryItem MapEntry(PayrollEntry entry, string? periodLabel = null)
+        private static PayrollEntryItem MapEntry(
+            PayrollEntry entry,
+            string? periodLabel = null,
+            PayrollAttendanceSummary? summary = null)
         {
             var gross = GrossOf(entry);
             var approved = ApprovedDeductionsOf(entry);
+            var coverDays = summary?.CoverDays ?? 0;
             return new PayrollEntryItem
             {
                 EmployeeId = entry.EmployeeId,
@@ -888,8 +1027,13 @@ namespace Service.Services
                 Gym = entry.Employee.Gym?.Name ?? string.Empty,
                 Position = entry.Employee.Position?.Title ?? "None",
                 EmploymentStatus = FriendlyEmployment(entry.Employee.Status),
-                Days = entry.DaysWorked,
+                // A period with attendance on record reports the real count; a
+                // historical sheet with no attendance rows keeps its stored value.
+                Days = summary is { DaysWorked: > 0 } ? summary.DaysWorked : entry.DaysWorked,
                 Overtime = entry.OvertimeHours,
+                CoverDays = coverDays,
+                ExtraShiftDays = summary?.ExtraShiftDays ?? 0,
+                CoverPay = CoverPay(entry, coverDays),
                 BaseSalary = entry.BaseSalary,
                 Bonus = entry.TotalBonuses,
                 Gross = gross,
@@ -904,6 +1048,7 @@ namespace Service.Services
                     .OrderBy(id => id)
                     .ToList(),
                 DeductionLines = entry.LineItems
+                    .Where(l => l.Type.Equals("Deduction", StringComparison.OrdinalIgnoreCase))
                     .OrderBy(l => l.EffectiveDate)
                     .ThenBy(l => l.Id)
                     .Select(MapLine)
@@ -985,15 +1130,19 @@ namespace Service.Services
         }
 
         private static decimal ApprovedDeductionsOf(PayrollEntry entry) =>
-            entry.LineItems.Where(l => l.Status is "Accepted" or "Approved").Sum(l => l.Amount);
+            entry.LineItems
+                .Where(l => l.Type.Equals("Deduction", StringComparison.OrdinalIgnoreCase)
+                    && l.Status is "Accepted" or "Approved")
+                .Sum(l => l.Amount);
 
         private static int PendingCountOf(PayrollEntry entry) =>
-            entry.LineItems.Count(l => l.Status == "Pending");
+            entry.LineItems.Count(l => l.Type.Equals("Deduction", StringComparison.OrdinalIgnoreCase)
+                && l.Status == "Pending");
 
         internal static decimal NetOf(PayrollEntry entry) => GrossOf(entry) - ApprovedDeductionsOf(entry);
 
         /// <summary>Mirrors the recomputed money back onto the stored row for history/exports.</summary>
-        private static void SyncTotals(PayrollEntry entry)
+        internal static void SyncTotals(PayrollEntry entry)
         {
             entry.TotalDeductions = ApprovedDeductionsOf(entry);
             entry.NetPay = NetOf(entry);
@@ -1028,7 +1177,7 @@ namespace Service.Services
         }
 
         /// <summary>Workdays an unapproved absence levies (the sweep, payroll close and the manager's view all price it the same).</summary>
-        internal const int AbsenceDayMultiplier = 3;
+        internal const int AbsenceDayMultiplier = 1;
 
         /// <summary>The marker the absence sweep stamps into a candidate's note so a derived-absent day stays identifiable.</summary>
         internal const string AbsenceMarkerPrefix = "auto-absence:";
@@ -1083,70 +1232,16 @@ namespace Service.Services
         }
 
         /// <summary>
-        /// features.md §10's auto-generation: every late / unapproved-absent day of the
-        /// period that carries no deduction yet becomes a pending candidate priced at
-        /// the rates above, so the branch can approve (or re-price) it before HR closes
-        /// the sheet. Idempotent per attendance day — including the sweep's derived-absent
-        /// days, which carry the marker instead of a record.
-        /// </summary>
-        internal static List<DeductionCandidate> EnsureAttendanceCandidates(
-            int employeeId,
-            int issuerId,
-            PayrollPeriod period,
-            decimal baseSalary,
-            IReadOnlyList<AttendanceRecord> records,
-            IReadOnlyList<DeductionCandidate> existing)
-        {
-            var (scheduled, _, late, absent) = AttendanceRates(baseSalary, period);
-            if (late <= 0)
-            {
-                return [];
-            }
-
-            var created = new List<DeductionCandidate>();
-            foreach (var record in records)
-            {
-                if (record.Date < period.StartDate || record.Date > period.EndDate
-                    || record.Status is not (AttendanceStatus.Late or AttendanceStatus.Absent))
-                {
-                    continue;
-                }
-
-                if (existing.Any(c => c.AttendanceRecordId == record.Id
-                    || (c.AttendanceRecordId is null && CandidateDayOf(c) == record.Date)))
-                {
-                    continue;
-                }
-
-                var isLate = record.Status == AttendanceStatus.Late;
-                created.Add(new DeductionCandidate
-                {
-                    EmployeeId = employeeId,
-                    AttendanceRecordId = record.Id,
-                    AttendanceRecord = record,
-                    Amount = isLate ? late : absent,
-                    Reason = isLate ? "Late arrival" : "Unapproved absence",
-                    Note = isLate
-                        ? $"Auto-priced: quarter day (base ÷ {scheduled} scheduled workdays ÷ 4)."
-                        : $"Auto-priced: {AbsenceDayMultiplier} days (base ÷ {scheduled} scheduled workdays × {AbsenceDayMultiplier}).",
-                    IssuedBy = issuerId,
-                    IssuedAt = DateTime.UtcNow,
-                    Status = DeductionStatus.Pending,
-                });
-            }
-
-            return created;
-        }
-
-        /// <summary>
-        /// The day a candidate punishes: its attendance day, else the absence marker
-        /// the sweep stamped into its note (a derived-absent day has no record and is
-        /// issued in UTC, which can lag the local day), else its issue day.
+        /// The day a candidate punishes. DeductionDate is authoritative for rows
+        /// written after the one-deduction-per-day change; legacy rows fall back to
+        /// the linked attendance day, the sweep's note marker, then the issue day.
         /// </summary>
         internal static DateOnly CandidateDayOf(DeductionCandidate candidate) =>
-            candidate.AttendanceRecord?.Date
-            ?? ParseAbsenceMarker(candidate.Note)
-            ?? DateOnly.FromDateTime(candidate.IssuedAt);
+            candidate.DeductionDate != default
+                ? candidate.DeductionDate
+                : candidate.AttendanceRecord?.Date
+                    ?? ParseAbsenceMarker(candidate.Note)
+                    ?? DateOnly.FromDateTime(candidate.IssuedAt);
 
         internal static string PeriodLabel(PayrollPeriod period) =>
             period.StartDate.ToString("MMMM yyyy", CultureInfo.InvariantCulture);

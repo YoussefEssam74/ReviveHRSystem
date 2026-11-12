@@ -131,6 +131,17 @@ not express:
    from the original text: `attendance.view.team` and friends remain in
    the mock UI's vocabulary for traceability, but the check is
    (feature, level) + resolved scope.
+   - **Unscoped sessions.** A multi-gym account (HR Manager, Top
+     Management) authenticates without a single active gym, so its token
+     carries no `gymId`. Passing a null gym to the scope guard has always
+     meant **self-only**, and several endpoints (a payslip, for example)
+     rely on that meaning. Call sites where a cross-gym account
+     legitimately reads another employee's record — notably a sick-leave
+     certificate — use `EnsureCanAccessCoveredGymAsync` instead: it scopes
+     on the **employee's own gym**, requires that the actor really holds
+     `UserGymAccess` to it, and then runs the per-gym team/role checks
+     against that gym. Previously those call sites refused every target,
+     which is why HR Manager could not open a certificate.
 6. **Team Leader = Branch Manager capability parity.** Both presets hold
    identical feature levels; the only difference is the resolved scope
    (team vs gym). Being a Team Leader no longer implies fewer features.

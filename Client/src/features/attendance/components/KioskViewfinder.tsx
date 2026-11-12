@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next'
 import { CheckCircle2, CloudOff, Cctv, Loader2, ScanFace, XCircle } from 'lucide-react'
 import { Button } from '../../../components/ui/button'
 import type { CheckoutPrompt, FrameState, ScannerPhase } from '../hooks/useKioskScanner'
@@ -23,6 +24,7 @@ const PHASE_META: Record<ScannerPhase, { title: string; badge: string; tone: str
  * adjust - green once it clears the attendance gate, red below it.
  */
 function LivenessBadge({ liveness }: { liveness: number }) {
+  const { t } = useTranslation()
   const percent = Math.round(liveness * 100)
   const passes = liveness >= LIVENESS_GATE
   return (
@@ -31,7 +33,7 @@ function LivenessBadge({ liveness }: { liveness: number }) {
         'rounded px-2 py-0.5 font-mono text-[10px] font-bold tabular-nums ' +
         (passes ? 'bg-emerald-500/20 text-emerald-300' : 'bg-red-500/20 text-red-300')
       }
-      title={passes ? 'Liveness clears the attendance gate' : 'Liveness below the attendance gate'}
+      title={passes ? t('Liveness clears the attendance gate') : t('Liveness below the attendance gate')}
     >
       {percent}%
     </span>
@@ -88,6 +90,7 @@ export function KioskViewfinder({
   onCancelCheckout,
   clockTime,
 }: KioskViewfinderProps) {
+  const { t } = useTranslation()
   const streaming = phase === 'starting' || phase === 'scanning' || phase === 'recognized'
   const meta = PHASE_META[phase]
 
@@ -99,9 +102,10 @@ export function KioskViewfinder({
   const stripTitle = matched
     ? [frame?.employeeName, frame?.employeeId ? `(${frame.employeeId})` : null].filter(Boolean).join(' ')
     : faceInFrame
-      ? 'Face detected'
-      : statusText || meta.title
-  const stripDetail = rejection ?? frame?.message ?? 'Anti-spoofing and face identification run continuously'
+      ? t('Face detected')
+      : statusText || t(meta.title)
+  const stripDetail =
+    rejection ?? frame?.message ?? t('Anti-spoofing and face identification run continuously')
 
   return (
     <section className="flex min-h-0 flex-col">
@@ -110,7 +114,7 @@ export function KioskViewfinder({
           <div className="flex items-center gap-2">
             <Cctv className="h-[18px] w-[18px] text-brand-600" aria-hidden="true" />
             <p className="text-xs font-bold text-charcoal-800">
-              YuNet detection - Silent-Face anti-spoofing - SFace 1-to-N
+              {t('YuNet detection - Silent-Face anti-spoofing - SFace 1-to-N')}
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -118,9 +122,9 @@ export function KioskViewfinder({
               type="button"
               onClick={onToggleSound}
               className="inline-flex items-center gap-1 rounded border border-charcoal-200 bg-white px-2 py-0.5 text-[11px] font-semibold text-charcoal-600 transition-colors hover:text-charcoal-900"
-              title="Toggle sound alerts"
+              title={t('Toggle sound alerts')}
             >
-              {soundEnabled ? 'Audio: ON' : 'Audio: OFF'}
+              {soundEnabled ? t('Audio: ON') : t('Audio: OFF')}
             </button>
             <button
               type="button"
@@ -131,9 +135,9 @@ export function KioskViewfinder({
                   ? 'border-brand-200 bg-brand-50 text-brand-700 hover:bg-brand-100'
                   : 'border-charcoal-200 bg-white text-charcoal-600 hover:text-charcoal-900')
               }
-              title="Automatically record attendance when a face is recognized"
+              title={t('Automatically record attendance when a face is recognized')}
             >
-              {autoScan ? 'Auto-scan: ON' : 'Auto-scan: OFF'}
+              {autoScan ? t('Auto-scan: ON') : t('Auto-scan: OFF')}
             </button>
             <span className="rounded border border-charcoal-200 bg-white px-2 py-0.5 font-mono text-[11px] font-medium text-charcoal-600">
               {gymName}
@@ -172,7 +176,7 @@ export function KioskViewfinder({
           <div className="relative z-10 flex items-center justify-between p-3">
             <span className="inline-flex items-center gap-1.5 rounded-md border border-[#fff]/15 bg-black/60 px-2.5 py-1 font-mono text-[11px] text-[#fff]/90 backdrop-blur-md">
               <span className="h-2 w-2 animate-pulse rounded-full bg-brand-400" />
-              LIVE VISION ACTIVE
+              {t('LIVE VISION ACTIVE')}
             </span>
             <span className="rounded-md border border-[#fff]/15 bg-black/60 px-2 py-1 font-mono text-[11px] text-[#fff]/70 backdrop-blur-md">
               {clockTime}
@@ -186,11 +190,11 @@ export function KioskViewfinder({
               <div className="mb-3 flex h-16 w-16 items-center justify-center rounded-2xl border border-charcoal-700 bg-charcoal-800 text-amber-400 shadow-lg">
                 <CloudOff className="h-[34px] w-[34px]" aria-hidden="true" />
               </div>
-              <h3 className="text-base font-bold text-white">Camera unavailable</h3>
+              <h3 className="text-base font-bold text-white">{t('Camera unavailable')}</h3>
               <p className="mt-1 max-w-sm text-xs text-charcoal-400">{cameraError}</p>
               <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
                 <Button size="sm" onClick={onRetryCamera}>
-                  Try camera again
+                  {t('Try camera again')}
                 </Button>
               </div>
             </div>
@@ -201,7 +205,7 @@ export function KioskViewfinder({
               <div className="flex h-20 w-20 animate-pulse items-center justify-center rounded-full border-2 border-[#fff]/20 bg-black/20 text-[#fff]/70 backdrop-blur-sm">
                 <ScanFace className="h-12 w-12" aria-hidden="true" />
               </div>
-              <p className="mt-3 text-sm font-bold text-[#fff] drop-shadow">Starting camera...</p>
+              <p className="mt-3 text-sm font-bold text-[#fff] drop-shadow">{t('Starting camera...')}</p>
             </div>
           )}
 
@@ -226,12 +230,12 @@ export function KioskViewfinder({
                   <p className="truncate text-[10px] leading-tight text-[#fff]/70">{stripDetail}</p>
                 </div>
               </div>
-              <div className="shrink-0 text-right">
+              <div className="shrink-0 text-end">
                 {faceInFrame && frame ? (
                   <LivenessBadge liveness={frame.liveness} />
                 ) : (
                   <span className="rounded bg-[#fff]/10 px-2 py-0.5 font-mono text-[10px] font-bold text-[#fff]/90 uppercase">
-                    {meta.badge}
+                    {t(meta.badge)}
                   </span>
                 )}
               </div>
@@ -241,7 +245,7 @@ export function KioskViewfinder({
           {!autoScan && (
             <div className="absolute inset-x-0 bottom-16 z-20 flex justify-center">
               <Button size="sm" onClick={onScanNow}>
-                Scan now
+                {t('Scan now')}
               </Button>
             </div>
           )}

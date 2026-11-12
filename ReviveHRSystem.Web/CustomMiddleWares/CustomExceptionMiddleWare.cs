@@ -55,6 +55,17 @@ namespace ReviveHRSystem.Web.CustomMiddleWares
             //Set Content type for the response
             context.Response.ContentType = "application/json";
 
+            // A 401 from an UnAuthorizedException is an authentication failure, not a
+            // permission message: emit the bearer challenge so the SPA recognises it
+            // and runs its silent-refresh / sign-in flow instead of rendering a dead-end
+            // error card. (Without this header a request that carried no user identity —
+            // e.g. only a kiosk station cookie — looked like a permanent crash.)
+            if (context.Response.StatusCode == StatusCodes.Status401Unauthorized
+                && !context.Response.Headers.ContainsKey("WWW-Authenticate"))
+            {
+                context.Response.Headers.WWWAuthenticate = "Bearer";
+            }
+
             // Ensure StatusCode is set in the response object
             Response.StatusCode = context.Response.StatusCode;
 

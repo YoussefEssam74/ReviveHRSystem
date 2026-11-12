@@ -5,7 +5,7 @@ namespace ReviveHRSystem.IntegrationTests.Fixtures.Data
     /// <summary>
     /// The 128-d SFace embedding produced by the original OpenCV pipeline for the face in
     /// <c>enrolled_face_sample.jpg</c> (the seeded employee EMP-1042). Captured from the
-    /// Python service's enrolled_faces.json so the engine can be verified against ground
+    /// original OpenCV reference pipeline so the engine can be verified against ground
     /// truth instead of merely asserting that it runs.
     /// </summary>
     public static class EnrolledFaceFeature

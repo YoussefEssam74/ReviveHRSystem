@@ -33,7 +33,8 @@ namespace ReviveHRSystem.IntegrationTests
                 employeeId = karimId,
                 amount = 150m,
                 reason = "Unapproved absence",
-                note = "Absent with no prior notice"
+                note = "Absent with no prior notice",
+                date = await FreeDeductionDateAsync(karimId)
             }, token);
             var issueResponse = await _fixture.Client.SendAsync(issue);
             issueResponse.EnsureSuccessStatusCode();
@@ -253,19 +254,77 @@ namespace ReviveHRSystem.IntegrationTests
         }
 
         /// <summary>Issues a deduction as the active manager and returns the created candidate id.</summary>
-        private async Task<int> IssueDeductionAndGetIdAsync(string token, int employeeId, decimal amount, string note)
+        private async Task<int> IssueDeductionAndGetIdAsync(
+            string token, int employeeId, decimal amount, string note, string? date = null)
         {
             var issue = _fixture.AuthorizedRequest(HttpMethod.Post, "/api/deduction-candidates", new
             {
                 employeeId,
                 amount,
                 reason = "Unapproved absence",
-                note
+                note,
+                date = date ?? await FreeDeductionDateAsync(employeeId)
             }, token);
             var issueResponse = await _fixture.Client.SendAsync(issue);
             issueResponse.EnsureSuccessStatusCode();
             var created = await issueResponse.Content.ReadFromJsonAsync<JsonElement>();
             return created.GetProperty("id").GetInt32();
+        }
+
+        /// <summary>
+        /// One deduction per employee/day, so every issue in this class needs a day of
+        /// its own: the nearest earlier day the employee has no deduction on yet.
+        /// </summary>
+        private async Task<string> FreeDeductionDateAsync(int employeeId)
+        {
+            using var scope = _fixture.Services.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<ReviveHrDbContext>();
+            var taken = await db.DeductionCandidates
+                .Where(c => c.EmployeeId == employeeId)
+                .Select(c => c.DeductionDate)
+                .ToListAsync();
+
+            var today = DateOnly.FromDateTime(DateTime.Today);
+            for (var offset = 1; offset <= 180; offset++)
+            {
+                var date = today.AddDays(-offset);
+                if (!taken.Contains(date))
+                {
+                    return date.ToString("yyyy-MM-dd");
+                }
+            }
+
+            throw new InvalidOperationException($"No free deduction date left for employee {employeeId}.");
+        }
+
+        /// <summary>
+        /// A rejected day is final for the branch too: re-issuing the same day is
+        /// refused instead of quietly reviving a waived deduction.
+        /// </summary>
+        [Fact]
+        public async Task Deduction_Issue_OnRejectedDay_Returns400()
+        {
+            var gym1Id = await GymIdByNameAsync("Revive Main Gym");
+            var token = await LoginSelectingGymAsync("omar@revive.hr", gym1Id);
+            var karimId = await OwnEmployeeIdAsync("karim@revive.hr");
+            var date = await FreeDeductionDateAsync(karimId);
+            var candidateId = await IssueDeductionAndGetIdAsync(token, karimId, 90m, "Rejected day re-issue test", date);
+
+            var reject = _fixture.AuthorizedRequest(HttpMethod.Post, $"/api/deduction-candidates/{candidateId}/branch-review", new
+            {
+                decision = "reject"
+            }, token);
+            Assert.Equal(HttpStatusCode.OK, (await _fixture.Client.SendAsync(reject)).StatusCode);
+
+            var again = _fixture.AuthorizedRequest(HttpMethod.Post, "/api/deduction-candidates", new
+            {
+                employeeId = karimId,
+                amount = 90m,
+                reason = "Unapproved absence",
+                note = "Second attempt on the rejected day",
+                date
+            }, token);
+            Assert.Equal(HttpStatusCode.BadRequest, (await _fixture.Client.SendAsync(again)).StatusCode);
         }
 
         [Fact]

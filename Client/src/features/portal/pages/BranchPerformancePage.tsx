@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate, useSearchParams } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { AlertTriangle, CheckCircle2, ChevronDown, MinusCircle, PiggyBank, Sparkles } from 'lucide-react'
 import {
   branchReviewDeduction,
@@ -24,7 +25,7 @@ import { usePortalSession } from '../../../contexts/PortalSessionContext'
 import { describeApiError } from '../../../lib/api-client'
 import { fetchAllPages } from '../../../lib/paged'
 import { cn } from '../../../lib/utils'
-import { formatDate, formatDateWithYear, formatMoney, humanize } from '../../../lib/format'
+import { formatDate, formatDateWithYear, formatMoney, formatNumber, formatTimeOfDay, humanize } from '../../../lib/format'
 
 /**
  * Employees Performance (mock §25 renderEmployeesPerformance): the whole roster
@@ -42,13 +43,14 @@ function ymOf(value: string | null | undefined): string {
 }
 
 export default function BranchPerformancePage() {
+  const { t } = useTranslation()
   const { isBranchManager, isTeamLeader } = usePortalSession()
 
   if (!isBranchManager && !isTeamLeader) {
     return (
       <EmptyState
-        title="Employees Performance is for managers"
-        hint="The aggregates read the management-scope lists guarded by the role model."
+        title={t('Employees Performance is for managers')}
+        hint={t('The aggregates read the management-scope lists guarded by the role model.')}
       />
     )
   }
@@ -57,6 +59,7 @@ export default function BranchPerformancePage() {
 }
 
 function PerformanceWorkspace() {
+  const { t } = useTranslation()
   const { me } = usePortalSession()
   const [month, setMonth] = useState<MonthKey>('all')
   // Who is drilled into, and on which tab, lives in the URL: the sidebar's action
@@ -227,51 +230,54 @@ function PerformanceWorkspace() {
 
   return (
     <div className="space-y-3">
-      <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
-        <div>
-          <h1 className="text-xl font-bold text-charcoal-900">Employees Performance</h1>
-          <p className="mt-0.5 text-xs text-charcoal-500">
-            {rowSubline(roster)} · Click an employee to open their full performance history ·{' '}
-            {me?.activeGym?.gymName || 'your gym'}
-          </p>
+      {/* Title + month filter share one line so the roster stays high on a phone.
+          The title wraps instead of truncating when the filter needs its width. */}
+      <div className="flex items-center justify-between gap-2">
+        <h1 className="min-w-0 text-base font-bold leading-tight text-charcoal-900 sm:text-xl">{t('Employees Performance')}</h1>
+        <div className="w-40 shrink-0 sm:w-44">
+          <MonthSelect month={month} months={months} onChange={setMonth} />
         </div>
-        <MonthSelect month={month} months={months} onChange={setMonth} />
       </div>
 
-      {/* The four real stat tiles */}
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-        <PerfTile accent="border-l-brand-500" label="Employees" value={String(roster.length)} valueClass="text-brand-700" />
+      {/* The four real stat tiles — one straight row on phones: a 2×2 grid read
+          as four separate cards and pushed the roster off the first screen. */}
+      <div className="grid grid-cols-4 gap-1.5 sm:gap-2">
+        <PerfTile accent="border-s-brand-500" label={t('Employees')} value={String(roster.length)} valueClass="text-brand-700" />
         <PerfTile
-          label={`Requests${monthLabel ? ` · ${monthLabel}` : ''}`}
+          label={`${t('Requests')}${monthLabel ? ` · ${monthLabel}` : ''}`}
           value={String(totals.requests)}
         />
         <PerfTile
-          label={`Deductions${monthLabel ? ` · ${monthLabel}` : ''}`}
-          value={formatMoney(totals.deductions)}
+          label={`${t('Deductions')}${monthLabel ? ` · ${monthLabel}` : ''}`}
+          value={formatNumber(totals.deductions)}
+          unit="EGP"
           valueClass={totals.deductions ? 'text-red-600' : 'text-charcoal-900'}
         />
         <PerfTile
-          label="Need review"
+          label={t('Need review')}
           value={String(totals.needsReview)}
           valueClass={totals.needsReview ? 'text-orange-600' : 'text-charcoal-900'}
         />
       </div>
 
       {rows.length === 0 ? (
-        <EmptyState title="No employees on the roster" hint="As soon as staff exist in this gym they appear here." />
+        <EmptyState
+          title={t('No employees on the roster')}
+          hint={t('As soon as staff exist in this gym they appear here.')}
+        />
       ) : (
         <>
           {/* Desktop roster table */}
           <div className="hidden overflow-hidden rounded-xl border border-charcoal-200 bg-white lg:block">
             <table className="w-full">
               <thead>
-                <tr className="border-b border-charcoal-100 text-left">
+                <tr className="border-b border-charcoal-100 text-start">
                   {['Employee', 'Position', 'Status', 'Requests', 'Deductions', 'Bonuses', 'Evaluations', 'Warnings'].map((column, index) => (
                     <th
                       key={column}
-                      className={cn('px-3 py-2 text-[10px] font-semibold uppercase tracking-wider text-charcoal-500', index >= 3 && 'text-right')}
+                      className={cn('px-3 py-2 text-[10px] font-semibold uppercase tracking-wider text-charcoal-500', index >= 3 && 'text-end')}
                     >
-                      {column}
+                      {t(column)}
                     </th>
                   ))}
                 </tr>
@@ -291,7 +297,7 @@ function PerformanceWorkspace() {
                         <div className="min-w-0">
                           <p className="text-xs font-medium text-charcoal-900">
                             {row.employee.name}
-                            {row.needsReview && <span className="ml-1.5 inline-block h-1.5 w-1.5 rounded-full bg-red-500 align-middle" title="Leaving case open" />}
+                            {row.needsReview && <span className="ms-1.5 inline-block h-1.5 w-1.5 rounded-full bg-red-500 align-middle" title={t('Leaving case open')} />}
                           </p>
                           <p className="text-[10px] text-charcoal-500">{row.employee.employeeNumber}</p>
                         </div>
@@ -301,11 +307,11 @@ function PerformanceWorkspace() {
                     <td className="px-3 py-2.5">
                       <StatusBadge status={humanize(row.employee.status)} />
                     </td>
-                    <td className="px-3 py-2.5 text-right text-xs text-charcoal-900">
+                    <td className="px-3 py-2.5 text-end text-xs text-charcoal-900">
                       {row.requests}
                       {row.pending > 0 && <span className="block text-[10px] text-yellow-600">{row.pending} pending</span>}
                     </td>
-                    <td className={cn('px-3 py-2.5 text-right text-xs font-semibold', row.deductionTotal ? 'text-red-600' : 'text-charcoal-400')}>
+                    <td className={cn('px-3 py-2.5 text-end text-xs font-semibold', row.deductionTotal ? 'text-red-600' : 'text-charcoal-400')}>
                       {formatMoney(row.deductionTotal)}
                       {row.pendingDeductions > 0 && (
                         <span className="block text-[10px] font-medium text-amber-600">
@@ -313,10 +319,10 @@ function PerformanceWorkspace() {
                         </span>
                       )}
                     </td>
-                    <td className={cn('px-3 py-2.5 text-right text-xs font-semibold', row.bonusTotal ? 'text-green-600' : 'text-charcoal-400')}>
+                    <td className={cn('px-3 py-2.5 text-end text-xs font-semibold', row.bonusTotal ? 'text-green-600' : 'text-charcoal-400')}>
                       {formatMoney(row.bonusTotal)}
                     </td>
-                    <td className="px-3 py-2.5 text-right text-xs">
+                    <td className="px-3 py-2.5 text-end text-xs">
                       {row.avgScore !== null ? (
                         <>
                           <span className="text-charcoal-900">{row.avgScore.toFixed(1)} / 5</span>
@@ -326,7 +332,7 @@ function PerformanceWorkspace() {
                         <span className="text-charcoal-400">—</span>
                       )}
                     </td>
-                    <td className={cn('px-3 py-2.5 text-right text-xs font-semibold', row.warnings ? 'text-orange-600' : 'text-charcoal-400')}>
+                    <td className={cn('px-3 py-2.5 text-end text-xs font-semibold', row.warnings ? 'text-orange-600' : 'text-charcoal-400')}>
                       {row.warnings}
                     </td>
                   </tr>
@@ -351,7 +357,7 @@ function PerformanceWorkspace() {
                   key={row.employee.id}
                   type="button"
                   onClick={() => openDrill(row)}
-                  className="w-full rounded-xl border border-charcoal-200 bg-white p-3 text-left card-interactive"
+                  className="w-full rounded-xl border border-charcoal-200 bg-white p-3 text-start card-interactive"
                 >
                   <div className="flex items-center justify-between gap-2">
                     <div className="flex min-w-0 items-center gap-2.5">
@@ -361,7 +367,7 @@ function PerformanceWorkspace() {
                       <div className="min-w-0">
                         <p className="truncate text-xs font-medium text-charcoal-900">
                           {row.employee.name}
-                          {row.needsReview && <span className="ml-1.5 inline-block h-1.5 w-1.5 rounded-full bg-red-500 align-middle" />}
+                          {row.needsReview && <span className="ms-1.5 inline-block h-1.5 w-1.5 rounded-full bg-red-500 align-middle" />}
                         </p>
                         <p className="truncate text-[10px] text-charcoal-500">
                           {row.employee.position} · {row.employee.employeeNumber}
@@ -373,26 +379,26 @@ function PerformanceWorkspace() {
                   <div className="mt-2 grid grid-cols-4 gap-1 text-center">
                     <div className="rounded-lg bg-charcoal-50 py-1.5">
                       <p className="text-xs font-bold text-charcoal-900">{row.requests}</p>
-                      <p className="text-[9px] text-charcoal-500">Requests</p>
+                      <p className="text-[9px] text-charcoal-500">{t('Requests')}</p>
                     </div>
                     <div className="rounded-lg bg-charcoal-50 py-1.5">
                       <p className={cn('text-xs font-bold', row.deductionTotal ? 'text-red-600' : 'text-charcoal-900')}>
-                        {row.deductionTotal}
+                        {formatNumber(row.deductionTotal)}
                       </p>
-                      <p className="text-[9px] text-charcoal-500">Ded. EGP</p>
+                      <p className="text-[9px] text-charcoal-500">{t('Ded. EGP')}</p>
                     </div>
                     <div className="rounded-lg bg-charcoal-50 py-1.5">
                       <p className="text-xs font-bold text-charcoal-900">{row.avgScore !== null ? row.avgScore.toFixed(1) : '—'}</p>
-                      <p className="text-[9px] text-charcoal-500">Eval /5</p>
+                      <p className="text-[9px] text-charcoal-500">{t('Eval /5')}</p>
                     </div>
                     <div className="rounded-lg bg-charcoal-50 py-1.5">
                       <p className={cn('text-xs font-bold', row.warnings ? 'text-orange-600' : 'text-charcoal-900')}>{row.warnings}</p>
-                      <p className="text-[9px] text-charcoal-500">Warnings</p>
+                      <p className="text-[9px] text-charcoal-500">{t('Warnings')}</p>
                     </div>
                   </div>
                   {waiting && (
                     <p className="mt-2 rounded-lg bg-amber-50 px-2 py-1 text-center text-[10px] font-semibold text-amber-700 ring-1 ring-inset ring-amber-200">
-                      Waiting for your decision: {waiting}
+                      {t('Waiting for your decision: {{count}}', { count: waiting })}
                     </p>
                   )}
                 </button>
@@ -405,27 +411,31 @@ function PerformanceWorkspace() {
   )
 }
 
-function rowSubline(roster: EmployeeDirectoryRow[]): string {
-  return `${roster.length} employees`
-}
-
 /* ==================== shared bits ==================== */
 
 function PerfTile({
   label,
   value,
+  unit,
   valueClass = 'text-charcoal-900',
   accent,
+  className,
 }: {
   label: string
   value: string
+  /** Currency/unit rendered small next to the value so a long amount still fits. */
+  unit?: string
   valueClass?: string
   accent?: string
+  className?: string
 }) {
   return (
-    <div className={cn('rounded-xl border border-charcoal-200 border-l-4 bg-white p-3 text-center', accent)}>
-      <p className={cn('text-xl font-bold', valueClass)}>{value}</p>
-      <p className="text-[10px] text-charcoal-500">{label}</p>
+    <div className={cn('min-w-0 rounded-xl border border-charcoal-200 border-s-4 bg-white px-1 py-2 text-center sm:p-3', accent, className)}>
+      <p className={cn('break-words text-[11px] font-bold leading-tight tabular-nums sm:text-xl', valueClass)}>
+        {value}
+        {unit && <span className="ml-0.5 hidden text-[11px] font-semibold text-charcoal-400 sm:inline">{unit}</span>}
+      </p>
+      <p className="mt-0.5 text-[9px] leading-tight text-charcoal-500 sm:text-[10px]">{label}</p>
     </div>
   )
 }
@@ -439,18 +449,19 @@ function MonthSelect({
   months: string[]
   onChange: (value: MonthKey) => void
 }) {
+  const { t } = useTranslation()
   const value = month === 'all' ? months[0] ?? null : (month as string)
   return (
     <select
       className="form-input w-44"
       value={value ?? ''}
       onChange={(event) => onChange(event.target.value)}
-      aria-label="Filter by month"
+      aria-label={t('Filter by month')}
     >
-      <option value="">All months</option>
+      <option value="">{t('All months')}</option>
       {months.map((key) => (
         <option key={key} value={key}>
-          {MONTH_NAMES[Number(key.slice(5, 7)) - 1] ?? key} {key.slice(0, 4)}
+          {t(MONTH_NAMES[Number(key.slice(5, 7)) - 1] ?? key)} {key.slice(0, 4)}
         </option>
       ))}
     </select>
@@ -564,6 +575,7 @@ function PerfDrillIn({
   }
 
   const inMonth = (value: string | null | undefined) => month === 'all' || ymOf(value) === month
+  const { t } = useTranslation()
 
   return (
     <div className="space-y-3">
@@ -574,8 +586,8 @@ function PerfDrillIn({
             onClick={onClose}
             className="mb-1 flex items-center gap-1 text-[11px] font-medium text-charcoal-500 hover:text-charcoal-800"
           >
-            <ChevronDown className="h-3.5 w-3.5 rotate-90" aria-hidden="true" />
-            Back to all employees
+            <ChevronDown className="h-3.5 w-3.5 rotate-90 rtl:-rotate-90" aria-hidden="true" />
+            {t('Back to all employees')}
           </button>
           <div className="flex items-center gap-2">
             <span className="flex h-10 w-10 items-center justify-center rounded-full bg-brand-100 text-[11px] font-semibold text-brand-700">
@@ -596,23 +608,63 @@ function PerfDrillIn({
         <div className="flex items-center gap-2">
           <MonthSelect month={month} months={months} onChange={onMonthChange} />
           <Button size="sm" variant="secondary" onClick={() => navigate(`/employee/branch/employees/${employee.id}`)}>
-            Full profile
+            {t('Full profile')}
           </Button>
         </div>
       </div>
 
-      {/* Aggregated tiles (same algebra as the roster row) */}
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-6">
+      {/* Aggregated tiles (same algebra as the roster row) — one swipeable row on
+          phones so the tabs and the tab's list stay above the fold. */}
+      <div className="flex gap-2 overflow-x-auto pb-1 sm:grid sm:grid-cols-4 sm:overflow-visible sm:pb-0 xl:grid-cols-7">
         <PerfTile
-          label="To act on"
+          className="w-28 shrink-0 sm:w-auto"
+          label={t('To act on')}
           value={String(row.pending + row.pendingDeductions)}
           valueClass={row.pending + row.pendingDeductions ? 'text-amber-600' : 'text-charcoal-900'}
+          accent="border-s-amber-400"
         />
-        <PerfTile label={`Requests${row.pending ? ` · ${row.pending} pending` : ''}`} value={String(row.requests)} />
-        <PerfTile label="Deductions" value={formatMoney(row.deductionTotal)} valueClass={row.deductionTotal ? 'text-red-600' : 'text-charcoal-900'} />
-        <PerfTile label="Bonuses" value={formatMoney(row.bonusTotal)} valueClass={row.bonusTotal ? 'text-green-600' : 'text-charcoal-900'} />
-        <PerfTile label="Warnings" value={String(row.warnings)} valueClass={row.warnings ? 'text-orange-600' : 'text-charcoal-900'} />
-        <PerfTile label="Eval avg" value={row.avgScore !== null ? `${row.avgScore.toFixed(1)} / 5` : '—'} />
+        <PerfTile
+          className="w-28 shrink-0 sm:w-auto"
+          label={`${t('Requests')}${row.pending ? ` · ${t('{{count}} pending', { count: row.pending })}` : ''}`}
+          value={String(row.requests)}
+          accent="border-s-blue-400"
+        />
+        <PerfTile
+          className="w-28 shrink-0 sm:w-auto"
+          label={t('Deductions')}
+          value={formatNumber(row.deductionTotal)}
+          unit="EGP"
+          valueClass={row.deductionTotal ? 'text-red-600' : 'text-charcoal-900'}
+          accent="border-s-red-400"
+        />
+        <PerfTile
+          className="w-28 shrink-0 sm:w-auto"
+          label={t('Bonuses')}
+          value={formatNumber(row.bonusTotal)}
+          unit="EGP"
+          valueClass={row.bonusTotal ? 'text-green-600' : 'text-charcoal-900'}
+          accent="border-s-green-400"
+        />
+        <PerfTile
+          className="w-28 shrink-0 sm:w-auto"
+          label={t('Warnings')}
+          value={String(row.warnings)}
+          valueClass={row.warnings ? 'text-orange-600' : 'text-charcoal-900'}
+          accent="border-s-orange-400"
+        />
+        <PerfTile
+          className="w-28 shrink-0 sm:w-auto"
+          label={t('Eval avg')}
+          value={row.avgScore !== null ? `${row.avgScore.toFixed(1)} / 5` : '—'}
+          accent="border-s-violet-400"
+        />
+        <PerfTile
+          className="w-28 shrink-0 sm:w-auto"
+          label={t('Monthly salary')}
+          value={row.employee.salary != null ? formatNumber(row.employee.salary) : '—'}
+          unit={row.employee.salary != null ? 'EGP' : undefined}
+          accent="border-s-brand-400"
+        />
       </div>
 
       <div className="overflow-hidden rounded-xl border border-charcoal-200 bg-white">
@@ -631,11 +683,11 @@ function PerfDrillIn({
                     : 'border-transparent text-charcoal-500 hover:text-charcoal-700',
                 )}
               >
-                {option.label}
+                {t(option.label)}
                 {count > 0 && (
                   <span
                     className={cn(
-                      'ml-1 inline-flex items-center rounded-full px-1.5 py-px text-[9px] font-bold leading-none tabular-nums',
+                      'ms-1 inline-flex items-center rounded-full px-1.5 py-px text-[9px] font-bold leading-none tabular-nums',
                       tab === option.id
                         ? 'bg-brand-100 text-brand-700'
                         : 'bg-amber-50 text-amber-700 ring-1 ring-inset ring-amber-200',
@@ -686,23 +738,26 @@ function DrillOverview({
   }
   inMonth: (value: string | null | undefined) => boolean
 }) {
+  const { t } = useTranslation()
   void inMonth
   return (
     <div className="space-y-2">
       <p className="text-xs text-charcoal-600">
-        {row.employee.name} — {row.employee.position}. The tiles above are the live aggregates for the selected
-        month; each tab lists the underlying rows.
+        {t('{{name}} — {{position}}. The tiles above are the live aggregates for the selected month; each tab lists the underlying rows.', {
+          name: row.employee.name,
+          position: row.employee.position,
+        })}
       </p>
       {row.needsReview && (
         <div className="flex items-start gap-2 rounded-lg border border-orange-200 bg-orange-50 p-2.5">
           <AlertTriangle className="mt-0.5 h-4 w-4 flex-shrink-0 text-orange-500" aria-hidden="true" />
-          <p className="text-[11px] text-orange-700">This employee has an open leaving (offboarding) case.</p>
+          <p className="text-[11px] text-orange-700">{t('This employee has an open leaving (offboarding) case.')}</p>
         </div>
       )}
       {row.latestPeriod && row.avgScore !== null && (
         <div className="flex items-center justify-between rounded-lg bg-charcoal-50 p-2.5">
           <div>
-            <p className="text-[10px] text-charcoal-500">LATEST EVALUATION</p>
+            <p className="text-[10px] text-charcoal-500">{t('LATEST EVALUATION')}</p>
             <p className="text-xs font-semibold text-charcoal-900">{row.latestPeriod}</p>
           </div>
           <p className="text-sm font-bold text-charcoal-900">{row.avgScore.toFixed(1)} / 5</p>
@@ -713,6 +768,7 @@ function DrillOverview({
 }
 
 function DrillRequests({ employeeId, inMonth }: { employeeId: number; inMonth: (value: string | null | undefined) => boolean }) {
+  const { t } = useTranslation()
   const inboxQuery = useQuery({
     queryKey: ['portal', 'perf', 'inbox'],
     queryFn: ({ signal }) => fetchAllPages((page) => getRequestInbox({ page, pageSize: 100, signal }), signal),
@@ -722,7 +778,7 @@ function DrillRequests({ employeeId, inMonth }: { employeeId: number; inMonth: (
   )
   return <DrillList
     isLoading={inboxQuery.isFetching && !inboxQuery.data}
-    emptyHint="No requests on record for this filter."
+    emptyHint={t('No requests on record for this filter.')}
     rows={rows.map((item) => ({
       key: item.id,
       left: (
@@ -730,7 +786,7 @@ function DrillRequests({ employeeId, inMonth }: { employeeId: number; inMonth: (
           <p className="text-xs font-medium text-charcoal-900">{item.type}</p>
           <p className="text-[10px] text-charcoal-500">
             {formatDate(item.requestedDate)}
-            {item.endDate ? ` → ${formatDate(item.endDate)}` : ''} · submitted {formatDate(item.submittedDate)}
+            {item.endDate ? ` → ${formatDate(item.endDate)}` : ''} · {t('submitted {{date}}', { date: formatDate(item.submittedDate) })}
           </p>
         </>
       ),
@@ -801,7 +857,7 @@ function DrillDeductions({
   const { toast } = useToast()
   const queryClient = useQueryClient()
   const [editingId, setEditingId] = useState<number | null>(null)
-  const [amount, setAmount] = useState('')
+  const [days, setDays] = useState('')
   const [view, setView] = useState<DeductionViewId>('pending')
 
   const deductionsQuery = useQuery({
@@ -809,16 +865,17 @@ function DrillDeductions({
     queryFn: ({ signal }) => listBranchDeductions(undefined, signal),
   })
 
+  const { t } = useTranslation()
   const reviewMutation = useMutation({
-    mutationFn: ({ id, decision, amount: revised }: { id: number; decision: 'approve' | 'reject' | 'edit'; amount?: number }) =>
-      branchReviewDeduction(id, { decision, amount: revised }),
+    mutationFn: ({ id, decision, days: revisedDays }: { id: number; decision: 'approve' | 'reject' | 'edit'; days?: number }) =>
+      branchReviewDeduction(id, { decision, days: revisedDays }),
     onSuccess: (_data, variables) => {
       toast(
         variables.decision === 'approve'
-          ? 'Deduction approved — it goes to HR for the payroll run.'
+          ? t('Deduction approved — it goes to HR for the payroll run.')
           : variables.decision === 'reject'
-            ? 'Deduction rejected.'
-            : 'Deduction amount updated.',
+            ? t('Deduction rejected.')
+            : t('Deduction days updated and amount recalculated.'),
       )
       setEditingId(null)
       void queryClient.invalidateQueries({ queryKey: ['portal', 'perf', 'deductions'] })
@@ -842,12 +899,12 @@ function DrillDeductions({
   const visible = rows.filter((item) => deductionViewOf(item.status) === view)
   const pending = reviewMutation.isPending
   const submitReprice = (item: DeductionCandidateRow) => {
-    const value = Number(amount)
-    if (amount === '' || !Number.isFinite(value) || value <= 0) {
-      toast('Enter an amount greater than zero.', 'error')
+    const value = Number(days)
+    if (days === '' || !Number.isInteger(value) || value < 1 || value > 30) {
+      toast(t('Enter a whole number of deduction days between 1 and 30.'), 'error')
       return
     }
-    reviewMutation.mutate({ id: item.id, decision: 'edit', amount: value })
+    reviewMutation.mutate({ id: item.id, decision: 'edit', days: value })
   }
 
   return (
@@ -869,7 +926,7 @@ function DrillDeductions({
                   : 'text-charcoal-500 hover:text-charcoal-700',
               )}
             >
-              {option.label}
+              {t(option.label)}
               <span
                 className={cn(
                   'rounded-full px-1.5 py-px text-[9px] font-bold tabular-nums',
@@ -881,18 +938,21 @@ function DrillDeductions({
             </button>
           ))}
         </div>
-        <p className="text-[10px] text-charcoal-500">{current.hint}</p>
+        <p className="text-[10px] text-charcoal-500">{t(current.hint)}</p>
       </div>
 
       <DrillList
         isLoading={deductionsQuery.isFetching && !deductionsQuery.data}
-        emptyHint={current.emptyHint}
+        emptyHint={t(current.emptyHint)}
         rows={visible.map((item) => {
           // What this row's state still allows: the whole decision while it is
-          // pending, re-price / reject while it waits for HR, nothing once HR has
-          // applied it (or the branch has excused it).
+          // pending, re-price / reject while it waits for HR, and — since a
+          // rejected row is otherwise frozen — the full decision again once
+          // rejected, so a manager who rejected in error can edit the days or
+          // re-approve it. Nothing once HR has applied it.
           const isOpen = item.status === 'Pending'
-          const canDecide = isOpen || item.status === 'BranchApproved'
+          const isRejected = item.status === 'Rejected'
+          const canDecide = isOpen || item.status === 'BranchApproved' || isRejected
           // The useful context for a manager deciding this row: the attendance day
           // itself, that employee's absence/late tally for the month, and any
           // request the employee filed for that exact day.
@@ -926,22 +986,27 @@ function DrillDeductions({
                 )}
                 {linkedRequests.length > 0 && (
                   <div className="mt-1 flex flex-wrap items-center gap-1">
-                    <span className="text-[10px] font-medium text-charcoal-400">Request that day:</span>
+                    <span className="text-[10px] font-medium text-charcoal-400">{t('Request that day:')}</span>
                     {linkedRequests.map((request) => (
                       <span
                         key={request.id}
                         className="inline-flex items-center gap-1 rounded-md border border-charcoal-200 bg-charcoal-50 px-1.5 py-0.5 text-[10px] font-medium text-charcoal-700"
                       >
                         {request.type}
-                        {request.requestTime ? ` · ${request.requestTime.slice(0, 5)}` : ''}
+                        {request.requestTime ? ` · ${formatTimeOfDay(request.requestTime)}` : ''}
                         <StatusBadge status={requestStatusLabel(request.status)} />
                       </span>
                     ))}
                   </div>
                 )}
+                {isRejected && (
+                  <p className="mt-1.5 text-[10px] font-medium text-red-600">
+                    Rejected — edit the days or re-approve to undo this decision.
+                  </p>
+                )}
                 {canDecide && (
                   <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-                    {isOpen && (
+                    {(isOpen || isRejected) && (
                       <button
                         type="button"
                         disabled={pending}
@@ -956,33 +1021,41 @@ function DrillDeductions({
                       disabled={pending}
                       onClick={() => {
                         setEditingId(editingId === item.id ? null : item.id)
-                        setAmount(String(item.amount))
+                        setDays(String(Math.max(1, Math.round(item.deductionDays))))
                       }}
                       className="rounded-md border border-charcoal-200 px-2 py-1 text-[10px] font-semibold text-charcoal-600 transition-colors hover:bg-charcoal-50 disabled:opacity-50"
                     >
-                      Edit amount
+                      Edit deduction days
                     </button>
-                    <button
-                      type="button"
-                      disabled={pending}
-                      onClick={() => reviewMutation.mutate({ id: item.id, decision: 'reject' })}
-                      className="rounded-md border border-red-200 px-2 py-1 text-[10px] font-semibold text-red-600 transition-colors hover:bg-red-50 disabled:opacity-50"
-                    >
-                      Reject
-                    </button>
+                    {!isRejected && (
+                      <button
+                        type="button"
+                        disabled={pending}
+                        onClick={() => reviewMutation.mutate({ id: item.id, decision: 'reject' })}
+                        className="rounded-md border border-red-200 px-2 py-1 text-[10px] font-semibold text-red-600 transition-colors hover:bg-red-50 disabled:opacity-50"
+                      >
+                        Reject
+                      </button>
+                    )}
                   </div>
                 )}
                 {editingId === item.id && (
                   <div className="mt-1.5 flex items-center gap-1.5">
                     <input
                       type="number"
-                      min="0"
-                      step="0.01"
-                      value={amount}
-                      onChange={(event) => setAmount(event.target.value)}
-                      placeholder="New amount (EGP)"
+                      min="1"
+                      max="30"
+                      step="1"
+                      value={days}
+                      onChange={(event) => setDays(event.target.value)}
+                      placeholder={t('Deduction days')}
                       className="w-28 rounded-md border border-charcoal-200 px-2 py-1 text-[11px] text-charcoal-800 focus:border-brand-400 focus:outline-none"
                     />
+                    <p className="text-[10px] text-charcoal-500">
+                      New amount: {item.deductionDays > 0
+                        ? formatMoney((item.amount / item.deductionDays) * Number(days || item.deductionDays))
+                        : 'calculated after saving'}
+                    </p>
                     <button
                       type="button"
                       disabled={pending}
@@ -1022,6 +1095,7 @@ function DrillDeductions({
 }
 
 function DrillEvaluations({ employeeId }: { employeeId: number }) {
+  const { t } = useTranslation()
   const evalsQuery = useQuery({
     queryKey: ['portal', 'perf', 'eval-rows', employeeId],
     queryFn: ({ signal }) => getEvaluationResponses({ employeeId, pageSize: 50, signal }),
@@ -1030,7 +1104,7 @@ function DrillEvaluations({ employeeId }: { employeeId: number }) {
   return (
     <DrillList
       isLoading={evalsQuery.isFetching && !evalsQuery.data}
-      emptyHint="No submitted evaluations yet."
+      emptyHint={t('No submitted evaluations yet.')}
       rows={rows.map((item) => ({
         key: item.id,
         left: (
@@ -1057,6 +1131,7 @@ function DrillEvaluations({ employeeId }: { employeeId: number }) {
 }
 
 function DrillBonuses({ employeeId, inMonth }: { employeeId: number; inMonth: (value: string | null | undefined) => boolean }) {
+  const { t } = useTranslation()
   const bonusesQuery = useQuery({
     queryKey: ['portal', 'perf', 'bonuses'],
     queryFn: ({ signal }) => listBonusProposals(undefined, signal),
@@ -1067,7 +1142,7 @@ function DrillBonuses({ employeeId, inMonth }: { employeeId: number; inMonth: (v
   return (
     <DrillList
       isLoading={bonusesQuery.isFetching && !bonusesQuery.data}
-      emptyHint="No bonuses proposed in this scope."
+      emptyHint={t('No bonuses proposed in this scope.')}
       rows={rows.map((item) => ({
         key: item.id,
         left: (
@@ -1091,6 +1166,7 @@ function DrillBonuses({ employeeId, inMonth }: { employeeId: number; inMonth: (v
 }
 
 function DrillWarnings({ employeeId, inMonth }: { employeeId: number; inMonth: (value: string | null | undefined) => boolean }) {
+  const { t } = useTranslation()
   const warningsQuery = useQuery({
     queryKey: ['portal', 'perf', 'warnings'],
     queryFn: ({ signal }) => listWarningNotices(undefined, signal),
@@ -1101,7 +1177,7 @@ function DrillWarnings({ employeeId, inMonth }: { employeeId: number; inMonth: (
   return (
     <DrillList
       isLoading={warningsQuery.isFetching && !warningsQuery.data}
-      emptyHint="No warnings on record in this scope."
+      emptyHint={t('No warnings on record in this scope.')}
       rows={rows.map((item) => ({
         key: item.id,
         left: (
@@ -1120,6 +1196,7 @@ function DrillWarnings({ employeeId, inMonth }: { employeeId: number; inMonth: (
 }
 
 function DrillAttendance({ employeeId }: { employeeId: number }) {
+  const { t } = useTranslation()
   const [month, setMonth] = useState(currentMonthValue())
   const attendanceQuery = useQuery({
     queryKey: ['portal', 'perf', 'attendance', employeeId, month],
@@ -1129,17 +1206,17 @@ function DrillAttendance({ employeeId }: { employeeId: number }) {
   return (
     <div>
       <div className="mb-2 flex items-center justify-between">
-        <p className="bento-label text-charcoal-400">ATTENDANCE</p>
+        <p className="bento-label text-charcoal-400">{t('ATTENDANCE')}</p>
         <input
           type="month"
           value={month}
           onChange={(event) => setMonth(event.target.value)}
           className="form-input w-40"
-          aria-label="Attendance month"
+          aria-label={t('Attendance month')}
         />
       </div>
       {attendanceQuery.isLoading ? (
-        <LoadingState label="Loading attendance…" />
+        <LoadingState label={t('Loading attendance…')} />
       ) : attendanceQuery.error ? (
         <p className="text-[11px] text-red-600">{describeApiError(attendanceQuery.error)}</p>
       ) : (
@@ -1150,28 +1227,29 @@ function DrillAttendance({ employeeId }: { employeeId: number }) {
 }
 
 function AttendanceRows({ history }: { history: EmployeeAttendanceResponse | undefined }) {
+  const { t } = useTranslation()
   const totals = history?.totals
   const items: EmployeeAttendanceItem[] = history?.items ?? []
-  if (items.length === 0) return <p className="text-xs text-charcoal-500">No attendance rows for this month.</p>
+  if (items.length === 0) return <p className="text-xs text-charcoal-500">{t('No attendance rows for this month.')}</p>
 
   return (
     <div>
       <div className="mb-2 grid grid-cols-2 gap-2 text-center sm:grid-cols-4">
         <div className="rounded-lg bg-charcoal-50 p-2">
           <p className="text-base font-bold text-brand-700">{totals?.present ?? 0}</p>
-          <p className="text-[10px] text-charcoal-500">On time</p>
+          <p className="text-[10px] text-charcoal-500">{t('On time')}</p>
         </div>
         <div className="rounded-lg bg-charcoal-50 p-2">
           <p className="text-base font-bold text-yellow-600">{totals?.late ?? 0}</p>
-          <p className="text-[10px] text-charcoal-500">Late</p>
+          <p className="text-[10px] text-charcoal-500">{t('Late')}</p>
         </div>
         <div className="rounded-lg bg-charcoal-50 p-2">
           <p className="text-base font-bold text-red-600">{totals?.absent ?? 0}</p>
-          <p className="text-[10px] text-charcoal-500">Absent</p>
+          <p className="text-[10px] text-charcoal-500">{t('Absent')}</p>
         </div>
         <div className="rounded-lg bg-charcoal-50 p-2">
           <p className="text-base font-bold text-charcoal-900">{totals ? totals.hours.toFixed(0) : 0}h</p>
-          <p className="text-[10px] text-charcoal-500">Hours</p>
+          <p className="text-[10px] text-charcoal-500">{t('Hours')}</p>
         </div>
       </div>
       <div className="divide-y divide-charcoal-50 rounded-lg border border-charcoal-200">
@@ -1180,7 +1258,7 @@ function AttendanceRows({ history }: { history: EmployeeAttendanceResponse | und
             <div className="min-w-0">
               <p className="text-xs font-medium text-charcoal-900">{formatDateWithYear(item.date)}</p>
               <p className="truncate text-[10px] text-charcoal-500">
-                {item.checkIn ?? '—'} → {item.checkOut ?? '—'}
+                {formatTimeOfDay(item.checkIn)} → {formatTimeOfDay(item.checkOut)}
               </p>
             </div>
             <StatusBadge status={humanize(item.status)} />

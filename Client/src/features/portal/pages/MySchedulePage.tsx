@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
+import { useTranslation } from 'react-i18next'
 import { Calendar, ChevronLeft, ChevronRight, Moon, Plus, Sun } from 'lucide-react'
 import { getEmployeeDashboard } from '../api/dashboard.api'
 import { getOwnAttendance, getOwnSchedule, type EmployeeAttendanceItem } from '../api/attendance.api'
@@ -10,6 +11,7 @@ import { ErrorState, LoadingState } from '../../../components/async-state'
 import { StatusBadge } from '../../../components/ui/badge'
 import { usePortalSession } from '../../../contexts/PortalSessionContext'
 import { describeApiError } from '../../../lib/api-client'
+import { activeLocale, formatTimeOfDay } from '../../../lib/format'
 import { cn } from '../../../lib/utils'
 
 const WEEKDAYS = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT']
@@ -50,14 +52,7 @@ function time12(value: string | null): string {
   return `${display}:${m ?? '00'} ${suffix}`
 }
 
-/** Short "8:00" → used inside tight calendar cells. */
-function timeShort(value: string | null): string {
-  if (!value) return '—'
-  const [h, m] = value.split(':')
-  const hour = Number(h)
-  if (Number.isNaN(hour)) return value
-  return `${hour % 12 === 0 ? 12 : hour % 12}:${m ?? '00'}`
-}
+/** Short "8:00 AM" → used inside tight calendar cells. */
 
 interface CellModel {
   date: string
@@ -73,6 +68,7 @@ interface CellModel {
 }
 
 export default function MySchedulePage() {
+  const { t } = useTranslation()
   const { me } = usePortalSession()
   const employeeId = me?.employeeId ?? null
 
@@ -124,12 +120,12 @@ export default function MySchedulePage() {
   if (employeeId == null) {
     return (
       <EmptyState
-        title="No employee profile"
-        hint="This account is not linked to an employee profile, so it has no schedule to show."
+        title={t('No employee profile')}
+        hint={t('This account is not linked to an employee profile, so it has no schedule to show.')}
       />
     )
   }
-  if (scheduleQuery.isLoading) return <LoadingState label="Loading your schedule…" />
+  if (scheduleQuery.isLoading) return <LoadingState label={t('Loading your schedule…')} />
   if (scheduleQuery.isError) {
     return <ErrorState message={describeApiError(scheduleQuery.error)} onRetry={() => scheduleQuery.refetch()} />
   }
@@ -143,7 +139,7 @@ export default function MySchedulePage() {
   const summary = dashboardQuery.data?.monthSummary ?? null
 
   const monthDate = new Date(year, month - 1, 1)
-  const monthLabel = `${MONTH_NAMES[month - 1]} ${year}`
+  const monthLabel = `${t(MONTH_NAMES[month - 1])} ${year}`
   const lead = monthDate.getDay() // 0 = Sunday
   const daysInMonth = new Date(year, month, 0).getDate()
   const hasScheduleData = (schedule?.days.length ?? 0) > 0
@@ -184,7 +180,7 @@ export default function MySchedulePage() {
 
   const attLine = (cell: CellModel) => {
     if (cell.att) {
-      if (cell.att.status === 'Off') return <span className="text-[8px] font-medium text-charcoal-400">Off day</span>
+      if (cell.att.status === 'Off') return <span className="text-[8px] font-medium text-charcoal-400">{t('Off day')}</span>
       const statusColor =
         cell.att.status === 'Late'
           ? 'text-yellow-600'
@@ -193,13 +189,13 @@ export default function MySchedulePage() {
             : 'text-brand-600'
       return (
         <span className={cn('text-[8px] font-semibold', statusColor)}>
-          {timeShort(cell.att.checkIn)} → {timeShort(cell.att.checkOut)}
+          {formatTimeOfDay(cell.att.checkIn)} → {formatTimeOfDay(cell.att.checkOut)}
         </span>
       )
     }
     return (
       <span className="text-[8px] font-medium text-charcoal-400">
-        {cell.isFuture ? 'Not yet' : 'No record'}
+        {cell.isFuture ? t('Not yet') : t('No record')}
       </span>
     )
   }
@@ -209,12 +205,12 @@ export default function MySchedulePage() {
       {/* Header */}
       <div className="flex flex-shrink-0 items-center justify-between gap-2">
         <div>
-          <h1 className="text-sm font-bold text-charcoal-900">My Schedule &amp; Attendance</h1>
-          <p className="text-[9px] text-charcoal-500">Monthly view of your shifts, check-ins and requests</p>
+          <h1 className="text-sm font-bold text-charcoal-900">{t('My Schedule & Attendance')}</h1>
+          <p className="text-[11px] text-charcoal-500">{t('Monthly view of your shifts, check-ins and requests')}</p>
         </div>
         {!hasScheduleData && schedule && (
           <p className="rounded-lg bg-yellow-50 px-2 py-1 text-[9px] font-medium text-yellow-700">
-            No published shift cycles for this month yet
+            {t('No published shift cycles for this month yet')}
           </p>
         )}
       </div>
@@ -225,62 +221,62 @@ export default function MySchedulePage() {
           <button
             type="button"
             onClick={() => navigateMonth(-1)}
-            aria-label="Previous month"
-            className="rounded-lg p-1 transition-colors hover:bg-charcoal-50"
+            aria-label={t('Previous month')}
+            className="touch-target rounded-lg p-1.5 transition-colors hover:bg-charcoal-50"
           >
-            <ChevronLeft className="h-4 w-4 text-charcoal-600" aria-hidden="true" />
+            <ChevronLeft className="h-4 w-4 text-charcoal-600 rtl:rotate-180" aria-hidden="true" />
           </button>
           <div className="min-w-[110px] text-center">
             <p className="text-sm font-bold leading-none text-charcoal-900">{monthLabel}</p>
-            <p className="mt-0.5 text-[9px] text-charcoal-500">{today ? `${today.date === todayIso() ? 'Today' : ''}` : 'Browse months'}</p>
+            <p className="mt-0.5 text-[9px] text-charcoal-500">{today ? (today.date === todayIso() ? t('Today') : '') : t('Browse months')}</p>
           </div>
           <button
             type="button"
             onClick={() => navigateMonth(1)}
-            aria-label="Next month"
-            className="rounded-lg p-1 transition-colors hover:bg-charcoal-50"
+            aria-label={t('Next month')}
+            className="touch-target rounded-lg p-1.5 transition-colors hover:bg-charcoal-50"
           >
-            <ChevronRight className="h-4 w-4 text-charcoal-600" aria-hidden="true" />
+            <ChevronRight className="h-4 w-4 text-charcoal-600 rtl:rotate-180" aria-hidden="true" />
           </button>
         </div>
         {summary && (
           <div className="hidden flex-wrap items-center justify-end gap-2 text-[9px] text-charcoal-500 md:flex">
-            <span className="font-bold text-brand-700">{Math.round(summary.rate)}%</span> rate
+            <span className="font-bold text-brand-700">{Math.round(summary.rate)}%</span> {t('rate')}
             <span className="text-charcoal-300">·</span>
-            <span className="font-bold text-brand-600">{summary.present}</span> present
+            <span className="font-bold text-brand-600">{summary.present}</span> {t('present')}
             <span className="text-charcoal-300">·</span>
-            <span className="font-bold text-yellow-600">{summary.late}</span> late
+            <span className="font-bold text-yellow-600">{summary.late}</span> {t('late')}
             <span className="text-charcoal-300">·</span>
-            <span className="font-bold text-red-600">{summary.absent}</span> absent
+            <span className="font-bold text-red-600">{summary.absent}</span> {t('absent')}
             <span className="text-charcoal-300">·</span>
-            <span className="font-bold text-blue-600">{summary.earlyCheckout}</span> early
+            <span className="font-bold text-blue-600">{summary.earlyCheckout}</span> {t('early')}
             <span className="text-charcoal-300">·</span>
-            <span className="font-bold text-charcoal-600">{requests.length}</span> requests
+            <span className="font-bold text-charcoal-600">{requests.length}</span> {t('requests')}
           </div>
         )}
       </div>
 
       {/* Legend */}
-      <div className="flex flex-shrink-0 flex-wrap items-center gap-3 px-1 text-[9px] text-charcoal-500">
+      <div className="flex flex-shrink-0 flex-wrap items-center gap-x-3 gap-y-1 px-1 text-[10px] text-charcoal-500">
         <span className="inline-flex items-center gap-1">
           <span className="schedule-shift-morning inline-block h-2.5 w-2.5 rounded border border-blue-200" />
-          Morning
+          {t('Morning')}
         </span>
         <span className="inline-flex items-center gap-1">
           <span className="schedule-shift-evening inline-block h-2.5 w-2.5 rounded border border-green-200" />
-          Evening
+          {t('Evening')}
         </span>
         <span className="inline-flex items-center gap-1">
           <span className="schedule-shift-off inline-block h-2.5 w-2.5 rounded border border-charcoal-200" />
-          Off
+          {t('Off')}
         </span>
         <span className="inline-flex items-center gap-1">
           <span className="inline-block h-2.5 w-2.5 rounded border border-yellow-200 bg-yellow-100" />
-          Pending Request
+          {t('Pending Request')}
         </span>
         <span className="inline-flex items-center gap-1">
           <span className="inline-block h-2.5 w-2.5 rounded border border-brand-200 bg-brand-100" />
-          Approved
+          {t('Approved')}
         </span>
       </div>
 
@@ -291,7 +287,7 @@ export default function MySchedulePage() {
           <div className="mb-0.5 grid flex-shrink-0 grid-cols-7 gap-1">
             {WEEKDAYS.map((weekday) => (
               <div key={weekday} className="py-0 text-center text-[8px] font-bold uppercase tracking-wider text-charcoal-400">
-                {weekday}
+                {t(weekday)}
               </div>
             ))}
           </div>
@@ -314,12 +310,41 @@ export default function MySchedulePage() {
         </div>
       </div>
 
-      {/* Mobile list */}
-      <div className="flex-shrink-0 space-y-1.5 lg:hidden">
-        {cells.filter(Boolean).length === 0 ? (
-          <EmptyState title="No published schedule for this month" />
+      {/* Mobile: compact month grid + the selected day underneath. The month
+          stays visible (7 columns) instead of turning into a long day list. */}
+      <div className="flex-shrink-0 space-y-2 lg:hidden">
+        {cells.some(Boolean) ? (
+          <>
+            <div className="rounded-xl border border-charcoal-200 bg-white p-1.5">
+              <div className="grid grid-cols-7 gap-1">
+                {WEEKDAYS.map((weekday, index) => (
+                  <div
+                    key={index}
+                    className="py-0.5 text-center text-[9px] font-bold uppercase tracking-wider text-charcoal-400"
+                  >
+                    {t(weekday).slice(0, 1)}
+                  </div>
+                ))}
+              </div>
+              <div className="mt-1 grid grid-cols-7 gap-1">
+                {cells.map((cell, index) =>
+                  cell ? (
+                    <MobileDayCell
+                      key={cell.date}
+                      cell={cell}
+                      selected={cell.date === selected?.date}
+                      onSelect={() => setSelectedDate(cell.date)}
+                    />
+                  ) : (
+                    <div key={`lead-${index}`} aria-hidden="true" />
+                  ),
+                )}
+              </div>
+            </div>
+            {selected && <DayDetailPanel cell={selected} onNewRequest={() => setDayRequestDate(selected.date)} />}
+          </>
         ) : (
-          cells.filter(Boolean).map((cell) => <MobileDayCard key={cell!.date} cell={cell!} onNewRequest={() => setDayRequestDate(cell!.date)} />)
+          <EmptyState title={t('No published schedule for this month')} />
         )}
       </div>
 
@@ -353,6 +378,7 @@ function ScheduleCell({
   attLine: React.ReactNode
   onNewRequest: () => void
 }) {
+  const { t } = useTranslation()
   return (
     <div
       role="button"
@@ -372,24 +398,24 @@ function ScheduleCell({
     >
       <div className="flex items-center justify-between leading-none">
         <p className={cn('text-[11px] font-bold', cell.isToday ? 'text-brand-600' : 'text-charcoal-900')}>{cell.dayNum}</p>
-        {cell.isToday && <span className="text-[7px] font-bold uppercase tracking-wide text-brand-600">Today</span>}
+        {cell.isToday && <span className="text-[7px] font-bold uppercase tracking-wide text-brand-600">{t('Today')}</span>}
       </div>
       <div className="mt-0.5 leading-none">
         {cell.isOff ? (
           <span className={cn('inline-flex items-center gap-0.5 rounded px-1 py-0.5 text-[8px] font-semibold', shiftPillClass(cell))}>
             <Moon className="h-2 w-2" aria-hidden="true" />
-            OFF
+            {t('OFF')}
           </span>
         ) : cell.shiftName ? (
           <span className={cn('inline-flex rounded px-1 py-0.5', shiftPillClass(cell))}>
             <span className="text-[8px] font-bold leading-none">
-              {cell.shiftName} · {timeShort(cell.start)}–{timeShort(cell.end)}
+              {cell.shiftName} · {formatTimeOfDay(cell.start)}–{formatTimeOfDay(cell.end)}
             </span>
           </span>
         ) : (
           <span className={cn('inline-flex items-center gap-0.5 rounded px-1 py-0.5 text-[8px] font-semibold', shiftPillClass(cell))}>
             <Sun className="h-2 w-2" aria-hidden="true" />
-            No shift
+            {t('No shift')}
           </span>
         )}
       </div>
@@ -421,7 +447,7 @@ function ScheduleCell({
         className="mt-auto inline-flex w-full items-center justify-center gap-0.5 rounded border border-charcoal-200 px-1 py-0.5 text-[8px] font-semibold text-charcoal-600 transition-colors hover:border-brand-200 hover:bg-brand-50 hover:text-brand-700"
       >
         <Plus className="h-2 w-2" aria-hidden="true" />
-        Request
+        {t('Request')}
       </button>
     </div>
   )
@@ -430,9 +456,10 @@ function ScheduleCell({
 /* ==================== Day detail (desktop panel / mobile card) ==================== */
 
 function DayDetailPanel({ cell, onNewRequest }: { cell: CellModel; onNewRequest: () => void }) {
+  const { t } = useTranslation()
   const dateObj = new Date(cell.date + 'T00:00:00')
-  const longLabel = dateObj.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })
-  const weekday = cell.date ? dateObj.toLocaleDateString('en-US', { weekday: 'short' }).toUpperCase() : ''
+  const longLabel = dateObj.toLocaleDateString(activeLocale(), { weekday: 'long', month: 'long', day: 'numeric' })
+  const weekday = cell.date ? dateObj.toLocaleDateString(activeLocale(), { weekday: 'short' }).toUpperCase() : ''
 
   return (
     <div className="sched-detail-panel flex w-64 flex-shrink-0 flex-col gap-3 overflow-y-auto">
@@ -440,7 +467,7 @@ function DayDetailPanel({ cell, onNewRequest }: { cell: CellModel; onNewRequest:
         <div className="mb-1 flex items-center justify-between">
           <h3 className="text-sm font-bold text-charcoal-900">{longLabel}</h3>
           {cell.isToday && (
-            <span className="rounded-full bg-brand-100 px-2 py-0.5 text-[9px] font-semibold text-brand-700">Today</span>
+            <span className="rounded-full bg-brand-100 px-2 py-0.5 text-[9px] font-semibold text-brand-700">{t('Today')}</span>
           )}
         </div>
         <p className="text-[10px] text-charcoal-500">{weekday} · {cell.dayNum}</p>
@@ -448,45 +475,45 @@ function DayDetailPanel({ cell, onNewRequest }: { cell: CellModel; onNewRequest:
 
       {/* Assigned shift */}
       <div>
-        <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-charcoal-700">Assigned Shift</p>
+        <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-charcoal-700">{t('Assigned Shift')}</p>
         {cell.isOff ? (
           <div className="flex items-center gap-2 rounded-lg bg-charcoal-50 p-2.5">
-            <span className="schedule-shift-off rounded px-2 py-0.5 text-[10px] font-semibold">OFF DAY</span>
-            <span className="text-[10px] text-charcoal-500">No shift scheduled</span>
+            <span className="schedule-shift-off rounded px-2 py-0.5 text-[10px] font-semibold">{t('OFF DAY')}</span>
+            <span className="text-[10px] text-charcoal-500">{t('No shift scheduled')}</span>
           </div>
         ) : cell.shiftName ? (
           <div className="flex items-center justify-between rounded-lg bg-charcoal-50 p-2.5">
             <div>
-              <p className="text-xs font-semibold text-charcoal-900">{cell.shiftName} Shift</p>
+              <p className="text-xs font-semibold text-charcoal-900">{t('{{shift}} Shift', { shift: t(cell.shiftName) })}</p>
               <p className="text-[10px] text-charcoal-500">
                 {time12(cell.start)} – {time12(cell.end)}
               </p>
             </div>
-            <span className={cn('rounded px-2 py-0.5 text-[10px] font-semibold', shiftPillClass(cell))}>{cell.shiftName}</span>
+            <span className={cn('rounded px-2 py-0.5 text-[10px] font-semibold', shiftPillClass(cell))}>{t(cell.shiftName)}</span>
           </div>
         ) : (
-          <div className="rounded-lg bg-charcoal-50 p-2.5 text-[10px] text-charcoal-500">No shift was published for this day</div>
+          <div className="rounded-lg bg-charcoal-50 p-2.5 text-[10px] text-charcoal-500">{t('No shift was published for this day')}</div>
         )}
       </div>
 
       {/* Attendance */}
       <div>
-        <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-charcoal-700">Attendance</p>
+        <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-charcoal-700">{t('Attendance')}</p>
         {cell.att ? (
           <div className="divide-y divide-charcoal-50 rounded-lg border border-charcoal-200 bg-white">
-            <DetailRow label="Check In" value={<span className={cell.att.status === 'Absent' ? 'text-red-600' : 'text-brand-600'}>{time12(cell.att.checkIn)}</span>} />
-            <DetailRow label="Check Out" value={<span className="font-semibold text-charcoal-800">{time12(cell.att.checkOut)}</span>} />
-            <DetailRow label="Status" value={<StatusBadge status={cell.att.status} />} />
+            <DetailRow label={t('Check In')} value={<span className={cell.att.status === 'Absent' ? 'text-red-600' : 'text-brand-600'}>{time12(cell.att.checkIn)}</span>} />
+            <DetailRow label={t('Check Out')} value={<span className="font-semibold text-charcoal-800">{time12(cell.att.checkOut)}</span>} />
+            <DetailRow label={t('Status')} value={<StatusBadge status={cell.att.status} />} />
             {cell.att.notes && (
               <div className="p-2.5">
-                <span className="text-[10px] text-charcoal-500">Notes</span>
+                <span className="text-[10px] text-charcoal-500">{t('Notes')}</span>
                 <p className="mt-0.5 text-[10px] text-charcoal-700">{cell.att.notes}</p>
               </div>
             )}
           </div>
         ) : (
           <div className="rounded-lg bg-charcoal-50 p-2.5 text-[10px] text-charcoal-500">
-            {cell.isFuture ? 'Not yet recorded' : 'No attendance record'}
+            {cell.isFuture ? t('Not yet recorded') : t('No attendance record')}
           </div>
         )}
       </div>
@@ -495,7 +522,7 @@ function DayDetailPanel({ cell, onNewRequest }: { cell: CellModel; onNewRequest:
       <div>
         <div className="mb-1.5 flex items-center gap-1.5">
           <Calendar className="h-3 w-3 text-orange-500" aria-hidden="true" />
-          <p className="text-[10px] font-semibold uppercase tracking-wide text-charcoal-700">Requests</p>
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-charcoal-700">{t('Requests')}</p>
         </div>
         {cell.requests.length > 0 ? (
           <div className="space-y-1">
@@ -520,12 +547,12 @@ function DayDetailPanel({ cell, onNewRequest }: { cell: CellModel; onNewRequest:
             ))}
           </div>
         ) : (
-          <p className="text-[10px] italic text-charcoal-400">No requests for this day</p>
+          <p className="text-[10px] italic text-charcoal-400">{t('No requests for this day')}</p>
         )}
       </div>
 
       <button type="button" onClick={onNewRequest} className="btn btn-sm btn-secondary w-full">
-        + Request for this day
+        {t('+ Request for this day')}
       </button>
     </div>
   )
@@ -540,63 +567,49 @@ function DetailRow({ label, value }: { label: string; value: React.ReactNode }) 
   )
 }
 
-function MobileDayCard({ cell, onNewRequest }: { cell: CellModel; onNewRequest: () => void }) {
+function MobileDayCell({ cell, selected, onSelect }: { cell: CellModel; selected: boolean; onSelect: () => void }) {
+  const { t } = useTranslation()
+  const shiftTone = cell.isOff || !cell.shiftName
+    ? 'bg-charcoal-200'
+    : cell.shiftName.toLowerCase().includes('morning')
+      ? 'bg-blue-400'
+      : cell.shiftName.toLowerCase().includes('evening')
+        ? 'bg-brand-500'
+        : 'bg-charcoal-300'
+  const attTone = !cell.att || cell.att.status === 'Off'
+    ? 'bg-transparent'
+    : cell.att.status === 'Absent'
+      ? 'bg-red-500'
+      : cell.att.status === 'Late'
+        ? 'bg-yellow-500'
+        : 'bg-brand-500'
+
   return (
-    <div className="card card-interactive p-3">
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="text-xs font-bold text-charcoal-900">{cell.dayNum}</p>
-          <p className="text-[10px] text-charcoal-500">
-            {cell.isOff
-              ? 'Off day'
-              : cell.shiftName
-                ? `${cell.shiftName} · ${timeShort(cell.start)}–${timeShort(cell.end)}`
-                : 'No shift published'}
-          </p>
-        </div>
-        <div className="text-right">
-          {cell.att ? (
-            <StatusBadge status={cell.att.status} />
-          ) : (
-            <span className="text-[10px] text-charcoal-400">{cell.isFuture ? 'Not yet' : 'No record'}</span>
-          )}
-          {cell.att && (
-            <p className="mt-1 text-[10px] text-charcoal-600">
-              {timeShort(cell.att.checkIn)} → {timeShort(cell.att.checkOut)}
-            </p>
-          )}
-        </div>
-      </div>
-      {cell.requests.length > 0 && (
-        <div className="mt-2 flex flex-wrap gap-1">
-          {cell.requests.map((request) => (
-            <span
-              key={request.id}
-              className={cn(
-                'inline-flex items-center rounded px-1.5 py-0.5 text-[9px] font-semibold',
-                request.status === 'Approved'
-                  ? 'bg-brand-100 text-brand-700'
-                  : request.status === 'Rejected'
-                    ? 'bg-red-100 text-red-700'
-                    : 'bg-yellow-100 text-yellow-700',
-              )}
-            >
-              {request.type}
-            </span>
-          ))}
-        </div>
+    <button
+      type="button"
+      onClick={onSelect}
+      aria-pressed={selected}
+      aria-label={
+        cell.isOff
+          ? t('Day {{day}}, off day', { day: cell.dayNum })
+          : cell.shiftName
+            ? t('Day {{day}}, {{shift}} shift', { day: cell.dayNum, shift: t(cell.shiftName) })
+            : t('Day {{day}}, no shift published', { day: cell.dayNum })
+      }
+      className={cn(
+        'flex aspect-square w-full flex-col items-center justify-center gap-1 rounded-lg border transition-colors',
+        selected
+          ? 'border-brand-400 bg-brand-50 ring-1 ring-brand-400'
+          : cell.isToday
+            ? 'border-brand-200 bg-brand-50/40 ring-1 ring-brand-200'
+            : 'border-charcoal-100 bg-white hover:bg-charcoal-50',
       )}
-      <div className="mt-2 flex items-center justify-between">
-        <p className="text-[9px] text-charcoal-400">{cell.isToday ? 'Today' : ''}</p>
-        <button
-          type="button"
-          onClick={onNewRequest}
-          className="inline-flex items-center gap-1 rounded border border-charcoal-200 px-2 py-1 text-[9px] font-semibold text-charcoal-600 transition-colors hover:border-brand-200 hover:bg-brand-50 hover:text-brand-700"
-        >
-          <Plus className="h-2.5 w-2.5" aria-hidden="true" />
-          Request
-        </button>
-      </div>
-    </div>
+    >
+      <span className={cn('text-[11px] font-bold leading-none', cell.isToday ? 'text-brand-700' : 'text-charcoal-800')}>
+        {cell.dayNum}
+      </span>
+      <span className={cn('h-1 w-4 rounded-full', shiftTone)} aria-hidden="true" />
+      <span className={cn('h-1 w-1 rounded-full', attTone)} aria-hidden="true" />
+    </button>
   )
 }

@@ -23,5 +23,8 @@ namespace ServiceAbstraction.Services
 
         /// <summary>Overview metrics as a CSV stream for the requested period (reports.view).</summary>
         Task<(string FileName, byte[] Content)> ExportReportAsync(int? actorUserId, ReportExportQuery query, CancellationToken cancellationToken = default);
+
+        /// <summary>GET /api/reports/overview — the Reports page's metric cards aggregated for the period (reports.view).</summary>
+        Task<ReportsOverviewDto> GetOverviewAsync(int? actorUserId, ReportsOverviewQuery query, CancellationToken cancellationToken = default);
     }
 }

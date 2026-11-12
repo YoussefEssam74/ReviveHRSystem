@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useTranslation } from 'react-i18next'
 import {
   Bell,
   Calendar,
@@ -38,6 +39,7 @@ import { cn } from '../../../lib/utils'
  */
 const PORTAL_LINKS: Record<string, string> = {
   requests: '/employee/requests',
+  'team-requests': '/employee/team/requests',
   '/schedule': '/employee/schedule',
   payroll: '/employee/payroll',
   documents: '/employee/documents',
@@ -70,6 +72,7 @@ const PAGE_SIZE = 20
 const FILTERS = ['All', 'Requests', 'Document', 'Recruitment', 'Announcements'] as const
 
 export default function NotificationsPage() {
+  const { t } = useTranslation()
   const { toast } = useToast()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
@@ -107,7 +110,7 @@ export default function NotificationsPage() {
   const markAll = useMutation({
     mutationFn: () => putMarkAllRead(),
     onSuccess: async () => {
-      toast('All notifications marked as read')
+      toast(t('All notifications marked as read'))
       await queryClient.invalidateQueries({ queryKey: ['notifications'] })
     },
     onError: (error) => toast(describeApiError(error), 'error'),
@@ -129,17 +132,18 @@ export default function NotificationsPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-lg font-bold text-charcoal-900">Notifications</h1>
-          <p className="mt-0.5 text-[11px] text-charcoal-500">{unread} unread</p>
+          <h1 className="text-lg font-bold text-charcoal-900">{t('Notifications')}</h1>
+          <p className="mt-0.5 text-[11px] text-charcoal-500">{t('{{count}} unread', { count: unread })}</p>
         </div>
         <Button variant="secondary" size="sm" onClick={() => markAll.mutate()} loading={markAll.isPending} disabled={unread === 0}>
           <CheckCheck className="h-3.5 w-3.5" aria-hidden="true" />
-          Mark All Read
+          {t('Mark All Read')}
         </Button>
       </div>
 
-      {/* Filters */}
-      <div className="flex flex-wrap items-center gap-1.5">
+      {/* Filters — a single line on phones: the chips scroll sideways instead of
+          wrapping to a second row. */}
+      <div className="-mx-4 flex items-center gap-1.5 overflow-x-auto px-4 pb-0.5 sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0 sm:pb-0">
         {FILTERS.map((filter) => {
           const active = filter === 'All' ? category == null && !onlyUnread : category === filter
           return (
@@ -152,11 +156,11 @@ export default function NotificationsPage() {
                 setPage(1)
               }}
               className={cn(
-                'rounded-full px-3 py-1 text-[11px] font-semibold transition-colors',
+                'shrink-0 whitespace-nowrap rounded-full px-3 py-1 text-[11px] font-semibold transition-colors',
                 active ? 'bg-charcoal-800 text-white' : 'bg-charcoal-100 text-charcoal-600 hover:bg-charcoal-200',
               )}
             >
-              {filter}
+              {t(filter)}
             </button>
           )
         })}
@@ -167,23 +171,23 @@ export default function NotificationsPage() {
             setPage(1)
           }}
           className={cn(
-            'rounded-full px-3 py-1 text-[11px] font-semibold transition-colors',
+            'shrink-0 whitespace-nowrap rounded-full px-3 py-1 text-[11px] font-semibold transition-colors',
             onlyUnread ? 'bg-brand-600 text-white' : 'bg-charcoal-100 text-charcoal-600 hover:bg-charcoal-200',
           )}
         >
-          Unread
+          {t('Unread')}
         </button>
       </div>
 
       {/* List */}
       {listQuery.isLoading ? (
-        <LoadingState label="Loading notifications…" />
+        <LoadingState label={t('Loading notifications…')} />
       ) : listQuery.isError ? (
         <ErrorState message={describeApiError(listQuery.error)} onRetry={() => listQuery.refetch()} />
       ) : items.length === 0 ? (
         <EmptyState
-          title={onlyUnread ? 'No unread notifications' : 'No notifications'}
-          hint="Requests, announcements and schedule updates show up here."
+          title={onlyUnread ? t('No unread notifications') : t('No notifications')}
+          hint={t('Requests, announcements and schedule updates show up here.')}
         />
       ) : (
         <div className="space-y-1">
@@ -208,7 +212,7 @@ export default function NotificationsPage() {
                   <div
                     className={cn(
                       'flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full',
-                      COLOR_CLASSES[notification.color] ?? 'bg-charcoal-100 text-charcoal-600',
+                      COLOR_CLASSES[notification.color ?? ''] ?? 'bg-charcoal-100 text-charcoal-600',
                     )}
                   >
                     <Icon className="h-3.5 w-3.5" aria-hidden="true" />
@@ -223,7 +227,7 @@ export default function NotificationsPage() {
                     <p className="mt-0.5 line-clamp-2 text-xs text-charcoal-600">{notification.description}</p>
                     <div className="mt-1 flex items-center gap-2">
                       <span className="inline-flex items-center gap-1 rounded-full bg-charcoal-50 px-2 py-0.5 text-[9px] font-medium text-charcoal-600">
-                        {notification.category}
+                        {t(notification.category)}
                       </span>
                       <span className="text-[10px] text-charcoal-400" title={notification.date}>
                         {timeAgo(notification.date)}
@@ -244,17 +248,17 @@ export default function NotificationsPage() {
       {totalPages > 1 && (
         <div className="flex items-center justify-between pt-1">
           <p className="text-[10px] text-charcoal-400">
-            {total} notification{total === 1 ? '' : 's'}
+            {total === 1 ? t('{{count}} notification', { count: total }) : t('{{count}} notifications', { count: total })}
           </p>
           <div className="flex items-center gap-2">
             <Button variant="secondary" size="sm" disabled={page <= 1} onClick={() => setPage((current) => current - 1)}>
-              Previous
+              {t('Previous')}
             </Button>
             <span className="text-[11px] font-semibold text-charcoal-600">
               {page} / {totalPages}
             </span>
             <Button variant="secondary" size="sm" disabled={page >= totalPages} onClick={() => setPage((current) => current + 1)}>
-              Next
+              {t('Next')}
             </Button>
           </div>
         </div>

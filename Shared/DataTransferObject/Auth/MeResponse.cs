@@ -30,4 +30,14 @@ public sealed class MeResponse
     /// is addressed by this id — the SPA could not reach them without it.
     /// </summary>
     public int? EmployeeId { get; init; }
+
+    /// <summary>
+    /// Effective feature access for the active gym: feature code → level
+    /// (0 = None, 1 = View, 2 = Edit — ADR-003 Amendment 1). Resolved from the
+    /// caller's permission keys, so it matches what the API will actually allow;
+    /// Top Management reports Edit everywhere because it bypasses the checks.
+    /// The SPA gates console navigation and write controls on this map.
+    /// </summary>
+    public IReadOnlyDictionary<string, int> FeatureLevels { get; init; } =
+        new Dictionary<string, int>();
 }

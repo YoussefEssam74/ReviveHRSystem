@@ -65,6 +65,58 @@ namespace ReviveHRSystem.IntegrationTests
         }
 
         [Fact]
+        public async Task FollowUp_Deduction_RaisesPricedCandidate()
+        {
+            // A Deduction action has financial effect: the same priced candidate the
+            // branch/HR queue reviews, priced off the employee's salary on file at
+            // base ÷ 30 — never off the size label alone.
+            var gym1Id = await GymIdByNameAsync("Revive Main Gym");
+            var seed = await SeedTeamWithLeaderAsync(gym1Id, "Deduction Team", "actded@revive.hr");
+            var memberId = await SeedTeamMemberAsync(seed.TeamId, gym1Id, "actdedmember@revive.hr");
+
+            const decimal salary = 9000m;
+            var punishedDay = DateOnly.FromDateTime(DateTime.Today.AddDays(-3));
+            using (var scope = _fixture.Services.CreateScope())
+            {
+                var db = scope.ServiceProvider.GetRequiredService<ReviveHrDbContext>();
+                var memberUserId = await db.Employees
+                    .Where(e => e.Id == memberId).Select(e => e.UserId).SingleAsync();
+                db.Compensations.Add(new DomainLayer.Models.EmployeeModule.Compensation
+                {
+                    EmployeeId = memberId,
+                    Amount = salary,
+                    EffectiveDate = punishedDay.AddDays(-10),
+                    ChangedBy = memberUserId,
+                });
+                await db.SaveChangesAsync();
+            }
+
+            var token = await _fixture.LoginAsync("actded@revive.hr", DevelopmentDataSeeder.EmployeePassword);
+            var create = _fixture.AuthorizedRequest(HttpMethod.Post, "/api/teams/follow-ups", new
+            {
+                employeeId = memberId,
+                action = "Deduction",
+                deductionSize = "Day",
+                date = punishedDay.ToString("yyyy-MM-dd"),
+                description = "Deduction — Day",
+                note = "No prior notice"
+            }, token);
+            var createResponse = await _fixture.Client.SendAsync(create);
+            createResponse.EnsureSuccessStatusCode();
+
+            using var scope2 = _fixture.Services.CreateScope();
+            var db2 = scope2.ServiceProvider.GetRequiredService<ReviveHrDbContext>();
+            var candidate = await db2.DeductionCandidates
+                .SingleAsync(c => c.EmployeeId == memberId);
+
+            Assert.Equal(punishedDay, candidate.DeductionDate);
+            Assert.Equal(1m, candidate.DeductionDays);
+            Assert.Equal(Math.Round(salary / 30m, 2), candidate.Amount);
+            Assert.Equal(DomainLayer.Models.PayrollModule.Enums.DeductionStatus.Pending, candidate.Status);
+            Assert.False(candidate.IsSystemGenerated);
+        }
+
+        [Fact]
         public async Task FollowUp_UnknownAction_Returns400()
         {
             var gym1Id = await GymIdByNameAsync("Revive Main Gym");

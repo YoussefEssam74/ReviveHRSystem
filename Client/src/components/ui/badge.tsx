@@ -1,9 +1,22 @@
+import type { ReactNode } from 'react'
+import { useTranslation } from 'react-i18next'
 import { cn } from '../../lib/utils'
 
 export type BadgeColor = 'green' | 'yellow' | 'red' | 'blue' | 'gray' | 'purple' | 'orange'
 
-export function Badge({ color = 'gray', children, className }: { color?: BadgeColor; children: React.ReactNode; className?: string }) {
-  return <span className={cn('badge', `badge-${color}`, className)}>{children}</span>
+export interface BadgeProps {
+  children: ReactNode
+  /** Explicit palette entry; wins over `status`. */
+  color?: BadgeColor
+  /** When set, derives the color from a known status string. */
+  status?: string | null
+  className?: string
+}
+
+/** Small pill used for statuses across the portals. */
+export function Badge({ color, status, children, className }: BadgeProps) {
+  const tone = color ?? (status ? statusColor(status) : 'gray')
+  return <span className={cn('badge', `badge-${tone}`, className)}>{children}</span>
 }
 
 const STATUS_COLORS: Record<string, BadgeColor> = {
@@ -16,11 +29,13 @@ const STATUS_COLORS: Record<string, BadgeColor> = {
   published: 'green',
   completed: 'green',
   valid: 'green',
+  eligible: 'green',
   'on shift': 'green',
   // Warning-ish
   late: 'yellow',
   pending: 'yellow',
   'pending hr review': 'yellow',
+  pendinghrreview: 'yellow',
   'pending hr': 'yellow',
   processing: 'yellow',
   'expiring soon': 'yellow',
@@ -47,6 +62,8 @@ const STATUS_COLORS: Record<string, BadgeColor> = {
   'on leave': 'orange',
   'notice period': 'orange',
   'early checkout': 'orange',
+  'covering (extra shift)': 'purple',
+  'cover / extra day': 'purple',
   off: 'gray',
   inactive: 'gray',
   disabled: 'gray',
@@ -71,11 +88,16 @@ export function statusColor(status: string): BadgeColor {
   return STATUS_COLORS[normalize(status)] ?? 'gray'
 }
 
-export function StatusBadge({ status, className }: { status: string; className?: string }) {
+/** Status pill; an empty status renders a neutral dash instead of a blank chip. */
+export function StatusBadge({ status, className }: { status: string | null | undefined; className?: string }) {
+  const { t } = useTranslation()
+  if (!status) {
+    return <span className={cn('badge', 'badge-gray', className)}>—</span>
+  }
   const color = statusColor(status)
   return (
     <span className={cn('badge', `badge-${color}`, className)}>
-      {normalize(status) === 'missingcheckout' ? 'Missing Checkout' : status}
+      {normalize(status) === 'missingcheckout' ? t('Missing Checkout') : t(status)}
     </span>
   )
 }

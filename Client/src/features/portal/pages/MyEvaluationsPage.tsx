@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
+import { useTranslation } from 'react-i18next'
 import { ChevronRight, Sparkles } from 'lucide-react'
 import { getOwnEvaluationDetails, type EvaluationDetail } from '../api/employee-file.api'
 import { Modal } from '../../../components/ui/modal'
@@ -13,6 +14,7 @@ import { formatDate } from '../../../lib/format'
 import { cn } from '../../../lib/utils'
 
 export default function MyEvaluationsPage() {
+  const { t } = useTranslation()
   const { me } = usePortalSession()
   const employeeId = me?.employeeId ?? null
 
@@ -25,9 +27,14 @@ export default function MyEvaluationsPage() {
   })
 
   if (employeeId == null) {
-    return <EmptyState title="No employee profile" hint="This account is not linked to an employee profile." />
+    return (
+      <EmptyState
+        title={t('No employee profile')}
+        hint={t('This account is not linked to an employee profile.')}
+      />
+    )
   }
-  if (evaluationsQuery.isLoading) return <LoadingState label="Loading your evaluations…" />
+  if (evaluationsQuery.isLoading) return <LoadingState label={t('Loading your evaluations…')} />
   if (evaluationsQuery.isError) {
     return <ErrorState message={describeApiError(evaluationsQuery.error)} onRetry={() => evaluationsQuery.refetch()} />
   }
@@ -38,22 +45,22 @@ export default function MyEvaluationsPage() {
 
   return (
     <div className="space-y-3">
-      <h1 className="text-xl font-bold text-charcoal-900">My Evaluations</h1>
+      <h1 className="text-xl font-bold text-charcoal-900">{t('My Evaluations')}</h1>
 
       {latest ? (
-        <div className="rounded-xl border border-charcoal-200 border-l-4 border-l-brand-500 bg-white p-4">
+        <div className="rounded-xl border border-charcoal-200 border-s-4 border-s-brand-500 bg-white p-4">
           <div className="flex items-center gap-4">
             <ScoreRing score={latest.score} maxScore={latest.maxScore} />
             <div>
-              <p className="bento-label mb-0.5 text-charcoal-500">LATEST EVALUATION</p>
+              <p className="bento-label mb-0.5 text-charcoal-500">{t('LATEST EVALUATION')}</p>
               <p className="text-sm font-bold text-charcoal-900">{latest.period}</p>
               <p className="mt-0.5 text-xs text-charcoal-500">
-                Reviewed by {latest.reviewer || '—'} · {formatDate(latest.date)}
+                {t('Reviewed by {{name}} · {{date}}', { name: latest.reviewer || '—', date: formatDate(latest.date) })}
               </p>
               <div className="mt-1.5 flex items-center gap-2">
                 <StatusBadge status={latest.status} />
                 <span className="text-[10px] text-charcoal-500">
-                  {Math.round((latest.score / latest.maxScore) * 100)}% score
+                  {t('{{percent}}% score', { percent: Math.round((latest.score / latest.maxScore) * 100) })}
                 </span>
               </div>
             </div>
@@ -62,23 +69,23 @@ export default function MyEvaluationsPage() {
       ) : (
         <div className="rounded-xl border border-charcoal-200 bg-white p-6 text-center">
           <Sparkles className="mx-auto mb-2 h-8 w-8 text-charcoal-300" aria-hidden="true" />
-          <p className="text-xs text-charcoal-500">No evaluations completed yet</p>
+          <p className="text-xs text-charcoal-500">{t('No evaluations completed yet')}</p>
           <p className="mt-1 text-[10px] text-charcoal-400">
-            Once your team leader or HR submits an evaluation for you, the results appear here.
+            {t('Once your team leader or HR submits an evaluation for you, the results appear here.')}
           </p>
         </div>
       )}
 
       {evaluations.length > 0 && (
         <>
-          <h2 className="pt-1 text-sm font-semibold text-charcoal-900">Evaluation History</h2>
+          <h2 className="pt-1 text-sm font-semibold text-charcoal-900">{t('Evaluation History')}</h2>
           <div className="space-y-1.5">
             {evaluations.map((ev) => (
               <button
                 key={ev.id}
                 type="button"
                 onClick={() => setOpenId(ev.id)}
-                className="card card-interactive w-full p-3 text-left"
+                className="card card-interactive w-full p-3 text-start"
               >
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
@@ -128,15 +135,16 @@ function ScoreRing({ score, maxScore }: { score: number; maxScore: number }) {
 }
 
 function EvaluationDetailModal({ evaluation, onClose }: { evaluation: EvaluationDetail | null; onClose: () => void }) {
+  const { t } = useTranslation()
   return (
     <Modal
       open={evaluation != null}
       width="wide"
-      title={evaluation ? `${evaluation.period} Evaluation` : ''}
+      title={evaluation ? t('{{period}} Evaluation', { period: evaluation.period }) : ''}
       onClose={onClose}
       footer={
         <Button variant="secondary" size="sm" onClick={onClose}>
-          Close
+          {t('Close')}
         </Button>
       }
     >
@@ -145,13 +153,13 @@ function EvaluationDetailModal({ evaluation, onClose }: { evaluation: Evaluation
           <div className="border-b border-charcoal-100 py-2 text-center">
             <ScoreRing score={evaluation.score} maxScore={evaluation.maxScore} />
             <p className="mt-2 text-xs text-charcoal-500">
-              Reviewed by {evaluation.reviewer || '—'} · {formatDate(evaluation.date)}
+              {t('Reviewed by {{name}} · {{date}}', { name: evaluation.reviewer || '—', date: formatDate(evaluation.date) })}
             </p>
           </div>
 
           {evaluation.criteria.length === 0 ? (
             <p className="rounded-lg bg-charcoal-50 p-3 text-center text-xs text-charcoal-500">
-              No criteria were recorded for this evaluation.
+              {t('No criteria were recorded for this evaluation.')}
             </p>
           ) : (
             <div className="space-y-2.5">
@@ -179,7 +187,7 @@ function EvaluationDetailModal({ evaluation, onClose }: { evaluation: Evaluation
 
           {evaluation.overallComment && (
             <div className="rounded-lg bg-charcoal-50 p-3">
-              <p className="bento-label mb-1 text-charcoal-500">OVERALL COMMENT</p>
+              <p className="bento-label mb-1 text-charcoal-500">{t('OVERALL COMMENT')}</p>
               <p className="text-xs text-charcoal-700">{evaluation.overallComment}</p>
             </div>
           )}

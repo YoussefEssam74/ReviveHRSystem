@@ -3,6 +3,7 @@ import { RouterProvider } from 'react-router-dom'
 import { router } from './app/router'
 import { queryClient } from './app/query-client'
 import { AuthSessionProvider } from './contexts/AuthSessionContext'
+import { MeProvider } from './contexts/MeContext'
 import { ThemeProvider } from './contexts/ThemeContext'
 import { ToastProvider } from './components/ui/toast'
 
@@ -12,7 +13,9 @@ export function App() {
       <QueryClientProvider client={queryClient}>
         <ToastProvider>
           <AuthSessionProvider>
-            <RouterProvider router={router} />
+            <MeProvider>
+              <RouterProvider router={router} />
+            </MeProvider>
           </AuthSessionProvider>
         </ToastProvider>
       </QueryClientProvider>

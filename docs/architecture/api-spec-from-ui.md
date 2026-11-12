@@ -60,7 +60,7 @@ Auth model per endpoint type (current):
 | Station login (`POST /api/kiosk/login`) | **Public** — 6-digit code only, rate-limited |
 | Attendance events / manual | **Public** — 6-digit `code` in the request body, rate-limited |
 | Roster / today feed (planned) | **Public** — 6-digit `code` in the request body (not yet implemented) |
-| Biometric AI service (`Station.biometricUrl`) | **None sent by UI** (separate dedicated service; network-restricted) |
+| Face-ID scan / enroll (`POST /api/attendance/face-scan`, `POST /api/employees/face/enroll`) | **Station token** for scans · **User-JWT** for HR enrollment (in-process ONNX pipeline) |
 | HR side: station-code rotation / read | **User-JWT**, gym-scoped (`/api/gyms/{gymId}/station-codes`) |
 
 ---
@@ -259,42 +259,29 @@ No separate search endpoint is called: datalist is populated from the full branc
 
 ---
 
-### 6. Enroll Face Modal
+### 6. Enroll Face Modal — **now in the backend**
 
-Calls the **separate Biometric AI service** (`Station.biometricUrl`, configurable — default `https://revive-hr-biometrics.onrender.com`; **not** the `/api` backend, **no user JWT**, no device token sent):
+> **Superseded:** the standalone Python biometric service (`biometric_test/`) was removed. Face detection, liveness and recognition run in-process in the .NET API (`Infrastructure/Biometrics`, ONNX Runtime), and the real client (`Client/src` → `/enrollment`) calls the endpoints below. The mock's `{biometricUrl}/*` calls (`/enroll_frame`, `/enroll`, `/employees`, `/status`, `/ping`, `/process_frame`, `/video_feed`) are kept in the mock for design reference only; nothing serves them anymore.
 
-#### 6.1 `POST {biometricUrl}/enroll_frame` — service API (not in api.md)
-- **Auth:** none sent (dedicated service).
-- **Called by:** `submitFaceEnrollment()` when a browser frame was captured.
-- **Body:** `{ "image": "data:image/jpeg;base64,…", "name": "Karim Hassan", "employee_code": "EMP-1042" }`
-  - `name` ← `#enroll-emp-name` (required, else toast); `employee_code` ← `#enroll-emp-id` (uppercased)
-- **Response:** `{ "success": true, "message": "…" }` — `message` → toast; on `success:false` → error toast.
+#### 6.1 `POST /api/employees/face/enroll` — **EXISTING**
+- **Auth:** HR user JWT.
+- **Called by:** the enrollment page and the create-employee dialog (`useDashboardFaceEnroll`).
+- **Body:** `{ "employeeNumber": "EMP-1042", "image": "data:image/jpeg;base64,…" }`.
+- **Response:** `{ employeeId, employeeNumber, fullName, enrolledAt }`.
 
-#### 6.2 `POST {biometricUrl}/enroll?name=…&employee_code=…` — service API
-Fallback (query-string variant) when no frame captured; same `{success, message}` response.
-
-#### 6.3 `GET {biometricUrl}/employees` — service API
-- **Called by:** `loadEnrolledEmployees()` (modal open, after enroll/delete, on init).
-- **Response:** array of `{ "id", "employee_code", "name", "enrolled_at", "thumb" }` — all rendered in `#enrolled-faces-list` (`name`, `employee_code||id`, `enrolled_at`, `thumb` image) and counts `enroll-list-count` ("N registered") + `enrolled-count-pill` ("N Enrolled"). Merged with `localStorage.revive_enrolled_faces_web`, deduped by `id`.
-
-#### 6.4 `DELETE {biometricUrl}/employees/{id}` — service API
-- **Called by:** `deleteEnrolledEmployee(id)` (trash button per row).
-- **Response:** `{ "success": true, "message": "…" }`.
+#### 6.2 `DELETE /api/employees/face/{employeeReference}` — **EXISTING**
+- **Auth:** HR user JWT. Removes the stored embedding (204).
 
 ---
 
-### 7. Cloud API Config Modal + Biometric Viewfinder (service APIs)
-
-Same dedicated Biometric AI service, **no user JWT**:
+### 7. Biometric Viewfinder — **now in the backend**
 
 | # | Method + path | Called by | Request | Response fields rendered |
 |---|---|---|---|---|
-| 7.1 | `GET {biometricUrl}/ping` — service API | `testAndSaveApiUrl()` ("Connect" `btn-test-api`) | none | `{ "device", "enrolled_count" }` → "Device: … · Registered: N" |
-| 7.2 | `GET {biometricUrl}/status` — service API | `checkBiometricConnection()` (every 5 s) | none | `{ "fps", "total_enrolled", "device" }` → status pill "Face-ID · Online (…)", `enrolled-count-pill` |
-| 7.3 | `POST {biometricUrl}/process_frame` — service API | `sendClientFrame()` (every 320 ms) | `{ "image": "<base64 jpeg>" }` | `{ "face_detected", "is_live", "is_match", "recognized_id", "recognized_name", "liveness_score", "similarity", "total_enrolled", "bbox" }` → HUD (MATCHED / SPOOF BLOCKED / UNKNOWN / VERIFYING), dwell & latch logic feeding scan 2.1 |
-| 7.4 | `GET {biometricUrl}/video_feed` — service API | fallback MJPEG `<img src>` when browser webcam unavailable | none | multipart stream |
+| 7.1 | `POST /api/attendance/face-scan` — **EXISTING** | kiosk scanner (`useKioskScanner`, ~every 320 ms) | `{ "type": "AUTO", "image": "<base64 data URL>", "timestamp": "…", "confirmCheckout": false }` | `{ outcome, livenessScore, similarity, … }` — `outcome` drives the HUD (`no_face` / `low_liveness` / `unrecognized` / `already_complete` / `rejected` / `recorded` / `pending_checkout`) |
+| 7.2 | `GET /api/attendance/station-summary` — **EXISTING** | kiosk status pill (every 5 s) | none (station token) | present/expected counters that replace the old `/status` `total_enrolled` |
 
-*(7.1–7.4 are outside the Revive `/api` backend and outside `api.md`; listed for completeness because the UI calls them.)*
+Face-ID liveness and match thresholds are configured under the `Biometrics` section (`MatchThreshold`, `LivenessThreshold`, `ScanLivenessThreshold`), not per-URL.
 
 ---
 
@@ -315,7 +302,7 @@ Same dedicated Biometric AI service, **no user JWT**:
 | 3 | `POST /api/attendance/manual` | **EXISTING** ✅ (UI omits `reason` & `gymId`; adds `employeeName`,`type`,`method`,`time`) | Device-token | Manual Fallback — "Record" |
 | 4 | `GET /api/attendance/roster` | **NEW** ✱ | Device-token | Datalist lookup, feed roster, enroll dropdown, expected count, shift display |
 | 5 | `GET /api/attendance?date=` | **EXISTING** ✅ (gym+date filters) | Device-token | Attendance feed + counters hydration |
-| 6 | `{biometricUrl}/enroll_frame`, `/enroll`, `/employees` (GET/DELETE), `/status`, `/ping`, `/process_frame`, `/video_feed` | Service APIs (outside `/api`, outside api.md) | None sent | Enroll modal, API config modal, viewfinder |
+| 6 | `POST /api/employees/face/enroll`, `DELETE /api/employees/face/{employeeReference}`, `POST /api/attendance/face-scan` | **EXISTING** ✅ (in-process ONNX pipeline; the old `{biometricUrl}/*` service APIs were removed) | User JWT (enroll/delete) · Station token (scan) | Enroll modal, viewfinder |
 
 ### Key discrepancies to resolve
 
@@ -564,9 +551,9 @@ Uses 13.6 (list), 13.7 (Action modal), and the Branch Actions palette (§20). "T
 | 20.1 | `POST /api/deduction-candidates` | JWT, [attendance:Edit] | body: `{employee, amount, date, reason, note}` — reason select: `Unapproved absence, Late arrival (30+ min), Early checkout without approval, Damaged equipment / property, Policy violation, Other (see note)`; `issuedBy`,`status:"Pending HR"` server-set | `{id,employee,amount,reason,date,note,issuedBy,status}` | Issue Deduction modal → Send to HR | **NEW** (docs only have list + HR review) |
 | 20.2 | `GET /api/deduction-candidates` | JWT, [attendance:Edit]/HR [payroll:View] | query: `status` | items as 20.1 | "Awaiting HR" merged queue | EXISTING |
 | 20.3 | `POST /api/warning-notices` | JWT, [employees:Edit] | body: `{employee, type, date, reason, note}` — `type` select: `Attendance, Conduct, Performance, Safety, Policy violation` | `{id,employee,type,date,reason,note,issuedBy,status:"Pending HR"}` | Issue Warning Notice → Send to HR | **NEW** |
-| 20.4 | `GET /api/warning-notices` | JWT, [employees:Edit] | query: `status` | items as 20.3 | Awaiting HR queue | **NEW** |
+| 20.4 | `GET /api/warning-notices/queue` | JWT, [employees:Edit] | query: `status` | items as 20.3 | Awaiting HR queue | **NEW** |
 | 20.5 | `POST /api/bonus-proposals` | JWT, [employees:Edit] | body: `{employee, type, amount, date, reason, note}` — `type` select: `Performance Bonus, Overtime Pay, Attendance Reward, Referral Bonus, Other` | `{id,employee,type,amount,date,reason,note,issuedBy,status:"Pending HR"}` | Propose Bonus → Send to HR | **NEW** |
-| 20.6 | `GET /api/bonus-proposals` | JWT, [employees:Edit] | query: `status` | items as 20.5 | Awaiting HR queue | **NEW** |
+| 20.6 | `GET /api/bonus-proposals/queue` | JWT, [employees:Edit] | query: `status` | items as 20.5 | Awaiting HR queue | **NEW** |
 | 20.7 | `POST /api/branch-reports` | JWT (palette action `perm:null` — any employee may report to HR) | body: `{period ("August 2026"), type ("Monthly branch summary"\|"Attendance exceptions"\|"Incident report"\|"Request escalations"), message}` | created report | Send Report to HR modal — **mock stub** (form values discarded; endpoint makes it real) | **NEW** |
 | 20.8 | Palette queue badge | JWT | `GET` 20.2/20.4/20.6 filtered `status=Pending HR` | counts | Sidebar "Actions" badge `awaiting HR` | see above |
 
@@ -724,7 +711,7 @@ mb
 | E17 | `POST /api/employees/{id}/compensation` | Bearer, `employees.compensation.manage` | body `{ salary, effectiveDate }` | `{ message }` | profile "Manage Compensation" | EXISTING |
 | E18 | `POST /api/employees/{id}/contract` | Bearer, `employees.contract.manage` | body `{ level?, salary?, effectiveDate? }` | `{ message }` | profile contract action | EXISTING |
 | E19 | `POST /api/employees/{id}/offboard` | Bearer, `employees.offboard` | body `{ lastDay, reason, notes }` | `{ data:{ separationId } }` | "+ Initiate Offboarding" modal (`submitInitiateOffboarding`), profile "Offboard" | EXISTING |
-| E20 | `POST /api/employee-action-requests` | Bearer, `employees.request_action` (HR preset) | body `{ employeeId, actionType: "Transfer"\|"CompensationChange"\|"RoleAssign"\|"Offboard"\|"BulkImport", proposedDetails{ fromGym,toGym,effectiveDate \| currentSalary,newSalary,effectiveDate \| systemRole \| lastDay,reason \| source }, justification }` | `{ data:{ id, status:'Pending' } }` | "Request Transfer" / "Request Compensation" / "Request Role" / "Request Offboard" / "Request Bulk Import" (`openActionRequest`, `submitTransferRequest`, `submitBulkImport` request variant) | **NEW** |
+| E20 | `POST /api/employee-action-requests` | Bearer, `employees.request_action` (HR preset) | body `{ employeeId, actionType: "Transfer"\|"CompensationChange"\|"RoleAssign"\|"Offboard"\|"BulkImport", proposedDetails{ fromGym,toGym,effectiveDate \| currentSalary,newSalary,effectiveDate \| systemRole \| lastDay,reason \| source }, justification }` | `{ data:{ id, status:'Pending' } }` | "Request Transfer" / "Request Compensation" / "Request Role" / "Request Offboard" / "Request Bulk Import" (`openActionRequest`, `submitTransferRequest`, `submitBulkImport` request variant) | **IMPLEMENTED (2026-10-22)** as `POST /api/action-requests` (same route family as GET/approve/reject; gated by the action type's meta key on the employee's gym — no `employees.request_action` catalog key was added) |
 | E21 | `GET /api/candidates?blocked=true` | Bearer, `recruitment.candidates.manage` | query `blocked=true` | items `[{ id, name, position, stage, blocked, blockReason }]` | "Blocked from hiring" strip (Profile/Restore) | EXISTING (endpoint; `blocked` filter/restore action belongs to recruitment scope) |
 
 ---
@@ -745,7 +732,7 @@ mb
 | T5 | `PUT /api/separations/{id}/verdict` | Bearer, `employees.offboard` | body `{ finalReason, settlement:{ direction:'none'\|'owedToEmployee'\|'employeeOwes', amount, note }, rehire:{ status:'Eligible'\|'Banned', note } }` | `{ message }` (sets status → `Under Review`) | `saveExitVerdict` | **NEW** |
 | T6 | `POST /api/separations/{id}/finalize` | Bearer, `employees.offboard` | — | `{ message }` (requires checklist complete + verdict; archives employee) | `finalizeSeparation` | **NEW** |
 | T7 | `PUT /api/employees/{id}/payroll/gross` | Bearer, `payroll.edit` | body `{ gross }` | `{ data:{ gross, deductions, net } }` | `updateSepGross` (Employee Data tab) | **NEW** (api.md has no payroll-line edit beyond deduction-candidate review) |
-| T8 | `PUT /api/employees/{id}/payroll/deductions` | Bearer, `payroll.edit` | body `{ op:'add', label, amount, reason }` \| `{ op:'remove', deductionId }` | `{ data:{ deductionLines[], deductions, net } }` (`line: {id,date,label,amount,reason,requestId,status}`) | `addSepDeduction` / `removeSepDeduction` | **NEW** |
+| T8 | `PUT /api/employees/{id}/payroll/deductions` | Bearer, `payroll.edit` | body `{ op:'add', label, amount, reason }` \| `{ op:'remove', deductionId }` | `{ data:{ deductionLines[], deductions, net } }` (`line: {id,date,label,amount,reason,requestId,status}`) | `addSepDeduction` (uses the existing `POST …/deductions`) / `removeSepDeduction` | **remove side IMPLEMENTED (2026-10-22)** as `DELETE /api/payroll-periods/{periodId}/entries/{employeeId}/deductions/{lineId}` (payroll.edit, open period only — `api.md`) |
 | T9 | `GET /api/employees/{id}/requests`, `GET /api/employees/{id}/attendance`, `GET /api/employees/{id}/history` | Bearer | as E6–E8 | as above | Employee Data tab blocks | EXISTING |
 | T10 | Resignation-approval hook: approving a `Resignation` request may return `{ offboardingPrompt: true, separationId }` → client then calls T-cascade | `requests.approve` | — | — | `applyRequestDecision` → `triggerOffboardingFromRequest` | uses E19/T2 |
 
@@ -836,10 +823,10 @@ mb
 |---|---|---|---|---|---|---|
 | H1 | `GET /api/users` | Bearer, `team.view` | query: `role=HR`, `page,pageSize` | envelope; items `[{ id, name, email, phone, initials, role, preset, gyms:[branch names], permissions:[keys], status:'Active'\|'Suspended', lastLogin, hireDate }]` | HR Team table/cards, KPI counts | EXISTING (endpoint; `preset` = applied role-template name the UI renders) |
 | H2 | `GET /api/users/{id}` | Bearer, `team.view` | — | `{ data: item + effectivePermissions[] }` | member detail modal (visible pages preview) | EXISTING |
-| H3 | `POST /api/users` | Bearer, `team.manage` | body `{ name, email, phone, hireDate /*UI "Start Date"*/, role:'HR' }` (credentials auto-emailed) | `{ data:{ id, ... } }` | Create HR Account wizard (`finalizeHRAccount`) | EXISTING |
+| H3 | `POST /api/users` | Bearer, `team.manage` | body `{ fullName, email, gymIds[≥1], permissions?[], rolePreset? }` (phone / Start Date dropped — no home on the User row; a standard temp password is issued server-side and never echoed — set a known one via D12) | `{ data:{ id, name, initials, roles[], gyms[], permissions[], status } }` (201) | Create HR Account wizard (`finalizeHRAccount`) | **IMPLEMENTED (2026-10-22)** |
 | H4 | `PUT /api/users/{id}/gym-access` | Bearer, `team.manage` | body `{ gyms:['Nasr City','Heliopolis',…] }` (min 1) | `{ message }` | wizard step 2 | EXISTING |
 | H5 | `PUT /api/users/{id}/permissions` | Bearer, `team.manage` | body `{ permissions:[ 'employees.view', … ] }` (full dotted keys; template optionally recorded as `preset`) | `{ data:{ permissions[], count } }` | wizard step 3, `saveHRMemberEdit` ("Save Permissions") | EXISTING |
-| H6 | `PUT /api/users/{id}/status` | Bearer, `team.manage` | body `{ status:'Active'\|'Suspended', reason }` (reason required) | `{ message }` (suspend revokes login immediately; audit `HR Account {status}`) | `toggleHRMemberStatus` / `confirmToggleStatus` | **NEW** (api.md users CRUD has no status/suspend op) |
+| H6 | `PUT /api/users/{id}/status` | Bearer, `team.manage` | body `{ status:'Active'\|'Suspended', reason }` (reason required) | `{ message }` (suspend revokes login immediately; audit `HR Account {status}`) | `toggleHRMemberStatus` / `confirmToggleStatus` | **IMPLEMENTED (2026-10-22)** — `api.md`: `PUT /api/users/{id}/status` |
 | H7 | `GET /api/roles` | Bearer, `team.view` | — | items `[{ id, name, description, color:'brand'\|'blue'\|'yellow'\|'purple', permissions[] }]` (HR (Default), HR-FullAccess, HR-AttendanceOnly, HR-NoPayroll) | Role Templates tab cards | EXISTING |
 | H8 | `POST /api/roles` | Bearer, `team.manage` | body `{ name, description, color, permissions[] }` | `{ data:{ id, … } }` | New Template modal (`saveNewTemplate`), wizard "Save as Template" (`confirmSaveTemplate`) | EXISTING |
 | H9 | `PUT /api/roles/{id}` | Bearer, `team.manage` | body `{ name, permissions[] }` | `{ message }` | Edit Template (`saveEditTpl`) | EXISTING |

@@ -150,9 +150,12 @@ namespace Presistence.Data.Configurations
                    .OnDelete(DeleteBehavior.SetNull);
             builder.HasOne(i => i.EmployeeRequest).WithMany().HasForeignKey(i => i.EmployeeRequestId)
                    .OnDelete(DeleteBehavior.SetNull);
+            builder.HasOne(i => i.DeductionCandidate).WithMany().HasForeignKey(i => i.DeductionCandidateId)
+                   .OnDelete(DeleteBehavior.SetNull);
             builder.HasOne(i => i.Reviewer).WithMany().HasForeignKey(i => i.ReviewedBy)
                    .OnDelete(DeleteBehavior.SetNull);
             builder.HasIndex(i => new { i.PayrollEntryId, i.Type });
+            builder.HasIndex(i => i.DeductionCandidateId);
         }
     }
 
@@ -164,8 +167,11 @@ namespace Presistence.Data.Configurations
             builder.HasKey(dc => dc.Id);
 
             builder.Property(dc => dc.Amount).HasPrecision(18, 2);
+            builder.Property(dc => dc.DeductionDays).HasPrecision(9, 2).HasDefaultValue(1m);
             builder.Property(dc => dc.Reason).IsRequired().HasMaxLength(500);
             builder.Property(dc => dc.Note).HasMaxLength(1000);
+            builder.Property(dc => dc.DeductionDate).IsRequired();
+            builder.Property(dc => dc.IsSystemGenerated).HasDefaultValue(false);
 
             builder.HasOne(dc => dc.IssuedByUser)
                    .WithMany()
@@ -189,6 +195,11 @@ namespace Presistence.Data.Configurations
 
             builder.HasIndex(dc => dc.EmployeeId);
             builder.HasIndex(dc => dc.Status);
+            // One deduction per employee/day — a rejected day is final, so the slot
+            // stays occupied for every status. Soft-deleted duplicates are ignored.
+            builder.HasIndex(dc => new { dc.EmployeeId, dc.DeductionDate })
+                   .IsUnique()
+                   .HasFilter("\"IsDeleted\" = false");
         }
     }
 }

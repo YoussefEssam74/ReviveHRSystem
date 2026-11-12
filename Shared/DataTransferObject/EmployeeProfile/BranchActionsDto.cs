@@ -7,6 +7,7 @@ public sealed class DeductionCandidateDto
     public int EmployeeId { get; init; }
     public string Employee { get; init; } = string.Empty;
     public decimal Amount { get; init; }
+    public decimal DeductionDays { get; init; }
     public string Reason { get; init; } = string.Empty;
     public string? Note { get; init; }
     public string Status { get; init; } = string.Empty;
@@ -19,6 +20,10 @@ public sealed class DeductionCandidateDto
 public sealed class CreateDeductionCandidateDto
 {
     public int EmployeeId { get; init; }
+
+    /// <summary>The day the deduction punishes (defaults to today when omitted).</summary>
+    public DateOnly? Date { get; init; }
+
     public decimal Amount { get; init; }
     public string Reason { get; init; } = string.Empty;
     public string? Note { get; init; }
@@ -30,7 +35,7 @@ public sealed class CreateDeductionCandidateDto
 /// Optional revised amount — applied with the decision (approve/edit). Required for
 /// <c>edit</c>; must be positive.
 /// </param>
-public sealed record BranchDeductionReviewRequest(string Decision, decimal? Amount = null);
+public sealed record BranchDeductionReviewRequest(string Decision, decimal? Amount = null, decimal? Days = null);
 
 /// <summary>A warning notice awaiting HR filing (mock §20 Issue Warning Notice).</summary>
 public sealed class WarningNoticeDto
@@ -44,6 +49,11 @@ public sealed class WarningNoticeDto
     public string Status { get; init; } = string.Empty;
     public DateTime IssuedAt { get; init; }
     public string IssuedBy { get; init; } = string.Empty;
+    /// <summary>HR reviewer's display name once decided.</summary>
+    public string? ReviewedBy { get; init; }
+    public DateTime? ReviewedAt { get; init; }
+    /// <summary>HR's reason when declined.</summary>
+    public string? ReviewNote { get; init; }
 }
 
 public sealed class CreateWarningNoticeDto
@@ -67,6 +77,11 @@ public sealed class BonusProposalDto
     public string Status { get; init; } = string.Empty;
     public DateTime IssuedAt { get; init; }
     public string IssuedBy { get; init; } = string.Empty;
+    /// <summary>HR reviewer's display name once decided.</summary>
+    public string? ReviewedBy { get; init; }
+    public DateTime? ReviewedAt { get; init; }
+    /// <summary>HR's reason when declined.</summary>
+    public string? ReviewNote { get; init; }
 }
 
 public sealed class CreateBonusProposalDto
@@ -95,4 +110,44 @@ public sealed class CreateBranchReportDto
     public string Period { get; init; } = string.Empty;
     public string Type { get; init; } = string.Empty;
     public string Message { get; init; } = string.Empty;
+}
+
+// ------------------------------------------------------------------
+// HR review endpoints for branch-raised warnings & bonuses
+// ------------------------------------------------------------------
+
+/// <summary>Query for the HR warning-notice / bonus-proposal lists: status + gym + pager.</summary>
+public sealed class ProposalListQuery
+{
+    /// <summary>Pending | Approved | Rejected | blank (all).</summary>
+    public string? Status { get; init; }
+    /// <summary>Gym id or branch name; blank = actor's full scope.</summary>
+    public string? Gym { get; init; }
+    public int Page { get; init; } = 1;
+    public int PageSize { get; init; } = 20;
+}
+
+/// <summary>Paged envelope shared by the warning-notice and bonus-proposal lists.</summary>
+public sealed class ProposalListResponse<T> where T : class
+{
+    public required IReadOnlyList<T> Items { get; init; }
+    public int Page { get; init; }
+    public int PageSize { get; init; }
+    public int Total { get; init; }
+    public int TotalPages { get; init; }
+}
+
+/// <summary>POST /api/warning-notices/{id}/review and /api/bonus-proposals/{id}/review body.</summary>
+public sealed class ReviewProposalRequest
+{
+    /// <summary>Approved (file/approve) | Rejected (decline).</summary>
+    public string? Decision { get; init; }
+    /// <summary>Reason — required when rejecting, optional when approving.</summary>
+    public string? Note { get; init; }
+}
+
+/// <summary>Review → the updated proposal, echoed as { data }.</summary>
+public sealed class ReviewProposalResponse<T> where T : class
+{
+    public required T Data { get; init; }
 }

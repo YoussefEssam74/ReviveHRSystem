@@ -1,4 +1,4 @@
-using DomainLayer.Models.AttendanceModule;
+﻿using DomainLayer.Models.AttendanceModule;
 using DomainLayer.Models.AttendanceModule.Enums;
 using DomainLayer.Models.EmployeeModule;
 using DomainLayer.Models.EmployeeModule.Enums;
@@ -54,12 +54,21 @@ namespace ReviveHRSystem.Web.DataSeed
         /// <summary>Optional lifetime (minutes) for seeded station codes; null keeps them valid forever.</summary>
         private const string StationCodeLifetimeKey = "DevelopmentSeeder:StationCodeLifetimeMinutes";
 
+        /// <summary>
+        /// Switch for the rich console-testing dataset (12 extra employees and their
+        /// history). On by default; the Testing host always skips it (see SeedAsync)
+        /// because the integration suite asserts against the lean scenario and owns
+        /// several of the teams and employees it would otherwise pre-create.
+        /// </summary>
+        private const string RichScenarioEnabledKey = "DevelopmentSeeder:RichScenario";
+
         public static async Task SeedAsync(IServiceProvider services)
         {
             using var scope = services.CreateScope();
             var db = scope.ServiceProvider.GetRequiredService<ReviveHrDbContext>();
             var hasher = scope.ServiceProvider.GetRequiredService<IPasswordHasher>();
             var configuration = scope.ServiceProvider.GetRequiredService<Microsoft.Extensions.Configuration.IConfiguration>();
+            var hostEnvironment = scope.ServiceProvider.GetRequiredService<Microsoft.Extensions.Hosting.IHostEnvironment>();
             var logger = scope.ServiceProvider
                 .GetRequiredService<ILoggerFactory>()
                 .CreateLogger("DevelopmentDataSeeder");
@@ -97,6 +106,9 @@ namespace ReviveHRSystem.Web.DataSeed
                 "Hana Refaat", "EMP-1001", gym1.Id, position1.Id, UserType.HR);
             await EnsureGymAccessAsync(db, hr.Id, gym1.Id);
             await EnsureUserGymRoleAsync(db, hr.Id, gym1.Id, RoleNames.Hr);
+            // The HR-portal guards read direct UserPermissions rows, which the
+            // per-gym role assignment above does not populate.
+            await EnsurePermissionGrantsAsync(db, hr.Id, AllPortalPermissionKeys);
 
             var (hrManagerProfile, hrManager) = await EnsureEmployeeAsync(db, hasher, HrManagerEmail, "hrmanager",
                 "Mona Aly", "EMP-1002", gym1.Id, position1.Id, UserType.HR);
@@ -104,6 +116,7 @@ namespace ReviveHRSystem.Web.DataSeed
             await EnsureGymAccessAsync(db, hrManager.Id, gym2.Id);
             await EnsureUserGymRoleAsync(db, hrManager.Id, gym1.Id, RoleNames.HrManager);
             await EnsureUserGymRoleAsync(db, hrManager.Id, gym2.Id, RoleNames.HrManager);
+            await EnsurePermissionGrantsAsync(db, hrManager.Id, AllPortalPermissionKeys);
 
             var stationCodeLifetimeMinutes = configuration.GetValue<int?>(StationCodeLifetimeKey);
             var gym1StationCode = await EnsureStationCodeAsync(db, gym1.Id, admin.Id, stationCodeLifetimeMinutes, logger);
@@ -131,7 +144,8 @@ namespace ReviveHRSystem.Web.DataSeed
             await EnsureUserGymRoleAsync(db, omarUser.Id, gym1.Id, RoleNames.BranchManager);
             await EnsureUserGymRoleAsync(db, omarUser.Id, gym2.Id, RoleNames.TeamLeader);
             // The system roles carry the permission-key bundles (RolePermissions); the
-            // per-gym rows above only scope the data.
+            // per-gym rows above only scope the data — so the BM/Team Leader keys stay
+            // per-gym instead of leaking to every gym through direct grants.
             await EnsureUserRoleAsync(db, omarUser.Id, RoleNames.BranchManager);
             await EnsureUserRoleAsync(db, omarUser.Id, RoleNames.TeamLeader);
             await EnsureAssignmentAsync(db, cycle1.Id, omar.Id, today, template.Id);
@@ -147,9 +161,36 @@ namespace ReviveHRSystem.Web.DataSeed
             sara.TeamId = team.Id;
             await db.SaveChangesAsync();
 
+            // Demo salary history: the absence/late sweep falls back to the latest
+            // compensation when no payroll sheet covers the day, so every seeded
+            // employee can be priced even before his first sheet exists.
+            await EnsureCompensationAsync(db, hrProfile.Id, admin.Id, 8000m, today);
+            await EnsureCompensationAsync(db, hrManagerProfile.Id, admin.Id, 12000m, today);
+            await EnsureCompensationAsync(db, karim.Id, admin.Id, 7000m, today);
+            await EnsureCompensationAsync(db, omar.Id, admin.Id, 9000m, today);
+            await EnsureCompensationAsync(db, sara.Id, admin.Id, 6000m, today);
+
             // Payroll months, leave taken and attendance facts for the previous
             // month, so My Payroll's monthly breakdown has a full story to tell.
             await EnsurePayrollAsync(db, gym1, gym2, karim, omar, sara, hrManager.Id, today, attendanceTimeZone);
+
+            // No HTTP endpoint creates payroll periods, so without seed data the
+            // Settlement sheet / deductions / publish / payslips / export screens
+            // would have nothing to open. One Open period per gym, Draft entries
+            // for that gym's active employees.
+            await EnsurePayrollSeedAsync(db, gym1.Id, today);
+            await EnsurePayrollSeedAsync(db, gym2.Id, today);
+
+            // Rich console-testing scenario layered on top (12 extra employees,
+            // months of attendance/payroll history, request/recruitment/evaluation/
+            // offboarding pipelines, branch queues, announcements, events).
+            // Idempotent — guarded by its own marker. The Testing host skips it: the
+            // integration suite asserts against the lean scenario and owns several of
+            // the teams/employees this dataset would pre-create.
+            if (!hostEnvironment.IsEnvironment("Testing") && configuration.GetValue(RichScenarioEnabledKey, true))
+            {
+                await RichScenarioSeeder.SeedAsync(db, hasher, logger);
+            }
 
             logger.LogWarning(
                 "Development seed complete. Logins (password {Password}): {Admin}, hr@revive.hr, hrmanager@revive.hr, and employee accounts (karim@revive.hr, omar@revive.hr, sara@revive.hr). " +
@@ -223,6 +264,68 @@ namespace ReviveHRSystem.Web.DataSeed
             ("Teams", "evaluations.view.team", "View evaluations of own team members."),
             ("Teams", "evaluations.manage.team", "Manage evaluations of own team members."),
         ];
+
+        /// <summary>
+        /// Tracked permission keys granted to the seeded HR / HR-Manager accounts so
+        /// every HR-portal endpoint is exercisable in Swagger manual testing without
+        /// hand-editing the database. The HR-portal guards read direct
+        /// <c>UserPermissions</c> rows (UserAccessRepository.GetPermissionKeysAsync),
+        /// which the per-gym feature roles above do not populate.
+        /// </summary>
+        private static readonly string[] AllPortalPermissionKeys =
+        [
+            "employees.view", "employees.create", "employees.edit", "employees.transfer",
+            "employees.position.change", "employees.role.assign", "employees.status.change",
+            "employees.compensation.manage", "employees.contract.manage", "employees.offboard",
+            "employees.documents.view", "employees.documents.manage", "employees.bulk_import",
+            "employees.leave_balance.manage",
+            "positions.view", "positions.manage",
+            "recruitment.view", "recruitment.vacancies.manage", "recruitment.candidates.manage",
+            "recruitment.hire.approve", "recruitment.vacancy_request.create", "recruitment.vacancy_request.approve",
+            "attendance.view", "attendance.edit", "attendance.manual_entry",
+            "schedule.view", "schedule.manage",
+            "requests.view", "requests.approve.branch", "requests.approve",
+            "payroll.view", "payroll.edit", "payroll.approve", "payroll.export",
+            "evaluations.view", "evaluations.manage", "evaluations.forms.manage",
+            "events.view", "reports.view",
+            "announcements.view", "announcements.manage",
+            "audit.view",
+            "team.view", "team.manage",
+        ];
+
+        /// <summary>
+        /// Idempotently grants tracked permission keys (UserPermissions rows) so
+        /// the HR-portal endpoint guards accept the seeded accounts. Keys that do
+        /// not exist in the catalog are skipped.
+        /// </summary>
+        private static async Task EnsurePermissionGrantsAsync(ReviveHrDbContext db, int userId, IReadOnlyList<string> keys)
+        {
+            var wanted = await db.Permissions
+                .Where(p => keys.Contains(p.Key))
+                .Select(p => p.Id)
+                .ToListAsync();
+            var existing = await db.UserPermissions
+                .Where(up => up.UserId == userId)
+                .Select(up => up.PermissionId)
+                .ToListAsync();
+
+            var missing = wanted.Except(existing).ToList();
+            if (missing.Count == 0)
+            {
+                return;
+            }
+
+            foreach (var permissionId in missing)
+            {
+                db.UserPermissions.Add(new UserPermission
+                {
+                    UserId = userId,
+                    PermissionId = permissionId,
+                });
+            }
+
+            await db.SaveChangesAsync();
+        }
 
         /// <summary>Inserts any catalog keys that are not yet tracked (never overwrites existing rows).</summary>
         private static async Task EnsurePermissionCatalogAsync(ReviveHrDbContext db)
@@ -360,7 +463,7 @@ namespace ReviveHRSystem.Web.DataSeed
         }
 
         /// <summary>Assigns a preset role to a user for one gym (idempotent).</summary>
-        private static async Task EnsureUserGymRoleAsync(ReviveHrDbContext db, int userId, int gymId, string roleName)
+        internal static async Task EnsureUserGymRoleAsync(ReviveHrDbContext db, int userId, int gymId, string roleName)
         {
             var role = await db.Roles.FirstOrDefaultAsync(r => r.Name == roleName);
             if (role is null)
@@ -572,6 +675,92 @@ namespace ReviveHRSystem.Web.DataSeed
             db.ShiftCycles.Add(cycle);
             await db.SaveChangesAsync();
             return cycle;
+        }
+
+        /// <summary>
+        /// One Open payroll period for the current month at the gym, with Draft
+        /// entries for each of its active employees — the manual-testing fixture
+        /// that makes every settlement-sheet endpoint (bonus, deductions, close,
+        /// publish, payslips, export, review queue) exercisable in Swagger.
+        /// Idempotent: existing periods/entries are left untouched.
+        /// </summary>
+        private static async Task EnsurePayrollSeedAsync(ReviveHrDbContext db, int gymId, DateOnly today)
+        {
+            var monthStart = new DateOnly(today.Year, today.Month, 1);
+            var monthEnd = new DateOnly(today.Year, today.Month, DateTime.DaysInMonth(today.Year, today.Month));
+
+            var period = await db.PayrollPeriods
+                .FirstOrDefaultAsync(p => p.GymId == gymId && p.StartDate == monthStart);
+            if (period is null)
+            {
+                period = new PayrollPeriod
+                {
+                    GymId = gymId,
+                    StartDate = monthStart,
+                    EndDate = monthEnd,
+                    Status = PayrollPeriodStatus.Open,
+                };
+                db.PayrollPeriods.Add(period);
+                await db.SaveChangesAsync();
+            }
+
+            var employees = await db.Employees
+                .Where(e => e.GymId == gymId && e.Status == EmployeeStatus.Active)
+                .Select(e => e.Id)
+                .ToListAsync();
+            if (employees.Count == 0)
+            {
+                return;
+            }
+
+            var existing = await db.PayrollEntries
+                .Where(e => e.PayrollPeriodId == period.Id)
+                .Select(e => e.EmployeeId)
+                .ToListAsync();
+
+            foreach (var employeeId in employees.Where(id => !existing.Contains(id)))
+            {
+                // 8000 base / 21 days / no OT or bonus — money is recomputed
+                // server-side, these columns only seed the starting sheet.
+                db.PayrollEntries.Add(new PayrollEntry
+                {
+                    PayrollPeriodId = period.Id,
+                    EmployeeId = employeeId,
+                    BaseSalary = 8000m,
+                    TotalDeductions = 0m,
+                    TotalBonuses = 0m,
+                    NetPay = 8000m,
+                    DaysWorked = 21,
+                    OvertimeHours = 0m,
+                    Status = "Draft",
+                });
+            }
+
+            await db.SaveChangesAsync();
+        }
+
+        /// <summary>
+        /// Gives a demo employee a base-salary row when he has no compensation yet.
+        /// Existing rows are left untouched so a seeded raise/history survives restarts.
+        /// </summary>
+        private static async Task EnsureCompensationAsync(
+            ReviveHrDbContext db, int employeeId, int changedBy, decimal amount, DateOnly today)
+        {
+            if (await db.Compensations.AnyAsync(c => c.EmployeeId == employeeId && c.Amount > 0))
+            {
+                return;
+            }
+
+            db.Compensations.Add(new Compensation
+            {
+                EmployeeId = employeeId,
+                Amount = amount,
+                Currency = "EGP",
+                EffectiveDate = new DateOnly(today.Year, 1, 1),
+                ChangedBy = changedBy,
+                Reason = "Base salary",
+            });
+            await db.SaveChangesAsync();
         }
 
         private static async Task<(Employee Employee, User User)> EnsureEmployeeAsync(
@@ -905,8 +1094,8 @@ namespace ReviveHRSystem.Web.DataSeed
         ///   • legacy lump lines ("Late Arrival Deduction" / "Unapproved Absence (3 days)")
         ///     are removed — the per-day lines below replace them;
         ///   • each late/absent day without a line gets one (Accepted) priced like the
-        ///     live flow — base ÷ scheduled workdays (days × 6 ÷ 7), a quarter day per
-        ///     late arrival, a full day per unapproved absence — plus its applied candidate;
+        ///     live flow — base ÷ 30 calendar days, a quarter day per late arrival, one
+        ///     day per unapproved absence — plus its applied candidate;
         ///   • seed-shaped attendance rows (this seeder's own demo facts — never
         ///     user-entered, which always carry a method/note/station session) get the
         ///     shift link and the planned local clock times stored as true UTC.
@@ -984,20 +1173,37 @@ namespace ReviveHRSystem.Web.DataSeed
                 changed = true;
             }
 
-            var linkedLineRecordIds = (await db.PayrollEntryLineItems
+            // Manual deduction lines (salary advance, seeded adjustments) never
+            // materialized from a candidate — the migration's date backfill could
+            // still match one, so drop that link before any HR reprice follows it.
+            foreach (var manualLine in await db.PayrollEntryLineItems
+                         .Where(l => l.PayrollEntryId == entry.Id
+                             && l.Type == "Deduction"
+                             && l.DeductionCandidateId != null
+                             && l.Source == "Manual")
+                         .ToListAsync())
+            {
+                manualLine.DeductionCandidateId = null;
+                changed = true;
+            }
+
+            var linesByRecord = (await db.PayrollEntryLineItems
                     .Where(l => l.PayrollEntryId == entry.Id && l.AttendanceRecordId != null)
-                    .Select(l => l.AttendanceRecordId!.Value)
-                    .ToListAsync()).ToHashSet();
+                    .ToListAsync())
+                .GroupBy(l => l.AttendanceRecordId!.Value)
+                .ToDictionary(g => g.Key, g => g.First());
             var candidatesByRecord = (await db.DeductionCandidates
                     .Where(c => c.EmployeeId == employeeId && c.AttendanceRecordId != null)
                     .ToListAsync())
                 .GroupBy(c => c.AttendanceRecordId!.Value)
                 .ToDictionary(g => g.Key, g => g.ToList());
 
-            var days = entry.PayrollPeriod.EndDate.DayNumber - entry.PayrollPeriod.StartDate.DayNumber + 1;
-            var scheduled = Math.Max(1, (int)Math.Floor(days * 6 / 7.0));
-            var daily = Math.Round(entry.BaseSalary / scheduled, 2);
+            // The live pricing rule (DeductionPricing): a fixed 30-day month, a
+            // quarter day per late arrival and one day per unapproved absence.
+            var daily = Math.Round(entry.BaseSalary / 30m, 2);
             var lateAmount = Math.Round(daily / 4m, 2);
+            // One unexcused absence costs one day of pay.
+            var absenceAmount = Math.Round(daily * 1m, 2);
 
             foreach (var record in pricedDays)
             {
@@ -1015,18 +1221,23 @@ namespace ReviveHRSystem.Web.DataSeed
                 }
 
                 var isLate = record.Status == AttendanceStatus.Late;
-                var amount = isLate ? lateAmount : daily;
+                var amount = isLate ? lateAmount : absenceAmount;
+                var days = isLate ? 0.25m : 1m;
+                var label = isLate
+                    ? $"Late Arrival — {record.Date:MMM d}"
+                    : $"Unapproved Absence — {record.Date:MMM d}";
                 var note = isLate
-                    ? $"Auto-priced: quarter day (base ÷ {scheduled} scheduled workdays ÷ 4)."
-                    : $"Auto-priced: one day (base ÷ {scheduled} scheduled workdays).";
+                    ? $"Auto-priced: quarter day (base ÷ 30 calendar days ÷ 4)."
+                    : $"Auto-priced: 1 days (base ÷ 30 calendar days × 1).";
 
-                if (!linkedLineRecordIds.Contains(record.Id))
+                linesByRecord.TryGetValue(record.Id, out var line);
+                if (line is null)
                 {
-                    db.PayrollEntryLineItems.Add(new PayrollEntryLineItem
+                    line = new PayrollEntryLineItem
                     {
                         PayrollEntryId = entry.Id,
                         Type = "Deduction",
-                        Label = isLate ? $"Late Arrival — {record.Date:MMM d}" : $"Unapproved Absence — {record.Date:MMM d}",
+                        Label = label,
                         EffectiveDate = record.Date,
                         // Deduction lines carry a positive amount (the totals subtract it).
                         Amount = amount,
@@ -1034,17 +1245,35 @@ namespace ReviveHRSystem.Web.DataSeed
                         Reason = note,
                         AttendanceRecordId = record.Id,
                         Status = "Accepted",
-                    });
-                    linkedLineRecordIds.Add(record.Id);
+                    };
+                    db.PayrollEntryLineItems.Add(line);
+                    linesByRecord[record.Id] = line;
                     changed = true;
                 }
-
-                if (existing is null)
+                else if (line.Status is not "Rejected"
+                    && line.Source == "biometric"
+                    && line.Reason?.StartsWith("Auto-priced:", StringComparison.Ordinal) == true)
                 {
-                    db.DeductionCandidates.Add(new DeductionCandidate
+                    // The three-day absence rule changed the price of the seeded
+                    // per-day lines — keep demos and the code in agreement.
+                    if (line.Amount != amount) { line.Amount = amount; changed = true; }
+                    if (line.Reason != note) { line.Reason = note; changed = true; }
+                    if (line.Label != label) { line.Label = label; changed = true; }
+                }
+
+                var candidate = existing?
+                    .Where(c => c.Status != DeductionStatus.Rejected)
+                    .OrderBy(c => c.Status == DeductionStatus.Approved ? 0 : 1)
+                    .FirstOrDefault();
+                if (candidate is null)
+                {
+                    candidate = new DeductionCandidate
                     {
                         EmployeeId = employeeId,
                         AttendanceRecordId = record.Id,
+                        DeductionDate = record.Date,
+                        DeductionDays = days,
+                        IsSystemGenerated = true,
                         Amount = amount,
                         Reason = isLate ? "Late arrival" : "Unapproved absence",
                         Note = note,
@@ -1053,7 +1282,37 @@ namespace ReviveHRSystem.Web.DataSeed
                         Status = DeductionStatus.Approved,
                         ReviewedBy = issuedById,
                         ReviewedAt = DateTime.UtcNow,
-                    });
+                    };
+                    db.DeductionCandidates.Add(candidate);
+                    changed = true;
+                }
+                else if (candidate.IsSystemGenerated
+                    || candidate.Note?.StartsWith("Auto-priced:", StringComparison.Ordinal) == true)
+                {
+                    var dirty = false;
+                    if (!candidate.IsSystemGenerated) { candidate.IsSystemGenerated = true; dirty = true; }
+                    if (candidate.DeductionDate != record.Date) { candidate.DeductionDate = record.Date; dirty = true; }
+                    if (candidate.DeductionDays != days) { candidate.DeductionDays = days; dirty = true; }
+                    if (candidate.Amount != amount) { candidate.Amount = amount; dirty = true; }
+                    if (candidate.Note != note) { candidate.Note = note; dirty = true; }
+                    var reason = isLate ? "Late arrival" : "Unapproved absence";
+                    if (candidate.Reason != reason) { candidate.Reason = reason; dirty = true; }
+                    changed |= dirty;
+                }
+
+                // The payroll line materialized from the candidate — link them so an
+                // HR re-price on the sheet also updates the employee-facing row.
+                if (line.DeductionCandidateId != candidate.Id)
+                {
+                    if (candidate.Id > 0)
+                    {
+                        line.DeductionCandidateId = candidate.Id;
+                    }
+                    else
+                    {
+                        line.DeductionCandidate = candidate;
+                    }
+
                     changed = true;
                 }
             }

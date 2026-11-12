@@ -21,13 +21,13 @@
     <ProjectReference Include="..\..\Shared\Shared.csproj" />
   </ItemGroup>
 
-  <!-- The models live in biometric_test/ (single source of truth) and are copied
-       into the API output so recognition runs in-process with no Python. -->
+  <!-- ONNX models owned by this project; copied into the API output so
+       recognition runs in-process with no external service. -->
   <ItemGroup>
-    <None Include="..\..\biometric_test\face_detection_yunet.onnx" Link="Models\face_detection_yunet.onnx" CopyToOutputDirectory="PreserveNewest" />
-    <None Include="..\..\biometric_test\face_recognition_sface.onnx" Link="Models\face_recognition_sface.onnx" CopyToOutputDirectory="PreserveNewest" />
-    <None Include="..\..\biometric_test\anti_spoof_2.7_80x80.onnx" Link="Models\anti_spoof_2.7_80x80.onnx" CopyToOutputDirectory="PreserveNewest" />
-    <None Include="..\..\biometric_test\anti_spoof_4.0_80x80.onnx" Link="Models\anti_spoof_4.0_80x80.onnx" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="Models\face_detection_yunet.onnx" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="Models\face_recognition_sface.onnx" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="Models\anti_spoof_2.7_80x80.onnx" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="Models\anti_spoof_4.0_80x80.onnx" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <!-- Transitive-package security pins: elevate the vulnerable resolved versions (see reports/package-audit log, advisory GHSA-qj66-m88j-hmgj / GHSA-8g4q-xg66-9fp4). -->

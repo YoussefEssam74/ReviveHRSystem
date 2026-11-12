@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useTranslation } from 'react-i18next'
 import { Plus, UserRound } from 'lucide-react'
 import {
   createVacancyRequest,
@@ -51,6 +52,7 @@ function Chip({ children, className }: { children: React.ReactNode; className: s
 }
 
 export default function BranchRecruitmentPage() {
+  const { t } = useTranslation()
   const me = usePortalSession()
 
   // Recruitment is a Branch-Manager surface (never served to a Team Leader,
@@ -59,8 +61,8 @@ export default function BranchRecruitmentPage() {
   if (!me.isBranchManager || (!me.can('recruitment.view') && !me.can('recruitment.vacancy_request.create'))) {
     return (
       <EmptyState
-        title="Recruitment is for Branch Managers"
-        hint="Submitting vacancy requests requires the requisition keys and the Branch Manager role in the active gym."
+        title={t('Recruitment is for Branch Managers')}
+        hint={t('Submitting vacancy requests requires the requisition keys and the Branch Manager role in the active gym.')}
       />
     )
   }
@@ -69,6 +71,7 @@ export default function BranchRecruitmentPage() {
 }
 
 function RecruitmentWorkspace() {
+  const { t } = useTranslation()
   const { me, can } = usePortalSession()
   const queryClient = useQueryClient()
   const [tab, setTab] = useState<Tab>('All')
@@ -118,16 +121,19 @@ function RecruitmentWorkspace() {
     <div className="space-y-3">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-bold text-charcoal-900">Recruitment</h1>
+          <h1 className="text-xl font-bold text-charcoal-900">{t('Recruitment')}</h1>
           <p className="mt-0.5 text-xs text-charcoal-500">
-            {openPositions} open positions on this page · {Math.max(total, rows.length)} requests ·{' '}
-            {me?.activeGym?.gymName || 'your gym'}
+            {t('{{positions}} open positions on this page · {{requests}} requests · {{gym}}', {
+              positions: openPositions,
+              requests: Math.max(total, rows.length),
+              gym: me?.activeGym?.gymName || t('your gym'),
+            })}
           </p>
         </div>
         {can('recruitment.vacancy_request.create') && (
           <Button size="sm" onClick={() => setNewOpen(true)}>
             <Plus className="h-3.5 w-3.5" aria-hidden="true" />
-            New Request
+            {t('New Request')}
           </Button>
         )}
       </div>
@@ -149,7 +155,7 @@ function RecruitmentWorkspace() {
                 : 'border-b-2 border-transparent text-charcoal-500 hover:text-charcoal-700',
             )}
           >
-            {option} Positions
+            {option === 'All' ? t('All Positions') : t('{{status}} Positions', { status: t(option) })}
             <span
               className={cn(
                 'rounded-full px-1.5 py-0.5 text-[10px] font-semibold',
@@ -165,7 +171,7 @@ function RecruitmentWorkspace() {
       {rows.length === 0 ? (
         <div className="rounded-xl border border-charcoal-200 bg-white p-8 text-center">
           <UserRound className="mx-auto mb-2 h-10 w-10 text-charcoal-300" aria-hidden="true" />
-          <p className="text-xs text-charcoal-500">No requests here right now.</p>
+          <p className="text-xs text-charcoal-500">{t('No requests here right now.')}</p>
         </div>
       ) : (
         <div className="space-y-1.5">
@@ -183,10 +189,10 @@ function RecruitmentWorkspace() {
             disabled={(listQuery.data?.page ?? 1) <= 1}
             onClick={() => setPage((value) => Math.max(1, value - 1))}
           >
-            Previous
+            {t('Previous')}
           </Button>
           <span className="text-[11px] text-charcoal-500">
-            Page {listQuery.data?.page ?? 1} of {totalPages}
+            {t('Page {{page}} of {{total}}', { page: listQuery.data?.page ?? 1, total: totalPages })}
           </span>
           <Button
             size="sm"
@@ -194,7 +200,7 @@ function RecruitmentWorkspace() {
             disabled={(listQuery.data?.page ?? 1) >= totalPages}
             onClick={() => setPage((value) => value + 1)}
           >
-            Next
+            {t('Next')}
           </Button>
         </div>
       )}
@@ -225,11 +231,12 @@ function RecruitmentWorkspace() {
 /* ==================== card ==================== */
 
 function RecruitmentCard({ row, onOpen }: { row: VacancyRequestRow; onOpen: () => void }) {
+  const { t } = useTranslation()
   return (
     <button
       type="button"
       onClick={onOpen}
-      className="w-full rounded-xl border border-charcoal-200 bg-white p-3 text-left transition-all hover:shadow-sm card-interactive"
+      className="w-full rounded-xl border border-charcoal-200 bg-white p-3 text-start transition-all hover:shadow-sm card-interactive"
     >
       <div className="flex items-center justify-between gap-2">
         <div className="flex min-w-0 items-center gap-3">
@@ -255,12 +262,14 @@ function RecruitmentCard({ row, onOpen }: { row: VacancyRequestRow; onOpen: () =
       </div>
       <p className="mt-2 text-[10px] text-charcoal-600">{row.reason}</p>
       <div className="mt-2 flex flex-wrap items-center gap-1.5">
-        <Chip className="bg-charcoal-50 text-charcoal-600">Wants {row.shift ?? 'any shift'}</Chip>
+        <Chip className="bg-charcoal-50 text-charcoal-600">
+          {t('Wants {{shift}}', { shift: row.shift ?? t('any shift') })}
+        </Chip>
         <Chip className="bg-charcoal-50 text-charcoal-600">
           EGP {row.salary != null ? formatMoney(row.salary) : '—'}
         </Chip>
         {row.vacancyId && (
-          <Chip className="bg-blue-50 text-blue-700">Vacancy #{row.vacancyId} opened</Chip>
+          <Chip className="bg-blue-50 text-blue-700">{t('Vacancy #{{id}} opened', { id: row.vacancyId })}</Chip>
         )}
       </div>
     </button>
@@ -270,6 +279,7 @@ function RecruitmentCard({ row, onOpen }: { row: VacancyRequestRow; onOpen: () =
 /* ==================== new request modal (mock openNewRecruitment) ==================== */
 
 function NewRequestModal({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) {
+  const { t } = useTranslation()
   const { user } = usePortalSession()
   const { toast } = useToast()
   const [position, setPosition] = useState('')
@@ -298,21 +308,20 @@ function NewRequestModal({ onClose, onSaved }: { onClose: () => void; onSaved: (
   })
 
   return (
-    <Modal open title="New Recruitment Request" onClose={onClose}>
+    <Modal open title={t('New Recruitment Request')} onClose={onClose}>
       <div className="space-y-3">
         <div className="rounded-lg border border-brand-100 bg-brand-50 p-2.5 text-[10px] leading-relaxed text-brand-800">
-          Tell HR exactly what you need — the <b>shift</b> and the <b>expected salary</b> are what HR matches
-          candidates against.
+          {t('Tell HR exactly what you need — the shift and the expected salary are what HR matches candidates against.')}
         </div>
         <div>
           <label className="form-label" htmlFor="rec-position">
-            Position
+            {t('Position')}
           </label>
           <input
             id="rec-position"
             type="text"
             className="form-input"
-            placeholder="e.g. Senior Trainer"
+            placeholder={t('e.g. Senior Trainer')}
             value={position}
             onChange={(event) => setPosition(event.target.value)}
           />
@@ -320,7 +329,7 @@ function NewRequestModal({ onClose, onSaved }: { onClose: () => void; onSaved: (
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className="form-label" htmlFor="rec-count">
-              Count
+              {t('Count')}
             </label>
             <input
               id="rec-count"
@@ -333,30 +342,30 @@ function NewRequestModal({ onClose, onSaved }: { onClose: () => void; onSaved: (
           </div>
           <div>
             <label className="form-label" htmlFor="rec-urgency">
-              Urgency
+              {t('Urgency')}
             </label>
             <select id="rec-urgency" className="form-input" value={urgency} onChange={(event) => setUrgency(event.target.value)}>
-              <option>Low</option>
-              <option>Medium</option>
-              <option>High</option>
+              <option value="Low">{t('Low')}</option>
+              <option value="Medium">{t('Medium')}</option>
+              <option value="High">{t('High')}</option>
             </select>
           </div>
         </div>
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className="form-label" htmlFor="rec-shift">
-              Shift you want
+              {t('Shift you want')}
             </label>
             <select id="rec-shift" className="form-input" value={shift} onChange={(event) => setShift(event.target.value)}>
-              <option>Morning</option>
-              <option>Evening</option>
-              <option>Night</option>
-              <option>Flexible</option>
+              <option value="Morning">{t('Morning')}</option>
+              <option value="Evening">{t('Evening')}</option>
+              <option value="Night">{t('Night')}</option>
+              <option value="Flexible">{t('Flexible')}</option>
             </select>
           </div>
           <div>
             <label className="form-label" htmlFor="rec-salary">
-              Expected salary (EGP, optional)
+              {t('Expected salary (EGP, optional)')}
             </label>
             <input
               id="rec-salary"
@@ -364,7 +373,7 @@ function NewRequestModal({ onClose, onSaved }: { onClose: () => void; onSaved: (
               min={0}
               step={500}
               className="form-input"
-              placeholder="e.g. 12000"
+              placeholder={t('e.g. 12000')}
               value={salary}
               onChange={(event) => setSalary(event.target.value)}
             />
@@ -372,20 +381,20 @@ function NewRequestModal({ onClose, onSaved }: { onClose: () => void; onSaved: (
         </div>
         <div>
           <label className="form-label" htmlFor="rec-reason">
-            Reason
+            {t('Reason')}
           </label>
           <textarea
             id="rec-reason"
             rows={2}
             className="form-input"
-            placeholder="Why is this position needed?"
+            placeholder={t('Why is this position needed?')}
             value={reason}
             onChange={(event) => setReason(event.target.value)}
           />
         </div>
         <div className="flex justify-end gap-2 pt-1">
           <Button size="sm" variant="secondary" onClick={onClose}>
-            Cancel
+            {t('Cancel')}
           </Button>
           <Button
             size="sm"
@@ -393,12 +402,12 @@ function NewRequestModal({ onClose, onSaved }: { onClose: () => void; onSaved: (
             loading={createMutation.isPending}
             onClick={() => createMutation.mutate()}
           >
-            Submit Request
+            {t('Submit Request')}
           </Button>
         </div>
       </div>
       <p className="mt-2 text-[10px] text-charcoal-400">
-        Filed by {user?.fullName ?? 'you'} — the request lands straight in HR&apos;s pending queue.
+        {t('Filed by {{name}} — the request lands straight in HR pending queue.', { name: user?.fullName ?? t('you') })}
       </p>
     </Modal>
   )
@@ -421,12 +430,17 @@ function RecruitmentDetailModal({
   onRaise: () => void
   onChanged: (row: VacancyRequestRow | null) => void
 }) {
+  const { t } = useTranslation()
   const { toast } = useToast()
 
   const decideMutation = useMutation({
     mutationFn: (decision: 'approve' | 'reject') => decideVacancyRequest(row.id, { decision, comment: null }),
     onSuccess: (updated) => {
-      toast(updated.data.status === 'Approved' ? 'Request approved — vacancy created.' : 'Request rejected.')
+      toast(
+        updated.data.status === 'Approved'
+          ? t('Request approved — vacancy created.')
+          : t('Request rejected.'),
+      )
       onChanged(updated.data)
     },
     onError: (error) => toast(describeApiError(error), 'error'),
@@ -435,7 +449,11 @@ function RecruitmentDetailModal({
   const reopenMutation = useMutation({
     mutationFn: () => reopenVacancyRequest(row.id),
     onSuccess: (result) => {
-      toast(result.vacancyWithdrawn ? 'Reopened — the vacancy had no applicants and was withdrawn.' : 'Request reopened — back to pending.')
+      toast(
+        result.vacancyWithdrawn
+          ? t('Reopened — the vacancy had no applicants and was withdrawn.')
+          : t('Request reopened — back to pending.'),
+      )
       onChanged(null)
     },
     onError: (error) => toast(describeApiError(error), 'error'),
@@ -446,57 +464,60 @@ function RecruitmentDetailModal({
       <div className="space-y-3">
         <div className="flex flex-wrap items-center gap-2">
           <span className={cn('rounded px-2 py-0.5 text-[9px] font-semibold', urgencyClass(row.urgency))}>
-            {row.urgency ?? '—'} urgency
+            {t('{{urgency}} urgency', { urgency: row.urgency ?? '—' })}
           </span>
           <StatusBadge status={humanize(row.status)} />
           <span className="text-[10px] text-charcoal-400">
-            submitted {formatDate(row.submittedDate)} · by {row.submittedBy ?? '—'}
+            {t('submitted {{date}} · by {{name}}', {
+              date: formatDate(row.submittedDate),
+              name: row.submittedBy ?? '—',
+            })}
           </span>
         </div>
 
         <div className="grid grid-cols-2 gap-2">
           <div className="rounded-lg bg-charcoal-50 p-2.5">
-            <p className="text-[10px] text-charcoal-500">Positions</p>
+            <p className="text-[10px] text-charcoal-500">{t('Positions')}</p>
             <p className="text-xs font-semibold text-charcoal-900">{row.headcount}</p>
           </div>
           {row.vacancyId && (
             <div className="rounded-lg bg-charcoal-50 p-2.5">
-              <p className="text-[10px] text-charcoal-500">Opened vacancy</p>
+              <p className="text-[10px] text-charcoal-500">{t('Opened vacancy')}</p>
               <p className="text-xs font-semibold text-charcoal-900">#{row.vacancyId}</p>
             </div>
           )}
         </div>
 
         <div>
-          <p className="form-label">Reason</p>
+          <p className="form-label">{t('Reason')}</p>
           <p className="text-xs text-charcoal-600">{row.reason}</p>
         </div>
 
         {/* what the BM asked for */}
         <div className="overflow-hidden rounded-xl border border-charcoal-200 bg-white">
           <div className="border-b border-charcoal-100 bg-charcoal-50/50 px-3 py-2">
-            <p className="bento-label">WHAT YOU ASKED FOR</p>
+            <p className="bento-label">{t('WHAT YOU ASKED FOR')}</p>
           </div>
           <div className="grid grid-cols-2 gap-2 p-3 sm:grid-cols-4">
             <div>
-              <p className="bento-label text-charcoal-500">Position</p>
+              <p className="bento-label text-charcoal-500">{t('Position')}</p>
               <p className="mt-0.5 text-xs font-semibold text-charcoal-900">
                 {row.position}
                 {row.headcount > 1 ? ` x${row.headcount}` : ''}
               </p>
             </div>
             <div>
-              <p className="bento-label text-charcoal-500">Shift</p>
-              <p className="mt-0.5 text-xs font-semibold text-charcoal-900">{row.shift ?? 'Any'}</p>
+              <p className="bento-label text-charcoal-500">{t('Shift')}</p>
+              <p className="mt-0.5 text-xs font-semibold text-charcoal-900">{row.shift ?? t('Any')}</p>
             </div>
             <div>
-              <p className="bento-label text-charcoal-500">Expected salary</p>
+              <p className="bento-label text-charcoal-500">{t('Expected salary')}</p>
               <p className="mt-0.5 text-xs font-semibold text-charcoal-900">
                 {row.salary != null ? formatMoney(row.salary) : '—'}
               </p>
             </div>
             <div>
-              <p className="bento-label text-charcoal-500">Requested by</p>
+              <p className="bento-label text-charcoal-500">{t('Requested by')}</p>
               <p className="mt-0.5 text-xs font-semibold text-charcoal-900">{row.submittedBy ?? '—'}</p>
             </div>
           </div>
@@ -505,25 +526,28 @@ function RecruitmentDetailModal({
         {/* what happens next, per the real state */}
         {row.status === 'Pending' && (
           <div className="rounded-xl border border-purple-100 bg-purple-50 p-3">
-            <p className="mb-0.5 text-xs font-bold text-purple-800">With HR — awaiting decision</p>
+            <p className="mb-0.5 text-xs font-bold text-purple-800">{t('With HR — awaiting decision')}</p>
             <p className="text-[11px] leading-snug text-purple-700">
-              HR reviews the position, shift and salary. You can&apos;t do anything here yet; you&apos;ll be
-              notified either way.
+              {t("HR reviews the position, shift and salary. You can't do anything here yet; you'll be notified either way.")}
             </p>
           </div>
         )}
         {row.status === 'Approved' && (
           <div className="rounded-xl border border-green-200 bg-green-50 p-3">
             <p className="mb-0.5 text-xs font-bold text-green-800">
-              Approved — {row.vacancyId ? `vacancy #${row.vacancyId} is open` : 'HR is opening the vacancy'}
+              {row.vacancyId
+                ? t('Approved — vacancy #{{id}} is open', { id: row.vacancyId })
+                : t('Approved — HR is opening the vacancy')}
             </p>
             <p className="text-[11px] leading-snug text-green-700">
-              HR creates the account and the contract once hiring completes. Decided by {row.decidedBy ?? '—'}.
+              {t('HR creates the account and the contract once hiring completes. Decided by {{name}}.', {
+                name: row.decidedBy ?? '—',
+              })}
             </p>
             {canApprove && (
               <div className="mt-2">
                 <Button size="sm" variant="danger" loading={reopenMutation.isPending} onClick={() => reopenMutation.mutate()}>
-                  Reopen
+                  {t('Reopen')}
                 </Button>
               </div>
             )}
@@ -531,12 +555,14 @@ function RecruitmentDetailModal({
         )}
         {row.status === 'Rejected' && (
           <div className="rounded-xl border border-red-200 bg-red-50 p-3">
-            <p className="mb-1 text-xs font-bold text-red-800">HR rejected this request</p>
-            <p className="text-[11px] leading-snug text-red-700">Decision recorded by {row.decidedBy ?? '—'}.</p>
+            <p className="mb-1 text-xs font-bold text-red-800">{t('HR rejected this request')}</p>
+            <p className="text-[11px] leading-snug text-red-700">
+              {t('Decision recorded by {{name}}.', { name: row.decidedBy ?? '—' })}
+            </p>
             {canRaise && (
               <div className="mt-2">
                 <Button size="sm" onClick={onRaise}>
-                  Raise a new request
+                  {t('Raise a new request')}
                 </Button>
               </div>
             )}
@@ -545,13 +571,13 @@ function RecruitmentDetailModal({
 
         {canApprove && row.status === 'Pending' && (
           <div className="rounded-xl border border-charcoal-200 bg-white p-3">
-            <p className="bento-label mb-1.5 text-charcoal-700">You hold the approval key</p>
+            <p className="bento-label mb-1.5 text-charcoal-700">{t('You hold the approval key')}</p>
             <div className="flex flex-wrap gap-1.5">
               <Button size="sm" loading={decideMutation.isPending && decideMutation.variables === 'approve'} onClick={() => decideMutation.mutate('approve')}>
-                Approve — open the vacancy
+                {t('Approve — open the vacancy')}
               </Button>
               <Button size="sm" variant="danger" onClick={() => decideMutation.mutate('reject')}>
-                Reject
+                {t('Reject')}
               </Button>
             </div>
           </div>
@@ -559,7 +585,7 @@ function RecruitmentDetailModal({
 
         <div className="flex justify-end gap-2 pt-1">
           <Button size="sm" variant="secondary" onClick={onClose}>
-            Close
+            {t('Close')}
           </Button>
         </div>
       </div>

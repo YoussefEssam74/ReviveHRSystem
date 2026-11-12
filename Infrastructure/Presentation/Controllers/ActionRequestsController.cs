@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using ServiceAbstraction.Services;
 using Shared.DataTransferObject.Employee;
@@ -19,6 +20,14 @@ namespace Presentation.Controllers
         [HttpGet]
         public async Task<ActionResult<ActionRequestListResponse>> GetActionRequests([FromQuery] ActionRequestListQuery query, CancellationToken cancellationToken)
             => Ok(await _service.GetActionRequestsAsync(GetActorUserId(), query, cancellationToken));
+
+        /// <summary>POST /api/action-requests — creates the Pending escalation (E20; gated by the action type's own meta key) → 201 { data }.</summary>
+        [HttpPost]
+        public async Task<ActionResult<ActionRequestDataResponse>> CreateActionRequest([FromBody] CreateActionRequestRequest request, CancellationToken cancellationToken)
+        {
+            var result = await _service.CreateAsync(GetActorUserId(), GetGymIdFromToken(), request, cancellationToken);
+            return StatusCode(StatusCodes.Status201Created, result);
+        }
 
         /// <summary>PUT /api/action-requests/{id}/approve — executes the effect + audit.</summary>
         [HttpPut("{id:int}/approve")]

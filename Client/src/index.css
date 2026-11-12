@@ -175,6 +175,20 @@ html {
   scroll-behavior: smooth;
 }
 
+/* Arabic gets a face with proper Arabic glyphs and slightly taller line boxes. */
+html[dir="rtl"] {
+  --font-sans: "Cairo", "Inter", ui-sans-serif, system-ui, sans-serif;
+  font-family: var(--font-sans);
+}
+
+/* Keep Latin numerals/codes readable inside Arabic copy. */
+html[dir="rtl"] input[type="email"],
+html[dir="rtl"] input[type="url"],
+html[dir="rtl"] input[type="tel"] {
+  direction: ltr;
+  text-align: start;
+}
+
 body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -191,6 +205,11 @@ body {
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--color-charcoal-300); border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--color-charcoal-400); }
+
+/* Safe area for the fixed mobile bottom nav (mock styles.css).
+   Requires viewport-fit=cover in index.html. */
+.safe-bottom { padding-bottom: env(safe-area-inset-bottom, 0px); }
+.safe-top { padding-top: env(safe-area-inset-top, 0px); }
 
 /* ==================== Component classes (mock parity) ==================== */
 
@@ -293,6 +312,18 @@ body {
 .modal-backdrop { animation: overlayFadeIn 0.2s ease; }
 .modal-content { animation: scaleIn 0.2s ease; }
 
+/* Overlays: cap to the *visible* viewport so mobile browser toolbars never
+   clip a dialog footer. vh first for older engines, dvh where supported. */
+.overlay-panel { max-height: 92vh; max-height: 92dvh; }
+
+/* Toast animation (mock styles.css) */
+@keyframes slideOutRight {
+  from { transform: translateX(0); opacity: 1; }
+  to { transform: translateX(100%); opacity: 0; }
+}
+.toast-enter { animation: slideInRight 0.3s ease forwards; }
+.toast-exit { animation: slideOutRight 0.3s ease forwards; }
+
 /* Drawer animation */
 @keyframes slideInRight {
   from { transform: translateX(100%); }
@@ -329,6 +360,10 @@ body {
 .data-table tbody tr { transition: background 0.15s; }
 .data-table tbody tr:hover { background: var(--color-charcoal-50); }
 .table-responsive { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+
+/* Compact variant for dense tables (mock parity, 12px floor on body cells). */
+.data-table-compact th { padding: 0.25rem 0.5rem; font-size: 0.6875rem; }
+.data-table-compact td { padding: 0.25rem 0.5rem; font-size: 0.75rem; }
 
 /* Form styles */
 .form-input {
@@ -399,6 +434,9 @@ body {
 .btn-md { padding: 0.4375rem 0.875rem; }
 .btn-primary { background: #16a34a; color: white; border: 1px solid #16a34a; }
 .btn-primary:hover { background: #15803d; border-color: #15803d; }
+/* Mock UI/HR "btn-success" — the green approve action. */
+.btn-success { background: #06b664; color: white; border: 1px solid #06b664; }
+.btn-success:hover { background: #059a55; border-color: #059a55; }
 .btn-secondary { background: var(--color-white); color: var(--color-charcoal-700); border: 1px solid var(--color-charcoal-300); }
 .btn-secondary:hover { background: var(--color-charcoal-50); }
 .btn-danger { background: #dc2626; color: white; border: 1px solid #dc2626; }
@@ -561,4 +599,32 @@ body {
 button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible {
   outline: 2px solid #16a34a;
   outline-offset: 2px;
+}
+
+/* ==================== Touch & mobile ergonomics ==================== */
+
+/* Icon-only controls get a 44px hit area on touch. Pointer-based so the
+   desktop layout keeps its compact paddings. */
+.touch-target { display: inline-flex; align-items: center; justify-content: center; }
+
+@media (pointer: coarse) {
+  .touch-target { min-width: 2.75rem; min-height: 2.75rem; }
+  /* Buttons default to ~27px tall (index.css .btn-sm/.btn-md). */
+  .btn-sm, .btn-md { min-height: 2.75rem; }
+  /* iOS zooms the page when a focused field's text is below 16px. Kept
+     unlayered so it also beats the compact text-xs / h-8 utilities used in
+     the dense HR forms. */
+  input:not([type='checkbox']):not([type='radio']),
+  select,
+  textarea { font-size: 1rem; }
+  input:not([type='checkbox']):not([type='radio']),
+  select { min-height: 2.75rem; }
+}
+
+/* Horizontal scrollers that should not show a scrollbar (mobile nav row). */
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+.no-scrollbar::-webkit-scrollbar { display: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .modal-backdrop, .modal-content, .fade-in, .toast-enter, .toast-exit { animation: none; }
 }

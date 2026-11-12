@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useTranslation } from 'react-i18next'
 import {
   Award,
   BadgeCheck,
@@ -51,6 +52,7 @@ function saveBlob({ blob, fileName, fallbackName }: { blob: Blob; fileName: stri
 }
 
 export default function MyDocumentsPage() {
+  const { t } = useTranslation()
   const { me } = usePortalSession()
   const employeeId = me?.employeeId ?? null
   const { toast } = useToast()
@@ -92,10 +94,15 @@ export default function MyDocumentsPage() {
     downloadMutation.mutate({ path: `/api/employees/${employeeId}/hr-documents/${id}/download`, fallback: name })
 
   if (employeeId == null) {
-    return <EmptyState title="No employee profile" hint="This account is not linked to an employee profile." />
+    return (
+      <EmptyState
+        title={t('No employee profile')}
+        hint={t('This account is not linked to an employee profile.')}
+      />
+    )
   }
   if (documentsQuery.isLoading || requiredQuery.isLoading) {
-    return <LoadingState label="Loading your documents…" />
+    return <LoadingState label={t('Loading your documents…')} />
   }
   if (documentsQuery.isError) {
     return <ErrorState message={describeApiError(documentsQuery.error)} onRetry={() => documentsQuery.refetch()} />
@@ -116,23 +123,23 @@ export default function MyDocumentsPage() {
       {/* Header */}
       <div className="flex flex-col justify-between gap-2 sm:flex-row sm:items-center">
         <div>
-          <h1 className="text-lg font-bold text-charcoal-900">My Documents</h1>
+          <h1 className="text-lg font-bold text-charcoal-900">{t('My Documents')}</h1>
           <p className="mt-0.5 text-[11px] text-charcoal-500">
-            {doneCount} of {required.length} required documents uploaded
+            {t('{{done}} of {{total}} required documents uploaded', { done: doneCount, total: required.length })}
           </p>
         </div>
         <button type="button" onClick={() => setUploadFor('')} className="btn btn-sm btn-primary">
           <Upload className="h-3.5 w-3.5" aria-hidden="true" />
-          Upload
+          {t('Upload')}
         </button>
       </div>
 
       {/* Required documents checklist */}
       <div className="overflow-hidden rounded-xl border border-charcoal-200 bg-white">
         <div className="flex items-center justify-between border-b border-charcoal-100 px-3 py-1.5">
-          <p className="bento-label">REQUIRED DOCUMENTS · EMPLOYEE UPLOADS</p>
+          <p className="bento-label">{t('REQUIRED DOCUMENTS · EMPLOYEE UPLOADS')}</p>
           <span className="text-[10px] text-charcoal-400">
-            {doneCount}/{required.length} complete
+            {t('{{done}}/{{total}} complete', { done: doneCount, total: required.length })}
           </span>
         </div>
         <div className="divide-y divide-charcoal-50">
@@ -154,7 +161,9 @@ export default function MyDocumentsPage() {
                     {item.label}
                     <span className="text-[10px] font-normal text-charcoal-500">
                       {' '}
-                      · {doc ? `Uploaded ${formatDate(doc.uploadDate)}` : 'Not uploaded yet'}
+                      · {doc
+                        ? t('Uploaded {{date}}', { date: formatDate(doc.uploadDate) })
+                        : t('Not uploaded yet')}
                     </span>
                   </p>
                 </div>
@@ -165,7 +174,7 @@ export default function MyDocumentsPage() {
                     </button>
                     <button
                       type="button"
-                      aria-label={`Download ${doc.name}`}
+                      aria-label={t('Download {{name}}', { name: doc.name })}
                       onClick={() => downloadOwn(doc)}
                       className="rounded-md p-1 transition-colors hover:bg-charcoal-100"
                     >
@@ -179,14 +188,14 @@ export default function MyDocumentsPage() {
                     className="btn btn-sm btn-secondary flex-shrink-0"
                   >
                     <Upload className="h-3 w-3" aria-hidden="true" />
-                    Upload
+                    {t('Upload')}
                   </button>
                 )}
               </div>
             )
           })}
           {required.length === 0 && (
-            <p className="px-3 py-3 text-xs text-charcoal-400">No document requirements are configured.</p>
+            <p className="px-3 py-3 text-xs text-charcoal-400">{t('No document requirements are configured.')}</p>
           )}
         </div>
       </div>
@@ -194,15 +203,15 @@ export default function MyDocumentsPage() {
       {/* HR published official documents */}
       <div className="overflow-hidden rounded-xl border border-charcoal-200 bg-white">
         <div className="flex items-center justify-between border-b border-charcoal-100 px-3 py-1.5">
-          <p className="bento-label">HR UPLOADED · OFFICIAL COMPANY DOCUMENTS</p>
+          <p className="bento-label">{t('HR UPLOADED · OFFICIAL COMPANY DOCUMENTS')}</p>
           <span className="inline-flex items-center gap-1 text-[10px] text-charcoal-400">
             <IdCard className="h-3 w-3" aria-hidden="true" />
-            View / Download only
+            {t('View / Download only')}
           </span>
         </div>
         <div className="divide-y divide-charcoal-50">
           {hrDocs.length === 0 ? (
-            <p className="px-3 py-3 text-xs text-charcoal-400">HR has not published any documents for you yet.</p>
+            <p className="px-3 py-3 text-xs text-charcoal-400">{t('HR has not published any documents for you yet.')}</p>
           ) : (
             hrDocs.map((hrDoc) => (
               <div key={hrDoc.id} className="flex items-center gap-2 px-3 py-1.5">
@@ -226,7 +235,7 @@ export default function MyDocumentsPage() {
                   className="btn btn-sm btn-secondary flex-shrink-0"
                 >
                   <Download className="h-3 w-3" aria-hidden="true" />
-                  Download
+                  {t('Download')}
                 </button>
               </div>
             ))
@@ -236,27 +245,27 @@ export default function MyDocumentsPage() {
 
       {/* All on-file documents */}
       <div className="flex items-center justify-between pt-1">
-        <p className="text-sm font-bold text-charcoal-900">All On-File Documents</p>
-        <span className="text-[10px] text-charcoal-400">{documents.length} documents</span>
+        <p className="text-sm font-bold text-charcoal-900">{t('All On-File Documents')}</p>
+        <span className="text-[10px] text-charcoal-400">{t('{{count}} documents', { count: documents.length })}</span>
       </div>
 
       {/* Desktop table */}
       <div className="hidden overflow-hidden rounded-xl border border-charcoal-200 bg-white lg:block">
         {documents.length === 0 ? (
           <EmptyState
-            title="No documents on file"
-            hint="Upload the required documents above — HR can then review your file."
+            title={t('No documents on file')}
+            hint={t('Upload the required documents above — HR can then review your file.')}
           />
         ) : (
           <div className="table-responsive">
             <table className="data-table data-table-compact">
               <thead>
                 <tr>
-                  <th>Document</th>
-                  <th>Category</th>
-                  <th>Uploaded</th>
-                  <th>Expires</th>
-                  <th>Status</th>
+                  <th>{t('Document')}</th>
+                  <th>{t('Category')}</th>
+                  <th>{t('Uploaded')}</th>
+                  <th>{t('Expires')}</th>
+                  <th>{t('Status')}</th>
                   <th />
                 </tr>
               </thead>
@@ -289,7 +298,7 @@ export default function MyDocumentsPage() {
                     <td>
                       <button
                         type="button"
-                        aria-label={`Download ${doc.name}`}
+                        aria-label={t('Download {{name}}', { name: doc.name })}
                         onClick={(event) => {
                           event.stopPropagation()
                           downloadOwn(doc)
@@ -310,7 +319,7 @@ export default function MyDocumentsPage() {
       {/* Mobile cards */}
       <div className="space-y-1.5 lg:hidden">
         {documents.length === 0 ? (
-          <EmptyState title="No documents on file" hint="Upload the required documents above." />
+          <EmptyState title={t('No documents on file')} hint={t('Upload the required documents above.')} />
         ) : (
           documents.map((doc) => (
             <div
@@ -345,7 +354,7 @@ export default function MyDocumentsPage() {
                           doc.status === 'Expiring Soon' ? 'font-medium text-orange-600' : 'text-charcoal-400',
                         )}
                       >
-                        Exp: {formatDate(doc.expiryDate)}
+                        {t('Exp: {{date}}', { date: formatDate(doc.expiryDate) })}
                       </span>
                     ) : null}
                   </div>
@@ -354,7 +363,7 @@ export default function MyDocumentsPage() {
                   <StatusBadge status={doc.status} />
                   <button
                     type="button"
-                    aria-label={`Download ${doc.name}`}
+                    aria-label={t('Download {{name}}', { name: doc.name })}
                     onClick={(event) => {
                       event.stopPropagation()
                       downloadOwn(doc)
@@ -379,7 +388,7 @@ export default function MyDocumentsPage() {
           detailDoc && (
             <>
               <Button variant="secondary" size="sm" onClick={() => setDetailDoc(null)}>
-                Close
+                {t('Close')}
               </Button>
               <Button
                 size="sm"
@@ -389,7 +398,7 @@ export default function MyDocumentsPage() {
                 }}
               >
                 <Download className="h-3.5 w-3.5" aria-hidden="true" />
-                Download
+                {t('Download')}
               </Button>
             </>
           )
@@ -403,24 +412,24 @@ export default function MyDocumentsPage() {
             </div>
             <div className="grid grid-cols-2 gap-2">
               <div className="rounded-lg bg-charcoal-50 p-2.5 text-center">
-                <p className="bento-label mb-0.5 text-charcoal-500">UPLOADED</p>
+                <p className="bento-label mb-0.5 text-charcoal-500">{t('UPLOADED')}</p>
                 <p className="text-xs font-semibold text-charcoal-900">{formatDate(detailDoc.uploadDate)}</p>
               </div>
               <div className="rounded-lg bg-charcoal-50 p-2.5 text-center">
-                <p className="bento-label mb-0.5 text-charcoal-500">EXPIRES</p>
+                <p className="bento-label mb-0.5 text-charcoal-500">{t('EXPIRES')}</p>
                 <p
                   className={cn(
                     'text-xs font-semibold',
                     detailDoc.status === 'Expiring Soon' ? 'text-orange-600' : 'text-charcoal-900',
                   )}
                 >
-                  {detailDoc.expiryDate ? formatDate(detailDoc.expiryDate) : 'N/A'}
+                  {detailDoc.expiryDate ? formatDate(detailDoc.expiryDate) : t('N/A')}
                 </p>
               </div>
             </div>
             <div className="rounded-lg bg-charcoal-50 p-6 text-center">
               <FileText className="mx-auto mb-2 h-10 w-10 text-charcoal-300" aria-hidden="true" />
-              <p className="text-xs text-charcoal-500">Document preview</p>
+              <p className="text-xs text-charcoal-500">{t('Document preview')}</p>
             </div>
           </div>
         )}
@@ -433,7 +442,7 @@ export default function MyDocumentsPage() {
           required={required}
           preselectedKey={uploadFor}
           onDone={async () => {
-            toast('Document uploaded for HR review')
+            toast(t('Document uploaded for HR review'))
             await invalidate()
             setUploadFor(null)
           }}
@@ -459,6 +468,7 @@ function UploadModal({
   onDone: () => Promise<void>
   onClose: () => void
 }) {
+  const { t } = useTranslation()
   const [category, setCategory] = useState(preselectedKey || required[0]?.key || '')
   const [expiryDate, setExpiryDate] = useState('')
   const [file, setFile] = useState<File | null>(null)
@@ -490,12 +500,12 @@ function UploadModal({
     <Modal
       open
       width="wide"
-      title="Upload Document"
+      title={t('Upload Document')}
       onClose={onClose}
       footer={
         <>
           <Button variant="secondary" size="sm" onClick={onClose} disabled={uploadMutation.isPending}>
-            Cancel
+            {t('Cancel')}
           </Button>
           <Button
             size="sm"
@@ -507,7 +517,7 @@ function UploadModal({
             }}
           >
             <Upload className="h-3.5 w-3.5" aria-hidden="true" />
-            Upload
+            {t('Upload')}
           </Button>
         </>
       }
@@ -518,7 +528,7 @@ function UploadModal({
           event.preventDefault()
           setError(null)
           if (!category || !file) {
-            setError('Choose a document type and a file first.')
+            setError(t('Choose a document type and a file first.'))
             return
           }
           const invalid = validateUploadFile(file)
@@ -531,7 +541,7 @@ function UploadModal({
       >
         <div>
           <label htmlFor="doc-category" className="form-label">
-            Document Type
+            {t('Document Type')}
           </label>
           <select
             id="doc-category"
@@ -540,10 +550,10 @@ function UploadModal({
             value={category}
             onChange={(event) => setCategory(event.target.value)}
           >
-            <option value="">Select…</option>
+            <option value="">{t('Select…')}</option>
             {types.map((type) => (
               <option key={type.key} value={type.key}>
-                {type.label}
+                {t(type.label)}
               </option>
             ))}
           </select>
@@ -551,7 +561,7 @@ function UploadModal({
 
         <div>
           <label htmlFor="doc-expiry" className="form-label">
-            Expires On <span className="font-normal text-charcoal-400">(optional)</span>
+            {t('Expires On')} <span className="font-normal text-charcoal-400">{t('(optional)')}</span>
           </label>
           <input
             id="doc-expiry"
@@ -564,7 +574,7 @@ function UploadModal({
 
         <div>
           <label htmlFor="doc-file" className="form-label">
-            File
+            {t('File')}
           </label>
           <label
             htmlFor="doc-file"
@@ -572,10 +582,10 @@ function UploadModal({
           >
             <Upload className="mb-1 h-6 w-6 text-charcoal-300" aria-hidden="true" />
             <p className="text-xs text-charcoal-500">
-              {file ? 'Choose a different file' : 'Click to upload or drag & drop'}
+              {file ? t('Choose a different file') : t('Click to upload or drag & drop')}
             </p>
             <p className="mt-0.5 text-[10px] text-charcoal-400">
-              {file ? 'Ready to upload' : `${DOCUMENT_FORMATS_LABEL} up to 10 MB`}
+              {file ? t('Ready to upload') : t('{{formats}} up to 10 MB', { formats: DOCUMENT_FORMATS_LABEL })}
             </p>
             <input
               id="doc-file"
@@ -604,7 +614,7 @@ function UploadModal({
               <span className="shrink-0 text-[10px] text-charcoal-500">{formatBytes(file.size)}</span>
               <button
                 type="button"
-                aria-label="Remove selected file"
+                aria-label={t('Remove selected file')}
                 onClick={() => {
                   setFile(null)
                   setError(null)
@@ -616,7 +626,7 @@ function UploadModal({
             </div>
           )}
           <p className="mt-1 text-[10px] text-charcoal-400">
-            The document name is taken from the file you choose.
+            {t('The document name is taken from the file you choose.')}
           </p>
         </div>
 

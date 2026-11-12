@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { translate as t } from '../i18n'
 
 const GET_MEDIA_TIMEOUT_MS = 12_000
 
@@ -57,7 +58,7 @@ export function useCamera() {
       setActive(true)
       return true
     } catch {
-      setError('Camera unavailable. Allow camera access and try again.')
+      setError(t('Camera unavailable. Allow camera access and try again.'))
       return false
     }
   }, [])

@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import {
   BadgeCheck,
   CalendarClock,
@@ -165,6 +166,7 @@ const PALETTE_ACTIONS: PaletteAction[] = [
 ]
 
 export function BranchActionsPalette({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const { t } = useTranslation()
   const { can } = usePortalSession()
   const navigate = useNavigate()
   const actions = PALETTE_ACTIONS.filter((a) => a.permission === '' || can(a.permission))
@@ -174,8 +176,8 @@ export function BranchActionsPalette({ open, onClose }: { open: boolean; onClose
     <>
       <Modal
         open={open}
-        title="Branch Actions"
-        subtitle="Everything you can do for the active gym — raise actions go to HR."
+        title={t('Branch Actions')}
+        subtitle={t('Everything you can do for the active gym — raise actions go to HR.')}
         onClose={onClose}
         width="wide"
       >
@@ -195,17 +197,17 @@ export function BranchActionsPalette({ open, onClose }: { open: boolean; onClose
                       }
                       setRaise(a.route.run)
                     }}
-                    className="group flex items-start gap-2.5 rounded-lg border border-charcoal-200 p-3 text-left transition-colors hover:border-brand-300 hover:bg-brand-50/60"
+                    className="group flex items-start gap-2.5 rounded-lg border border-charcoal-200 p-3 text-start transition-colors hover:border-brand-300 hover:bg-brand-50/60"
                   >
                     <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-brand-50 text-brand-600 group-hover:bg-brand-100">
                       <Icon className="h-4 w-4" />
                     </span>
                     <span className="min-w-0 flex-1">
                       <span className="flex flex-wrap items-center gap-1.5">
-                        <span className="text-xs font-semibold text-charcoal-900">{a.label}</span>
+                        <span className="text-xs font-semibold text-charcoal-900">{t(a.label)}</span>
                         {a.toHr && <HrTag />}
                       </span>
-                      <span className="mt-0.5 block text-[10px] leading-snug text-charcoal-500">{a.desc}</span>
+                      <span className="mt-0.5 block text-[10px] leading-snug text-charcoal-500">{t(a.desc)}</span>
                     </span>
                   </button>
                 )
@@ -224,9 +226,10 @@ export function BranchActionsPalette({ open, onClose }: { open: boolean; onClose
 }
 
 function HrTag() {
+  const { t } = useTranslation()
   return (
     <span className="rounded bg-purple-50 px-1 py-0.5 text-[9px] font-bold uppercase tracking-wide text-purple-700 ring-1 ring-inset ring-purple-200">
-      → HR
+      <span className="inline-block rtl:rotate-180">→</span> {t('HR')}
     </span>
   )
 }
@@ -234,6 +237,7 @@ function HrTag() {
 /* Awaiting HR ------------------------------------------------------------- */
 
 function AwaitingHrList({ open }: { open: boolean }) {
+  const { t } = useTranslation()
   const queue = useQuery({
     queryKey: ['portal', 'branch-actions', 'pending-hr'],
     queryFn: ({ signal }) => getPendingHrQueue(signal),
@@ -248,7 +252,7 @@ function AwaitingHrList({ open }: { open: boolean }) {
 
   return (
     <div className="rounded-lg bg-charcoal-50 p-2.5">
-      <p className="bento-label mb-1.5">Awaiting HR ({items.length})</p>
+      <p className="bento-label mb-1.5">{t('Awaiting HR ({{count}})', { count: items.length })}</p>
       {items.map((item) => (
         <QueueRow key={`${item.kind}-${item.id}`} item={item} />
       ))}
@@ -299,9 +303,10 @@ function EmployeeSelect({
   value: string
   onChange: (v: string) => void
 }) {
+  const { t } = useTranslation()
   return (
     <select id={id} value={value} onChange={(e) => onChange(e.target.value)} className="form-input">
-      <option value="">Select employee...</option>
+      <option value="">{t('Select employee...')}</option>
       {options.map((e) => (
         <option key={e.id} value={String(e.id)}>
           {e.name} — {e.position}
@@ -314,12 +319,14 @@ function EmployeeSelect({
 /* Issue Deduction ---------------------------------------------------------- */
 
 function IssueDeductionModal({ onClose }: { onClose: () => void }) {
+  const { t } = useTranslation()
   const { toast } = useToast()
   const queryClient = useQueryClient()
   const roster = useRosterOptions(false)
   const options = roster.data?.filter((e) => e.status !== 'Terminated') ?? []
 
   const [employeeId, setEmployeeId] = useState('')
+  const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10))
   const [amount, setAmount] = useState('')
   const [reason, setReason] = useState(DEDUCTION_REASONS[0])
   const [note, setNote] = useState('')
@@ -336,12 +343,18 @@ function IssueDeductionModal({ onClose }: { onClose: () => void }) {
     mutationFn: () =>
       issueDeduction({
         employeeId: Number(employeeId),
+        date,
         amount: Number(amount),
         reason,
         note: note.trim() || null,
       }),
     onSuccess: (created) => {
-      toast(`Deduction of ${formatMoney(created.amount)} for ${created.employee} sent to HR for approval`)
+      toast(
+        t('Deduction of {{amount}} for {{employee}} sent to HR for approval', {
+          amount: formatMoney(created.amount),
+          employee: created.employee,
+        }),
+      )
       void queryClient.invalidateQueries({ queryKey: ['portal', 'branch-actions', 'pending-hr'] })
       void queryClient.invalidateQueries({ queryKey: ['portal', 'branch', 'deductions'] })
       onClose()
@@ -350,24 +363,25 @@ function IssueDeductionModal({ onClose }: { onClose: () => void }) {
   })
 
   return (
-    <Modal open title="Issue Deduction → Send to HR" onClose={onClose} width="md">
+    <Modal open title={t('Issue Deduction → Send to HR')} onClose={onClose} width="md">
       <form
         onSubmit={(e) => {
           e.preventDefault()
-          if (!employeeId) return toast('Select an employee', 'error')
+          if (!employeeId) return toast(t('Select an employee'), 'error')
           if (!Number.isFinite(Number(amount)) || Number(amount) <= 0)
-            return toast('Enter a valid amount', 'error')
+            return toast(t('Enter a valid amount'), 'error')
           save.mutate()
         }}
         className="space-y-3"
       >
         <div className="rounded-lg border border-purple-100 bg-purple-50 p-2.5 text-[10px] leading-relaxed text-purple-800">
-          The deduction is created as a <b>Deduction Candidate</b> with status <b>Pending HR</b>. HR reviews and
-          approves it before it appears in payroll or on the employee's payslip.
+          {t('The deduction is created as a')} <b>{t('Deduction Candidate')}</b> {t('with status')}{' '}
+          <b>{t('Pending HR')}</b>.{' '}
+          {t("HR reviews and approves it before it appears in payroll or on the employee's payslip.")}
         </div>
         <div>
           <label className="form-label" htmlFor="ded-employee">
-            Employee
+            {t('Employee')}
           </label>
           {roster.isPending ? (
             <LoadingState />
@@ -382,10 +396,27 @@ function IssueDeductionModal({ onClose }: { onClose: () => void }) {
             />
           )}
         </div>
+        <div>
+          <label className="form-label" htmlFor="ded-date">
+            {t('Deduction date')}
+          </label>
+          <input
+            id="ded-date"
+            type="date"
+            value={date}
+            max={new Date().toISOString().slice(0, 10)}
+            onChange={(e) => setDate(e.target.value)}
+            className="form-input"
+            required
+          />
+          <p className="mt-1 text-[10px] text-charcoal-500">
+            {t('One deduction per employee per day. A rejected day cannot be re-issued.')}
+          </p>
+        </div>
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className="form-label" htmlFor="ded-amount">
-              Amount (EGP)
+              {t('Amount (EGP)')}
             </label>
             <input
               id="ded-amount"
@@ -395,36 +426,40 @@ function IssueDeductionModal({ onClose }: { onClose: () => void }) {
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
               className="form-input"
-              placeholder="e.g. 150"
+              placeholder={t('e.g. 150')}
               required
             />
             {suggestedDaily != null && (
               <p className="mt-1 text-[10px] text-charcoal-500">
-                Suggested: 1 day ≈ {formatMoney(suggestedDaily)} (based on basic salary).{' '}
+                {t('Suggested: 1 day ≈ {{amount}} (based on basic salary).', {
+                  amount: formatMoney(suggestedDaily),
+                })}{' '}
                 <button
                   type="button"
                   className="font-semibold text-brand-600 hover:underline"
                   onClick={() => setAmount(String(suggestedDaily))}
                 >
-                  Use suggested
+                  {t('Use suggested')}
                 </button>
               </p>
             )}
           </div>
           <div>
             <label className="form-label" htmlFor="ded-reason">
-              Reason
+              {t('Reason')}
             </label>
             <select id="ded-reason" value={reason} onChange={(e) => setReason(e.target.value)} className="form-input">
               {DEDUCTION_REASONS.map((r) => (
-                <option key={r}>{r}</option>
+                <option key={r} value={r}>
+                  {t(r)}
+                </option>
               ))}
             </select>
           </div>
         </div>
         <div>
           <label className="form-label" htmlFor="ded-note">
-            Note for HR (optional)
+            {t('Note for HR (optional)')}
           </label>
           <textarea
             id="ded-note"
@@ -432,18 +467,20 @@ function IssueDeductionModal({ onClose }: { onClose: () => void }) {
             value={note}
             onChange={(e) => setNote(e.target.value)}
             className="form-input"
-            placeholder="Context that helps HR review it faster..."
+            placeholder={t('Context that helps HR review it faster...')}
           />
         </div>
         {reason === 'Other (see note)' && (
-          <p className="text-[10px] text-charcoal-500">"Other" requires the note for HR to understand the case.</p>
+          <p className="text-[10px] text-charcoal-500">
+            {t('"Other" requires the note for HR to understand the case.')}
+          </p>
         )}
         <div className="flex justify-end gap-2 pt-1">
           <Button type="button" size="sm" variant="secondary" onClick={onClose}>
-            Cancel
+            {t('Cancel')}
           </Button>
           <Button type="submit" size="sm" variant="primary" loading={save.isPending}>
-            Send to HR
+            {t('Send to HR')}
           </Button>
         </div>
       </form>
@@ -454,6 +491,7 @@ function IssueDeductionModal({ onClose }: { onClose: () => void }) {
 /* Issue Warning ------------------------------------------------------------ */
 
 function IssueWarningModal({ onClose }: { onClose: () => void }) {
+  const { t } = useTranslation()
   const { toast } = useToast()
   const queryClient = useQueryClient()
   const roster = useRosterOptions(false)
@@ -473,7 +511,7 @@ function IssueWarningModal({ onClose }: { onClose: () => void }) {
         note: note.trim() || null,
       }),
     onSuccess: (created) => {
-      toast(`Warning notice for ${created.employee} sent to HR for review`)
+      toast(t('Warning notice for {{employee}} sent to HR for review', { employee: created.employee }))
       void queryClient.invalidateQueries({ queryKey: ['portal', 'branch-actions', 'pending-hr'] })
       void queryClient.invalidateQueries({ queryKey: ['portal', 'branch', 'warnings'] })
       onClose()
@@ -482,23 +520,25 @@ function IssueWarningModal({ onClose }: { onClose: () => void }) {
   })
 
   return (
-    <Modal open title="Issue Warning Notice → Send to HR" onClose={onClose} width="md">
+    <Modal open title={t('Issue Warning Notice → Send to HR')} onClose={onClose} width="md">
       <form
         onSubmit={(e) => {
           e.preventDefault()
-          if (!employeeId) return toast('Select an employee', 'error')
-          if (reason.trim().length === 0) return toast('Enter a reason for the warning', 'error')
+          if (!employeeId) return toast(t('Select an employee'), 'error')
+          if (reason.trim().length === 0) return toast(t('Enter a reason for the warning'), 'error')
           save.mutate()
         }}
         className="space-y-3"
       >
         <div className="rounded-lg border border-purple-100 bg-purple-50 p-2.5 text-[10px] leading-relaxed text-purple-800">
-          The notice is saved with status <b>Pending HR</b>. HR reviews it and files it to the employee's record —
-          disciplinary action is HR-owned, the Branch Manager only proposes it.
+          {t('The notice is saved with status')} <b>{t('Pending HR')}</b>.{' '}
+          {t(
+            "HR reviews it and files it to the employee's record — disciplinary action is HR-owned, the Branch Manager only proposes it.",
+          )}
         </div>
         <div>
           <label className="form-label" htmlFor="warn-employee">
-            Employee
+            {t('Employee')}
           </label>
           {roster.isPending ? (
             <LoadingState />
@@ -515,30 +555,32 @@ function IssueWarningModal({ onClose }: { onClose: () => void }) {
         </div>
         <div>
           <label className="form-label" htmlFor="warn-type">
-            Category
+            {t('Category')}
           </label>
           <select id="warn-type" value={type} onChange={(e) => setType(e.target.value)} className="form-input">
-            {WARNING_TYPES.map((t) => (
-              <option key={t}>{t}</option>
+            {WARNING_TYPES.map((option) => (
+              <option key={option} value={option}>
+                {t(option)}
+              </option>
             ))}
           </select>
         </div>
         <div>
           <label className="form-label" htmlFor="warn-reason">
-            Reason
+            {t('Reason')}
           </label>
           <input
             id="warn-reason"
             value={reason}
             onChange={(e) => setReason(e.target.value)}
             className="form-input"
-            placeholder="e.g. 3rd late arrival within one month"
+            placeholder={t('e.g. 3rd late arrival within one month')}
             required
           />
         </div>
         <div>
           <label className="form-label" htmlFor="warn-note">
-            What was said to the employee
+            {t('What was said to the employee')}
           </label>
           <textarea
             id="warn-note"
@@ -546,18 +588,18 @@ function IssueWarningModal({ onClose }: { onClose: () => void }) {
             value={note}
             onChange={(e) => setNote(e.target.value)}
             className="form-input"
-            placeholder="e.g. Verbal warning issued on site; agreed on 08:00 start"
+            placeholder={t('e.g. Verbal warning issued on site; agreed on 08:00 start')}
           />
         </div>
         <div className="rounded-lg bg-charcoal-50 p-2.5 text-[10px] text-charcoal-500">
-          The employee does <b>not</b> see this until HR approves and files it.
+          {t('The employee does')} <b>{t('not')}</b> {t('see this until HR approves and files it.')}
         </div>
         <div className="flex justify-end gap-2 pt-1">
           <Button type="button" size="sm" variant="secondary" onClick={onClose}>
-            Cancel
+            {t('Cancel')}
           </Button>
           <Button type="submit" size="sm" variant="primary" loading={save.isPending}>
-            Send to HR
+            {t('Send to HR')}
           </Button>
         </div>
       </form>
@@ -568,6 +610,7 @@ function IssueWarningModal({ onClose }: { onClose: () => void }) {
 /* Propose Bonus ------------------------------------------------------------ */
 
 function ProposeBonusModal({ onClose }: { onClose: () => void }) {
+  const { t } = useTranslation()
   const { toast } = useToast()
   const queryClient = useQueryClient()
   // Bonuses go to working staff: the Active roster only (no terminated rows).
@@ -588,7 +631,12 @@ function ProposeBonusModal({ onClose }: { onClose: () => void }) {
         note: note.trim() || null,
       }),
     onSuccess: (created) => {
-      toast(`Bonus proposal of ${formatMoney(created.amount)} for ${created.employee} sent to HR`)
+      toast(
+        t('Bonus proposal of {{amount}} for {{employee}} sent to HR', {
+          amount: formatMoney(created.amount),
+          employee: created.employee,
+        }),
+      )
       void queryClient.invalidateQueries({ queryKey: ['portal', 'branch-actions', 'pending-hr'] })
       void queryClient.invalidateQueries({ queryKey: ['portal', 'branch', 'bonuses'] })
       onClose()
@@ -597,25 +645,25 @@ function ProposeBonusModal({ onClose }: { onClose: () => void }) {
   })
 
   return (
-    <Modal open title="Propose Bonus → Send to HR" onClose={onClose} width="md">
+    <Modal open title={t('Propose Bonus → Send to HR')} onClose={onClose} width="md">
       <form
         onSubmit={(e) => {
           e.preventDefault()
-          if (!employeeId) return toast('Select an employee', 'error')
+          if (!employeeId) return toast(t('Select an employee'), 'error')
           if (!Number.isFinite(Number(amount)) || Number(amount) <= 0)
-            return toast('Enter a valid amount', 'error')
-          if (reason.trim().length === 0) return toast('Add a justification for HR', 'error')
+            return toast(t('Enter a valid amount'), 'error')
+          if (reason.trim().length === 0) return toast(t('Add a justification for HR'), 'error')
           save.mutate()
         }}
         className="space-y-3"
       >
         <div className="rounded-lg border border-purple-100 bg-purple-50 p-2.5 text-[10px] leading-relaxed text-purple-800">
-          HR owns payroll edits (<code>payroll.edit</code>) — your proposal lands as <b>Pending HR</b> and is only
-          added to the payroll run once HR approves it.
+          {t('HR owns payroll edits')} (<code>payroll.edit</code>) — {t('your proposal lands as')}{' '}
+          <b>{t('Pending HR')}</b> {t('and is only added to the payroll run once HR approves it.')}
         </div>
         <div>
           <label className="form-label" htmlFor="bonus-employee">
-            Employee
+            {t('Employee')}
           </label>
           {roster.isPending ? (
             <LoadingState />
@@ -633,17 +681,19 @@ function ProposeBonusModal({ onClose }: { onClose: () => void }) {
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className="form-label" htmlFor="bonus-type">
-              Type
+              {t('Type')}
             </label>
             <select id="bonus-type" value={type} onChange={(e) => setType(e.target.value)} className="form-input">
-              {BONUS_TYPES.map((t) => (
-                <option key={t}>{t}</option>
+              {BONUS_TYPES.map((option) => (
+                <option key={option} value={option}>
+                  {t(option)}
+                </option>
               ))}
             </select>
           </div>
           <div>
             <label className="form-label" htmlFor="bonus-amount">
-              Amount (EGP)
+              {t('Amount (EGP)')}
             </label>
             <input
               id="bonus-amount"
@@ -653,14 +703,14 @@ function ProposeBonusModal({ onClose }: { onClose: () => void }) {
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
               className="form-input"
-              placeholder="e.g. 500"
+              placeholder={t('e.g. 500')}
               required
             />
           </div>
         </div>
         <div>
           <label className="form-label" htmlFor="bonus-reason">
-            Justification
+            {t('Justification')}
           </label>
           <textarea
             id="bonus-reason"
@@ -668,13 +718,13 @@ function ProposeBonusModal({ onClose }: { onClose: () => void }) {
             value={reason}
             onChange={(e) => setReason(e.target.value)}
             className="form-input"
-            placeholder="Why does this employee deserve it?"
+            placeholder={t('Why does this employee deserve it?')}
             required
           />
         </div>
         <div>
           <label className="form-label" htmlFor="bonus-note">
-            Supporting note (optional)
+            {t('Supporting note (optional)')}
           </label>
           <textarea
             id="bonus-note"
@@ -682,15 +732,15 @@ function ProposeBonusModal({ onClose }: { onClose: () => void }) {
             value={note}
             onChange={(e) => setNote(e.target.value)}
             className="form-input"
-            placeholder="Numbers that back it up — revenue, coverage, KPIs..."
+            placeholder={t('Numbers that back it up — revenue, coverage, KPIs...')}
           />
         </div>
         <div className="flex justify-end gap-2 pt-1">
           <Button type="button" size="sm" variant="secondary" onClick={onClose}>
-            Cancel
+            {t('Cancel')}
           </Button>
           <Button type="submit" size="sm" variant="primary" loading={save.isPending}>
-            Send to HR
+            {t('Send to HR')}
           </Button>
         </div>
       </form>
@@ -701,6 +751,7 @@ function ProposeBonusModal({ onClose }: { onClose: () => void }) {
 /* Send Report -------------------------------------------------------------- */
 
 function SendReportModal({ onClose }: { onClose: () => void }) {
+  const { t } = useTranslation()
   const { toast } = useToast()
   // Local year-month, not toISOString(): for positive UTC offsets the first
   // hours of a month land in the previous one.
@@ -714,25 +765,25 @@ function SendReportModal({ onClose }: { onClose: () => void }) {
   const save = useMutation({
     mutationFn: () => sendBranchReport({ period, type, message: message.trim() }),
     onSuccess: () => {
-      toast('Report sent to HR')
+      toast(t('Report sent to HR'))
       onClose()
     },
     onError: (error) => toast(describeApiError(error), 'error'),
   })
 
   return (
-    <Modal open title="Send Report to HR" onClose={onClose} width="md">
+    <Modal open title={t('Send Report to HR')} onClose={onClose} width="md">
       <form
         onSubmit={(e) => {
           e.preventDefault()
-          if (message.trim().length === 0) return toast('Add the report message', 'error')
+          if (message.trim().length === 0) return toast(t('Add the report message'), 'error')
           save.mutate()
         }}
         className="space-y-3"
       >
         <div>
           <label className="form-label" htmlFor="report-period">
-            Report period
+            {t('Report period')}
           </label>
           <input
             id="report-period"
@@ -745,17 +796,19 @@ function SendReportModal({ onClose }: { onClose: () => void }) {
         </div>
         <div>
           <label className="form-label" htmlFor="report-type">
-            Report type
+            {t('Report type')}
           </label>
           <select id="report-type" value={type} onChange={(e) => setType(e.target.value)} className="form-input">
-            {REPORT_TYPES.map((t) => (
-              <option key={t}>{t}</option>
+            {REPORT_TYPES.map((option) => (
+              <option key={option} value={option}>
+                {t(option)}
+              </option>
             ))}
           </select>
         </div>
         <div>
           <label className="form-label" htmlFor="report-message">
-            Message
+            {t('Message')}
           </label>
           <textarea
             id="report-message"
@@ -763,15 +816,15 @@ function SendReportModal({ onClose }: { onClose: () => void }) {
             value={message}
             onChange={(e) => setMessage(e.target.value)}
             className="form-input"
-            placeholder="Anything HR should know..."
+            placeholder={t('Anything HR should know...')}
           />
         </div>
         <div className="flex justify-end gap-2 pt-1">
           <Button type="button" size="sm" variant="secondary" onClick={onClose}>
-            Cancel
+            {t('Cancel')}
           </Button>
           <Button type="submit" size="sm" variant="primary" loading={save.isPending}>
-            Send to HR
+            {t('Send to HR')}
           </Button>
         </div>
       </form>
@@ -787,6 +840,7 @@ function SendReportModal({ onClose }: { onClose: () => void }) {
  */
 
 export function QuickVacancyRequestModal({ onClose }: { onClose: () => void }) {
+  const { t } = useTranslation()
   const { toast } = useToast()
   const queryClient = useQueryClient()
   const [position, setPosition] = useState('')
@@ -807,7 +861,7 @@ export function QuickVacancyRequestModal({ onClose }: { onClose: () => void }) {
         headcount,
       }),
     onSuccess: (created) => {
-      toast(`${created.data.position} request submitted · awaiting HR`)
+      toast(t('{{position}} request submitted · awaiting HR', { position: created.data.position }))
       void queryClient.invalidateQueries({ queryKey: ['portal', 'vacancy-requests'] })
       onClose()
     },
@@ -817,8 +871,8 @@ export function QuickVacancyRequestModal({ onClose }: { onClose: () => void }) {
   return (
     <Modal
       open
-      title="New Recruitment Request"
-      subtitle="Tell HR exactly what you need — shift and expected salary drive the match."
+      title={t('New Recruitment Request')}
+      subtitle={t('Tell HR exactly what you need — shift and expected salary drive the match.')}
       onClose={onClose}
       width="md"
     >
@@ -826,29 +880,29 @@ export function QuickVacancyRequestModal({ onClose }: { onClose: () => void }) {
         onSubmit={(e) => {
           e.preventDefault()
           if (save.isPending) return
-          if (position.trim().length === 0) return toast('Position is required', 'error')
-          if (reason.trim().length === 0) return toast('Add the reason for the request', 'error')
+          if (position.trim().length === 0) return toast(t('Position is required'), 'error')
+          if (reason.trim().length === 0) return toast(t('Add the reason for the request'), 'error')
           save.mutate()
         }}
         className="space-y-3"
       >
         <div>
           <label className="form-label" htmlFor="qvac-position">
-            Position
+            {t('Position')}
           </label>
           <input
             id="qvac-position"
             value={position}
             onChange={(e) => setPosition(e.target.value)}
             className="form-input"
-            placeholder="e.g. Senior Trainer"
+            placeholder={t('e.g. Senior Trainer')}
             required
           />
         </div>
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className="form-label" htmlFor="qvac-count">
-              Count
+              {t('Count')}
             </label>
             <input
               id="qvac-count"
@@ -861,31 +915,31 @@ export function QuickVacancyRequestModal({ onClose }: { onClose: () => void }) {
           </div>
           <div>
             <label className="form-label" htmlFor="qvac-urgency">
-              Urgency
+              {t('Urgency')}
             </label>
             <select id="qvac-urgency" value={urgency} onChange={(e) => setUrgency(e.target.value)} className="form-input">
-              <option>Low</option>
-              <option>Medium</option>
-              <option>High</option>
+              <option value="Low">{t('Low')}</option>
+              <option value="Medium">{t('Medium')}</option>
+              <option value="High">{t('High')}</option>
             </select>
           </div>
         </div>
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className="form-label" htmlFor="qvac-shift">
-              Shift you want
+              {t('Shift you want')}
             </label>
             <select id="qvac-shift" value={shift} onChange={(e) => setShift(e.target.value)} className="form-input">
-              <option value="">Any</option>
-              <option>Morning</option>
-              <option>Evening</option>
-              <option>Night</option>
-              <option>Flexible</option>
+              <option value="">{t('Any')}</option>
+              <option value="Morning">{t('Morning')}</option>
+              <option value="Evening">{t('Evening')}</option>
+              <option value="Night">{t('Night')}</option>
+              <option value="Flexible">{t('Flexible')}</option>
             </select>
           </div>
           <div>
             <label className="form-label" htmlFor="qvac-salary">
-              Expected salary (EGP)
+              {t('Expected salary (EGP)')}
             </label>
             <input
               id="qvac-salary"
@@ -895,13 +949,13 @@ export function QuickVacancyRequestModal({ onClose }: { onClose: () => void }) {
               value={salary}
               onChange={(e) => setSalary(e.target.value)}
               className="form-input"
-              placeholder="e.g. 12000"
+              placeholder={t('e.g. 12000')}
             />
           </div>
         </div>
         <div>
           <label className="form-label" htmlFor="qvac-reason">
-            Reason
+            {t('Reason')}
           </label>
           <textarea
             id="qvac-reason"
@@ -909,16 +963,16 @@ export function QuickVacancyRequestModal({ onClose }: { onClose: () => void }) {
             value={reason}
             onChange={(e) => setReason(e.target.value)}
             className="form-input"
-            placeholder="Why is this position needed?"
+            placeholder={t('Why is this position needed?')}
             required
           />
         </div>
         <div className="flex justify-end gap-2 pt-1">
           <Button type="button" size="sm" variant="secondary" onClick={onClose}>
-            Cancel
+            {t('Cancel')}
           </Button>
           <Button type="submit" size="sm" variant="primary" loading={save.isPending}>
-            Submit Request
+            {t('Submit Request')}
           </Button>
         </div>
       </form>

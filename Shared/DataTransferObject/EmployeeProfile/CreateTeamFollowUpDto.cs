@@ -20,4 +20,10 @@ public sealed class CreateTeamFollowUpDto
 
     /// <summary>Optional free-form note recorded with the item.</summary>
     public string? Note { get; init; }
+
+    /// <summary>The day a Deduction action punishes (defaults to today when omitted).</summary>
+    public DateOnly? Date { get; init; }
+
+    /// <summary>Deduction size for a Deduction action: Quarter Day | Half Day | Day | 3 Days.</summary>
+    public string? DeductionSize { get; init; }
 }

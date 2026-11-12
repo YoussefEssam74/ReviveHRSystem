@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useTranslation } from 'react-i18next'
 import { AlertCircle, CheckCircle2, Info, X } from 'lucide-react'
 import { cn } from '../../lib/utils'
 
@@ -18,9 +19,9 @@ interface ToastContextValue {
 const ToastContext = createContext<ToastContextValue | null>(null)
 
 const KIND_STYLES: Record<ToastKind, { border: string; icon: typeof Info }> = {
-  success: { border: 'border-l-green-500', icon: CheckCircle2 },
-  error: { border: 'border-l-red-500', icon: AlertCircle },
-  info: { border: 'border-l-blue-500', icon: Info },
+  success: { border: 'border-s-green-500', icon: CheckCircle2 },
+  error: { border: 'border-s-red-500', icon: AlertCircle },
+  info: { border: 'border-s-blue-500', icon: Info },
 }
 
 const ICON_COLOR: Record<ToastKind, string> = {
@@ -31,6 +32,7 @@ const ICON_COLOR: Record<ToastKind, string> = {
 
 /** Portal toasts: top-right stack, auto-dismiss, mock's slide-in/out animation. */
 export function ToastProvider({ children }: { children: ReactNode }) {
+  const { t } = useTranslation()
   const [items, setItems] = useState<ToastItem[]>([])
   const nextId = useRef(1)
 
@@ -53,7 +55,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   return (
     <ToastContext.Provider value={value}>
       {children}
-      <div className="pointer-events-none fixed right-4 top-4 z-[100] flex w-80 max-w-[calc(100vw-2rem)] flex-col gap-2" role="status" aria-live="polite">
+      <div className="pointer-events-none fixed end-4 top-[4.5rem] z-[100] flex w-80 max-w-[calc(100vw-2rem)] flex-col gap-2 sm:top-4" role="status" aria-live="polite">
         {items.map(({ id, kind, message, leaving }) => {
           const style = KIND_STYLES[kind]
           const Icon = style.icon
@@ -61,7 +63,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
             <div
               key={id}
               className={cn(
-                'pointer-events-auto flex items-start gap-2.5 rounded-xl border border-charcoal-200 border-l-4 bg-white p-3 shadow-lg',
+                'pointer-events-auto flex items-start gap-2.5 rounded-xl border border-charcoal-200 border-s-4 bg-white p-3 shadow-lg',
                 style.border,
                 leaving ? 'toast-exit' : 'toast-enter',
               )}
@@ -72,7 +74,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
                 type="button"
                 onClick={() => dismiss(id)}
                 className="rounded p-0.5 text-charcoal-400 hover:bg-charcoal-100 hover:text-charcoal-700"
-                aria-label="Dismiss notification"
+                aria-label={t('Dismiss notification')}
               >
                 <X className="h-3.5 w-3.5" aria-hidden="true" />
               </button>
