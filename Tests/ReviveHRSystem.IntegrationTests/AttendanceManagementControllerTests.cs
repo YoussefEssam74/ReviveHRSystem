@@ -57,6 +57,9 @@ namespace ReviveHRSystem.IntegrationTests
             var gym = await builder.CreateGymWithStationAsync();
             var employee = await builder.CreateEmployeeAsync(gym);
             var today = builder.AttendanceToday;
+            // Scheduled day: an unscheduled punch is labelled "Covering (Extra Shift)"
+            // by design, so this row must sit inside a published shift to read On Time.
+            await builder.AssignShiftAsync(employee.EmployeeId, gym.GymId, today, "IT Morning", new TimeOnly(8, 0), new TimeOnly(16, 0));
             await builder.CreateAttendanceRecordAsync(
                 employee.EmployeeId, gym.GymId, today,
                 checkInUtc: AtHourUtc(today, 8), checkOutUtc: AtHourUtc(today, 16),
@@ -259,6 +262,8 @@ namespace ReviveHRSystem.IntegrationTests
             await builder.GrantPermissionAsync(hr.UserId, "attendance.view");
             var token = await _fixture.LoginAsync(hr.Email, hr.Password);
             var today = builder.AttendanceToday;
+            // A scheduled day: the HR form is an upsert ON a working day, not a cover day.
+            await builder.AssignShiftAsync(employee.EmployeeId, gym.GymId, today, "IT Morning", new TimeOnly(8, 0), new TimeOnly(16, 0));
 
             var first = await SendManualAsync(token, new
             {
@@ -453,6 +458,7 @@ namespace ReviveHRSystem.IntegrationTests
             var gym = await builder.CreateGymWithStationAsync();
             var employee = await builder.CreateEmployeeAsync(gym);
             var today = builder.AttendanceToday;
+            await builder.AssignShiftAsync(employee.EmployeeId, gym.GymId, today, "IT Morning", new TimeOnly(8, 0), new TimeOnly(16, 0));
             await builder.CreateAttendanceRecordAsync(
                 employee.EmployeeId, gym.GymId, today,
                 checkInUtc: AtHourUtc(today, 8), checkOutUtc: AtHourUtc(today, 16));

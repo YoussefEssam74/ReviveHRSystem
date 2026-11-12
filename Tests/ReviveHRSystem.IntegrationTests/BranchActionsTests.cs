@@ -207,7 +207,7 @@ namespace ReviveHRSystem.IntegrationTests
         }
 
         [Fact]
-        public async Task Deduction_BranchReview_RejectIsFinal_SecondDecisionReturns400()
+        public async Task Deduction_BranchReview_RejectionCanBeReopened_ButAnAppliedRowIsFinal()
         {
             var gym1Id = await GymIdByNameAsync("Revive Main Gym");
             var token = await LoginSelectingGymAsync("omar@revive.hr", gym1Id);
@@ -224,13 +224,32 @@ namespace ReviveHRSystem.IntegrationTests
             var rejected = await rejectResponse.Content.ReadFromJsonAsync<JsonElement>();
             Assert.Equal("Rejected", rejected.GetProperty("status").GetString());
 
+            // A wrong rejection can still be undone by the branch (documented rule:
+            // only an HR-applied row is frozen).
             var second = _fixture.AuthorizedRequest(HttpMethod.Post, $"/api/deduction-candidates/{candidateId}/branch-review", new
             {
                 decision = "approve"
             }, token);
             var secondResponse = await _fixture.Client.SendAsync(second);
+            Assert.Equal(HttpStatusCode.OK, secondResponse.StatusCode);
 
-            Assert.Equal(HttpStatusCode.BadRequest, secondResponse.StatusCode);
+            // HR applies it → the row is final; another branch decision is refused.
+            // (Set directly: applying through the API would require an open payroll
+            // period for the chosen day, which is environment state we don't control.)
+            using (var scope = _fixture.Services.CreateScope())
+            {
+                var db = scope.ServiceProvider.GetRequiredService<ReviveHrDbContext>();
+                var candidate = await db.DeductionCandidates.SingleAsync(c => c.Id == candidateId);
+                candidate.Status = DomainLayer.Models.PayrollModule.Enums.DeductionStatus.Approved;
+                await db.SaveChangesAsync();
+            }
+
+            var third = _fixture.AuthorizedRequest(HttpMethod.Post, $"/api/deduction-candidates/{candidateId}/branch-review", new
+            {
+                decision = "reject"
+            }, token);
+            var thirdResponse = await _fixture.Client.SendAsync(third);
+            Assert.Equal(HttpStatusCode.BadRequest, thirdResponse.StatusCode);
         }
 
         [Fact]
