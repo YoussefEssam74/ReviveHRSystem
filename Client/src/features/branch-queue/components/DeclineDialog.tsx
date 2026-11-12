@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Button } from '../../../components/ui/button'
 import { Label } from '../../../components/ui/label'
 import { Textarea } from '../../../components/ui/textarea'
@@ -23,6 +24,7 @@ interface DeclineDialogProps {
  * or the employee record — the item returns to the submitter.
  */
 export function DeclineDialog({ kind, subject, detail, onClose, onConfirm }: DeclineDialogProps) {
+  const { t } = useTranslation()
   const [note, setNote] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [pending, setPending] = useState(false)
@@ -47,15 +49,15 @@ export function DeclineDialog({ kind, subject, detail, onClose, onConfirm }: Dec
     <Dialog
       open
       onClose={onClose}
-      title={`Decline ${kind}`}
+      title={t('Decline {{kind}}', { kind: kind === 'bonus' ? t('bonus') : t('warning') })}
       className="sm:max-w-md"
       footer={
         <>
           <Button variant="outline" onClick={onClose}>
-            Cancel
+            {t('Cancel')}
           </Button>
           <Button onClick={submit} loading={pending} disabled={!valid}>
-            Decline item
+            {t('Decline item')}
           </Button>
         </>
       }
@@ -67,20 +69,21 @@ export function DeclineDialog({ kind, subject, detail, onClose, onConfirm }: Dec
         </div>
 
         <div className="rounded-lg border border-red-200 bg-red-50 p-2.5 text-xs leading-relaxed text-red-700">
-          Declining returns the item to the Branch Manager with your reason. Nothing is applied to payroll or the
-          employee record.
+          {t(
+            'Declining returns the item to the Branch Manager with your reason. Nothing is applied to payroll or the employee record.',
+          )}
         </div>
 
         <div>
           <Label htmlFor="decline-reason">
-            Reason for declining <span className="text-red-500">*</span>
+            {t('Reason for declining')} <span className="text-red-500">*</span>
           </Label>
           <Textarea
             id="decline-reason"
             rows={3}
             value={note}
             onChange={(e) => setNote(e.target.value)}
-            placeholder="e.g. Amount exceeds branch budget — resubmit with area manager approval"
+            placeholder={t('e.g. Amount exceeds branch budget — resubmit with area manager approval')}
             className="mt-1"
           />
         </div>

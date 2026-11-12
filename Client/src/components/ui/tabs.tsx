@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next'
 import { cn } from '../../lib/utils'
 
 export interface TabItem<T extends string> {
@@ -16,6 +17,7 @@ export interface TabsProps<T extends string> {
 
 /** Segmented tab bar used for list filters (requests status, employee views). */
 export function Tabs<T extends string>({ items, value, onChange, className }: TabsProps<T>) {
+  const { t } = useTranslation()
   return (
     <div className={cn('flex flex-wrap gap-1 rounded-xl bg-slate-100 p-1', className)} role="tablist">
       {items.map((item) => {
@@ -32,7 +34,7 @@ export function Tabs<T extends string>({ items, value, onChange, className }: Ta
               active ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900',
             )}
           >
-            {item.label}
+            {t(item.label)}
             {item.count != null && (
               <span
                 className={cn(

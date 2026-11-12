@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Button } from '../../../components/ui/button'
 import { Dialog } from '../../../components/ui/dialog'
 import { Input } from '../../../components/ui/input'
@@ -49,6 +50,7 @@ function buildQuestionInputs(questions: QuestionDraft[]): QuestionInput[] {
 
 /** Create/edit dialog for both form resources (same body shape). */
 export default function FormDialog({ kind, form, onClose, onSaved }: FormDialogProps) {
+  const { t } = useTranslation()
   const { me } = useMe()
   const editingId = form?.id ?? null
 
@@ -112,7 +114,7 @@ export default function FormDialog({ kind, form, onClose, onSaved }: FormDialogP
       } else {
         await saveHiring.mutateAsync({ id: editingId, body })
       }
-      onSaved(editingId == null ? 'Form created.' : 'Form saved.')
+      onSaved(editingId == null ? t('Form created.') : t('Form saved.'))
     } catch (err) {
       setError(describeApiError(err))
     }
@@ -122,16 +124,16 @@ export default function FormDialog({ kind, form, onClose, onSaved }: FormDialogP
     <Dialog
       open
       onClose={onClose}
-      title={editingId == null ? 'New form' : 'Edit form'}
-      description={kind === 'evaluation' ? 'Evaluation template' : 'Hiring application form'}
+      title={editingId == null ? t('New form') : t('Edit form')}
+      description={kind === 'evaluation' ? t('Evaluation template') : t('Hiring application form')}
       className="max-w-2xl"
       footer={
         <>
           <Button variant="outline" onClick={onClose}>
-            Cancel
+            {t('Cancel')}
           </Button>
           <Button onClick={onSave} loading={saving} disabled={!valid || (editingId != null && detailLoading)}>
-            {editingId == null ? 'Create form' : 'Save changes'}
+            {editingId == null ? t('Create form') : t('Save changes')}
           </Button>
         </>
       }
@@ -144,45 +146,45 @@ export default function FormDialog({ kind, form, onClose, onSaved }: FormDialogP
         )}
 
         {editingId != null && detailLoading ? (
-          <LoadingState label="Loading form…" />
+          <LoadingState label={t('Loading form…')} />
         ) : (
           <>
             <div className="grid gap-3 sm:grid-cols-2">
               <div>
-                <Label htmlFor="form-name">Name</Label>
+                <Label htmlFor="form-name">{t('Name')}</Label>
                 <Input
                   id="form-name"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  placeholder="Trainer QA — Q4 2026"
+                  placeholder={t('Trainer QA — Q4 2026')}
                 />
               </div>
               <div>
-                <Label htmlFor="form-position">Target position</Label>
+                <Label htmlFor="form-position">{t('Target position')}</Label>
                 <Select id="form-position" value={position} onChange={(e) => setPosition(e.target.value)}>
                   {positionOptions.map((option) => (
                     <option key={option} value={option}>
-                      {option === 'All' ? 'Any position' : option}
+                      {option === 'All' ? t('Any position') : t(option)}
                     </option>
                   ))}
                 </Select>
               </div>
               <div>
-                <Label htmlFor="form-gym">Gym</Label>
+                <Label htmlFor="form-gym">{t('Gym')}</Label>
                 <Select id="form-gym" value={gym} onChange={(e) => setGym(e.target.value)}>
                   {gymOptions.map((option) => (
                     <option key={option} value={option}>
-                      {option === 'All' ? 'All gyms' : option}
+                      {option === 'All' ? t('All gyms') : option}
                     </option>
                   ))}
                 </Select>
               </div>
               <div>
-                <Label htmlFor="form-status">Status</Label>
+                <Label htmlFor="form-status">{t('Status')}</Label>
                 <Select id="form-status" value={status} onChange={(e) => setStatus(e.target.value)}>
                   {resolvedStatuses.map((option) => (
                     <option key={option} value={option}>
-                      {option}
+                      {t(option)}
                     </option>
                   ))}
                 </Select>

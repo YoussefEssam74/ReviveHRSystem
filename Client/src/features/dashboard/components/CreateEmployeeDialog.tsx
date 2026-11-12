@@ -1,4 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Camera, RefreshCw } from 'lucide-react'
 import { Dialog } from '../../../components/ui/dialog'
 import { Button } from '../../../components/ui/button'
@@ -52,6 +53,7 @@ function emailFromName(fullName: string): string {
  * system role, then POST /api/employees — the account itself is created server-side.
  */
 export default function CreateEmployeeDialog({ onClose, toast }: CreateEmployeeDialogProps) {
+  const { t } = useTranslation()
   const { data: gyms = [] } = useQuery({ queryKey: ['gyms'], queryFn: ({ signal }) => getGyms(signal) })
   // Role templates live in Role management; without team.view the base roles are offered.
   const { data: rolesData } = useQuery({
@@ -109,13 +111,13 @@ export default function CreateEmployeeDialog({ onClose, toast }: CreateEmployeeD
 
   const startFaceCamera = async () => {
     const started = await start()
-    if (!started) toast('Camera unavailable — you can still create the account without a photo', 'warning')
+    if (!started) toast(t('Camera unavailable — you can still create the account without a photo'), 'warning')
   }
 
   const captureFace = () => {
     const dataUrl = capture()
     if (!dataUrl) {
-      toast('Camera is not ready yet', 'warning')
+      toast(t('Camera is not ready yet'), 'warning')
       return
     }
     setPhoto(dataUrl)
@@ -130,13 +132,13 @@ export default function CreateEmployeeDialog({ onClose, toast }: CreateEmployeeD
   const onSubmit = async (event: FormEvent) => {
     event.preventDefault()
     const nameErrors = !fullName.trim()
-      ? 'Please enter the employee full name'
+      ? t('Please enter the employee full name')
       : !position.trim()
-        ? 'Please enter the position'
+        ? t('Please enter the position')
         : !email.trim() || !/.+@.+\..+/.test(email.trim())
-          ? 'Please enter a valid work email'
+          ? t('Please enter a valid work email')
           : gymId == null
-            ? 'Select a home gym / branch'
+            ? t('Select a home gym / branch')
             : null
     if (nameErrors) {
       setError(nameErrors)
@@ -145,7 +147,7 @@ export default function CreateEmployeeDialog({ onClose, toast }: CreateEmployeeD
 
     const names = splitName(fullName)
     if (!names) {
-      setError('Please enter the employee full name')
+      setError(t('Please enter the employee full name'))
       return
     }
 
@@ -171,14 +173,23 @@ export default function CreateEmployeeDialog({ onClose, toast }: CreateEmployeeD
         try {
           await postRoleChange(created.id, { systemRole: role })
         } catch (roleError) {
-          warnings.push(`The ${role} role could not be applied: ${describeApiError(roleError)}`)
+          warnings.push(
+            t('The {{role}} role could not be applied: {{error}}', {
+              role,
+              error: describeApiError(roleError),
+            }),
+          )
         }
       }
       if (photo) {
         try {
           await enrollFace.mutateAsync({ employeeNumber: created.employeeNumber, image: photo })
         } catch (enrollError) {
-          warnings.push(`Face-ID photo could not be saved: ${describeApiError(enrollError)}`)
+          warnings.push(
+            t('Face-ID photo could not be saved: {{error}}', {
+              error: describeApiError(enrollError),
+            }),
+          )
         }
       }
 
@@ -271,16 +282,16 @@ export default function CreateEmployeeDialog({ onClose, toast }: CreateEmployeeD
     <Dialog
       open
       onClose={onClose}
-      title="Create New Employee Account"
-      description="Creates the employee profile and their login account (code auto-generated)."
+      title={t('Create New Employee Account')}
+      description={t('Creates the employee profile and their login account (code auto-generated).')}
       className="sm:max-w-xl"
       footer={
         <>
           <Button variant="outline" size="sm" onClick={onClose}>
-            Cancel
+            {t('Cancel')}
           </Button>
           <Button variant="primary" size="sm" onClick={onSubmit} loading={saving}>
-            Create Employee &amp; Account
+            {t('Create Employee & Account')}
           </Button>
         </>
       }
@@ -294,37 +305,39 @@ export default function CreateEmployeeDialog({ onClose, toast }: CreateEmployeeD
 
         <div className="space-y-3 rounded-xl border border-charcoal-200 bg-charcoal-50 p-3">
           <div className="flex items-center justify-between">
-            <p className="text-[11px] font-bold uppercase tracking-wide text-charcoal-700">New Employee Profile</p>
-            <span className="font-mono text-[11px] text-charcoal-500">Code: auto-generated (EMP-####)</span>
+            <p className="text-[11px] font-bold uppercase tracking-wide text-charcoal-700">{t('New Employee Profile')}</p>
+            <span className="font-mono text-[11px] text-charcoal-500">{t('Code: auto-generated (EMP-####)')}</span>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
               <Label className="mb-1 block text-xs font-semibold text-charcoal-700" htmlFor="acc-name">
-                Full Name <span className="text-red-500">*</span>
+                {t('Full Name')} <span className="text-red-500">*</span>
               </Label>
-              <Input id="acc-name" className="h-8 text-xs" placeholder="e.g. Mariam Adel" value={fullName} onChange={(e) => onNameChange(e.target.value)} />
+              <Input id="acc-name" className="h-8 text-xs" placeholder={t('e.g. Mariam Adel')} value={fullName} onChange={(e) => onNameChange(e.target.value)} />
             </div>
             <div>
               <Label className="mb-1 block text-xs font-semibold text-charcoal-700" htmlFor="acc-position">
-                Position <span className="text-red-500">*</span>
+                {t('Position')} <span className="text-red-500">*</span>
               </Label>
-              <Input id="acc-position" className="h-8 text-xs" placeholder="Type the position freely" value={position} onChange={(e) => setPosition(e.target.value)} />
+              <Input id="acc-position" className="h-8 text-xs" placeholder={t('Type the position freely')} value={position} onChange={(e) => setPosition(e.target.value)} />
             </div>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
               <Label className="mb-1 block text-xs font-semibold text-charcoal-700" htmlFor="acc-level">
-                Level
+                {t('Level')}
               </Label>
               <Select id="acc-level" className="h-8 text-xs" value={level} onChange={(e) => setLevel(e.target.value)}>
                 {LEVELS.map((option) => (
-                  <option key={option}>{option}</option>
+                  <option key={option} value={option}>
+                    {t(option)}
+                  </option>
                 ))}
               </Select>
             </div>
             <div>
               <Label className="mb-1 block text-xs font-semibold text-charcoal-700" htmlFor="acc-phone">
-                Phone
+                {t('Phone')}
               </Label>
               <Input id="acc-phone" type="tel" className="h-8 text-xs" placeholder="+20 1XX XXX XXXX" value={phone} onChange={(e) => setPhone(e.target.value)} />
             </div>
@@ -332,7 +345,7 @@ export default function CreateEmployeeDialog({ onClose, toast }: CreateEmployeeD
           <div className="grid grid-cols-2 gap-3">
             <div>
               <Label className="mb-1 block text-xs font-semibold text-charcoal-700" htmlFor="acc-email">
-                Work Email <span className="text-red-500">*</span>
+                {t('Work Email')} <span className="text-red-500">*</span>
               </Label>
               <Input
                 id="acc-email"
@@ -348,7 +361,7 @@ export default function CreateEmployeeDialog({ onClose, toast }: CreateEmployeeD
             </div>
             <div>
               <Label className="mb-1 block text-xs font-semibold text-charcoal-700" htmlFor="acc-hire">
-                Hire Date
+                {t('Hire Date')}
               </Label>
               <Input id="acc-hire" type="date" className="h-8 text-xs" value={hireDate} onChange={(e) => setHireDate(e.target.value)} />
             </div>
@@ -356,18 +369,18 @@ export default function CreateEmployeeDialog({ onClose, toast }: CreateEmployeeD
           <div className="grid grid-cols-2 gap-3">
             <div>
               <Label className="mb-1 block text-xs font-semibold text-charcoal-700" htmlFor="acc-salary">
-                Base Salary (EGP)
+                {t('Base Salary (EGP)')}
               </Label>
-              <Input id="acc-salary" type="number" min={0} className="h-8 text-xs" placeholder="e.g. 9000" value={salary} onChange={(e) => setSalary(e.target.value)} />
+              <Input id="acc-salary" type="number" min={0} className="h-8 text-xs" placeholder={t('e.g. 9000')} value={salary} onChange={(e) => setSalary(e.target.value)} />
             </div>
             <div>
               <Label className="mb-1 block text-xs font-semibold text-charcoal-700" htmlFor="acc-role">
-                System Role
+                {t('System Role')}
               </Label>
               <Select id="acc-role" className="h-8 text-xs" value={role} onChange={(e) => setRole(e.target.value)}>
                 {roleOptions.map((option) => (
                   <option key={option} value={option}>
-                    {option === 'Emp' ? 'Emp (No system role)' : option}
+                    {option === 'Emp' ? t('Emp (No system role)') : option}
                   </option>
                 ))}
               </Select>
@@ -377,10 +390,10 @@ export default function CreateEmployeeDialog({ onClose, toast }: CreateEmployeeD
 
         <div className="space-y-2 rounded-xl border border-charcoal-200 p-3">
           <p className="text-[11px] font-bold uppercase tracking-wide text-charcoal-700">
-            Gym / Branch Assignment <span className="font-normal normal-case text-charcoal-500">(home branch — one per employee)</span>
+            {t('Gym / Branch Assignment')} <span className="font-normal normal-case text-charcoal-500">{t('(home branch — one per employee)')}</span>
           </p>
           {gyms.length === 0 ? (
-            <p className="text-charcoal-400">No gyms available for your scope.</p>
+            <p className="text-charcoal-400">{t('No gyms available for your scope.')}</p>
           ) : (
             <div className="grid grid-cols-2 gap-2">
               {gyms.map((gym) => (
@@ -408,35 +421,35 @@ export default function CreateEmployeeDialog({ onClose, toast }: CreateEmployeeD
 
         <div className="space-y-2 rounded-xl border border-charcoal-200 p-3">
           <div className="flex items-center justify-between">
-            <p className="text-[11px] font-bold uppercase tracking-wide text-charcoal-700">Face-ID for Attendance</p>
+            <p className="text-[11px] font-bold uppercase tracking-wide text-charcoal-700">{t('Face-ID for Attendance')}</p>
             <span className={`text-[10px] font-semibold ${photo ? 'text-brand-600' : 'text-charcoal-400'}`}>
-              {photo ? 'Photo captured ✓' : 'No photo yet'}
+              {photo ? t('Photo captured ✓') : t('No photo yet')}
             </span>
           </div>
           <div className="relative flex h-64 items-center justify-center overflow-hidden rounded-lg bg-charcoal-900">
             <video ref={videoRef} autoPlay playsInline muted className={`h-full w-full object-cover ${cameraActive && !photo ? '' : 'hidden'}`} />
-            {photo && <img src={photo} alt="captured face" className="h-64 w-64 rounded-lg object-cover" />}
+            {photo && <img src={photo} alt={t('captured face')} className="h-64 w-64 rounded-lg object-cover" />}
             {!cameraActive && !photo && (
               <div className="flex flex-col items-center gap-1 px-6 text-center text-[11px] text-white/50">
                 <Camera className="h-7 w-7" aria-hidden="true" />
-                Take a clear front-facing photo — the employee checks in automatically at the Attendance Station
+                {t('Take a clear front-facing photo — the employee checks in automatically at the Attendance Station')}
               </div>
             )}
           </div>
           <div className="flex gap-2">
             {!cameraActive && !photo && (
               <button type="button" onClick={startFaceCamera} className="btn-mock-secondary flex-1 rounded-lg border border-charcoal-300 bg-white px-2 py-1.5 font-medium text-charcoal-700 text-xs hover:bg-charcoal-100">
-                <Camera className="mr-1 inline h-3.5 w-3.5" aria-hidden="true" /> Start Camera
+                <Camera className="ms-1 inline h-3.5 w-3.5" aria-hidden="true" /> {t('Start Camera')}
               </button>
             )}
             {cameraActive && !photo && (
               <button type="button" onClick={captureFace} className="flex-1 rounded-lg bg-brand-600 px-2 py-1.5 font-medium text-white text-xs hover:bg-brand-700">
-                Capture Photo
+                {t('Capture Photo')}
               </button>
             )}
             {photo && (
               <button type="button" onClick={retakeFace} className="flex-1 rounded-lg border border-charcoal-300 bg-white px-2 py-1.5 font-medium text-charcoal-700 text-xs hover:bg-charcoal-100">
-                <RefreshCw className="mr-1 inline h-3.5 w-3.5" aria-hidden="true" /> Retake
+                <RefreshCw className="ms-1 inline h-3.5 w-3.5" aria-hidden="true" /> {t('Retake')}
               </button>
             )}
           </div>
@@ -444,13 +457,13 @@ export default function CreateEmployeeDialog({ onClose, toast }: CreateEmployeeD
 
         <div>
           <Label className="mb-1 block text-xs font-semibold text-charcoal-700" htmlFor="acc-pass">
-            Initial Password
+            {t('Initial Password')}
           </Label>
           <div className="flex items-center gap-1.5">
             <Input id="acc-pass" readOnly value={DEFAULT_PASSWORD} className="flex-1 font-mono text-xs" />
           </div>
           <p className="mt-1 text-[10px] text-charcoal-500">
-            The account starts with this password — change it any time from “Change Password”.
+            {t('The account starts with this password — change it any time from “Change Password”.')}
           </p>
         </div>
       </form>

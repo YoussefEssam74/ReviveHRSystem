@@ -1,4 +1,5 @@
 import { Navigate, Link } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { useAuthSession } from '../../../contexts/AuthSessionContext'
 
 export type DashboardRole = 'top-management' | 'hr' | 'employee'
@@ -22,6 +23,7 @@ interface RoleDashboardPageProps {
  */
 export default function RoleDashboardPage({ role }: RoleDashboardPageProps) {
   const { session } = useAuthSession()
+  const { t } = useTranslation()
 
   if (!session) return <Navigate to="/login" replace />
 
@@ -33,16 +35,17 @@ export default function RoleDashboardPage({ role }: RoleDashboardPageProps) {
   return (
     <div className="mx-auto max-w-md px-4 py-16">
       <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-sm">
-        <h1 className="text-lg font-semibold text-slate-900">Welcome to Revive HR</h1>
+        <h1 className="text-lg font-semibold text-slate-900">{t('Welcome to Revive HR')}</h1>
         <p className="mt-2 text-sm text-slate-500">
-          Your employee self-service portal is coming soon. For now you can clock in at the gym
-          terminal with your branch's station code.
+          {t(
+            "Your employee self-service portal is coming soon. For now you can clock in at the gym terminal with your branch's station code.",
+          )}
         </p>
         <Link
           to="/attendance"
           className="mt-5 inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-emerald-700"
         >
-          Open attendance terminal
+          {t('Open attendance terminal')}
         </Link>
       </div>
     </div>

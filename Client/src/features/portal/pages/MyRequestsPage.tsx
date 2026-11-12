@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useTranslation } from 'react-i18next'
 import { CalendarX2, ChevronRight, Download, FileText, Plus } from 'lucide-react'
 import { cancelRequest, getOwnRequests, getRequestDetail, type RequestDetail } from '../api/requests.api'
 import { NewRequestModal } from '../components/NewRequestModal'
@@ -11,7 +12,7 @@ import { Button } from '../../../components/ui/button'
 import { useToast } from '../../../components/ui/toast'
 import { usePortalSession } from '../../../contexts/PortalSessionContext'
 import { apiDownload, describeApiError } from '../../../lib/api-client'
-import { formatDate, formatDateWithYear } from '../../../lib/format'
+import { formatDate, formatDateWithYear, formatTimeLabel } from '../../../lib/format'
 import { cn } from '../../../lib/utils'
 
 type StatusFilter = 'All' | 'Pending' | 'Approved' | 'Rejected'
@@ -37,6 +38,7 @@ export function rangeLabel(start: string, end: string | null): string {
 }
 
 export default function MyRequestsPage() {
+  const { t } = useTranslation()
   const { me } = usePortalSession()
   const employeeId = me?.employeeId ?? null
   const [filter, setFilter] = useState<StatusFilter>('All')
@@ -46,17 +48,17 @@ export default function MyRequestsPage() {
   return (
     <div className="space-y-3">
       <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
-        <h1 className="text-xl font-bold text-charcoal-900">My Requests</h1>
+        <h1 className="text-xl font-bold text-charcoal-900">{t('My Requests')}</h1>
         <Button size="sm" onClick={() => setNewOpen(true)} disabled={employeeId == null}>
           <Plus className="h-3.5 w-3.5" aria-hidden="true" />
-          New Request
+          {t('New Request')}
         </Button>
       </div>
 
       {employeeId == null && (
         <EmptyState
-          title="No employee profile"
-          hint="This account is not linked to an employee profile, so it has no self-service requests."
+          title={t('No employee profile')}
+          hint={t('This account is not linked to an employee profile, so it has no self-service requests.')}
         />
       )}
       {employeeId != null && (
@@ -88,6 +90,7 @@ function RequestsWorkspace({
   onDetail: (id: number | null) => void
 }) {
   const { toast } = useToast()
+  const { t } = useTranslation()
   const queryClient = useQueryClient()
 
   const requestsQuery = useQuery({
@@ -123,7 +126,7 @@ function RequestsWorkspace({
   const cancelMutation = useMutation({
     mutationFn: (requestId: number) => cancelRequest(requestId),
     onSuccess: async () => {
-      toast('Request cancelled')
+      toast(t('Request cancelled'))
       await queryClient.invalidateQueries({ queryKey: ['portal', 'requests'] })
     },
     onError: (error) => toast(describeApiError(error), 'error'),
@@ -142,7 +145,7 @@ function RequestsWorkspace({
     onError: (error) => toast(describeApiError(error), 'error'),
   })
 
-  if (requestsQuery.isLoading) return <LoadingState label="Loading your requests…" />
+  if (requestsQuery.isLoading) return <LoadingState label={t('Loading your requests…')} />
   if (requestsQuery.isError) {
     return <ErrorState message={describeApiError(requestsQuery.error)} onRetry={() => requestsQuery.refetch()} />
   }
@@ -160,21 +163,21 @@ function RequestsWorkspace({
               filter === pill ? PILL_STYLES_ACTIVE[pill] : PILL_STYLES[pill],
             )}
           >
-            {pill} <span className="text-[10px] opacity-70">{counts[pill]}</span>
+            {t(pill)} <span className="text-[10px] opacity-70">{counts[pill]}</span>
           </button>
         ))}
       </div>
 
       <div className="card hidden overflow-hidden lg:block">
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs">
+          <table className="w-full text-start text-xs">
             <thead>
               <tr className="border-b border-charcoal-100 text-charcoal-500">
-                <th className="px-4 py-2.5 font-medium">Request</th>
-                <th className="px-4 py-2.5 font-medium">Type</th>
-                <th className="px-4 py-2.5 font-medium">Date</th>
-                <th className="px-4 py-2.5 font-medium">Submitted</th>
-                <th className="px-4 py-2.5 font-medium">Status</th>
+                <th className="px-4 py-2.5 font-medium">{t('Request')}</th>
+                <th className="px-4 py-2.5 font-medium">{t('Type')}</th>
+                <th className="px-4 py-2.5 font-medium">{t('Date')}</th>
+                <th className="px-4 py-2.5 font-medium">{t('Submitted')}</th>
+                <th className="px-4 py-2.5 font-medium">{t('Status')}</th>
                 <th className="w-8" />
               </tr>
             </thead>
@@ -186,7 +189,16 @@ function RequestsWorkspace({
                   onClick={() => onDetail(request.id)}
                 >
                   <td className="px-4 py-2.5 font-medium">#{request.id}</td>
-                  <td className="px-4 py-2.5">{request.type}</td>
+                  <td className="px-4 py-2.5">
+                    <span className="flex flex-wrap items-center gap-1.5">
+                      {request.type}
+                      {request.calculatedDays != null && (
+                        <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
+                          {t('Cover: {{count}}', { count: request.calculatedDays })}
+                        </span>
+                      )}
+                    </span>
+                  </td>
                   <td className="px-4 py-2.5">{rangeLabel(request.requestedDate, request.endDate)}</td>
                   <td className="px-4 py-2.5">{formatDate(request.submittedDate)}</td>
                   <td className="px-4 py-2.5">
@@ -205,20 +217,27 @@ function RequestsWorkspace({
       <div className="space-y-1.5 lg:hidden">
         {filtered.map((request) => (
           <div key={request.id} className="card card-interactive cursor-pointer p-3" onClick={() => onDetail(request.id)}>
-            <div className="flex items-center justify-between">
-              <div className="flex min-w-0 items-center gap-2.5">
+            <div className="flex items-start justify-between gap-2">
+              <div className="flex min-w-0 items-start gap-2.5">
                 <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded bg-charcoal-100 text-charcoal-600">
                   <FileText className="h-4 w-4" aria-hidden="true" />
                 </div>
                 <div className="min-w-0">
-                  <p className="truncate text-xs font-medium text-charcoal-900">{request.type}</p>
-                  <p className="text-[10px] text-charcoal-500">
+                  <p className="flex flex-wrap items-center gap-1.5 text-xs font-medium text-charcoal-900">
+                    <span className="min-w-0 truncate">{request.type}</span>
+                    {request.calculatedDays != null && (
+                      <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
+                        {t('Cover: {{count}}', { count: request.calculatedDays })}
+                      </span>
+                    )}
+                  </p>
+                  <p className="mt-0.5 text-[10px] text-charcoal-500">
                     #{request.id} · {formatDate(request.submittedDate)}
                   </p>
+                  <p className="text-[10px] text-charcoal-500">{rangeLabel(request.requestedDate, request.endDate)}</p>
                 </div>
               </div>
-              <div className="flex items-center gap-2">
-                <p className="hidden text-[10px] text-charcoal-700 sm:block">{rangeLabel(request.requestedDate, request.endDate)}</p>
+              <div className="flex shrink-0 items-center gap-1.5">
                 <StatusBadge status={request.status === 'Pending' ? 'Awaiting Manager' : request.status} />
                 <ChevronRight className="h-3.5 w-3.5 text-charcoal-400" aria-hidden="true" />
               </div>
@@ -230,8 +249,8 @@ function RequestsWorkspace({
       {filtered.length === 0 && (
         <EmptyState
           icon={<FileText className="h-10 w-10" aria-hidden="true" />}
-          title={filter === 'All' ? 'No requests yet' : `No ${filter.toLowerCase()} requests`}
-          hint={filter === 'All' ? 'Submit a new request to see it here.' : undefined}
+          title={filter === 'All' ? t('No requests yet') : t('No {{status}} requests', { status: t(filter) })}
+          hint={filter === 'All' ? t('Submit a new request to see it here.') : undefined}
         />
       )}
 
@@ -264,6 +283,7 @@ function RequestDetailDrawer({
   onDownload: (id: number) => void
   downloading: boolean
 }) {
+  const { t } = useTranslation()
   const query = useQuery({
     queryKey: ['portal', 'requests', requestId, 'detail'],
     queryFn: ({ signal }) => getRequestDetail(requestId!, signal),
@@ -272,18 +292,30 @@ function RequestDetailDrawer({
   })
 
   const detail: RequestDetail | undefined = query.data
-  const canCancel = detail?.status === 'Pending' || detail?.status === 'Pending HR Review'
+  // System-generated cover requests are not employee-filed, so they can't be
+  // cancelled from the employee side.
+  const canCancel =
+    detail != null &&
+    detail.type !== 'Unscheduled Attendance' &&
+    (detail.status === 'Pending' || detail.status === 'Pending HR Review')
 
   return (
-    <Drawer open={requestId != null} title={detail ? detail.type : 'Request'} onClose={onClose}>
-      {query.isLoading && <LoadingState label="Loading request…" />}
+    <Drawer open={requestId != null} title={detail ? detail.type : t('Request')} onClose={onClose}>
+      {query.isLoading && <LoadingState label={t('Loading request…')} />}
       {query.isError && <ErrorState message={describeApiError(query.error)} onRetry={() => query.refetch()} />}
       {detail && (
         <div className="space-y-4">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <StatusBadge status={detail.status === 'Pending' ? 'Awaiting Manager' : detail.status} />
               <span className="text-[10px] font-medium text-charcoal-400">#{detail.id}</span>
+              {detail.calculatedDays != null && (
+                <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
+                  {detail.calculatedDays === 1
+                    ? t('Cover: {{count}} day', { count: detail.calculatedDays })
+                    : t('Cover: {{count}} days', { count: detail.calculatedDays })}
+                </span>
+              )}
             </div>
           </div>
 
@@ -319,40 +351,50 @@ function RequestDetailDrawer({
 
           <div className="grid grid-cols-2 gap-2">
             <div className="rounded-lg bg-charcoal-50 p-2.5 text-center">
-              <p className="bento-label mb-0.5">TYPE</p>
+              <p className="bento-label mb-0.5">{t('TYPE')}</p>
               <p className="text-xs font-semibold text-charcoal-900">{detail.type}</p>
             </div>
             <div className="rounded-lg bg-charcoal-50 p-2.5 text-center">
-              <p className="bento-label mb-0.5">SUBMITTED</p>
+              <p className="bento-label mb-0.5">{t('SUBMITTED')}</p>
               <p className="text-xs font-semibold text-charcoal-900">{formatDateWithYear(detail.submittedDate)}</p>
             </div>
           </div>
 
           <div className="rounded-lg bg-charcoal-50 p-3">
-            <p className="bento-label mb-1">REQUESTED DATE</p>
+            <p className="bento-label mb-1">{t('REQUESTED DATE')}</p>
             <p className="text-sm font-bold text-charcoal-900">{rangeLabel(detail.requestedDate, detail.endDate)}</p>
+            {detail.calculatedDays != null && (
+              <p className="mt-1 text-xs text-violet-700">
+                {t('Cover / extra days:')} <span className="font-semibold">{detail.calculatedDays}</span>
+              </p>
+            )}
+            {detail.type === 'Unscheduled Attendance' && (
+              <p className="mt-1 text-[10px] text-charcoal-500">
+                {t("Recorded automatically at the attendance station — you can't cancel it, but agreeing doesn't change your monthly day-off balance.")}
+              </p>
+            )}
           </div>
 
           <div>
-            <p className="bento-label mb-1">REASON</p>
-            <p className="rounded-lg bg-charcoal-50 p-2.5 text-xs text-charcoal-700">{detail.reason}</p>
+            <p className="bento-label mb-1">{t('REASON')}</p>
+            <p className="rounded-lg bg-charcoal-50 p-2.5 text-xs text-charcoal-700">{detail.reason && formatTimeLabel(detail.reason)}</p>
           </div>
 
           {detail.bmComment && (
             <div className="rounded-lg border border-blue-200 bg-blue-50 p-3">
-              <p className="bento-label mb-1 text-blue-600">TEAM LEAD / BRANCH MANAGER COMMENT</p>
+              <p className="bento-label mb-1 text-blue-600">{t('TEAM LEAD / BRANCH MANAGER COMMENT')}</p>
               <p className="text-xs text-charcoal-700">{detail.bmComment}</p>
             </div>
           )}
           {detail.hrComment && (
             <div className="rounded-lg border border-brand-200 bg-brand-50 p-3">
-              <p className="bento-label mb-1 text-brand-600">HR COMMENT</p>
+              <p className="bento-label mb-1 text-brand-600">{t('HR COMMENT')}</p>
               <p className="text-xs text-charcoal-700">{detail.hrComment}</p>
             </div>
           )}
 
           <div>
-            <p className="bento-label mb-2">APPROVAL WORKFLOW</p>
+            <p className="bento-label mb-2">{t('APPROVAL WORKFLOW')}</p>
             <div className="space-y-0">
               {detail.timeline.map((step, index) => (
                 <div key={step.step + index} className="flex gap-2.5">
@@ -367,7 +409,7 @@ function RequestDetailDrawer({
                   </div>
                   <div className="pb-3">
                     <p className={cn('text-xs font-medium', step.done ? 'text-charcoal-900' : 'text-charcoal-400')}>{step.step}</p>
-                    <p className={cn('text-[10px]', step.done ? 'text-charcoal-500' : 'text-charcoal-400')}>{step.date}</p>
+                    <p className={cn('text-[10px]', step.done ? 'text-charcoal-500' : 'text-charcoal-400')}>{formatTimeLabel(step.date)}</p>
                   </div>
                 </div>
               ))}
@@ -384,7 +426,7 @@ function RequestDetailDrawer({
                 onClick={() => onCancel(detail.id)}
               >
                 <CalendarX2 className="h-3.5 w-3.5" aria-hidden="true" />
-                {cancelling ? 'Cancelling…' : 'Cancel Request'}
+                {cancelling ? t('Cancelling…') : t('Cancel Request')}
               </Button>
             )}
             {detail.status === 'Approved' && (
@@ -396,11 +438,11 @@ function RequestDetailDrawer({
                 onClick={() => onDownload(detail.id)}
               >
                 <Download className="h-3.5 w-3.5" aria-hidden="true" />
-                {downloading ? 'Downloading…' : 'Download'}
+                {downloading ? t('Downloading…') : t('Download')}
               </Button>
             )}
             <Button variant="secondary" size="sm" className="flex-1 justify-center" onClick={onClose}>
-              Close
+              {t('Close')}
             </Button>
           </div>
         </div>

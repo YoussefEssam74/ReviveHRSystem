@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useTranslation } from 'react-i18next'
 import { Camera, Lock, MapPin, Pencil } from 'lucide-react'
 import {
   downloadProfilePhoto,
@@ -52,6 +53,7 @@ function useAvatarUrl(employeeId: number | null, enabled: boolean, epoch: number
 }
 
 export default function MyProfilePage() {
+  const { t } = useTranslation()
   const { me } = usePortalSession()
   const employeeId = me?.employeeId ?? null
   const { toast } = useToast()
@@ -67,12 +69,19 @@ export default function MyProfilePage() {
     enabled: employeeId != null,
   })
 
-  const invalidateProfile = () => queryClient.invalidateQueries({ queryKey: ['portal', 'profile'] })
+  // Avatar blobs are cached per employee (the roster renders one per row), so a
+  // new photo has to evict that entry too or the old image lingers.
+  const invalidateProfile = async () => {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ['portal', 'profile'] }),
+      queryClient.invalidateQueries({ queryKey: ['portal', 'avatar'] }),
+    ])
+  }
 
   const photoMutation = useMutation({
     mutationFn: (file: File) => uploadProfilePhoto(employeeId!, file),
     onSuccess: async () => {
-      toast('Profile photo updated')
+      toast(t('Profile photo updated'))
       setPhotoEpoch((epoch) => epoch + 1)
       await invalidateProfile()
     },
@@ -84,12 +93,12 @@ export default function MyProfilePage() {
   if (employeeId == null) {
     return (
       <EmptyState
-        title="No employee profile"
-        hint="This account is not linked to an employee profile."
+        title={t('No employee profile')}
+        hint={t('This account is not linked to an employee profile.')}
       />
     )
   }
-  if (profileQuery.isLoading) return <LoadingState label="Loading your profile…" />
+  if (profileQuery.isLoading) return <LoadingState label={t('Loading your profile…')} />
   if (profileQuery.isError) {
     return <ErrorState message={describeApiError(profileQuery.error)} onRetry={() => profileQuery.refetch()} />
   }
@@ -101,8 +110,8 @@ export default function MyProfilePage() {
     <div className="space-y-2">
       {/* Profile header card */}
       <div className="flex flex-col items-center gap-3 rounded-xl border border-charcoal-200 bg-white p-3 sm:flex-row sm:items-start">
-        <div className="relative h-20 w-20 shrink-0">
-          <div className="flex h-20 w-20 items-center justify-center overflow-hidden rounded-full border-4 border-white bg-brand-100 text-2xl font-bold text-brand-700 shadow-sm">
+        <div className="relative h-16 w-16 shrink-0 sm:h-20 sm:w-20">
+          <div className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-full border-4 border-white bg-brand-100 text-xl font-bold text-brand-700 shadow-sm sm:h-20 sm:w-20 sm:text-2xl">
             {avatarUrl ? (
               <img src={avatarUrl} alt={profile?.fullName ?? ''} className="h-full w-full object-cover" />
             ) : (
@@ -111,10 +120,10 @@ export default function MyProfilePage() {
           </div>
           <button
             type="button"
-            aria-label="Upload profile photo"
+            aria-label={t('Upload profile photo')}
             onClick={() => fileRef.current?.click()}
             disabled={photoMutation.isPending}
-            className="absolute bottom-0 right-0 rounded-full border border-charcoal-200 bg-white p-1.5 text-charcoal-500 shadow-sm transition-colors hover:border-brand-300 hover:text-brand-600"
+            className="absolute bottom-0 end-0 rounded-full border border-charcoal-200 bg-white p-1.5 text-charcoal-500 shadow-sm transition-colors hover:border-brand-300 hover:text-brand-600"
           >
             <Camera className="h-3.5 w-3.5" aria-hidden="true" />
           </button>
@@ -130,10 +139,10 @@ export default function MyProfilePage() {
             }}
           />
         </div>
-        <div className="flex-1 text-center sm:text-left">
+        <div className="flex-1 text-center sm:text-start">
           <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
             <div>
-              <h2 className="text-xl font-bold text-charcoal-900">{profile?.fullName}</h2>
+              <h2 className="text-lg font-bold text-charcoal-900 sm:text-xl">{profile?.fullName}</h2>
               <p className="mt-0.5 text-xs text-charcoal-500">
                 {profile?.position} · {profile?.gym.name} {profile?.gym.branch}
               </p>
@@ -157,27 +166,30 @@ export default function MyProfilePage() {
           <div className="overflow-hidden rounded-xl border border-charcoal-200 bg-white">
             <div className="flex items-center justify-between border-b border-charcoal-100 bg-charcoal-50/50 px-3 py-2">
               <div>
-                <p className="bento-label">PROFILE DETAILS</p>
-                <h3 className="mt-0.5 text-sm font-bold text-charcoal-900">Personal Info</h3>
+                <p className="bento-label">{t('PROFILE DETAILS')}</p>
+                <h3 className="mt-0.5 text-sm font-bold text-charcoal-900">{t('Personal Info')}</h3>
               </div>
               <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-charcoal-400">
                 <Lock className="h-3 w-3" aria-hidden="true" />
-                Read-only
+                {t('Read-only')}
               </span>
             </div>
             <div className="grid grid-cols-1 gap-2 p-3 sm:grid-cols-2">
-              <InfoField label="Full Name" value={profile?.fullName} />
-              <InfoField label="Date of Birth" value={profile?.dateOfBirth ? formatDate(profile.dateOfBirth) : null} />
-              <InfoField label="National ID" value={profile?.nationalId} />
-              <InfoField label="Gender" value={profile?.gender} />
+              <InfoField label={t('Full Name')} value={profile?.fullName} />
+              <InfoField
+                label={t('Date of Birth')}
+                value={profile?.dateOfBirth ? formatDate(profile.dateOfBirth) : null}
+              />
+              <InfoField label={t('National ID')} value={profile?.nationalId} />
+              <InfoField label={t('Gender')} value={profile?.gender} />
             </div>
           </div>
 
           <div className="overflow-hidden rounded-xl border border-charcoal-200 bg-white">
             <div className="flex items-center justify-between border-b border-charcoal-100 bg-charcoal-50/50 px-3 py-2">
               <div>
-                <p className="bento-label">COMMUNICATION</p>
-                <h3 className="mt-0.5 text-sm font-bold text-charcoal-900">Contact Info</h3>
+                <p className="bento-label">{t('COMMUNICATION')}</p>
+                <h3 className="mt-0.5 text-sm font-bold text-charcoal-900">{t('Contact Info')}</h3>
               </div>
               <button
                 type="button"
@@ -185,14 +197,14 @@ export default function MyProfilePage() {
                 className="flex items-center gap-1 text-[10px] font-semibold text-brand-600 hover:text-brand-700"
               >
                 <Pencil className="h-3 w-3" aria-hidden="true" />
-                Edit
+                {t('Edit')}
               </button>
             </div>
             <div className="grid grid-cols-1 gap-2 p-3 sm:grid-cols-2">
-              <InfoField label="Mobile Number" value={profile?.phone} />
-              <InfoField label="Email (work)" value={profile?.email} />
+              <InfoField label={t('Mobile Number')} value={profile?.phone} />
+              <InfoField label={t('Email (work)')} value={profile?.email} />
               <div className="sm:col-span-2">
-                <InfoField label="Residential Address" value={profile?.address} />
+                <InfoField label={t('Residential Address')} value={profile?.address} />
               </div>
             </div>
           </div>
@@ -205,15 +217,15 @@ export default function MyProfilePage() {
             <div>
               <p className="bento-label flex items-center gap-1 text-charcoal-600">
                 <Lock className="h-3 w-3" aria-hidden="true" />
-                HR CONTROLLED
+                {t('HR CONTROLLED')}
               </p>
-              <h3 className="mt-0.5 text-sm font-bold text-charcoal-900">Employment Info</h3>
+              <h3 className="mt-0.5 text-sm font-bold text-charcoal-900">{t('Employment Info')}</h3>
             </div>
           </div>
           <div className="relative z-10 space-y-2 p-3">
             <div className="flex items-end justify-between border-b border-charcoal-200 pb-2">
               <div>
-                <p className="bento-label text-charcoal-500">Employee ID</p>
+                <p className="bento-label text-charcoal-500">{t('Employee ID')}</p>
                 <p className="mt-0.5 text-xs font-semibold text-charcoal-900">
                   EMP-{String(profile?.id ?? 0).padStart(4, '0')}
                 </p>
@@ -221,7 +233,7 @@ export default function MyProfilePage() {
             </div>
             <div className="flex items-end justify-between border-b border-charcoal-200 pb-2">
               <div>
-                <p className="bento-label text-charcoal-500">Primary Location</p>
+                <p className="bento-label text-charcoal-500">{t('Primary Location')}</p>
                 <p className="mt-0.5 text-xs font-semibold text-charcoal-900">
                   {profile?.gym.name} {profile?.gym.branch}
                 </p>
@@ -230,13 +242,13 @@ export default function MyProfilePage() {
             </div>
             <div className="flex items-end justify-between border-b border-charcoal-200 pb-2">
               <div>
-                <p className="bento-label text-charcoal-500">Job Title / Position</p>
+                <p className="bento-label text-charcoal-500">{t('Job Title / Position')}</p>
                 <p className="mt-0.5 text-xs font-semibold text-charcoal-900">{profile?.position}</p>
               </div>
             </div>
             <div className="flex items-end justify-between border-b border-charcoal-200 pb-2">
               <div>
-                <p className="bento-label text-charcoal-500">Hire Date</p>
+                <p className="bento-label text-charcoal-500">{t('Hire Date')}</p>
                 <p className="mt-0.5 text-xs font-semibold text-charcoal-900">
                   {profile?.hireDate ? formatDate(profile.hireDate) : '—'}
                 </p>
@@ -244,7 +256,7 @@ export default function MyProfilePage() {
             </div>
             <div className="flex items-end justify-between">
               <div>
-                <p className="bento-label text-charcoal-500">Current Status</p>
+                <p className="bento-label text-charcoal-500">{t('Current Status')}</p>
                 <p className="mt-0.5 flex items-center gap-1.5 text-xs font-semibold text-charcoal-900">
                   <span className="h-2 w-2 rounded-full bg-brand-500" />
                   {profile?.status} {profile?.employmentType}
@@ -258,7 +270,7 @@ export default function MyProfilePage() {
       {/* Editable contact modal (phone + address; email is HR-controlled) */}
       {contactOpen && profile && (
         <ContactEditModal
-          title="Edit Contact Information"
+          title={t('Edit Contact Information')}
           initial={{ phone: contact.phone, address: contact.address }}
           save={async (fields) => {
             await updateContact(employeeId, {
@@ -267,7 +279,7 @@ export default function MyProfilePage() {
             })
           }}
           onSaved={async () => {
-            toast('Contact information updated')
+            toast(t('Contact information updated'))
             await invalidateProfile()
             setContactOpen(false)
           }}
@@ -300,6 +312,7 @@ export function ContactEditModal({
   onClose: () => void
 }) {
   const [state, setState] = useState<EditableContactState>(initial)
+  const { t } = useTranslation()
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const isEmergency = initial.name !== undefined
@@ -326,7 +339,7 @@ export function ContactEditModal({
     <Modal open title={title} onClose={onClose} footer={
       <>
         <Button variant="secondary" size="sm" onClick={onClose} disabled={saving}>
-          Cancel
+          {t('Cancel')}
         </Button>
         <Button
           size="sm"
@@ -344,16 +357,16 @@ export function ContactEditModal({
             }
           }}
         >
-          Save
+          {t('Save')}
         </Button>
       </>
     }
     >
       <div className="space-y-3">
-        {isEmergency && field('name', 'Name', { required: true })}
-        {isEmergency && field('relationship', 'Relationship', { required: true })}
-        {field('phone', 'Phone', { required: true, tel: true })}
-        {!isEmergency && field('address', 'Address')}
+        {isEmergency && field('name', t('Name'), { required: true })}
+        {isEmergency && field('relationship', t('Relationship'), { required: true })}
+        {field('phone', t('Phone'), { required: true, tel: true })}
+        {!isEmergency && field('address', t('Address'))}
         {error && (
           <p role="alert" className="rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700">
             {error}
@@ -366,9 +379,11 @@ export function ContactEditModal({
 
 function InfoField({ label, value }: { label: string; value: string | null | undefined }) {
   return (
-    <div>
-      <label className="bento-label text-charcoal-500">{label}</label>
-      <p className="mt-0.5 text-xs text-charcoal-900">{value || '—'}</p>
+    <div className="flex items-baseline justify-between gap-3 border-b border-charcoal-100 pb-1.5 last:border-0 last:pb-0 sm:block sm:border-0 sm:pb-0">
+      <label className="bento-label shrink-0 text-charcoal-500">{label}</label>
+      <p className="min-w-0 break-words text-end text-xs font-medium text-charcoal-900 sm:mt-0.5 sm:text-start sm:font-normal">
+        {value || '—'}
+      </p>
     </div>
   )
 }

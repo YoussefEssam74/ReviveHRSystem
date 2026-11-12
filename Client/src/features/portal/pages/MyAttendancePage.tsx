@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
+import { useTranslation } from 'react-i18next'
 import { Plus, SquarePen } from 'lucide-react'
 import { getEmployeeDashboard } from '../api/dashboard.api'
 import {
@@ -16,11 +17,12 @@ import { NewRequestModal } from '../components/NewRequestModal'
 import { EmptyState } from '../../../components/ui/primitives'
 import { ErrorState, LoadingState } from '../../../components/async-state'
 import { Drawer } from '../../../components/ui/drawer'
+import { Button } from '../../../components/ui/button'
 import { StatusBadge } from '../../../components/ui/badge'
 import { Badge, type BadgeColor } from '../../../components/ui/badge'
 import { usePortalSession } from '../../../contexts/PortalSessionContext'
 import { describeApiError } from '../../../lib/api-client'
-import { formatDate, formatDateWithYear, formatMoney } from '../../../lib/format'
+import { formatDate, formatDateWithYear, formatMoney, formatTimeLabel } from '../../../lib/format'
 import { PAGE_PATHS } from '../portal-nav'
 import { cn } from '../../../lib/utils'
 
@@ -78,10 +80,17 @@ const DEDUCTION_CORRECTION_ID = 'deduction-correction'
 /** Badge color per deduction status — from the employee's seat: applied = money gone. */
 const DEDUCTION_COLORS: Record<string, BadgeColor> = {
   'In review': 'yellow',
+  Pending: 'yellow',
+  'Pending HR': 'yellow',
   'Branch approved': 'yellow',
   Applied: 'red',
   Rejected: 'green',
   Resolved: 'green',
+}
+
+/** A deduction the branch/HR still stands behind — a waived one no longer paints its day. */
+function isLiveDeduction(deduction: EmployeeDeduction): boolean {
+  return deduction.status !== 'Rejected' && deduction.status !== 'Resolved'
 }
 
 /** Raw RequestStatus enum → the label the badge vocabulary understands. */
@@ -113,56 +122,24 @@ function RequestChip({ type, status }: DayRequestChipProps) {
   )
 }
 
-/** Per-status warning framing shown in the Warnings & Deductions column/drawer. */
-const DAY_WARNING_META: Record<string, { label: string; color: BadgeColor; title: string }> = {
-  Late: {
-    label: 'Late arrival',
-    color: 'yellow',
-    title: 'Late arrival — deducted as a ¼ day once approved.',
-  },
-  Absent: {
-    label: 'Absent',
-    color: 'red',
-    title: 'Absent without permission — deducted as a full day once approved.',
-  },
-  EarlyCheckout: {
-    label: 'Early checkout',
-    color: 'blue',
-    title: 'Checked out before the scheduled shift ended.',
-  },
-}
-
 /**
- * Box-2 content for a history row: the day's warning chips (late/absent/…, plus
- * any issued notice) and each priced deduction amount — all opening the day drawer.
+ * Box-2 content for a history row: the day's warning chips (any issued notice)
+ * and each priced deduction with the state it is in — Pending while the branch
+ * or HR still has to decide, Applied once booked, Rejected once waived — all
+ * opening the day drawer. The day's own status stays in the Status column, so
+ * it is never repeated here.
  */
 function DayWarningChips({
-  item,
   warning,
   deductions,
   onOpen,
 }: {
-  item: EmployeeAttendanceItem
   warning: WarningNoticeRow | null
   deductions: EmployeeDeduction[]
   onOpen: (warning: WarningNoticeRow | null) => void
 }) {
-  const meta = DAY_WARNING_META[item.status]
   return (
     <div className="flex flex-wrap gap-1">
-      {meta && (
-        <button
-          type="button"
-          onClick={(event) => {
-            event.stopPropagation()
-            onOpen(warning)
-          }}
-          className="inline-flex"
-          title={meta.title}
-        >
-          <Badge color={meta.color}>{meta.label}</Badge>
-        </button>
-      )}
       {warning && (
         <button
           type="button"
@@ -185,28 +162,32 @@ function DayWarningChips({
             onOpen(warning)
           }}
           className="inline-flex"
-          title={`${deduction.description}${deduction.detail ? ` — ${deduction.detail}` : ''}`}
+          title={`${deduction.description} · ${deduction.status}${deduction.detail ? ` — ${deduction.detail}` : ''}`}
         >
           <Badge color={DEDUCTION_COLORS[deduction.status] ?? 'gray'}>
             {deduction.amount != null ? formatMoney(deduction.amount) : 'Amount pending'}
+            <span className="font-normal">· {deduction.status}</span>
           </Badge>
         </button>
       ))}
-      {!meta && !warning && deductions.length === 0 && <span className="text-charcoal-400">—</span>}
+      {!warning && deductions.length === 0 && <span className="text-charcoal-400">—</span>}
     </div>
   )
 }
 
 /**
- * An off/empty row that carries a deduction still reads as the day that
- * deduction punishes — Late when one names lateness, Absent otherwise.
+ * An off/empty row that carries a live deduction still reads as the day that
+ * deduction punishes — Late when one names lateness, Absent otherwise. A
+ * waived deduction no longer paints the day.
  */
 function dayDisplayStatus(item: EmployeeAttendanceItem, deductions: EmployeeDeduction[]) {
-  if ((item.status !== 'Off' && item.status !== '') || deductions.length === 0) return item.status
-  return deductions.some((row) => /late/i.test(row.description)) ? 'Late' : 'Absent'
+  const live = deductions.filter(isLiveDeduction)
+  if ((item.status !== 'Off' && item.status !== '') || live.length === 0) return item.status
+  return live.some((row) => /late/i.test(row.description)) ? 'Late' : 'Absent'
 }
 
 export default function MyAttendancePage() {
+  const { t } = useTranslation()
   const { me } = usePortalSession()
   const employeeId = me?.employeeId ?? null
 
@@ -262,12 +243,12 @@ export default function MyAttendancePage() {
   if (employeeId == null) {
     return (
       <EmptyState
-        title="No employee profile"
-        hint="This account is not linked to an employee profile, so it has no attendance to show."
+        title={t('No employee profile')}
+        hint={t('This account is not linked to an employee profile, so it has no attendance to show.')}
       />
     )
   }
-  if (attendanceQuery.isLoading) return <LoadingState label="Loading attendance…" />
+  if (attendanceQuery.isLoading) return <LoadingState label={t('Loading attendance…')} />
   if (attendanceQuery.isError) {
     return <ErrorState message={describeApiError(attendanceQuery.error)} onRetry={() => attendanceQuery.refetch()} />
   }
@@ -297,12 +278,15 @@ export default function MyAttendancePage() {
       .filter((entry): entry is readonly [string, WarningNoticeRow] => entry !== null),
   )
   // Off days (no shift planned) are omitted from the history like in the mock —
-  // unless the day carries a warning or a deduction, which must stay reachable
-  // on the day it happened.
+  // unless the day carries a warning, a live deduction, or an unscheduled punch
+  // (shift "Cover / Extra Day" or a cover-day value), all of which must stay
+  // reachable on the day they happened. A waived deduction does not resurrect
+  // an off day.
   const history = (attendance?.items ?? []).filter((item) => {
     const shift = item.shift.trim().toLowerCase()
     if (shift !== '' && shift !== 'off') return true
-    return warningsByDate.has(item.date) || deductionsByDate.has(item.date)
+    if (item.coverDays != null) return true
+    return warningsByDate.has(item.date) || (deductionsByDate.get(item.date) ?? []).some(isLiveDeduction)
   })
   const now = new Date()
   const todayIso = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
@@ -348,7 +332,7 @@ export default function MyAttendancePage() {
         <div className="card overflow-hidden">
           <div className="flex flex-col justify-between gap-1 border-b border-charcoal-100 px-4 py-2 sm:flex-row sm:items-center">
             <div>
-              <p className="text-sm font-bold text-charcoal-900">Today's View</p>
+              <p className="text-sm font-bold text-charcoal-900">{t("Today's View")}</p>
               <p className="text-[10px] text-charcoal-500">
                 {formatDateWithYear(todayIso)} · {dashboard.user.gymName}
               </p>
@@ -357,16 +341,16 @@ export default function MyAttendancePage() {
               Read-only
             </span>
           </div>
-          <div className="grid grid-cols-2 divide-y divide-charcoal-100 lg:grid-cols-5 lg:divide-y-0 lg:divide-x">
-            <div className="px-3 py-2.5">
-              <p className="bento-label mb-1 text-charcoal-400">ASSIGNED SHIFT</p>
+          <div className="grid grid-cols-2 gap-px bg-charcoal-100 lg:grid-cols-5">
+            <div className="bg-white px-3 py-2.5">
+              <p className="bento-label mb-1 text-charcoal-400">{t('ASSIGNED SHIFT')}</p>
               <p className="text-sm font-bold leading-snug text-charcoal-900">{dashboard.todayShift?.shiftName ?? 'Off'}</p>
               <p className="mt-0.5 text-[10px] leading-snug text-charcoal-500">
                 {dashboard.todayShift ? `${time12(dashboard.todayShift.start)} – ${time12(dashboard.todayShift.end)}` : 'no shift today'}
               </p>
             </div>
-            <div className="px-3 py-2.5">
-              <p className="bento-label mb-1 text-charcoal-400">CHECK-IN</p>
+            <div className="bg-white px-3 py-2.5">
+              <p className="bento-label mb-1 text-charcoal-400">{t('CHECK-IN')}</p>
               <p className={cn('text-sm font-bold leading-snug', today?.checkIn ? 'text-brand-600' : 'text-charcoal-400')}>
                 {time12(today?.checkIn ?? null)}
               </p>
@@ -374,20 +358,20 @@ export default function MyAttendancePage() {
                 {today?.checkIn ? dashboard.user.gymName : 'not checked in'}
               </p>
             </div>
-            <div className="px-3 py-2.5">
-              <p className="bento-label mb-1 text-charcoal-400">CHECK-OUT</p>
+            <div className="bg-white px-3 py-2.5">
+              <p className="bento-label mb-1 text-charcoal-400">{t('CHECK-OUT')}</p>
               <p className={cn('text-sm font-bold leading-snug', today?.checkOut ? 'text-charcoal-900' : 'text-charcoal-400')}>
                 {time12(today?.checkOut ?? null)}
               </p>
               <p className="mt-0.5 text-[10px] leading-snug text-charcoal-500">{today?.checkOut ? 'completed' : 'in progress'}</p>
             </div>
-            <div className="px-3 py-2.5">
-              <p className="bento-label mb-1 text-charcoal-400">WORKING HOURS</p>
+            <div className="bg-white px-3 py-2.5">
+              <p className="bento-label mb-1 text-charcoal-400">{t('WORKING HOURS')}</p>
               <p className="text-sm font-bold leading-snug text-charcoal-900">{workedLabel(workedToday)}</p>
               <p className="mt-0.5 text-[10px] leading-snug text-charcoal-500">{today?.checkOut ? 'day complete' : 'updating live'}</p>
             </div>
-            <div className="px-3 py-2.5">
-              <p className="bento-label mb-1 text-charcoal-400">ATTENDANCE STATUS</p>
+            <div className="col-span-2 bg-white px-3 py-2.5 lg:col-span-1">
+              <p className="bento-label mb-1 text-charcoal-400">{t('ATTENDANCE STATUS')}</p>
               <div className="mt-0.5">
                 {today ? <StatusBadge status={today.status} /> : <StatusBadge status="Off" />}
               </div>
@@ -397,35 +381,37 @@ export default function MyAttendancePage() {
         </div>
       )}
 
-      {/* Stats row (the dashboard aggregate's real month summary) */}
+      {/* Stats row — one straight line of seven boxes on phones, so nothing is
+          pushed to a second row or clipped by the page edge. */}
       {dashboard && (
-        <div className="grid grid-cols-3 gap-2 sm:grid-cols-6">
-          <StatPill value={`${Math.round(dashboard.monthSummary.rate)}%`} label="Attendance Rate" color="text-brand-700" accent="border-l-brand-500" />
-          <StatPill value={dashboard.monthSummary.present} label="Present" color="text-brand-600" accent="border-l-brand-500" />
-          <StatPill value={dashboard.monthSummary.late} label="Late" color="text-yellow-600" accent="border-l-yellow-500" />
-          <StatPill value={dashboard.monthSummary.absent} label="Absent" color="text-red-600" accent="border-l-red-500" />
-          <StatPill value={dashboard.monthSummary.earlyCheckout} label="Early Out" color="text-blue-600" accent="border-l-blue-500" />
-          <StatPill value={dashboard.monthSummary.missingCheckout} label="Missing Out" color="text-charcoal-600" accent="border-l-charcoal-400" />
+        <div className="grid grid-cols-7 gap-1 sm:gap-2">
+          <StatPill value={`${Math.round(dashboard.monthSummary.rate)}%`} label={t('Attendance Rate')} color="text-brand-700" accent="border-s-brand-500" />
+          <StatPill value={dashboard.monthSummary.present} label={t('Present')} color="text-brand-600" accent="border-s-brand-500" />
+          <StatPill value={dashboard.monthSummary.late} label={t('Late')} color="text-yellow-600" accent="border-s-yellow-500" />
+          <StatPill value={dashboard.monthSummary.absent} label={t('Absent')} color="text-red-600" accent="border-s-red-500" />
+          <StatPill value={dashboard.monthSummary.earlyCheckout} label={t('Early Out')} color="text-blue-600" accent="border-s-blue-500" />
+          <StatPill value={dashboard.monthSummary.missingCheckout} label={t('Missing Out')} color="text-charcoal-600" accent="border-s-charcoal-400" />
+          <StatPill value={dashboard.monthSummary.coverDays} label={t('Cover days')} color="text-violet-600" accent="border-s-violet-500" />
         </div>
       )}
 
       {/* Leave balance + quick request launch */}
       <div className="grid grid-cols-1 gap-2 lg:grid-cols-3">
         <div className="card px-3 py-2">
-          <p className="bento-label mb-1.5">LEAVE BALANCE</p>
+          <p className="bento-label mb-1.5">{t('LEAVE BALANCE')}</p>
           <div className="space-y-1.5">
             {balance ? (
               <>
-                <BalanceRow label="Annual" used={balance.dayOff.used} total={balance.dayOff.total} color="bg-brand-500" />
-                <BalanceRow label="Sick" used={balance.sick.used} total={balance.sick.total} color="bg-red-400" />
-                <BalanceRow label="Unpaid" used={balance.unpaid.used} total={balance.unpaid.total} color="bg-blue-500" />
+                <BalanceRow label={t('Annual')} used={balance.dayOff.used} total={balance.dayOff.total} color="bg-brand-500" />
+                <BalanceRow label={t('Sick')} used={balance.sick.used} total={balance.sick.total} color="bg-red-400" />
+                <BalanceRow label={t('Unpaid')} used={balance.unpaid.used} total={balance.unpaid.total} color="bg-blue-500" />
               </>
             ) : (
               balanceQuery.isError && <p className="text-[11px] text-red-600">{describeApiError(balanceQuery.error)}</p>
             )}
             {budget && (
               <BalanceRow
-                label="Excused hours"
+                label={t('Excused hours')}
                 used={budget.usedHours}
                 total={budget.capHours}
                 color="bg-purple-400"
@@ -437,63 +423,81 @@ export default function MyAttendancePage() {
 
         <div className="card px-3 py-2 lg:col-span-2">
           <div className="mb-1.5 flex items-center justify-between">
-            <p className="bento-label">NEW REQUEST</p>
+            <p className="bento-label">{t('NEW REQUEST')}</p>
             <Link to={PAGE_PATHS.requests} className="text-[10px] font-semibold text-brand-600 hover:underline">
               View All
             </Link>
           </div>
-          {typesQuery.isError ? (
-            <p className="text-[11px] text-red-600">{describeApiError(typesQuery.error)}</p>
-          ) : (
-            <div className="grid grid-cols-3 gap-1.5">
-              {(typesQuery.data ?? []).map((type) => (
-                <button
-                  key={type.id}
-                  type="button"
-                  onClick={() => setRequestDraft({ typeId: type.id })}
-                  className="flex min-w-0 items-center gap-1.5 rounded-lg border border-charcoal-200 px-2 py-1.5 text-left transition-colors hover:border-brand-300 hover:bg-brand-50"
-                >
-                  <SquarePen className="h-3.5 w-3.5 flex-shrink-0 text-brand-600" aria-hidden="true" />
-                  <span className="truncate text-[10px] font-semibold text-charcoal-700">{type.label}</span>
-                </button>
-              ))}
-            </div>
-          )}
+
+          {/* Phone: a single launcher — the form itself asks for the type. */}
+          <div className="flex flex-wrap items-center gap-2 sm:hidden">
+            <Button size="sm" onClick={() => setRequestDraft({})}>
+              <SquarePen className="h-3.5 w-3.5" aria-hidden="true" /> New Request
+            </Button>
+            <p className="text-[10px] text-charcoal-500">{t('Choose the request type in the form — leave, swap, correction or advance.')}</p>
+          </div>
+
+          {/* Tablet / desktop: the type chips. Deduction disputes start from the
+              deduction itself (day drawer → Request correction), so that type is
+              not offered as a standalone chip here. */}
+          <div className="hidden sm:block">
+            {typesQuery.isError ? (
+              <p className="text-[11px] text-red-600">{describeApiError(typesQuery.error)}</p>
+            ) : (
+              <div className="grid grid-cols-3 gap-1.5">
+                {(typesQuery.data ?? [])
+                  .filter((type) => type.id !== 'unscheduled-attendance' && type.id !== DEDUCTION_CORRECTION_ID)
+                  .map((type) => (
+                    <button
+                      key={type.id}
+                      type="button"
+                      onClick={() => setRequestDraft({ typeId: type.id })}
+                      className="flex min-w-0 items-center gap-1.5 rounded-lg border border-charcoal-200 px-2 py-1.5 text-left transition-colors hover:border-brand-300 hover:bg-brand-50"
+                    >
+                      <SquarePen className="h-3.5 w-3.5 flex-shrink-0 text-brand-600" aria-hidden="true" />
+                      <span className="truncate text-[10px] font-semibold text-charcoal-700">{type.label}</span>
+                    </button>
+                  ))}
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
       {/* Attendance history */}
-      <div className="flex items-center justify-between pt-1">
-        <p className="text-xs font-bold text-charcoal-900">Attendance History</p>
-        <select
-          className="form-select w-36"
-          aria-label="Select month"
-          value={month}
-          onChange={(event) => setMonth(event.target.value)}
-        >
-          {monthOptions.map((option) => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
-          ))}
-        </select>
+      <div className="flex flex-col gap-2 pt-1 sm:flex-row sm:items-center sm:justify-between">
+        <p className="text-xs font-bold text-charcoal-900">{t('Attendance History')}</p>
+        <div className="w-full shrink-0 sm:w-44">
+          <select
+            className="form-select"
+            aria-label={t('Select month')}
+            value={month}
+            onChange={(event) => setMonth(event.target.value)}
+          >
+            {monthOptions.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </div>
       </div>
 
       <div className="card hidden overflow-hidden lg:block">
         {history.length === 0 ? (
-          <EmptyState title="No attendance records for this month" />
+          <EmptyState title={t('No attendance records for this month')} />
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs">
               <thead>
                 <tr className="border-b border-charcoal-100 text-charcoal-500 dark:text-charcoal-700">
-                  <th className="px-4 py-2.5 font-medium">Date</th>
-                  <th className="px-4 py-2.5 font-medium">Shift</th>
-                  <th className="px-4 py-2.5 font-medium">Check In</th>
-                  <th className="px-4 py-2.5 font-medium">Check Out</th>
-                  <th className="px-4 py-2.5 font-medium">Status</th>
-                  <th className="px-4 py-2.5 font-medium">Warnings & Deductions</th>
-                  <th className="px-4 py-2.5 font-medium">Requests</th>
+                  <th className="px-4 py-2.5 font-medium">{t('Date')}</th>
+                  <th className="px-4 py-2.5 font-medium">{t('Shift')}</th>
+                  <th className="px-4 py-2.5 font-medium">{t('Check In')}</th>
+                  <th className="px-4 py-2.5 font-medium">{t('Check Out')}</th>
+                  <th className="px-4 py-2.5 font-medium">{t('Status')}</th>
+                  <th className="px-4 py-2.5 font-medium">{t('Warnings & Deductions')}</th>
+                  <th className="px-4 py-2.5 font-medium">{t('Requests')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -513,10 +517,17 @@ export default function MyAttendancePage() {
                       <td className="px-4 py-2.5">{time12(item.checkIn)}</td>
                       <td className="px-4 py-2.5">{time12(item.checkOut)}</td>
                       <td className="px-4 py-2.5">
-                        {leave ? <StatusBadge status={leave.status} /> : <StatusBadge status={dayDisplayStatus(item, dayDeductions)} />}
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          {leave ? <StatusBadge status={leave.status} /> : <StatusBadge status={dayDisplayStatus(item, dayDeductions)} />}
+                          {item.coverDays != null && (
+                            <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
+                              Cover: {item.coverDays}
+                            </span>
+                          )}
+                        </div>
                       </td>
                       <td className="px-4 py-2.5">
-                        <DayWarningChips item={item} warning={warning} deductions={dayDeductions} onOpen={(w) => openDetail(item.date, w)} />
+                        <DayWarningChips warning={warning} deductions={dayDeductions} onOpen={(w) => openDetail(item.date, w)} />
                       </td>
                       <td className="px-4 py-2.5">
                         {others.length > 0 ? (
@@ -539,7 +550,7 @@ export default function MyAttendancePage() {
       </div>
 
       <div className="space-y-2 lg:hidden">
-        {history.length === 0 && <EmptyState title="No attendance records for this month" />}
+        {history.length === 0 && <EmptyState title={t('No attendance records for this month')} />}
         {history.map((item) => {
           const leave = leaveOn(item.date)
           const others = requestsOn(item.date).filter((r) => r !== leave)
@@ -552,10 +563,17 @@ export default function MyAttendancePage() {
                   <p className="text-xs font-medium text-charcoal-900">{formatDate(item.date)}</p>
                   <p className="text-[10px] text-charcoal-500">{item.shift}</p>
                 </div>
-                {leave ? <StatusBadge status={leave.status} /> : <StatusBadge status={dayDisplayStatus(item, dayDeductions)} />}
+                <div className="flex flex-wrap items-center justify-end gap-1.5">
+                  {item.coverDays != null && (
+                    <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
+                      Cover: {item.coverDays}
+                    </span>
+                  )}
+                  {leave ? <StatusBadge status={leave.status} /> : <StatusBadge status={dayDisplayStatus(item, dayDeductions)} />}
+                </div>
               </div>
               <div className="mt-1.5">
-                <DayWarningChips item={item} warning={warning} deductions={dayDeductions} onOpen={(w) => openDetail(item.date, w)} />
+                <DayWarningChips warning={warning} deductions={dayDeductions} onOpen={(w) => openDetail(item.date, w)} />
               </div>
               <div className="mt-2 flex gap-4 text-[10px] text-charcoal-500">
                 <span>In: {time12(item.checkIn)}</span>
@@ -631,9 +649,9 @@ function StatPill({
   accent: string
 }) {
   return (
-    <div className={cn('card flex flex-col items-center rounded-xl border-l-4 px-2 py-2 text-center', accent)}>
-      <p className={cn('text-base font-bold leading-none', color)}>{value}</p>
-      <p className="mt-1 text-[9px] leading-tight text-charcoal-500">{label}</p>
+    <div className={cn('card flex min-w-0 flex-col items-center rounded-xl border-l-2 px-0.5 py-2 text-center sm:border-l-4 sm:px-2', accent)}>
+      <p className={cn('text-[11px] font-bold leading-none sm:text-base', color)}>{value}</p>
+      <p className="mt-1 text-[7px] leading-[1.15] text-charcoal-500 sm:text-[9px]">{label}</p>
     </div>
   )
 }
@@ -661,7 +679,7 @@ function BalanceRow({
   const low = !spent && pct >= 75
   return (
     <div className="flex items-center gap-2">
-      <span className="w-16 flex-shrink-0 truncate text-[10px] font-medium text-charcoal-600">{label}</span>
+      <span className="w-20 flex-shrink-0 truncate text-[10px] font-medium text-charcoal-600">{label}</span>
       <div className="h-1.5 min-w-0 flex-1 overflow-hidden rounded-full bg-charcoal-100">
         <div className={cn('h-full rounded-full transition-all', spent ? 'bg-red-500' : low ? 'bg-yellow-500' : color)} style={{ width: `${pct}%` }} />
       </div>
@@ -706,8 +724,9 @@ function AttendanceDetailDrawer({
   /** Opens the New Request modal with no type pre-picked. */
   onNewRequest: () => void
 }) {
+  const { t } = useTranslation()
   return (
-    <Drawer open={detailDate != null} title="Attendance Details" onClose={onClose}>
+    <Drawer open={detailDate != null} title={t('Attendance Details')} onClose={onClose}>
       {detail && (
         <div className="space-y-4">
           <div className="border-b border-charcoal-100 py-2 text-center">
@@ -719,14 +738,22 @@ function AttendanceDetailDrawer({
 
           {/* Section 1 — the day's attendance facts, with its own correction action */}
           <div>
-            <p className="bento-label mb-1.5 text-charcoal-500">ATTENDANCE</p>
+            <p className="bento-label mb-1.5 text-charcoal-500">{t('ATTENDANCE')}</p>
             <div className="space-y-2">
-              <DayRow label="Scheduled Shift" value={detail.shift} />
-              <DayRow label="Check In" value={time12(detail.checkIn)} valueClass={detail.checkIn ? 'text-brand-600' : 'text-charcoal-400'} bold />
-              <DayRow label="Check Out" value={time12(detail.checkOut)} bold />
+              <DayRow label={t('Scheduled Shift')} value={formatTimeLabel(detail.shift)} />
+              <DayRow label={t('Check In')} value={time12(detail.checkIn)} valueClass={detail.checkIn ? 'text-brand-600' : 'text-charcoal-400'} bold />
+              <DayRow label={t('Check Out')} value={time12(detail.checkOut)} bold />
+              {detail.coverDays != null && (
+                <DayRow
+                  label={t('Cover / Extra Days')}
+                  value={`${detail.coverDays} day${detail.coverDays === 1 ? '' : 's'}`}
+                  valueClass="text-violet-600"
+                  bold
+                />
+              )}
               {detail.notes ? (
                 <div className="py-1.5 text-xs">
-                  <span className="mb-1 flex items-center gap-1.5 text-charcoal-500">Notes</span>
+                  <span className="mb-1 flex items-center gap-1.5 text-charcoal-500">{t('Notes')}</span>
                   <p className="rounded-lg bg-charcoal-50 p-2.5 text-charcoal-700">{detail.notes}</p>
                 </div>
               ) : null}
@@ -761,23 +788,8 @@ function AttendanceDetailDrawer({
 
           {/* Section 2 — warnings & deductions raised on the day, each disputable on its own */}
           <div>
-            <p className="bento-label mb-1.5 text-charcoal-500">WARNINGS & DEDUCTIONS</p>
+            <p className="bento-label mb-1.5 text-charcoal-500">{t('WARNINGS & DEDUCTIONS')}</p>
             <div className="space-y-2">
-              {DAY_WARNING_META[detail.status] && (
-                <div
-                  className={cn(
-                    'rounded-lg border p-2.5',
-                    DAY_WARNING_META[detail.status].color === 'red'
-                      ? 'border-red-200 bg-red-50'
-                      : DAY_WARNING_META[detail.status].color === 'yellow'
-                        ? 'border-yellow-200 bg-yellow-50'
-                        : 'border-blue-200 bg-blue-50',
-                  )}
-                >
-                  <p className="text-xs font-semibold text-charcoal-900">{DAY_WARNING_META[detail.status].label}</p>
-                  <p className="mt-1 text-[11px] leading-relaxed text-charcoal-700">{DAY_WARNING_META[detail.status].title}</p>
-                </div>
-              )}
               {warning && (
                 <div className="rounded-lg border border-orange-200 bg-orange-50 p-2.5">
                   <p className="text-xs font-semibold text-orange-800">{warning.type || 'Warning'}</p>
@@ -799,7 +811,7 @@ function AttendanceDetailDrawer({
                       Correction
                       <StatusBadge status={requestStatusLabel(deduction.correctionStatus)} />
                     </div>
-                  ) : deduction.date ? (
+                  ) : deduction.date && isLiveDeduction(deduction) ? (
                     <button
                       type="button"
                       onClick={() => onCorrectDeduction(deduction)}
@@ -810,8 +822,8 @@ function AttendanceDetailDrawer({
                   ) : null}
                 </div>
               ))}
-              {!DAY_WARNING_META[detail.status] && !warning && deductions.length === 0 && (
-                <p className="text-[11px] text-charcoal-400">No warnings or deductions on this day.</p>
+              {!warning && deductions.length === 0 && (
+                <p className="text-[11px] text-charcoal-400">{t('No warnings or deductions on this day.')}</p>
               )}
             </div>
           </div>

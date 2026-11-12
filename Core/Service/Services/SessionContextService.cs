@@ -4,6 +4,7 @@ using DomainLayer.Exceptions;
 using DomainLayer.Models.OrganizationModule;
 using DomainLayer.Models.OrganizationModule.Enums;
 using DomainLayer.Models.UserModule;
+using DomainLayer.Models.UserModule.Enums;
 using Microsoft.EntityFrameworkCore;
 using Service.Specifications;
 using ServiceAbstraction.Services;
@@ -92,21 +93,21 @@ namespace Service.Services
                     ExpiresAtUtc = tokenService.RefreshTokenExpiresAtUtc
                 }, cancellationToken);
 
-            // Revoke every OTHER alive refresh chain of this user in the same
-            // transaction. Leaving old chains alive proved unsafe in practice: a
-            // stale SPA context (another tab, or a tab still running a previous
-            // build with an old in-memory session) kept one, hit its 401-retry,
-            // refreshed against it and got a token re-scoped to the PREVIOUS gym
-            // (RefreshAsync preserves chain scope), overwriting the persisted
-            // session so the UI silently flipped back to the old gym with no
-            // error — the exact "stays in the main gym" report. With
-            // single-live-chain discipline a stale credential is refused: its
-            // holder is signed out (visible state) instead of resurrecting the
-            // old gym scope. The new row is excluded by hash (its Id is not
-            // assigned until the save).
+            // Same-gym sessions coexist; only chains minted for a DIFFERENT gym are
+            // swept. Revoking every other chain (the former blanket "single-live-
+            // chain" sweep) signed the user out on every other device/browser one
+            // access-token lifetime later — the reported "logged out every 15–30
+            // minutes" — because their next silent refresh was refused.
+            //
+            // The guarantee the sweep exists for is preserved: a chain minted for the
+            // PREVIOUS gym is revoked, so a stale SPA context can never silently
+            // refresh into the gym the user has since left (RefreshAsync preserves
+            // its chain's ScopedGymId). A session already on the target gym — another
+            // device, or a second browser — is a legitimate independent session and
+            // survives the switch.
             var staleChain = await refreshRepo.GetAllAsync(
                 new RefreshTokensByUserActiveSpec(user.Id), cancellationToken);
-            foreach (var zombie in staleChain)
+            foreach (var zombie in staleChain.Where(t => t.ScopedGymId != gymId))
             {
                 zombie.RevokedAtUtc = DateTime.UtcNow;
                 refreshRepo.Update(zombie);
@@ -150,7 +151,6 @@ namespace Service.Services
         {
             string? roleInActiveGym = null;
             int? ledTeamId = null;
-            var featureLevels = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
             int? employeeId = await employeeAccessService.GetOwnEmployeeIdAsync(user.Id, cancellationToken);
 
             if (activeGym is not null)
@@ -161,10 +161,16 @@ namespace Service.Services
                 // Only relevant for team-scoped sessions, but harmless to resolve always:
                 // null unless the user leads a team in the active gym.
                 ledTeamId = await teamScopeService.GetLedTeamIdAsync(user.Id, activeGym.GymId, cancellationToken);
-
-                var permissionKeys = await userAccess.GetPermissionKeysForGymAsync(user.Id, activeGym.GymId, cancellationToken);
-                featureLevels = BuildFeatureLevels(permissionKeys);
             }
+
+            // Feature levels follow the same key resolution the access token is issued
+            // with (GetPermissionKeysForGymAsync), so the SPA's gates and the API's
+            // guards can never disagree. Without a gym scope the global keys apply —
+            // the pre-selection case for multi-gym accounts.
+            var featureLevels = user.UserType == UserType.TopManagement
+                ? FeatureLevelCatalog.AllAtEdit()
+                : FeatureLevelCatalog.Resolve(
+                    await userAccess.GetPermissionKeysForGymAsync(user.Id, activeGym?.GymId, cancellationToken));
 
             return new MeResponse
             {
@@ -179,38 +185,6 @@ namespace Service.Services
                 FeatureLevels = featureLevels,
                 EmployeeId = employeeId
             };
-        }
-
-        /// <summary>
-        /// Collapses the gym's permission keys into one level per feature:
-        /// <c>{feature}.view</c> is View (1); any other action (edit, manage, approve,
-        /// create, …) is Edit (2) — the highest grant wins.
-        /// </summary>
-        private static Dictionary<string, int> BuildFeatureLevels(IEnumerable<string> permissionKeys)
-        {
-            const int View = 1;
-            const int Edit = 2;
-
-            var levels = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
-            foreach (var key in permissionKeys)
-            {
-                var separator = key.IndexOf('.');
-                if (separator <= 0 || separator == key.Length - 1)
-                {
-                    continue;
-                }
-
-                var feature = key[..separator];
-                var action = key[(separator + 1)..];
-                var level = action.Equals("view", StringComparison.OrdinalIgnoreCase) ? View : Edit;
-
-                if (!levels.TryGetValue(feature, out var current) || level > current)
-                {
-                    levels[feature] = level;
-                }
-            }
-
-            return levels;
         }
 
         /// <summary>

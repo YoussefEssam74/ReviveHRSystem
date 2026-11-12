@@ -1,4 +1,4 @@
-using DomainLayer.Models.AttendanceModule;
+﻿using DomainLayer.Models.AttendanceModule;
 using DomainLayer.Models.AttendanceModule.Enums;
 using DomainLayer.Models.EmployeeModule;
 using DomainLayer.Models.EmployeeModule.Enums;
@@ -160,6 +160,15 @@ namespace ReviveHRSystem.Web.DataSeed
             await EnsureTeamLeaderAsync(db, team.Id, omar.Id);
             sara.TeamId = team.Id;
             await db.SaveChangesAsync();
+
+            // Demo salary history: the absence/late sweep falls back to the latest
+            // compensation when no payroll sheet covers the day, so every seeded
+            // employee can be priced even before his first sheet exists.
+            await EnsureCompensationAsync(db, hrProfile.Id, admin.Id, 8000m, today);
+            await EnsureCompensationAsync(db, hrManagerProfile.Id, admin.Id, 12000m, today);
+            await EnsureCompensationAsync(db, karim.Id, admin.Id, 7000m, today);
+            await EnsureCompensationAsync(db, omar.Id, admin.Id, 9000m, today);
+            await EnsureCompensationAsync(db, sara.Id, admin.Id, 6000m, today);
 
             // Payroll months, leave taken and attendance facts for the previous
             // month, so My Payroll's monthly breakdown has a full story to tell.
@@ -759,6 +768,30 @@ namespace ReviveHRSystem.Web.DataSeed
             await db.SaveChangesAsync();
         }
 
+        /// <summary>
+        /// Gives a demo employee a base-salary row when he has no compensation yet.
+        /// Existing rows are left untouched so a seeded raise/history survives restarts.
+        /// </summary>
+        private static async Task EnsureCompensationAsync(
+            ReviveHrDbContext db, int employeeId, int changedBy, decimal amount, DateOnly today)
+        {
+            if (await db.Compensations.AnyAsync(c => c.EmployeeId == employeeId && c.Amount > 0))
+            {
+                return;
+            }
+
+            db.Compensations.Add(new Compensation
+            {
+                EmployeeId = employeeId,
+                Amount = amount,
+                Currency = "EGP",
+                EffectiveDate = new DateOnly(today.Year, 1, 1),
+                ChangedBy = changedBy,
+                Reason = "Base salary",
+            });
+            await db.SaveChangesAsync();
+        }
+
         private static async Task<(Employee Employee, User User)> EnsureEmployeeAsync(
             ReviveHrDbContext db, IPasswordHasher hasher,
             string email, string userName, string fullName, string employeeNumber,
@@ -1090,8 +1123,8 @@ namespace ReviveHRSystem.Web.DataSeed
         ///   • legacy lump lines ("Late Arrival Deduction" / "Unapproved Absence (3 days)")
         ///     are removed — the per-day lines below replace them;
         ///   • each late/absent day without a line gets one (Accepted) priced like the
-        ///     live flow — base ÷ scheduled workdays (days × 6 ÷ 7), a quarter day per
-        ///     late arrival, a full day per unapproved absence — plus its applied candidate;
+        ///     live flow — base ÷ 30 calendar days, a quarter day per late arrival, one
+        ///     day per unapproved absence — plus its applied candidate;
         ///   • seed-shaped attendance rows (this seeder's own demo facts — never
         ///     user-entered, which always carry a method/note/station session) get the
         ///     shift link and the planned local clock times stored as true UTC.
@@ -1169,20 +1202,37 @@ namespace ReviveHRSystem.Web.DataSeed
                 changed = true;
             }
 
-            var linkedLineRecordIds = (await db.PayrollEntryLineItems
+            // Manual deduction lines (salary advance, seeded adjustments) never
+            // materialized from a candidate — the migration's date backfill could
+            // still match one, so drop that link before any HR reprice follows it.
+            foreach (var manualLine in await db.PayrollEntryLineItems
+                         .Where(l => l.PayrollEntryId == entry.Id
+                             && l.Type == "Deduction"
+                             && l.DeductionCandidateId != null
+                             && l.Source == "Manual")
+                         .ToListAsync())
+            {
+                manualLine.DeductionCandidateId = null;
+                changed = true;
+            }
+
+            var linesByRecord = (await db.PayrollEntryLineItems
                     .Where(l => l.PayrollEntryId == entry.Id && l.AttendanceRecordId != null)
-                    .Select(l => l.AttendanceRecordId!.Value)
-                    .ToListAsync()).ToHashSet();
+                    .ToListAsync())
+                .GroupBy(l => l.AttendanceRecordId!.Value)
+                .ToDictionary(g => g.Key, g => g.First());
             var candidatesByRecord = (await db.DeductionCandidates
                     .Where(c => c.EmployeeId == employeeId && c.AttendanceRecordId != null)
                     .ToListAsync())
                 .GroupBy(c => c.AttendanceRecordId!.Value)
                 .ToDictionary(g => g.Key, g => g.ToList());
 
-            var days = entry.PayrollPeriod.EndDate.DayNumber - entry.PayrollPeriod.StartDate.DayNumber + 1;
-            var scheduled = Math.Max(1, (int)Math.Floor(days * 6 / 7.0));
-            var daily = Math.Round(entry.BaseSalary / scheduled, 2);
+            // The live pricing rule (DeductionPricing): a fixed 30-day month, a
+            // quarter day per late arrival and one day per unapproved absence.
+            var daily = Math.Round(entry.BaseSalary / 30m, 2);
             var lateAmount = Math.Round(daily / 4m, 2);
+            // One unexcused absence costs one day of pay.
+            var absenceAmount = Math.Round(daily * 1m, 2);
 
             foreach (var record in pricedDays)
             {
@@ -1200,18 +1250,23 @@ namespace ReviveHRSystem.Web.DataSeed
                 }
 
                 var isLate = record.Status == AttendanceStatus.Late;
-                var amount = isLate ? lateAmount : daily;
+                var amount = isLate ? lateAmount : absenceAmount;
+                var days = isLate ? 0.25m : 1m;
+                var label = isLate
+                    ? $"Late Arrival — {record.Date:MMM d}"
+                    : $"Unapproved Absence — {record.Date:MMM d}";
                 var note = isLate
-                    ? $"Auto-priced: quarter day (base ÷ {scheduled} scheduled workdays ÷ 4)."
-                    : $"Auto-priced: one day (base ÷ {scheduled} scheduled workdays).";
+                    ? $"Auto-priced: quarter day (base ÷ 30 calendar days ÷ 4)."
+                    : $"Auto-priced: 1 days (base ÷ 30 calendar days × 1).";
 
-                if (!linkedLineRecordIds.Contains(record.Id))
+                linesByRecord.TryGetValue(record.Id, out var line);
+                if (line is null)
                 {
-                    db.PayrollEntryLineItems.Add(new PayrollEntryLineItem
+                    line = new PayrollEntryLineItem
                     {
                         PayrollEntryId = entry.Id,
                         Type = "Deduction",
-                        Label = isLate ? $"Late Arrival — {record.Date:MMM d}" : $"Unapproved Absence — {record.Date:MMM d}",
+                        Label = label,
                         EffectiveDate = record.Date,
                         // Deduction lines carry a positive amount (the totals subtract it).
                         Amount = amount,
@@ -1219,17 +1274,35 @@ namespace ReviveHRSystem.Web.DataSeed
                         Reason = note,
                         AttendanceRecordId = record.Id,
                         Status = "Accepted",
-                    });
-                    linkedLineRecordIds.Add(record.Id);
+                    };
+                    db.PayrollEntryLineItems.Add(line);
+                    linesByRecord[record.Id] = line;
                     changed = true;
                 }
-
-                if (existing is null)
+                else if (line.Status is not "Rejected"
+                    && line.Source == "biometric"
+                    && line.Reason?.StartsWith("Auto-priced:", StringComparison.Ordinal) == true)
                 {
-                    db.DeductionCandidates.Add(new DeductionCandidate
+                    // The three-day absence rule changed the price of the seeded
+                    // per-day lines — keep demos and the code in agreement.
+                    if (line.Amount != amount) { line.Amount = amount; changed = true; }
+                    if (line.Reason != note) { line.Reason = note; changed = true; }
+                    if (line.Label != label) { line.Label = label; changed = true; }
+                }
+
+                var candidate = existing?
+                    .Where(c => c.Status != DeductionStatus.Rejected)
+                    .OrderBy(c => c.Status == DeductionStatus.Approved ? 0 : 1)
+                    .FirstOrDefault();
+                if (candidate is null)
+                {
+                    candidate = new DeductionCandidate
                     {
                         EmployeeId = employeeId,
                         AttendanceRecordId = record.Id,
+                        DeductionDate = record.Date,
+                        DeductionDays = days,
+                        IsSystemGenerated = true,
                         Amount = amount,
                         Reason = isLate ? "Late arrival" : "Unapproved absence",
                         Note = note,
@@ -1238,7 +1311,37 @@ namespace ReviveHRSystem.Web.DataSeed
                         Status = DeductionStatus.Approved,
                         ReviewedBy = issuedById,
                         ReviewedAt = DateTime.UtcNow,
-                    });
+                    };
+                    db.DeductionCandidates.Add(candidate);
+                    changed = true;
+                }
+                else if (candidate.IsSystemGenerated
+                    || candidate.Note?.StartsWith("Auto-priced:", StringComparison.Ordinal) == true)
+                {
+                    var dirty = false;
+                    if (!candidate.IsSystemGenerated) { candidate.IsSystemGenerated = true; dirty = true; }
+                    if (candidate.DeductionDate != record.Date) { candidate.DeductionDate = record.Date; dirty = true; }
+                    if (candidate.DeductionDays != days) { candidate.DeductionDays = days; dirty = true; }
+                    if (candidate.Amount != amount) { candidate.Amount = amount; dirty = true; }
+                    if (candidate.Note != note) { candidate.Note = note; dirty = true; }
+                    var reason = isLate ? "Late arrival" : "Unapproved absence";
+                    if (candidate.Reason != reason) { candidate.Reason = reason; dirty = true; }
+                    changed |= dirty;
+                }
+
+                // The payroll line materialized from the candidate — link them so an
+                // HR re-price on the sheet also updates the employee-facing row.
+                if (line.DeductionCandidateId != candidate.Id)
+                {
+                    if (candidate.Id > 0)
+                    {
+                        line.DeductionCandidateId = candidate.Id;
+                    }
+                    else
+                    {
+                        line.DeductionCandidate = candidate;
+                    }
+
                     changed = true;
                 }
             }

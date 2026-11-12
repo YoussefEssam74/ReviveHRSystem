@@ -6,6 +6,9 @@ using DomainLayer.Models.EmployeeModule.Enums;
 using DomainLayer.Models.NotificationModule;
 using DomainLayer.Models.NotificationModule.Enums;
 using DomainLayer.Models.OrganizationModule;
+using DomainLayer.Models.PayrollModule;
+using DomainLayer.Models.PayrollModule.Enums;
+using DomainLayer.Models.SchedulingModule;
 using DomainLayer.Models.UserModule;
 using Service.Specifications;
 using ServiceAbstraction.Services;
@@ -102,6 +105,13 @@ namespace Service.Services
             var severity = ParseSeverity(request.Severity);
             var resolving = action == FollowUpActionType.Resolution;
 
+            // A Deduction action must have financial effect, not just a follow-up row:
+            // the same priced candidate the branch/HR queue reviews is raised here.
+            if (action == FollowUpActionType.Deduction)
+            {
+                await RaiseDeductionAsync(actorUserId, employee, request, cancellationToken);
+            }
+
             var followUp = new TeamFollowUp
             {
                 EmployeeId = employee.Id,
@@ -197,6 +207,90 @@ namespace Service.Services
         }
 
         // ---------- helpers ----------
+
+        /// <summary>Deduction sizes the Team Actions modal offers, as a fraction of one day's pay.</summary>
+        private static readonly (string Term, decimal Multiplier, string Label)[] DeductionSizes =
+        [
+            ("Quarter Day", 0.25m, "Quarter Day"),
+            ("Half Day", 0.5m, "Half Day"),
+            ("3 Days", 3m, "3 Days"),
+            ("Day", 1m, "Day"),
+        ];
+
+        /// <summary>
+        /// Prices and raises the real <see cref="DeductionCandidate"/> behind a Deduction
+        /// follow-up. The day is unique per employee (a rejected day stays final), and
+        /// the amount comes from the shared salary/schedule pricing path — never from a
+        /// category label alone.
+        /// </summary>
+        private async Task RaiseDeductionAsync(
+            int actorUserId,
+            Employee employee,
+            CreateTeamFollowUpDto request,
+            CancellationToken cancellationToken)
+        {
+            var date = request.Date ?? DateOnly.FromDateTime(DateTime.UtcNow);
+            var (multiplier, label) = ParseDeductionSize(request.DeductionSize, request.Description);
+
+            var existing = await unitOfWork.GetRepository<DeductionCandidate, int>()
+                .GetAllAsync(new DeductionCandidatesByEmployeesSpec([employee.Id]), cancellationToken);
+            if (existing.Any(c => PayrollService.CandidateDayOf(c) == date))
+            {
+                throw new BadRequestException(
+                    "A deduction already exists for this employee on that date.");
+            }
+
+            var sheets = (await unitOfWork.GetRepository<PayrollEntry, int>()
+                    .GetAllAsync(new PayrollEntriesByEmployeeIdsSpec([employee.Id]), cancellationToken))
+                .ToList();
+            var monthStart = new DateOnly(date.Year, date.Month, 1);
+            var monthEnd = monthStart.AddMonths(1).AddDays(-1);
+            var assignments = (await unitOfWork.GetRepository<ShiftAssignment, int>()
+                    .GetAllAsync(
+                        new ShiftAssignmentsByEmployeeIdsRangeSpec([employee.Id], monthStart, monthEnd),
+                        cancellationToken))
+                .ToList();
+
+            var (daily, _) = DeductionPricing.DailyRate(employee, date, sheets, assignments);
+            if (daily <= 0)
+            {
+                throw new BadRequestException(
+                    "No salary is on file for this employee yet — add a salary or compensation before issuing a deduction.");
+            }
+
+            await unitOfWork.GetRepository<DeductionCandidate, int>().AddAsync(new DeductionCandidate
+            {
+                EmployeeId = employee.Id,
+                DeductionDate = date,
+                IsSystemGenerated = false,
+                Amount = Math.Round(daily * multiplier, 2),
+                DeductionDays = multiplier,
+                Reason = $"Deduction — {label}",
+                Note = OptionalText(request.Note, 1000, "note"),
+                IssuedBy = actorUserId,
+                IssuedAt = DateTime.UtcNow,
+                Status = DeductionStatus.Pending,
+            }, cancellationToken);
+        }
+
+        private static (decimal Multiplier, string Label) ParseDeductionSize(string? size, string? description)
+        {
+            var term = (size ?? string.Empty).Trim();
+            var match = DeductionSizes.FirstOrDefault(s =>
+                s.Term.Equals(term, StringComparison.OrdinalIgnoreCase));
+
+            // Older clients only sent the size inside "Deduction — 3 Days".
+            if (match.Term is null && term.Length == 0 && !string.IsNullOrWhiteSpace(description))
+            {
+                match = DeductionSizes.FirstOrDefault(s =>
+                    description.Contains(s.Term, StringComparison.OrdinalIgnoreCase));
+            }
+
+            return match.Term is null
+                ? throw new BadRequestException(
+                    "Deduction size must be Quarter Day, Half Day, Day, or 3 Days.")
+                : (match.Multiplier, match.Label);
+        }
 
         private async Task NotifyAsync(Employee employee, string title, string body, CancellationToken cancellationToken)
         {

@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from 'react'
 import { useMutation } from '@tanstack/react-query'
+import { useTranslation } from 'react-i18next'
 import { useMe } from '../../../contexts/MeContext'
 import { Dialog } from '../../../components/ui/dialog'
 import { Button } from '../../../components/ui/button'
@@ -37,6 +38,7 @@ const FIXED_APPLICATION_FIELDS = [
  * form through POST /api/hiring-forms (evaluations.forms.manage).
  */
 export default function CreateHiringFormDialog({ onClose, toast }: CreateHiringFormDialogProps) {
+  const { t } = useTranslation()
   const { me } = useMe()
   const queryClient = useQueryClient()
 
@@ -51,7 +53,7 @@ export default function CreateHiringFormDialog({ onClose, toast }: CreateHiringF
     onSuccess: (form) => {
       queryClient.invalidateQueries({ queryKey: ['evaluations', 'hiring-forms'] })
       queryClient.invalidateQueries({ queryKey: ['recruitment'] })
-      toast(`Hiring form published for “${form.name}”! Application link generated.`, 'success')
+      toast(t('Hiring form published for “{{name}}”! Application link generated.', { name: form.name }), 'success')
       onClose()
     },
     onError: (submitError) => setError(describeApiError(submitError)),
@@ -61,7 +63,7 @@ export default function CreateHiringFormDialog({ onClose, toast }: CreateHiringF
     event.preventDefault()
     const title = position.trim()
     if (!title) {
-      setError('Please enter the position title')
+      setError(t('Please enter the position title'))
       return
     }
     setError(null)
@@ -87,15 +89,15 @@ export default function CreateHiringFormDialog({ onClose, toast }: CreateHiringF
     <Dialog
       open
       onClose={onClose}
-      title="Create New Hiring / Application Form"
+      title={t('Create New Hiring / Application Form')}
       className="sm:max-w-lg"
       footer={
         <>
           <Button variant="outline" size="sm" onClick={onClose}>
-            Cancel
+            {t('Cancel')}
           </Button>
           <Button variant="primary" size="sm" onClick={onSubmit} loading={publish.isPending}>
-            Publish Hiring Form
+            {t('Publish Hiring Form')}
           </Button>
         </>
       }
@@ -109,18 +111,18 @@ export default function CreateHiringFormDialog({ onClose, toast }: CreateHiringF
         <div className="grid grid-cols-2 gap-3">
           <div>
             <Label className="mb-1 block font-semibold text-charcoal-700" htmlFor="hf-title">
-              Position Title
+              {t('Position Title')}
             </Label>
-            <Input id="hf-title" className="h-8 text-xs" placeholder="e.g. Senior Fitness Coach" value={position} onChange={(e) => setPosition(e.target.value)} />
+            <Input id="hf-title" className="h-8 text-xs" placeholder={t('e.g. Senior Fitness Coach')} value={position} onChange={(e) => setPosition(e.target.value)} />
           </div>
           <div>
             <Label className="mb-1 block font-semibold text-charcoal-700" htmlFor="hf-gym">
-              Target Gym Branch
+              {t('Target Gym Branch')}
             </Label>
             <Select id="hf-gym" className="h-8 text-xs" value={gym} onChange={(e) => setGym(e.target.value)}>
               {gymOptions.map((option) => (
                 <option key={option} value={option}>
-                  {option === 'All' ? 'All Branches' : option}
+                  {option === 'All' ? t('All Branches') : option}
                 </option>
               ))}
             </Select>
@@ -130,19 +132,19 @@ export default function CreateHiringFormDialog({ onClose, toast }: CreateHiringF
         <div className="grid grid-cols-2 gap-3">
           <div>
             <Label className="mb-1 block font-semibold text-charcoal-700" htmlFor="hf-type">
-              Employment Type
+              {t('Employment Type')}
             </Label>
             <Select id="hf-type" className="h-8 text-xs" value={employmentType} onChange={(e) => setEmploymentType(e.target.value)}>
               {EMPLOYMENT_TYPES.map((option) => (
                 <option key={option} value={option}>
-                  {option}
+                  {t(option)}
                 </option>
               ))}
             </Select>
           </div>
           <div>
             <Label className="mb-1 block font-semibold text-charcoal-700" htmlFor="hf-headcount">
-              Target Headcount
+              {t('Target Headcount')}
             </Label>
             <Input id="hf-headcount" type="number" min={1} className="h-8 text-xs" value={headcount} onChange={(e) => setHeadcount(e.target.value)} />
           </div>
@@ -150,18 +152,20 @@ export default function CreateHiringFormDialog({ onClose, toast }: CreateHiringF
 
         <div>
           <Label className="mb-1.5 block text-xs font-semibold text-charcoal-700" htmlFor="hf-fields-0">
-            Required Application Fields
+            {t('Required Application Fields')}
           </Label>
           <div className="grid grid-cols-2 gap-2" id="hf-fields-0">
             {FIXED_APPLICATION_FIELDS.map((field) => (
               <label key={field} className="flex items-center gap-2 rounded-lg bg-charcoal-50 p-2 text-xs">
                 <input type="checkbox" checked disabled className="h-3.5 w-3.5 accent-[#006c49]" />
-                <span>{field}</span>
+                <span>{t(field)}</span>
               </label>
             ))}
           </div>
           <p className="mt-1 text-[10px] text-charcoal-500">
-            These fields are always collected from applicants; the form additionally asks for the employment type selected above.
+            {t(
+              'These fields are always collected from applicants; the form additionally asks for the employment type selected above.',
+            )}
           </p>
         </div>
       </form>

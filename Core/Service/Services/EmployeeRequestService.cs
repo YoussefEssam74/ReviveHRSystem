@@ -193,8 +193,7 @@ namespace Service.Services
             foreach (var candidate in candidates)
             {
                 // The punished attendance day, not the raise date — a deduction can be
-                // issued days after the absence/lateness it punishes (and a derived
-                // absence carries its day in the note marker instead of a record).
+                // issued days after the absence/lateness it punishes.
                 var date = PayrollService.CandidateDayOf(candidate);
                 int? correctionId = null;
                 string? correctionStatus = null;
@@ -204,23 +203,30 @@ namespace Service.Services
                     correctionStatus = candidateCorrection.Status.ToString();
                 }
 
+                // Every raised deduction reaches the employee with the state it is
+                // in: Pending while the branch still has to decide, Pending HR once
+                // the branch approved it, Applied when HR booked it against payroll,
+                // and Rejected when it was waived — so each punished day answers
+                // "how much will I lose" from the moment the sweep raises it.
                 rows.Add(new EmployeeDeductionDto(
                     $"candidate-{candidate.Id}",
                     "candidate",
                     date,
                     candidate.Reason,
-                    candidate.Amount,
+                    candidate.Amount > 0 ? candidate.Amount : null,
                     candidate.Status switch
                     {
-                        DeductionStatus.Pending => "In review",
-                        DeductionStatus.BranchApproved => "Branch approved",
+                        DeductionStatus.Pending => "Pending",
+                        DeductionStatus.BranchApproved => "Pending HR",
                         DeductionStatus.Approved => "Applied",
                         _ => "Rejected"
                     },
-                    candidate.Note,
+                    // Internal pricing notes/markers never reach the employee; a
+                    // manager's own note is employee-facing context.
+                    candidate.IsSystemGenerated ? null : PayrollService.StripAbsenceMarker(candidate.Note),
                     correctionId,
                     correctionStatus,
-                    IssuedBy: candidate.IssuedByUser?.UserName,
+                    IssuedBy: candidate.IsSystemGenerated ? null : candidate.IssuedByUser?.UserName,
                     AttendanceDate: candidate.AttendanceRecord?.Date));
             }
 
@@ -234,10 +240,10 @@ namespace Service.Services
         /// The money a deduction follow-up threatens: the day-multiple its description
         /// carries ("Deduction — 3 Days" from the sweep, a manager's Quarter/Half/Day
         /// preset) priced at the daily rate of the sheet whose period covers the
-        /// absence day — the same base ÷ scheduled-workdays rule the payroll
-        /// candidates use. Months without a sheet fall back to the employee's salary
-        /// history, so the row still carries a number; only an employee with no
-        /// salary on file at all prices as null.
+        /// absence day — the same base ÷ 30 rule every deduction prices with. Months
+        /// without a sheet fall back to the employee's salary history, so the row
+        /// still carries a number; only an employee with no salary on file at all
+        /// prices as null.
         /// </summary>
         private static decimal? FollowUpAmount(
             string description, DateOnly? date, IEnumerable<PayrollEntry> entries, decimal fallbackSalary)
@@ -251,27 +257,10 @@ namespace Service.Services
             var entry = entries.FirstOrDefault(e => e.PayrollPeriod is not null
                 && e.PayrollPeriod.StartDate <= date.Value && date.Value <= e.PayrollPeriod.EndDate);
 
-            decimal baseSalary;
-            DateOnly start;
-            DateOnly end;
-            if (entry is { BaseSalary: > 0 })
-            {
-                baseSalary = entry.BaseSalary;
-                start = entry.PayrollPeriod!.StartDate;
-                end = entry.PayrollPeriod.EndDate;
-            }
-            else if (fallbackSalary > 0)
-            {
-                baseSalary = fallbackSalary;
-                start = new DateOnly(date.Value.Year, date.Value.Month, 1);
-                end = start.AddMonths(1).AddDays(-1);
-            }
-            else
-            {
-                return null;
-            }
-
-            var (_, daily, _, _) = PayrollService.AttendanceRates(baseSalary, start, end);
+            var baseSalary = entry is { BaseSalary: > 0 } ? entry.BaseSalary : fallbackSalary;
+            var daily = baseSalary > 0
+                ? Math.Round(baseSalary / DeductionPricing.StandardDays, 2)
+                : 0m;
             return daily > 0 ? Math.Round(daily * days.Value, 2) : null;
         }
 
@@ -409,6 +398,9 @@ namespace Service.Services
                     // reviewers still own the actual amount, so nothing else to validate.
                     break;
 
+                case RequestTypeCatalog.UnscheduledAttendanceId:
+                    throw new BadRequestException("Unscheduled Attendance is recorded automatically at the attendance station.");
+
                 default:
                     throw new BadRequestException($"Unknown request type '{request.Type}'.");
             }
@@ -496,8 +488,10 @@ namespace Service.Services
                 ?? throw new NotFoundException("Request not found.");
 
             // The requester always gets his own file; anyone else needs employee-scoped
-            // access in the request's gym, so a cross-scope caller learns nothing.
-            await employeeAccess.EnsureCanAccessAsync(
+            // access in the request's gym, so a cross-scope caller learns nothing. An
+            // unscoped HR Manager / Top Management session covers the gym the request
+            // belongs to, which is what lets HR open the medical certificate.
+            await employeeAccess.EnsureCanAccessCoveredGymAsync(
                 actorUserId, request.EmployeeId, activeGymId, cancellationToken);
 
             var content = string.IsNullOrWhiteSpace(request.AttachmentPath)

@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Button } from '../../../components/ui/button'
 import { Dialog } from '../../../components/ui/dialog'
 import { Input } from '../../../components/ui/input'
@@ -18,6 +19,7 @@ export interface VacancyFormDialogProps {
 
 /** Create / edit a vacancy (recruitment.vacancies.manage). */
 export function VacancyFormDialog({ vacancy, onClose }: VacancyFormDialogProps) {
+  const { t } = useTranslation()
   const { me } = useMe()
   const createVacancy = useCreateVacancy()
   const updateVacancy = useUpdateVacancy(vacancy?.id ?? 0)
@@ -68,16 +70,16 @@ export function VacancyFormDialog({ vacancy, onClose }: VacancyFormDialogProps) 
     <Dialog
       open
       onClose={onClose}
-      title={vacancy ? 'Edit vacancy' : 'New vacancy'}
-      description={vacancy ? `${vacancy.position} · ${vacancy.gym}` : 'Open a position on the public vacancy board.'}
+      title={vacancy ? t('Edit vacancy') : t('New vacancy')}
+      description={vacancy ? `${vacancy.position} · ${vacancy.gym}` : t('Open a position on the public vacancy board.')}
       className="sm:max-w-2xl"
       footer={
         <>
           <Button variant="outline" onClick={onClose}>
-            Cancel
+            {t('Cancel')}
           </Button>
           <Button onClick={onSubmit} loading={createVacancy.isPending || updateVacancy.isPending} disabled={!canSubmit}>
-            {vacancy ? 'Save changes' : 'Create vacancy'}
+            {vacancy ? t('Save changes') : t('Create vacancy')}
           </Button>
         </>
       }
@@ -90,16 +92,16 @@ export function VacancyFormDialog({ vacancy, onClose }: VacancyFormDialogProps) 
         )}
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div>
-            <Label htmlFor="vacancy-position">Position (required)</Label>
+            <Label htmlFor="vacancy-position">{t('Position (required)')}</Label>
             <Input
               id="vacancy-position"
               value={position}
               onChange={(e) => setPosition(e.target.value)}
-              placeholder="e.g. Front Desk"
+              placeholder={t('e.g. Front Desk')}
             />
           </div>
           <div>
-            <Label htmlFor="vacancy-gym">Gym</Label>
+            <Label htmlFor="vacancy-gym">{t('Gym')}</Label>
             <Select id="vacancy-gym" value={gymId} onChange={(e) => setGymId(e.target.value)}>
               {gymOptions.map((option) => (
                 <option key={option.gymId} value={String(option.gymId)}>
@@ -109,57 +111,57 @@ export function VacancyFormDialog({ vacancy, onClose }: VacancyFormDialogProps) 
             </Select>
           </div>
           <div>
-            <Label htmlFor="vacancy-headcount">Headcount needed</Label>
+            <Label htmlFor="vacancy-headcount">{t('Headcount needed')}</Label>
             <Input id="vacancy-headcount" type="number" min={1} value={headcount} onChange={(e) => setHeadcount(e.target.value)} />
           </div>
           <div>
-            <Label htmlFor="vacancy-urgency">Urgency</Label>
+            <Label htmlFor="vacancy-urgency">{t('Urgency')}</Label>
             <Select id="vacancy-urgency" value={urgency} onChange={(e) => setUrgency(e.target.value)}>
               {URGENCIES.map((option) => (
                 <option key={option} value={option}>
-                  {option}
+                  {t(option)}
                 </option>
               ))}
             </Select>
           </div>
           <div>
-            <Label htmlFor="vacancy-salary">Salary (EGP)</Label>
+            <Label htmlFor="vacancy-salary">{t('Salary (EGP)')}</Label>
             <Input id="vacancy-salary" type="number" min={0} value={salary} onChange={(e) => setSalary(e.target.value)} />
           </div>
           <div>
-            <Label htmlFor="vacancy-shift">Shift</Label>
-            <Input id="vacancy-shift" value={shift} onChange={(e) => setShift(e.target.value)} placeholder="e.g. Morning" />
+            <Label htmlFor="vacancy-shift">{t('Shift')}</Label>
+            <Input id="vacancy-shift" value={shift} onChange={(e) => setShift(e.target.value)} placeholder={t('e.g. Morning')} />
           </div>
           <div>
-            <Label htmlFor="vacancy-source">Source</Label>
-            <Input id="vacancy-source" value={source} onChange={(e) => setSource(e.target.value)} placeholder="e.g. HR Console" />
+            <Label htmlFor="vacancy-source">{t('Source')}</Label>
+            <Input id="vacancy-source" value={source} onChange={(e) => setSource(e.target.value)} placeholder={t('e.g. HR Console')} />
           </div>
           <div>
-            <Label htmlFor="vacancy-status">Status</Label>
+            <Label htmlFor="vacancy-status">{t('Status')}</Label>
             <Select id="vacancy-status" value={status} onChange={(e) => setStatus(e.target.value)}>
-              <option value="Open">Open</option>
-              <option value="Draft">Draft</option>
+              <option value="Open">{t('Open')}</option>
+              <option value="Draft">{t('Draft')}</option>
             </Select>
           </div>
         </div>
         <div>
-          <Label htmlFor="vacancy-description">Job description</Label>
+          <Label htmlFor="vacancy-description">{t('Job description')}</Label>
           <Textarea
             id="vacancy-description"
             rows={3}
             value={jobDescription}
             onChange={(e) => setJobDescription(e.target.value)}
-            placeholder="What does the role involve?"
+            placeholder={t('What does the role involve?')}
           />
         </div>
         <div>
-          <Label htmlFor="vacancy-requirements">Requirements</Label>
+          <Label htmlFor="vacancy-requirements">{t('Requirements')}</Label>
           <Textarea
             id="vacancy-requirements"
             rows={3}
             value={requirements}
             onChange={(e) => setRequirements(e.target.value)}
-            placeholder="Skills, experience, languages…"
+            placeholder={t('Skills, experience, languages…')}
           />
         </div>
       </div>

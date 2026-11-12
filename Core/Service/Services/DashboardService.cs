@@ -132,7 +132,7 @@ namespace Service.Services
             // O(1) day-off date lookups instead of .Any() per calendar day.
             var dayOffDates = new HashSet<DateOnly>();
             var approvedDayOffRequests = (await unitOfWork.GetRepository<EmployeeRequest, int>()
-                .GetAllAsync(new ApprovedDayOffRequestsByEmployeeIdsSpec(new[] { employee.Id }, monthStart, monthEnd.AddDays(-1)), cancellationToken))
+                .GetAllAsync(new ApprovedLeaveByEmployeeIdsSpec(new[] { employee.Id }, monthStart, monthEnd.AddDays(-1)), cancellationToken))
                 .ToList();
             foreach (var r in approvedDayOffRequests)
             {
@@ -145,6 +145,14 @@ namespace Service.Services
             }
 
             var recordedDates = monthRecords.Select(r => r.Date).ToHashSet();
+
+            // Cover/extra days earned by approving an unscheduled punch (display-only).
+            var coverRequests = await unitOfWork.GetRepository<EmployeeRequest, int>()
+                .GetAllAsync(new ApprovedUnscheduledAttendanceByEmployeeIdsSpec(
+                    [employee.Id], monthStart, monthEnd.AddDays(-1)), cancellationToken);
+            var coverDays = coverRequests.Sum(r => r.OvertimeHoursRequested.HasValue
+                ? (int)r.OvertimeHoursRequested.Value
+                : (r.Payment?.Contains("2") == true ? 2 : 1));
 
             int derivedAbsent = 0;
             for (var date = monthStart; date <= today && date < monthEnd; date = date.AddDays(1))
@@ -242,7 +250,8 @@ namespace Service.Services
                     Late = late,
                     Absent = totalAbsent,
                     EarlyCheckout = monthRecords.Count(r => r.Status == AttendanceStatus.EarlyCheckout),
-                    MissingCheckout = monthRecords.Count(r => r.Status == AttendanceStatus.MissingCheckout)
+                    MissingCheckout = monthRecords.Count(r => r.Status == AttendanceStatus.MissingCheckout),
+                    CoverDays = coverDays
                 },
                 UpcomingSchedule = upcoming,
                 PendingRequestCount = pendingRequests,
@@ -299,7 +308,7 @@ namespace Service.Services
                 .ToHashSet();
             var recordedIds = attendance.Select(a => a.EmployeeId).ToHashSet();
             var dayOffIds = (await unitOfWork.GetRepository<EmployeeRequest, int>()
-                .GetAllAsync(new ApprovedDayOffRequestsByEmployeeIdsSpec(scopedIds, today, today), cancellationToken))
+                .GetAllAsync(new ApprovedLeaveByEmployeeIdsSpec(scopedIds, today, today), cancellationToken))
                 .Select(r => r.EmployeeId)
                 .ToHashSet();
             var derivedAbsentEmployees = scoped

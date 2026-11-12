@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
+import { useTranslation } from 'react-i18next'
 import { ArrowRight, Briefcase, Building2, ShieldCheck, Sparkles } from 'lucide-react'
 import { getOwnHistory, type EmployeeHistoryItem } from '../api/employee-file.api'
 import { EmptyState } from '../../../components/ui/primitives'
@@ -34,6 +35,7 @@ interface MonthGroup {
 }
 
 export default function MyHistoryPage() {
+  const { t } = useTranslation()
   const { me } = usePortalSession()
   const employeeId = me?.employeeId ?? null
 
@@ -44,9 +46,14 @@ export default function MyHistoryPage() {
   })
 
   if (employeeId == null) {
-    return <EmptyState title="No employee profile" hint="This account is not linked to an employee profile." />
+    return (
+      <EmptyState
+        title={t('No employee profile')}
+        hint={t('This account is not linked to an employee profile.')}
+      />
+    )
   }
-  if (historyQuery.isLoading) return <LoadingState label="Loading your history…" />
+  if (historyQuery.isLoading) return <LoadingState label={t('Loading your history…')} />
   if (historyQuery.isError) {
     return <ErrorState message={describeApiError(historyQuery.error)} onRetry={() => historyQuery.refetch()} />
   }
@@ -59,7 +66,7 @@ export default function MyHistoryPage() {
     for (const item of items) {
       const key = item.date.slice(0, 7)
       const month = Number(key.slice(5, 7))
-      const label = `${MONTH_NAMES[month - 1] ?? ''} ${key.slice(0, 4)}`
+      const label = `${t(MONTH_NAMES[month - 1] ?? '')} ${key.slice(0, 4)}`
       const group = groups.get(key) ?? { key, label, events: [] }
       group.events.push(item)
       groups.set(key, group)
@@ -69,12 +76,12 @@ export default function MyHistoryPage() {
 
   return (
     <div className="max-w-2xl space-y-2">
-      <h1 className="text-lg font-bold text-charcoal-900">Employment History</h1>
+      <h1 className="text-lg font-bold text-charcoal-900">{t('Employment History')}</h1>
 
       {months.length === 0 ? (
         <EmptyState
-          title="No history recorded yet"
-          hint="Employment changes (transfers, position changes, new contracts) appear here as they happen."
+          title={t('No history recorded yet')}
+          hint={t('Employment changes (transfers, position changes, new contracts) appear here as they happen.')}
         />
       ) : (
         <div className="relative">
@@ -82,7 +89,7 @@ export default function MyHistoryPage() {
           <div className="space-y-4">
             {months.map((group) => (
               <div key={group.key}>
-                <p className="mb-2 pl-8 text-[10px] font-semibold uppercase tracking-wider text-charcoal-400">
+                <p className="mb-2 ps-8 text-[10px] font-semibold uppercase tracking-wider text-charcoal-400">
                   {group.label}
                 </p>
                 {group.events.map((event, index) => (

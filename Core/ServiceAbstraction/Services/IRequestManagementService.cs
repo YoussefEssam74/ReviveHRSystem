@@ -41,6 +41,7 @@ public sealed class RequestDecisionDto
 
     public string Decision { get; init; } = string.Empty;
     public string? Comment { get; init; }
+    public int? CalculatedDays { get; init; }
 }
 
 /// <summary>Manager edit body for a pending request.</summary>

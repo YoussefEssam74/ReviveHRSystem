@@ -623,47 +623,12 @@ namespace Service.Services
 
             var candidates = (await unitOfWork.GetRepository<DeductionCandidate, int>()
                     .GetAllAsync(new DeductionCandidatesByEmployeesSpec([employeeId]), cancellationToken))
+                // The employee's own payroll card shows only what was actually
+                // applied. Pending / branch-approved rows stay internal to managers,
+                // and rejected rows are visible only through the deductions tab
+                // when a correction request is attached.
+                .Where(c => c.Status == DeductionStatus.Approved)
                 .ToList();
-
-            // Mock §8 / features.md §10: while a period is still open, every late or
-            // unapproved-absent day prices itself into a pending candidate (quarter
-            // day / one day of base salary) so the branch can review it before HR
-            // closes the sheet. Paid months keep whatever was actually applied.
-            var openPeriods = periods.Where(p => p.Status == PayrollPeriodStatus.Open).ToList();
-            if (openPeriods.Count > 0)
-            {
-                var issuerId = (await unitOfWork.GetRepository<DomainLayer.Models.UserModule.User, int>()
-                        .GetAllAsync(new UserByEmailSpec("admin@revive.hr"), cancellationToken))
-                    .Select(u => u.Id)
-                    .Cast<int?>()
-                    .FirstOrDefault();
-
-                if (issuerId is not null)
-                {
-                    var createdAny = false;
-                    foreach (var open in openPeriods)
-                    {
-                        var openEntry = entries.FirstOrDefault(e => e.PayrollPeriodId == open.Id);
-                        if (openEntry is null)
-                        {
-                            continue;
-                        }
-
-                        foreach (var candidate in PayrollService.EnsureAttendanceCandidates(
-                            employeeId, issuerId.Value, open, openEntry.BaseSalary, attendance, candidates))
-                        {
-                            await unitOfWork.GetRepository<DeductionCandidate, int>().AddAsync(candidate, cancellationToken);
-                            candidates.Add(candidate);
-                            createdAny = true;
-                        }
-                    }
-
-                    if (createdAny)
-                    {
-                        await unitOfWork.SaveChangesAsync(cancellationToken);
-                    }
-                }
-            }
 
             var absenceFollowUps = (await unitOfWork.GetRepository<TeamFollowUp, int>()
                     .GetAllAsync(new TeamFollowUpsDeductionForEmployeesSpec([employeeId]), cancellationToken))
@@ -792,7 +757,16 @@ namespace Service.Services
                 throw new NotFoundException("Payroll sheet not found.");
             }
 
-            return new PayslipResponse { Data = PayrollService.BuildPayslip(entry) };
+            var summaries = await PayrollService.LoadAttendanceSummariesAsync(
+                unitOfWork, entry.PayrollPeriod, [employeeId], cancellationToken);
+
+            return new PayslipResponse
+            {
+                Data = PayrollService.BuildPayslip(
+                    entry,
+                    onlyApproved: true,
+                    summaries.GetValueOrDefault(employeeId)),
+            };
         }
 
         /// <summary>
@@ -888,8 +862,8 @@ namespace Service.Services
                         MinutesLate = minutesLate,
                         CheckInAt = checkInAt,
                         Shift = ShiftLabel(record),
-                        Amount = candidate?.Amount,
-                        Reason = candidate?.Note ?? followUp?.Description,
+                        Amount = candidate is { Amount: > 0 } ? candidate.Amount : null,
+                        Reason = AutoPriced(candidate) ? null : PayrollService.StripAbsenceMarker(candidate?.Note) ?? followUp?.Description,
                         IssuedBy = AutoPriced(candidate) ? null : candidate?.IssuedByUser?.UserName ?? followUp?.RaisedByUser?.UserName,
                         Status = candidate is not null ? StatusLabel(candidate.Status) : null,
                         AttendanceRecordId = record.Id,
@@ -903,8 +877,8 @@ namespace Service.Services
                         Date = record.Date,
                         Label = "Unapproved day off",
                         Shift = ShiftLabel(record),
-                        Amount = candidate?.Amount,
-                        Reason = candidate?.Note ?? followUp?.Description,
+                        Amount = candidate is { Amount: > 0 } ? candidate.Amount : null,
+                        Reason = AutoPriced(candidate) ? null : PayrollService.StripAbsenceMarker(candidate?.Note) ?? followUp?.Description,
                         IssuedBy = AutoPriced(candidate) ? null : candidate?.IssuedByUser?.UserName ?? followUp?.RaisedByUser?.UserName,
                         Status = candidate is not null ? StatusLabel(candidate.Status)
                             : followUp is not null
@@ -922,8 +896,7 @@ namespace Service.Services
                          .Where(c => !consumedCandidates.Contains(c))
                          .OrderBy(c => c.IssuedAt))
             {
-                var day = candidate.AttendanceRecord?.Date
-                    ?? DateOnly.FromDateTime(candidate.IssuedAt);
+                var day = PayrollService.CandidateDayOf(candidate);
                 if (day < start || day > end)
                 {
                     continue;
@@ -934,8 +907,8 @@ namespace Service.Services
                     Kind = "candidate",
                     Date = day,
                     Label = candidate.Reason,
-                    Amount = candidate.Amount,
-                    Reason = candidate.Note,
+                    Amount = candidate.Amount > 0 ? candidate.Amount : null,
+                    Reason = AutoPriced(candidate) ? null : PayrollService.StripAbsenceMarker(candidate.Note),
                     IssuedBy = AutoPriced(candidate) ? null : candidate.IssuedByUser?.UserName,
                     Status = StatusLabel(candidate.Status),
                     AttendanceRecordId = candidate.AttendanceRecordId,

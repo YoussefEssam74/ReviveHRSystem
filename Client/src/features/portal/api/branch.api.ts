@@ -111,6 +111,10 @@ export interface AttendanceGridRow {
   notes: string | null
   correctedBy: string | null
   correctedAt: string | null
+  /** Approved cover/extra days for an unscheduled punch (1 or 2), null otherwise. */
+  coverDays: number | null
+  /** True when the day was worked without a scheduled shift (cover / extra shift). */
+  isCoverDay: boolean
 }
 
 export interface AttendanceGridParams {
@@ -148,6 +152,7 @@ export interface DeductionCandidateRow {
   employeeId: number
   employee: string
   amount: number
+  deductionDays: number
   reason: string
   note: string | null
   /** Raw DeductionStatus: Pending | BranchApproved | Approved | Rejected. */
@@ -188,6 +193,8 @@ export interface BonusProposalRow {
 
 export function issueDeduction(fields: {
   employeeId: number
+  /** DateOnly "yyyy-MM-dd" — the day the deduction punishes (defaults to today server-side). */
+  date?: string
   amount: number
   reason: string
   note: string | null
@@ -244,12 +251,12 @@ export function listBranchDeductions(employeeId?: number, signal?: AbortSignal):
 /**
  * POST /api/deduction-candidates/{id}/branch-review — the branch's own decision on
  * one of its deductions: approve (`BranchApproved` — goes to HR), reject (final) or
- * re-price the amount (status untouched). Amount is honored with approve, required
- * for edit, must be positive.
+ * change the deducted salary days (status untouched). The server recalculates the
+ * amount as salary / 30 × days.
  */
 export function branchReviewDeduction(
   id: number,
-  fields: { decision: 'approve' | 'reject' | 'edit'; amount?: number },
+  fields: { decision: 'approve' | 'reject' | 'edit'; amount?: number; days?: number },
 ): Promise<DeductionCandidateRow> {
   return apiRequest<DeductionCandidateRow>(`/api/deduction-candidates/${id}/branch-review`, {
     method: 'POST',

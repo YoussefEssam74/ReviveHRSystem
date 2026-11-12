@@ -36,9 +36,11 @@ namespace Service.Services
         public const string SalaryAdvanceId = "salary-advance";
         public const string PaidHolidayId = "paid-holiday";
         public const string DeductionCorrectionId = "deduction-correction";
+        public const string UnscheduledAttendanceId = "unscheduled-attendance";
 
         /// <summary>Stored request rows carry the label, not the id — this one is matched by label.</summary>
         public const string DeductionCorrectionLabel = "Deduction Correction";
+        public const string UnscheduledAttendanceLabel = "Unscheduled Attendance";
 
         private static readonly IReadOnlyList<RequestTypeDefinition> Types = new[]
         {
@@ -80,6 +82,10 @@ namespace Service.Services
                 null, false, false, false, false, false),
             new RequestTypeDefinition(
                 DeductionCorrectionId, DeductionCorrectionLabel,
+                new[] { "date", "reason" },
+                null, false, false, false, false, false),
+            new RequestTypeDefinition(
+                UnscheduledAttendanceId, UnscheduledAttendanceLabel,
                 new[] { "date", "reason" },
                 null, false, false, false, false, false)
         };

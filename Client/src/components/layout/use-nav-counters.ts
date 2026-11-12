@@ -5,6 +5,7 @@
  * shared query keys, so navigating to a section re-uses already-cached data.
  */
 import { useMemo } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useQuery } from '@tanstack/react-query'
 import { usePortalSession } from '../../contexts/PortalSessionContext'
 import { getEmployeeDashboard } from '../../features/portal/api/dashboard.api'
@@ -52,6 +53,7 @@ export function navRelevantCycle(cycles: ShiftCycleItem[], today: string): Shift
 }
 
 export function useNavCounters(): Partial<Record<PortalPageId, NavBadge>> {
+  const { t } = useTranslation()
   const portal = usePortalSession()
   const me = portal.me
   const gymId = me?.activeGym?.gymId ?? null
@@ -156,22 +158,22 @@ export function useNavCounters(): Partial<Record<PortalPageId, NavBadge>> {
       if (count > 0) badges[id] = { count, label }
     }
 
-    put('requests', dashboard.data?.pendingRequestCount ?? 0, 'pending')
+    put('requests', dashboard.data?.pendingRequestCount ?? 0, t('pending'))
     const month = dashboard.data?.monthSummary
     if (month) {
       put(
         'attendance',
         month.late + month.absent + month.earlyCheckout + month.missingCheckout,
-        'this month to review',
+        t('this month to review'),
       )
     }
-    put('team-requests', inbox.data?.totalCount ?? 0, 'awaiting your decision')
+    put('team-requests', inbox.data?.totalCount ?? 0, t('awaiting your decision'))
     if (isManager) {
-      put('employees', dashboard.data?.overview?.absent ?? 0, 'absent today')
+      put('employees', dashboard.data?.overview?.absent ?? 0, t('absent today'))
       put(
         'attendance-management',
         (lateToday.data?.total ?? 0) + (absentToday.data?.total ?? 0),
-        'today to follow up',
+        t('today to follow up'),
       )
     }
 
@@ -184,9 +186,14 @@ export function useNavCounters(): Partial<Record<PortalPageId, NavBadge>> {
     const openActions = openRequests + openDeductions.length
     const leavingCases = (leavingsDraft.data?.totalCount ?? 0) + (leavingsNotice.data?.totalCount ?? 0)
     const perfLabel = [
-      openActions > 0 ? `${openActions} waiting for your decision` : null,
+      openActions > 0 ? t('{{count}} waiting for your decision', { count: openActions }) : null,
       leavingCases > 0
-        ? `${leavingCases} leaving ${leavingCases === 1 ? 'case' : 'cases'} in progress`
+        ? t(
+            leavingCases === 1
+              ? '{{count}} leaving case in progress'
+              : '{{count}} leaving cases in progress',
+            { count: leavingCases },
+          )
         : null,
     ]
       .filter((part): part is string => part != null)
@@ -194,9 +201,9 @@ export function useNavCounters(): Partial<Record<PortalPageId, NavBadge>> {
     put('employees-performance', openActions + leavingCases, perfLabel)
 
     if (isBranchManager) {
-      put('recruitment', vacancies.data?.total ?? 0, 'pending vacancy requests')
+      put('recruitment', vacancies.data?.total ?? 0, t('pending vacancy requests'))
     }
-    put('team-schedule', unscheduled, 'not fully scheduled yet')
+    put('team-schedule', unscheduled, t('not fully scheduled yet'))
     return badges
   }, [
     dashboard.data,
@@ -210,5 +217,6 @@ export function useNavCounters(): Partial<Record<PortalPageId, NavBadge>> {
     pendingDeductions.data,
     vacancies.data,
     unscheduled,
+    t,
   ])
 }

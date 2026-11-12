@@ -1,4 +1,4 @@
-﻿using System.Globalization;
+using System.Globalization;
 using System.Text.Json;
 using DomainLayer.Contracts;
 using DomainLayer.Exceptions;
@@ -7,7 +7,13 @@ using DomainLayer.Models.AttendanceModule.Enums;
 using DomainLayer.Models.AuditModule;
 using DomainLayer.Models.EmployeeModule;
 using DomainLayer.Models.OrganizationModule.Enums;
+using DomainLayer.Models.NotificationModule;
+using DomainLayer.Models.NotificationModule.Enums;
+using DomainLayer.Models.RequestModule;
+using DomainLayer.Models.RequestModule.Enums;
 using DomainLayer.Models.SchedulingModule;
+using DomainLayer.Models.UserModule;
+using DomainLayer.Models.UserModule.Enums;
 using Service.Specifications;
 using ServiceAbstraction.Services;
 using Shared.DataTransferObject.Attendance;
@@ -199,11 +205,46 @@ namespace Service.Services
                 })
                 .ToArray();
 
+            var rosterEmployeeIds = roster.Select(a => a.EmployeeId).ToHashSet();
+            var extraRows = records
+                .Where(r => !rosterEmployeeIds.Contains(r.EmployeeId) && r.CheckInTime is not null)
+                .OrderBy(r => r.Employee?.FullName ?? string.Empty, StringComparer.OrdinalIgnoreCase)
+                .Select(r =>
+                {
+                    var checkIn = r.CheckInTime is { } inUtc
+                        ? TimeZoneInfo.ConvertTimeFromUtc(inUtc, _attendanceTimeZone)
+                        : (DateTime?)null;
+                    var checkOut = r.CheckOutTime is { } outUtc
+                        ? TimeZoneInfo.ConvertTimeFromUtc(outUtc, _attendanceTimeZone)
+                        : (DateTime?)null;
+                    var status = r.CheckOutTime is null ? "PRESENT" : "LEFT";
+                    var method = (r.CheckOutTime is not null ? r.CheckOutMethod : r.CheckInMethod)?.ToString();
+
+                    return new StationSummaryRecord
+                    {
+                        RecordId = $"ATT-{r.Id}",
+                        EmployeeId = r.Employee?.EmployeeNumber ?? r.EmployeeId.ToString(),
+                        EmployeeName = r.Employee?.FullName ?? $"Employee #{r.EmployeeId}",
+                        Status = status,
+                        ShiftName = AttendanceManagementService.CoverDayStatus,
+                        ShiftStart = "—",
+                        ShiftEnd = "—",
+                        CheckIn = checkIn?.ToString("HH:mm", CultureInfo.InvariantCulture),
+                        CheckOut = checkOut?.ToString("HH:mm", CultureInfo.InvariantCulture),
+                        LateMinutes = 0,
+                        EarlyLeaveMinutes = 0,
+                        Method = method,
+                    };
+                })
+                .ToArray();
+
+            var allRows = rows.Concat(extraRows).ToArray();
+
             return new StationSummaryResponse
             {
-                PresentCount = records.Count(r => r.CheckInTime is not null),
+                PresentCount = records.Count(r => r.CheckInTime is not null && r.CheckOutTime is null),
                 ScheduledTodayCount = rows.Length,
-                Records = rows,
+                Records = allRows,
             };
         }
 
@@ -309,14 +350,6 @@ namespace Service.Services
             var requestedAuto = type == "AUTO";
             if (type == "AUTO")
             {
-                if (todayHasCheckIn && !todayHasOpenRecord)
-                {
-                    // Typed so the face pipeline can report a silent "already complete"
-                    // scan outcome; HTTP callers of /events still get a 400 (the
-                    // exception middleware matches BadRequestException by base type).
-                    throw new AttendanceAlreadyCompleteException("This employee has already completed attendance for today.");
-                }
-
                 type = todayHasOpenRecord || previousDayOvernightOpen is not null ? "OUT" : "IN";
             }
 
@@ -352,27 +385,30 @@ namespace Service.Services
             var shiftAtThisGym = carriedOverAssignment
                 ?? assignments.FirstOrDefault(a => a.Date == eventDate && a.ShiftCycle.GymId == gymId && a.ShiftTemplateId.HasValue);
 
+            var isUnscheduledAttendance = false;
             if (shiftAtThisGym is null)
             {
                 var todayAssignments = assignments.Where(a => a.Date == eventDate).ToArray();
                 var dayOffAtThisGym = todayAssignments.Any(a => a.ShiftCycle.GymId == gymId);
                 if (dayOffAtThisGym || todayAssignments.Length == 0)
                 {
-                    throw new NotFoundException("No shift is scheduled for this employee today.");
+                    isUnscheduledAttendance = true;
                 }
-
-                throw new UnAuthorizedException("This employee is scheduled at a different branch today.");
+                else
+                {
+                    throw new UnAuthorizedException("This employee is scheduled at a different branch today.");
+                }
             }
 
-            var template = shiftAtThisGym.ShiftTemplate!;
-            var attendanceDate = shiftAtThisGym.Date;
+            var template = shiftAtThisGym?.ShiftTemplate;
+            var attendanceDate = shiftAtThisGym?.Date ?? eventDate;
 
             // The shift as a full wall-clock window on its scheduled date (attendance
             // timezone). Overnight templates — EndTime at or before StartTime, e.g.
             // 22:00 → 05:00 — end the following day, so every comparison below uses
             // these instants instead of bare clock times that break across midnight.
-            var shiftStartsAt = ShiftWindowStartsAt(attendanceDate, template);
-            var shiftEndsAt = ShiftWindowEndsAt(attendanceDate, template);
+            var shiftStartsAt = template is not null ? ShiftWindowStartsAt(attendanceDate, template) : DateTime.MinValue;
+            var shiftEndsAt = template is not null ? ShiftWindowEndsAt(attendanceDate, template) : DateTime.MaxValue;
 
             var record = possibleRecords.FirstOrDefault(r => r.Date == attendanceDate);
 
@@ -384,7 +420,7 @@ namespace Service.Services
 
             if (type == "IN")
             {
-                if (record?.CheckInTime is not null)
+                if (record?.CheckInTime is not null && record.CheckOutTime is null)
                 {
                     throw new BadRequestException("This employee is already checked in today.");
                 }
@@ -394,16 +430,38 @@ namespace Service.Services
                     EmployeeId = employee.Id,
                     GymId = gymId,
                     Date = attendanceDate,
-                    ScheduledShiftTemplateId = template.Id
+                    ScheduledShiftTemplateId = template?.Id
                 };
                 if (record.Id == 0)
                 {
                     await attendanceRepository.AddAsync(record, cancellationToken);
                 }
 
-                record.CheckInTime = utcTimestamp;
-                record.CheckInMethod = method;
-                record.Status = localEvent > shiftStartsAt ? AttendanceStatus.Late : AttendanceStatus.OnTime;
+                if (record.CheckInTime is null)
+                {
+                    record.CheckInTime = utcTimestamp;
+                    record.CheckInMethod = method;
+                    record.Status = template is not null && localEvent > shiftStartsAt ? AttendanceStatus.Late : AttendanceStatus.OnTime;
+                    if (isUnscheduledAttendance)
+                    {
+                        record.Notes = "Unscheduled / Off-day check-in (pending approval)";
+                    }
+                }
+                else
+                {
+                    // Multiple check-ins in the same day:
+                    // Keep the first CheckInTime, clear CheckOutTime to reopen the day's record
+                    record.CheckOutTime = null;
+                    if (record.Status == AttendanceStatus.EarlyCheckout && template is not null)
+                    {
+                        record.Status = AttendanceStatus.OnTime;
+                    }
+                }
+
+                if (isUnscheduledAttendance)
+                {
+                    await EnsureUnscheduledRequestAndNotificationsAsync(gymId, employee, attendanceDate, localEvent, cancellationToken);
+                }
             }
             else
             {
@@ -414,10 +472,12 @@ namespace Service.Services
 
                 if (record.CheckOutTime is not null)
                 {
-                    throw new BadRequestException("This employee is already checked out today.");
+                    if (utcTimestamp <= record.CheckOutTime.Value)
+                    {
+                        throw new BadRequestException("This employee is already checked out today.");
+                    }
                 }
-
-                if (utcTimestamp <= record.CheckInTime.Value)
+                else if (utcTimestamp <= record.CheckInTime.Value)
                 {
                     throw new BadRequestException("Checkout time must be after check-in time.");
                 }
@@ -427,9 +487,13 @@ namespace Service.Services
 
                 // Lateness outranks early checkout; otherwise leaving before the shift's
                 // end (the next day for overnight shifts) marks the record as EarlyCheckout.
-                if (record.Status != AttendanceStatus.Late && localEvent < shiftEndsAt)
+                if (record.Status != AttendanceStatus.Late && template is not null && localEvent < shiftEndsAt)
                 {
                     record.Status = AttendanceStatus.EarlyCheckout;
+                }
+                else if (record.Status == AttendanceStatus.EarlyCheckout && (template is null || localEvent >= shiftEndsAt))
+                {
+                    record.Status = AttendanceStatus.OnTime;
                 }
             }
 
@@ -485,10 +549,68 @@ namespace Service.Services
                 Method = method.ToString(),
                 Timestamp = utcTimestamp,
                 AttendanceStatus = record.Status.ToString().ToUpperInvariant(),
-                ShiftComparison = type == "IN"
-                    ? (localEvent > shiftStartsAt ? "LATE" : "ON_SCHEDULE")
-                    : (localEvent < shiftEndsAt ? "EARLY_CHECKOUT" : "ON_SCHEDULE")
+                ShiftComparison = isUnscheduledAttendance
+                    ? "UNSCHEDULED"
+                    : (type == "IN"
+                        ? (localEvent > shiftStartsAt ? "LATE" : "ON_SCHEDULE")
+                        : (localEvent < shiftEndsAt ? "EARLY_CHECKOUT" : "ON_SCHEDULE"))
             };
+        }
+
+        private async Task EnsureUnscheduledRequestAndNotificationsAsync(
+            int gymId, Employee employee, DateOnly date, DateTime localEvent, CancellationToken cancellationToken)
+        {
+            var requestRepo = unitOfWork.GetRepository<EmployeeRequest, int>();
+            var existing = await requestRepo.GetAllAsync(
+                new EmployeeRequestsByDateAndTypeSpec(employee.Id, date, RequestTypeCatalog.UnscheduledAttendanceLabel),
+                cancellationToken);
+
+            if (!existing.Any())
+            {
+                var request = new EmployeeRequest
+                {
+                    EmployeeId = employee.Id,
+                    Type = RequestTypeCatalog.UnscheduledAttendanceLabel,
+                    RequestDate = date,
+                                    TargetTime = TimeOnly.FromDateTime(localEvent),
+                                    SubmittedAt = DateTime.UtcNow,
+                                    CreatedAt = DateTime.UtcNow,
+                                    Status = RequestStatus.Pending,
+                                    Details = $"{employee.FullName} checked in on an unscheduled day ({date:yyyy-MM-dd}) at {localEvent:HH:mm}. Awaiting BM/HR decision for extra/cover day calculation.",
+                                };
+                await requestRepo.AddAsync(request, cancellationToken);
+                await unitOfWork.SaveChangesAsync(cancellationToken);
+
+                try
+                {
+                    var users = await unitOfWork.GetRepository<User, int>()
+                        .GetAllAsync(new BranchManagersAndHrForGymSpec(gymId), cancellationToken);
+
+                    var notificationRepo = unitOfWork.GetRepository<Notification, int>();
+                    var title = "Unscheduled Attendance";
+                    var message = $"{employee.FullName} checked in on an unscheduled day ({date:yyyy-MM-dd}). Awaiting approval.";
+
+                    foreach (var user in users)
+                    {
+                        await notificationRepo.AddAsync(new Notification
+                        {
+                            UserId = user.Id,
+                            Title = title,
+                            Message = message,
+                            Type = NotificationType.AttendanceIssue,
+                            IsRead = false,
+                            LinkTo = "team-requests",
+                            CreatedAt = DateTime.UtcNow
+                        }, cancellationToken);
+                    }
+
+                    await unitOfWork.SaveChangesAsync(cancellationToken);
+                }
+                catch
+                {
+                    // Notification dispatch failure should not block attendance punch
+                }
+            }
         }
 
         /// <summary>

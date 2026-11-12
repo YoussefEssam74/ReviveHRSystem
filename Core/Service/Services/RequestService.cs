@@ -1,8 +1,12 @@
 using System.Globalization;
 using DomainLayer.Contracts;
 using DomainLayer.Exceptions;
+using DomainLayer.Models.AttendanceModule;
+using DomainLayer.Models.AttendanceModule.Enums;
 using DomainLayer.Models.EmployeeModule;
 using DomainLayer.Models.EmployeeModule.Enums;
+using DomainLayer.Models.PayrollModule;
+using DomainLayer.Models.PayrollModule.Enums;
 using DomainLayer.Models.RequestModule;
 using DomainLayer.Models.RequestModule.Enums;
 using DomainLayer.Models.UserModule;
@@ -26,7 +30,8 @@ namespace Service.Services
         IUnitOfWork _unitOfWork,
         IAccessControlService _accessControl,
         IUserAccessRepository _userAccess,
-        ITeamScopeService _teamScope) : IRequestService
+        ITeamScopeService _teamScope,
+        TimeZoneInfo attendanceTimeZone) : IRequestService
     {
         private const int DefaultPageSize = 20;
         private const int MaxPageSize = 100;
@@ -92,9 +97,14 @@ namespace Service.Services
                 (page - 1) * pageSize, pageSize, sortBy, sortDescending, idFilter, includeAwaitingManager);
             var requests = await _unitOfWork.GetRepository<EmployeeRequest, int>().GetAllAsync(pageSpec, cancellationToken);
 
+            // Unscheduled Attendance rows from before the request carried its own
+            // check-in time have no TargetTime: resolve it from the linked
+            // attendance record so the desk still shows the real check-in.
+            var checkInFallbacks = await ResolveCheckInTimeFallbacksAsync(requests, cancellationToken);
+
             return new RequestListResponse
             {
-                Items = requests.Select(MapItem).ToList(),
+                Items = requests.Select(r => MapItem(r, checkInFallbacks.GetValueOrDefault((r.EmployeeId, r.RequestDate)))).ToList(),
                 Page = page,
                 PageSize = pageSize,
                 Total = total,
@@ -169,7 +179,9 @@ namespace Service.Services
                 await _accessControl.EnsurePermissionForGymAsync(actor.Id, "requests.view", request.Employee.GymId, cancellationToken);
             }
 
-            return new RequestDetailResponse { Data = MapItem(request) };
+            var checkInFallback = await ResolveCheckInTimeFallbackAsync(request, cancellationToken);
+
+            return new RequestDetailResponse { Data = MapItem(request, checkInFallback) };
         }
 
         // ------------------------------------------------------------------
@@ -339,6 +351,44 @@ namespace Service.Services
                     cancellationToken);
             }
 
+            if (entity.Type == RequestTypeCatalog.UnscheduledAttendanceLabel)
+            {
+                if (decision == DecisionOutcome.Approved)
+                {
+                    var days = request.CalculatedDays ?? (entity.OvertimeHoursRequested.HasValue ? (int)entity.OvertimeHoursRequested.Value : (request.Payment?.Contains("2") == true ? 2 : 1));
+                    if (days is not (1 or 2))
+                    {
+                        throw new BadRequestException("Unscheduled attendance can be counted as 1 or 2 days.");
+                    }
+
+                    payment = $"{days} day{(days > 1 ? "s" : "")}";
+                    entity.OvertimeHoursRequested = days;
+                }
+                var attendanceRepo = _unitOfWork.GetRepository<AttendanceRecord, int>();
+                var records = await attendanceRepo.GetAllAsync(
+                    new AttendanceRecordByEmployeeDatesSpec(entity.EmployeeId, entity.RequestDate), cancellationToken);
+                var record = records.FirstOrDefault(r => r.Date == entity.RequestDate);
+                if (record is not null)
+                {
+                    if (decision == DecisionOutcome.Approved)
+                    {
+                        var days = request.CalculatedDays ?? (entity.OvertimeHoursRequested.HasValue ? (int)entity.OvertimeHoursRequested.Value : 1);
+                        if (days is not (1 or 2))
+                        {
+                            throw new BadRequestException("Unscheduled attendance can be counted as 1 or 2 days.");
+                        }
+
+                        record.Notes = $"Approved as {days} day(s) cover/extra day";
+                        record.Status = AttendanceStatus.OnTime;
+                    }
+                    else
+                    {
+                        record.Notes = "Unscheduled attendance rejected by HR";
+                    }
+                    attendanceRepo.Update(record);
+                }
+            }
+
             entity.Status = decision == DecisionOutcome.Approved ? RequestStatus.Approved : RequestStatus.Rejected;
             entity.Payment = payment;
             entity.Decisions.Add(new RequestDecision
@@ -350,6 +400,11 @@ namespace Service.Services
                 DecidedBy = actor.Id,
                 DecidedAt = DateTime.UtcNow,
             });
+
+            if (decision == DecisionOutcome.Approved)
+            {
+                await ApplyDeductionCorrectionAsync(entity, actor.Id, cancellationToken);
+            }
 
             await _unitOfWork.SaveChangesAsync(cancellationToken);
 
@@ -421,6 +476,30 @@ namespace Service.Services
 
             entity.Status = RequestStatus.PendingHRReview;
             entity.Payment = null;
+
+            if (entity.Type == RequestTypeCatalog.UnscheduledAttendanceLabel)
+            {
+                var attendanceRepo = _unitOfWork.GetRepository<AttendanceRecord, int>();
+                var records = await attendanceRepo.GetAllAsync(
+                    new AttendanceRecordByEmployeeDatesSpec(entity.EmployeeId, entity.RequestDate), cancellationToken);
+                var record = records.FirstOrDefault(r => r.Date == entity.RequestDate);
+                if (record is not null)
+                {
+                    // Undo returns the request to HR review, so the attendance note
+                    // reverts to the BM-approved wording (or plain pending when
+                    // no BM approval is on record).
+                    var bmDecision = entity.Decisions
+                        .Where(d => d.Stage == ApprovalStage.BranchManager)
+                        .OrderBy(d => d.DecidedAt).LastOrDefault();
+                    var days = entity.OvertimeHoursRequested.HasValue
+                        ? (int)entity.OvertimeHoursRequested.Value
+                        : (bmDecision?.Decision == DecisionOutcome.Approved ? 1 : 0);
+                    record.Notes = bmDecision?.Decision == DecisionOutcome.Approved
+                        ? $"Approved by BM as {days} day(s) (Pending HR review)"
+                        : "Unscheduled / Off-day check-in (pending approval)";
+                    attendanceRepo.Update(record);
+                }
+            }
 
             await _unitOfWork.SaveChangesAsync(cancellationToken);
 
@@ -515,11 +594,32 @@ namespace Service.Services
                 if (entity.Type == "Resignation")
                 {
                     entity.Employee.Status = EmployeeStatus.NoticePeriod;
+                    _unitOfWork.GetRepository<Employee, int>().MarkModified(entity.Employee);
+                }
+
+                if (entity.Type == RequestTypeCatalog.UnscheduledAttendanceLabel)
+                {
+                    // Bulk approval carries no explicit days: the BM's value wins.
+                    var days = entity.OvertimeHoursRequested.HasValue
+                        ? (int)entity.OvertimeHoursRequested.Value
+                        : 1;
+                    payment = $"{days} day{(days > 1 ? "s" : "")}";
+                    entity.OvertimeHoursRequested = days;
+
+                    var attendanceRepo = _unitOfWork.GetRepository<AttendanceRecord, int>();
+                    var records = await attendanceRepo.GetAllAsync(
+                        new AttendanceRecordByEmployeeDatesSpec(entity.EmployeeId, entity.RequestDate), cancellationToken);
+                    var record = records.FirstOrDefault(r => r.Date == entity.RequestDate);
+                    if (record is not null)
+                    {
+                        record.Notes = $"Approved as {days} day(s) cover/extra day";
+                        record.Status = AttendanceStatus.OnTime;
+                    }
                 }
 
                 entity.Status = RequestStatus.Approved;
                 entity.Payment = payment;
-                entity.Decisions.Add(new RequestDecision
+                var decision = new RequestDecision
                 {
                     RequestId = entity.Id,
                     Stage = ApprovalStage.HR,
@@ -527,8 +627,15 @@ namespace Service.Services
                     Comment = comment,
                     DecidedBy = actor.Id,
                     DecidedAt = DateTime.UtcNow,
-                });
+                };
+                entity.Decisions.Add(decision);
+                await _unitOfWork.GetRepository<RequestDecision, int>().AddAsync(decision, cancellationToken);
 
+                await ApplyDeductionCorrectionAsync(entity, actor.Id, cancellationToken);
+
+                // The spec tracks, so the mutations above are already picked up; the
+                // explicit MarkModified keeps the intent visible for future readers.
+                _unitOfWork.GetRepository<EmployeeRequest, int>().MarkModified(entity);
                 approved++;
             }
 
@@ -820,8 +927,58 @@ namespace Service.Services
             return actor;
         }
 
+        /// <summary>Check-in wall time for one Unscheduled Attendance request whose own
+        /// TargetTime was never recorded (rows from before the request carried the
+        /// check-in): the linked attendance record is the source of truth, shown in
+        /// the attendance timezone. Null when the type does not carry a check-in.</summary>
+        private async Task<TimeOnly?> ResolveCheckInTimeFallbackAsync(EmployeeRequest entity, CancellationToken cancellationToken)
+        {
+            if (entity.TargetTime is not null || entity.Type != RequestTypeCatalog.UnscheduledAttendanceLabel)
+            {
+                return null;
+            }
+
+            var records = await _unitOfWork.GetRepository<AttendanceRecord, int>()
+                .GetAllAsync(new AttendanceByEmployeeDateSpec(entity.EmployeeId, entity.RequestDate), cancellationToken);
+            var record = records
+                .Where(r => r.CheckInTime is not null)
+                .OrderBy(r => r.CheckInTime)
+                .FirstOrDefault();
+            return record?.CheckInTime is { } checkInUtc
+                ? TimeOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(checkInUtc, attendanceTimeZone))
+                : null;
+        }
+
+        /// <summary>Batch twin of <see cref="ResolveCheckInTimeFallbackAsync"/> for list
+        /// reads: one range query covers every row that needs the fallback.</summary>
+        private async Task<Dictionary<(int EmployeeId, DateOnly Date), TimeOnly>> ResolveCheckInTimeFallbacksAsync(
+            IEnumerable<EmployeeRequest> entities, CancellationToken cancellationToken)
+        {
+            var needed = entities
+                .Where(e => e.TargetTime is null && e.Type == RequestTypeCatalog.UnscheduledAttendanceLabel)
+                .ToList();
+            if (needed.Count == 0)
+            {
+                return [];
+            }
+
+            var ids = needed.Select(e => e.EmployeeId).Distinct().ToArray();
+            var from = needed.Min(e => e.RequestDate);
+            var to = needed.Max(e => e.RequestDate);
+            var records = await _unitOfWork.GetRepository<AttendanceRecord, int>()
+                .GetAllAsync(new AttendanceRecordsByEmployeeIdsRangeSpec(ids, from, to), cancellationToken);
+
+            return records
+                .Where(r => r.CheckInTime is not null)
+                .GroupBy(r => (r.EmployeeId, r.Date))
+                .ToDictionary(
+                    g => g.Key,
+                    g => TimeOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(
+                        g.Min(r => r.CheckInTime!.Value), attendanceTimeZone)));
+        }
+
         /// <summary>Maps an entity onto the R1 card shape (decisions, payment, timeline).</summary>
-        private static RequestListItem MapItem(EmployeeRequest entity)
+        private static RequestListItem MapItem(EmployeeRequest entity, TimeOnly? requestTimeFallback = null)
         {
             var bm = LastDecision(entity, ApprovalStage.BranchManager);
             var hr = LastDecision(entity, ApprovalStage.HR);
@@ -843,12 +1000,17 @@ namespace Service.Services
                 SubmittedDate = DateOnly.FromDateTime(entity.CreatedAt),
                 RequestedDate = entity.RequestDate,
                 EndDate = NormalizeDisplayRange(entity),
+                RequestTime = requestTimeFallback ?? entity.TargetTime,
+                Amount = entity.RequestedAmount,
                 Status = StatusDisplay(entity.Status),
                 BmDecision = bm?.Decision.ToString(),
                 BmComment = bm?.Comment,
                 HrDecision = hr?.Decision.ToString(),
                 HrComment = hr?.Comment,
                 Payment = entity.Payment,
+                CalculatedDays = entity.OvertimeHoursRequested.HasValue
+                    ? (int?)entity.OvertimeHoursRequested.Value
+                    : (entity.Payment != null && entity.Payment.Contains("2") ? (int?)2 : (entity.Payment != null && entity.Payment.Contains("1") ? (int?)1 : null)),
                 Reason = entity.Details,
                 HasAttachment = !string.IsNullOrEmpty(entity.AttachmentPath),
                 Timeline = BuildTimeline(entity, bm, hr),
@@ -980,6 +1142,136 @@ namespace Service.Services
 
         private static string StatusDisplay(RequestStatus status) =>
             status == RequestStatus.PendingHRReview ? "Pending HR Review" : status.ToString();
+
+        /// <summary>
+        /// An approved Deduction Correction takes the disputed money off the employee:
+        /// while the sheet is still open the line and its candidate are rejected (the
+        /// day is waived, and the candidate stays final); once the sheet is locked the
+        /// paid month cannot change, so the amount is offset by a negative deduction
+        /// line in the employee's next open period.
+        /// </summary>
+        private async Task ApplyDeductionCorrectionAsync(
+            EmployeeRequest request, int actorId, CancellationToken cancellationToken)
+        {
+            if (!request.Type.Equals(RequestTypeCatalog.DeductionCorrectionLabel, StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
+
+            var date = request.TargetStartDate ?? request.RequestDate;
+            var candidates = (await _unitOfWork.GetRepository<DeductionCandidate, int>()
+                    .GetAllAsync(new DeductionCandidatesByEmployeesSpec([request.EmployeeId]), cancellationToken))
+                .Where(c => PayrollService.CandidateDayOf(c) == date)
+                .ToList();
+            var candidate = candidates
+                .OrderByDescending(c => c.Status == DeductionStatus.Approved)
+                .ThenByDescending(c => c.Status == DeductionStatus.BranchApproved)
+                .FirstOrDefault();
+
+            var entries = (await _unitOfWork.GetRepository<PayrollEntry, int>()
+                    .GetAllAsync(new PayrollEntriesByEmployeeSpec(request.EmployeeId), cancellationToken))
+                .ToList();
+
+            var match = entries
+                .SelectMany(entry => entry.LineItems
+                    .Where(l => l.Type.Equals("Deduction", StringComparison.OrdinalIgnoreCase))
+                    .Where(l => candidate is not null
+                        ? l.DeductionCandidateId == candidate.Id
+                        : l.EffectiveDate == date)
+                    .Select(line => (Entry: entry, Line: line)))
+                .OrderByDescending(x => x.Entry.PayrollPeriod.StartDate)
+                .FirstOrDefault();
+
+            if (match.Line is null)
+            {
+                // No sheet line yet — a still-pending candidate is simply waived.
+                if (candidate is not null
+                    && candidate.Status is DeductionStatus.Pending or DeductionStatus.BranchApproved)
+                {
+                    candidate.Status = DeductionStatus.Rejected;
+                    candidate.ReviewedBy = actorId;
+                    candidate.ReviewedAt = DateTime.UtcNow;
+                    _unitOfWork.GetRepository<DeductionCandidate, int>().MarkModified(candidate);
+                }
+
+                return;
+            }
+
+            var entry = match.Entry;
+            var line = match.Line;
+            var period = entry.PayrollPeriod;
+            var locked = period.Status != PayrollPeriodStatus.Open
+                || period.PaidDate is not null
+                || entry.Status == "Locked";
+
+            if (!locked)
+            {
+                if (line.Status is not "Rejected")
+                {
+                    line.Status = "Rejected";
+                    line.ReviewedBy = actorId;
+                    line.ReviewedAt = DateTime.UtcNow;
+                    _unitOfWork.GetRepository<PayrollEntryLineItem, int>().MarkModified(line);
+                }
+
+                if (candidate is not null && candidate.Status != DeductionStatus.Rejected)
+                {
+                    candidate.Status = DeductionStatus.Rejected;
+                    candidate.ReviewedBy = actorId;
+                    candidate.ReviewedAt = DateTime.UtcNow;
+                    _unitOfWork.GetRepository<DeductionCandidate, int>().MarkModified(candidate);
+                }
+
+                PayrollService.SyncTotals(entry);
+                _unitOfWork.GetRepository<PayrollEntry, int>().MarkModified(entry);
+                return;
+            }
+
+            // The locked month is paid history. The correction becomes a negative
+            // deduction in the next open period, so net pay carries the refund.
+            if (line.Status is not ("Accepted" or "Approved"))
+            {
+                return;
+            }
+
+            var openEntries = entries
+                .Where(e => e.PayrollPeriod.Id != period.Id
+                    && e.PayrollPeriod.Status == PayrollPeriodStatus.Open
+                    && e.PayrollPeriod.PaidDate is null)
+                .OrderBy(e => e.PayrollPeriod.StartDate)
+                .ToList();
+            var openEntry = openEntries.FirstOrDefault(e => e.PayrollPeriod.StartDate > period.StartDate)
+                ?? openEntries.FirstOrDefault()
+                ?? throw new BadRequestException(
+                    "This month is locked and there is no open payroll period to carry the correction.");
+
+            if (openEntry.LineItems.Any(l => l.EmployeeRequestId == request.Id))
+            {
+                return;
+            }
+
+            var reversal = new PayrollEntryLineItem
+            {
+                PayrollEntryId = openEntry.Id,
+                Type = "Deduction",
+                Label = "Deduction correction",
+                EffectiveDate = date,
+                Amount = -Math.Abs(line.Amount),
+                Reason = string.IsNullOrWhiteSpace(request.Details)
+                    ? $"Reversal of the {date:yyyy-MM-dd} deduction."
+                    : request.Details.Trim(),
+                Source = "correction",
+                EmployeeRequestId = request.Id,
+                Status = "Accepted",
+                ReviewedBy = actorId,
+                ReviewedAt = DateTime.UtcNow,
+            };
+
+            await _unitOfWork.GetRepository<PayrollEntryLineItem, int>().AddAsync(reversal, cancellationToken);
+            openEntry.LineItems.Add(reversal);
+            PayrollService.SyncTotals(openEntry);
+            _unitOfWork.GetRepository<PayrollEntry, int>().MarkModified(openEntry);
+        }
 
         /// <summary>True for the types that consume a leave balance (Annual / Sick).</summary>
         private static bool IsBalanceType(string type) => LeaveTypeFor(type) is not null;

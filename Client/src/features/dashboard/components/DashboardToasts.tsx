@@ -1,4 +1,5 @@
 import { X } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { cn } from '../../../lib/utils'
 import type { MockToast, ToastTone } from '../hooks/useMockToast'
 
@@ -24,9 +25,10 @@ function Icon({ tone }: { tone: ToastTone }) {
 
 /** Bottom-right toast stack per Mock UI/HR core.js showToast. */
 export function DashboardToasts({ toasts, onDismiss }: { toasts: MockToast[]; onDismiss: (id: number) => void }) {
+  const { t } = useTranslation()
   if (toasts.length === 0) return null
   return (
-    <div className="pointer-events-none fixed bottom-4 right-4 z-[60] flex w-full max-w-xs flex-col gap-2" role="status" aria-live="polite">
+    <div className="pointer-events-none fixed bottom-4 end-4 z-[60] flex w-full max-w-xs flex-col gap-2" role="status" aria-live="polite">
       {toasts.map((item) => (
         <div
           key={item.id}
@@ -43,7 +45,7 @@ export function DashboardToasts({ toasts, onDismiss }: { toasts: MockToast[]; on
             type="button"
             onClick={() => onDismiss(item.id)}
             className="flex-shrink-0 opacity-60 transition-opacity hover:opacity-100"
-            aria-label="Dismiss notification"
+            aria-label={t('Dismiss notification')}
           >
             <X className="h-3.5 w-3.5" aria-hidden="true" />
           </button>

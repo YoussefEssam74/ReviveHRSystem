@@ -984,10 +984,6 @@ function renderDashboard() {
         </div>
       </div>
       <div class="flex items-center gap-2">
-        <button onclick="exportMonthlyHRReport()" class="btn btn-sm btn-secondary text-xs h-7 px-2.5 flex items-center gap-1.5">
-          <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
-          Export
-        </button>
         ${renderGymSelector()}
       </div>
     </div>
@@ -1090,7 +1086,7 @@ function renderDashboard() {
         </div>
       </div>
 
-      <!-- RIGHT (5 cols): Fast Actions + Branches Oversight -->
+      <!-- RIGHT (5 cols): Fast Actions -->
       <div class="lg:col-span-5 flex flex-col gap-2.5 min-h-0 overflow-hidden">
 
         <!-- FAST ACTIONS (fixed height, no scroll needed) -->
@@ -1144,45 +1140,6 @@ function renderDashboard() {
               <p class="text-[10px] font-semibold text-charcoal-800 group-hover:text-brand-800 leading-tight">Announcement</p>
             </button>
 
-          </div>
-        </div>
-
-        <!-- BRANCHES OVERVIEW: flex-1 fills leftover height, inner scroll if overflow -->
-        <div class="bg-white rounded-xl border border-charcoal-200 p-3 shadow-2xs flex flex-col flex-1 min-h-0 overflow-hidden">
-          <div class="flex items-center justify-between mb-2 flex-shrink-0">
-            <div>
-              <h3 class="text-[11px] font-bold text-charcoal-900 uppercase tracking-wide">Branches Overview</h3>
-              <p class="text-[10px] text-charcoal-400">Headcount &amp; required actions · click to filter</p>
-            </div>
-            <button onclick="openGymsOverviewModal()" class="text-[11px] text-brand-600 hover:text-brand-800 font-semibold">Details →</button>
-          </div>
-          <div class="flex-1 min-h-0 overflow-y-auto space-y-1.5">
-            ${MOCK.gymList.map(g => {
-              const act = typeof getGymRequiredActions === 'function' ? getGymRequiredActions(g.branch) : { total: 0, summaryText: 'All clear' };
-              const isSelected = u.selectedGym === g.id;
-              return `
-              <div onclick="setGymFilter('${g.id}')" class="px-2.5 py-2 rounded-lg transition-all flex items-center justify-between cursor-pointer border ${
-                isSelected ? 'bg-brand-50/70 border-brand-300 ring-1 ring-brand-300' : 'bg-charcoal-50 hover:bg-charcoal-100 border-charcoal-100 hover:border-charcoal-200'
-              }">
-                <div class="flex items-center gap-2 min-w-0">
-                  <div class="w-2.5 h-2.5 rounded-full ${act.total > 0 ? 'bg-amber-500 ring-2 ring-amber-200' : 'bg-emerald-500'} flex-shrink-0"></div>
-                  <div class="min-w-0">
-                    <div class="flex items-center gap-1.5">
-                      <p class="text-xs font-bold text-charcoal-900 truncate">${g.branch}</p>
-                      ${act.total > 0 
-                        ? `<span class="px-1.5 py-0.2 rounded text-[9px] font-bold bg-amber-100 text-amber-800 border border-amber-200 flex-shrink-0">${act.total} action${act.total > 1 ? 's' : ''}</span>` 
-                        : `<span class="px-1.5 py-0.2 rounded text-[9px] font-medium bg-emerald-50 text-emerald-700 flex-shrink-0">Clear</span>`
-                      }
-                    </div>
-                    <p class="text-[10px] text-charcoal-400 truncate">${act.total > 0 ? act.summaryText : `${g.name} · All clear`}</p>
-                  </div>
-                </div>
-                <div class="text-right flex-shrink-0 ml-2">
-                  <span class="text-xs font-bold text-charcoal-900">${g.employees}</span>
-                  <span class="text-[10px] text-charcoal-400 ml-0.5">staff</span>
-                </div>
-              </div>
-            `;}).join('')}
           </div>
         </div>
 

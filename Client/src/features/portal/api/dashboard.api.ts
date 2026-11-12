@@ -32,6 +32,8 @@ export interface AttendanceSummary {
   absent: number
   earlyCheckout: number
   missingCheckout: number
+  /** Total approved cover/extra days this month (display-only). */
+  coverDays: number
 }
 
 export interface ScheduleDay {

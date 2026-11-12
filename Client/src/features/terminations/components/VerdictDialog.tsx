@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Button } from '../../../components/ui/button'
 import { Dialog } from '../../../components/ui/dialog'
 import { Input } from '../../../components/ui/input'
@@ -28,6 +29,7 @@ export interface VerdictDialogProps {
 
 /** T5 — record the exit verdict (final reason, settlement, rehire status). */
 export function VerdictDialog({ separationId, employeeName, onClose }: VerdictDialogProps) {
+  const { t } = useTranslation()
   const saveVerdict = useSaveVerdict(separationId)
   const [finalReason, setFinalReason] = useState('')
   const [direction, setDirection] = useState<SettlementDirection>('none')
@@ -65,15 +67,15 @@ export function VerdictDialog({ separationId, employeeName, onClose }: VerdictDi
     <Dialog
       open
       onClose={onClose}
-      title="Exit verdict"
+      title={t('Exit verdict')}
       description={employeeName}
       footer={
         <>
           <Button variant="outline" onClick={onClose}>
-            Cancel
+            {t('Cancel')}
           </Button>
           <Button onClick={onSubmit} loading={saveVerdict.isPending} disabled={!canSubmit}>
-            Save verdict
+            {t('Save verdict')}
           </Button>
         </>
       }
@@ -85,18 +87,18 @@ export function VerdictDialog({ separationId, employeeName, onClose }: VerdictDi
           </p>
         )}
         <div>
-          <Label htmlFor="final-reason">Final reason (required)</Label>
+          <Label htmlFor="final-reason">{t('Final reason (required)')}</Label>
           <Textarea
             id="final-reason"
             rows={3}
             value={finalReason}
             onChange={(e) => setFinalReason(e.target.value)}
-            placeholder="Summary of why the employment is ending…"
+            placeholder={t('Summary of why the employment is ending…')}
           />
         </div>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div>
-            <Label htmlFor="settlement-direction">Settlement</Label>
+            <Label htmlFor="settlement-direction">{t('Settlement')}</Label>
             <Select
               id="settlement-direction"
               value={direction}
@@ -104,13 +106,15 @@ export function VerdictDialog({ separationId, employeeName, onClose }: VerdictDi
             >
               {DIRECTIONS.map((option) => (
                 <option key={option.value} value={option.value}>
-                  {option.label}
+                  {t(option.label)}
                 </option>
               ))}
             </Select>
           </div>
           <div>
-            <Label htmlFor="settlement-amount">Amount (EGP){needsAmount ? ' (required)' : ''}</Label>
+            <Label htmlFor="settlement-amount">
+              {needsAmount ? t('Amount (EGP) (required)') : t('Amount (EGP)')}
+            </Label>
             <Input
               id="settlement-amount"
               type="number"
@@ -123,31 +127,31 @@ export function VerdictDialog({ separationId, employeeName, onClose }: VerdictDi
           </div>
         </div>
         <div>
-          <Label htmlFor="settlement-note">Settlement note (optional)</Label>
+          <Label htmlFor="settlement-note">{t('Settlement note (optional)')}</Label>
           <Input
             id="settlement-note"
             value={settlementNote}
             onChange={(e) => setSettlementNote(e.target.value)}
-            placeholder="Context for the settlement…"
+            placeholder={t('Context for the settlement…')}
           />
         </div>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div>
-            <Label htmlFor="rehire-status">Rehire</Label>
+            <Label htmlFor="rehire-status">{t('Rehire')}</Label>
             <Select id="rehire-status" value={rehireStatus} onChange={(e) => setRehireStatus(e.target.value as RehireStatus)}>
               {REHIRE_OPTIONS.map((option) => (
                 <option key={option.value} value={option.value}>
-                  {option.label}
+                  {t(option.label)}
                 </option>
               ))}
             </Select>
           </div>
           <div>
-            <Label htmlFor="rehire-note">Rehire note (optional)</Label>
+            <Label htmlFor="rehire-note">{t('Rehire note (optional)')}</Label>
             <Input id="rehire-note" value={rehireNote} onChange={(e) => setRehireNote(e.target.value)} />
           </div>
         </div>
-        <p className="text-xs text-slate-500">Saving the verdict moves the case to “Under Review”.</p>
+        <p className="text-xs text-slate-500">{t('Saving the verdict moves the case to “Under Review”.')}</p>
       </div>
     </Dialog>
   )

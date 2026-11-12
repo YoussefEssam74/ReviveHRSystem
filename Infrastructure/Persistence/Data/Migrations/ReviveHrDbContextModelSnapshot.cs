@@ -2337,10 +2337,24 @@ namespace Persistence.Data.Migrations
                     b.Property<int?>("CreatedBy")
                         .HasColumnType("integer");
 
+                    b.Property<DateOnly>("DeductionDate")
+                        .HasColumnType("date");
+
+                    b.Property<decimal>("DeductionDays")
+                        .ValueGeneratedOnAdd()
+                        .HasPrecision(9, 2)
+                        .HasColumnType("numeric(9,2)")
+                        .HasDefaultValue(1m);
+
                     b.Property<int>("EmployeeId")
                         .HasColumnType("integer");
 
                     b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
+
+                    b.Property<bool>("IsSystemGenerated")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("boolean")
                         .HasDefaultValue(false);
@@ -2386,6 +2400,10 @@ namespace Persistence.Data.Migrations
                     b.HasIndex("ReviewedBy");
 
                     b.HasIndex("Status");
+
+                    b.HasIndex("EmployeeId", "DeductionDate")
+                        .IsUnique()
+                        .HasFilter("\"IsDeleted\" = false");
 
                     b.ToTable("DeductionCandidates", (string)null);
                 });
@@ -2503,6 +2521,9 @@ namespace Persistence.Data.Migrations
                     b.Property<int?>("CreatedBy")
                         .HasColumnType("integer");
 
+                    b.Property<int?>("DeductionCandidateId")
+                        .HasColumnType("integer");
+
                     b.Property<DateOnly>("EffectiveDate")
                         .HasColumnType("date");
 
@@ -2556,6 +2577,8 @@ namespace Persistence.Data.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("AttendanceRecordId");
+
+                    b.HasIndex("DeductionCandidateId");
 
                     b.HasIndex("EmployeeRequestId");
 
@@ -4785,6 +4808,11 @@ namespace Persistence.Data.Migrations
                         .HasForeignKey("AttendanceRecordId")
                         .OnDelete(DeleteBehavior.SetNull);
 
+                    b.HasOne("DomainLayer.Models.PayrollModule.DeductionCandidate", "DeductionCandidate")
+                        .WithMany()
+                        .HasForeignKey("DeductionCandidateId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
                     b.HasOne("DomainLayer.Models.RequestModule.EmployeeRequest", "EmployeeRequest")
                         .WithMany()
                         .HasForeignKey("EmployeeRequestId")
@@ -4802,6 +4830,8 @@ namespace Persistence.Data.Migrations
                         .OnDelete(DeleteBehavior.SetNull);
 
                     b.Navigation("AttendanceRecord");
+
+                    b.Navigation("DeductionCandidate");
 
                     b.Navigation("EmployeeRequest");
 

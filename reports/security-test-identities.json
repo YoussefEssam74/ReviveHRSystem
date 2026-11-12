@@ -5,11 +5,11 @@
     "employeeId": 3
   },
   "teamLeader": {
-    "email": "itest-7cfaa37f@test.local",
+    "email": "itest-726cfb47@test.local",
     "password": "Revive!2026"
   },
   "branchManager": {
-    "email": "itest-9cbae8ee@test.local",
+    "email": "itest-1a408f60@test.local",
     "password": "Revive!2026"
   },
   "hr": {
@@ -17,7 +17,7 @@
     "password": "Revive!2026"
   },
   "hrManager": {
-    "email": "ittest-d72b5bdf@test.local",
+    "email": "ittest-792b6ff5@test.local",
     "password": "Revive!2026"
   },
   "topManagement": {

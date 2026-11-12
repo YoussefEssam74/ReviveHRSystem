@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Button } from '../../../components/ui/button'
 import { Dialog } from '../../../components/ui/dialog'
 import { Input } from '../../../components/ui/input'
@@ -14,6 +15,7 @@ interface ResetPasswordDialogProps {
 
 /** POST /api/users/{id}/reset-password — the admin sets a known password (team.manage). */
 export function ResetPasswordDialog({ member, onClose }: ResetPasswordDialogProps) {
+  const { t } = useTranslation()
   const [newPassword, setNewPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
   const reset = useResetUserPassword(member.id)
@@ -35,15 +37,15 @@ export function ResetPasswordDialog({ member, onClose }: ResetPasswordDialogProp
     <Dialog
       open
       onClose={onClose}
-      title={`Reset password — ${member.name}`}
+      title={t('Reset password — {{name}}', { name: member.name })}
       description={member.email}
       footer={
         <>
           <Button variant="outline" onClick={onClose}>
-            Cancel
+            {t('Cancel')}
           </Button>
           <Button onClick={onSubmit} loading={reset.isPending} disabled={!valid}>
-            Reset password
+            {t('Reset password')}
           </Button>
         </>
       }
@@ -55,22 +57,23 @@ export function ResetPasswordDialog({ member, onClose }: ResetPasswordDialogProp
           </p>
         )}
         <div>
-          <Label htmlFor="reset-password">New password</Label>
+          <Label htmlFor="reset-password">{t('New password')}</Label>
           <Input
             id="reset-password"
             type="password"
             value={newPassword}
             onChange={(e) => setNewPassword(e.target.value)}
-            placeholder="At least 8 characters"
+            placeholder={t('At least 8 characters')}
             autoComplete="new-password"
           />
           {newPassword.length > 0 && newPassword.length < 8 && (
-            <p className="mt-1 text-xs text-amber-600">Passwords must be at least 8 characters.</p>
+            <p className="mt-1 text-xs text-amber-600">{t('Passwords must be at least 8 characters.')}</p>
           )}
         </div>
         <p className="rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-500">
-          The new password is written directly to the account and is never displayed or logged in the console — share it
-          with the member securely.
+          {t(
+            'The new password is written directly to the account and is never displayed or logged in the console — share it with the member securely.',
+          )}
         </p>
       </div>
     </Dialog>

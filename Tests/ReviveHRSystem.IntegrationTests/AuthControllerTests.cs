@@ -103,6 +103,34 @@ namespace ReviveHRSystem.IntegrationTests
         }
 
         [Fact]
+        public async Task Login_SecondSessionSameGym_KeepsTheFirstSessionAlive()
+        {
+            var credentials = new
+            {
+                email = "karim@revive.hr",
+                password = "Revive!2026"
+            };
+
+            var (firstStatus, first) = await LoginAsync(credentials);
+            var (secondStatus, second) = await LoginAsync(credentials);
+
+            Assert.Equal(HttpStatusCode.OK, firstStatus);
+            Assert.Equal(HttpStatusCode.OK, secondStatus);
+            Assert.False(string.IsNullOrWhiteSpace(second.GetProperty("refreshToken").GetString()));
+
+            // Signing in on a second device/browser/profile must not destroy the
+            // session that is already open. Sweeping it made the open session's next
+            // silent refresh fail, so the user was signed out one access-token
+            // lifetime later with no visible cause.
+            var firstRefresh = await _fixture.Client.PostAsJsonAsync("/api/auth/refresh", new
+            {
+                refreshToken = first.GetProperty("refreshToken").GetString()
+            });
+
+            Assert.Equal(HttpStatusCode.OK, firstRefresh.StatusCode);
+        }
+
+        [Fact]
         public async Task SelectGym_InvalidTempToken_Returns401()
         {
             var response = await _fixture.Client.PostAsJsonAsync("/api/auth/login/select-gym", new

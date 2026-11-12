@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { Users } from 'lucide-react'
 import { PageHeader } from '../../../components/ui/page-header'
 import { Card } from '../../../components/ui/card'
@@ -21,6 +22,7 @@ const STATUS_OPTIONS = ['', 'Active', 'On Leave', 'Suspended', 'Terminated']
 /** HR employee directory (S1) — paged, searchable, gym-scoped. */
 export default function EmployeesPage() {
   const navigate = useNavigate()
+  const { t } = useTranslation()
   const { me } = useMe()
   const [search, setSearch] = useState('')
   const [status, setStatus] = useState('')
@@ -46,47 +48,47 @@ export default function EmployeesPage() {
   return (
     <div>
       <PageHeader
-        title="Employees"
-        description={me?.activeGym ? `Staff at ${me.activeGym.gymName}` : 'Employee directory'}
+        title={t('Employees')}
+        description={me?.activeGym ? t('Staff at {{gym}}', { gym: me.activeGym.gymName }) : t('Employee directory')}
       />
 
       <Card>
         <div className="flex flex-col gap-3 border-b border-slate-100 p-4 sm:flex-row">
           <Input
-            placeholder="Search by name or email…"
+            placeholder={t('Search by name or email…')}
             value={search}
             onChange={(e) => onSearch(e.target.value)}
             className="sm:max-w-xs"
-            aria-label="Search employees"
+            aria-label={t('Search employees')}
           />
-          <Select value={status} onChange={(e) => onStatus(e.target.value)} className="sm:w-48" aria-label="Filter by status">
+          <Select value={status} onChange={(e) => onStatus(e.target.value)} className="sm:w-48" aria-label={t('Filter by status')}>
             {STATUS_OPTIONS.map((option) => (
               <option key={option} value={option}>
-                {option || 'All statuses'}
+                {option ? t(option) : t('All statuses')}
               </option>
             ))}
           </Select>
         </div>
 
         {isLoading ? (
-          <LoadingState label="Loading employees…" />
+          <LoadingState label={t('Loading employees…')} />
         ) : error ? (
           <ErrorState message={describeApiError(error)} />
         ) : (data?.items?.length ?? 0) === 0 ? (
           <EmptyState
             icon={Users}
-            title="No employees found"
-            message={search || status ? 'Try adjusting your search or filters.' : 'No staff are assigned to this gym yet.'}
+            title={t('No employees found')}
+            message={search || status ? t('Try adjusting your search or filters.') : t('No staff are assigned to this gym yet.')}
           />
         ) : (
           <>
             <Table>
               <THead>
-                <TH>Employee</TH>
-                <TH>Position</TH>
-                <TH>Status</TH>
-                <TH>Hired</TH>
-                <TH className="text-right">Salary</TH>
+                <TH>{t('Employee')}</TH>
+                <TH>{t('Position')}</TH>
+                <TH>{t('Status')}</TH>
+                <TH>{t('Hired')}</TH>
+                <TH className="text-end">{t('Salary')}</TH>
               </THead>
               <TBody>
                 {data!.items.map((employee) => (
@@ -108,7 +110,7 @@ export default function EmployeesPage() {
                       <StatusBadge status={employee.status} />
                     </TD>
                     <TD className="text-slate-500">{formatDate(employee.hireDate)}</TD>
-                    <TD className="text-right font-medium text-slate-900">{formatMoney(employee.salary)}</TD>
+                    <TD className="text-end font-medium text-slate-900">{formatMoney(employee.salary)}</TD>
                   </TR>
                 ))}
               </TBody>

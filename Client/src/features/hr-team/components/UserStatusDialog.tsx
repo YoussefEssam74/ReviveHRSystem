@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Button } from '../../../components/ui/button'
 import { Dialog } from '../../../components/ui/dialog'
 import { Label } from '../../../components/ui/label'
@@ -14,6 +15,7 @@ interface UserStatusDialogProps {
 
 /** PUT /api/users/{id}/status — suspend/reactivate; the reason is required (team.manage). */
 export function UserStatusDialog({ member, onClose }: UserStatusDialogProps) {
+  const { t } = useTranslation()
   const suspending = member.status === 'Active'
   const target: 'Active' | 'Suspended' = suspending ? 'Suspended' : 'Active'
   const [reason, setReason] = useState('')
@@ -37,19 +39,19 @@ export function UserStatusDialog({ member, onClose }: UserStatusDialogProps) {
     <Dialog
       open
       onClose={onClose}
-      title={suspending ? `Suspend ${member.name}` : `Reactivate ${member.name}`}
+      title={suspending ? t('Suspend {{name}}', { name: member.name }) : t('Reactivate {{name}}', { name: member.name })}
       description={
         suspending
-          ? 'The account can no longer sign in until it is reactivated.'
-          : 'The account will be able to sign in again.'
+          ? t('The account can no longer sign in until it is reactivated.')
+          : t('The account will be able to sign in again.')
       }
       footer={
         <>
           <Button variant="outline" onClick={onClose}>
-            Cancel
+            {t('Cancel')}
           </Button>
           <Button variant={suspending ? 'danger' : 'primary'} onClick={onSubmit} loading={change.isPending} disabled={!valid}>
-            {suspending ? 'Suspend member' : 'Reactivate member'}
+            {suspending ? t('Suspend member') : t('Reactivate member')}
           </Button>
         </>
       }
@@ -61,17 +63,19 @@ export function UserStatusDialog({ member, onClose }: UserStatusDialogProps) {
           </p>
         )}
         <div>
-          <Label htmlFor="status-reason">Reason (required)</Label>
+          <Label htmlFor="status-reason">{t('Reason (required)')}</Label>
           <Textarea
             id="status-reason"
             rows={3}
             value={reason}
             onChange={(e) => setReason(e.target.value)}
-            placeholder={suspending ? 'Why is this account being suspended?' : 'Why is this account being reactivated?'}
+            placeholder={
+              suspending ? t('Why is this account being suspended?') : t('Why is this account being reactivated?')
+            }
           />
         </div>
         <p className="text-xs text-slate-500">
-          The change is recorded in the audit log under your name. Suspending your own account is refused by the server.
+          {t('The change is recorded in the audit log under your name. Suspending your own account is refused by the server.')}
         </p>
       </div>
     </Dialog>

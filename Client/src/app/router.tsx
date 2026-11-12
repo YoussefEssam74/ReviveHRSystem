@@ -1,5 +1,6 @@
 import { lazy, Suspense, type ReactNode } from 'react'
 import { createBrowserRouter, Navigate } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { AppLayout } from '../components/layout/AppLayout'
 import { KioskLayout } from '../components/layout/KioskLayout'
 import { ConsoleLayout } from '../features/console/components/ConsoleLayout'
@@ -73,11 +74,12 @@ function RequireAuth({ children }: { children: ReactNode }) {
 
 /** Shown for console routes whose module isn't built yet. */
 function ConsolePlaceholder() {
-  const path = window.location.pathname.replace(/^\/console\/?/, '') || 'this section'
+  const { t } = useTranslation()
+  const path = window.location.pathname.replace(/^\/console\/?/, '') || t('this section')
   return (
     <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-12 text-center">
       <h2 className="text-lg font-semibold capitalize text-slate-900">{path.replace(/-/g, ' ')}</h2>
-      <p className="mt-1 text-sm text-slate-500">This module is coming soon.</p>
+      <p className="mt-1 text-sm text-slate-500">{t('This module is coming soon.')}</p>
     </div>
   )
 }
@@ -101,7 +103,7 @@ export const router = createBrowserRouter([
       // HR-side: register faces for Face-ID attendance (auth session required).
       { path: '/enrollment', element: <Page><EnrollmentPage /></Page> },
       // HR/TopManagement: view + rotate the gym's station enrollment code.
-      { path: '/station-code', element: <Page><StationCodePage /></Page> },
+      { path: '/station-code', element: <Navigate to="/console/station-code" replace /> },
       // Role dashboards - /dashboard sends each role to its own page.
       { path: '/dashboard', element: <Page><DashboardPage /></Page> },
       { path: '/dashboard/top-management', element: <Page><RoleDashboardPage role="top-management" /></Page> },
@@ -136,6 +138,8 @@ export const router = createBrowserRouter([
       { path: 'reports', element: <Page><ReportsPage /></Page> },
       { path: 'positions', element: <Page><PositionsPage /></Page> },
       { path: 'schedule', element: <Page><SchedulePage /></Page> },
+      // HR/TopManagement: generate the 6-digit kiosk pairing code.
+      { path: 'station-code', element: <Page><StationCodePage /></Page> },
       { path: 'events', element: <Page><EventsPage /></Page> },
       { path: 'notifications', element: <Page><ConsoleNotificationsPage /></Page> },
       { path: 'audit', element: <Page><AuditPage /></Page> },

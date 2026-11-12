@@ -1,5 +1,6 @@
 import { ApiError, apiRequest } from '../../../lib/api-client'
 import { loadStoredSession } from '../../../lib/session-store'
+import { translate } from '../../../i18n'
 
 /** The paged envelope every list endpoint returns. */
 export interface Paged<T> {
@@ -157,6 +158,12 @@ export interface PayrollEntry {
   days: number
   /** Overtime hours (OT pay is folded into `gross`). */
   overtime: number
+  /** Approved cover/extra day credits (1 or 2 per approved request). */
+  coverDays: number
+  /** Days actually worked outside the schedule (cover / extra shifts). */
+  extraShiftDays: number
+  /** Base salary ÷ 30 × approved cover days. */
+  coverPay: number
   baseSalary: number
   bonus: number
   gross: number
@@ -341,6 +348,12 @@ export interface Payslip {
   deductions: PayslipDeduction[]
   net: number
   days: number
+  /** Approved cover/extra day credits (1 or 2 per approved request). */
+  coverDays: number
+  /** Days actually worked outside the schedule (cover / extra shifts). */
+  extraShiftDays: number
+  /** Base salary ÷ 30 × approved cover days. */
+  coverPay: number
   status: string
 }
 
@@ -452,8 +465,8 @@ export async function downloadPeriodCsv(periodId: number, gymId?: number): Promi
       response.status,
       'HTTP_' + response.status,
       response.status === 401
-        ? 'You are not signed in, or your session has expired.'
-        : 'The payroll export failed. Please try again.',
+        ? translate('You are not signed in, or your session has expired.')
+        : translate('The payroll export failed. Please try again.'),
     )
   }
   const blob = await response.blob()

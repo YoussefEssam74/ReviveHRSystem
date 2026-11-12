@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Search, UserX } from 'lucide-react'
 import { Button } from '../../../components/ui/button'
 import { Badge } from '../../../components/ui/badge'
@@ -17,6 +18,7 @@ export interface InitiateSeparationDialogProps {
 
 /** T2 — open a Termination case for an employee (closed reason vocabulary). */
 export function InitiateSeparationDialog({ onClose }: InitiateSeparationDialogProps) {
+  const { t } = useTranslation()
   const initiate = useInitiateSeparation()
   const [search, setSearch] = useState('')
   const [selected, setSelected] = useState<EmployeeOption | null>(null)
@@ -48,15 +50,15 @@ export function InitiateSeparationDialog({ onClose }: InitiateSeparationDialogPr
     <Dialog
       open
       onClose={onClose}
-      title="New separation"
-      description="Open a termination case with the five-task exit checklist."
+      title={t('New separation')}
+      description={t('Open a termination case with the five-task exit checklist.')}
       footer={
         <>
           <Button variant="outline" onClick={onClose}>
-            Cancel
+            {t('Cancel')}
           </Button>
           <Button onClick={onSubmit} loading={initiate.isPending} disabled={!canSubmit}>
-            Open case
+            {t('Open case')}
           </Button>
         </>
       }
@@ -69,7 +71,7 @@ export function InitiateSeparationDialog({ onClose }: InitiateSeparationDialogPr
         )}
 
         <div>
-          <Label htmlFor="employee-search">Employee</Label>
+          <Label htmlFor="employee-search">{t('Employee')}</Label>
           {selected ? (
             <div className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 px-3 py-2">
               <div className="min-w-0">
@@ -79,28 +81,28 @@ export function InitiateSeparationDialog({ onClose }: InitiateSeparationDialogPr
                 </p>
               </div>
               <Button variant="ghost" size="sm" onClick={() => setSelected(null)}>
-                Change
+                {t('Change')}
               </Button>
             </div>
           ) : (
             <>
               <div className="relative">
                 <Search
-                  className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"
+                  className="pointer-events-none absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"
                   aria-hidden="true"
                 />
                 <Input
                   id="employee-search"
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  placeholder="Search by name, email or employee number…"
-                  className="pl-9"
+                  placeholder={t('Search by name, email or employee number…')}
+                  className="ps-9"
                 />
               </div>
               {search.trim().length >= 2 && (
                 <ul className="mt-2 max-h-48 divide-y divide-slate-100 overflow-y-auto rounded-lg border border-slate-200">
                   {(options.data?.items?.length ?? 0) === 0 ? (
-                    <li className="px-3 py-2 text-sm text-slate-500">No matching employees.</li>
+                    <li className="px-3 py-2 text-sm text-slate-500">{t('No matching employees.')}</li>
                   ) : (
                     options.data!.items.map((employee) => (
                       <li key={employee.id}>
@@ -110,7 +112,7 @@ export function InitiateSeparationDialog({ onClose }: InitiateSeparationDialogPr
                             setSelected(employee)
                             setSearch('')
                           }}
-                          className="flex w-full items-center gap-3 px-3 py-2 text-left transition-colors hover:bg-slate-50"
+                          className="flex w-full items-center gap-3 px-3 py-2 text-start transition-colors hover:bg-slate-50"
                         >
                           <UserX className="h-4 w-4 shrink-0 text-slate-400" aria-hidden="true" />
                           <span className="min-w-0">
@@ -130,36 +132,38 @@ export function InitiateSeparationDialog({ onClose }: InitiateSeparationDialogPr
         </div>
 
         <div>
-          <Label htmlFor="last-day">Last working day (required)</Label>
+          <Label htmlFor="last-day">{t('Last working day (required)')}</Label>
           <Input id="last-day" type="date" value={lastDay} onChange={(e) => setLastDay(e.target.value)} />
         </div>
 
         <div>
-          <Label htmlFor="reason">Reason</Label>
+          <Label htmlFor="reason">{t('Reason')}</Label>
           <Select id="reason" value={reason} onChange={(e) => setReason(e.target.value)}>
             {TERMINATION_REASONS.map((option) => (
               <option key={option} value={option}>
-                {option}
+                {t(option)}
               </option>
             ))}
           </Select>
         </div>
 
         <div>
-          <Label htmlFor="notes">Notes (optional)</Label>
+          <Label htmlFor="notes">{t('Notes (optional)')}</Label>
           <Textarea
             id="notes"
             rows={3}
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
-            placeholder="Anything the exit checklist owner should know…"
+            placeholder={t('Anything the exit checklist owner should know…')}
           />
         </div>
 
         {selected && (
           <div className="flex items-center gap-2">
             <Badge>{selected.name}</Badge>
-            <span className="text-xs text-slate-500">The employee's standing does not change until the case is completed.</span>
+            <span className="text-xs text-slate-500">
+              {t("The employee's standing does not change until the case is completed.")}
+            </span>
           </div>
         )}
       </div>

@@ -16,6 +16,10 @@ export interface EmployeeAttendanceItem {
   checkOut: string | null
   status: string
   notes: string | null
+  /** Approved cover/extra days for an unscheduled punch (1 or 2), null otherwise. */
+  coverDays: number | null
+  /** True when the day was worked without a scheduled shift (cover / extra shift). */
+  isCoverDay: boolean
 }
 
 export interface EmployeeAttendanceTotals {
@@ -29,6 +33,12 @@ export interface EmployeeAttendanceTotals {
   hours: number
   /** Scheduled hours summed over the same days (future days excluded). */
   expected: number
+  /** Total approved cover/extra days in the period (display-only). */
+  coverDays: number
+  /** Days with a recorded check-in — scheduled days plus cover/extra shifts. */
+  daysWorked: number
+  /** Days worked outside the schedule (cover / extra shifts actually attended). */
+  extraShiftDays: number
 }
 
 export interface EmployeeAttendanceResponse {
@@ -153,7 +163,7 @@ export interface EmployeeDeduction {
   description: string
   /** Money deductions only (day-based follow-ups leave it null). */
   amount: number | null
-  /** Human status: In review | Branch approved | Resolved | Applied | Rejected. */
+  /** Human status: Pending | Pending HR | In review | Branch approved | Resolved | Applied | Rejected. */
   status: string
   detail: string | null
   correctionRequestId: number | null

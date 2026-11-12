@@ -488,10 +488,15 @@ namespace ReviveHRSystem.IntegrationTests
             Assert.Equal(HttpStatusCode.BadRequest, (await _fixture.Client.SendAsync(missingReason)).StatusCode);
         }
 
+        /// <summary>
+        /// Closing settles the branch sheet but never decides the money: a pending
+        /// deduction line stays out of the totals and publishing waits for HR's call
+        /// on every one of them.
+        /// </summary>
         [Fact]
-        public async Task CloseEntry_WithPendingLines_Returns400()
+        public async Task CloseEntry_WithPendingLines_SettlesAndKeepsDeductionsForHrReview()
         {
-            var (_, employee, periodId, entryId) = await SetupSheetAsync();
+            var (gym, employee, periodId, entryId) = await SetupSheetAsync();
             var builder = NewBuilder();
             await builder.AddPayrollLineAsync(entryId, 50m, status: "Pending");
             var admin = await _fixture.GetAdminTokenAsync();
@@ -499,8 +504,35 @@ namespace ReviveHRSystem.IntegrationTests
             var request = _fixture.AuthorizedRequest(HttpMethod.Post,
                 $"/api/payroll-periods/{periodId}/entries/{employee.EmployeeId}/close", null, admin);
             var response = await _fixture.Client.SendAsync(request);
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
-            Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+            var closed = (await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("data");
+            Assert.Equal("Reviewed", closed.GetProperty("status").GetString());
+            Assert.True(closed.GetProperty("reviewed").GetBoolean());
+            // Pending money is HR's call: closing keeps it out of the totals.
+            Assert.Equal(0m, closed.GetProperty("deductions").GetDecimal());
+            Assert.Equal(17600m, closed.GetProperty("net").GetDecimal());
+
+            // Publishing waits for HR's decision on every pending deduction line.
+            var publish = _fixture.AuthorizedRequest(HttpMethod.Post,
+                $"/api/payroll-periods/{periodId}/approve", new { gym = gym.Name }, admin);
+            Assert.Equal(HttpStatusCode.BadRequest, (await _fixture.Client.SendAsync(publish)).StatusCode);
+
+            // HR reviews the line, and the sheet publishes right after.
+            using var scope = _fixture.Services.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<ReviveHrDbContext>();
+            var lineId = await db.PayrollEntryLineItems
+                .Where(l => l.PayrollEntryId == entryId && l.Status == "Pending")
+                .Select(l => l.Id)
+                .SingleAsync();
+
+            var review = _fixture.AuthorizedRequest(HttpMethod.Post,
+                $"/api/deduction-candidates/{lineId}/review", new { decision = "Accepted" }, admin);
+            Assert.Equal(HttpStatusCode.OK, (await _fixture.Client.SendAsync(review)).StatusCode);
+
+            var publishAgain = _fixture.AuthorizedRequest(HttpMethod.Post,
+                $"/api/payroll-periods/{periodId}/approve", new { gym = gym.Name }, admin);
+            Assert.Equal(HttpStatusCode.OK, (await _fixture.Client.SendAsync(publishAgain)).StatusCode);
         }
 
         [Fact]
@@ -536,20 +568,22 @@ namespace ReviveHRSystem.IntegrationTests
 
         /// <summary>
         /// Month-end: the auto-priced attendance candidates (a quarter day per late
-        /// arrival, a full day per unapproved absence) finalize into real deduction
-        /// lines, the totals move, and the candidates freeze as Applied.
+        /// arrival, one day per unapproved absence at base ÷ 30) materialize as real
+        /// deduction lines, the totals stay pending until HR decides, and the
+        /// candidates follow the review.
         /// </summary>
         [Fact]
         public async Task CloseEntry_AppliesPricedAttendanceDeductions()
         {
-            var (gym, employee, periodId, entryId) = await SetupSheetAsync();
+            var previousMonth = new DateOnly(DateTime.Today.Year, DateTime.Today.Month, 1).AddMonths(-1);
+            var (gym, employee, periodId, entryId) = await SetupSheetAsync(periodStart: previousMonth);
             var builder = NewBuilder();
             await builder.CreateAttendanceRecordAsync(
-                employee.EmployeeId, gym.GymId, new DateOnly(2031, 8, 10),
-                checkInUtc: new DateTime(2031, 8, 10, 7, 30, 0, DateTimeKind.Utc),
+                employee.EmployeeId, gym.GymId, previousMonth.AddDays(9),
+                checkInUtc: new DateTime(previousMonth.Year, previousMonth.Month, 9, 7, 30, 0, DateTimeKind.Utc),
                 status: AttendanceStatus.Late);
             await builder.CreateAttendanceRecordAsync(
-                employee.EmployeeId, gym.GymId, new DateOnly(2031, 8, 17),
+                employee.EmployeeId, gym.GymId, previousMonth.AddDays(16),
                 status: AttendanceStatus.Absent);
             var admin = await _fixture.GetAdminTokenAsync();
 
@@ -558,27 +592,47 @@ namespace ReviveHRSystem.IntegrationTests
             var closeResponse = await _fixture.Client.SendAsync(closeRequest);
             Assert.Equal(HttpStatusCode.OK, closeResponse.StatusCode);
 
-            // Aug 2031 = 31 days → scheduled 31 × 6 ÷ 7 = 26 → daily 676.92;
-            // late = quarter day 169.23, an unapproved absence = three days.
+            // daily = 17600 ÷ 30 = 586.67; a late arrival is a quarter day (146.67)
+            // and an unapproved absence one day (586.67).
             var closed = (await closeResponse.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("data");
-            Assert.Equal(2199.99m, closed.GetProperty("deductions").GetDecimal());
-            Assert.Equal(15400.01m, closed.GetProperty("net").GetDecimal());
+            Assert.Equal(0m, closed.GetProperty("deductions").GetDecimal());
+            Assert.Equal(17600m, closed.GetProperty("net").GetDecimal());
 
             using var scope = _fixture.Services.CreateScope();
             var db = scope.ServiceProvider.GetRequiredService<ReviveHrDbContext>();
             var lines = await db.PayrollEntryLineItems
-                .Where(l => l.PayrollEntryId == entryId && l.Type == "Deduction" && l.Status == "Accepted")
+                .Where(l => l.PayrollEntryId == entryId && l.Type == "Deduction")
                 .ToListAsync();
             Assert.Equal(2, lines.Count);
-            Assert.Contains(lines, l => l.Amount == 169.23m);
-            Assert.Contains(lines, l => l.Amount == 2030.76m);
+            Assert.Contains(lines, l => l.Amount == 146.67m && l.Status == "Pending");
+            Assert.Contains(lines, l => l.Amount == 586.67m && l.Status == "Pending");
             Assert.All(lines, l => Assert.NotNull(l.AttendanceRecordId));
 
             var candidates = await db.DeductionCandidates
                 .Where(c => c.EmployeeId == employee.EmployeeId)
                 .ToListAsync();
             Assert.Equal(2, candidates.Count);
-            Assert.All(candidates, c => Assert.Equal(DeductionStatus.Approved, c.Status));
+            Assert.All(candidates, c => Assert.Equal(DeductionStatus.Pending, c.Status));
+
+            // HR accepts both: the totals move and the candidates freeze as Approved.
+            foreach (var line in lines)
+            {
+                var review = _fixture.AuthorizedRequest(HttpMethod.Post,
+                    $"/api/deduction-candidates/{line.Id}/review", new { decision = "Accepted" }, admin);
+                Assert.Equal(HttpStatusCode.OK, (await _fixture.Client.SendAsync(review)).StatusCode);
+            }
+
+            var detail = await GetJsonAsync($"/api/payroll-periods/{periodId}", admin);
+            var item = detail.GetProperty("data").GetProperty("items").EnumerateArray()
+                .Single(i => i.GetProperty("employeeId").GetInt32() == employee.EmployeeId);
+            Assert.Equal(733.34m, item.GetProperty("deductions").GetDecimal());
+            Assert.Equal(16866.66m, item.GetProperty("net").GetDecimal());
+
+            var afterReview = await db.DeductionCandidates
+                .AsNoTracking()
+                .Where(c => c.EmployeeId == employee.EmployeeId)
+                .ToListAsync();
+            Assert.All(afterReview, c => Assert.Equal(DeductionStatus.Approved, c.Status));
         }
 
         [Fact]
@@ -837,11 +891,12 @@ namespace ReviveHRSystem.IntegrationTests
         [Fact]
         public async Task ReviewDeduction_AfterClose_RepricesTheSourceCandidate()
         {
-            var (gym, employee, periodId, entryId) = await SetupSheetAsync();
+            var previousMonth = new DateOnly(DateTime.Today.Year, DateTime.Today.Month, 1).AddMonths(-1);
+            var (gym, employee, periodId, entryId) = await SetupSheetAsync(periodStart: previousMonth);
             var builder = NewBuilder();
             var recordId = await builder.CreateAttendanceRecordAsync(
-                employee.EmployeeId, gym.GymId, new DateOnly(2031, 8, 10),
-                checkInUtc: new DateTime(2031, 8, 10, 7, 30, 0, DateTimeKind.Utc),
+                employee.EmployeeId, gym.GymId, previousMonth.AddDays(9),
+                checkInUtc: new DateTime(previousMonth.Year, previousMonth.Month, 9, 7, 30, 0, DateTimeKind.Utc),
                 status: AttendanceStatus.Late);
             var admin = await _fixture.GetAdminTokenAsync();
 

@@ -7,6 +7,7 @@ public sealed class DeductionCandidateDto
     public int EmployeeId { get; init; }
     public string Employee { get; init; } = string.Empty;
     public decimal Amount { get; init; }
+    public decimal DeductionDays { get; init; }
     public string Reason { get; init; } = string.Empty;
     public string? Note { get; init; }
     public string Status { get; init; } = string.Empty;
@@ -19,6 +20,10 @@ public sealed class DeductionCandidateDto
 public sealed class CreateDeductionCandidateDto
 {
     public int EmployeeId { get; init; }
+
+    /// <summary>The day the deduction punishes (defaults to today when omitted).</summary>
+    public DateOnly? Date { get; init; }
+
     public decimal Amount { get; init; }
     public string Reason { get; init; } = string.Empty;
     public string? Note { get; init; }
@@ -30,7 +35,7 @@ public sealed class CreateDeductionCandidateDto
 /// Optional revised amount — applied with the decision (approve/edit). Required for
 /// <c>edit</c>; must be positive.
 /// </param>
-public sealed record BranchDeductionReviewRequest(string Decision, decimal? Amount = null);
+public sealed record BranchDeductionReviewRequest(string Decision, decimal? Amount = null, decimal? Days = null);
 
 /// <summary>A warning notice awaiting HR filing (mock §20 Issue Warning Notice).</summary>
 public sealed class WarningNoticeDto

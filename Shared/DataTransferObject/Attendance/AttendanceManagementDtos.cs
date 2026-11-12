@@ -51,6 +51,12 @@ namespace Shared.DataTransferObject.Attendance
         public string? Notes { get; init; }
         public string? CorrectedBy { get; init; }
         public string? CorrectedAt { get; init; }
+
+        /// <summary>Approved cover/extra days for an unscheduled punch (1 or 2), else null.</summary>
+        public int? CoverDays { get; init; }
+
+        /// <summary>True when the day was worked without a scheduled shift (cover / extra shift).</summary>
+        public bool IsCoverDay { get; init; }
     }
 
     /// <summary>Paged envelope for GET /api/attendance (A1).</summary>
@@ -115,6 +121,12 @@ namespace Shared.DataTransferObject.Attendance
         public string? CheckOut { get; init; }
         public required string Status { get; init; }
         public string? Notes { get; init; }
+
+        /// <summary>Approved cover/extra days for an unscheduled punch (1 or 2), else null.</summary>
+        public int? CoverDays { get; init; }
+
+        /// <summary>True when the day was worked without a scheduled shift (cover / extra shift).</summary>
+        public bool IsCoverDay { get; init; }
     }
 
     /// <summary>
@@ -133,6 +145,15 @@ namespace Shared.DataTransferObject.Attendance
         public int Off { get; init; }
         public decimal Hours { get; init; }
         public decimal Expected { get; init; }
+
+        /// <summary>Total approved cover/extra days in the period (display-only).</summary>
+        public int CoverDays { get; init; }
+
+        /// <summary>Days with a recorded check-in — scheduled days plus cover/extra shifts.</summary>
+        public int DaysWorked { get; init; }
+
+        /// <summary>Days worked outside the schedule (cover / extra shifts actually attended).</summary>
+        public int ExtraShiftDays { get; init; }
     }
 
     /// <summary>Response for GET /api/employees/{id}/attendance (A7).</summary>

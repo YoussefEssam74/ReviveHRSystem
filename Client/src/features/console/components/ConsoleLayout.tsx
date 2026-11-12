@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { LogOut, Menu, X } from 'lucide-react'
 import { useAuthSession } from '../../../contexts/AuthSessionContext'
 import { useMe } from '../../../contexts/MeContext'
@@ -18,22 +19,24 @@ function navLinkClass(isActive: boolean) {
 }
 
 function NavItemLink({ item, onNavigate }: { item: NavItem; onNavigate?: () => void }) {
+  const { t } = useTranslation()
   const Icon = item.icon
   return (
     <NavLink to={item.to} end={item.to === '/dashboard'} className={({ isActive }) => navLinkClass(isActive)} onClick={onNavigate}>
       <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
-      <span className="truncate">{item.label}</span>
+      <span className="truncate">{t(item.label)}</span>
     </NavLink>
   )
 }
 
 function NavSection({ title, items, onNavigate }: { title?: string; items: NavItem[]; onNavigate?: () => void }) {
+  const { t } = useTranslation()
   const { can } = useMe()
   const visible = items.filter((item) => !item.feature || can(item.feature))
   if (visible.length === 0) return null
   return (
     <div className="space-y-1">
-      {title && <p className="px-3 pb-1 pt-4 text-xs font-semibold uppercase tracking-wide text-slate-400">{title}</p>}
+      {title && <p className="px-3 pb-1 pt-4 text-xs font-semibold uppercase tracking-wide text-slate-400">{t(title)}</p>}
       {visible.map((item) => (
         <NavItemLink key={item.to} item={item} onNavigate={onNavigate} />
       ))}
@@ -42,6 +45,7 @@ function NavSection({ title, items, onNavigate }: { title?: string; items: NavIt
 }
 
 function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
+  const { t } = useTranslation()
   const { me } = useMe()
   const { signOut } = useAuthSession()
   const navigate = useNavigate()
@@ -53,7 +57,7 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
         <span className="text-lg font-bold tracking-tight text-slate-900">Revive HR</span>
       </div>
 
-      <nav aria-label="Main" className="flex-1 overflow-y-auto px-3 pb-4">
+      <nav aria-label={t('Main')} className="flex-1 overflow-y-auto px-3 pb-4">
         <NavSection items={MAIN_NAV} onNavigate={onNavigate} />
         <NavSection title="Administration" items={ADMIN_NAV} onNavigate={onNavigate} />
       </nav>
@@ -62,7 +66,7 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
         <div className="flex items-center gap-2.5 px-2 py-1.5">
           <Avatar name={initialsOf(me?.userName)} size="sm" />
           <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-semibold text-slate-900">{me?.userName ?? 'Signed in'}</p>
+            <p className="truncate text-sm font-semibold text-slate-900">{me?.userName ?? t('Signed in')}</p>
             <p className="truncate text-xs text-slate-500">{me?.roleInActiveGym ?? me?.userType ?? ''}</p>
           </div>
         </div>
@@ -75,7 +79,7 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
           className="mt-1 flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900"
         >
           <LogOut className="h-4 w-4" aria-hidden="true" />
-          Sign out
+          {t('Sign out')}
         </button>
       </div>
     </div>
@@ -84,6 +88,7 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
 
 /** The HR console shell: fixed sidebar (desktop) / drawer (mobile) + header. */
 export function ConsoleLayout() {
+  const { t } = useTranslation()
   const { me } = useMe()
   const location = useLocation()
   const [mobileOpen, setMobileOpen] = useState(false)
@@ -99,7 +104,7 @@ export function ConsoleLayout() {
   return (
     <div className="hr-portal min-h-screen bg-charcoal-50">
       {/* Desktop sidebar */}
-      <aside className="fixed inset-y-0 left-0 z-20 hidden w-64 border-r border-slate-200 bg-white lg:block">
+      <aside className="fixed inset-y-0 start-0 z-20 hidden w-64 border-e border-slate-200 bg-white lg:block">
         <SidebarContent />
       </aside>
 
@@ -107,12 +112,12 @@ export function ConsoleLayout() {
       {mobileOpen && (
         <div className="fixed inset-0 z-40 lg:hidden">
           <div className="absolute inset-0 bg-slate-900/40" onClick={() => setMobileOpen(false)} aria-hidden="true" />
-          <aside className="absolute inset-y-0 left-0 w-72 bg-white shadow-xl">
+          <aside className="absolute inset-y-0 start-0 flex w-72 max-w-[85vw] flex-col bg-white shadow-xl">
             <button
               type="button"
               onClick={() => setMobileOpen(false)}
-              aria-label="Close menu"
-              className="absolute right-3 top-4 rounded-lg p-1.5 text-slate-400 hover:bg-slate-100"
+              aria-label={t('Close menu')}
+              className="touch-target absolute end-2 top-2 rounded-lg p-1.5 text-slate-400 hover:bg-slate-100"
             >
               <X className="h-5 w-5" aria-hidden="true" />
             </button>
@@ -122,14 +127,14 @@ export function ConsoleLayout() {
       )}
 
       {/* Content + header */}
-      <div className="lg:pl-64">
+      <div className="lg:ps-64">
         <header className="sticky top-0 z-10 border-b border-slate-200 bg-white/90 backdrop-blur">
           <div className="flex h-16 items-center justify-between gap-3 px-4 sm:px-6">
             <button
               type="button"
               onClick={() => setMobileOpen(true)}
-              aria-label="Open menu"
-              className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 lg:hidden"
+              aria-label={t('Open menu')}
+              className="touch-target rounded-lg p-2 text-slate-500 hover:bg-slate-100 lg:hidden"
             >
               <Menu className="h-5 w-5" aria-hidden="true" />
             </button>
@@ -143,7 +148,7 @@ export function ConsoleLayout() {
                   <GymSwitcher />
                 </div>
                 <NotificationsBell />
-                <span className="ml-1 hidden items-center gap-2 sm:flex">
+                <span className="ms-1 hidden items-center gap-2 sm:flex">
                   <Avatar name={initialsOf(me?.userName)} size="sm" />
                 </span>
               </div>

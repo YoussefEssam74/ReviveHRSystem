@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Lock, ScrollText } from 'lucide-react'
 import { PageHeader } from '../../../components/ui/page-header'
 import { Card } from '../../../components/ui/card'
@@ -41,6 +42,7 @@ function actionStatus(action: string): string {
 
 /** Audit log (S5.9) — paged, filterable, read-only; gated on audit.view. */
 export default function AuditPage() {
+  const { t } = useTranslation()
   const { can, isLoading: meLoading } = useMe()
   // The gate is UX-only: the API still enforces audit.view server-side.
   const canView = can('audit', VIEW)
@@ -98,18 +100,18 @@ export default function AuditPage() {
 
   return (
     <>
-      <PageHeader title="Audit Log" description="Read-only trail of activity across your gyms" />
+      <PageHeader title={t('Audit Log')} description={t('Read-only trail of activity across your gyms')} />
 
       {meLoading ? (
         <Card>
-          <LoadingState label="Checking your access…" />
+          <LoadingState label={t('Checking your access…')} />
         </Card>
       ) : !canView ? (
         <Card>
           <EmptyState
             icon={Lock}
-            title="You don't have access to the audit log"
-            message="Ask your administrator to grant the audit feature for this gym."
+            title={t("You don't have access to the audit log")}
+            message={t('Ask your administrator to grant the audit feature for this gym.')}
           />
         </Card>
       ) : (
@@ -118,25 +120,25 @@ export default function AuditPage() {
           <div className="border-b border-slate-100 p-4">
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
               <div>
-                <Label htmlFor="audit-action">Action</Label>
+                <Label htmlFor="audit-action">{t('Action')}</Label>
                 <Select id="audit-action" value={action} onChange={(e) => onAction(e.target.value)}>
                   {ACTION_OPTIONS.map((option) => (
                     <option key={option} value={option}>
-                      {option || 'All actions'}
+                      {option ? t(option) : t('All actions')}
                     </option>
                   ))}
                 </Select>
               </div>
 
               <div>
-                <Label htmlFor="audit-gym">Gym</Label>
+                <Label htmlFor="audit-gym">{t('Gym')}</Label>
                 <Select
                   id="audit-gym"
                   value={gym}
                   onChange={(e) => onGym(e.target.value)}
                   disabled={gyms.isLoading || (gyms.data?.length ?? 0) === 0}
                 >
-                  <option value="">All gyms</option>
+                  <option value="">{t('All gyms')}</option>
                   {(gyms.data ?? []).map((option) => (
                     <option key={option.id} value={option.id}>
                       {option.name}
@@ -146,14 +148,14 @@ export default function AuditPage() {
               </div>
 
               <div>
-                <Label htmlFor="audit-user">User</Label>
+                <Label htmlFor="audit-user">{t('User')}</Label>
                 <Select
                   id="audit-user"
                   value={actor}
                   onChange={(e) => onActor(e.target.value)}
                   disabled={!actors.data || actors.data.items.length === 0}
                 >
-                  <option value="">All users</option>
+                  <option value="">{t('All users')}</option>
                   {(actors.data?.items ?? []).map((option) => (
                     <option key={option.id} value={option.id}>
                       {option.name}
@@ -164,11 +166,11 @@ export default function AuditPage() {
 
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <Label htmlFor="audit-from">From</Label>
+                  <Label htmlFor="audit-from">{t('From')}</Label>
                   <Input id="audit-from" type="date" value={from} onChange={(e) => onFrom(e.target.value)} />
                 </div>
                 <div>
-                  <Label htmlFor="audit-to">To</Label>
+                  <Label htmlFor="audit-to">{t('To')}</Label>
                   <Input id="audit-to" type="date" value={to} onChange={(e) => onTo(e.target.value)} />
                 </div>
               </div>
@@ -176,20 +178,20 @@ export default function AuditPage() {
 
             <div className="mt-3 flex justify-end">
               <Button variant="ghost" size="sm" onClick={clearFilters}>
-                Clear filters
+                {t('Clear filters')}
               </Button>
             </div>
           </div>
 
           {isLoading ? (
-            <LoadingState label="Loading audit log…" />
+            <LoadingState label={t('Loading audit log…')} />
           ) : error ? (
             <ErrorState message={describeApiError(error)} />
           ) : (data?.items?.length ?? 0) === 0 ? (
             <EmptyState
               icon={ScrollText}
-              title="No audit entries"
-              message="No activity matches the current filters."
+              title={t('No audit entries')}
+              message={t('No activity matches the current filters.')}
             />
           ) : (
             <>
@@ -197,12 +199,12 @@ export default function AuditPage() {
               <div className="hidden md:block">
                 <Table>
                   <THead>
-                    <TH>Timestamp</TH>
-                    <TH>Actor</TH>
-                    <TH>Action</TH>
-                    <TH>Target</TH>
-                    <TH>Gym</TH>
-                    <TH>Details</TH>
+                    <TH>{t('Timestamp')}</TH>
+                    <TH>{t('Actor')}</TH>
+                    <TH>{t('Action')}</TH>
+                    <TH>{t('Target')}</TH>
+                    <TH>{t('Gym')}</TH>
+                    <TH>{t('Details')}</TH>
                   </THead>
                   <TBody>
                     {data!.items.map((row: AuditLogItem) => (

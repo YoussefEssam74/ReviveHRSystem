@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { Check } from 'lucide-react'
 import { Badge } from '../../../components/ui/badge'
 import { Button } from '../../../components/ui/button'
@@ -23,6 +24,7 @@ export interface NotificationRowProps {
 
 /** One inbox row — unread rows are emphasized with a dot + heavier title. */
 export function NotificationRow({ item, isMarking, onMarkRead }: NotificationRowProps) {
+  const { t } = useTranslation()
   return (
     <li className="flex flex-col gap-3 p-4 sm:flex-row sm:items-start sm:justify-between">
       <div className="flex min-w-0 gap-3">
@@ -42,7 +44,7 @@ export function NotificationRow({ item, isMarking, onMarkRead }: NotificationRow
             <span>{formatDateTime(item.date)}</span>
             {item.link?.startsWith('/') ? (
               <Link to={item.link} className="font-medium text-emerald-600 hover:text-emerald-700">
-                Open →
+                {t('Open →')}
               </Link>
             ) : (
               item.link && <span>{item.link}</span>
@@ -60,7 +62,7 @@ export function NotificationRow({ item, isMarking, onMarkRead }: NotificationRow
           onClick={() => onMarkRead(item.id)}
         >
           <Check className="h-3.5 w-3.5" aria-hidden="true" />
-          Mark read
+          {t('Mark read')}
         </Button>
       )}
     </li>

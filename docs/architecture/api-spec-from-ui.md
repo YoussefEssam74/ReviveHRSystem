@@ -60,7 +60,7 @@ Auth model per endpoint type (current):
 | Station login (`POST /api/kiosk/login`) | **Public** — 6-digit code only, rate-limited |
 | Attendance events / manual | **Public** — 6-digit `code` in the request body, rate-limited |
 | Roster / today feed (planned) | **Public** — 6-digit `code` in the request body (not yet implemented) |
-| Biometric AI service (`Station.biometricUrl`) | **None sent by UI** (separate dedicated service; network-restricted) |
+| Face-ID scan / enroll (`POST /api/attendance/face-scan`, `POST /api/employees/face/enroll`) | **Station token** for scans · **User-JWT** for HR enrollment (in-process ONNX pipeline) |
 | HR side: station-code rotation / read | **User-JWT**, gym-scoped (`/api/gyms/{gymId}/station-codes`) |
 
 ---
@@ -259,42 +259,29 @@ No separate search endpoint is called: datalist is populated from the full branc
 
 ---
 
-### 6. Enroll Face Modal
+### 6. Enroll Face Modal — **now in the backend**
 
-Calls the **separate Biometric AI service** (`Station.biometricUrl`, configurable — default `https://revive-hr-biometrics.onrender.com`; **not** the `/api` backend, **no user JWT**, no device token sent):
+> **Superseded:** the standalone Python biometric service (`biometric_test/`) was removed. Face detection, liveness and recognition run in-process in the .NET API (`Infrastructure/Biometrics`, ONNX Runtime), and the real client (`Client/src` → `/enrollment`) calls the endpoints below. The mock's `{biometricUrl}/*` calls (`/enroll_frame`, `/enroll`, `/employees`, `/status`, `/ping`, `/process_frame`, `/video_feed`) are kept in the mock for design reference only; nothing serves them anymore.
 
-#### 6.1 `POST {biometricUrl}/enroll_frame` — service API (not in api.md)
-- **Auth:** none sent (dedicated service).
-- **Called by:** `submitFaceEnrollment()` when a browser frame was captured.
-- **Body:** `{ "image": "data:image/jpeg;base64,…", "name": "Karim Hassan", "employee_code": "EMP-1042" }`
-  - `name` ← `#enroll-emp-name` (required, else toast); `employee_code` ← `#enroll-emp-id` (uppercased)
-- **Response:** `{ "success": true, "message": "…" }` — `message` → toast; on `success:false` → error toast.
+#### 6.1 `POST /api/employees/face/enroll` — **EXISTING**
+- **Auth:** HR user JWT.
+- **Called by:** the enrollment page and the create-employee dialog (`useDashboardFaceEnroll`).
+- **Body:** `{ "employeeNumber": "EMP-1042", "image": "data:image/jpeg;base64,…" }`.
+- **Response:** `{ employeeId, employeeNumber, fullName, enrolledAt }`.
 
-#### 6.2 `POST {biometricUrl}/enroll?name=…&employee_code=…` — service API
-Fallback (query-string variant) when no frame captured; same `{success, message}` response.
-
-#### 6.3 `GET {biometricUrl}/employees` — service API
-- **Called by:** `loadEnrolledEmployees()` (modal open, after enroll/delete, on init).
-- **Response:** array of `{ "id", "employee_code", "name", "enrolled_at", "thumb" }` — all rendered in `#enrolled-faces-list` (`name`, `employee_code||id`, `enrolled_at`, `thumb` image) and counts `enroll-list-count` ("N registered") + `enrolled-count-pill` ("N Enrolled"). Merged with `localStorage.revive_enrolled_faces_web`, deduped by `id`.
-
-#### 6.4 `DELETE {biometricUrl}/employees/{id}` — service API
-- **Called by:** `deleteEnrolledEmployee(id)` (trash button per row).
-- **Response:** `{ "success": true, "message": "…" }`.
+#### 6.2 `DELETE /api/employees/face/{employeeReference}` — **EXISTING**
+- **Auth:** HR user JWT. Removes the stored embedding (204).
 
 ---
 
-### 7. Cloud API Config Modal + Biometric Viewfinder (service APIs)
-
-Same dedicated Biometric AI service, **no user JWT**:
+### 7. Biometric Viewfinder — **now in the backend**
 
 | # | Method + path | Called by | Request | Response fields rendered |
 |---|---|---|---|---|
-| 7.1 | `GET {biometricUrl}/ping` — service API | `testAndSaveApiUrl()` ("Connect" `btn-test-api`) | none | `{ "device", "enrolled_count" }` → "Device: … · Registered: N" |
-| 7.2 | `GET {biometricUrl}/status` — service API | `checkBiometricConnection()` (every 5 s) | none | `{ "fps", "total_enrolled", "device" }` → status pill "Face-ID · Online (…)", `enrolled-count-pill` |
-| 7.3 | `POST {biometricUrl}/process_frame` — service API | `sendClientFrame()` (every 320 ms) | `{ "image": "<base64 jpeg>" }` | `{ "face_detected", "is_live", "is_match", "recognized_id", "recognized_name", "liveness_score", "similarity", "total_enrolled", "bbox" }` → HUD (MATCHED / SPOOF BLOCKED / UNKNOWN / VERIFYING), dwell & latch logic feeding scan 2.1 |
-| 7.4 | `GET {biometricUrl}/video_feed` — service API | fallback MJPEG `<img src>` when browser webcam unavailable | none | multipart stream |
+| 7.1 | `POST /api/attendance/face-scan` — **EXISTING** | kiosk scanner (`useKioskScanner`, ~every 320 ms) | `{ "type": "AUTO", "image": "<base64 data URL>", "timestamp": "…", "confirmCheckout": false }` | `{ outcome, livenessScore, similarity, … }` — `outcome` drives the HUD (`no_face` / `low_liveness` / `unrecognized` / `already_complete` / `rejected` / `recorded` / `pending_checkout`) |
+| 7.2 | `GET /api/attendance/station-summary` — **EXISTING** | kiosk status pill (every 5 s) | none (station token) | present/expected counters that replace the old `/status` `total_enrolled` |
 
-*(7.1–7.4 are outside the Revive `/api` backend and outside `api.md`; listed for completeness because the UI calls them.)*
+Face-ID liveness and match thresholds are configured under the `Biometrics` section (`MatchThreshold`, `LivenessThreshold`, `ScanLivenessThreshold`), not per-URL.
 
 ---
 
@@ -315,7 +302,7 @@ Same dedicated Biometric AI service, **no user JWT**:
 | 3 | `POST /api/attendance/manual` | **EXISTING** ✅ (UI omits `reason` & `gymId`; adds `employeeName`,`type`,`method`,`time`) | Device-token | Manual Fallback — "Record" |
 | 4 | `GET /api/attendance/roster` | **NEW** ✱ | Device-token | Datalist lookup, feed roster, enroll dropdown, expected count, shift display |
 | 5 | `GET /api/attendance?date=` | **EXISTING** ✅ (gym+date filters) | Device-token | Attendance feed + counters hydration |
-| 6 | `{biometricUrl}/enroll_frame`, `/enroll`, `/employees` (GET/DELETE), `/status`, `/ping`, `/process_frame`, `/video_feed` | Service APIs (outside `/api`, outside api.md) | None sent | Enroll modal, API config modal, viewfinder |
+| 6 | `POST /api/employees/face/enroll`, `DELETE /api/employees/face/{employeeReference}`, `POST /api/attendance/face-scan` | **EXISTING** ✅ (in-process ONNX pipeline; the old `{biometricUrl}/*` service APIs were removed) | User JWT (enroll/delete) · Station token (scan) | Enroll modal, viewfinder |
 
 ### Key discrepancies to resolve
 

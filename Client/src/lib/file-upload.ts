@@ -3,6 +3,8 @@
  * validating before the request gives the employee an immediate, named reason
  * instead of a generic failure after a slow upload.
  */
+import { translate as t } from '../i18n'
+
 export const MAX_UPLOAD_BYTES = 10 * 1024 * 1024
 
 export const DOCUMENT_EXTENSIONS = ['.pdf', '.png', '.jpg', '.jpeg', '.webp', '.doc', '.docx'] as const
@@ -28,16 +30,16 @@ export function validateUploadFile(
     maxBytes = MAX_UPLOAD_BYTES,
   }: UploadValidationOptions = {},
 ): string | null {
-  if (file.size === 0) return 'That file is empty. Choose another file.'
+  if (file.size === 0) return t('That file is empty. Choose another file.')
 
   const dot = file.name.lastIndexOf('.')
   const extension = dot >= 0 ? file.name.slice(dot).toLowerCase() : ''
   if (!extension || !allowedExtensions.includes(extension)) {
-    return `Choose a ${formatsLabel} file.`
+    return t('Choose a {{formats}} file.', { formats: formatsLabel })
   }
 
   if (file.size > maxBytes) {
-    return `That file is too large. The maximum is ${Math.round(maxBytes / (1024 * 1024))} MB.`
+    return t('That file is too large. The maximum is {{size}} MB.', { size: Math.round(maxBytes / (1024 * 1024)) })
   }
 
   return null

@@ -102,6 +102,10 @@ export interface CreateTeamFollowUpInput {
   severity: string | null
   description: string
   note: string | null
+  /** DateOnly "yyyy-MM-dd" — the day a Deduction punishes (defaults to today). */
+  date?: string | null
+  /** Quarter Day | Half Day | Day | 3 Days — prices the Deduction candidate. */
+  deductionSize?: string | null
 }
 
 export interface UpdateTeamFollowUpInput {

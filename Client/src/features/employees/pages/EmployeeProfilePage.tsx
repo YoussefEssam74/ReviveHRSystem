@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { ArrowLeft, Mail, Phone, Building2, CalendarDays, ShieldCheck } from 'lucide-react'
 import { PageHeader } from '../../../components/ui/page-header'
 import { Card, CardContent, CardHeader, CardTitle } from '../../../components/ui/card'
@@ -35,6 +36,7 @@ export default function EmployeeProfilePage() {
   const { id } = useParams()
   const employeeId = Number(id)
   const navigate = useNavigate()
+  const { t } = useTranslation()
   const { can } = useMe()
   const { data: employee, isLoading, error } = useEmployee(employeeId)
   const statusChange = useStatusChange(employeeId)
@@ -43,9 +45,9 @@ export default function EmployeeProfilePage() {
   const [note, setNote] = useState('')
   const [actionError, setActionError] = useState<string | null>(null)
 
-  if (isLoading) return <LoadingState label="Loading profile…" />
+  if (isLoading) return <LoadingState label={t('Loading profile…')} />
   if (error) return <ErrorState message={describeApiError(error)} onRetry={() => navigate(0)} />
-  if (!employee) return <ErrorState message="Employee not found." />
+  if (!employee) return <ErrorState message={t('Employee not found.')} />
 
   const canEdit = can('employees', 2)
 
@@ -72,8 +74,8 @@ export default function EmployeeProfilePage() {
         to="/console/employees"
         className="mb-4 inline-flex items-center gap-1.5 text-sm font-medium text-slate-500 hover:text-slate-900"
       >
-        <ArrowLeft className="h-4 w-4" aria-hidden="true" />
-        Back to employees
+        <ArrowLeft className="h-4 w-4 rtl:rotate-180" aria-hidden="true" />
+        {t('Back to employees')}
       </Link>
 
       <PageHeader
@@ -82,7 +84,7 @@ export default function EmployeeProfilePage() {
         actions={
           canEdit ? (
             <Button variant="outline" onClick={openDialog}>
-              Change status
+              {t('Change status')}
             </Button>
           ) : undefined
         }
@@ -109,32 +111,32 @@ export default function EmployeeProfilePage() {
         <div className="space-y-6 lg:col-span-2">
           <Card>
             <CardHeader>
-              <CardTitle>Details</CardTitle>
+              <CardTitle>{t('Details')}</CardTitle>
             </CardHeader>
             <CardContent className="grid gap-4 sm:grid-cols-2">
-              <Detail icon={Mail} label="Email" value={employee.email ?? '—'} />
-              <Detail icon={Phone} label="Phone" value={employee.phone ?? '—'} />
-              <Detail icon={Building2} label="Gym" value={employee.gym} />
-              <Detail icon={CalendarDays} label="Hire date" value={formatDate(employee.hireDate)} />
+              <Detail icon={Mail} label={t('Email')} value={employee.email ?? '—'} />
+              <Detail icon={Phone} label={t('Phone')} value={employee.phone ?? '—'} />
+              <Detail icon={Building2} label={t('Gym')} value={employee.gym} />
+              <Detail icon={CalendarDays} label={t('Hire date')} value={formatDate(employee.hireDate)} />
             </CardContent>
           </Card>
 
           <Card>
             <CardHeader>
-              <CardTitle>Compensation &amp; access</CardTitle>
+              <CardTitle>{t('Compensation & access')}</CardTitle>
             </CardHeader>
             <CardContent className="grid gap-4 sm:grid-cols-2">
               <div>
-                <p className="text-xs font-medium uppercase tracking-wide text-slate-400">Salary</p>
+                <p className="text-xs font-medium uppercase tracking-wide text-slate-400">{t('Salary')}</p>
                 <p className="text-lg font-bold text-slate-900">{formatMoney(employee.salary)}</p>
               </div>
               <div>
-                <p className="text-xs font-medium uppercase tracking-wide text-slate-400">System role</p>
+                <p className="text-xs font-medium uppercase tracking-wide text-slate-400">{t('System role')}</p>
                 <p className="text-sm text-slate-900">{employee.systemRole ?? '—'}</p>
               </div>
               {employee.branches.length > 0 && (
                 <div className="sm:col-span-2">
-                  <p className="text-xs font-medium uppercase tracking-wide text-slate-400">Gym access</p>
+                  <p className="text-xs font-medium uppercase tracking-wide text-slate-400">{t('Gym access')}</p>
                   <div className="mt-1.5 flex flex-wrap gap-1.5">
                     {employee.branches.map((branch) => (
                       <Badge key={branch.id}>{branch.name}</Badge>
@@ -150,15 +152,15 @@ export default function EmployeeProfilePage() {
       <Dialog
         open={dialogOpen}
         onClose={() => setDialogOpen(false)}
-        title="Change status"
-        description={`Update ${employee.name}'s working status. This is recorded in their history.`}
+        title={t('Change status')}
+        description={t("Update {{name}}'s working status. This is recorded in their history.", { name: employee.name })}
         footer={
           <>
             <Button variant="outline" onClick={() => setDialogOpen(false)}>
-              Cancel
+              {t('Cancel')}
             </Button>
             <Button onClick={onSubmitStatus} loading={statusChange.isPending}>
-              Save status
+              {t('Save status')}
             </Button>
           </>
         }
@@ -170,23 +172,23 @@ export default function EmployeeProfilePage() {
             </p>
           )}
           <div>
-            <Label htmlFor="status">Status</Label>
+            <Label htmlFor="status">{t('Status')}</Label>
             <Select id="status" value={nextStatus} onChange={(e) => setNextStatus(e.target.value)}>
               {STATUSES.map((option) => (
                 <option key={option} value={option}>
-                  {option}
+                  {t(option)}
                 </option>
               ))}
             </Select>
           </div>
           <div>
-            <Label htmlFor="note">Note (optional)</Label>
+            <Label htmlFor="note">{t('Note (optional)')}</Label>
             <Textarea
               id="note"
               rows={3}
               value={note}
               onChange={(e) => setNote(e.target.value)}
-              placeholder="Reason for the change…"
+              placeholder={t('Reason for the change…')}
             />
           </div>
         </div>

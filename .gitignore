@@ -58,6 +58,11 @@ __pycache__/
 *.py[cod]
 *.pyo
 
+## Test result
+# Generated run artefacts only: the k6 summaries and the raw CSVs, which reach
+# tens of megabytes. The suite itself (scripts, data, README) is committed.
+Tests/Performance/
+
 
 # Local file storage root (avatars, employee documents) - never commit user files
 **/App_Data/storage/

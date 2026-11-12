@@ -1,3 +1,4 @@
+import { translate as t } from '../i18n'
 import { clearSession, loadStoredSession, saveSession } from './session-store'
 import type { StoredSession } from './session-store'
 
@@ -67,8 +68,10 @@ const STATUS_FALLBACK_MESSAGES: Record<number, string> = {
 }
 
 function fallbackMessage(status: number): string {
-  if (STATUS_FALLBACK_MESSAGES[status]) return STATUS_FALLBACK_MESSAGES[status]
-  return status >= 500 ? 'The server hit an unexpected error. Please try again.' : 'The request failed.'
+  if (STATUS_FALLBACK_MESSAGES[status]) return t(STATUS_FALLBACK_MESSAGES[status])
+  return status >= 500
+    ? t('The server hit an unexpected error. Please try again.')
+    : t('The request failed.')
 }
 
 function safeJsonParse(text: string): unknown {
@@ -98,13 +101,13 @@ function toApiError(status: number, body: unknown): ApiError {
       for (const item of errorBody.errors) {
         if (typeof item === 'object' && item !== null) {
           const fieldError = item as { field?: string; message?: string }
-          fieldErrors.push({ field: fieldError.field ?? '', message: fieldError.message ?? 'Invalid value.' })
+          fieldErrors.push({ field: fieldError.field ?? '', message: fieldError.message ?? t('Invalid value.') })
         }
       }
     } else if (typeof errorBody.errors === 'object' && errorBody.errors !== null) {
       // ASP.NET ProblemDetails validation envelope: { errors: { Field: ["msg"] } }
       for (const [field, messages] of Object.entries(errorBody.errors)) {
-        const message = Array.isArray(messages) && messages.length > 0 ? String(messages[0]) : 'Invalid value.'
+        const message = Array.isArray(messages) && messages.length > 0 ? String(messages[0]) : t('Invalid value.')
         fieldErrors.push({ field, message })
       }
     } else if (Array.isArray(errorBody.validationErrors)) {
@@ -116,7 +119,7 @@ function toApiError(status: number, body: unknown): ApiError {
           if (Array.isArray(entry.errors) && entry.errors.length > 0) {
             for (const message of entry.errors) fieldErrors.push({ field, message: String(message) })
           } else {
-            fieldErrors.push({ field, message: 'Invalid value.' })
+            fieldErrors.push({ field, message: t('Invalid value.') })
           }
         }
       }
@@ -135,7 +138,7 @@ function toApiError(status: number, body: unknown): ApiError {
 /** Human-readable message for any thrown request error. */
 export function describeApiError(error: unknown): string {
   if (error instanceof ApiError) return error.message
-  return 'Something went wrong. Please try again.'
+  return t('Something went wrong. Please try again.')
 }
 
 /**
@@ -149,59 +152,163 @@ function isAuthChallenge(response: Response): boolean {
   return response.headers.has('WWW-Authenticate')
 }
 
-let refreshPromise: Promise<StoredSession | null> | null = null
+/**
+ * Result of one silent-renewal attempt. The distinction matters: only a server
+ * that actually refused the refresh credential may end the session. A timeout, a
+ * dropped connection or a 5xx says nothing about the credential, and treating it
+ * as a refusal is what signed users out mid-session.
+ */
+type RefreshOutcome =
+  | { kind: 'refreshed'; session: StoredSession }
+  | { kind: 'rejected' }
+  | { kind: 'unavailable' }
 
-/** Attempts a single refresh using the stored refresh token; dedupes concurrent calls. */
-async function tryRefreshSession(session: StoredSession, signal?: AbortSignal): Promise<StoredSession | null> {
-  if (!session.refreshToken) return null
+let refreshPromise: Promise<RefreshOutcome> | null = null
+
+/**
+ * Origin-wide lock serialising silent refreshes across tabs. Every tab shares
+ * `revive.session`, so two tabs that 401 at the same moment would otherwise
+ * present the same refresh token: the winner rotates it and the loser is
+ * refused (the server's rotation grace answers a spent token with a plain 401,
+ * not a chain revocation) — which wiped the shared session and signed every
+ * tab out.
+ */
+const REFRESH_LOCK_NAME = 'revive.session.refresh'
+
+/** Runs `task` under the cross-tab refresh lock (directly where it is unavailable). */
+function withRefreshLock<T>(task: () => Promise<T>): Promise<T> {
+  const locks = (navigator as Navigator & { locks?: LockManager }).locks
+  return locks ? (locks.request(REFRESH_LOCK_NAME, task) as Promise<T>) : task()
+}
+
+/**
+ * One rotation attempt. Storage is re-read on both sides of the request: before
+ * it (a sibling tab may have rotated while this one waited for the lock) and
+ * after a 401/403 (a sibling may have rotated while this request was in
+ * flight). In both cases the sibling's session is adopted — the server refusing
+ * an already-rotated token does NOT mean the chain is dead.
+ */
+async function refreshOnce(initial: StoredSession, controller: AbortController): Promise<RefreshOutcome> {
+  let session = initial
+  const storedAtLock = loadStoredSession()
+  if (storedAtLock) {
+    if (storedAtLock.accessToken !== session.accessToken && storedAtLock.expiresAt > Date.now()) {
+      return { kind: 'refreshed', session: storedAtLock }
+    }
+    if (storedAtLock.refreshToken && storedAtLock.refreshToken !== session.refreshToken) session = storedAtLock
+  }
+  if (!session.refreshToken) return { kind: 'rejected' }
+
+  const response = await fetch(BASE_URL + '/api/auth/refresh', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+    body: JSON.stringify({ refreshToken: session.refreshToken }),
+    signal: controller.signal,
+  })
+
+  if (response.status === 401 || response.status === 403) {
+    const storedNow = loadStoredSession()
+    if (storedNow && storedNow.accessToken !== session.accessToken && storedNow.expiresAt > Date.now()) {
+      return { kind: 'refreshed', session: storedNow }
+    }
+    // Only now does the auth answer prove the stored refresh credential is dead.
+    return { kind: 'rejected' }
+  }
+  if (!response.ok) return { kind: 'unavailable' }
+  const json = (await response.json()) as {
+    accessToken?: string
+    expiresInSeconds?: number
+    refreshExpiresInSeconds?: number
+    refreshToken?: string
+    user?: StoredSession['user']
+  }
+  if (!json.accessToken) return { kind: 'unavailable' }
+  const next: StoredSession = {
+    accessToken: json.accessToken,
+    refreshToken: json.refreshToken ?? session.refreshToken,
+    expiresAt: Date.now() + (json.expiresInSeconds ?? 3600) * 1000,
+    refreshExpiresAt: json.refreshExpiresInSeconds
+      ? Date.now() + json.refreshExpiresInSeconds * 1000
+      : undefined,
+    user: json.user ?? session.user,
+  }
+  // Another tab may have stored a NEWER session while this request was in
+  // flight (a gym switch, a fresh login). Overwriting it would resurrect the
+  // scope this refresh was minted for — adopt the newer session instead.
+  const storedAfterRefresh = loadStoredSession()
+  if (
+    storedAfterRefresh &&
+    storedAfterRefresh.accessToken !== session.accessToken &&
+    storedAfterRefresh.accessToken !== next.accessToken
+  ) {
+    return { kind: 'refreshed', session: storedAfterRefresh }
+  }
+  saveSession(next)
+  return { kind: 'refreshed', session: next }
+}
+
+/**
+ * Attempts a single silent refresh; dedupes concurrent callers in this tab.
+ *
+ * Deliberately NOT bound to any caller's AbortSignal: this refresh mints the
+ * session's next credential and is shared by every waiting request, so a
+ * navigation that cancels one of them must never cancel the rotation the server
+ * is already performing. Discarding that response left storage holding a spent
+ * token, and the next refresh was refused — the "signed out after 15–30 min"
+ * report this window removes.
+ */
+async function tryRefreshSession(session: StoredSession): Promise<RefreshOutcome> {
+  if (!session.refreshToken) return { kind: 'rejected' }
   if (refreshPromise) return refreshPromise
   // Bound the refresh like every other request: a stalled refresh must settle
   // (releasing the waiters joined on this promise) instead of leaving them and
   // their queued requests pending forever.
-  refreshPromise = (async () => {
+  refreshPromise = (async (): Promise<RefreshOutcome> => {
     const controller = new AbortController()
     const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
-    const onExternalAbort = () => controller.abort()
-    if (signal) {
-      if (signal.aborted) controller.abort()
-      else signal.addEventListener('abort', onExternalAbort, { once: true })
-    }
     try {
-      const response = await fetch(BASE_URL + '/api/auth/refresh', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-        body: JSON.stringify({ refreshToken: session.refreshToken }),
-        signal: controller.signal,
-      })
-      if (!response.ok) return null
-      const json = (await response.json()) as {
-        accessToken?: string
-        expiresInSeconds?: number
-        refreshExpiresInSeconds?: number
-        refreshToken?: string
-        user?: StoredSession['user']
-      }
-      if (!json.accessToken) return null
-      const next: StoredSession = {
-        accessToken: json.accessToken,
-        refreshToken: json.refreshToken ?? session.refreshToken,
-        expiresAt: Date.now() + (json.expiresInSeconds ?? 3600) * 1000,
-        refreshExpiresAt: json.refreshExpiresInSeconds
-          ? Date.now() + json.refreshExpiresInSeconds * 1000
-          : undefined,
-        user: json.user ?? session.user,
-      }
-      saveSession(next)
-      return next
+      return await withRefreshLock(() => refreshOnce(session, controller))
     } catch {
-      return null
+      return { kind: 'unavailable' }
     } finally {
       clearTimeout(timer)
-      signal?.removeEventListener('abort', onExternalAbort)
       refreshPromise = null
     }
   })()
   return refreshPromise
+}
+
+interface RenewalResult {
+  /** Bearer the caller may replay the failed request with. */
+  retryToken: string | null
+  /** True only when the server refused the refresh credential itself. */
+  rejected: boolean
+}
+
+/**
+ * Renews the bearer behind a request that came back 401. Prefers credentials
+ * another tab already rotated — the captured session's refresh token is then
+ * stale, and presenting it again trips the server's reuse detection.
+ */
+async function renewBearer(session: StoredSession): Promise<RenewalResult> {
+  const storedNow = loadStoredSession()
+  if (storedNow && storedNow.accessToken !== session.accessToken) {
+    if (storedNow.expiresAt > Date.now()) return { retryToken: storedNow.accessToken, rejected: false }
+    const outcome = await tryRefreshSession(storedNow)
+    if (outcome.kind === 'refreshed') return { retryToken: outcome.session.accessToken, rejected: false }
+    return { retryToken: null, rejected: outcome.kind === 'rejected' }
+  }
+
+  const outcome = await tryRefreshSession(session)
+  if (outcome.kind === 'refreshed') return { retryToken: outcome.session.accessToken, rejected: false }
+  if (outcome.kind === 'rejected') return { retryToken: null, rejected: true }
+
+  // The refresh reached no verdict (timeout / connection drop): a sibling tab may
+  // have finished the rotation meanwhile, so take its bearer when it is newer.
+  const storedAfter = loadStoredSession()
+  return storedAfter && storedAfter.accessToken !== session.accessToken
+    ? { retryToken: storedAfter.accessToken, rejected: false }
+    : { retryToken: null, rejected: false }
 }
 
 export async function apiRequest<T>(path: string, options: RequestOptions & { form?: FormData } = {}): Promise<T> {
@@ -251,8 +358,8 @@ export async function apiRequest<T>(path: string, options: RequestOptions & { fo
   } catch (error) {
     // A caller-initiated cancellation (navigation, unmount) is not an app error.
     if (signal?.aborted) throw error
-    if (timedOut) throw new ApiError(0, 'TIMEOUT', 'The request timed out. Please try again.')
-    throw new ApiError(0, 'NETWORK_ERROR', 'Could not reach the server. Check your connection and try again.')
+    if (timedOut) throw new ApiError(0, 'TIMEOUT', t('The request timed out. Please try again.'))
+    throw new ApiError(0, 'NETWORK_ERROR', t('Could not reach the server. Check your connection and try again.'))
   } finally {
     clearTimeout(timer)
     signal?.removeEventListener('abort', onExternalAbort)
@@ -265,39 +372,26 @@ export async function apiRequest<T>(path: string, options: RequestOptions & { fo
 
   if (!response.ok) {
     // Access-token expired? Try a silent refresh once, then retry the original request.
+    let renewalRejected = false
     if (response.status === 401 && !accessToken && !stationToken && !stationAuth
         && session && isAuthChallenge(response)
         && path !== '/api/auth/refresh' && path !== '/api/auth/login' && path !== '/api/auth/login/select-gym') {
-      // Another tab may have rotated the session meanwhile: the captured session's
-      // refresh token is then stale (refreshing with it would trip the server's
-      // reuse detection), so prefer the newer credentials already in storage.
-      const storedNow = loadStoredSession()
-      if (storedNow && storedNow.accessToken !== session.accessToken) {
-        if (storedNow.expiresAt > Date.now()) {
-          // The newer bearer is usable — retry with it instead of spinning a refresh.
-          return apiRequest<T>(path, { ...options, accessToken: storedNow.accessToken })
-        }
-        const refreshed = await tryRefreshSession(storedNow, signal)
-        if (refreshed) {
-          return apiRequest<T>(path, { ...options, accessToken: refreshed.accessToken })
-        }
-      } else {
-        const refreshed = await tryRefreshSession(session, signal)
-        if (refreshed) {
-          return apiRequest<T>(path, { ...options, accessToken: refreshed.accessToken })
-        }
+      const renewal = await renewBearer(session)
+      if (renewal.retryToken) {
+        return apiRequest<T>(path, { ...options, accessToken: renewal.retryToken })
       }
+      renewalRejected = renewal.rejected
     }
 
     if (response.status === 401 && !accessToken && !stationToken && !stationAuth
-        && session && isAuthChallenge(response)) {
-      // Clear-session discipline: a 401 challenge may be refused because the
-      // credential itself is dead, OR because another tab replaced the session
-      // while this request was in flight (single-live-chain sweep). Only the
-      // holder whose credential is still the stored one may clear shared
-      // storage — a stale in-flight retry must not evict the newer session;
-      // it caused the "randomly bounced to login right after picking a gym"
-      // multi-tab report.
+        && session && isAuthChallenge(response) && renewalRejected) {
+      // Clear-session discipline: only a refresh the server actually refused ends
+      // the session. A 401 challenge may also be refused because another tab
+      // replaced the session while this request was in flight (single-live-chain
+      // sweep), so the holder whose credential is still the stored one is the only
+      // one allowed to clear shared storage — a stale in-flight retry must not
+      // evict the newer session; it caused the "randomly bounced to login right
+      // after picking a gym" multi-tab report.
       const storedOnChallenge = loadStoredSession()
       if (!storedOnChallenge || storedOnChallenge.accessToken === session.accessToken) clearSession()
     }
@@ -307,9 +401,19 @@ export async function apiRequest<T>(path: string, options: RequestOptions & { fo
   return json as T
 }
 
-/** Downloads a binary endpoint (payslip PDF, request attachment) with session auth. */
-export async function apiDownload(path: string, signal?: AbortSignal): Promise<{ blob: Blob; fileName: string | null }> {
+/**
+ * Downloads a binary endpoint (payslip PDF, request attachment) with session auth.
+ * Renewal mirrors apiRequest: an expired access token is refreshed and the
+ * download replayed, so opening a document after the token aged out never ends
+ * the session.
+ */
+export async function apiDownload(
+  path: string,
+  signal?: AbortSignal,
+  accessToken?: string,
+): Promise<{ blob: Blob; fileName: string | null }> {
   const session = loadStoredSession()
+  const bearerToken = accessToken ?? session?.accessToken
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS * 4)
   if (signal) {
@@ -321,22 +425,30 @@ export async function apiDownload(path: string, signal?: AbortSignal): Promise<{
   try {
     response = await fetch(BASE_URL + path, {
       headers: {
-        ...(session?.accessToken ? { Authorization: 'Bearer ' + session.accessToken } : {}),
+        ...(bearerToken ? { Authorization: 'Bearer ' + bearerToken } : {}),
       },
       signal: controller.signal,
     })
   } catch (error) {
     // A caller-initiated cancellation (navigation, unmount) is not an app error.
     if (signal?.aborted) throw error
-    throw new ApiError(0, 'NETWORK_ERROR', 'Could not reach the server. Check your connection and try again.')
+    throw new ApiError(0, 'NETWORK_ERROR', t('Could not reach the server. Check your connection and try again.'))
   } finally {
     clearTimeout(timer)
   }
 
   if (!response.ok) {
-    // Same 401 split as apiRequest (M4): only a bearer-challenge auth failure
-    // signs the user out; a permission-denial 401 keeps the session.
-    if (response.status === 401 && isAuthChallenge(response) && session) clearSession()
+    // Same 401 split as apiRequest (M4): only a bearer-challenge auth failure on an
+    // implicit session credential may end the session, and only once the server
+    // has actually refused the refresh.
+    if (response.status === 401 && !accessToken && isAuthChallenge(response) && session) {
+      const renewal = await renewBearer(session)
+      if (renewal.retryToken) return apiDownload(path, signal, renewal.retryToken)
+      if (renewal.rejected) {
+        const storedOnChallenge = loadStoredSession()
+        if (!storedOnChallenge || storedOnChallenge.accessToken === session.accessToken) clearSession()
+      }
+    }
     let message = fallbackMessage(response.status)
     try {
       const text = await response.text()
