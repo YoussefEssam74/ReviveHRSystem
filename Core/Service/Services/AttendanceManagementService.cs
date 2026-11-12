@@ -417,16 +417,37 @@ namespace Service.Services
                     if (recordIndex.TryGetValue((employee.Id, date), out var record))
                     {
                         correctionsByRecordId.TryGetValue(record.Id, out var correction);
-                        // Worked on a day with no scheduled shift → cover / extra shift.
+                        coverByEmployeeDate.TryGetValue((employee.Id, date), out var coverDays);
+
+                        // A punch on an unscheduled day is only a cover/extra shift when
+                        // HR approved an unscheduled-attendance request for it; without
+                        // that approval the stored status is the truth.
                         var isCoverDay = isOffDay
+                            && coverDays > 0
                             && (record.CheckInTime is not null || record.CheckOutTime is not null);
+
+                        // A stored Absent is a real finding: never repaint it "Off"
+                        // just because the day had no scheduled shift.
                         var statusOverride = isCoverDay
                             ? CoverDayStatus
-                            : isOffDay && record.CheckInTime is null && record.CheckOutTime is null
-                                ? "Off"
-                                : null;
-                        coverByEmployeeDate.TryGetValue((employee.Id, date), out var coverDays);
-                        rows.Add(MapRow(record, employee, employee.Gym?.Name ?? string.Empty, correction, shiftLabel, statusOverride, coverDays, isCoverDay));
+                            : isOffDay
+                                && record.Status != AttendanceStatus.Absent
+                                && record.CheckInTime is null
+                                && record.CheckOutTime is null
+                                    ? "Off"
+                                    : null;
+
+                        rows.Add(MapRow(
+                            record,
+                            employee,
+                            employee.Gym?.Name ?? string.Empty,
+                            correction,
+                            // No assignment on the day: let the record's own shift
+                            // template fill the column instead of a bare "Off".
+                            assignment is null ? null : shiftLabel,
+                            statusOverride,
+                            coverDays > 0 ? coverDays : null,
+                            isCoverDay));
                         continue;
                     }
 

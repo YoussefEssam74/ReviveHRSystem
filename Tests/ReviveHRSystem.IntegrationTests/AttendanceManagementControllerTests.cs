@@ -57,8 +57,9 @@ namespace ReviveHRSystem.IntegrationTests
             var gym = await builder.CreateGymWithStationAsync();
             var employee = await builder.CreateEmployeeAsync(gym);
             var today = builder.AttendanceToday;
-            // Scheduled day: an unscheduled punch is labelled "Covering (Extra Shift)"
-            // by design, so this row must sit inside a published shift to read On Time.
+            // Scheduled day: an unscheduled punch only reads as "Covering (Extra
+            // Shift)" when HR approved a cover/extra-day request for it, so this
+            // row must sit inside a published shift to read On Time.
             await builder.AssignShiftAsync(employee.EmployeeId, gym.GymId, today, "IT Morning", new TimeOnly(8, 0), new TimeOnly(16, 0));
             await builder.CreateAttendanceRecordAsync(
                 employee.EmployeeId, gym.GymId, today,
@@ -106,6 +107,61 @@ namespace ReviveHRSystem.IntegrationTests
                 i => i.GetProperty("employeeId").GetInt32() == employee.EmployeeId);
             Assert.Equal("Off", item.GetProperty("status").GetString());
             Assert.Equal("Day Off approved", item.GetProperty("notes").GetString());
+        }
+
+        [Fact]
+        public async Task GetAttendance_UnscheduledAbsentRecord_StaysAbsent()
+        {
+            var builder = new TestDataBuilder(_fixture.Services);
+            var gym = await builder.CreateGymWithStationAsync();
+            var employee = await builder.CreateEmployeeAsync(gym);
+            var absentDate = builder.AttendanceToday.AddDays(-2);
+            // No shift assignment that day: the stored Absent is the finding and must
+            // not be repainted "Off" just because the day carries no schedule.
+            await builder.CreateAttendanceRecordAsync(
+                employee.EmployeeId, gym.GymId, absentDate, status: AttendanceStatus.Absent);
+            var token = await _fixture.GetAdminTokenAsync();
+
+            var request = _fixture.AuthorizedRequest(
+                HttpMethod.Get, $"/api/attendance?from={absentDate:yyyy-MM-dd}&to={absentDate:yyyy-MM-dd}&gymId={gym.GymId}", null, token);
+            var response = await _fixture.Client.SendAsync(request);
+            var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            var item = Assert.Single(
+                body.GetProperty("items").EnumerateArray().ToList(),
+                i => i.GetProperty("employeeId").GetInt32() == employee.EmployeeId);
+            Assert.Equal("Absent", item.GetProperty("status").GetString());
+            Assert.False(item.GetProperty("isCoverDay").GetBoolean());
+        }
+
+        [Fact]
+        public async Task GetAttendance_UnscheduledPunchWithoutApprovedCover_IsNotCovering()
+        {
+            var builder = new TestDataBuilder(_fixture.Services);
+            var gym = await builder.CreateGymWithStationAsync();
+            var employee = await builder.CreateEmployeeAsync(gym);
+            var today = builder.AttendanceToday;
+            // A punch on a day with no shift and no approved cover request is an
+            // unapproved extra day, not a cover day HR sanctioned.
+            await builder.CreateAttendanceRecordAsync(
+                employee.EmployeeId, gym.GymId, today,
+                checkInUtc: AtHourUtc(today, 8), checkOutUtc: AtHourUtc(today, 16),
+                status: AttendanceStatus.OnTime);
+            var token = await _fixture.GetAdminTokenAsync();
+
+            var request = _fixture.AuthorizedRequest(
+                HttpMethod.Get, $"/api/attendance?date={today:yyyy-MM-dd}&gymId={gym.GymId}", null, token);
+            var response = await _fixture.Client.SendAsync(request);
+            var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            var item = Assert.Single(
+                body.GetProperty("items").EnumerateArray().ToList(),
+                i => i.GetProperty("employeeId").GetInt32() == employee.EmployeeId);
+            Assert.Equal("On Time", item.GetProperty("status").GetString());
+            Assert.False(item.GetProperty("isCoverDay").GetBoolean());
+            Assert.Equal(JsonValueKind.Null, item.GetProperty("coverDays").ValueKind);
         }
 
         [Fact]

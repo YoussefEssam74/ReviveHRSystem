@@ -112,7 +112,7 @@ export function PortalSessionProvider({ children }: { children: ReactNode }) {
       loading: Boolean(session) && (meQuery.isLoading || userQuery.isLoading),
       error: meQuery.error ? describeApiError(meQuery.error) : userQuery.error ? describeApiError(userQuery.error) : null,
       reload,
-      isTeamLeader: (me?.ledTeamId ?? null) !== null,
+      isTeamLeader: me?.roleInActiveGym === ROLE_LABEL_TEAM_LEADER && (me?.ledTeamId ?? null) !== null,
       isBranchManager: me?.roleInActiveGym === ROLE_LABEL_BRANCH_MANAGER,
       can: (permissionKey: string) => permissions.includes(permissionKey),
       switchGym,

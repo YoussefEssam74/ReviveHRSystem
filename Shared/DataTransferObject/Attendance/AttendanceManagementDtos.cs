@@ -55,7 +55,7 @@ namespace Shared.DataTransferObject.Attendance
         /// <summary>Approved cover/extra days for an unscheduled punch (1 or 2), else null.</summary>
         public int? CoverDays { get; init; }
 
-        /// <summary>True when the day was worked without a scheduled shift (cover / extra shift).</summary>
+        /// <summary>True when the approved cover/extra day was worked without a scheduled shift.</summary>
         public bool IsCoverDay { get; init; }
     }
 
@@ -125,7 +125,7 @@ namespace Shared.DataTransferObject.Attendance
         /// <summary>Approved cover/extra days for an unscheduled punch (1 or 2), else null.</summary>
         public int? CoverDays { get; init; }
 
-        /// <summary>True when the day was worked without a scheduled shift (cover / extra shift).</summary>
+        /// <summary>True when the approved cover/extra day was worked without a scheduled shift.</summary>
         public bool IsCoverDay { get; init; }
     }
 
