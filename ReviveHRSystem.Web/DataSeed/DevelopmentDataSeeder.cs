@@ -415,6 +415,16 @@ namespace ReviveHRSystem.Web.DataSeed
                 // keeps the operational bundle (views, status change, attendance,
                 // schedule, evaluation drill-in, on-behalf flows).
             ],
+            // The endpoint guards check EXACT keys ("payroll.edit", "requests.approve"),
+            // so the HR roles must carry the same portal catalogue the seeded HR users get
+            // directly — an account created in HR Team Management with the HR role then
+            // works without hand-granted permissions. HR Manager adds team administration
+            // and payroll sign-off on top of the HR bundle.
+            [RoleNames.Hr] =
+            [
+                .. AllPortalPermissionKeys.Where(key => key is not ("team.manage" or "payroll.approve")),
+            ],
+            [RoleNames.HrManager] = [.. AllPortalPermissionKeys],
         };
 
         private static async Task EnsurePresetRolePermissionsAsync(ReviveHrDbContext db)
@@ -697,7 +707,16 @@ namespace ReviveHRSystem.Web.DataSeed
 
             var employees = await db.Employees
                 .Where(e => e.GymId == gymId && e.Status == EmployeeStatus.Active)
-                .Select(e => e.Id)
+                .Select(e => new
+                {
+                    e.Id,
+                    // Latest compensation is the sheet's base; a hire without one seeds 0
+                    // rather than an invented salary that contradicts the employee file.
+                    Salary = e.Compensations
+                        .OrderByDescending(c => c.EffectiveDate)
+                        .Select(c => (decimal?)c.Amount)
+                        .FirstOrDefault() ?? 0m,
+                })
                 .ToListAsync();
             if (employees.Count == 0)
             {
@@ -709,19 +728,29 @@ namespace ReviveHRSystem.Web.DataSeed
                 .Select(e => e.EmployeeId)
                 .ToListAsync();
 
-            foreach (var employeeId in employees.Where(id => !existing.Contains(id)))
+            var missing = employees.Where(e => !existing.Contains(e.Id)).Select(e => e.Id).ToList();
+            var daysByEmployee = missing.Count == 0
+                ? new Dictionary<int, int>()
+                : await db.AttendanceRecords
+                    .Where(r => missing.Contains(r.EmployeeId) && r.Date >= monthStart && r.Date <= monthEnd && r.CheckInTime != null)
+                    .GroupBy(r => r.EmployeeId)
+                    .Select(g => new { EmployeeId = g.Key, Days = g.Count() })
+                    .ToDictionaryAsync(x => x.EmployeeId, x => x.Days);
+
+            foreach (var employee in employees.Where(e => !existing.Contains(e.Id)))
             {
-                // 8000 base / 21 days / no OT or bonus — money is recomputed
-                // server-side, these columns only seed the starting sheet.
+                // Money is recomputed server-side; these columns only seed the starting
+                // sheet, so they mirror what the payroll ensure endpoint would produce.
+                var daysWorked = daysByEmployee.GetValueOrDefault(employee.Id);
                 db.PayrollEntries.Add(new PayrollEntry
                 {
                     PayrollPeriodId = period.Id,
-                    EmployeeId = employeeId,
-                    BaseSalary = 8000m,
+                    EmployeeId = employee.Id,
+                    BaseSalary = employee.Salary,
                     TotalDeductions = 0m,
                     TotalBonuses = 0m,
-                    NetPay = 8000m,
-                    DaysWorked = 21,
+                    NetPay = employee.Salary,
+                    DaysWorked = daysWorked,
                     OvertimeHours = 0m,
                     Status = "Draft",
                 });

@@ -190,7 +190,7 @@ function RequestsWorkspace({
                   <td className="px-4 py-2.5">{rangeLabel(request.requestedDate, request.endDate)}</td>
                   <td className="px-4 py-2.5">{formatDate(request.submittedDate)}</td>
                   <td className="px-4 py-2.5">
-                    <StatusBadge status={request.status} />
+                    <StatusBadge status={request.status === 'Pending' ? 'Awaiting Manager' : request.status} />
                   </td>
                   <td className="px-2">
                     <ChevronRight className="h-3.5 w-3.5 text-charcoal-400" aria-hidden="true" />
@@ -219,7 +219,7 @@ function RequestsWorkspace({
               </div>
               <div className="flex items-center gap-2">
                 <p className="hidden text-[10px] text-charcoal-700 sm:block">{rangeLabel(request.requestedDate, request.endDate)}</p>
-                <StatusBadge status={request.status} />
+                <StatusBadge status={request.status === 'Pending' ? 'Awaiting Manager' : request.status} />
                 <ChevronRight className="h-3.5 w-3.5 text-charcoal-400" aria-hidden="true" />
               </div>
             </div>
@@ -282,10 +282,40 @@ function RequestDetailDrawer({
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <StatusBadge status={detail.status} />
+              <StatusBadge status={detail.status === 'Pending' ? 'Awaiting Manager' : detail.status} />
               <span className="text-[10px] font-medium text-charcoal-400">#{detail.id}</span>
             </div>
           </div>
+
+          {detail.hrDecision && (
+            <div
+              className={cn(
+                'rounded-lg border p-3',
+                detail.hrDecision === 'Approved'
+                  ? 'border-brand-200 bg-brand-50'
+                  : 'border-red-200 bg-red-50',
+              )}
+            >
+              <div className="flex flex-wrap items-center gap-2">
+                <p className="bento-label text-charcoal-500">FINAL DECISION</p>
+                <span className="badge badge-gray text-[9px]">{detail.hrDecision}</span>
+                {detail.payment && (
+                  <span className={cn('badge text-[9px]', detail.payment === 'paid' ? 'badge-green' : 'badge-red')}>
+                    {detail.payment === 'paid' ? 'Paid' : 'Unpaid'}
+                  </span>
+                )}
+              </div>
+              <p className="mt-1 text-xs text-charcoal-700">
+                {detail.payment === 'paid'
+                  ? 'Deducted from your leave balance.'
+                  : detail.payment === 'unpaid'
+                    ? 'Recorded as unpaid — a payroll deduction applies.'
+                    : detail.hrDecision === 'Approved'
+                      ? 'Approved by HR.'
+                      : 'Rejected by HR.'}
+              </p>
+            </div>
+          )}
 
           <div className="grid grid-cols-2 gap-2">
             <div className="rounded-lg bg-charcoal-50 p-2.5 text-center">

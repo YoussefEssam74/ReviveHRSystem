@@ -31,12 +31,28 @@ namespace Service.Services
         private const int DefaultPageSize = 20;
         private const int MaxPageSize = 100;
 
-        /// <summary>Request types the HR form offers (UI's select list).</summary>
+        /// <summary>
+        /// Request types the HR form offers: the catalog's labels plus resignation.
+        /// The legacy labels stay accepted so older clients and existing rows keep
+        /// round-tripping.
+        /// </summary>
         private static readonly string[] AllowedTypes =
-            ["Day Off", "Sick Leave", "Leave Early", "Late Arrival", "Shift Swap", "Resignation"];
+        [
+            .. RequestTypeCatalog.All.Select(type => type.Label),
+            "Day Off", "Late Arrival", "Leave Early",
+            "Resignation",
+        ];
 
-        /// <summary>Types that consume a leave balance and therefore surface the paid/unpaid choice.</summary>
-        private static readonly string[] BalanceTypes = ["Day Off", "Sick Leave"];
+        /// <summary>
+        /// Leave type a stored request consumes, or null when it consumes none.
+        /// Accepts the legacy labels ("Day Off") the pre-catalog rows still carry.
+        /// </summary>
+        private static LeaveType? LeaveTypeFor(string type) => type switch
+        {
+            "Day Off" or "DayOff" => LeaveType.Annual,
+            "SickLeave" => LeaveType.Sick,
+            _ => RequestTypeCatalog.LeaveTypeFor(type),
+        };
 
         // ------------------------------------------------------------------
         // R1 — inbox list
@@ -62,13 +78,18 @@ namespace Service.Services
             var pageSize = query.PageSize <= 0 ? DefaultPageSize : Math.Min(query.PageSize, MaxPageSize);
             var idFilter = ParseIds(query.Ids);
 
+            // The HR pending tab shows stage-1 requests too: with no branch manager the
+            // employee's submission would otherwise never reach this inbox.
+            var includeAwaitingManager = statusFilter == RequestStatus.PendingHRReview;
+
             var countSpec = new RequestDirectorySpec(
-                gymFilter, statusFilter, decidedOnly, typeFilter, dateFilter, quick, 0, 0, sortBy, sortDescending, idFilter);
+                gymFilter, statusFilter, decidedOnly, typeFilter, dateFilter, quick, 0, 0, sortBy, sortDescending,
+                idFilter, includeAwaitingManager);
             var total = await _unitOfWork.GetRepository<EmployeeRequest, int>().CountAsync(countSpec, cancellationToken);
 
             var pageSpec = new RequestDirectorySpec(
                 gymFilter, statusFilter, decidedOnly, typeFilter, dateFilter, quick,
-                (page - 1) * pageSize, pageSize, sortBy, sortDescending, idFilter);
+                (page - 1) * pageSize, pageSize, sortBy, sortDescending, idFilter, includeAwaitingManager);
             var requests = await _unitOfWork.GetRepository<EmployeeRequest, int>().GetAllAsync(pageSpec, cancellationToken);
 
             return new RequestListResponse
@@ -80,6 +101,55 @@ namespace Service.Services
                 TotalPages = pageSize > 0 ? (int)Math.Ceiling(total / (double)pageSize) : 0,
             };
         }
+
+        // ------------------------------------------------------------------
+        // R10 — inbox summary (KPI tiles, tab counts, type pills)
+        // ------------------------------------------------------------------
+
+        public async Task<RequestSummaryResponse> GetRequestSummaryAsync(
+            int? actorUserId, int? gym, CancellationToken cancellationToken = default)
+        {
+            var actor = await ResolveActorAsync(actorUserId, cancellationToken);
+            await _accessControl.EnsurePermissionForGymAsync(actor.Id, "requests.view", gym, cancellationToken);
+
+            var gymFilter = await ResolveGymFilterAsync(actor, gym, cancellationToken);
+            var all = (await _unitOfWork.GetRepository<EmployeeRequest, int>()
+                .GetAllAsync(
+                    new RequestDirectorySpec(gymFilter, null, false, null, null, null, 0, 0, "submitted", true),
+                    cancellationToken))
+                .ToList();
+
+            // "Pending HR" covers both the stage-1 queue (no manager decided yet) and
+            // the requests already forwarded to HR — HR can act on either.
+            var pending = all
+                .Where(r => r.Status is RequestStatus.PendingHRReview or RequestStatus.Pending)
+                .ToList();
+            var now = DateTime.UtcNow;
+
+            return new RequestSummaryResponse
+            {
+                Pending = pending.Count,
+                AwaitingManager = pending.Count(r => r.Status == RequestStatus.Pending),
+                Urgent = pending.Count(IsUrgent),
+                ApprovedThisMonth = all.Count(r =>
+                    r.Status == RequestStatus.Approved &&
+                    r.RequestDate.Year == now.Year && r.RequestDate.Month == now.Month),
+                BmRejected = all.Count(r => r.Decisions.Any(d =>
+                    d.Stage == ApprovalStage.BranchManager && d.Decision == DecisionOutcome.Rejected)),
+                BalanceAlerts = pending.Count(r => BalanceSnapshot(r) is { Left: <= 0 }),
+                Decided = all.Count(r => r.Status is RequestStatus.Approved or RequestStatus.Rejected),
+                Archived = all.Count(r => r.Status == RequestStatus.Archived),
+                Total = all.Count,
+                ByType = all.GroupBy(r => r.Type)
+                    .OrderByDescending(g => g.Count())
+                    .Select(g => new RequestTypeCount { Type = g.Key, Count = g.Count() })
+                    .ToList(),
+            };
+        }
+
+        /// <summary>The time-critical types the inbox tags "Urgent" while awaiting HR.</summary>
+        private static bool IsUrgent(EmployeeRequest request) =>
+            request.Type is "Late Attendance" or "Late Arrival" or "Early Leave" or "Leave Early" or "Sick Leave";
 
         // ------------------------------------------------------------------
         // R2 — detail
@@ -190,12 +260,18 @@ namespace Service.Services
             {
                 case RequestStatus.Archived:
                     throw new BadRequestException("Archived requests cannot be decided. Restore the request first.");
-                case RequestStatus.Pending:
-                    throw new BadRequestException("This request is still awaiting the branch manager's decision.");
                 case RequestStatus.Approved:
                 case RequestStatus.Rejected:
                     throw new BadRequestException("This request has already been decided. Use undo-decision to reopen it.");
             }
+
+            // A stage-1 request (no manager decision yet) is decidable here: with no
+            // branch manager assigned the submission would otherwise never reach HR.
+            var wasAwaitingManager = entity.Status == RequestStatus.Pending;
+            var hadManagerDecision = entity.Decisions.Any(d => d.Stage == ApprovalStage.BranchManager);
+            // Self-service submissions reserve their days on the balance; those must be
+            // released on every outcome. Requests filed by HR never reserved anything.
+            var reservedDays = hadManagerDecision || wasAwaitingManager;
 
             var decision = ParseDecision(request.Decision);
             var comment = string.IsNullOrWhiteSpace(request.Comment) ? null : request.Comment.Trim();
@@ -208,9 +284,31 @@ namespace Service.Services
                 ? await ResolvePaymentAsync(entity, request.Payment, cancellationToken)
                 : null;
 
-            if (payment == "paid")
+            // The reservation made at submission always leaves PendingDays here: paid
+            // approvals move the days into UsedDays, unpaid/rejected outcomes just
+            // release them. Skipping this double-counted (pending + used) or leaked.
+            if (IsBalanceType(entity.Type))
             {
-                await ApplyBalanceAsync(entity, +1, cancellationToken);
+                await MoveBalanceDaysAsync(
+                    entity,
+                    pendingDelta: reservedDays ? -DaysOf(entity) : 0,
+                    usedDelta: payment == "paid" ? DaysOf(entity) : 0,
+                    cancellationToken);
+            }
+
+            // Record the manager stage when it never happened, so the timeline explains
+            // how a stage-1 request reached its final decision.
+            if (!hadManagerDecision)
+            {
+                entity.Decisions.Add(new RequestDecision
+                {
+                    RequestId = entity.Id,
+                    Stage = ApprovalStage.BranchManager,
+                    Decision = DecisionOutcome.Approved,
+                    Comment = ManagerSkippedComment,
+                    DecidedBy = actor.Id,
+                    DecidedAt = DateTime.UtcNow,
+                });
             }
 
             var offboarding = decision == DecisionOutcome.Approved && entity.Type == "Resignation";
@@ -296,6 +394,10 @@ namespace Service.Services
                 throw new BadRequestException("The requested date has passed — the decision can no longer be changed.");
             }
 
+            // Undo restores what the decision moved: the days go back to reserved and a
+            // paid approval gives its consumed days back.
+            var reservedDays = entity.Decisions.Any(d => d.Stage == ApprovalStage.BranchManager);
+
             var requestRepo = _unitOfWork.GetRepository<RequestDecision, int>();
             foreach (var hrDecision in entity.Decisions.Where(d => d.Stage == ApprovalStage.HR).ToList())
             {
@@ -303,9 +405,13 @@ namespace Service.Services
                 requestRepo.Remove(hrDecision);
             }
 
-            if (entity.Payment == "paid")
+            if (IsBalanceType(entity.Type))
             {
-                await ApplyBalanceAsync(entity, -1, cancellationToken);
+                await MoveBalanceDaysAsync(
+                    entity,
+                    pendingDelta: reservedDays ? DaysOf(entity) : 0,
+                    usedDelta: entity.Payment == "paid" ? -DaysOf(entity) : 0,
+                    cancellationToken);
             }
 
             if (entity.Type == "Resignation" && entity.Employee.Status == EmployeeStatus.NoticePeriod)
@@ -356,35 +462,59 @@ namespace Service.Services
             }
             else
             {
-                // No ids: every pending request in the caller's gym scope.
+                // No ids: every pending request in the caller's gym scope — the stage-1
+                // queue included, exactly like the inbox's pending tab.
                 var all = await _unitOfWork.GetRepository<EmployeeRequest, int>()
                     .GetAllAsync(new RequestDirectorySpec(
-                        gymFilter, RequestStatus.PendingHRReview, false, null, null, null, 0, 0, "submitted", true),
+                        gymFilter, RequestStatus.PendingHRReview, false, null, null, null, 0, 0, "submitted", true,
+                        includeAwaitingManager: true, tracking: true),
                         cancellationToken);
                 targets = all.ToList();
             }
 
             var approved = 0;
             var unpaidApplied = 0;
-            foreach (var entity in targets.Where(t => t.Status == RequestStatus.PendingHRReview))
+            var balanceCache = new Dictionary<(int, LeaveType), LeaveBalance>();
+            foreach (var entity in targets.Where(t => t.Status is RequestStatus.PendingHRReview or RequestStatus.Pending))
             {
+                var hadManagerDecision = entity.Decisions.Any(d => d.Stage == ApprovalStage.BranchManager);
+                var reservedDays = hadManagerDecision || entity.Status == RequestStatus.Pending;
+
                 var payment = IsBalanceType(entity.Type)
                     ? await ResolvePaymentAsync(entity, requested: null, cancellationToken)
                     : null;
 
-                if (payment == "paid")
+                if (IsBalanceType(entity.Type))
                 {
-                    await ApplyBalanceAsync(entity, +1, cancellationToken);
+                    await MoveBalanceDaysAsync(
+                        entity,
+                        pendingDelta: reservedDays ? -DaysOf(entity) : 0,
+                        usedDelta: payment == "paid" ? DaysOf(entity) : 0,
+                        cancellationToken,
+                        balanceCache);
                 }
-                else if (payment == "unpaid")
+
+                if (payment == "unpaid")
                 {
                     unpaidApplied++;
+                }
+
+                if (!hadManagerDecision)
+                {
+                    entity.Decisions.Add(new RequestDecision
+                    {
+                        RequestId = entity.Id,
+                        Stage = ApprovalStage.BranchManager,
+                        Decision = DecisionOutcome.Approved,
+                        Comment = ManagerSkippedComment,
+                        DecidedBy = actor.Id,
+                        DecidedAt = DateTime.UtcNow,
+                    });
                 }
 
                 if (entity.Type == "Resignation")
                 {
                     entity.Employee.Status = EmployeeStatus.NoticePeriod;
-                    _unitOfWork.GetRepository<Employee, int>().Update(entity.Employee);
                 }
 
                 entity.Status = RequestStatus.Approved;
@@ -399,10 +529,6 @@ namespace Service.Services
                     DecidedAt = DateTime.UtcNow,
                 });
 
-                // The targets come from a no-tracking directory query, so the
-                // status/payment/decision mutations above need an explicit attach —
-                // without it SaveChanges reports success and writes nothing.
-                _unitOfWork.GetRepository<EmployeeRequest, int>().Update(entity);
                 approved++;
             }
 
@@ -553,42 +679,78 @@ namespace Service.Services
         }
 
         /// <summary>
-        /// Applies the approved days to the matching leave balance: direction +1 deducts
-        /// on approve (creating an empty balance row when none exists, so the deduction
-        /// still shows), -1 returns them on undo, clamped at zero.
+        /// Moves a request's days between the two balance buckets in one tracked save:
+        /// <paramref name="pendingDelta"/> releases/restores the reservation taken at
+        /// submission, <paramref name="usedDelta"/> consumes/returns approved days.
+        /// Both land on the same row instance on purpose — loading it twice would
+        /// attach a duplicate entity to the context.
         /// </summary>
-        private async Task ApplyBalanceAsync(EmployeeRequest entity, int direction, CancellationToken cancellationToken)
+        private async Task MoveBalanceDaysAsync(
+            EmployeeRequest entity,
+            decimal pendingDelta,
+            decimal usedDelta,
+            CancellationToken cancellationToken,
+            Dictionary<(int EmployeeId, LeaveType Type), LeaveBalance>? cache = null)
         {
-            var leaveType = entity.Type == "Day Off" ? LeaveType.Annual : LeaveType.Sick;
-            var balance = await LoadBalanceForTypeAsync(entity.Type, entity.EmployeeId, cancellationToken)
-                ?? new LeaveBalance
-                {
-                    EmployeeId = entity.EmployeeId,
-                    LeaveType = leaveType,
-                    Year = DateTime.UtcNow.Year,
-                    TotalEntitlement = 0,
-                    PendingDays = 0,
-                    UsedDays = 0,
-                };
-
-            var days = DaysOf(entity);
-            balance.UsedDays = direction > 0
-                ? balance.UsedDays + days
-                : Math.Max(0, balance.UsedDays - days);
-
-            if (balance.Id == 0)
+            if (pendingDelta == 0 && usedDelta == 0)
             {
-                await _unitOfWork.GetRepository<LeaveBalance, int>().AddAsync(balance, cancellationToken);
+                return;
+            }
+
+            var leaveType = LeaveTypeFor(entity.Type) ?? LeaveType.Annual;
+            var key = (entity.EmployeeId, leaveType);
+
+            LeaveBalance? balance;
+            if (cache is not null && cache.TryGetValue(key, out var cached))
+            {
+                balance = cached;
             }
             else
             {
-                _unitOfWork.GetRepository<LeaveBalance, int>().Update(balance);
+                var balances = await _unitOfWork.GetRepository<LeaveBalance, int>()
+                    .GetAllAsync(new LeaveBalancesForYearSpec(entity.EmployeeId, DateTime.UtcNow.Year), cancellationToken);
+                balance = balances.FirstOrDefault(b => b.LeaveType == leaveType);
+
+                // A pure release on a missing row means nothing was reserved — skip it.
+                if (balance is null && pendingDelta <= 0 && usedDelta <= 0)
+                {
+                    return;
+                }
+
+                if (balance is null)
+                {
+                    balance = new LeaveBalance
+                    {
+                        EmployeeId = entity.EmployeeId,
+                        LeaveType = leaveType,
+                        Year = DateTime.UtcNow.Year,
+                        TotalEntitlement = LeaveBalanceReservation.DefaultEntitlement(leaveType),
+                        PendingDays = 0,
+                        UsedDays = 0,
+                    };
+                    await _unitOfWork.GetRepository<LeaveBalance, int>().AddAsync(balance, cancellationToken);
+                }
+                else
+                {
+                    _unitOfWork.GetRepository<LeaveBalance, int>().Update(balance);
+                }
+
+                // A batch (bulk decide) can touch the same employee twice; the cache
+                // keeps one tracked instance per bucket.
+                cache?.Add(key, balance);
             }
+
+            balance.PendingDays = Math.Max(0, balance.PendingDays + pendingDelta);
+            balance.UsedDays = Math.Max(0, balance.UsedDays + usedDelta);
         }
 
         private async Task<LeaveBalance?> LoadBalanceForTypeAsync(string type, int employeeId, CancellationToken cancellationToken)
         {
-            var leaveType = type == "Day Off" ? LeaveType.Annual : LeaveType.Sick;
+            if (LeaveTypeFor(type) is not { } leaveType)
+            {
+                return null;
+            }
+
             var balances = await _unitOfWork.GetRepository<LeaveBalance, int>()
                 .GetAllAsync(new LeaveBalancesForYearSpec(employeeId, DateTime.UtcNow.Year), cancellationToken);
             return balances.FirstOrDefault(b => b.LeaveType == leaveType);
@@ -670,6 +832,14 @@ namespace Service.Services
                 Employee = entity.Employee?.FullName ?? string.Empty,
                 Gym = entity.Employee?.Gym?.Name ?? string.Empty,
                 Type = entity.Type,
+                EmployeeId = entity.EmployeeId,
+                EmployeeNumber = entity.Employee?.EmployeeNumber ?? string.Empty,
+                Initials = HrPortalHelpers.BuildInitials(entity.Employee?.FullName ?? string.Empty),
+                Position = entity.Employee?.Position?.Title ?? string.Empty,
+                Level = entity.Employee?.Position?.Level,
+                HireDate = entity.Employee?.HireDate,
+                LeaveBalance = BalanceSnapshot(entity),
+                AwaitingManager = entity.Status == RequestStatus.Pending,
                 SubmittedDate = DateOnly.FromDateTime(entity.CreatedAt),
                 RequestedDate = entity.RequestDate,
                 EndDate = NormalizeDisplayRange(entity),
@@ -682,6 +852,37 @@ namespace Service.Services
                 Reason = entity.Details,
                 HasAttachment = !string.IsNullOrEmpty(entity.AttachmentPath),
                 Timeline = BuildTimeline(entity, bm, hr),
+            };
+        }
+
+        /// <summary>
+        /// Leave-balance snapshot for the Day Off / Sick Leave cards (null for every
+        /// other type). <c>AfterApproval</c> is what the card prints next to the
+        /// current balance: one request's worth of days still to come off.
+        /// </summary>
+        private static RequestLeaveBalance? BalanceSnapshot(EmployeeRequest entity)
+        {
+            if (LeaveTypeFor(entity.Type) is not { } leaveType)
+            {
+                return null;
+            }
+
+            var year = DateTime.UtcNow.Year;
+            var balance = entity.Employee?.LeaveBalances?
+                .FirstOrDefault(b => b.LeaveType == leaveType && b.Year == year);
+
+            var total = (int)Math.Round(balance?.TotalEntitlement ?? 0);
+            var used = (int)Math.Round(balance?.UsedDays ?? 0);
+            var left = Math.Max(0, (int)Math.Round(balance?.RemainingDays ?? 0));
+            var pending = entity.Status == RequestStatus.PendingHRReview;
+
+            return new RequestLeaveBalance
+            {
+                Label = leaveType == LeaveType.Annual ? "Annual leave balance" : "Sick leave balance",
+                Total = total,
+                Used = used,
+                Left = left,
+                AfterApproval = pending ? Math.Max(0, left - DaysOf(entity)) : left,
             };
         }
 
@@ -714,6 +915,16 @@ namespace Service.Services
                 steps.Add(new RequestTimelineStep { Step = "BM Review", Date = "Pending" });
             }
 
+            if (AdvanceMarker(entity) is { } marker)
+            {
+                steps.Add(new RequestTimelineStep
+                {
+                    Step = marker.Comment == AutoAdvanceComment ? "Auto-advanced to HR" : "Manager stage skipped",
+                    Date = FormatStamp(marker.DecidedAt),
+                    Done = true,
+                });
+            }
+
             if (hr is not null)
             {
                 steps.Add(new RequestTimelineStep
@@ -731,9 +942,36 @@ namespace Service.Services
             return steps;
         }
 
+        /// <summary>
+        /// A manager-stage row recorded without a real branch-manager decision: either
+        /// the submission advanced automatically (no manager assigned) or HR decided
+        /// the stage-1 request itself. Both mark the reserved-days bookkeeping and
+        /// render as their own timeline step.
+        /// </summary>
+        internal const string AutoAdvanceComment = "Auto-advanced to HR — no branch manager assigned to this gym.";
+
+        internal const string ManagerSkippedComment = "Manager stage skipped — advanced by HR.";
+
+        private static bool IsSyntheticManagerDecision(RequestDecision decision) =>
+            decision.Stage == ApprovalStage.BranchManager &&
+            (decision.Comment == AutoAdvanceComment || decision.Comment == ManagerSkippedComment);
+
+        /// <summary>Manager-stage decisions only, excluding the synthetic advance markers.</summary>
+        private static IEnumerable<RequestDecision> RealManagerDecisions(EmployeeRequest entity) =>
+            entity.Decisions?
+                .Where(d => d.Stage == ApprovalStage.BranchManager && !IsSyntheticManagerDecision(d))
+                ?? [];
+
         private static RequestDecision? LastDecision(EmployeeRequest entity, ApprovalStage stage) =>
             entity.Decisions?
-                .Where(d => d.Stage == stage)
+                .Where(d => d.Stage == stage && !IsSyntheticManagerDecision(d))
+                .OrderBy(d => d.DecidedAt)
+                .LastOrDefault();
+
+        /// <summary>The synthetic advance row (auto-advance or HR-skipped), when there is one.</summary>
+        private static RequestDecision? AdvanceMarker(EmployeeRequest entity) =>
+            entity.Decisions?
+                .Where(IsSyntheticManagerDecision)
                 .OrderBy(d => d.DecidedAt)
                 .LastOrDefault();
 
@@ -743,8 +981,8 @@ namespace Service.Services
         private static string StatusDisplay(RequestStatus status) =>
             status == RequestStatus.PendingHRReview ? "Pending HR Review" : status.ToString();
 
-        private static bool IsBalanceType(string type) =>
-            type is "Day Off" or "Sick Leave";
+        /// <summary>True for the types that consume a leave balance (Annual / Sick).</summary>
+        private static bool IsBalanceType(string type) => LeaveTypeFor(type) is not null;
 
         private static DecisionOutcome ParseDecision(string? value) =>
             (value ?? string.Empty).Trim().ToLowerInvariant() switch

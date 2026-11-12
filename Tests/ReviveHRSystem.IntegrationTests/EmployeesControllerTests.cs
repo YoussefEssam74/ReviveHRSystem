@@ -536,7 +536,7 @@ namespace ReviveHRSystem.IntegrationTests
         // ------------------------------------------------------------------
 
         [Fact]
-        public async Task LeaveBalance_NewEmployee_ReturnsZeroBuckets()
+        public async Task LeaveBalance_NewEmployee_ReturnsDefaultEntitlement()
         {
             var gym = await new TestDataBuilder(_fixture.Services).CreateGymWithStationAsync();
             var token = await _fixture.GetAdminTokenAsync();
@@ -550,9 +550,12 @@ namespace ReviveHRSystem.IntegrationTests
 
             Assert.Equal(HttpStatusCode.OK, response.StatusCode);
             Assert.Equal(id, body.GetProperty("employeeId").GetInt32());
+            // No stored row yet: the portal reports the type's default entitlement so a
+            // brand-new employee can submit a leave request (matching the submit rule).
             Assert.Equal(0, body.GetProperty("dayOff").GetProperty("used").GetDecimal());
-            Assert.Equal(0, body.GetProperty("dayOff").GetProperty("total").GetDecimal());
+            Assert.Equal(21, body.GetProperty("dayOff").GetProperty("total").GetDecimal());
             Assert.Equal(0, body.GetProperty("sick").GetProperty("used").GetDecimal());
+            Assert.Equal(10, body.GetProperty("sick").GetProperty("total").GetDecimal());
             Assert.Equal(0, body.GetProperty("unpaid").GetProperty("total").GetDecimal());
         }
 

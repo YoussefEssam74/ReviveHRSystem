@@ -2,6 +2,8 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using DomainLayer.Models.UserModule.Enums;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using ReviveHRSystem.IntegrationTests.Fixtures;
 using ReviveHRSystem.IntegrationTests.Support;
 using Xunit;
@@ -498,6 +500,142 @@ namespace ReviveHRSystem.IntegrationTests
             Assert.Equal("Day Off", item.GetProperty("type").GetString());
             Assert.Equal("Pending HR Review", item.GetProperty("status").GetString());
             Assert.True(item.TryGetProperty("bmComment", out _));
+        }
+
+        // ------------------------------------------------------------------
+        // Two-sided pipeline: employee submission <-> HR inbox (R1/R3/R10)
+        // ------------------------------------------------------------------
+
+        [Fact]
+        public async Task HrSeesStageOneRequest_AndDecidingItReleasesTheReservation()
+        {
+            var builder = new TestDataBuilder(_fixture.Services);
+            var gym = await builder.CreateGymWithStationAsync();
+            var employee = await builder.CreateEmployeeAsync(gym);
+            await builder.SetLeaveBalanceAsync(employee.EmployeeId, total: 10, used: 1);
+            var requestId = await SeedStageOneRequestAsync(employee.EmployeeId, "Annual Leave", reservedDays: 1);
+            var token = await _fixture.GetAdminTokenAsync();
+
+            // The pending tab lists stage-1 requests and tags them for the UI.
+            var listResponse = await _fixture.Client.SendAsync(_fixture.AuthorizedRequest(
+                HttpMethod.Get, "/api/requests?status=Pending%20HR%20Review&pageSize=100", null, token));
+            var list = await listResponse.Content.ReadFromJsonAsync<JsonElement>();
+            var row = list.GetProperty("items").EnumerateArray()
+                .Single(i => i.GetProperty("id").GetInt32() == requestId);
+            Assert.True(row.GetProperty("awaitingManager").GetBoolean());
+
+            var summaryResponse = await _fixture.Client.SendAsync(_fixture.AuthorizedRequest(
+                HttpMethod.Get, "/api/requests/summary", null, token));
+            summaryResponse.EnsureSuccessStatusCode();
+            var summary = await summaryResponse.Content.ReadFromJsonAsync<JsonElement>();
+            Assert.True(summary.GetProperty("awaitingManager").GetInt32() >= 1);
+
+            // HR decides a paid approval directly: used +1, the reserved day released once.
+            var decide = await _fixture.Client.SendAsync(_fixture.AuthorizedRequest(
+                HttpMethod.Post, $"/api/requests/{requestId}/decide",
+                new { stage = "HR", decision = "Approved", payment = "paid" }, token));
+            Assert.Equal(HttpStatusCode.OK, decide.StatusCode);
+
+            var (used, pending) = await BalanceBucketsAsync(employee.EmployeeId);
+            Assert.Equal(2m, used);
+            Assert.Equal(0m, pending);
+        }
+
+        [Fact]
+        public async Task HrRejectingStageOneRequest_ReleasesTheReservedDays()
+        {
+            var builder = new TestDataBuilder(_fixture.Services);
+            var gym = await builder.CreateGymWithStationAsync();
+            var employee = await builder.CreateEmployeeAsync(gym);
+            await builder.SetLeaveBalanceAsync(employee.EmployeeId, total: 10, used: 1);
+            var requestId = await SeedStageOneRequestAsync(employee.EmployeeId, "Annual Leave", reservedDays: 1);
+            var token = await _fixture.GetAdminTokenAsync();
+
+            var decide = await _fixture.Client.SendAsync(_fixture.AuthorizedRequest(
+                HttpMethod.Post, $"/api/requests/{requestId}/decide",
+                new { stage = "HR", decision = "Rejected", comment = "Coverage gap" }, token));
+            Assert.Equal(HttpStatusCode.OK, decide.StatusCode);
+
+            var (used, pending) = await BalanceBucketsAsync(employee.EmployeeId);
+            Assert.Equal(1m, used);
+            Assert.Equal(0m, pending);
+        }
+
+        [Fact]
+        public async Task Submit_WhenGymHasNoManager_AdvancesStraightToHr()
+        {
+            var builder = new TestDataBuilder(_fixture.Services);
+            var gym = await builder.CreateGymWithStationAsync();
+            var employee = await builder.CreateEmployeeAsync(gym);
+            await builder.SetLeaveBalanceAsync(employee.EmployeeId, total: 10, used: 0);
+
+            var login = await _fixture.Client.PostAsJsonAsync(
+                "/api/auth/login", new { email = employee.Email, password = employee.Password });
+            login.EnsureSuccessStatusCode();
+            var loginBody = await login.Content.ReadFromJsonAsync<JsonElement>();
+            var token = loginBody.GetProperty("accessToken").GetString()!;
+
+            using var content = new MultipartFormDataContent
+            {
+                { new StringContent("annual-leave"), "type" },
+                { new StringContent(FutureDate(5)), "requestDate" },
+                { new StringContent("Family trip"), "reason" },
+            };
+            // Multipart content carries its own boundary — AuthorizedRequest would
+            // attach JSON content instead, hence the hand-built request.
+            using var submitRequest = new HttpRequestMessage(
+                HttpMethod.Post, $"/api/employees/{employee.EmployeeId}/requests")
+            {
+                Content = content,
+            };
+            submitRequest.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+            var submit = await _fixture.Client.SendAsync(submitRequest);
+            Assert.Equal(HttpStatusCode.Created, submit.StatusCode);
+            var body = await submit.Content.ReadFromJsonAsync<JsonElement>();
+            var id = body.GetProperty("id").GetInt32();
+
+            using var scope = _fixture.Services.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<Presistence.Data.ReviveHrDbContext>();
+            var request = await db.EmployeeRequests.SingleAsync(r => r.Id == id);
+            Assert.Equal(DomainLayer.Models.RequestModule.Enums.RequestStatus.PendingHRReview, request.Status);
+            Assert.Equal(1m, (await db.LeaveBalances
+                .Where(b => b.EmployeeId == employee.EmployeeId)
+                .Select(b => b.PendingDays)
+                .SingleAsync()));
+        }
+
+        /// <summary>Seeds a stage-1 request plus the pending days its submission reserved.</summary>
+        private async Task<int> SeedStageOneRequestAsync(int employeeId, string type, decimal reservedDays)
+        {
+            using var scope = _fixture.Services.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<Presistence.Data.ReviveHrDbContext>();
+
+            var balance = await db.LeaveBalances
+                .SingleAsync(b => b.EmployeeId == employeeId && b.LeaveType == DomainLayer.Models.EmployeeModule.Enums.LeaveType.Annual);
+            balance.PendingDays += reservedDays;
+
+            var request = new DomainLayer.Models.RequestModule.EmployeeRequest
+            {
+                EmployeeId = employeeId,
+                Type = type,
+                RequestDate = DateOnly.FromDateTime(DateTime.UtcNow).AddDays(5),
+                TargetStartDate = DateOnly.FromDateTime(DateTime.UtcNow).AddDays(5),
+                Details = "Family event",
+                Status = DomainLayer.Models.RequestModule.Enums.RequestStatus.Pending,
+                SubmittedAt = DateTime.UtcNow,
+            };
+            db.EmployeeRequests.Add(request);
+            await db.SaveChangesAsync();
+            return request.Id;
+        }
+
+        private async Task<(decimal Used, decimal Pending)> BalanceBucketsAsync(int employeeId)
+        {
+            using var scope = _fixture.Services.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<Presistence.Data.ReviveHrDbContext>();
+            var balance = await db.LeaveBalances
+                .SingleAsync(b => b.EmployeeId == employeeId && b.LeaveType == DomainLayer.Models.EmployeeModule.Enums.LeaveType.Annual);
+            return (balance.UsedDays, balance.PendingDays);
         }
 
         // ------------------------------------------------------------------

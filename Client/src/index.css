@@ -30,6 +30,46 @@
   --color-charcoal-900: #212529;
 }
 
+/* ==================== HR console scope ====================
+   The HR mock (Mock UI/HR/DESIGN.md) uses a deeper emerald (#006c49) and a
+   violet-tinted "charcoal" scale than the Employee mock, so the console
+   redeclares just those stops on its own subtree. Tailwind v4 utilities read
+   these custom properties, so every brand/charcoal utility inside .hr-portal
+   picks the HR palette while the rest of the app keeps its own. */
+.hr-portal {
+  --color-brand-50: #f0fdf4;
+  --color-brand-100: #dcfce7;
+  --color-brand-200: #bbf7d0;
+  --color-brand-300: #86efac;
+  --color-brand-400: #4ade80;
+  --color-brand-500: #10b981;
+  --color-brand-600: #006c49;
+  --color-brand-700: #005236;
+  --color-brand-800: #00422b;
+  --color-brand-900: #002113;
+}
+
+/* Primary buttons inside the console use the HR emerald (the base .btn-primary
+   is a literal brand-green that predates the token scope). */
+.hr-portal .btn-primary {
+  background: var(--color-brand-600);
+  border-color: var(--color-brand-600);
+}
+.hr-portal .btn-primary:hover:not(:disabled) {
+  background: var(--color-brand-700);
+  border-color: var(--color-brand-700);
+}
+
+/* The violet-tinted charcoal is a light-theme value only: under .dark the
+   app's own dark neutrals must win, or cards stay dark on a light page. */
+:root:not(.dark) .hr-portal {
+  --color-charcoal-50: #f9f9ff;
+  --color-charcoal-400: #adb5bd;
+  --color-charcoal-500: #6c7a71;
+  --color-charcoal-800: #111c2d;
+  --color-charcoal-900: #212529;
+}
+
 /* ==================== Dark mode tokens ====================
    Tailwind v4 utilities compile to var(--color-*), so re-declaring the
    scales under .dark flips every utility in the app at once. Three rules:
@@ -246,6 +286,9 @@ body {
 .badge-gray { background: var(--color-charcoal-100); color: var(--color-charcoal-700); }
 .badge-purple { background: #f3e8ff; color: #6b21a8; }
 .badge-orange { background: #fff7ed; color: #9a3412; }
+.badge-emerald { background: #d1fae5; color: #065f46; }
+.badge-success { background: #d1fae5; color: #00422b; }
+.badge-brand { background: #e6f4ee; color: #006c49; }
 /* Dark variants: deep-tinted backgrounds with light text instead of pastel pills. */
 .dark .badge-green { background: #11301d; color: #8ce0a8; }
 .dark .badge-yellow { background: #332a0c; color: #e6c767; }
@@ -253,6 +296,20 @@ body {
 .dark .badge-blue { background: #12233d; color: #93b7e8; }
 .dark .badge-purple { background: #28123d; color: #cea3f0; }
 .dark .badge-orange { background: #381a0c; color: #efa676; }
+.dark .badge-emerald { background: #0d2f24; color: #6ee7b7; }
+.dark .badge-success { background: #0d2f24; color: #a7f3cf; }
+.dark .badge-brand { background: #0f2c22; color: #6ee7a8; }
+
+/* HR console in dark mode: keep the deep emerald fills but lighten the text
+   stops painted on them (brand-600 stays a button/fill colour). */
+.dark .hr-portal {
+  --color-brand-50: #0d2a1d;
+  --color-brand-100: #123a27;
+  --color-brand-200: #17503a;
+  --color-brand-300: #1f6b4a;
+  --color-brand-700: #6ee7a8;
+  --color-brand-800: #a7f3cf;
+}
 
 /* Timeline */
 .timeline-line {

@@ -35,10 +35,15 @@ function splitName(fullName: string): { firstName: string; lastName: string } | 
 }
 
 function emailFromName(fullName: string): string {
-  return fullName
+  // "Flow Check 1211 " → "flow.check" (collapse spaces, drop non-letters, trim dots).
+  const slug = fullName
+    .trim()
     .toLowerCase()
     .replace(/\s+/g, '.')
-    .replace(/[^a-z.]/g, '') + '@revive.com'
+    .replace(/[^a-z.]/g, '')
+    .replace(/\.{2,}/g, '.')
+    .replace(/^\.+|\.+$/g, '')
+  return `${slug || 'employee'}@revive.com`
 }
 
 /**
@@ -57,7 +62,7 @@ export default function CreateEmployeeDialog({ onClose, toast }: CreateEmployeeD
 
   const createEmployee = useCreateEmployee()
   const enrollFace = useDashboardFaceEnroll()
-  const today = new Date().toISOString().slice(0, 10)
+  const [today] = useState(() => new Date().toISOString().slice(0, 10))
   const [fullName, setFullName] = useState('')
   const [position, setPosition] = useState('')
   const [level, setLevel] = useState('Junior')
@@ -69,6 +74,22 @@ export default function CreateEmployeeDialog({ onClose, toast }: CreateEmployeeD
   const [gymId, setGymId] = useState<number | null>(null)
   const [role, setRole] = useState('Emp')
   const [error, setError] = useState<string | null>(null)
+  const [created, setCreated] = useState<{
+    name: string
+    code: string
+    email: string
+    password: string
+    warnings: string[]
+  } | null>(null)
+
+  const copyToClipboard = async (value: string, label: string) => {
+    try {
+      await navigator.clipboard.writeText(value)
+      toast(`${label} copied`, 'success')
+    } catch {
+      toast('Copy failed — select the text and copy it manually', 'warning')
+    }
+  }
 
   // Role options: base roles + any role template configured in HR Team Management.
   const roleOptions = BASE_ROLES.concat(
@@ -145,30 +166,106 @@ export default function CreateEmployeeDialog({ onClose, toast }: CreateEmployeeD
 
       // Optional extras run after the employee exists; failures stay visible but
       // never undo the account.
+      const warnings: string[] = [];
       if (role !== 'Emp') {
         try {
           await postRoleChange(created.id, { systemRole: role })
         } catch (roleError) {
-          toast(`Employee ${created.employeeNumber} created, but the ${role} role could not be applied: ${describeApiError(roleError)}`, 'warning')
+          warnings.push(`The ${role} role could not be applied: ${describeApiError(roleError)}`)
         }
       }
       if (photo) {
         try {
           await enrollFace.mutateAsync({ employeeNumber: created.employeeNumber, image: photo })
-          toast(`New employee ${fullName.trim()} (${created.employeeNumber}) created — Face-ID photo saved for attendance.`, 'success')
         } catch (enrollError) {
-          toast(`Employee ${created.employeeNumber} created, but Face-ID save failed: ${describeApiError(enrollError)}`, 'warning')
+          warnings.push(`Face-ID photo could not be saved: ${describeApiError(enrollError)}`)
         }
-      } else {
-        toast(`New employee ${fullName.trim()} (${created.employeeNumber}) created — no Face-ID photo yet.`, 'success')
       }
-      onClose()
+
+      // Hand the credentials over instead of closing: HR needs them to sign the
+      // employee in for the first time.
+      setCreated({
+        name: fullName.trim(),
+        code: created.employeeNumber,
+        email: email.trim(),
+        password: DEFAULT_PASSWORD,
+        warnings,
+      })
     } catch (submitError) {
       setError(describeApiError(submitError))
     }
   }
 
   const saving = createEmployee.isPending || enrollFace.isPending
+
+  if (created) {
+    const credential = (label: string, value: string) => (
+      <div className="rounded-lg border border-charcoal-200 bg-charcoal-50 p-2.5">
+        <p className="text-[9px] font-semibold uppercase tracking-wide text-charcoal-500">{label}</p>
+        <div className="mt-1 flex items-center gap-2">
+          <code className="min-w-0 flex-1 truncate font-mono text-xs font-bold text-charcoal-900">{value}</code>
+          <Button size="sm" variant="secondary" className="h-6 px-2 text-[10px]" onClick={() => copyToClipboard(value, label)}>
+            Copy
+          </Button>
+        </div>
+      </div>
+    )
+
+    return (
+      <Dialog
+        open
+        onClose={onClose}
+        title="Employee account created"
+        description="Share these credentials with the employee so they can sign in to the portal."
+        className="sm:max-w-md"
+        footer={
+          <Button size="sm" onClick={onClose}>
+            Done
+          </Button>
+        }
+      >
+        <div className="space-y-3">
+          <div className="flex items-center gap-2.5 rounded-lg border border-brand-200 bg-brand-50 px-3 py-2">
+            <span className="flex h-8 w-8 items-center justify-center rounded-full bg-brand-100 text-xs font-bold text-brand-700">
+              ✓
+            </span>
+            <div className="min-w-0">
+              <p className="truncate text-sm font-bold text-charcoal-900">{created.name}</p>
+              <p className="font-mono text-[10px] text-charcoal-500">{created.code}</p>
+            </div>
+          </div>
+
+          {credential('Login email', created.email)}
+          {credential('Temporary password', created.password)}
+
+          <div className="flex justify-end gap-1.5">
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-7 text-[11px]"
+              onClick={() => copyToClipboard(`Email: ${created.email}\nPassword: ${created.password}`, 'Credentials')}
+            >
+              Copy both
+            </Button>
+          </div>
+
+          <p className="text-[10px] leading-relaxed text-charcoal-500">
+            The employee signs in at the app&apos;s login page with this email and password, then lands in the
+            employee portal (requests, schedule, attendance, payroll). They can change the password later from
+            their profile settings.
+          </p>
+
+          {created.warnings.length > 0 && (
+            <ul className="space-y-1 rounded-lg border border-amber-200 bg-amber-50 p-2.5 text-[10px] text-amber-800">
+              {created.warnings.map((warning) => (
+                <li key={warning}>⚠ {warning}</li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </Dialog>
+    )
+  }
 
   return (
     <Dialog

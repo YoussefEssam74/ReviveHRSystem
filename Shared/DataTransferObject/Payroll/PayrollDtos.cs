@@ -19,6 +19,10 @@ namespace Shared.DataTransferObject.Payroll
     public class PayrollPeriodItem
     {
         public int Id { get; set; }
+        /// <summary>The branch this run belongs to (periods are per-gym rows).</summary>
+        public int GymId { get; set; }
+        /// <summary>Branch name ("Nasr City") — the sheet header and publish target.</summary>
+        public string Gym { get; set; } = string.Empty;
         /// <summary>Month label ("August 2026") derived from the period start.</summary>
         public string Period { get; set; } = string.Empty;
         /// <summary>Open | Partially Published | Published | Paid.</summary>
@@ -42,6 +46,24 @@ namespace Shared.DataTransferObject.Payroll
         public int TotalPages { get; set; }
     }
 
+    /// <summary>
+    /// POST /api/payroll-periods/ensure — idempotent provisioning of the current month:
+    /// creates the gym's period when missing and adds a Draft sheet for every active
+    /// employee who has none. Locked/paid periods are never touched.
+    /// </summary>
+    public class PayrollEnsureResponse
+    {
+        public int PeriodId { get; set; }
+        /// <summary>Month label ("November 2026").</summary>
+        public string Period { get; set; } = string.Empty;
+        /// <summary>True when the period row itself was created by this call.</summary>
+        public bool Created { get; set; }
+        /// <summary>Employee sheets added to an already-open period.</summary>
+        public int EntriesAdded { get; set; }
+        /// <summary>False when the period is already published/locked (nothing changed).</summary>
+        public bool Open { get; set; }
+    }
+
     /// <summary>One deduction line: `{ id, date, label, reason, source, amount, status, attendanceRef, requestId }`.</summary>
     public class DeductionLineItem
     {
@@ -59,11 +81,104 @@ namespace Shared.DataTransferObject.Payroll
         public int? RequestId { get; set; }
     }
 
+    /// <summary>One punch the settlement sheet's evidence column renders.</summary>
+    public class PayrollPunchItem
+    {
+        /// <summary>"ATT-{recordId}" — feeds GET /api/attendance/{id}.</summary>
+        public string AttendanceRef { get; set; } = string.Empty;
+        public DateOnly Date { get; set; }
+        /// <summary>Gym-local "08:41".</summary>
+        public string? FirstIn { get; set; }
+        public string? LastOut { get; set; }
+        /// <summary>Biometric | Manual | Unknown.</summary>
+        public string Device { get; set; } = string.Empty;
+        /// <summary>On Time | Late | Absent | Early Checkout | Missing Checkout | Off.</summary>
+        public string Exception { get; set; } = string.Empty;
+        public string Detail { get; set; } = string.Empty;
+        public bool OnTime { get; set; }
+    }
+
+    /// <summary>
+    /// One day behind the settlement sheet's counters (the click-through log):
+    /// its category, the shift it belonged to, the punches and any overtime.
+    /// </summary>
+    public class PayrollAttendanceDay
+    {
+        public DateOnly Date { get; set; }
+
+        /// <summary>
+        /// Attended | WeeklyOff | ApprovedLeave | Late | Absent | EarlyCheckout |
+        /// MissingCheckout — the bucket the counter row sums up.
+        /// </summary>
+        public string Kind { get; set; } = "Attended";
+
+        /// <summary>Friendly status ("On Time", "Late", "Off", …).</summary>
+        public string Status { get; set; } = string.Empty;
+
+        /// <summary>Shift window ("08:00–16:00") when a shift was scheduled.</summary>
+        public string? Shift { get; set; }
+
+        /// <summary>Gym-local "08:41".</summary>
+        public string? CheckIn { get; set; }
+        public string? CheckOut { get; set; }
+
+        /// <summary>Punch-to-punch hours (0 when the day has no complete punch).</summary>
+        public decimal WorkedHours { get; set; }
+
+        /// <summary>Hours worked past the scheduled shift end (0 when none).</summary>
+        public decimal OvertimeHours { get; set; }
+
+        /// <summary>Leave reason / manual-entry note, when there is one.</summary>
+        public string? Note { get; set; }
+
+        /// <summary>"ATT-{recordId}" when the day has a punch — feeds GET /api/attendance/{id}.</summary>
+        public string? AttendanceRef { get; set; }
+    }
+
+    /// <summary>
+    /// PUT /api/payroll-periods/{id}/entries/{employeeId}/attendance — HR's correction of
+    /// the sheet's attendance numbers (payroll.edit). All six are required so the sheet
+    /// always carries a complete, deliberate set.
+    /// </summary>
+    public class UpdatePayrollAttendanceRequest
+    {
+        public int DaysAttended { get; set; }
+        public int WeeklyOffs { get; set; }
+        public int ApprovedLeaves { get; set; }
+        public decimal OvertimeHours { get; set; }
+        public int LateArrivals { get; set; }
+        public int UnexcusedAbsences { get; set; }
+    }
+
+    /// <summary>
+    /// Attendance evidence for one settlement sheet (the right-hand column): the six
+    /// counters the mock prints, the per-day log behind them, and the punch records
+    /// behind any deduction.
+    /// </summary>
+    public class PayrollAttendanceItem
+    {
+        /// <summary>Set when HR corrected the counters by hand (the raw log stays visible).</summary>
+        public DateTime? AdjustedAt { get; set; }
+
+        public int DaysAttended { get; set; }
+        public int WeeklyOffs { get; set; }
+        public int ApprovedLeaves { get; set; }
+        public decimal OvertimeHours { get; set; }
+        public int LateArrivals { get; set; }
+        public int UnexcusedAbsences { get; set; }
+        public List<PayrollPunchItem> Punches { get; set; } = [];
+
+        /// <summary>Every day of the period, oldest first — the drill-down source.</summary>
+        public List<PayrollAttendanceDay> Days { get; set; } = [];
+    }
+
     /// <summary>One payroll sheet row in the overview table / settlement sheet.</summary>
     public class PayrollEntryItem
     {
         public int EmployeeId { get; set; }
         public string Name { get; set; } = string.Empty;
+        /// <summary>"RV-00124" — printed under the name.</summary>
+        public string EmployeeNumber { get; set; } = string.Empty;
         public string Initials { get; set; } = string.Empty;
         public string Gym { get; set; } = string.Empty;
         public string Position { get; set; } = string.Empty;
@@ -83,6 +198,11 @@ namespace Shared.DataTransferObject.Payroll
         public bool Reviewed { get; set; }
         public List<int> RelatedRequestIds { get; set; } = [];
         public List<DeductionLineItem> DeductionLines { get; set; } = [];
+        /// <summary>
+        /// Work-days ledger + punch proof. Populated by the period detail (the
+        /// settlement sheet); null on the per-employee history list.
+        /// </summary>
+        public PayrollAttendanceItem? Attendance { get; set; }
         /// <summary>Month label — populated by the per-employee history endpoint only.</summary>
         public string? Period { get; set; }
     }

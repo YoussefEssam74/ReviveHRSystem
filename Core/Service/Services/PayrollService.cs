@@ -91,8 +91,108 @@ namespace Service.Services
                 .OrderBy(e => e.Employee.FullName, StringComparer.OrdinalIgnoreCase)
                 .ToList();
 
-            var data = BuildPeriodDetail(period, entries);
+            // The settlement sheet's evidence column (work-days ledger + punch proof)
+            // rides with the detail so the page renders from a single call.
+            var evidence = await LoadAttendanceEvidenceAsync(period, entries, cancellationToken);
+            var data = BuildPeriodDetail(period, entries, evidence);
             return new PayrollPeriodDetailResponse { Data = data };
+        }
+
+        // ==================================================================
+        // Current-period provisioning
+        // ==================================================================
+
+        public async Task<PayrollEnsureResponse> EnsureCurrentPeriodAsync(
+            int? actorUserId, int gymId, CancellationToken cancellationToken = default)
+        {
+            var actor = await HrPortalHelpers.ResolveActorAsync(_unitOfWork, actorUserId, cancellationToken);
+            await _accessControl.EnsurePermissionForGymAsync(actor.Id, "payroll.edit", gymId, cancellationToken);
+            await HrPortalHelpers.ResolveGymAsync(_unitOfWork, _userAccess, actor, gymId, null, cancellationToken);
+
+            var today = DateOnly.FromDateTime(DateTime.UtcNow);
+            var start = new DateOnly(today.Year, today.Month, 1);
+            var end = start.AddMonths(1).AddDays(-1);
+
+            // Every status: the run this call may have opened is Open, and the
+            // per-gym spec used elsewhere deliberately hides those.
+            var periods = await _unitOfWork.GetRepository<PayrollPeriod, int>()
+                .GetAllAsync(new PayrollPeriodScopeSpec([gymId], gymId), cancellationToken);
+            var period = periods.FirstOrDefault(p => p.StartDate == start);
+
+            var created = false;
+            if (period is null)
+            {
+                period = new PayrollPeriod
+                {
+                    GymId = gymId,
+                    StartDate = start,
+                    EndDate = end,
+                    Status = PayrollPeriodStatus.Open,
+                };
+                await _unitOfWork.GetRepository<PayrollPeriod, int>().AddAsync(period, cancellationToken);
+                await _unitOfWork.SaveChangesAsync(cancellationToken);
+                created = true;
+            }
+
+            var response = new PayrollEnsureResponse
+            {
+                PeriodId = period.Id,
+                Period = PeriodLabel(period),
+                Created = created,
+                Open = period.Status == PayrollPeriodStatus.Open && period.PaidDate is null,
+            };
+
+            // Published/paid runs are historical records — new staff must not alter them.
+            if (!response.Open)
+            {
+                return response;
+            }
+
+            var entrants = await _unitOfWork.GetRepository<PayrollEntry, int>()
+                .GetAllAsync(new PayrollEntriesByPeriodSpec(period.Id, withEmployee: false), cancellationToken);
+            var covered = entrants.Select(e => e.EmployeeId).ToHashSet();
+
+            var employees = (await _unitOfWork.GetRepository<Employee, int>()
+                    .GetAllAsync(new EmployeesByGymSpec(gymId), cancellationToken))
+                .Where(e => e.Status == EmployeeStatus.Active && !covered.Contains(e.Id))
+                .ToList();
+
+            if (employees.Count == 0)
+            {
+                return response;
+            }
+
+            var attendance = await _unitOfWork.GetRepository<AttendanceRecord, int>()
+                .GetAllAsync(new AttendanceByEmployeesRangeSpec(employees.Select(e => e.Id).ToArray(), start, end), cancellationToken);
+            var daysByEmployee = attendance
+                .Where(r => r.CheckInTime is not null)
+                .GroupBy(r => r.EmployeeId)
+                .ToDictionary(g => g.Key, g => g.Count());
+
+            var added = 0;
+            foreach (var employee in employees)
+            {
+                var compensation = await _unitOfWork.GetRepository<Compensation, int>()
+                    .GetByIdAsync(new LatestCompensationSpec(employee.Id), cancellationToken);
+
+                var entry = new PayrollEntry
+                {
+                    PayrollPeriodId = period.Id,
+                    EmployeeId = employee.Id,
+                    BaseSalary = compensation?.Amount ?? 0m,
+                    DaysWorked = daysByEmployee.GetValueOrDefault(employee.Id),
+                    OvertimeHours = 0m,
+                    TotalBonuses = 0m,
+                    Status = "Draft",
+                };
+                SyncTotals(entry);
+                await _unitOfWork.GetRepository<PayrollEntry, int>().AddAsync(entry, cancellationToken);
+                added++;
+            }
+
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+            response.EntriesAdded = added;
+            return response;
         }
 
         // ==================================================================
@@ -112,6 +212,47 @@ namespace Service.Services
             }
 
             entry.TotalBonuses = bonus;
+            SyncTotals(entry);
+            _unitOfWork.GetRepository<PayrollEntry, int>().Update(entry);
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+            return new EntryTotalsResponse
+            {
+                Data = new EntryTotalsData
+                {
+                    EmployeeId = entry.EmployeeId,
+                    Bonus = entry.TotalBonuses,
+                    Gross = GrossOf(entry),
+                    Deductions = ApprovedDeductionsOf(entry),
+                    Net = NetOf(entry),
+                },
+            };
+        }
+
+        public async Task<EntryTotalsResponse> UpdateAttendanceAsync(
+            int? actorUserId, int periodId, int employeeId, UpdatePayrollAttendanceRequest request,
+            CancellationToken cancellationToken = default)
+        {
+            var actor = await HrPortalHelpers.ResolveActorAsync(_unitOfWork, actorUserId, cancellationToken);
+            await _accessControl.EnsurePermissionAsync(actor.Id, "payroll.edit", cancellationToken);
+            var (_, entry) = await LoadEntryAsync(actor, periodId, employeeId, requireOpen: true, cancellationToken);
+
+            if (request.DaysAttended < 0 || request.WeeklyOffs < 0 || request.ApprovedLeaves < 0 ||
+                request.LateArrivals < 0 || request.UnexcusedAbsences < 0 || request.OvertimeHours < 0)
+            {
+                throw new BadRequestException("Attendance values cannot be negative.");
+            }
+
+            entry.DaysWorked = request.DaysAttended;
+            entry.OvertimeHours = Math.Round(request.OvertimeHours, 2);
+            entry.WeeklyOffsOverride = request.WeeklyOffs;
+            entry.ApprovedLeavesOverride = request.ApprovedLeaves;
+            entry.LateArrivalsOverride = request.LateArrivals;
+            entry.UnexcusedAbsencesOverride = request.UnexcusedAbsences;
+            entry.AttendanceAdjustedAt = DateTime.UtcNow;
+            entry.AttendanceAdjustedBy = actor.Id;
+
+            // Overtime feeds the gross, so the money has to follow the correction.
             SyncTotals(entry);
             _unitOfWork.GetRepository<PayrollEntry, int>().Update(entry);
             await _unitOfWork.SaveChangesAsync(cancellationToken);
@@ -864,12 +1005,211 @@ namespace Service.Services
             return "Published";
         }
 
+        /// <summary>
+        /// Builds the settlement sheet's right-hand evidence column for every entry in
+        /// one batch: the six attendance counters the mock prints plus the punch
+        /// records behind them (deduction-linked punches first, then the newest ones).
+        /// </summary>
+        private async Task<Dictionary<int, PayrollAttendanceItem>> LoadAttendanceEvidenceAsync(
+            PayrollPeriod period,
+            IReadOnlyCollection<PayrollEntry> entries,
+            CancellationToken cancellationToken)
+        {
+            var employeeIds = entries.Select(e => e.EmployeeId).Distinct().ToArray();
+            if (employeeIds.Length == 0)
+            {
+                return [];
+            }
+
+            var records = (await _unitOfWork.GetRepository<AttendanceRecord, int>()
+                .GetAllAsync(new AttendanceByEmployeesRangeSpec(employeeIds, period.StartDate, period.EndDate), cancellationToken))
+                .ToList();
+
+            var approvedLeaves = (await _unitOfWork.GetRepository<DomainLayer.Models.RequestModule.EmployeeRequest, int>()
+                    .GetAllAsync(
+                        new RequestsByEmployeesSpec(
+                            employeeIds,
+                            DomainLayer.Models.RequestModule.Enums.RequestStatus.Approved,
+                            null,
+                            period.StartDate,
+                            period.EndDate),
+                        cancellationToken))
+                // Annual Leave / Sick Leave consume the balance; "Day Off" is the legacy label.
+                .Where(r => r.Type is "Annual Leave" or "Day Off" or "Sick Leave")
+                .ToList();
+
+            var recordsByEmployee = records
+                .GroupBy(r => r.EmployeeId)
+                .ToDictionary(g => g.Key, g => g.ToList());
+
+            return entries.ToDictionary(
+                e => e.EmployeeId,
+                e =>
+                {
+                    var rows = recordsByEmployee.GetValueOrDefault(e.EmployeeId) ?? [];
+                    var leaves = approvedLeaves.Where(l => l.EmployeeId == e.EmployeeId).ToList();
+                    // Without a manual correction the counters are derived from the
+                    // records; a seeded or stale DaysWorked must not outlive its evidence.
+                    var adjusted = e.AttendanceAdjustedAt is not null;
+                    return new PayrollAttendanceItem
+                    {
+                        AdjustedAt = e.AttendanceAdjustedAt,
+                        DaysAttended = adjusted ? e.DaysWorked : rows.Count(r => r.CheckInTime is not null),
+                        // A hand correction wins over the derived count; the day log and
+                        // punch proof below stay untouched as the raw evidence.
+                        WeeklyOffs = e.WeeklyOffsOverride ?? rows.Count(r => r.Status == AttendanceStatus.Off),
+                        ApprovedLeaves = e.ApprovedLeavesOverride ?? leaves.Sum(RequestSpanDays),
+                        OvertimeHours = e.OvertimeHours,
+                        LateArrivals = e.LateArrivalsOverride ?? rows.Count(r => r.Status == AttendanceStatus.Late),
+                        UnexcusedAbsences = e.UnexcusedAbsencesOverride ?? rows.Count(r => r.Status == AttendanceStatus.Absent),
+                        Punches = rows
+                            .Where(r => r.CheckInTime is not null)
+                            .OrderByDescending(r => r.Status is AttendanceStatus.Late or AttendanceStatus.EarlyCheckout)
+                            .ThenByDescending(r => r.Date)
+                            .Take(5)
+                            .Select(ToPunch)
+                            .ToList(),
+                        // The per-day log behind the counters (click-through).
+                        Days = BuildAttendanceDays(rows, leaves, period.StartDate, period.EndDate),
+                    };
+                });
+        }
+
+        private static PayrollPunchItem ToPunch(AttendanceRecord record) => new()
+        {
+            AttendanceRef = $"ATT-{record.Id}",
+            Date = record.Date,
+            FirstIn = record.CheckInTime?.ToString("HH:mm", CultureInfo.InvariantCulture),
+            LastOut = record.CheckOutTime?.ToString("HH:mm", CultureInfo.InvariantCulture),
+            Device = record.CheckInMethod?.ToString() ?? record.CheckOutMethod?.ToString() ?? "Manual",
+            Exception = FriendlyAttendance(record.Status),
+            Detail = string.IsNullOrWhiteSpace(record.Notes) ? PunchDetail(record.Status) : record.Notes,
+            OnTime = record.Status == AttendanceStatus.OnTime,
+        };
+
+        /// <summary>
+        /// The day-by-day log behind the six counters: every attendance record of the
+        /// period plus the approved leave days that carry no record, oldest first.
+        /// </summary>
+        private static List<PayrollAttendanceDay> BuildAttendanceDays(
+            IReadOnlyCollection<AttendanceRecord> records,
+            IReadOnlyCollection<DomainLayer.Models.RequestModule.EmployeeRequest> leaves,
+            DateOnly start,
+            DateOnly end)
+        {
+            var days = new List<PayrollAttendanceDay>();
+            var covered = new HashSet<DateOnly>(records.Select(r => r.Date));
+
+            foreach (var record in records)
+            {
+                var shift = record.ScheduledShiftTemplate;
+
+                decimal worked = 0;
+                if (record.CheckInTime is { } checkIn && record.CheckOutTime is { } checkOut)
+                {
+                    var minutes = (checkOut - checkIn).TotalMinutes;
+                    if (minutes > 0)
+                    {
+                        worked = Math.Round((decimal)minutes / 60m, 2);
+                    }
+                }
+
+                decimal overtime = 0;
+                if (shift is not null && worked > 0)
+                {
+                    var shiftHours = (decimal)(shift.EndTime - shift.StartTime).TotalHours;
+                    if (shiftHours > 0 && worked > shiftHours)
+                    {
+                        overtime = Math.Round(worked - shiftHours, 2);
+                    }
+                }
+
+                days.Add(new PayrollAttendanceDay
+                {
+                    Date = record.Date,
+                    Kind = AttendanceKind(record.Status),
+                    Status = FriendlyAttendance(record.Status),
+                    Shift = shift is null
+                        ? null
+                        : $"{shift.StartTime.ToString("HH:mm", CultureInfo.InvariantCulture)}–{shift.EndTime.ToString("HH:mm", CultureInfo.InvariantCulture)}",
+                    CheckIn = record.CheckInTime?.ToString("HH:mm", CultureInfo.InvariantCulture),
+                    CheckOut = record.CheckOutTime?.ToString("HH:mm", CultureInfo.InvariantCulture),
+                    WorkedHours = worked,
+                    OvertimeHours = overtime,
+                    Note = record.Notes,
+                    AttendanceRef = record.CheckInTime is not null ? $"ATT-{record.Id}" : null,
+                });
+            }
+
+            foreach (var leave in leaves)
+            {
+                var from = leave.TargetStartDate ?? leave.RequestDate;
+                var to = leave.TargetEndDate ?? leave.RequestDate;
+                if (to < start || from > end)
+                {
+                    continue;
+                }
+
+                if (from < start) from = start;
+                if (to > end) to = end;
+
+                for (var day = from; day <= to; day = day.AddDays(1))
+                {
+                    if (!covered.Add(day))
+                    {
+                        continue;
+                    }
+
+                    days.Add(new PayrollAttendanceDay
+                    {
+                        Date = day,
+                        Kind = "ApprovedLeave",
+                        Status = leave.Type,
+                        Note = string.IsNullOrWhiteSpace(leave.Details) ? null : leave.Details,
+                    });
+                }
+            }
+
+            return days.OrderBy(day => day.Date).ToList();
+        }
+
+        /// <summary>The counter bucket a record belongs to (see <see cref="PayrollAttendanceDay.Kind"/>).</summary>
+        private static string AttendanceKind(AttendanceStatus status) => status switch
+        {
+            AttendanceStatus.Off => "WeeklyOff",
+            AttendanceStatus.Late => "Late",
+            AttendanceStatus.Absent => "Absent",
+            AttendanceStatus.EarlyCheckout => "EarlyCheckout",
+            AttendanceStatus.MissingCheckout => "MissingCheckout",
+            _ => "Attended",
+        };
+
+        private static string PunchDetail(AttendanceStatus status) => status switch
+        {
+            AttendanceStatus.Late => "Check-in was logged after the shift start.",
+            AttendanceStatus.EarlyCheckout => "Check-out was logged before the shift end.",
+            AttendanceStatus.MissingCheckout => "No check-out punch was recorded.",
+            AttendanceStatus.Absent => "No punch was recorded for this shift.",
+            AttendanceStatus.Off => "Weekly off — no shift was scheduled.",
+            _ => "Regular punch.",
+        };
+
+        /// <summary>Calendar days an approved leave covers (at least one).</summary>
+        private static int RequestSpanDays(DomainLayer.Models.RequestModule.EmployeeRequest request)
+        {
+            var start = request.TargetStartDate ?? request.RequestDate;
+            var end = request.TargetEndDate ?? request.RequestDate;
+            return Math.Max(1, end.DayNumber - start.DayNumber + 1);
+        }
+
         private static PayrollPeriodItem BuildPeriodItem(PayrollPeriod period, List<PayrollEntry> entries)
         {
             var published = period.Status != PayrollPeriodStatus.Open || period.PaidDate is not null;
             return new PayrollPeriodItem
             {
                 Id = period.Id,
+                GymId = period.GymId,
+                Gym = period.Gym?.Name ?? string.Empty,
                 Period = PeriodLabel(period),
                 Status = DisplayStatus(period, entries),
                 Locked = period.Status != PayrollPeriodStatus.Open,
@@ -882,12 +1222,17 @@ namespace Service.Services
             };
         }
 
-        private static PayrollPeriodDetailData BuildPeriodDetail(PayrollPeriod period, List<PayrollEntry> entries)
+        private static PayrollPeriodDetailData BuildPeriodDetail(
+            PayrollPeriod period,
+            List<PayrollEntry> entries,
+            IReadOnlyDictionary<int, PayrollAttendanceItem>? evidence = null)
         {
             var item = BuildPeriodItem(period, entries);
             return new PayrollPeriodDetailData
             {
                 Id = item.Id,
+                GymId = item.GymId,
+                Gym = item.Gym,
                 Period = item.Period,
                 Status = item.Status,
                 Locked = item.Locked,
@@ -897,11 +1242,16 @@ namespace Service.Services
                 TotalGross = item.TotalGross,
                 TotalDeductions = item.TotalDeductions,
                 TotalNet = item.TotalNet,
-                Items = entries.Select(e => MapEntry(e)).ToList(),
+                Items = entries
+                    .Select(e => MapEntry(e, attendance: evidence?.GetValueOrDefault(e.EmployeeId)))
+                    .ToList(),
             };
         }
 
-        private static PayrollEntryItem MapEntry(PayrollEntry entry, string? periodLabel = null)
+        private static PayrollEntryItem MapEntry(
+            PayrollEntry entry,
+            string? periodLabel = null,
+            PayrollAttendanceItem? attendance = null)
         {
             var gross = GrossOf(entry);
             var approved = ApprovedDeductionsOf(entry);
@@ -909,11 +1259,14 @@ namespace Service.Services
             {
                 EmployeeId = entry.EmployeeId,
                 Name = entry.Employee.FullName,
+                EmployeeNumber = entry.Employee.EmployeeNumber,
                 Initials = HrPortalHelpers.BuildInitials(entry.Employee.FullName),
                 Gym = entry.Employee.Gym?.Name ?? string.Empty,
                 Position = entry.Employee.Position?.Title ?? "None",
                 EmploymentStatus = FriendlyEmployment(entry.Employee.Status),
-                Days = entry.DaysWorked,
+                // The ledger's Days column mirrors the evidence: a manual correction wins,
+                // otherwise the count comes from the punches (never a stale seed).
+                Days = attendance?.DaysAttended ?? entry.DaysWorked,
                 Overtime = entry.OvertimeHours,
                 BaseSalary = entry.BaseSalary,
                 Bonus = entry.TotalBonuses,
@@ -933,6 +1286,7 @@ namespace Service.Services
                     .ThenBy(l => l.Id)
                     .Select(MapLine)
                     .ToList(),
+                Attendance = attendance,
                 Period = periodLabel,
             };
         }

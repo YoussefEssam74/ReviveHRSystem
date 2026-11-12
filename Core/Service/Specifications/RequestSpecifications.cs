@@ -33,6 +33,8 @@ namespace Service.Specifications
             Criteria = r => r.Id == requestId;
             AddInclude(r => r.Employee);
             AddInclude(r => r.Employee.Gym);
+            AddInclude(r => r.Employee.Position);
+            AddInclude(r => r.Employee.LeaveBalances);
             AddInclude(r => r.Decisions);
             AddInclude(r => r.SwapWithEmployee!);
             // Decide / undo / archive / restore mutate the fetched request (and its
@@ -66,6 +68,12 @@ namespace Service.Specifications
     /// </summary>
     public sealed class RequestDirectorySpec : BaseSpecification<EmployeeRequest, int>
     {
+        /// <param name="includeAwaitingManager">
+        /// The HR inbox opts in: "Pending HR Review" then also matches stage-1
+        /// <see cref="RequestStatus.Pending"/> rows, which HR may decide directly when
+        /// no branch manager is assigned. The management desk keeps the default
+        /// (exact status) so its stage-1 queue is unchanged.
+        /// </param>
         public RequestDirectorySpec(
             int[]? gymIds,
             RequestStatus? status,
@@ -77,7 +85,9 @@ namespace Service.Specifications
             int take,
             string sortBy,
             bool desc,
-            int[]? ids = null)
+            int[]? ids = null,
+            bool includeAwaitingManager = false,
+            bool tracking = false)
         {
             Expression<Func<EmployeeRequest, bool>> predicate = _ => true;
 
@@ -91,6 +101,13 @@ namespace Service.Specifications
             {
                 predicate = And(predicate, r =>
                     r.Status == RequestStatus.Approved || r.Status == RequestStatus.Rejected);
+            }
+            else if (status.HasValue &&
+                     includeAwaitingManager &&
+                     status.Value == RequestStatus.PendingHRReview)
+            {
+                predicate = And(predicate, r =>
+                    r.Status == RequestStatus.PendingHRReview || r.Status == RequestStatus.Pending);
             }
             else if (status.HasValue)
             {
@@ -123,7 +140,9 @@ namespace Service.Specifications
                 case "urgent":
                     predicate = And(predicate, r =>
                         r.Status == RequestStatus.PendingHRReview &&
-                        (r.Type == "Late Arrival" || r.Type == "Leave Early" || r.Type == "Sick Leave"));
+                        (r.Type == "Late Attendance" || r.Type == "Late Arrival" ||
+                         r.Type == "Early Leave" || r.Type == "Leave Early" ||
+                         r.Type == "Sick Leave"));
                     break;
                 case "approved":
                     predicate = And(predicate, r => r.Status == RequestStatus.Approved);
@@ -135,13 +154,15 @@ namespace Service.Specifications
                             d.Decision == DecisionOutcome.Rejected));
                     break;
                 case "balance":
+                    // Annual Leave / Sick Leave are the catalog's balance types; "Day Off"
+                    // is the legacy label the pre-catalog rows still carry.
                     var year = DateTime.UtcNow.Year;
                     predicate = And(predicate, r =>
                         r.Status == RequestStatus.PendingHRReview &&
-                        (r.Type == "Day Off" || r.Type == "Sick Leave") &&
+                        (r.Type == "Annual Leave" || r.Type == "Day Off" || r.Type == "Sick Leave") &&
                         r.Employee.LeaveBalances.Any(lb =>
                             lb.Year == year &&
-                            ((r.Type == "Day Off" && lb.LeaveType == LeaveType.Annual) ||
+                            (((r.Type == "Annual Leave" || r.Type == "Day Off") && lb.LeaveType == LeaveType.Annual) ||
                              (r.Type == "Sick Leave" && lb.LeaveType == LeaveType.Sick)) &&
                             lb.TotalEntitlement - lb.UsedDays - lb.PendingDays <= 0));
                     break;
@@ -175,7 +196,17 @@ namespace Service.Specifications
 
             AddInclude(r => r.Employee);
             AddInclude(r => r.Employee.Gym);
+            // Card identity row (position · level) and the leave-balance cell.
+            AddInclude(r => r.Employee.Position);
+            AddInclude(r => r.Employee.LeaveBalances);
             AddInclude(r => r.Decisions);
+
+            // Bulk decide mutates the loaded rows; tracking keeps one Employee instance
+            // per key so attaching a second request of the same employee cannot throw.
+            if (tracking)
+            {
+                ApplyTracking();
+            }
 
             if (take > 0)
             {
@@ -213,6 +244,12 @@ namespace Service.Specifications
     /// Explicit-id bulk selection (R5): the listed requests, optionally narrowed to a
     /// gym scope so an out-of-scope id is simply not found.
     /// </summary>
+    /// <summary>
+    /// Bulk-decide target list. Tracking is required: the service mutates status /
+    /// payment / decisions on the loaded rows and saves them. A no-tracking load made
+    /// the follow-up Update() re-attach the Employee graph, which EF rejects as a
+    /// duplicate key when two requests belong to the same employee.
+    /// </summary>
     public sealed class RequestByIdsSpec : BaseSpecification<EmployeeRequest, int>
     {
         public RequestByIdsSpec(IReadOnlyCollection<int> ids, int[]? gymIds)
@@ -229,6 +266,7 @@ namespace Service.Specifications
             AddInclude(r => r.Employee);
             AddInclude(r => r.Employee.Gym);
             AddInclude(r => r.Decisions);
+            ApplyTracking();
         }
 
         private static Expression<Func<T, bool>> And<T>(Expression<Func<T, bool>> left, Expression<Func<T, bool>> right)

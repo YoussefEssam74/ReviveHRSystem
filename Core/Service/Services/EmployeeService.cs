@@ -525,7 +525,14 @@ namespace Service.Services
             LeaveBalanceBucket Bucket(LeaveType type)
             {
                 var row = rows.FirstOrDefault(b => b.LeaveType == type);
-                return new LeaveBalanceBucket { Used = row?.UsedDays ?? 0, Total = row?.TotalEntitlement ?? 0 };
+                // A brand-new employee has no balance row yet; reporting 0 entitlement
+                // blocked every leave request in the portal. The submission path already
+                // assumes the type's default entitlement, so the read must match it.
+                return new LeaveBalanceBucket
+                {
+                    Used = row?.UsedDays ?? 0,
+                    Total = row?.TotalEntitlement ?? LeaveBalanceReservation.DefaultEntitlement(type),
+                };
             }
 
             return new LeaveBalanceResponse
@@ -860,7 +867,9 @@ namespace Service.Services
             await _unitOfWork.GetRepository<User, int>().AddAsync(user, cancellationToken);
             await _unitOfWork.SaveChangesAsync(cancellationToken);
 
-            var hireDate = DateOnly.FromDateTime(DateTime.UtcNow);
+            // The form's hire date is the employment start — honouring it keeps tenure,
+            // payroll cut-offs and the contract start on the same day.
+            var hireDate = startDate == default ? DateOnly.FromDateTime(DateTime.UtcNow) : startDate;
             var employee = new Employee
             {
                 UserId = user.Id,
@@ -870,7 +879,7 @@ namespace Service.Services
                 Phone = string.IsNullOrWhiteSpace(phone) ? null : phone.Trim(),
                 Status = EmployeeStatus.Active,
                 ContractType = "FullTime",
-                ContractStartDate = startDate,
+                ContractStartDate = startDate == default ? hireDate : startDate,
                 HireDate = hireDate,
                 EmployeeNumber = await GenerateEmployeeNumberAsync(cancellationToken),
             };

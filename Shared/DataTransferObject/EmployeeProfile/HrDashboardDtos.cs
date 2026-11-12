@@ -29,6 +29,10 @@ namespace Shared.DataTransferObject.EmployeeProfile
         public required string Title { get; init; }
         public required string Subtitle { get; init; }
         public required string Detail { get; init; }
+        /// <summary>Numeric id of the underlying row (the id inside <see cref="Id"/>).</summary>
+        public int RefId { get; init; }
+        /// <summary>Employee the card is about, when there is one (contracts, requests, branch proposals).</summary>
+        public int? EmployeeId { get; init; }
         /// <summary>Date the card is anchored to (submitted/requested/issued/expires).</summary>
         public DateTime Date { get; init; }
         public int? GymId { get; init; }

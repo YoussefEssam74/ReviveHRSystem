@@ -97,7 +97,7 @@ export function ConsoleLayout() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div className="hr-portal min-h-screen bg-charcoal-50">
       {/* Desktop sidebar */}
       <aside className="fixed inset-y-0 left-0 z-20 hidden w-64 border-r border-slate-200 bg-white lg:block">
         <SidebarContent />
@@ -151,7 +151,7 @@ export function ConsoleLayout() {
           </div>
         </header>
 
-        <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+        <main className="mx-auto max-w-[1600px] px-4 py-4">
           <Outlet />
         </main>
       </div>

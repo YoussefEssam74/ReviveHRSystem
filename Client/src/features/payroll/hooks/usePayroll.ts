@@ -2,19 +2,23 @@ import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tansta
 import {
   deleteEntryDeduction,
   downloadPeriodCsv,
+  getAttendanceRef,
   getDeductionCandidates,
   getPayrollPeriod,
   getPayrollPeriods,
   getPayslip,
   postCandidateReview,
+  postEnsureCurrentPeriod,
   postEntryClose,
   postEntryDeduction,
   postEntryReopen,
   postPeriodApprove,
+  putEntryAttendance,
   putEntryBonus,
   type CreateDeductionBody,
   type DeductionCandidateParams,
   type PayrollPeriodListParams,
+  type UpdatePayrollAttendanceBody,
 } from '../api/payroll.api'
 
 /** Paged payroll-period directory. */
@@ -44,6 +48,27 @@ export function usePayslip(periodId: number, employeeId: number, enabled = true)
   })
 }
 
+/** Punch audit behind a deduction line (View Log on the settlement sheet). */
+export function useAttendanceRef(ref: string | null) {
+  return useQuery({
+    queryKey: ['payroll', 'attendance-ref', ref],
+    queryFn: ({ signal }) => getAttendanceRef(ref!, signal),
+    enabled: Boolean(ref) && ref !== 'ATT-MANUAL',
+  })
+}
+
+/**
+ * Opens the current month's run and adds sheets for newly created employees.
+ * Idempotent, so the page can call it on every visit.
+ */
+export function useEnsureCurrentPeriod() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (gymId: number) => postEnsureCurrentPeriod(gymId),
+    onSuccess: () => invalidatePayroll(queryClient),
+  })
+}
+
 /** The pending-lines review queue. */
 export function useDeductionCandidates(params: DeductionCandidateParams, enabled = true) {
   return useQuery({
@@ -63,6 +88,16 @@ export function useUpdateBonus(periodId: number) {
   return useMutation({
     mutationFn: ({ employeeId, bonus }: { employeeId: number; bonus: number }) =>
       putEntryBonus(periodId, employeeId, bonus),
+    onSuccess: () => invalidatePayroll(queryClient),
+  })
+}
+
+/** PUT …/entries/{employeeId}/attendance — correct the sheet's six counters. */
+export function useUpdateEntryAttendance(periodId: number) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ employeeId, body }: { employeeId: number; body: UpdatePayrollAttendanceBody }) =>
+      putEntryAttendance(periodId, employeeId, body),
     onSuccess: () => invalidatePayroll(queryClient),
   })
 }

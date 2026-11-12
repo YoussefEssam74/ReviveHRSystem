@@ -25,6 +25,24 @@ namespace Presentation.Controllers
         public async Task<ActionResult<PayrollPeriodDetailResponse>> GetPeriod(int id, [FromQuery] int? gym, CancellationToken ct)
             => Ok(await _service.GetPeriodAsync(GetActorUserId(), id, gym, ct));
 
+        /// <summary>
+        /// POST /api/payroll-periods/ensure?gym={id} — idempotently opens the current
+        /// month's run and adds a Draft sheet for every active employee who has none
+        /// (payroll.edit). Published/paid periods are left untouched.
+        /// </summary>
+        [HttpPost("ensure")]
+        public async Task<ActionResult<PayrollEnsureResponse>> EnsureCurrentPeriod([FromQuery] int gym, CancellationToken ct)
+            => Ok(await _service.EnsureCurrentPeriodAsync(GetActorUserId(), gym, ct));
+
+        /// <summary>
+        /// PUT /api/payroll-periods/{periodId}/entries/{employeeId}/attendance — correct the
+        /// sheet's six attendance counters (payroll.edit, open period).
+        /// </summary>
+        [HttpPut("{periodId:int}/entries/{employeeId:int}/attendance")]
+        public async Task<ActionResult<EntryTotalsResponse>> UpdateAttendance(
+            int periodId, int employeeId, [FromBody] UpdatePayrollAttendanceRequest request, CancellationToken ct)
+            => Ok(await _service.UpdateAttendanceAsync(GetActorUserId(), periodId, employeeId, request, ct));
+
         /// <summary>PUT /api/payroll-periods/{periodId}/entries/{employeeId} — set the bonus (payroll.edit).</summary>
         [HttpPut("{periodId:int}/entries/{employeeId:int}")]
         public async Task<ActionResult<EntryTotalsResponse>> UpdateBonus(int periodId, int employeeId, [FromBody] UpdateBonusRequest request, CancellationToken ct)

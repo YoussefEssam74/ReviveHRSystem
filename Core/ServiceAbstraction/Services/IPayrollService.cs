@@ -18,8 +18,20 @@ namespace ServiceAbstraction.Services
         /// <summary>One period with its entry sheets (payroll.view).</summary>
         Task<PayrollPeriodDetailResponse> GetPeriodAsync(int? actorUserId, int periodId, int? gym, CancellationToken cancellationToken = default);
 
+        /// <summary>
+        /// Ensures the gym's current month has a period and a Draft sheet for every
+        /// active employee (payroll.edit). Idempotent; never touches locked/paid runs.
+        /// </summary>
+        Task<PayrollEnsureResponse> EnsureCurrentPeriodAsync(int? actorUserId, int gymId, CancellationToken cancellationToken = default);
+
         /// <summary>Sets an entry's bonus and echoes the recomputed totals (payroll.edit).</summary>
         Task<EntryTotalsResponse> UpdateBonusAsync(int? actorUserId, int periodId, int employeeId, UpdateBonusRequest request, CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// Corrects the sheet's six attendance counters (payroll.edit, open period). The
+        /// derived ones are stored as overrides so the raw punch log stays the evidence.
+        /// </summary>
+        Task<EntryTotalsResponse> UpdateAttendanceAsync(int? actorUserId, int periodId, int employeeId, UpdatePayrollAttendanceRequest request, CancellationToken cancellationToken = default);
 
         /// <summary>Adds a Pending deduction line to an open period (payroll.edit) → 201.</summary>
         Task<CreateDeductionResponse> AddDeductionAsync(int? actorUserId, int periodId, int employeeId, CreateDeductionRequest request, CancellationToken cancellationToken = default);

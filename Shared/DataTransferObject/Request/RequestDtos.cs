@@ -39,6 +39,22 @@ namespace Shared.DataTransferObject.Request
         public bool Done { get; init; }
     }
 
+    /// <summary>
+    /// Leave-balance snapshot the balance-type cards render (R1 "Balance" row,
+    /// the decide modal's strip/warning, and the New Request live preview).
+    /// </summary>
+    public class RequestLeaveBalance
+    {
+        /// <summary>"Day-off balance" | "Sick leave balance".</summary>
+        public required string Label { get; init; }
+        public int Total { get; init; }
+        public int Used { get; init; }
+        /// <summary>Days still available today (never negative).</summary>
+        public int Left { get; init; }
+        /// <summary>Days left if this request is approved (equals <see cref="Left"/> once decided).</summary>
+        public int AfterApproval { get; init; }
+    }
+
     /// <summary>One request card (R1/R2 item) — identity, decisions, payment, and timeline.</summary>
     public class RequestListItem
     {
@@ -46,6 +62,24 @@ namespace Shared.DataTransferObject.Request
         public required string Employee { get; init; }
         public required string Gym { get; init; }
         public required string Type { get; init; }
+
+        // ---- identity row (avatar/initials, position · level · gym · tenure) ----
+        public int EmployeeId { get; init; }
+        public string EmployeeNumber { get; init; } = string.Empty;
+        public string Initials { get; init; } = string.Empty;
+        public required string Position { get; init; }
+        public string? Level { get; init; }
+        public DateOnly? HireDate { get; init; }
+
+        /// <summary>Populated for Day Off / Sick Leave only; null for every other type.</summary>
+        public RequestLeaveBalance? LeaveBalance { get; init; }
+
+        /// <summary>
+        /// True while the request still sits at stage 1 (no branch-manager decision).
+        /// HR may decide it directly when no manager is assigned to the gym; the
+        /// decision records a "manager stage skipped" step in the timeline.
+        /// </summary>
+        public bool AwaitingManager { get; init; }
         public DateOnly SubmittedDate { get; init; }
         public DateOnly RequestedDate { get; init; }
 
@@ -174,5 +208,47 @@ namespace Shared.DataTransferObject.Request
         public required string Status { get; init; }
         public string Reason { get; init; } = string.Empty;
         public string? BmComment { get; init; }
+    }
+
+    /// <summary>One type-pill count on the inbox (R10).</summary>
+    public class RequestTypeCount
+    {
+        public required string Type { get; init; }
+        public int Count { get; init; }
+    }
+
+    /// <summary>
+    /// GET /api/requests/summary (R10) — the counts the HR inbox prints without
+    /// paging: the four KPI tiles, the three tab badges, and the type pills.
+    /// </summary>
+    public class RequestSummaryResponse
+    {
+        /// <summary>Pending HR Review requests plus stage-1 requests still awaiting a manager.</summary>
+        public int Pending { get; init; }
+
+        /// <summary>The subset of <see cref="Pending"/> that has no branch-manager decision yet.</summary>
+        public int AwaitingManager { get; init; }
+
+        /// <summary>Pending HR Review requests of a time-critical type (Late Arrival / Leave Early / Sick Leave).</summary>
+        public int Urgent { get; init; }
+
+        /// <summary>Approved requests whose requested date falls in the current month.</summary>
+        public int ApprovedThisMonth { get; init; }
+
+        /// <summary>Requests carrying a Branch Manager rejection (the "Review" queue).</summary>
+        public int BmRejected { get; init; }
+
+        /// <summary>Pending Day Off / Sick Leave requests with no balance left — HR must pick paid vs unpaid.</summary>
+        public int BalanceAlerts { get; init; }
+
+        /// <summary>Approved or Rejected (the "Decided" tab).</summary>
+        public int Decided { get; init; }
+
+        public int Archived { get; init; }
+
+        /// <summary>Every request in scope (the "All" pill).</summary>
+        public int Total { get; init; }
+
+        public List<RequestTypeCount> ByType { get; init; } = [];
     }
 }

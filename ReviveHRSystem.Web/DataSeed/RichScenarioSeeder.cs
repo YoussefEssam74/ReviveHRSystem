@@ -65,6 +65,46 @@ namespace ReviveHRSystem.Web.DataSeed
         private static DateTime UtcAt(DateOnly date, TimeOnly time) =>
             DateTime.SpecifyKind(date.ToDateTime(time), DateTimeKind.Utc);
 
+        /// <summary>
+        /// Fills the current month's attendance up to yesterday for the seeded roster.
+        /// Runs on every startup even when the scenario is complete, so the open payroll
+        /// month always carries real day-level records (the settlement sheet derives its
+        /// counters from them). Idempotent: days that already have a record are skipped.
+        /// </summary>
+        private static async Task TopUpCurrentMonthAttendanceAsync(ReviveHrDbContext db, ILogger logger)
+        {
+            var today = DateOnly.FromDateTime(DateTime.UtcNow);
+            var yesterday = today.AddDays(-1);
+            var monthStart = new DateOnly(yesterday.Year, yesterday.Month, 1);
+            if (yesterday < monthStart)
+            {
+                return;
+            }
+
+            var roster = await db.Employees
+                .Where(e => e.Status != EmployeeStatus.Terminated)
+                .OrderBy(e => e.Id)
+                .ToListAsync();
+            if (roster.Count == 0)
+            {
+                return;
+            }
+
+            var rosterIndex = roster.Select((e, i) => (e.Id, i))
+                .ToDictionary(x => x.Id, x => x.i);
+            var morningByGym = roster
+                .Select(e => e.GymId)
+                .Distinct()
+                .ToDictionary(
+                    gymId => gymId,
+                    gymId => db.ShiftTemplates
+                        .First(t => t.GymId == gymId && t.Name == "Morning Shift"));
+
+            var added = await SeedAttendanceAsync(db, roster, rosterIndex, morningByGym, monthStart, yesterday);
+            logger.LogInformation(
+                "Attendance topped up for {Start:yyyy-MM-dd}..{End:yyyy-MM-dd} ({Staff} staff).",
+                monthStart, yesterday, roster.Count);        }
+
         private sealed record StaffSeed(
             string Email, string UserName, string FullName, string Number,
             int Gym, string PositionTitle, DateOnly HireDate, EmployeeStatus Status,
@@ -92,6 +132,10 @@ namespace ReviveHRSystem.Web.DataSeed
         {
             if (await IsCompleteAsync(db))
             {
+                // The demo world keeps moving: top the current month's attendance up so
+                // the open payroll sheet always has day-level evidence behind its
+                // counters (a seeded "21 days" with no records reads as a phantom).
+                await TopUpCurrentMonthAttendanceAsync(db, logger);
                 return;
             }
 
@@ -468,13 +512,17 @@ namespace ReviveHRSystem.Web.DataSeed
             ReviveHrDbContext db,
             IReadOnlyList<Employee> roster,
             IReadOnlyDictionary<int, int> rosterIndex,
-            IReadOnlyDictionary<int, ShiftTemplate> morningByGym)
+            IReadOnlyDictionary<int, ShiftTemplate> morningByGym,
+            DateOnly? windowStart = null,
+            DateOnly? windowEnd = null)
         {
             // Pinned scenario window (was: rolling 53 days ending yesterday, which
             // drifted with the clock and left October incomplete). Deterministic:
             // every run seeds Sep 1 -> Oct 31 2026, Fridays skipped as days off.
-            var start = new DateOnly(2026, 9, 1);
-            var end = new DateOnly(2026, 10, 31);
+            // The window is overridable so the current-month top-up can reuse the
+            // exact same status pattern for the days the seed itself did not cover.
+            var start = windowStart ?? new DateOnly(2026, 9, 1);
+            var end = windowEnd ?? new DateOnly(2026, 10, 31);
 
             var existing = (await db.AttendanceRecords
                     .Where(a => a.Date >= start && a.Date <= end)

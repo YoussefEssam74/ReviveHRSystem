@@ -18,6 +18,10 @@ export type DeductionLineStatus = 'Pending' | 'Accepted' | 'Approved' | 'Rejecte
 /** One period row (GET /api/payroll-periods) — a branch × month settlement run. */
 export interface PayrollPeriod {
   id: number
+  /** The branch this run belongs to (periods are per-gym rows). */
+  gymId: number
+  /** Branch name ("Nasr City"). */
+  gym: string
   /** Month label ("October 2026"). */
   period: string
   /** Derived: Open | Partially Published | Published | Paid. */
@@ -65,10 +69,87 @@ export interface DeductionLine {
   requestId: number | null
 }
 
+/** One punch the settlement sheet's evidence column renders. */
+export interface PayrollPunch {
+  /** ATT-{recordId} — feeds GET /api/attendance/{id}. */
+  attendanceRef: string
+  /** ISO date (yyyy-MM-dd). */
+  date: string
+  /** Gym-local "08:41". */
+  firstIn: string | null
+  lastOut: string | null
+  /** Biometric | Manual | Unknown. */
+  device: string
+  /** On Time | Late | Absent | Early Checkout | Missing Checkout | Off. */
+  exception: string
+  detail: string
+  onTime: boolean
+}
+
+/** One day behind the settlement sheet's counters. */
+export interface PayrollAttendanceDay {
+  /** ISO date (yyyy-MM-dd). */
+  date: string
+  /**
+   * Attended | WeeklyOff | ApprovedLeave | Late | Absent | EarlyCheckout |
+   * MissingCheckout — the counter row this day belongs to.
+   */
+  kind: string
+  /** Friendly status ("On Time", "Late", "Off", …). */
+  status: string
+  /** Shift window ("08:00–16:00"). */
+  shift: string | null
+  checkIn: string | null
+  checkOut: string | null
+  workedHours: number
+  overtimeHours: number
+  note: string | null
+  /** ATT-{recordId} when the day has a punch. */
+  attendanceRef: string | null
+}
+
+/** Work-days ledger + punch proof for one settlement sheet. */
+export interface PayrollAttendance {
+  /** Set when HR corrected the counters by hand (raw log stays visible). */
+  adjustedAt: string | null
+  daysAttended: number
+  weeklyOffs: number
+  approvedLeaves: number
+  overtimeHours: number
+  lateArrivals: number
+  unexcusedAbsences: number
+  punches: PayrollPunch[]
+  /** Every day of the period, oldest first — the click-through log. */
+  days: PayrollAttendanceDay[]
+}
+
+/** PUT …/entries/{employeeId}/attendance — HR's correction of the six counters. */
+export interface UpdatePayrollAttendanceBody {
+  daysAttended: number
+  weeklyOffs: number
+  approvedLeaves: number
+  overtimeHours: number
+  lateArrivals: number
+  unexcusedAbsences: number
+}
+
+export function putEntryAttendance(
+  periodId: number,
+  employeeId: number,
+  body: UpdatePayrollAttendanceBody,
+): Promise<EntryTotals> {
+  return apiRequest<Wrapped<EntryTotals>>(`/api/payroll-periods/${periodId}/entries/${employeeId}/attendance`, {
+    method: 'PUT',
+    body,
+  }).then((r) => r.data)
+}
+
 /** One settlement sheet row in the period detail. */
 export interface PayrollEntry {
   employeeId: number
   name: string
+  /** "RV-00124" — printed under the name. */
+  employeeNumber: string
   initials: string
   gym: string
   position: string
@@ -87,6 +168,8 @@ export interface PayrollEntry {
   reviewed: boolean
   relatedRequestIds: number[]
   deductionLines: DeductionLine[]
+  /** Period detail only; null on the per-employee history list. */
+  attendance: PayrollAttendance | null
 }
 
 /** GET /api/payroll-periods/{id} — the settlement sheet. */
@@ -96,6 +179,24 @@ export interface PayrollPeriodDetail extends PayrollPeriod {
 
 interface Wrapped<T> {
   data: T
+}
+
+/**
+ * POST /api/payroll-periods/ensure?gym= — idempotently opens the current month and
+ * adds a Draft sheet for every active employee without one (payroll.edit).
+ */
+export interface PayrollEnsureResult {
+  periodId: number
+  /** Month label ("November 2026"). */
+  period: string
+  created: boolean
+  entriesAdded: number
+  /** False when the period is already published/locked (nothing changed). */
+  open: boolean
+}
+
+export function postEnsureCurrentPeriod(gymId: number, signal?: AbortSignal): Promise<PayrollEnsureResult> {
+  return apiRequest<PayrollEnsureResult>(`/api/payroll-periods/ensure?gym=${gymId}`, { method: 'POST', signal })
 }
 
 export function getPayrollPeriod(id: number, signal?: AbortSignal): Promise<PayrollPeriodDetail> {
@@ -247,6 +348,25 @@ export function getPayslip(periodId: number, employeeId: number, signal?: AbortS
   return apiRequest<Wrapped<Payslip>>(`/api/payroll-periods/${periodId}/payslips/${employeeId}`, { signal }).then(
     (r) => r.data,
   )
+}
+
+/** GET /api/attendance/{ref} — the punch audit behind a deduction line. */
+export interface AttendanceRef {
+  /** Normalized ref ("ATT-123"). */
+  id: string
+  /** ISO date (yyyy-MM-dd). */
+  date: string
+  firstIn: string | null
+  lastOut: string | null
+  /** Biometric | Manual. */
+  device: string
+  /** On Time | Late | Absent | Early Checkout | Missing Checkout. */
+  exception: string
+  detail: string
+}
+
+export function getAttendanceRef(ref: string, signal?: AbortSignal): Promise<AttendanceRef> {
+  return apiRequest<Wrapped<AttendanceRef>>(`/api/attendance/${encodeURIComponent(ref)}`, { signal }).then((r) => r.data)
 }
 
 /** One reviewable deduction line (GET /api/deduction-candidates). */

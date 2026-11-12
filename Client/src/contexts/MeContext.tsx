@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { getMe, postSwitchGym, type MeResponse } from '../features/console/api/console.api'
 import { ApiError } from '../lib/api-client'
@@ -85,6 +85,29 @@ export function MeProvider({ children }: { children: ReactNode }) {
     },
     [session, signIn, queryClient],
   )
+
+  // HR accounts sign in without a gym scope and every console page is gym-scoped,
+  // which read as "no access". Scope them to their first gym once (the header
+  // switcher still changes it); TopManagement keeps its cross-gym scope on purpose.
+  const autoScoped = useRef(false)
+  useEffect(() => {
+    if (!authenticated) {
+      autoScoped.current = false
+      return
+    }
+    if (
+      autoScoped.current ||
+      !me ||
+      me.activeGym ||
+      me.userType === 'TopManagement' ||
+      me.gyms.length === 0 ||
+      isSwitching
+    ) {
+      return
+    }
+    autoScoped.current = true
+    void switchGym(me.gyms[0].gymId)
+  }, [authenticated, me, isSwitching, switchGym])
 
   const value = useMemo<MeContextValue>(
     () => ({

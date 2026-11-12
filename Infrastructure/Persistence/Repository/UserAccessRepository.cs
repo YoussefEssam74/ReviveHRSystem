@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using Presistence.Data;
 using DomainLayer.Models.OrganizationModule.Enums;
 using DomainLayer.Models.UserModule;
+using Shared.Authorization;
 
 namespace Presistence.Repository
 {
@@ -84,6 +85,20 @@ namespace Presistence.Repository
                 select ugr.Role.Name
             ).Distinct()
              .ToListAsync(cancellationToken);
+
+        /// <inheritdoc />
+        public async Task<bool> HasActiveGymDeskAsync(int gymId, int excludeUserId, CancellationToken cancellationToken = default)
+        {
+            string[] deskRoles = [RoleNames.TeamLeader, RoleNames.BranchManager, RoleNames.SuperAdmin];
+
+            return await (
+                from ugr in _dbContext.UserGymRoles.AsNoTracking()
+                where ugr.GymId == gymId && ugr.UserId != excludeUserId
+                join user in _dbContext.Users.AsNoTracking() on ugr.UserId equals user.Id
+                where user.IsActive && deskRoles.Contains(ugr.Role.Name)
+                select ugr.RoleId
+            ).AnyAsync(cancellationToken);
+        }
 
         /// <inheritdoc />
         public async Task<IReadOnlyList<string>> GetPermissionKeysForGymAsync(int userId, int? gymId, CancellationToken cancellationToken = default)

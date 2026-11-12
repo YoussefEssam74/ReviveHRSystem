@@ -231,6 +231,10 @@ namespace Service.Specifications
         public LeaveBalancesByEmployeeSpec(int employeeId, int year)
         {
             Criteria = lb => lb.EmployeeId == employeeId && lb.Year == year;
+            // Reservation bookkeeping (submit/cancel/decide) mutates these rows; tracking
+            // keeps one instance per key, so a graph already loaded through the request
+            // (employee → leave balances) is reused instead of attached twice.
+            ApplyTracking();
         }
     }
 

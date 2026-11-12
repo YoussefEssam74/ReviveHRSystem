@@ -45,6 +45,200 @@ namespace ReviveHRSystem.IntegrationTests
             return (gym, employee, periodId, entryId);
         }
 
+        // ------------------------------------------------------------------
+        // POST /api/payroll-periods/ensure — current-month provisioning
+        // ------------------------------------------------------------------
+
+        [Fact]
+        public async Task EnsureCurrentPeriod_CreatesTheRunAndAddsEveryActiveEmployee_ThenIsIdempotent()
+        {
+            var builder = NewBuilder();
+            var gym = await builder.CreateGymWithStationAsync();
+            var first = await builder.CreateEmployeeAsync(gym);
+            await builder.SetEmployeeStatusAsync(first.EmployeeId, DomainLayer.Models.EmployeeModule.Enums.EmployeeStatus.Active);
+            var token = await _fixture.GetAdminTokenAsync();
+
+            var firstCall = await _fixture.Client.SendAsync(_fixture.AuthorizedRequest(
+                HttpMethod.Post, $"/api/payroll-periods/ensure?gym={gym.GymId}", null, token));
+            Assert.Equal(HttpStatusCode.OK, firstCall.StatusCode);
+            var firstBody = await firstCall.Content.ReadFromJsonAsync<JsonElement>();
+            Assert.True(firstBody.GetProperty("created").GetBoolean());
+            Assert.True(firstBody.GetProperty("open").GetBoolean());
+            var periodId = firstBody.GetProperty("periodId").GetInt32();
+            Assert.True(firstBody.GetProperty("entriesAdded").GetInt32() >= 1);
+
+            // A second run changes nothing.
+            var again = await _fixture.Client.SendAsync(_fixture.AuthorizedRequest(
+                HttpMethod.Post, $"/api/payroll-periods/ensure?gym={gym.GymId}", null, token));
+            var againBody = await again.Content.ReadFromJsonAsync<JsonElement>();
+            Assert.Equal(periodId, againBody.GetProperty("periodId").GetInt32());
+            Assert.False(againBody.GetProperty("created").GetBoolean());
+            Assert.Equal(0, againBody.GetProperty("entriesAdded").GetInt32());
+
+            // A later hire joins the open run on the next visit.
+            var second = await builder.CreateEmployeeAsync(gym);
+            var third = await _fixture.Client.SendAsync(_fixture.AuthorizedRequest(
+                HttpMethod.Post, $"/api/payroll-periods/ensure?gym={gym.GymId}", null, token));
+            var thirdBody = await third.Content.ReadFromJsonAsync<JsonElement>();
+            Assert.Equal(1, thirdBody.GetProperty("entriesAdded").GetInt32());
+
+            using var scope = _fixture.Services.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<ReviveHrDbContext>();
+            Assert.True(await db.PayrollEntries.AnyAsync(e => e.PayrollPeriodId == periodId && e.EmployeeId == second.EmployeeId));
+        }
+
+        [Fact]
+        public async Task EnsureCurrentPeriod_LeavesAPaidRunUntouched()
+        {
+            var builder = NewBuilder();
+            var gym = await builder.CreateGymWithStationAsync();
+            var employee = await builder.CreateEmployeeAsync(gym);
+            var start = new DateOnly(DateTime.UtcNow.Year, DateTime.UtcNow.Month, 1);
+            var periodId = await builder.CreatePayrollPeriodAsync(
+                gym.GymId, start, start.AddMonths(1).AddDays(-1),
+                PayrollPeriodStatus.Approved, DateOnly.FromDateTime(DateTime.UtcNow));
+            var token = await _fixture.GetAdminTokenAsync();
+
+            var response = await _fixture.Client.SendAsync(_fixture.AuthorizedRequest(
+                HttpMethod.Post, $"/api/payroll-periods/ensure?gym={gym.GymId}", null, token));
+            var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+
+            Assert.Equal(periodId, body.GetProperty("periodId").GetInt32());
+            Assert.False(body.GetProperty("open").GetBoolean());
+            Assert.Equal(0, body.GetProperty("entriesAdded").GetInt32());
+
+            using var scope = _fixture.Services.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<ReviveHrDbContext>();
+            Assert.False(await db.PayrollEntries.AnyAsync(e => e.PayrollPeriodId == periodId && e.EmployeeId == employee.EmployeeId));
+        }
+
+        // ------------------------------------------------------------------
+        // PUT /api/payroll-periods/{id}/entries/{employeeId}/attendance
+        // ------------------------------------------------------------------
+
+        [Fact]
+        public async Task UpdateAttendance_CorrectsTheCountersAndRepricesOvertime()
+        {
+            var (gym, employee, periodId, _) = await SetupSheetAsync(baseSalary: 17600m);
+            var token = await _fixture.GetAdminTokenAsync();
+
+            var response = await _fixture.Client.SendAsync(_fixture.AuthorizedRequest(
+                HttpMethod.Put,
+                $"/api/payroll-periods/{periodId}/entries/{employee.EmployeeId}/attendance",
+                new
+                {
+                    daysAttended = 18,
+                    weeklyOffs = 4,
+                    approvedLeaves = 1,
+                    overtimeHours = 2,
+                    lateArrivals = 3,
+                    unexcusedAbsences = 1,
+                },
+                token));
+
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            var totals = await response.Content.ReadFromJsonAsync<JsonElement>();
+            // 17600 base + 2h OT at (17600/176)×1.5 = 300.
+            Assert.Equal(17900m, totals.GetProperty("data").GetProperty("gross").GetDecimal());
+
+            var detail = await GetJsonAsync($"/api/payroll-periods/{periodId}?gym={gym.GymId}", token);
+            var entry = detail.GetProperty("data").GetProperty("items").EnumerateArray()
+                .Single(e => e.GetProperty("employeeId").GetInt32() == employee.EmployeeId);
+            var attendance = entry.GetProperty("attendance");
+
+            Assert.Equal(18, attendance.GetProperty("daysAttended").GetInt32());
+            Assert.Equal(4, attendance.GetProperty("weeklyOffs").GetInt32());
+            Assert.Equal(1, attendance.GetProperty("approvedLeaves").GetInt32());
+            Assert.Equal(3, attendance.GetProperty("lateArrivals").GetInt32());
+            Assert.Equal(1, attendance.GetProperty("unexcusedAbsences").GetInt32());
+            Assert.Equal(2m, attendance.GetProperty("overtimeHours").GetDecimal());
+            Assert.NotEqual(JsonValueKind.Null, attendance.GetProperty("adjustedAt").ValueKind);
+            Assert.Equal(2m, entry.GetProperty("overtime").GetDecimal());
+        }
+
+        [Fact]
+        public async Task UpdateAttendance_NegativeValue_Returns400()
+        {
+            var (gym, employee, periodId, _) = await SetupSheetAsync();
+            var token = await _fixture.GetAdminTokenAsync();
+
+            var response = await _fixture.Client.SendAsync(_fixture.AuthorizedRequest(
+                HttpMethod.Put,
+                $"/api/payroll-periods/{periodId}/entries/{employee.EmployeeId}/attendance",
+                new
+                {
+                    daysAttended = -1,
+                    weeklyOffs = 0,
+                    approvedLeaves = 0,
+                    overtimeHours = 0,
+                    lateArrivals = 0,
+                    unexcusedAbsences = 0,
+                },
+                token));
+
+            Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        }
+
+        [Fact]
+        public async Task GetPeriod_DerivesDaysFromPunches_WhenTheSheetWasNotCorrected()
+        {
+            var (gym, employee, periodId, _) = await SetupSheetAsync();
+            var builder = NewBuilder();
+
+            // A stale seeded count (like the old 21) with one real punch behind it.
+            var start = new DateOnly(2031, 8, 1);
+            using (var scope = _fixture.Services.CreateScope())
+            {
+                var db = scope.ServiceProvider.GetRequiredService<ReviveHrDbContext>();
+                var entry = await db.PayrollEntries.SingleAsync(e => e.PayrollPeriodId == periodId && e.EmployeeId == employee.EmployeeId);
+                entry.DaysWorked = 21;
+                await db.SaveChangesAsync();
+            }
+
+            await builder.CreateAttendanceRecordAsync(
+                employee.EmployeeId, gym.GymId, start.AddDays(2),
+                checkInUtc: new DateTime(2031, 8, 3, 8, 0, 0, DateTimeKind.Utc),
+                checkOutUtc: new DateTime(2031, 8, 3, 16, 0, 0, DateTimeKind.Utc));
+            var token = await _fixture.GetAdminTokenAsync();
+
+            var detail = await GetJsonAsync($"/api/payroll-periods/{periodId}?gym={gym.GymId}", token);
+            var item = detail.GetProperty("data").GetProperty("items").EnumerateArray()
+                .Single(e => e.GetProperty("employeeId").GetInt32() == employee.EmployeeId);
+
+            Assert.Equal(1, item.GetProperty("days").GetInt32());
+            Assert.Equal(1, item.GetProperty("attendance").GetProperty("daysAttended").GetInt32());
+            Assert.Equal(JsonValueKind.Null, item.GetProperty("attendance").GetProperty("adjustedAt").ValueKind);
+        }
+
+        [Fact]
+        public async Task GetPeriod_PrefersTheManualCorrection_OverTheDerivedCount()
+        {
+            var (gym, employee, periodId, _) = await SetupSheetAsync();
+            var token = await _fixture.GetAdminTokenAsync();
+
+            var correct = await _fixture.Client.SendAsync(_fixture.AuthorizedRequest(
+                HttpMethod.Put,
+                $"/api/payroll-periods/{periodId}/entries/{employee.EmployeeId}/attendance",
+                new
+                {
+                    daysAttended = 18,
+                    weeklyOffs = 0,
+                    approvedLeaves = 0,
+                    overtimeHours = 0,
+                    lateArrivals = 0,
+                    unexcusedAbsences = 0,
+                },
+                token));
+            Assert.Equal(HttpStatusCode.OK, correct.StatusCode);
+
+            var detail = await GetJsonAsync($"/api/payroll-periods/{periodId}?gym={gym.GymId}", token);
+            var item = detail.GetProperty("data").GetProperty("items").EnumerateArray()
+                .Single(e => e.GetProperty("employeeId").GetInt32() == employee.EmployeeId);
+
+            Assert.Equal(18, item.GetProperty("days").GetInt32());
+            Assert.Equal(18, item.GetProperty("attendance").GetProperty("daysAttended").GetInt32());
+        }
+
         private async Task<JsonElement> GetJsonAsync(string url, string token)
         {
             var request = _fixture.AuthorizedRequest(HttpMethod.Get, url, null, token);
@@ -160,7 +354,10 @@ namespace ReviveHRSystem.IntegrationTests
             Assert.Equal(gym.Name, row.GetProperty("gym").GetString());
             Assert.Equal("IT Tester", row.GetProperty("position").GetString());
             Assert.Equal("Active", row.GetProperty("employmentStatus").GetString());
-            Assert.Equal(26, row.GetProperty("days").GetInt32());
+            // Days mirrors the evidence: the sheet was not manually corrected, so the
+            // count comes from the one punch seeded for this period (not the stored 26).
+            Assert.Equal(1, row.GetProperty("days").GetInt32());
+            Assert.Equal(1, row.GetProperty("attendance").GetProperty("daysAttended").GetInt32());
             Assert.Equal(10m, row.GetProperty("overtime").GetDecimal());
             Assert.Equal(17600m, row.GetProperty("baseSalary").GetDecimal());
             Assert.Equal(500m, row.GetProperty("bonus").GetDecimal());

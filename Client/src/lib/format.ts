@@ -76,6 +76,42 @@ export function formatMoney(value: number | null | undefined, currency = 'EGP'):
   return `${withSeparators} ${currency}`
 }
 
+/** 12500 → "EGP 12,500" — the amount label the HR mock prints in ledgers. */
+export function formatEGP(value: number | null | undefined): string {
+  if (value === null || value === undefined) return 'EGP 0'
+  const rounded = Math.round(value)
+  return `EGP ${rounded.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',')}`
+}
+
+/** "3y 2m" / "7m" / "<1 mo" — the tenure label on request cards. */
+export function tenureLabel(hireDate: string | null | undefined): string {
+  if (!hireDate) return ''
+  const hired = toDate(hireDate)
+  if (!hired) return ''
+  const now = new Date()
+  let months = (now.getFullYear() - hired.getFullYear()) * 12 + (now.getMonth() - hired.getMonth())
+  if (now.getDate() < hired.getDate()) months--
+  if (months < 1) return '<1 mo'
+  const years = Math.floor(months / 12)
+  const rest = months % 12
+  return years ? `${years}y ${rest}m` : `${rest}m`
+}
+
+/** "today" / "tomorrow" / "in 4 days" / "yesterday" / "3 days ago" with the mock's tone. */
+export function relativeDayLabel(date: string | null | undefined): { text: string; soon: boolean } | null {
+  if (!date) return null
+  const target = toDate(date)
+  if (!target) return null
+  const today = new Date()
+  const startOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime()
+  const days = Math.round((startOfDay(target) - startOfDay(today)) / 86_400_000)
+  if (days === 0) return { text: 'today', soon: true }
+  if (days === 1) return { text: 'tomorrow', soon: true }
+  if (days > 1) return { text: `in ${days} days`, soon: true }
+  if (days === -1) return { text: 'yesterday', soon: false }
+  return { text: `${Math.abs(days)} days ago`, soon: false }
+}
+
 /** 1450 → "1,450" (no currency) */
 export function formatNumber(value: number | null | undefined): string {
   if (value === null || value === undefined) return '—'

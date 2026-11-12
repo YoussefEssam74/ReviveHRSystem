@@ -50,6 +50,9 @@ export function useCreateEmployee() {
       queryClient.invalidateQueries({ queryKey: ['employees'] })
       queryClient.invalidateQueries({ queryKey: ['dashboard'] })
       queryClient.invalidateQueries({ queryKey: ['gyms'] })
+      // The payroll page ensures the open sheet on its next visit; refresh the
+      // cached period lists so a freshly added sheet is not stale.
+      queryClient.invalidateQueries({ queryKey: ['payroll'] })
     },
   })
 }

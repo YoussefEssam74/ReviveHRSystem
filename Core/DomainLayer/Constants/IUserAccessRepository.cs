@@ -62,6 +62,14 @@ namespace DomainLayer.Contracts
         /// <summary>Number of users assigned to a role (archived users and roles excluded by the join filters).</summary>
         Task<int> CountUsersWithRoleAsync(int roleId, CancellationToken cancellationToken = default);
 
+        /// <summary>
+        /// True when the gym has at least one active user holding a desk role
+        /// (Team Leader / Branch Manager / Super Admin), ignoring <paramref name="excludeUserId"/>.
+        /// Employee submissions auto-advance to HR when this is false — otherwise no one
+        /// would ever clear the stage-1 queue.
+        /// </summary>
+        Task<bool> HasActiveGymDeskAsync(int gymId, int excludeUserId, CancellationToken cancellationToken = default);
+
         /// <summary>Archives a role by flipping the shadow IsDeleted flag (the UI's "Archive role" action).</summary>
         Task ArchiveRoleAsync(int roleId, CancellationToken cancellationToken = default);
     }

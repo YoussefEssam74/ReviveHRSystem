@@ -675,7 +675,7 @@ mb
 
 | # | Endpoint | Auth + Permission | Request | Response | Called by | Mark |
 |---|---|---|---|---|---|---|
-| D1 | `GET /api/dashboard/hr` | Bearer, `dashboard.view`/HR | query: `gymId` (`all` or branch id) | `{ totalGyms, totalStaff, pendingRequests, actionsNeeded }` (KPI strip; panel items may be composed from D2–D5 instead) | renderDashboard KPI strip | EXISTING |
+| D1 | `GET /api/dashboard/hr` | Bearer, `dashboard.view`/HR | query: `gymId` (`all` or branch id), else the token's active gym | `{ greeting, userName, kpis:{ totalGyms, totalStaff, totalPendingRequests, actionsNeeded }, actions:[{ id, kind: request\|vacancy\|deduction\|warning\|bonus\|contract\|payroll, badge, badgeClass, title, subtitle, detail, refId, employeeId, date, gymId, gym }], branches:[{ gymId, name, location, headcount, pendingActions, summary }] }` | KPI strip, action cards (Approve/Decline/Review), Branches Overview | EXISTING (`refId` + `employeeId` added so decisions need no id parsing) |
 | D2 | `GET /api/requests` | Bearer, `requests.view` | query: `status=PendingHRReview`, `gym`, `page,pageSize` | items `[{ id, employee, gym, type, submittedDate, requestedDate, status, bmDecision, bmComment, reason, timeline[{step,date,done}] }]` | dashboard action cards (request type); also Requests page | EXISTING |
 | D3 | `GET /api/vacancy-requests` | Bearer, `recruitment.view` | query: `status=Pending`, `gym` | items `[{ id, position, gym, urgency, status, submittedBy, submittedDate, reason, salary, shift, headcount }]` | dashboard vacancy cards, `openVacancyRequestModal` | EXISTING |
 | D4 | `PUT /api/vacancy-requests/{id}/decide` | Bearer, `recruitment.vacancy_request.approve` | body `{ decision: "Approved"\|"Rejected", positionId?, headcount?, salary?, shift? }` (approve opens the Vacancy) | `{ message, item, vacancy? }` | `approveVacancyRequest` / `rejectVacancyRequest` / `quickApproveVacancy` | EXISTING |
@@ -800,16 +800,17 @@ mb
 
 | # | Endpoint | Auth + Permission | Request | Response | Called by | Mark |
 |---|---|---|---|---|---|---|
-| R1 | `GET /api/requests` | Bearer, `requests.view`, gym-scoped | query: `status=PendingHRReview\|Approved\|Rejected\|Archived`, `type`, `gym`, `date`, `quick=urgent\|bmRejected\|balance`, `page,pageSize,sortBy,sortOrder` | envelope; items `[{ id, employee, gym, type, submittedDate, requestedDate, status:'Pending HR Review'\|'Approved'\|'Rejected'\|'Archived', bmDecision:'Approved'\|'Rejected', bmComment, reason, hrDecision, hrComment, payment:'paid'\|'unpaid', timeline:[{step,date,done}] }]` | list, tabs, KPI counts, type pills | EXISTING |
+| R1 | `GET /api/requests` | Bearer, `requests.view`, gym-scoped | query: `status=PendingHRReview\|Approved\|Rejected\|Archived\|Decided`, `type`, `gym`, `date`, `quick=urgent\|approved\|bmRejected\|balance`, `ids`, `page,pageSize,sortBy,sortOrder` | envelope; items `[{ id, employee, employeeId, employeeNumber, initials, position, level, hireDate, gym, type, submittedDate, requestedDate, endDate, status, awaitingManager, bmDecision, bmComment, reason, hrDecision, hrComment, payment:'paid'\|'unpaid', hasAttachment, leaveBalance:{label,total,used,left,afterApproval}\|null, timeline:[{step,date,done}] }]`. **`status=Pending HR Review` also returns stage-1 `Pending` rows** (`awaitingManager: true`) so HR sees employee submissions before a manager decision | list, cards, decision modal, payroll linked-requests pane | EXISTING |
+| R10 | `GET /api/requests/summary` | Bearer, `requests.view`, gym-scoped (`gym` query) | — | `{ pending, awaitingManager, urgent, approvedThisMonth, bmRejected, balanceAlerts, decided, archived, total, byType:[{type,count}] }` — `pending` counts `PendingHRReview` **and** stage-1 `Pending`; `awaitingManager` is the stage-1 subset | the four KPI tiles, tab badges and type pills in one call | **NEW** |
 | R2 | `GET /api/requests/{id}` | Bearer, `requests.view` | — | `{ data: (item as R1, incl. BM-stage decision) }` | `openRequestDetail`, Decision modal, attendance Details | EXISTING |
-| R3 | `POST /api/requests/{id}/decide` | Bearer, `requests.approve` | body `{ stage:'HR', decision:'Approved'\|'Rejected', comment, payment:'paid'\|'unpaid' }` (`payment` only for Day Off/Sick Leave when balance exhausted UI forces choice; null otherwise) | `{ message, item }` (Approve on Resignation → `status:'Notice Period'` on employee + returns `offboardingPrompt`) | `applyRequestDecision`, dashboard quick approve/reject, attendance inline | EXISTING (endpoint + `stage/decision/comment`; `payment` is a UI-required addition) |
+| R3 | `POST /api/requests/{id}/decide` | Bearer, `requests.approve` | body `{ stage:'HR', decision:'Approved'\|'Rejected', comment, payment:'paid'\|'unpaid' }` (`payment` only for balance types; null otherwise). Accepts **stage-1 `Pending`** requests too: a `BranchManager` row with the comment `"Manager stage skipped — advanced by HR."` is recorded so the timeline stays honest, and the submission's reserved days are released on every outcome (paid moves them into used) | `{ message, item }` (Approve on Resignation → `status:'Notice Period'` on employee + returns `offboardingPrompt`) | `applyRequestDecision`, dashboard quick approve/reject, attendance inline | EXISTING (endpoint + `stage/decision/comment`; `payment` is a UI-required addition) |
 | R4 | `POST /api/requests/{id}/undo-decision` | Bearer, `requests.approve` | body `{ comment? }` — allowed only while `requestedDate` hasn't passed; reverts to `Pending HR Review`, returns paid balance day | `{ message, item }` | "Undo Decision" (`applyRequestDecision` mode `undo`) | **NEW** (api.md has no undo/revert) |
 | R5 | `POST /api/requests/bulk-decide` | Bearer, `requests.approve` | body `{ decision:'Approved', comment:'Bulk approved', requestIds?:[] }` (default = all `Pending HR Review`) + server applies `payment` per balance | `{ message, approved, unpaidApplied }` | `bulkApproveRequests` / `doBulkApprove` | **NEW** |
 | R6 | `POST /api/requests/{id}/archive` and `POST /api/requests/{id}/restore` | Bearer, `requests.view`+inbox owner (UI gates only on status) | — | `{ message }` | card Archive / Restore buttons | **NEW** (status `Archived` is rendered but no endpoint mutates it) |
 | R7 | `POST /api/requests` | Bearer, HR creating on behalf (or employee) | body `{ employee /*name in UI*/, type, requestedDate, endDate?, reason }` (type ∈ Day Off, Sick Leave, Leave Early, Late Arrival, Shift Swap, Resignation) | `{ data:{ id, status:'Pending HR Review', timeline:[…] } }` | New Request modal (`submitNewRequest`) | EXISTING |
 | R8 | `GET /api/employees/{id}/leave-balance` | Bearer, `requests.view` | — | `{ dayOff:{used,total,left,after}, sick:{used,total}, unpaid:{used,total} }` | balance strip/warn/cell, New Request live balance, Bulk Approve alert | **NEW** (mirrors E9; drives paid/unpaid decision) |
 | R9 | `PUT /api/employees/{id}/leave-balance` (server-side on approve when `payment='paid'`) | Bearer, implicit via `requests.approve` | server action | — | `adjustLeaveBal` | **NEW** (or automatic side-effect of R3 — implement inside R3) |
-| R10 | Branch queue cards inside Requests page | as D9/D10 | `GET /api/branch-submissions`, `POST /api/branch-submissions/{id}/decide` | as D9/D10 | type pills Deduction/Warning/Bonus, merged card list | **NEW** |
+| R11 | Branch queue cards inside Requests page | as D9/D10 | `GET /api/branch-submissions`, `POST /api/branch-submissions/{id}/decide` | as D9/D10 | type pills Deduction/Warning/Bonus, merged card list | **NEW** |
 
 ---
 
@@ -1139,13 +1140,28 @@ Selectors: **Gym branch** (`Nasr City | Heliopolis | 6th October`) and **Period*
 
 **`GET /api/payroll-periods`** — EXISTING
 - Auth: JWT + `payroll.view` (gym-filtered). Query: `gym`, `status` (`Open|Partially Published|Published|Paid`), `page, pageSize`.
-- Response `items[]`: `{ id, period, status, locked, paidDate, publishedGyms[], totalEmployees, totalGross, totalDeductions, totalNet }`.
-- Used by: period selector + Locked/Open header badge ("🔒 Locked" / "🟢 Open for Reconciliation", "Published").
+- Response `items[]`: `{ id, gymId, gym, period, status, locked, paidDate, publishedGyms[], totalEmployees, totalGross, totalDeductions, totalNet }`.
+- `gymId`/`gym` identify the branch row (periods are per-gym), feeding the sheet header and the publish target.
+- Used by: branch + period selectors and the Locked/Open header badge ("🔒 Locked" / "🟢 Open for Reconciliation", "Published").
 
 **`GET /api/payroll-periods/{id}`** — EXISTING *(period detail with entries — the core read for this page)*
 - Auth: JWT + `payroll.view`. Query: `gym`.
 - Response `{ data: { id, period, status, locked, paidDate, publishedGyms[], totalEmployees, totalGross, totalDeductions, totalNet, items: [ …payroll entries… ] } }`.
-- Payroll **entry** item fields (exact names rendered): `{ employeeId, name, initials, gym, position, employmentStatus, days, overtime, baseSalary, bonus, gross, deductions, net, status: "Draft"|"Reviewed"|"Approved"|"Locked", reviewed, relatedRequestIds[], deductionLines: [{ id, date, label, reason, source: "biometric"|"manager", amount, status: "Pending"|"Accepted"|"Approved"|"Rejected", attendanceRef, requestId }] }`.
+- Payroll **entry** item fields (exact names rendered): `{ employeeId, name, employeeNumber, initials, gym, position, employmentStatus, days, overtime, baseSalary, bonus, gross, deductions, net, status: "Draft"|"Reviewed"|"Approved"|"Locked", reviewed, relatedRequestIds[], deductionLines: [{ id, date, label, reason, source: "biometric"|"manager", amount, status: "Pending"|"Accepted"|"Approved"|"Rejected", attendanceRef, requestId }], attendance: { daysAttended, weeklyOffs, approvedLeaves, overtimeHours, lateArrivals, unexcusedAbsences, punches: [{ attendanceRef, date, firstIn, lastOut, device, exception, detail, onTime }] } }`.
+- `attendance` powers the whole right-hand evidence column (Work Days & Attendance Log + Biometric Punch Proof) from the same call — no per-employee round trips.
+- `attendance.adjustedAt` is set when HR corrected the counters by hand (see the write endpoint below); the day log and punches always remain the raw evidence.
+
+**`PUT /api/payroll-periods/{id}/entries/{employeeId}/attendance`** — **NEW** *(sheet reconciliation; `payroll.edit`, open period)*
+- Body `{ daysAttended, weeklyOffs, approvedLeaves, overtimeHours, lateArrivals, unexcusedAbsences }` (all required, non-negative).
+- Persists `DaysWorked` / `OvertimeHours` on the entry and stores the four derived counters as overrides (`WeeklyOffsOverride`, `ApprovedLeavesOverride`, `LateArrivalsOverride`, `UnexcusedAbsencesOverride`) plus `AttendanceAdjustedAt` / `AttendanceAdjustedBy`; overtime reprices the gross. Returns the recomputed entry totals.
+- UI: the *Work Days & Attendance Log* card's **Edit** button turns the six rows into inputs; an **Adjusted** chip marks a corrected sheet.
+
+- `attendance.days[]` is the click-through log behind the six counters: `{ date, kind: Attended|WeeklyOff|ApprovedLeave|Late|Absent|EarlyCheckout|MissingCheckout, status, shift, checkIn, checkOut, workedHours, overtimeHours, note, attendanceRef }`, oldest first. Clicking a counter row opens that log filtered to the row's bucket; `attendanceRef` feeds the existing punch audit (`GET /api/attendance/{id}`).
+
+**`POST /api/payroll-periods/ensure?gym={id}`** — **NEW** *(current-month provisioning; `payroll.edit`)*
+- Idempotent. Finds the gym's period whose `StartDate` is the first of the current month, creates it (`Open`) when missing, and — while it is open — adds a `Draft` entry for every **Active** employee that has none (`BaseSalary` = latest compensation, `DaysWorked` = attendance punches in the window, `OvertimeHours` 0).
+- Response `{ periodId, period, created, entriesAdded, open }`. Published/paid periods are never modified (`open: false`, `entriesAdded: 0`).
+- Called by the payroll page on load, so the ledger (and the employee's *My Payroll*) always includes newly created staff.
 - Derived client-side (must be computable from these fields): OT pay = `(baseSalary/176)*1.5*overtime`; gross = base+bonus+OT; approved deductions = lines with `Accepted|Approved`; net = gross − approved; pending count = lines `Pending`; status badge = `Closed & Settled` | `{n} Actions Needed` | `Ready to Close`.
 - Used by: **overview table** columns (Employee initials/name/employeeId, Role/position, Base Salary, OT & Bonus, Deductions, Net Final, Status, Action "Review Sheet →"), 4 stat cards (Total Staff, Settled & Closed %, Pending Review, Net Disbursed + Gross), and the **settlement sheet** (earnings card, deductions list, net strip).
 
@@ -1190,8 +1206,9 @@ Selectors: **Gym branch** (`Nasr City | Heliopolis | 6th October`) and **Period*
 **`GET /api/payroll-periods/{id}/export`** — NEW *(spec §4.7 "Export (CSV/PDF)"; permission `payroll.export`)*
 - Query: `gym`, `format=csv|pdf`. Response: streamed file (CSV columns = overview table columns). Used by: Export action.
 
-**`GET /api/employees/{id}/attendance`** — EXISTING *(evidence pane)*
-- Query: `from`, `to` (period). Response supplies: Days Attended, Weekly Offs, Approved Leaves, Overtime Logged, Late Arrivals, Unexcused Absences (settlement sheet right column).
+**`GET /api/employees/{id}/attendance`** — EXISTING *(alternate evidence source)*
+- Query: `month`, `page`, `pageSize`. Returns the day rows + month totals (`present`, `late`, `early`, `absent`, `off`, `hours`).
+- The settlement sheet no longer needs it: the period detail's `attendance` block already carries the six counters and the punch proof (see above).
 
 **`GET /api/attendance/{id}`** — NEW *(biometric punch audit for a referenced record)*
 - Auth: JWT + `payroll.view` or `attendance.view`. Response `{ data: { id, date, firstIn, lastOut, device, exception, detail } }`. Used by: **View Log** → `openPayrollAttendanceRef` modal (Record Date, Punch In/Out, Terminal Source, System Exception Notes) for refs like `ATT-2608-0417`.

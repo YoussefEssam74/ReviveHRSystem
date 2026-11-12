@@ -2413,6 +2413,15 @@ namespace Persistence.Data.Migrations
                     b.Property<int>("DaysWorked")
                         .HasColumnType("integer");
 
+                    b.Property<int?>("ApprovedLeavesOverride")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("AttendanceAdjustedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int?>("AttendanceAdjustedBy")
+                        .HasColumnType("integer");
+
                     b.Property<int>("EmployeeId")
                         .HasColumnType("integer");
 
@@ -2420,6 +2429,9 @@ namespace Persistence.Data.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("boolean")
                         .HasDefaultValue(false);
+
+                    b.Property<int?>("LateArrivalsOverride")
+                        .HasColumnType("integer");
 
                     b.Property<decimal>("NetPay")
                         .HasPrecision(18, 2)
@@ -2437,6 +2449,12 @@ namespace Persistence.Data.Migrations
                     b.Property<string>("Status")
                         .IsRequired()
                         .HasColumnType("text");
+
+                    b.Property<int?>("UnexcusedAbsencesOverride")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("WeeklyOffsOverride")
+                        .HasColumnType("integer");
 
                     b.Property<decimal>("TotalBonuses")
                         .HasPrecision(18, 2)

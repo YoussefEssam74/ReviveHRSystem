@@ -33,6 +33,7 @@ const STATUS_COLORS: Record<string, BadgeColor> = {
   // Warning-ish
   late: 'yellow',
   pending: 'yellow',
+  'awaiting manager': 'yellow',
   'pending hr review': 'yellow',
   pendinghrreview: 'yellow',
   'pending hr': 'yellow',

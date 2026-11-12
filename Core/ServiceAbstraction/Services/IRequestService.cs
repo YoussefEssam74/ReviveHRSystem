@@ -15,6 +15,12 @@ namespace ServiceAbstraction.Services
         /// <summary>Paged, gym-scoped requests inbox (R1) — status/type/gym/date/quick filters and sorting.</summary>
         Task<RequestListResponse> GetRequestsAsync(int? actorUserId, RequestListQuery query, CancellationToken cancellationToken = default);
 
+        /// <summary>
+        /// The counts the inbox prints without paging (R10): KPI tiles, tab badges
+        /// and type-pill counts, all gym-scoped like the list.
+        /// </summary>
+        Task<RequestSummaryResponse> GetRequestSummaryAsync(int? actorUserId, int? gym, CancellationToken cancellationToken = default);
+
         /// <summary>One request with its decision trail (R2).</summary>
         Task<RequestDetailResponse> GetRequestAsync(int? actorUserId, int requestId, CancellationToken cancellationToken = default);
 

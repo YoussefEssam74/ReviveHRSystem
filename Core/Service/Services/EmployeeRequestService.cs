@@ -424,6 +424,25 @@ namespace Service.Services
             await unitOfWork.GetRepository<EmployeeRequest, int>().AddAsync(entity, cancellationToken);
             await unitOfWork.SaveChangesAsync(cancellationToken);
 
+            // Nobody would clear the stage-1 queue in a gym without a Team Leader /
+            // Branch Manager, so the request goes straight to HR. The marker decision
+            // keeps the timeline honest and lets the HR decision release the reserved days.
+            if (!await userAccess.HasActiveGymDeskAsync(employee.GymId, actorUserId, cancellationToken))
+            {
+                entity.Status = RequestStatus.PendingHRReview;
+                entity.Decisions.Add(new RequestDecision
+                {
+                    RequestId = entity.Id,
+                    Stage = ApprovalStage.BranchManager,
+                    Decision = DecisionOutcome.Approved,
+                    Comment = RequestService.AutoAdvanceComment,
+                    DecidedBy = actorUserId,
+                    DecidedAt = DateTime.UtcNow
+                });
+                unitOfWork.GetRepository<EmployeeRequest, int>().Update(entity);
+                await unitOfWork.SaveChangesAsync(cancellationToken);
+            }
+
             var leaveType = LeaveBalanceReservation.LeaveTypeFor(entity);
             if (leaveType is not null)
             {

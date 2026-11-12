@@ -150,6 +150,7 @@ namespace Service.Services
         {
             string? roleInActiveGym = null;
             int? ledTeamId = null;
+            var featureLevels = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
             int? employeeId = await employeeAccessService.GetOwnEmployeeIdAsync(user.Id, cancellationToken);
 
             if (activeGym is not null)
@@ -160,6 +161,9 @@ namespace Service.Services
                 // Only relevant for team-scoped sessions, but harmless to resolve always:
                 // null unless the user leads a team in the active gym.
                 ledTeamId = await teamScopeService.GetLedTeamIdAsync(user.Id, activeGym.GymId, cancellationToken);
+
+                var permissionKeys = await userAccess.GetPermissionKeysForGymAsync(user.Id, activeGym.GymId, cancellationToken);
+                featureLevels = BuildFeatureLevels(permissionKeys);
             }
 
             return new MeResponse
@@ -172,8 +176,41 @@ namespace Service.Services
                 Gyms = gyms,
                 RoleInActiveGym = roleInActiveGym,
                 LedTeamId = ledTeamId,
+                FeatureLevels = featureLevels,
                 EmployeeId = employeeId
             };
+        }
+
+        /// <summary>
+        /// Collapses the gym's permission keys into one level per feature:
+        /// <c>{feature}.view</c> is View (1); any other action (edit, manage, approve,
+        /// create, …) is Edit (2) — the highest grant wins.
+        /// </summary>
+        private static Dictionary<string, int> BuildFeatureLevels(IEnumerable<string> permissionKeys)
+        {
+            const int View = 1;
+            const int Edit = 2;
+
+            var levels = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+            foreach (var key in permissionKeys)
+            {
+                var separator = key.IndexOf('.');
+                if (separator <= 0 || separator == key.Length - 1)
+                {
+                    continue;
+                }
+
+                var feature = key[..separator];
+                var action = key[(separator + 1)..];
+                var level = action.Equals("view", StringComparison.OrdinalIgnoreCase) ? View : Edit;
+
+                if (!levels.TryGetValue(feature, out var current) || level > current)
+                {
+                    levels[feature] = level;
+                }
+            }
+
+            return levels;
         }
 
         /// <summary>

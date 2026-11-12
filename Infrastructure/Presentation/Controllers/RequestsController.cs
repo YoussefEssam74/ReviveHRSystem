@@ -27,6 +27,17 @@ namespace Presentation.Controllers
             return Ok(result);
         }
 
+        /// <summary>
+        /// GET /api/requests/summary â€” KPI tile / tab / type-pill counts in one call
+        /// (R10, requests.view). Same gym scope as the list.
+        /// </summary>
+        [HttpGet("summary")]
+        public async Task<ActionResult<RequestSummaryResponse>> GetSummary([FromQuery] int? gym, CancellationToken cancellationToken)
+        {
+            var result = await _service.GetRequestSummaryAsync(GetActorUserId(), gym, cancellationToken);
+            return Ok(result);
+        }
+
         /// <summary>GET /api/requests/{id} â€” one request with its decision trail (R2, requests.view).</summary>
         [HttpGet("{id:int}")]
         public async Task<ActionResult<RequestDetailResponse>> GetRequest(int id, CancellationToken cancellationToken)

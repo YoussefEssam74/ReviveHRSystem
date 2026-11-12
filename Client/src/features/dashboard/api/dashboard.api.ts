@@ -16,6 +16,10 @@ export interface HrDashboardAction {
   title: string
   subtitle: string
   detail: string
+  /** Numeric id of the underlying row (request/vacancy/employee/period). */
+  refId: number
+  /** Employee the card is about, when there is one. */
+  employeeId: number | null
   date: string
   gymId: number | null
   gym: string | null
