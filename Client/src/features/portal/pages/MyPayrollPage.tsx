@@ -24,8 +24,10 @@ import {
   type PayrollSheet,
   type PayrollDeductionDetail,
 } from '../api/payroll.api'
-import { EmptyState } from '../../../components/ui/primitives'
+import { getOwnLeaveBalance, type LeaveBalanceResponse } from '../api/attendance.api'
+import { EmptyState, ProgressBar } from '../../../components/ui/primitives'
 import { ErrorState, LoadingState } from '../../../components/async-state'
+import { Skeleton } from '../../../components/ui/skeleton'
 import { Drawer } from '../../../components/ui/drawer'
 import { StatusBadge, Badge, statusColor, type BadgeColor } from '../../../components/ui/badge'
 import { Button } from '../../../components/ui/button'
@@ -90,6 +92,13 @@ export default function MyPayrollPage() {
     queryFn: ({ signal }) => getOwnPayrollSheets(employeeId!, signal),
     enabled: employeeId != null,
   })
+  // The snapshot's right half answers "how much leave is left behind this money":
+  // the same year-to-date balance the requests page draws from.
+  const balanceQuery = useQuery({
+    queryKey: ['portal', 'leave-balance', employeeId],
+    queryFn: ({ signal }) => getOwnLeaveBalance(employeeId!, signal),
+    enabled: employeeId != null,
+  })
 
   if (employeeId == null) {
     return (
@@ -146,7 +155,14 @@ export default function MyPayrollPage() {
         </span>
       </h1>
 
-      {snapshot && <PayrollSnapshotCard sheet={snapshot} onPayslip={() => setSlipId(snapshot.id)} />}
+      {snapshot && (
+        <PayrollSnapshotCard
+          sheet={snapshot}
+          balance={balanceQuery.data ?? null}
+          balanceError={balanceQuery.isError ? describeApiError(balanceQuery.error) : null}
+          onPayslip={() => setSlipId(snapshot.id)}
+        />
+      )}
 
       <MonthlyBreakdown
         months={months}
@@ -168,55 +184,73 @@ export default function MyPayrollPage() {
 
 /* ==================== Current payroll snapshot (mock §8 donut card) ==================== */
 
-function PayrollSnapshotCard({ sheet, onPayslip }: { sheet: PayrollSheet; onPayslip: () => void }) {
+function PayrollSnapshotCard({
+  sheet,
+  balance,
+  balanceError,
+  onPayslip,
+}: {
+  sheet: PayrollSheet
+  balance: LeaveBalanceResponse | null
+  balanceError: string | null
+  onPayslip: () => void
+}) {
   const { t } = useTranslation()
   const net = sheet.netSalary
   const deductions = sheet.totalDeductions
   const gross = grossPay(sheet) || net + deductions
 
   return (
-    <section className="card p-3.5 sm:p-4">
+    <section className="card p-3 sm:p-3.5">
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
         <h2 className="text-base font-bold text-charcoal-900">{t('Current Payroll Snapshot')}</h2>
         <span className="text-sm text-charcoal-400">· {sheet.period}</span>
         <StatusBadge status={sheet.status} className="ms-auto" />
       </div>
 
-      <div className="mt-3 grid items-center gap-4 sm:grid-cols-[minmax(0,190px)_minmax(0,1fr)]">
-        <DonutChart
-          net={net}
-          deductions={deductions}
-          netLabel={t('Net Pay')}
-          netValue={formatEGP(net)}
-          ariaLabel={t('Payroll split: net pay {{net}}, deductions {{deductions}}', {
-            net: formatEGP(net),
-            deductions: formatEGP(deductions),
-          })}
-        />
+      <div className="mt-2.5 grid gap-3 lg:grid-cols-2">
+        {/* Left half: the money of this period */}
+        <div className="flex items-center gap-3 lg:pe-4">
+          <DonutChart
+            net={net}
+            deductions={deductions}
+            netLabel={t('Net Pay')}
+            netValue={formatEGP(net)}
+            ariaLabel={t('Payroll split: net pay {{net}}, deductions {{deductions}}', {
+              net: formatEGP(net),
+              deductions: formatEGP(deductions),
+            })}
+          />
 
-        <dl className="w-full max-w-md space-y-2 text-sm">
-          <div className="flex items-center justify-between gap-3">
-            <dt className="flex items-center gap-2 text-charcoal-600">
-              <span className="h-2.5 w-2.5 rounded-full bg-brand-500" aria-hidden="true" />
-              {t('Net Pay')}
-            </dt>
-            <dd className="font-semibold text-charcoal-900">{formatEGP(net)}</dd>
-          </div>
-          <div className="flex items-center justify-between gap-3">
-            <dt className="flex items-center gap-2 text-charcoal-600">
-              <span className="h-2.5 w-2.5 rounded-full bg-red-500" aria-hidden="true" />
-              {t('Deductions')}
-            </dt>
-            <dd className="font-semibold text-red-600">{formatEGP(deductions)}</dd>
-          </div>
-          <div className="flex items-center justify-between gap-3 border-t border-charcoal-100 pt-2">
-            <dt className="text-charcoal-600">{t('Total Payout this period')}</dt>
-            <dd className="text-base font-bold text-charcoal-900">{formatEGP(gross)}</dd>
-          </div>
-        </dl>
+          <dl className="min-w-0 flex-1 space-y-1.5 text-xs">
+            <div className="flex items-center justify-between gap-2">
+              <dt className="flex min-w-0 items-center gap-1.5 text-charcoal-600">
+                <span className="h-2 w-2 flex-shrink-0 rounded-full bg-brand-500" aria-hidden="true" />
+                <span className="truncate">{t('Net Pay')}</span>
+              </dt>
+              <dd className="flex-shrink-0 font-semibold text-charcoal-900">{formatEGP(net)}</dd>
+            </div>
+            <div className="flex items-center justify-between gap-2">
+              <dt className="flex min-w-0 items-center gap-1.5 text-charcoal-600">
+                <span className="h-2 w-2 flex-shrink-0 rounded-full bg-red-500" aria-hidden="true" />
+                <span className="truncate">{t('Deductions')}</span>
+              </dt>
+              <dd className="flex-shrink-0 font-semibold text-red-600">{formatEGP(deductions)}</dd>
+            </div>
+            <div className="flex items-center justify-between gap-2 border-t border-charcoal-100 pt-1.5">
+              <dt className="min-w-0 leading-tight text-charcoal-600">{t('Total Payout this period')}</dt>
+              <dd className="flex-shrink-0 text-sm font-bold text-charcoal-900">{formatEGP(gross)}</dd>
+            </div>
+          </dl>
+        </div>
+
+        {/* Right half: the leave standing behind this money */}
+        <div className="border-t border-charcoal-100 pt-2.5 lg:border-s lg:border-t-0 lg:ps-4 lg:pt-0">
+          <LeaveBalanceBlock sheet={sheet} balance={balance} error={balanceError} />
+        </div>
       </div>
 
-      <div className="mt-3 flex justify-end">
+      <div className="mt-2.5 flex justify-end border-t border-charcoal-100 pt-2">
         {sheet.visible ? (
           <Button size="sm" onClick={onPayslip}>
             <FileText className="h-3.5 w-3.5" aria-hidden="true" />
@@ -227,6 +261,79 @@ function PayrollSnapshotCard({ sheet, onPayslip }: { sheet: PayrollSheet; onPays
         )}
       </div>
     </section>
+  )
+}
+
+/** Year-to-date leave standing next to the payslip (mock's "annual leave" block). */
+function LeaveBalanceBlock({
+  sheet,
+  balance,
+  error,
+}: {
+  sheet: PayrollSheet
+  balance: LeaveBalanceResponse | null
+  error: string | null
+}) {
+  const { t } = useTranslation()
+
+  if (error) {
+    return <p className="text-[11px] text-red-600">{error}</p>
+  }
+  if (!balance) {
+    return (
+      <div className="space-y-1.5" role="status" aria-live="polite">
+        <Skeleton className="h-2.5 w-24" />
+        <Skeleton className="h-5" />
+        <Skeleton className="h-5" />
+        <Skeleton className="h-5" />
+        <span className="sr-only">{t('Loading leave balance…')}</span>
+      </div>
+    )
+  }
+
+  const rows = [
+    { key: 'annual', label: t('Annual leave'), used: balance.dayOff.used, total: balance.dayOff.total, bar: 'bg-brand-500' },
+    { key: 'unpaid', label: t('Unpaid days'), used: balance.unpaid.used, total: balance.unpaid.total, bar: 'bg-amber-500' },
+    { key: 'sick', label: t('Sick leave'), used: balance.sick.used, total: balance.sick.total, bar: 'bg-sky-500' },
+  ]
+
+  return (
+    <div className="w-full max-w-md">
+      <div className="mb-1.5 flex items-baseline justify-between gap-2">
+        <p className="bento-label">{t('LEAVE BALANCE')}</p>
+        <p className="text-[10px] text-charcoal-400">{t('Year to date')}</p>
+      </div>
+      <div className="space-y-1.5">
+        {rows.map((row) => {
+          const left = Math.max(0, row.total - row.used)
+          return (
+            <div key={row.key}>
+              <div className="flex items-baseline justify-between gap-2">
+                <span className="flex min-w-0 items-center gap-1.5 text-xs text-charcoal-600">
+                  <span className={cn('h-2 w-2 flex-shrink-0 rounded-full', row.bar)} aria-hidden="true" />
+                  <span className="truncate">{row.label}</span>
+                </span>
+                <span className="flex-shrink-0 text-[11px] font-semibold text-charcoal-900">
+                  {row.total > 0
+                    ? t('{{used}} used · {{left}} left', { used: row.used, left })
+                    : t('{{used}} taken', { used: row.used })}
+                </span>
+              </div>
+              {row.total > 0 && (
+                <ProgressBar value={row.used} max={row.total} colorClass={row.bar} className="mt-1 h-1" />
+              )}
+            </div>
+          )
+        })}
+      </div>
+      <p className="mt-1.5 text-[10px] text-charcoal-400">
+        {t('This period: {{annual}} annual · {{unpaid}} unpaid · {{sick}} sick days', {
+          annual: sheet.annualLeaveDays ?? 0,
+          unpaid: sheet.unpaidLeaveDays ?? 0,
+          sick: sheet.sickLeaveDays ?? 0,
+        })}
+      </p>
+    </div>
   )
 }
 
@@ -254,7 +361,7 @@ function DonutChart({
   let consumed = 0
 
   return (
-    <div className="relative mx-auto h-40 w-40 sm:h-44 sm:w-44">
+    <div className="relative mx-auto h-28 w-28 flex-shrink-0 sm:h-32 sm:w-32">
       <svg viewBox="0 0 120 120" className="h-full w-full" role="img" aria-label={ariaLabel}>
         <circle cx="60" cy="60" r={radius} fill="none" stroke="var(--color-charcoal-100)" strokeWidth="15" />
         {segments.map((segment) => {
@@ -277,9 +384,9 @@ function DonutChart({
           )
         })}
       </svg>
-      <div className="absolute inset-0 flex flex-col items-center justify-center px-6 text-center">
-        <p className="text-[10px] font-semibold uppercase tracking-wider text-charcoal-400">{netLabel}</p>
-        <p className="mt-0.5 text-base font-bold leading-tight text-charcoal-900">{netValue}</p>
+      <div className="absolute inset-0 flex flex-col items-center justify-center px-5 text-center">
+        <p className="text-[9px] font-semibold uppercase tracking-wider text-charcoal-400">{netLabel}</p>
+        <p className="mt-0.5 text-sm font-bold leading-tight text-charcoal-900">{netValue}</p>
       </div>
     </div>
   )

@@ -223,6 +223,12 @@ export const portal: Record<string, string> = {
   'Quick Financial Insights': 'مؤشرات مالية سريعة',
   'Next Payout (EST.)': 'موعد الصرف التالي (تقديري)',
   'Max deductions': 'أقصى خصومات',
+  'Annual leave': 'الإجازة السنوية',
+  'Sick leave': 'الإجازة المرضية',
+  '{{used}} used · {{left}} left': '{{used}} مستخدمة · {{left}} متبقية',
+  '{{used}} taken': '{{used}} مأخوذة',
+  'This period: {{annual}} annual · {{unpaid}} unpaid · {{sick}} sick days':
+    'هذه الفترة: {{annual}} سنوية · {{unpaid}} بدون أجر · {{sick}} مرضية',
 
   // Settings
   'Manage your account and preferences': 'إدارة حسابك وتفضيلاتك',
