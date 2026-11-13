@@ -23,6 +23,8 @@ export interface EmployeeRequestItem {
   /** End of a leave/swap range, null on single-day types. */
   endDate: string | null
   submittedDate: string
+  /** Date + clock time the request was filed (ISO); the list prints its time. */
+  submittedAt?: string
   status: string
   reason: string
   bmComment: string | null

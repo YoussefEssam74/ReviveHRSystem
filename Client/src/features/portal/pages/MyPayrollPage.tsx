@@ -2,10 +2,9 @@ import { Fragment, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import {
-  ArrowRight,
+  AlertCircle,
   BadgeCheck,
   Banknote,
-  CalendarClock,
   Clock,
   FileText,
   MinusCircle,
@@ -48,15 +47,7 @@ function grossPay(sheet: PayrollSheet): number {
   return sheet.baseSalary + sheet.totalBonuses + (sheet.overtimePay ?? 0) + (sheet.annualIncrease ?? 0)
 }
 
-/** "November 2026" → 1st of the following month — the mock's estimated payout date. */
-function estimateNextPayout(sheet: PayrollSheet | null): Date | null {
-  if (!sheet) return null
-  const [monthName, year] = sheet.period.split(' ')
-  const start = new Date(`${monthName} 1, ${year}`)
-  if (Number.isNaN(start.getTime())) return null
-  return new Date(start.getFullYear(), start.getMonth() + 1, 1)
-}
-
+/** Dot colour per status tone (the breakdown table's status marker). */
 const STATUS_DOT_CLASS: Record<BadgeColor, string> = {
   green: 'bg-emerald-500',
   yellow: 'bg-amber-500',
@@ -134,26 +125,12 @@ export default function MyPayrollPage() {
   const openSheet = allSheets.find((sheet) => !sheet.visible) ?? null
   const months = openSheet ? [...paid, openSheet] : paid
   const latestPaid = paid[0] ?? null
-  // The snapshot mirrors the mock's "current period": the in-flight month when it
-  // already carries figures, otherwise the latest closed payslip.
-  const snapshot =
-    openSheet && (openSheet.netSalary > 0 || openSheet.totalDeductions > 0) ? openSheet : (latestPaid ?? openSheet)
-
-  const lastThree = paid.slice(0, 3)
-  const avgNet = lastThree.length
-    ? Math.round(lastThree.reduce((sum, sheet) => sum + sheet.netSalary, 0) / lastThree.length)
-    : 0
-  const maxDeductions = paid.reduce((max, sheet) => Math.max(max, sheet.totalDeductions), 0)
+  // The snapshot follows the current (open) period — that is what "current" means —
+  // and falls back to the latest closed payslip when nothing is running.
+  const snapshot = openSheet ?? latestPaid
 
   return (
-    <div className="space-y-2.5">
-      <h1 className="text-lg font-bold text-charcoal-900">
-        {t('My Payroll')}{' '}
-        <span className="text-[11px] font-normal text-charcoal-400">
-          · {t('{{count}} payslips', { count: paid.length })} · {openSheet ? 1 : 0} {t('open')}
-        </span>
-      </h1>
-
+    <div className="space-y-1.5">
       {snapshot && (
         <PayrollSnapshotCard
           sheet={snapshot}
@@ -162,18 +139,12 @@ export default function MyPayrollPage() {
         />
       )}
 
+      {/* Side by side on wide screens so the whole page lands inside one viewport. */}
       <MonthlyBreakdown
         months={months}
         expandedId={expandedId}
         onToggle={(id) => setExpandedId((current) => (current === id ? null : id))}
         onSlip={setSlipId}
-      />
-
-      <FinancialInsights
-        avgNet={avgNet}
-        nextPayout={estimateNextPayout(openSheet ?? latestPaid)}
-        maxDeductions={maxDeductions}
-        raiseSheet={latestPaid ?? snapshot}
       />
 
       <PayslipDrawer entryId={slipId} employeeId={employeeId} onClose={() => setSlipId(null)} />
@@ -198,14 +169,14 @@ function PayrollSnapshotCard({
   const gross = grossPay(sheet) || net + deductions
 
   return (
-    <section className="card p-3 sm:p-3.5">
+    <section className="card p-2.5 sm:p-3">
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
         <h2 className="text-base font-bold text-charcoal-900">{t('Current Payroll Snapshot')}</h2>
         <span className="text-sm text-charcoal-400">· {sheet.period}</span>
         <StatusBadge status={sheet.status} className="ms-auto" />
       </div>
 
-      <div className="mt-2.5 grid gap-3 lg:grid-cols-2">
+      <div className="mt-2 grid gap-2.5 lg:grid-cols-2">
         {/* Left half: the money of this period */}
         <div className="flex items-center gap-3 lg:pe-4">
           <DonutChart
@@ -227,10 +198,10 @@ function PayrollSnapshotCard({
               </dt>
               <dd className="flex-shrink-0 font-semibold text-charcoal-900">{formatEGP(net)}</dd>
             </div>
-            {/* Bonus rides inside the net figure — indented so it never reads as a
-                slice of the donut; the purple dot is its legend marker. */}
-            <div className="flex items-center justify-between gap-2 ps-3.5">
-              <dt className="flex min-w-0 items-center gap-1.5 text-charcoal-500">
+            {/* Bonus rides inside the net figure — same row rhythm as the other
+                legend entries, marked by its purple dot. */}
+            <div className="flex items-center justify-between gap-2">
+              <dt className="flex min-w-0 items-center gap-1.5 text-charcoal-600">
                 <span className="h-2 w-2 flex-shrink-0 rounded-full bg-purple-500" aria-hidden="true" />
                 <span className="truncate">{t('Bonus')}</span>
               </dt>
@@ -250,26 +221,53 @@ function PayrollSnapshotCard({
           </dl>
         </div>
 
-        {/* Right half: the leave standing behind this money */}
-        <div className="border-t border-charcoal-100 pt-2.5 lg:border-s lg:border-t-0 lg:ps-4 lg:pt-0">
-          <LeaveBalanceBlock sheet={sheet} balance={balance} error={balanceError} />
+        {/* Right half: the annual leave standing behind this money */}
+        <div className="border-t border-charcoal-100 pt-2.5 lg:flex lg:items-center lg:border-s lg:border-t-0 lg:ps-4 lg:pt-0">
+          <LeaveBalanceBlock balance={balance} error={balanceError} />
         </div>
       </div>
     </section>
   )
 }
 
-/** Year-to-date leave standing next to the payslip (mock's "annual leave" block). */
+/**
+ * Product rule: annual leave is earned one day per completed service month, released
+ * after six months and capped at this yearly allowance (mirrors
+ * AnnualLeaveAccrual.MaxDaysPerYear on the server).
+ */
+const ANNUAL_LEAVE_ALLOWANCE = 12
+
+/** Session-level "today" keeps the accrual countdown out of the render path. */
+const ACCRUAL_TODAY = new Date()
+
+/**
+ * Hire date + six completed months → the day annual leave opens, plus the whole months
+ * still to wait (rounded up so "1 month" never hides a nearly-finished month).
+ * Mirrors AnnualLeaveAccrual.QualifyingMonths on the server.
+ */
+function annualLeaveOpensOn(hireDate: string | null | undefined): { opensOn: Date; monthsLeft: number } | null {
+  if (!hireDate) return null
+  const hired = new Date(hireDate)
+  if (Number.isNaN(hired.getTime())) return null
+  const opensOn = new Date(hired.getFullYear(), hired.getMonth() + 6, hired.getDate())
+  const days = (opensOn.getTime() - ACCRUAL_TODAY.getTime()) / 86_400_000
+  return { opensOn, monthsLeft: days <= 0 ? 0 : Math.max(1, Math.ceil(days / 30.44)) }
+}
+
+/**
+ * Annual leave only, matching the product rule: the balance settles days as paid and
+ * carries anything taken ahead of the accrual as an unpaid deficit that only costs
+ * money if the employee leaves before the accrual catches up.
+ */
 function LeaveBalanceBlock({
-  sheet,
   balance,
   error,
 }: {
-  sheet: PayrollSheet
   balance: LeaveBalanceResponse | null
   error: string | null
 }) {
   const { t } = useTranslation()
+  const { user } = usePortalSession()
 
   if (error) {
     return <p className="text-[11px] text-red-600">{error}</p>
@@ -280,54 +278,74 @@ function LeaveBalanceBlock({
         <Skeleton className="h-2.5 w-24" />
         <Skeleton className="h-5" />
         <Skeleton className="h-5" />
-        <Skeleton className="h-5" />
         <span className="sr-only">{t('Loading leave balance…')}</span>
       </div>
     )
   }
 
-  const rows = [
-    { key: 'annual', label: t('Annual leave'), used: balance.dayOff.used, total: balance.dayOff.total, bar: 'bg-brand-500' },
-    { key: 'unpaid', label: t('Unpaid days'), used: balance.unpaid.used, total: balance.unpaid.total, bar: 'bg-amber-500' },
-    { key: 'sick', label: t('Sick leave'), used: balance.sick.used, total: balance.sick.total, bar: 'bg-sky-500' },
-  ]
+  // Annual-leave requests only. `dayOff.used` is every annual day booked; the part the
+  // accrual already funds is paid, and anything above it is the unpaid deficit that the
+  // following months absorb (it only costs money if the employee leaves first).
+  const entitlement = balance.dayOff.total
+  const paidDays = Math.min(balance.dayOff.used, entitlement)
+  const unpaidDays = balance.unpaid.used
+  const takenDays = paidDays + unpaidDays
+  // Nothing is released before six completed months of service.
+  const accruing = entitlement <= 0
+  const qualifying = annualLeaveOpensOn(user?.hireDate)
 
   return (
-    <div className="w-full max-w-md">
+    <div className="mx-auto w-full max-w-md">
       <div className="mb-1.5 flex items-baseline justify-between gap-2">
         <p className="bento-label">{t('LEAVE BALANCE')}</p>
         <p className="text-[10px] text-charcoal-400">{t('Year to date')}</p>
       </div>
-      <div className="space-y-1.5">
-        {rows.map((row) => {
-          const left = Math.max(0, row.total - row.used)
-          return (
-            <div key={row.key}>
-              <div className="flex items-baseline justify-between gap-2">
-                <span className="flex min-w-0 items-center gap-1.5 text-xs text-charcoal-600">
-                  <span className={cn('h-2 w-2 flex-shrink-0 rounded-full', row.bar)} aria-hidden="true" />
-                  <span className="truncate">{row.label}</span>
-                </span>
-                <span className="flex-shrink-0 text-[11px] font-semibold text-charcoal-900">
-                  {row.total > 0
-                    ? t('{{used}} used · {{left}} left', { used: row.used, left })
-                    : t('{{used}} taken', { used: row.used })}
-                </span>
-              </div>
-              {row.total > 0 && (
-                <ProgressBar value={row.used} max={row.total} colorClass={row.bar} className="mt-1 h-1" />
-              )}
-            </div>
-          )
-        })}
+
+      <div className="flex items-baseline justify-between gap-2">
+        <span className="flex min-w-0 items-center gap-1.5 text-xs text-charcoal-600">
+          <span className="h-2 w-2 flex-shrink-0 rounded-full bg-brand-500" aria-hidden="true" />
+          <span className="truncate">{t('Annual leave')}</span>
+        </span>
+        <span className="flex-shrink-0 text-[11px] font-semibold text-charcoal-900">
+          {takenDays}/{ANNUAL_LEAVE_ALLOWANCE}
+        </span>
       </div>
-      <p className="mt-1.5 text-[10px] text-charcoal-400">
-        {t('This period: {{annual}} annual · {{unpaid}} unpaid · {{sick}} sick days', {
-          annual: sheet.annualLeaveDays ?? 0,
-          unpaid: sheet.unpaidLeaveDays ?? 0,
-          sick: sheet.sickLeaveDays ?? 0,
-        })}
-      </p>
+      <ProgressBar
+        value={Math.min(takenDays, ANNUAL_LEAVE_ALLOWANCE)}
+        max={ANNUAL_LEAVE_ALLOWANCE}
+        colorClass="bg-brand-500"
+        className="mt-1 h-1"
+      />
+      {accruing && (
+        <p className="mt-1 text-[10px] text-charcoal-400">
+          {qualifying && qualifying.monthsLeft > 0
+            ? t('Opens on {{date}} · {{count}} months left', {
+                date: formatDateWithYear(qualifying.opensOn),
+                count: qualifying.monthsLeft,
+              })
+            : t('After 6 months of service')}
+        </p>
+      )}
+
+      <div className="mt-1.5 grid grid-cols-2 gap-2">
+        <div className="rounded-lg bg-charcoal-50 px-2 py-1.5">
+          <p className="truncate text-[10px] text-charcoal-500">{t('Calculated as paid')}</p>
+          <p className="text-sm font-bold leading-tight text-charcoal-900">{paidDays}</p>
+        </div>
+        <div className="rounded-lg bg-charcoal-50 px-2 py-1.5">
+          <p className="truncate text-[10px] text-charcoal-500">{t('Unpaid days')}</p>
+          <p className={cn('text-sm font-bold leading-tight', unpaidDays > 0 ? 'text-red-600' : 'text-charcoal-900')}>
+            {unpaidDays}
+          </p>
+        </div>
+      </div>
+
+      {unpaidDays > 0 && (
+        <p className="mt-1.5 flex flex-wrap items-center gap-x-1 text-[10px] font-semibold text-red-600">
+          <AlertCircle className="h-3 w-3 flex-shrink-0" aria-hidden="true" />
+          {t('Deducted if you leave')}
+        </p>
+      )}
     </div>
   )
 }
@@ -356,7 +374,7 @@ function DonutChart({
   let consumed = 0
 
   return (
-    <div className="relative mx-auto h-28 w-28 flex-shrink-0 sm:h-32 sm:w-32">
+    <div className="relative mx-auto h-24 w-24 flex-shrink-0 sm:h-28 sm:w-28">
       <svg viewBox="0 0 120 120" className="h-full w-full" role="img" aria-label={ariaLabel}>
         <circle cx="60" cy="60" r={radius} fill="none" stroke="var(--color-charcoal-100)" strokeWidth="15" />
         {segments.map((segment) => {
@@ -430,13 +448,13 @@ function MonthlyBreakdown({
 
   return (
     <section className="card overflow-hidden">
-      <div className="px-3.5 pb-2.5 pt-3">
+      <div className="px-3 pb-2 pt-2.5">
         <h2 className="text-base font-bold text-charcoal-900">{t('Monthly Breakdown')}</h2>
       </div>
 
       {/* Desktop: the mock's table */}
       <div className="hidden border-t border-charcoal-100 lg:block">
-        <table className="w-full">
+        <table className="w-full [&_td]:py-1.5 [&_th]:py-1.5">
           <thead>
             <tr className="bg-charcoal-50 text-[10px] uppercase tracking-wider text-charcoal-500">
               <th scope="col" className="px-3 py-2 text-start font-semibold">{t('Month & Year')}</th>
@@ -539,87 +557,6 @@ function MonthlyBreakdown({
             </div>
           )
         })}
-      </div>
-    </section>
-  )
-}
-
-/* ==================== Quick financial insights (mock §8) ==================== */
-
-function FinancialInsights({
-  avgNet,
-  nextPayout,
-  maxDeductions,
-  raiseSheet,
-}: {
-  avgNet: number
-  nextPayout: Date | null
-  maxDeductions: number
-  raiseSheet: PayrollSheet | null
-}) {
-  const { t } = useTranslation()
-  const raisePercent = raiseSheet ? increasePercentLabel(raiseSheet) : '0%'
-  // The sheet reports no raise slice (it is folded into base salary once a year),
-  // so the amount is the gym policy percent applied to the period's base salary —
-  // the same figure the payslip card prints.
-  const raiseAmount =
-    raiseSheet && (raiseSheet.annualIncreasePercent ?? 0) > 0
-      ? Math.round((raiseSheet.baseSalary * (raiseSheet.annualIncreasePercent ?? 0)) / 100)
-      : 0
-  const raiseDate = raiseSheet?.paidDate ?? null
-
-  const tiles: { key: string; icon: React.ReactNode; tint: string; label: string; value: string; caption?: string }[] = [
-    {
-      key: 'avg',
-      icon: <Wallet className="h-4 w-4" aria-hidden="true" />,
-      tint: 'bg-brand-50 text-brand-600',
-      label: t('Your avg. Net Pay (Last 3 Mo.)'),
-      value: formatEGP(avgNet),
-    },
-    {
-      key: 'next',
-      icon: <CalendarClock className="h-4 w-4" aria-hidden="true" />,
-      tint: 'bg-blue-50 text-blue-600',
-      label: t('Next Payout (EST.)'),
-      value: nextPayout ? formatDateWithYear(nextPayout) : '—',
-    },
-    {
-      key: 'raise',
-      icon: <TrendingUp className="h-4 w-4" aria-hidden="true" />,
-      tint: 'bg-emerald-50 text-emerald-600',
-      label: t('Annual Increase'),
-      value: formatEGP(raiseAmount),
-      // Percentage and the date the raise slice was applied (its pay date).
-      caption: raiseDate ? `${raisePercent} · ${formatDateWithYear(raiseDate)}` : raisePercent,
-    },
-    {
-      key: 'max',
-      icon: <TrendingDown className="h-4 w-4" aria-hidden="true" />,
-      tint: 'bg-red-50 text-red-500',
-      label: t('Max deductions'),
-      value: formatEGP(maxDeductions),
-    },
-  ]
-
-  return (
-    <section className="card p-3.5">
-      <div className="flex items-center justify-between">
-        <h2 className="text-base font-bold text-charcoal-900">{t('Quick Financial Insights')}</h2>
-        <ArrowRight className="h-4 w-4 text-charcoal-300 rtl:rotate-180" aria-hidden="true" />
-      </div>
-      <div className="mt-3 grid gap-2.5 sm:grid-cols-2 lg:grid-cols-4">
-        {tiles.map((tile) => (
-          <div key={tile.key} className="flex items-center gap-2.5 rounded-xl border border-charcoal-100 p-2.5">
-            <span className={cn('flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full', tile.tint)}>
-              {tile.icon}
-            </span>
-            <div className="min-w-0">
-              <p className="truncate text-[10px] text-charcoal-500">{tile.label}</p>
-              <p className="mt-0.5 truncate text-sm font-bold text-charcoal-900">{tile.value}</p>
-              {tile.caption && <p className="mt-0.5 truncate text-[10px] text-charcoal-400">{tile.caption}</p>}
-            </div>
-          </div>
-        ))}
       </div>
     </section>
   )
