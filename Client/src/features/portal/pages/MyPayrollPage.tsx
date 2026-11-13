@@ -1,10 +1,11 @@
-import { useState } from 'react'
+import { Fragment, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import {
+  ArrowRight,
   BadgeCheck,
   Banknote,
-  ChevronDown,
+  CalendarClock,
   Clock,
   FileText,
   MinusCircle,
@@ -17,7 +18,6 @@ import {
   UserRound,
   Wallet,
 } from 'lucide-react'
-import { getOwnLeaveBalance, type LeaveBalanceResponse } from '../api/attendance.api'
 import {
   getOwnPayslip,
   getOwnPayrollSheets,
@@ -27,30 +27,67 @@ import {
 import { EmptyState } from '../../../components/ui/primitives'
 import { ErrorState, LoadingState } from '../../../components/async-state'
 import { Drawer } from '../../../components/ui/drawer'
-import { StatusBadge, Badge, type BadgeColor } from '../../../components/ui/badge'
+import { StatusBadge, Badge, statusColor, type BadgeColor } from '../../../components/ui/badge'
+import { Button } from '../../../components/ui/button'
 import { usePortalSession } from '../../../contexts/PortalSessionContext'
 import { translate } from '../../../i18n'
 import { describeApiError } from '../../../lib/api-client'
-import { formatDate, formatMoney, formatTimeOfDay } from '../../../lib/format'
+import {
+  formatDate,
+  formatDateWithYear,
+  formatEGP,
+  formatMoney,
+  formatNumber,
+  formatTimeOfDay,
+} from '../../../lib/format'
 import { cn } from '../../../lib/utils'
+
+/** Gross of a period: base + bonuses + overtime pay + the gym's raise slice (mock §8). */
+function grossPay(sheet: PayrollSheet): number {
+  return sheet.baseSalary + sheet.totalBonuses + (sheet.overtimePay ?? 0) + (sheet.annualIncrease ?? 0)
+}
+
+/** "November 2026" → 1st of the following month — the mock's estimated payout date. */
+function estimateNextPayout(sheet: PayrollSheet | null): Date | null {
+  if (!sheet) return null
+  const [monthName, year] = sheet.period.split(' ')
+  const start = new Date(`${monthName} 1, ${year}`)
+  if (Number.isNaN(start.getTime())) return null
+  return new Date(start.getFullYear(), start.getMonth() + 1, 1)
+}
+
+const STATUS_DOT_CLASS: Record<BadgeColor, string> = {
+  green: 'bg-emerald-500',
+  yellow: 'bg-amber-500',
+  red: 'bg-red-500',
+  blue: 'bg-blue-500',
+  gray: 'bg-charcoal-400',
+  purple: 'bg-purple-500',
+  orange: 'bg-orange-500',
+}
+
+/** Dot + label status (mock §8 breakdown table) instead of the pill used in cards. */
+function StatusDot({ status }: { status: string }) {
+  const { t } = useTranslation()
+  return (
+    <span className="inline-flex items-center gap-1.5 whitespace-nowrap text-xs font-semibold text-charcoal-700">
+      <span className={cn('h-2 w-2 rounded-full', STATUS_DOT_CLASS[statusColor(status)])} aria-hidden="true" />
+      {t(status)}
+    </span>
+  )
+}
 
 export default function MyPayrollPage() {
   const { t } = useTranslation()
   const { me } = usePortalSession()
   const employeeId = me?.employeeId ?? null
 
-  const [summaryOpen, setSummaryOpen] = useState(false)
   const [expandedId, setExpandedId] = useState<number | null>(null)
   const [slipId, setSlipId] = useState<number | null>(null)
 
   const sheetsQuery = useQuery({
     queryKey: ['portal', 'payroll-sheets', employeeId],
     queryFn: ({ signal }) => getOwnPayrollSheets(employeeId!, signal),
-    enabled: employeeId != null,
-  })
-  const balanceQuery = useQuery({
-    queryKey: ['portal', 'leave-balance', employeeId],
-    queryFn: ({ signal }) => getOwnLeaveBalance(employeeId!, signal),
     enabled: employeeId != null,
   })
 
@@ -67,28 +104,7 @@ export default function MyPayrollPage() {
     return <ErrorState message={describeApiError(sheetsQuery.error)} onRetry={() => sheetsQuery.refetch()} />
   }
 
-  // Open periods (visible=false) render as the "Current Period" card and as the
-  // still-open last row of the Monthly Breakdown; closed sheets are payslip history.
   const allSheets = sheetsQuery.data ?? []
-  const paid = [...allSheets]
-    .filter((sheet) => sheet.visible)
-    .sort((a, b) => (b.paidDate ?? '').localeCompare(a.paidDate ?? ''))
-  const openSheet = allSheets.find((sheet) => !sheet.visible) ?? null
-  const months = openSheet ? [...paid, openSheet] : paid
-  const ref = paid[0] ?? null
-
-  const totalNet = paid.reduce((sum, sheet) => sum + sheet.netSalary, 0)
-  const totalDed = paid.reduce((sum, sheet) => sum + sheet.totalDeductions, 0)
-  // Mock §8 gross: base + bonus + OT pay + the gym's raise slice, closed months only.
-  const totalGross = paid.reduce(
-    (sum, sheet) =>
-      sum + sheet.baseSalary + sheet.totalBonuses + (sheet.overtimePay ?? 0) + (sheet.annualIncrease ?? 0),
-    0,
-  )
-  const avgNet = paid.length ? Math.round(totalNet / paid.length) : 0
-  const maxNet = Math.max(...paid.map((sheet) => sheet.netSalary), 1)
-
-  const balance = balanceQuery.data ?? null
 
   if (allSheets.length === 0) {
     return (
@@ -102,234 +118,588 @@ export default function MyPayrollPage() {
     )
   }
 
+  // Closed sheets are payslip history, newest first; an open period renders as the
+  // still-processing last row of the breakdown.
+  const paid = [...allSheets]
+    .filter((sheet) => sheet.visible)
+    .sort((a, b) => (b.paidDate ?? '').localeCompare(a.paidDate ?? ''))
+  const openSheet = allSheets.find((sheet) => !sheet.visible) ?? null
+  const months = openSheet ? [...paid, openSheet] : paid
+  const latestPaid = paid[0] ?? null
+  // The snapshot mirrors the mock's "current period": the in-flight month when it
+  // already carries figures, otherwise the latest closed payslip.
+  const snapshot =
+    openSheet && (openSheet.netSalary > 0 || openSheet.totalDeductions > 0) ? openSheet : (latestPaid ?? openSheet)
+
+  const lastThree = paid.slice(0, 3)
+  const avgNet = lastThree.length
+    ? Math.round(lastThree.reduce((sum, sheet) => sum + sheet.netSalary, 0) / lastThree.length)
+    : 0
+  const maxDeductions = paid.reduce((max, sheet) => Math.max(max, sheet.totalDeductions), 0)
+
   return (
     <div className="space-y-2.5">
-      <div>
-        <h1 className="text-lg font-bold text-charcoal-900">
-          {t('My Payroll')}{' '}
-          <span className="text-[11px] font-normal text-charcoal-400">
-            · {t('{{count}} payslips', { count: paid.length })} · {openSheet ? 1 : 0} {t('open')}
-          </span>
-        </h1>
-      </div>
+      <h1 className="text-lg font-bold text-charcoal-900">
+        {t('My Payroll')}{' '}
+        <span className="text-[11px] font-normal text-charcoal-400">
+          · {t('{{count}} payslips', { count: paid.length })} · {openSheet ? 1 : 0} {t('open')}
+        </span>
+      </h1>
 
-      {/* One summary row — click to drop open everything underneath it (mock §8) */}
-      <SummaryPanel
-        open={summaryOpen}
-        onToggle={() => setSummaryOpen((current) => !current)}
-        summaryLabel={t('EGP {{amount}} net', { amount: totalNet.toLocaleString() })}
-        note={`${t('{{count}} payslips', { count: paid.length })} · ${openSheet ? 1 : 0} ${t('open')}`}
-      >
-        <SummaryBody
-          paid={paid}
-          latest={ref}
-          balance={balance}
-          balanceQueryError={balanceQuery.isError ? describeApiError(balanceQuery.error) : null}
-          totalGross={totalGross}
-          totalDed={totalDed}
-          totalNet={totalNet}
-          avgNet={avgNet}
-        />
-      </SummaryPanel>
+      {snapshot && <PayrollSnapshotCard sheet={snapshot} onPayslip={() => setSlipId(snapshot.id)} />}
 
-      {/* Current period — sits under the summary panel, above the breakdown (mock). */}
-      {openSheet && <CurrentPeriodCard sheet={openSheet} />}
+      <MonthlyBreakdown
+        months={months}
+        expandedId={expandedId}
+        onToggle={(id) => setExpandedId((current) => (current === id ? null : id))}
+        onSlip={setSlipId}
+      />
 
-      {/* Monthly Breakdown — one collapsible card per month, newest first. */}
-      <div>
-        <h2 className="mb-2 text-base font-bold text-charcoal-900">{t('Monthly Breakdown')}</h2>
-        <div className="space-y-2.5">
-          {months.map((sheet) => (
-            <SheetCard
-              key={sheet.id}
-              sheet={sheet}
-              maxNet={maxNet}
-              open={expandedId === sheet.id}
-              onToggle={() => setExpandedId((current) => (current === sheet.id ? null : sheet.id))}
-              onSlip={() => setSlipId(sheet.id)}
-            />
-          ))}
-        </div>
-        <p className="mt-2 text-[11px] text-charcoal-400">{t('Tap a month to drop open its full breakdown.')}</p>
-      </div>
+      <FinancialInsights
+        avgNet={avgNet}
+        nextPayout={estimateNextPayout(openSheet ?? latestPaid)}
+        maxDeductions={maxDeductions}
+      />
 
       <PayslipDrawer entryId={slipId} employeeId={employeeId} onClose={() => setSlipId(null)} />
     </div>
   )
 }
 
-/* ==================== Summary panel (mock: single PAYROLL SUMMARY accordion) ==================== */
+/* ==================== Current payroll snapshot (mock §8 donut card) ==================== */
 
-function SummaryPanel({
-  open,
-  onToggle,
-  summaryLabel,
-  note,
-  children,
-}: {
-  open: boolean
-  onToggle: () => void
-  summaryLabel: string
-  note: string
-  children: React.ReactNode
-}) {
+function PayrollSnapshotCard({ sheet, onPayslip }: { sheet: PayrollSheet; onPayslip: () => void }) {
   const { t } = useTranslation()
+  const net = sheet.netSalary
+  const deductions = sheet.totalDeductions
+  const gross = grossPay(sheet) || net + deductions
+
   return (
-    <div className="overflow-hidden rounded-xl border border-charcoal-200 bg-white">
-      <button
-        type="button"
-        onClick={onToggle}
-        aria-expanded={open}
-        className="w-full px-3 py-2.5 text-start transition-colors hover:bg-charcoal-50/60"
-      >
-        <div className="flex items-center gap-2">
-          <p className="bento-label min-w-0 flex-1 truncate text-charcoal-500">{t('PAYROLL SUMMARY')}</p>
-          <span className="hidden min-w-0 truncate text-[11px] text-charcoal-400 sm:block">{note}</span>
-          <span className="whitespace-nowrap text-sm font-bold text-charcoal-900">{summaryLabel}</span>
-          <ChevronDown
-            className={cn('h-4 w-4 flex-shrink-0 text-charcoal-400 transition-transform duration-200', open && 'rotate-180')}
-            aria-hidden="true"
-          />
-        </div>
-      </button>
-      {open && <div className="border-t border-charcoal-100 bg-charcoal-50/40 p-2">{children}</div>}
-    </div>
+    <section className="card p-3.5 sm:p-4">
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+        <h2 className="text-base font-bold text-charcoal-900">{t('Current Payroll Snapshot')}</h2>
+        <span className="text-sm text-charcoal-400">· {sheet.period}</span>
+        <StatusBadge status={sheet.status} className="ms-auto" />
+      </div>
+
+      <div className="mt-3 grid items-center gap-4 sm:grid-cols-[minmax(0,190px)_minmax(0,1fr)]">
+        <DonutChart
+          net={net}
+          deductions={deductions}
+          netLabel={t('Net Pay')}
+          netValue={formatEGP(net)}
+          ariaLabel={t('Payroll split: net pay {{net}}, deductions {{deductions}}', {
+            net: formatEGP(net),
+            deductions: formatEGP(deductions),
+          })}
+        />
+
+        <dl className="w-full max-w-md space-y-2 text-sm">
+          <div className="flex items-center justify-between gap-3">
+            <dt className="flex items-center gap-2 text-charcoal-600">
+              <span className="h-2.5 w-2.5 rounded-full bg-brand-500" aria-hidden="true" />
+              {t('Net Pay')}
+            </dt>
+            <dd className="font-semibold text-charcoal-900">{formatEGP(net)}</dd>
+          </div>
+          <div className="flex items-center justify-between gap-3">
+            <dt className="flex items-center gap-2 text-charcoal-600">
+              <span className="h-2.5 w-2.5 rounded-full bg-red-500" aria-hidden="true" />
+              {t('Deductions')}
+            </dt>
+            <dd className="font-semibold text-red-600">{formatEGP(deductions)}</dd>
+          </div>
+          <div className="flex items-center justify-between gap-3 border-t border-charcoal-100 pt-2">
+            <dt className="text-charcoal-600">{t('Total Payout this period')}</dt>
+            <dd className="text-base font-bold text-charcoal-900">{formatEGP(gross)}</dd>
+          </div>
+        </dl>
+      </div>
+
+      <div className="mt-3 flex justify-end">
+        {sheet.visible ? (
+          <Button size="sm" onClick={onPayslip}>
+            <FileText className="h-3.5 w-3.5" aria-hidden="true" />
+            {t('View Payslip')}
+          </Button>
+        ) : (
+          <p className="text-[11px] text-charcoal-400">{t('Payslip available once this period is paid.')}</p>
+        )}
+      </div>
+    </section>
   )
 }
 
-function SummaryBody({
-  paid,
-  latest,
-  balance,
-  balanceQueryError,
-  totalGross,
-  totalDed,
-  totalNet,
-  avgNet,
+function DonutChart({
+  net,
+  deductions,
+  netLabel,
+  netValue,
+  ariaLabel,
 }: {
-  paid: PayrollSheet[]
-  latest: PayrollSheet | null
-  balance: LeaveBalanceResponse | null
-  balanceQueryError: string | null
-  totalGross: number
-  totalDed: number
-  totalNet: number
-  avgNet: number
+  net: number
+  deductions: number
+  netLabel: string
+  netValue: string
+  ariaLabel: string
 }) {
-  const { t } = useTranslation()
+  const radius = 42
+  const circumference = 2 * Math.PI * radius
+  const total = net + deductions
+  const segments = [
+    { id: 'net', value: net, color: '#16a34a' },
+    { id: 'deductions', value: deductions, color: '#ef4444' },
+  ].filter((segment) => segment.value > 0)
+
+  let consumed = 0
+
   return (
-    <div className="space-y-2">
-      {paid.length > 0 && (
-        <div>
-          <div className="mb-1 flex items-center justify-between">
-            <p className="bento-label text-charcoal-400">{t('YEAR TO DATE')}</p>
-            <span className="text-[10px] font-semibold text-charcoal-400">{t('{{count}} months paid', { count: paid.length })}</span>
-          </div>
-          <div className="grid grid-cols-2 gap-1.5 lg:grid-cols-4">
-            <YtdCard icon={<Wallet className="h-4 w-4 text-brand-500" aria-hidden="true" />} tint="bg-brand-50" label={t('Earned')} value={totalGross} color="text-brand-700" />
-            <YtdCard icon={<TrendingDown className="h-4 w-4 text-red-400" aria-hidden="true" />} tint="bg-red-50" label={t('Deductions')} value={totalDed} color="text-red-600" />
-            <YtdCard icon={<PiggyBank className="h-4 w-4 text-green-500" aria-hidden="true" />} tint="bg-green-50" label={t('Net Pay')} value={totalNet} color="text-green-700" />
-            <YtdCard icon={<TrendingUp className="h-4 w-4 text-purple-500" aria-hidden="true" />} tint="bg-purple-50" label={t('Avg / Month')} value={avgNet} color="text-purple-700" />
-          </div>
-        </div>
-      )}
-
-      {latest && (
-        <div>
-          <div className="mb-1 flex items-center justify-between">
-            <p className="bento-label text-charcoal-400">{t('SALARY & SCHEDULE')}</p>
-            <span className="text-[10px] font-semibold text-charcoal-400">{latest.period}</span>
-          </div>
-          <div className="space-y-1.5 rounded-xl border border-charcoal-100 bg-white p-2">
-            <div className="flex items-center justify-between">
-              <span className="flex items-center gap-2 text-[13px] text-charcoal-600">
-                <Banknote className="h-4 w-4 text-charcoal-400" aria-hidden="true" />
-                {t('Basic Salary')}
-              </span>
-              <span className="text-[13px] font-bold text-charcoal-900">{formatMoney(latest.baseSalary)}</span>
-            </div>
-            {(latest.annualIncrease ?? 0) > 0 && (
-              <div className="flex items-center justify-between">
-                <span className="flex items-center gap-2 text-[13px] text-charcoal-600">
-                  <TrendingUp className="h-4 w-4 text-green-500" aria-hidden="true" />
-                  {t('Annual Increase ({{percent}})', { percent: increasePercentLabel(latest) })}
-                </span>
-                <span className="text-[13px] font-bold text-green-600">
-                  +{formatMoney(latest.annualIncrease ?? 0)}
-                </span>
-              </div>
-            )}
-            <div className="flex items-center justify-between rounded-lg border border-brand-100 bg-brand-50 px-2.5 py-1.5">
-              <p className="text-[13px] font-bold text-brand-700">{t('Contractual Salary / month')}</p>
-              <p className="text-sm font-bold text-brand-700">
-                {formatMoney(latest.baseSalary + (latest.annualIncrease ?? 0))}
-              </p>
-            </div>
-            <div className="grid grid-cols-2 gap-1.5 pt-0.5 text-center sm:grid-cols-4">
-              <div className="rounded-lg bg-charcoal-50 p-1.5">
-                <p className="text-base font-bold text-charcoal-900">{latest.workingDays ?? 0}</p>
-                <p className="mt-0.5 text-[10px] leading-tight text-charcoal-500">{t('Scheduled Work Days')}</p>
-              </div>
-              <div className="rounded-lg bg-charcoal-50 p-1.5">
-                <p className="text-base font-bold text-charcoal-900">{latest.scheduledWeeklyDays ?? 6}</p>
-                <p className="mt-0.5 text-[10px] leading-tight text-charcoal-500">{t('Weekly Days')}</p>
-              </div>
-              <div className="rounded-lg bg-charcoal-50 p-1.5">
-                <p className="text-base font-bold text-brand-700">{latest.daysWorked ?? 0}</p>
-                <p className="mt-0.5 text-[10px] leading-tight text-charcoal-500">
-                  {t('Attendance · {{percent}}%', { percent: attendancePct(latest) })}
-                </p>
-              </div>
-              <div className="rounded-lg bg-charcoal-50 p-1.5">
-                <p
-                  className={cn(
-                    'text-base font-bold',
-                    (latest.overtimeHours ?? 0) > 0 ? 'text-blue-700' : 'text-charcoal-400',
-                  )}
-                >
-                  {latest.overtimeHours ?? 0}h
-                </p>
-                <p className="mt-0.5 text-[10px] leading-tight text-charcoal-500">{t('Overtime')}</p>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      <div>
-        <div className="mb-1 flex items-center justify-between">
-          <p className="bento-label text-charcoal-400">{t('ANNUAL LEAVE')}</p>
-          <span className="text-[10px] font-semibold text-charcoal-400">
-            {openPeriodLabel(latest)}
-          </span>
-        </div>
-        <LeaveQuotaBody balance={balance} error={balanceQueryError} />
+    <div className="relative mx-auto h-40 w-40 sm:h-44 sm:w-44">
+      <svg viewBox="0 0 120 120" className="h-full w-full" role="img" aria-label={ariaLabel}>
+        <circle cx="60" cy="60" r={radius} fill="none" stroke="var(--color-charcoal-100)" strokeWidth="15" />
+        {segments.map((segment) => {
+          const length = total > 0 ? (segment.value / total) * circumference : 0
+          const dashOffset = -consumed
+          consumed += length
+          return (
+            <circle
+              key={segment.id}
+              cx="60"
+              cy="60"
+              r={radius}
+              fill="none"
+              stroke={segment.color}
+              strokeWidth="15"
+              strokeDasharray={`${length} ${circumference - length}`}
+              strokeDashoffset={dashOffset}
+              transform="rotate(-90 60 60)"
+            />
+          )
+        })}
+      </svg>
+      <div className="absolute inset-0 flex flex-col items-center justify-center px-6 text-center">
+        <p className="text-[10px] font-semibold uppercase tracking-wider text-charcoal-400">{netLabel}</p>
+        <p className="mt-0.5 text-base font-bold leading-tight text-charcoal-900">{netValue}</p>
       </div>
     </div>
   )
 }
 
-function openPeriodLabel(latest: PayrollSheet | null): string {
-  return latest ? `${latest.period} · latest payslip` : 'not closed'
+/* ==================== Monthly breakdown (mock §8 table) ==================== */
+
+function MonthlyBreakdown({
+  months,
+  expandedId,
+  onToggle,
+  onSlip,
+}: {
+  months: PayrollSheet[]
+  expandedId: number | null
+  onToggle: (id: number) => void
+  onSlip: (id: number) => void
+}) {
+  const { t } = useTranslation()
+  const paidLabel = (sheet: PayrollSheet) =>
+    sheet.paidDate ? t('Paid {{date}}', { date: formatDate(sheet.paidDate) }) : t('Not paid yet')
+
+  const detailActions = (sheet: PayrollSheet, open: boolean) => (
+    <>
+      <button
+        type="button"
+        onClick={() => onToggle(sheet.id)}
+        aria-expanded={open}
+        className="text-[11px] font-semibold text-brand-600 hover:underline"
+      >
+        {open ? t('Hide details') : t('View Details')}
+      </button>
+      <span className="text-charcoal-200" aria-hidden="true">
+        |
+      </span>
+      <button
+        type="button"
+        onClick={() => onSlip(sheet.id)}
+        aria-label={t('Open payslip for {{period}}', { period: sheet.period })}
+        className="touch-target rounded-lg p-1 text-charcoal-400 transition-colors hover:bg-charcoal-100 hover:text-charcoal-700"
+      >
+        <FileText className="h-3.5 w-3.5" aria-hidden="true" />
+      </button>
+    </>
+  )
+
+  return (
+    <section className="card overflow-hidden">
+      <div className="px-3.5 pb-2.5 pt-3">
+        <h2 className="text-base font-bold text-charcoal-900">{t('Monthly Breakdown')}</h2>
+      </div>
+
+      {/* Desktop: the mock's table */}
+      <div className="hidden border-t border-charcoal-100 lg:block">
+        <table className="w-full">
+          <thead>
+            <tr className="bg-charcoal-50 text-[10px] uppercase tracking-wider text-charcoal-500">
+              <th scope="col" className="px-3 py-2 text-start font-semibold">{t('Month & Year')}</th>
+              <th scope="col" className="px-3 py-2 text-start font-semibold">{t('Status')}</th>
+              <th scope="col" className="px-3 py-2 text-end font-semibold">{t('Net Pay (EGP)')}</th>
+              <th scope="col" className="px-3 py-2 text-end font-semibold">{t('Gross Pay (EGP)')}</th>
+              <th scope="col" className="px-3 py-2 text-end font-semibold">{t('Deductions (EGP)')}</th>
+              <th scope="col" className="px-3 py-2 text-end font-semibold">{t('Actions')}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {months.map((sheet) => {
+              const open = expandedId === sheet.id
+              return (
+                <Fragment key={sheet.id}>
+                  <tr className={cn('border-t border-charcoal-100', !sheet.visible && 'bg-amber-50/40')}>
+                    <td className="px-3 py-2.5">
+                      <p className="text-sm font-semibold text-charcoal-900">{sheet.period}</p>
+                      <p className="mt-0.5 text-[11px] text-charcoal-400">{paidLabel(sheet)}</p>
+                    </td>
+                    <td className="px-3 py-2.5">
+                      <StatusDot status={sheet.status} />
+                    </td>
+                    <td className="whitespace-nowrap px-3 py-2.5 text-end text-sm font-bold text-charcoal-900">
+                      {sheet.visible ? formatNumber(sheet.netSalary) : '—'}
+                    </td>
+                    <td className="whitespace-nowrap px-3 py-2.5 text-end text-sm text-charcoal-700">
+                      {sheet.visible ? formatNumber(grossPay(sheet)) : '—'}
+                    </td>
+                    <td
+                      className={cn(
+                        'whitespace-nowrap px-3 py-2.5 text-end text-sm',
+                        sheet.visible && sheet.totalDeductions > 0 ? 'text-red-600' : 'text-charcoal-500',
+                      )}
+                    >
+                      {sheet.visible ? formatNumber(sheet.totalDeductions) : '—'}
+                    </td>
+                    <td className="px-3 py-2.5">
+                      <div className="flex items-center justify-end gap-1.5">
+                        {sheet.visible ? (
+                          detailActions(sheet, open)
+                        ) : (
+                          <span className="text-[11px] text-charcoal-400">{t('N/A')}</span>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                  {open && sheet.visible && (
+                    <tr className="border-t border-charcoal-100 bg-charcoal-50/50">
+                      <td colSpan={6} className="px-3 py-3">
+                        <SheetDetail sheet={sheet} onSlip={() => onSlip(sheet.id)} />
+                      </td>
+                    </tr>
+                  )}
+                </Fragment>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Below lg: the table restacks into cards (mobile standard). */}
+      <div className="space-y-2 border-t border-charcoal-100 p-2.5 lg:hidden">
+        {months.map((sheet) => {
+          const open = expandedId === sheet.id
+          return (
+            <div
+              key={sheet.id}
+              className={cn('overflow-hidden rounded-xl border border-charcoal-200', !sheet.visible && 'bg-amber-50/40')}
+            >
+              <div className="flex items-center justify-between gap-2 px-3 py-2.5">
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-bold text-charcoal-900">{sheet.period}</p>
+                  <p className="mt-0.5 text-[11px] text-charcoal-400">{paidLabel(sheet)}</p>
+                </div>
+                <StatusDot status={sheet.status} />
+              </div>
+              <div className="grid grid-cols-3 gap-1.5 px-3 pb-2.5">
+                <StatTile label={t('Net Pay')} value={sheet.visible ? formatNumber(sheet.netSalary) : '—'} />
+                <StatTile label={t('Gross Pay')} value={sheet.visible ? formatNumber(grossPay(sheet)) : '—'} />
+                <StatTile
+                  label={t('Deductions')}
+                  value={sheet.visible ? formatNumber(sheet.totalDeductions) : '—'}
+                  bg={sheet.visible && sheet.totalDeductions > 0 ? 'bg-red-50' : undefined}
+                  text={sheet.visible && sheet.totalDeductions > 0 ? 'text-red-600' : undefined}
+                />
+              </div>
+              <div className="flex items-center justify-end gap-2 border-t border-charcoal-100 px-3 py-1.5">
+                {sheet.visible ? (
+                  detailActions(sheet, open)
+                ) : (
+                  <span className="text-[11px] text-charcoal-400">{t('N/A')}</span>
+                )}
+              </div>
+              {open && sheet.visible && (
+                <div className="border-t border-charcoal-100 bg-charcoal-50/60 p-2.5">
+                  <SheetDetail sheet={sheet} onSlip={() => onSlip(sheet.id)} />
+                </div>
+              )}
+            </div>
+          )
+        })}
+      </div>
+    </section>
+  )
 }
 
-type RaiseInfo = { baseSalary: number; annualIncrease?: number; annualIncreasePercent?: number | null }
+/* ==================== Quick financial insights (mock §8) ==================== */
 
-/** The mock's "Annual Increase (10%)" label — the gym policy percent, derived from the slice as fallback. */
-function increasePercentLabel(sheet: RaiseInfo): string {
-  const pct =
-    sheet.annualIncreasePercent ??
-    (sheet.baseSalary > 0 ? ((sheet.annualIncrease ?? 0) / sheet.baseSalary) * 100 : 0)
-  return `${pct % 1 === 0 ? pct : pct.toFixed(1)}%`
+function FinancialInsights({
+  avgNet,
+  nextPayout,
+  maxDeductions,
+}: {
+  avgNet: number
+  nextPayout: Date | null
+  maxDeductions: number
+}) {
+  const { t } = useTranslation()
+  const tiles = [
+    {
+      key: 'avg',
+      icon: <Wallet className="h-4 w-4" aria-hidden="true" />,
+      tint: 'bg-brand-50 text-brand-600',
+      label: t('Your avg. Net Pay (Last 3 Mo.)'),
+      value: formatEGP(avgNet),
+    },
+    {
+      key: 'next',
+      icon: <CalendarClock className="h-4 w-4" aria-hidden="true" />,
+      tint: 'bg-blue-50 text-blue-600',
+      label: t('Next Payout (EST.)'),
+      value: nextPayout ? formatDateWithYear(nextPayout) : '—',
+    },
+    {
+      key: 'max',
+      icon: <TrendingDown className="h-4 w-4" aria-hidden="true" />,
+      tint: 'bg-red-50 text-red-500',
+      label: t('Max deductions'),
+      value: formatEGP(maxDeductions),
+    },
+  ]
+
+  return (
+    <section className="card p-3.5">
+      <div className="flex items-center justify-between">
+        <h2 className="text-base font-bold text-charcoal-900">{t('Quick Financial Insights')}</h2>
+        <ArrowRight className="h-4 w-4 text-charcoal-300 rtl:rotate-180" aria-hidden="true" />
+      </div>
+      <div className="mt-3 grid gap-2.5 sm:grid-cols-3">
+        {tiles.map((tile) => (
+          <div key={tile.key} className="flex items-center gap-2.5 rounded-xl border border-charcoal-100 p-2.5">
+            <span className={cn('flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full', tile.tint)}>
+              {tile.icon}
+            </span>
+            <div className="min-w-0">
+              <p className="truncate text-[10px] text-charcoal-500">{tile.label}</p>
+              <p className="mt-0.5 truncate text-sm font-bold text-charcoal-900">{tile.value}</p>
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
+  )
 }
 
-/** Attendance rate of the period (mock: worked / scheduled). */
-function attendancePct(sheet: PayrollSheet): number {
-  const working = sheet.workingDays ?? 0
-  return working ? Math.round(((sheet.daysWorked ?? 0) / working) * 100) : 0
+/* ==================== Expanded month detail (attendance, earnings, deductions) ==================== */
+
+function SheetDetail({ sheet, onSlip }: { sheet: PayrollSheet; onSlip: () => void }) {
+  const { t } = useTranslation()
+  const earnings = buildEarningsRows(sheet)
+  const earningsTotal = earnings.reduce((sum, row) => sum + row.amount, 0)
+  const deductionRows = buildDeductionRows(sheet)
+  const workedPct = sheet.workingDays
+    ? Math.round(((sheet.daysWorked ?? 0) / (sheet.workingDays ?? 1)) * 100)
+    : 0
+  const notWorked = Math.max(0, (sheet.workingDays ?? 0) - (sheet.daysWorked ?? 0))
+
+  return (
+    <div className="space-y-2">
+      <div className="rounded-xl border border-charcoal-100 bg-white p-2.5">
+        <div className="mb-1.5 flex items-center justify-between">
+          <p className="bento-label text-charcoal-500">{t('ATTENDANCE & LEAVE')}</p>
+          <span className="rounded-full bg-charcoal-100 px-2 py-0.5 text-[10px] font-bold text-charcoal-700">
+            {t('{{worked}}/{{total}} days', { worked: sheet.daysWorked ?? 0, total: sheet.workingDays ?? 0 })}
+          </span>
+        </div>
+        <div className="flex h-2 w-full overflow-hidden rounded-full bg-charcoal-100">
+          <div className="h-full rounded-s-full bg-brand-500" style={{ width: `${workedPct}%` }} />
+          {notWorked > 0 && <div className="h-full flex-1 rounded-e-full bg-charcoal-200" />}
+        </div>
+        <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1">
+          <span className="flex items-center gap-1 text-[10px] text-charcoal-500">
+            <span className="inline-block h-2 w-2 rounded-full bg-brand-500" />
+            {t('{{count}} worked', { count: sheet.daysWorked ?? 0 })}
+          </span>
+          <span className="flex items-center gap-1 text-[10px] text-charcoal-400">
+            <span className="inline-block h-2 w-2 rounded-full bg-charcoal-200" />
+            {t('{{count}} not worked', { count: notWorked })}
+          </span>
+          {(sheet.overtimeHours ?? 0) > 0 && (
+            <span className="flex items-center gap-1 text-[10px] text-charcoal-500">
+              <Clock className="h-3 w-3 text-charcoal-400" aria-hidden="true" />
+              {t('{{count}}h overtime', { count: sheet.overtimeHours ?? 0 })}
+            </span>
+          )}
+          {(sheet.paidLeaveDays ?? 0) > 0 && (
+            <span className="flex items-center gap-1 text-[10px] text-charcoal-500">
+              <span className="inline-block h-2 w-2 rounded-full bg-sky-300" />
+              {t('{{count}} paid leave', { count: sheet.paidLeaveDays ?? 0 })}
+            </span>
+          )}
+          {(sheet.unpaidLeaveDays ?? 0) > 0 && (
+            <span className="text-[10px] text-red-600">{t('{{count}} unpaid', { count: sheet.unpaidLeaveDays ?? 0 })}</span>
+          )}
+        </div>
+        <div className="mt-2 grid grid-cols-3 gap-1.5 sm:grid-cols-6">
+          <StatTile label={t('Late')} value={String(sheet.lateCount ?? 0)} bg="bg-amber-50" text="text-amber-600" />
+          <StatTile label={t('Early Leave')} value={String(sheet.earlyLeaveCount ?? 0)} />
+          <StatTile label={t('Sick Leave')} value={String(sheet.sickLeaveDays ?? 0)} bg="bg-blue-50" text="text-blue-600" />
+          <StatTile label={t('Annual Leave')} value={String(sheet.annualLeaveDays ?? 0)} bg="bg-blue-50" text="text-blue-600" />
+          <StatTile label={t('Absent')} value={String(sheet.absentDays ?? 0)} bg="bg-red-50" text="text-red-600" />
+          <StatTile
+            label={t('Salary Advance')}
+            value={(sheet.salaryAdvance ?? 0) > 0 ? formatMoney(sheet.salaryAdvance ?? 0) : '—'}
+            bg={(sheet.salaryAdvance ?? 0) > 0 ? 'bg-red-50' : undefined}
+            text={(sheet.salaryAdvance ?? 0) > 0 ? 'text-red-600' : undefined}
+          />
+        </div>
+        {(sheet.leaveDeduction ?? 0) > 0 && (
+          <div className="mt-2 flex items-center justify-between text-[11px]">
+            <span className="text-charcoal-500">{t('Leave deduction')}</span>
+            <span className="font-semibold text-red-600">−{formatMoney(sheet.leaveDeduction ?? 0)}</span>
+          </div>
+        )}
+      </div>
+
+      <ItemSection
+        tone="earnings"
+        title={t('Earnings')}
+        headerValue={`+${formatMoney(earningsTotal)}`}
+        rows={earnings}
+      />
+      <ItemSection
+        tone="deductions"
+        title={t('Deductions')}
+        headerValue={`−${formatMoney(sheet.totalDeductions)}`}
+        rows={deductionRows}
+        emptyHint={t('No deductions this period.')}
+      />
+
+      {/* Dark net bar with the payslip action (mock) */}
+      <div className="flex items-center justify-between gap-2 rounded-xl bg-charcoal-900 px-3 py-2.5">
+        <div className="min-w-0">
+          <p className="text-[10px] font-bold uppercase tracking-wider text-charcoal-400">{t('Net Salary')}</p>
+          <p className="whitespace-nowrap text-lg font-bold leading-tight text-white">{formatMoney(sheet.netSalary)}</p>
+        </div>
+        <button
+          type="button"
+          onClick={onSlip}
+          className="flex flex-shrink-0 items-center gap-1 rounded-lg bg-white/10 px-3 py-2 text-[11px] font-semibold text-white transition-colors hover:bg-white/20"
+        >
+          <FileText className="h-3.5 w-3.5" aria-hidden="true" />
+          Payslip
+        </button>
+      </div>
+    </div>
+  )
+}
+
+/* ==================== Detail pieces (mock §8 earnings/deduction lists) ==================== */
+
+function ItemSection({
+  tone,
+  title,
+  headerValue,
+  rows,
+  emptyHint,
+}: {
+  tone: 'earnings' | 'deductions'
+  title: string
+  headerValue: string
+  rows: DeductionDisplayRow[]
+  emptyHint?: string
+}) {
+  const isEarnings = tone === 'earnings'
+  return (
+    <div className="overflow-hidden rounded-xl border border-charcoal-100 bg-white">
+      <div
+        className={cn(
+          'flex items-center justify-between border-b px-3 py-2',
+          isEarnings ? 'border-green-100 bg-green-50/60' : 'border-red-100 bg-red-50/60',
+        )}
+      >
+        <div className="flex items-center gap-1.5">
+          {isEarnings ? (
+            <TrendingUp className="h-3.5 w-3.5 text-green-500" aria-hidden="true" />
+          ) : (
+            <TrendingDown className="h-3.5 w-3.5 text-red-400" aria-hidden="true" />
+          )}
+          <p className={cn('text-[10px] font-bold uppercase tracking-wider', isEarnings ? 'text-green-700' : 'text-red-600')}>
+            {title}
+          </p>
+        </div>
+        <p className={cn('text-xs font-bold', isEarnings ? 'text-green-700' : 'text-red-600')}>{headerValue}</p>
+      </div>
+      {rows.length === 0 ? (
+        <p className="px-3 py-2 text-[11px] text-charcoal-500">{emptyHint}</p>
+      ) : (
+        <div className="divide-y divide-charcoal-50">
+          {rows.map((row, index) => (
+            <SectionRow key={index} row={row} isEarnings={isEarnings} />
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+/** One earning/deduction line: icon, label + subline, review badge, signed amount. */
+function SectionRow({ row, isEarnings }: { row: DeductionDisplayRow; isEarnings: boolean }) {
+  return (
+    <div className="flex items-center gap-2.5 px-3 py-2">
+      {payItemIcon(row.label, isEarnings)}
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-xs font-medium text-charcoal-800">{row.label}</p>
+        {row.reason && (
+          <p className="whitespace-pre-line text-[10px] leading-tight text-charcoal-400">{row.reason}</p>
+        )}
+      </div>
+      {row.status && (
+        <span className="flex-shrink-0">
+          <Badge color={DEDUCTION_STATUS_COLORS[row.status] ?? 'gray'}>{row.status}</Badge>
+        </span>
+      )}
+      <span className={cn('whitespace-nowrap text-xs font-bold', isEarnings ? 'text-green-700' : 'text-red-600')}>
+        {row.amount == null ? (
+          <span className="font-medium text-charcoal-400">—</span>
+        ) : isEarnings ? (
+          `+${formatMoney(row.amount)}`
+        ) : (
+          `−${formatMoney(row.amount)}`
+        )}
+      </span>
+    </div>
+  )
+}
+
+function StatTile({ label, value, bg, text }: { label: string; value: string; bg?: string; text?: string }) {
+  return (
+    <div className={cn('rounded-lg bg-charcoal-50 px-1.5 py-1.5 text-center', bg)}>
+      <p className={cn('text-base font-bold leading-none', text ?? 'text-charcoal-700')}>{value}</p>
+      <p className="mt-1 truncate text-[9px] leading-tight text-charcoal-500">{label}</p>
+    </div>
+  )
 }
 
 type EarningRow = { label: string; amount: number; reason?: string | null }
+
+type DeductionDisplayRow = {
+  label: string
+  amount: number | null
+  reason?: string | null
+  status?: string | null
+}
 
 /**
  * The mock §8 earnings list: Basic Salary, the raise slice, overtime pay and bonus
@@ -360,13 +730,6 @@ function buildEarningsRows(sheet: PayrollSheet): EarningRow[] {
       .map((item) => ({ label: item.label, amount: item.amount, reason: item.reason })),
   )
   return rows
-}
-
-type DeductionDisplayRow = {
-  label: string
-  amount: number | null
-  reason?: string | null
-  status?: string | null
 }
 
 /**
@@ -462,355 +825,14 @@ function payItemIcon(label: string, earning: boolean): React.ReactNode {
   )
 }
 
-function LeaveQuotaBody({ balance, error }: { balance: LeaveBalanceResponse | null; error: string | null }) {
-  const { t } = useTranslation()
-  if (error) {
-    return <p className="text-[11px] text-red-600">{error}</p>
-  }
-  if (!balance) {
-    return <p className="text-[11px] text-charcoal-400">{t('Loading annual leave balance…')}</p>
-  }
-  const total = balance.dayOff.total
-  const used = balance.dayOff.used
-  const remaining = Math.max(0, total - used)
-  const pct = total ? Math.min(100, Math.round((used / total) * 100)) : 0
-  const quota = Math.round(total / 12)
-  return (
-    <div className="rounded-xl border border-charcoal-100 bg-white p-2">
-      <div className="grid grid-cols-3 gap-1">
-        <div className="rounded-lg bg-charcoal-50 p-1.5 text-center">
-          <p className="text-lg font-bold leading-none text-charcoal-900">{quota}</p>
-          <p className="mt-0.5 text-[9px] text-charcoal-500">{t('Accrues / month')}</p>
-        </div>
-        <div className="rounded-lg bg-charcoal-50 p-1.5 text-center">
-          <p className="text-lg font-bold leading-none text-charcoal-900">{used}</p>
-          <p className="mt-0.5 text-[9px] text-charcoal-500">{t('Used this year')}</p>
-        </div>
-        <div className="rounded-lg bg-charcoal-50 p-1.5 text-center">
-          <p className="text-lg font-bold leading-none text-brand-700">{remaining}</p>
-          <p className="mt-0.5 text-[9px] text-charcoal-500">{t('Days left')}</p>
-        </div>
-      </div>
-      <p className="mt-1.5 text-[10px] leading-snug text-charcoal-500">
-        {t('Annual leave accrues monthly against your {{total}}-day allowance — you have {{remaining}} of {{total}} days left this year.', {
-          total,
-          remaining,
-        })}
-      </p>
-      <div className="mt-1.5 flex items-center gap-2">
-        <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-charcoal-100">
-          <div className="h-full rounded-l-full bg-brand-500 transition-all" style={{ width: `${pct}%` }} />
-        </div>
-        <span className="whitespace-nowrap text-[10px] font-semibold text-charcoal-600">
-          {remaining} / {total} days left this year
-        </span>
-      </div>
-    </div>
-  )
-}
+type RaiseInfo = { baseSalary: number; annualIncrease?: number; annualIncreasePercent?: number | null }
 
-function YtdCard({
-  icon,
-  tint,
-  label,
-  value,
-  color,
-}: {
-  icon: React.ReactNode
-  tint: string
-  label: string
-  value: number
-  color: string
-}) {
-  return (
-    <div className="flex items-center gap-1.5 rounded-xl border border-charcoal-100/80 bg-white p-1.5 shadow-sm transition-shadow hover:shadow-md">
-      <div className={cn('flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg', tint)}>
-        {icon}
-      </div>
-      <div className="min-w-0">
-        <p className="truncate text-[9px] font-semibold uppercase tracking-wide text-charcoal-400">{label}</p>
-        <p className={cn('mt-0.5 truncate text-xs font-bold', color)}>{formatMoney(value)}</p>
-      </div>
-    </div>
-  )
-}
-
-/* ==================== Current period card ==================== */
-
-function CurrentPeriodCard({ sheet }: { sheet: PayrollSheet }) {
-  const { t } = useTranslation()
-  return (
-    <div className="relative overflow-hidden rounded-2xl border border-brand-200 bg-gradient-to-br from-brand-50 via-white to-brand-50/50 p-3.5">
-      <div className="absolute end-0 top-0 h-28 w-28 translate-x-1/2 -translate-y-1/2 rounded-full bg-brand-100/40" />
-      <div className="relative flex items-center gap-3.5">
-        <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-2xl bg-brand-500 shadow-md shadow-brand-200">
-          <Clock className="h-6 w-6 text-white" aria-hidden="true" />
-        </div>
-        <div className="min-w-0 flex-1">
-          <p className="text-[11px] font-bold uppercase tracking-wider text-brand-600">{t('Current Period')}</p>
-          <p className="mt-0.5 text-xl font-bold text-charcoal-900">{sheet.period}</p>
-          <div className="mt-1 flex items-center gap-2">
-            <StatusBadge status={sheet.status} />
-            <span className="text-xs text-charcoal-400">{t('· Payout pending')}</span>
-          </div>
-        </div>
-        <div className="hidden flex-shrink-0 text-end sm:block">
-          <div className="h-2.5 w-32 overflow-hidden rounded-full bg-brand-100">
-            <div className="h-full w-2/3 rounded-full bg-brand-400" />
-          </div>
-          <p className="mt-1.5 text-[11px] text-charcoal-400">{t('Being processed…')}</p>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-/* ==================== Monthly breakdown (mock: month cards, expandable) ==================== */
-
-function SheetCard({
-  sheet,
-  maxNet,
-  open,
-  onToggle,
-  onSlip,
-}: {
-  sheet: PayrollSheet
-  maxNet: number
-  open: boolean
-  onToggle: () => void
-  onSlip: () => void
-}) {
-  const { t } = useTranslation()
-  const openPeriod = !sheet.visible
-  const earnings = buildEarningsRows(sheet)
-  const earningsTotal = earnings.reduce((sum, row) => sum + row.amount, 0)
-  const deductionRows = buildDeductionRows(sheet)
-  const workedPct = sheet.workingDays ? Math.round(((sheet.daysWorked ?? 0) / (sheet.workingDays ?? 1)) * 100) : 0
-  const notWorked = Math.max(0, (sheet.workingDays ?? 0) - (sheet.daysWorked ?? 0))
-  return (
-    <div className="overflow-hidden rounded-xl border border-charcoal-200 bg-white">
-      <button
-        type="button"
-        onClick={onToggle}
-        aria-expanded={open}
-        className="w-full px-3 py-2.5 text-start transition-colors hover:bg-charcoal-50/60"
-      >
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex min-w-0 items-center gap-2.5">
-            <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-charcoal-100">
-              <Receipt className="h-4 w-4 text-charcoal-500" aria-hidden="true" />
-            </div>
-            <div className="min-w-0">
-              <p className="truncate text-sm font-bold text-charcoal-900">{sheet.period}</p>
-              <p className="mt-0.5 truncate text-[10px] text-charcoal-400">
-                {sheet.paidDate ? t('Paid {{date}}', { date: formatDate(sheet.paidDate) }) : t('Not paid yet')}
-              </p>
-            </div>
-          </div>
-          <div className="flex flex-shrink-0 items-center gap-2">
-            <StatusBadge status={sheet.status} />
-            {sheet.visible ? (
-              <span className="whitespace-nowrap text-sm font-bold text-charcoal-900">{formatMoney(sheet.netSalary)}</span>
-            ) : (
-              <span className="whitespace-nowrap text-xs text-charcoal-400">—</span>
-            )}
-            <ChevronDown className={cn('h-4 w-4 text-charcoal-400 transition-transform duration-200', open ? 'rotate-180' : '')} aria-hidden="true" />
-          </div>
-        </div>
-        <div className="mt-2 h-1 w-full overflow-hidden rounded-full bg-charcoal-100">
-          <div
-            className="h-full rounded-full bg-brand-500 transition-all duration-500"
-            style={{ width: `${Math.max(4, Math.round((sheet.netSalary / maxNet) * 100))}%` }}
-          />
-        </div>
-      </button>
-
-      {open && (
-        <div className="space-y-2 border-t border-charcoal-100 bg-charcoal-50/40 px-3 py-2.5">
-          {openPeriod || !sheet.visible ? (
-            <p className="text-[11px] text-charcoal-400">
-              {t('This period is still open — its payout is not visible yet.')}
-            </p>
-          ) : (
-            <>
-              <div className="rounded-xl border border-charcoal-100 bg-white p-2.5">
-                <div className="mb-1.5 flex items-center justify-between">
-                  <p className="bento-label text-charcoal-500">{t('ATTENDANCE & LEAVE')}</p>
-                  <span className="rounded-full bg-charcoal-100 px-2 py-0.5 text-[10px] font-bold text-charcoal-700">
-                    {t('{{worked}}/{{total}} days', { worked: sheet.daysWorked ?? 0, total: sheet.workingDays ?? 0 })}
-                  </span>
-                </div>
-                <div className="flex h-2 w-full overflow-hidden rounded-full bg-charcoal-100">
-                  <div className="h-full rounded-s-full bg-brand-500" style={{ width: `${workedPct}%` }} />
-                  {notWorked > 0 && <div className="h-full flex-1 rounded-e-full bg-charcoal-200" />}
-                </div>
-                <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1">
-                  <span className="flex items-center gap-1 text-[10px] text-charcoal-500">
-                    <span className="inline-block h-2 w-2 rounded-full bg-brand-500" />
-                    {t('{{count}} worked', { count: sheet.daysWorked ?? 0 })}
-                  </span>
-                  <span className="flex items-center gap-1 text-[10px] text-charcoal-400">
-                    <span className="inline-block h-2 w-2 rounded-full bg-charcoal-200" />
-                    {t('{{count}} not worked', { count: notWorked })}
-                  </span>
-                  {(sheet.overtimeHours ?? 0) > 0 && (
-                    <span className="flex items-center gap-1 text-[10px] text-charcoal-500">
-                      <Clock className="h-3 w-3 text-charcoal-400" aria-hidden="true" />
-                      {t('{{count}}h overtime', { count: sheet.overtimeHours ?? 0 })}
-                    </span>
-                  )}
-                  {(sheet.paidLeaveDays ?? 0) > 0 && (
-                    <span className="flex items-center gap-1 text-[10px] text-charcoal-500">
-                      <span className="inline-block h-2 w-2 rounded-full bg-sky-300" />
-                      {t('{{count}} paid leave', { count: sheet.paidLeaveDays ?? 0 })}
-                    </span>
-                  )}
-                  {(sheet.unpaidLeaveDays ?? 0) > 0 && (
-                    <span className="text-[10px] text-red-600">{t('{{count}} unpaid', { count: sheet.unpaidLeaveDays ?? 0 })}</span>
-                  )}
-                </div>
-                <div className="mt-2 grid grid-cols-3 gap-1.5 sm:grid-cols-6">
-                  <StatTile label={t('Late')} value={String(sheet.lateCount ?? 0)} bg="bg-amber-50" text="text-amber-600" />
-                  <StatTile label={t('Early Leave')} value={String(sheet.earlyLeaveCount ?? 0)} />
-                  <StatTile label={t('Sick Leave')} value={String(sheet.sickLeaveDays ?? 0)} bg="bg-blue-50" text="text-blue-600" />
-                  <StatTile label={t('Annual Leave')} value={String(sheet.annualLeaveDays ?? 0)} bg="bg-blue-50" text="text-blue-600" />
-                  <StatTile label={t('Absent')} value={String(sheet.absentDays ?? 0)} bg="bg-red-50" text="text-red-600" />
-                  <StatTile
-                    label={t('Salary Advance')}
-                    value={(sheet.salaryAdvance ?? 0) > 0 ? formatMoney(sheet.salaryAdvance ?? 0) : '—'}
-                    bg={(sheet.salaryAdvance ?? 0) > 0 ? 'bg-red-50' : undefined}
-                    text={(sheet.salaryAdvance ?? 0) > 0 ? 'text-red-600' : undefined}
-                  />
-                </div>
-                {(sheet.leaveDeduction ?? 0) > 0 && (
-                  <div className="mt-2 flex items-center justify-between text-[11px]">
-                    <span className="text-charcoal-500">{t('Leave deduction')}</span>
-                    <span className="font-semibold text-red-600">−{formatMoney(sheet.leaveDeduction ?? 0)}</span>
-                  </div>
-                )}
-              </div>
-
-              <ItemSection
-                tone="earnings"
-                title={t('Earnings')}
-                headerValue={`+${formatMoney(earningsTotal)}`}
-                rows={earnings}
-              />
-              <ItemSection
-                tone="deductions"
-                title={t('Deductions')}
-                headerValue={`−${formatMoney(sheet.totalDeductions)}`}
-                rows={deductionRows}
-                emptyHint={t('No deductions this period.')}
-              />
-              {/* Dark net bar with the payslip action (mock) */}
-              <div className="flex items-center justify-between gap-2 rounded-xl bg-charcoal-900 px-3 py-2.5">
-                <div className="min-w-0">
-                  <p className="text-[10px] font-bold uppercase tracking-wider text-charcoal-400">{t('Net Salary')}</p>
-                  <p className="whitespace-nowrap text-lg font-bold leading-tight text-white">{formatMoney(sheet.netSalary)}</p>
-                </div>
-                <button
-                  type="button"
-                  onClick={onSlip}
-                  className="flex flex-shrink-0 items-center gap-1 rounded-lg bg-white/10 px-3 py-2 text-[11px] font-semibold text-white transition-colors hover:bg-white/20"
-                >
-                  <FileText className="h-3.5 w-3.5" aria-hidden="true" />
-                  Payslip
-                </button>
-              </div>
-            </>
-          )}
-        </div>
-      )}
-    </div>
-  )
-}
-
-function ItemSection({
-  tone,
-  title,
-  headerValue,
-  rows,
-  emptyHint,
-}: {
-  tone: 'earnings' | 'deductions'
-  title: string
-  headerValue: string
-  rows: DeductionDisplayRow[]
-  emptyHint?: string
-}) {
-  const isEarnings = tone === 'earnings'
-  return (
-    <div className="overflow-hidden rounded-xl border border-charcoal-100 bg-white">
-      <div
-        className={cn(
-          'flex items-center justify-between border-b px-3 py-2',
-          isEarnings ? 'border-green-100 bg-green-50/60' : 'border-red-100 bg-red-50/60',
-        )}
-      >
-        <div className="flex items-center gap-1.5">
-          {isEarnings ? (
-            <TrendingUp className="h-3.5 w-3.5 text-green-500" aria-hidden="true" />
-          ) : (
-            <TrendingDown className="h-3.5 w-3.5 text-red-400" aria-hidden="true" />
-          )}
-          <p className={cn('text-[10px] font-bold uppercase tracking-wider', isEarnings ? 'text-green-700' : 'text-red-600')}>
-            {title}
-          </p>
-        </div>
-        <p className={cn('text-xs font-bold', isEarnings ? 'text-green-700' : 'text-red-600')}>{headerValue}</p>
-      </div>
-      {rows.length === 0 ? (
-        <p className="px-3 py-2 text-[11px] text-charcoal-500">{emptyHint}</p>
-      ) : (
-        <div className="divide-y divide-charcoal-50">
-          {rows.map((row, index) => (
-            <SectionRow key={index} row={row} isEarnings={isEarnings} />
-          ))}
-        </div>
-      )}
-    </div>
-  )
-}
-
-/** One earning/deduction line: icon, label + subline, review badge, signed amount. */
-function SectionRow({ row, isEarnings }: { row: DeductionDisplayRow; isEarnings: boolean }) {
-  return (
-    <div className="flex items-center gap-2.5 px-3 py-2">
-      {payItemIcon(row.label, isEarnings)}
-      <div className="min-w-0 flex-1">
-        <p className="truncate text-xs font-medium text-charcoal-800">{row.label}</p>
-        {row.reason && (
-          <p className="whitespace-pre-line text-[10px] leading-tight text-charcoal-400">{row.reason}</p>
-        )}
-      </div>
-      {row.status && (
-        <span className="flex-shrink-0">
-          <Badge color={DEDUCTION_STATUS_COLORS[row.status] ?? 'gray'}>{row.status}</Badge>
-        </span>
-      )}
-      <span className={cn('whitespace-nowrap text-xs font-bold', isEarnings ? 'text-green-700' : 'text-red-600')}>
-        {row.amount == null ? (
-          <span className="font-medium text-charcoal-400">—</span>
-        ) : isEarnings ? (
-          `+${formatMoney(row.amount)}`
-        ) : (
-          `−${formatMoney(row.amount)}`
-        )}
-      </span>
-    </div>
-  )
-}
-
-/* ==================== Breakdown detail pieces (mock §8 stat tiles + deduction trail) ==================== */
-
-function StatTile({ label, value, bg, text }: { label: string; value: string; bg?: string; text?: string }) {
-  return (
-    <div className={cn('rounded-lg bg-charcoal-50 px-1.5 py-1.5 text-center', bg)}>
-      <p className={cn('text-base font-bold leading-none', text ?? 'text-charcoal-700')}>{value}</p>
-      <p className="mt-1 truncate text-[9px] leading-tight text-charcoal-500">{label}</p>
-    </div>
-  )
+/** The mock's "Annual Increase (10%)" label — the gym policy percent, derived from the slice as fallback. */
+function increasePercentLabel(sheet: RaiseInfo): string {
+  const pct =
+    sheet.annualIncreasePercent ??
+    (sheet.baseSalary > 0 ? ((sheet.annualIncrease ?? 0) / sheet.baseSalary) * 100 : 0)
+  return `${pct % 1 === 0 ? pct : pct.toFixed(1)}%`
 }
 
 /** Badge color per attached-deduction status (mirrors the attendance page's vocabulary). */

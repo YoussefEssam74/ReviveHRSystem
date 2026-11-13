@@ -206,6 +206,23 @@ export const portal: Record<string, string> = {
   '{{count}} awaiting review': '{{count}} بانتظار المراجعة',
   'LATEST PAYROLL': 'أحدث راتب',
   'No payroll yet': 'لا يوجد راتب بعد',
+  'Current Payroll Snapshot': 'لقطة الراتب الحالية',
+  'Total Payout this period': 'إجمالي المستحق لهذه الفترة',
+  'Payslip available once this period is paid.': 'تتوفر قسيمة الراتب بعد صرف هذه الفترة.',
+  'Payroll split: net pay {{net}}, deductions {{deductions}}':
+    'توزيع الراتب: صافي {{net}}، الخصومات {{deductions}}',
+  'Month & Year': 'الشهر والسنة',
+  'Net Pay (EGP)': 'صافي الراتب (ج.م)',
+  'Gross Pay (EGP)': 'الراتب الإجمالي (ج.م)',
+  'Deductions (EGP)': 'الخصومات (ج.م)',
+  'View Details': 'عرض التفاصيل',
+  'Hide details': 'إخفاء التفاصيل',
+  'Open payslip for {{period}}': 'فتح قسيمة راتب {{period}}',
+  'Gross Pay': 'الراتب الإجمالي',
+  'Your avg. Net Pay (Last 3 Mo.)': 'متوسط صافي راتبك (آخر 3 أشهر)',
+  'Quick Financial Insights': 'مؤشرات مالية سريعة',
+  'Next Payout (EST.)': 'موعد الصرف التالي (تقديري)',
+  'Max deductions': 'أقصى خصومات',
 
   // Settings
   'Manage your account and preferences': 'إدارة حسابك وتفضيلاتك',
