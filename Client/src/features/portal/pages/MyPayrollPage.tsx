@@ -30,7 +30,6 @@ import { ErrorState, LoadingState } from '../../../components/async-state'
 import { Skeleton } from '../../../components/ui/skeleton'
 import { Drawer } from '../../../components/ui/drawer'
 import { StatusBadge, Badge, statusColor, type BadgeColor } from '../../../components/ui/badge'
-import { Button } from '../../../components/ui/button'
 import { usePortalSession } from '../../../contexts/PortalSessionContext'
 import { translate } from '../../../i18n'
 import { describeApiError } from '../../../lib/api-client'
@@ -160,7 +159,6 @@ export default function MyPayrollPage() {
           sheet={snapshot}
           balance={balanceQuery.data ?? null}
           balanceError={balanceQuery.isError ? describeApiError(balanceQuery.error) : null}
-          onPayslip={() => setSlipId(snapshot.id)}
         />
       )}
 
@@ -175,6 +173,7 @@ export default function MyPayrollPage() {
         avgNet={avgNet}
         nextPayout={estimateNextPayout(openSheet ?? latestPaid)}
         maxDeductions={maxDeductions}
+        raiseSheet={latestPaid ?? snapshot}
       />
 
       <PayslipDrawer entryId={slipId} employeeId={employeeId} onClose={() => setSlipId(null)} />
@@ -188,12 +187,10 @@ function PayrollSnapshotCard({
   sheet,
   balance,
   balanceError,
-  onPayslip,
 }: {
   sheet: PayrollSheet
   balance: LeaveBalanceResponse | null
   balanceError: string | null
-  onPayslip: () => void
 }) {
   const { t } = useTranslation()
   const net = sheet.netSalary
@@ -230,6 +227,15 @@ function PayrollSnapshotCard({
               </dt>
               <dd className="flex-shrink-0 font-semibold text-charcoal-900">{formatEGP(net)}</dd>
             </div>
+            {/* Bonus rides inside the net figure — indented so it never reads as a
+                slice of the donut; the purple dot is its legend marker. */}
+            <div className="flex items-center justify-between gap-2 ps-3.5">
+              <dt className="flex min-w-0 items-center gap-1.5 text-charcoal-500">
+                <span className="h-2 w-2 flex-shrink-0 rounded-full bg-purple-500" aria-hidden="true" />
+                <span className="truncate">{t('Bonus')}</span>
+              </dt>
+              <dd className="flex-shrink-0 font-semibold text-charcoal-900">{formatEGP(sheet.totalBonuses)}</dd>
+            </div>
             <div className="flex items-center justify-between gap-2">
               <dt className="flex min-w-0 items-center gap-1.5 text-charcoal-600">
                 <span className="h-2 w-2 flex-shrink-0 rounded-full bg-red-500" aria-hidden="true" />
@@ -248,17 +254,6 @@ function PayrollSnapshotCard({
         <div className="border-t border-charcoal-100 pt-2.5 lg:border-s lg:border-t-0 lg:ps-4 lg:pt-0">
           <LeaveBalanceBlock sheet={sheet} balance={balance} error={balanceError} />
         </div>
-      </div>
-
-      <div className="mt-2.5 flex justify-end border-t border-charcoal-100 pt-2">
-        {sheet.visible ? (
-          <Button size="sm" onClick={onPayslip}>
-            <FileText className="h-3.5 w-3.5" aria-hidden="true" />
-            {t('View Payslip')}
-          </Button>
-        ) : (
-          <p className="text-[11px] text-charcoal-400">{t('Payslip available once this period is paid.')}</p>
-        )}
       </div>
     </section>
   )
@@ -555,13 +550,25 @@ function FinancialInsights({
   avgNet,
   nextPayout,
   maxDeductions,
+  raiseSheet,
 }: {
   avgNet: number
   nextPayout: Date | null
   maxDeductions: number
+  raiseSheet: PayrollSheet | null
 }) {
   const { t } = useTranslation()
-  const tiles = [
+  const raisePercent = raiseSheet ? increasePercentLabel(raiseSheet) : '0%'
+  // The sheet reports no raise slice (it is folded into base salary once a year),
+  // so the amount is the gym policy percent applied to the period's base salary —
+  // the same figure the payslip card prints.
+  const raiseAmount =
+    raiseSheet && (raiseSheet.annualIncreasePercent ?? 0) > 0
+      ? Math.round((raiseSheet.baseSalary * (raiseSheet.annualIncreasePercent ?? 0)) / 100)
+      : 0
+  const raiseDate = raiseSheet?.paidDate ?? null
+
+  const tiles: { key: string; icon: React.ReactNode; tint: string; label: string; value: string; caption?: string }[] = [
     {
       key: 'avg',
       icon: <Wallet className="h-4 w-4" aria-hidden="true" />,
@@ -575,6 +582,15 @@ function FinancialInsights({
       tint: 'bg-blue-50 text-blue-600',
       label: t('Next Payout (EST.)'),
       value: nextPayout ? formatDateWithYear(nextPayout) : '—',
+    },
+    {
+      key: 'raise',
+      icon: <TrendingUp className="h-4 w-4" aria-hidden="true" />,
+      tint: 'bg-emerald-50 text-emerald-600',
+      label: t('Annual Increase'),
+      value: formatEGP(raiseAmount),
+      // Percentage and the date the raise slice was applied (its pay date).
+      caption: raiseDate ? `${raisePercent} · ${formatDateWithYear(raiseDate)}` : raisePercent,
     },
     {
       key: 'max',
@@ -591,7 +607,7 @@ function FinancialInsights({
         <h2 className="text-base font-bold text-charcoal-900">{t('Quick Financial Insights')}</h2>
         <ArrowRight className="h-4 w-4 text-charcoal-300 rtl:rotate-180" aria-hidden="true" />
       </div>
-      <div className="mt-3 grid gap-2.5 sm:grid-cols-3">
+      <div className="mt-3 grid gap-2.5 sm:grid-cols-2 lg:grid-cols-4">
         {tiles.map((tile) => (
           <div key={tile.key} className="flex items-center gap-2.5 rounded-xl border border-charcoal-100 p-2.5">
             <span className={cn('flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full', tile.tint)}>
@@ -600,6 +616,7 @@ function FinancialInsights({
             <div className="min-w-0">
               <p className="truncate text-[10px] text-charcoal-500">{tile.label}</p>
               <p className="mt-0.5 truncate text-sm font-bold text-charcoal-900">{tile.value}</p>
+              {tile.caption && <p className="mt-0.5 truncate text-[10px] text-charcoal-400">{tile.caption}</p>}
             </div>
           </div>
         ))}

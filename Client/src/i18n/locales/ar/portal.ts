@@ -223,6 +223,7 @@ export const portal: Record<string, string> = {
   'Quick Financial Insights': 'مؤشرات مالية سريعة',
   'Next Payout (EST.)': 'موعد الصرف التالي (تقديري)',
   'Max deductions': 'أقصى خصومات',
+  'Annual Increase': 'الزيادة السنوية',
   'Annual leave': 'الإجازة السنوية',
   'Sick leave': 'الإجازة المرضية',
   '{{used}} used · {{left}} left': '{{used}} مستخدمة · {{left}} متبقية',
