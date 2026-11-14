@@ -627,31 +627,9 @@ namespace Service.Services
             var assignments = cycle.ShiftAssignments.OrderBy(a => a.Date).ToList();
             var working = assignments.Where(a => a.ShiftTemplateId.HasValue).ToList();
 
-            // C1 — approved Day Off / Sick Leave vs an assigned shift.
-            var workingEmployeeIds = working.Select(a => a.EmployeeId).Distinct().ToArray();
-            if (workingEmployeeIds.Length > 0)
-            {
-                var requests = await _unitOfWork.GetRepository<EmployeeRequest, int>().GetAllAsync(
-                    new ApprovedDayOffRequestsOverlappingSpec(workingEmployeeIds, cycle.StartDate, cycle.EndDate), cancellationToken);
-
-                foreach (var request in requests)
-                {
-                    var from = request.TargetStartDate ?? request.RequestDate;
-                    var to = request.TargetEndDate ?? request.RequestDate;
-                    foreach (var assignment in working.Where(a => a.EmployeeId == request.EmployeeId && a.Date >= from && a.Date <= to))
-                    {
-                        var shiftName = assignment.ShiftTemplateId.HasValue && templatesById.TryGetValue(assignment.ShiftTemplateId.Value, out var template)
-                            ? template.Name
-                            : "a shift";
-                        conflicts.Add(new ShiftConflictItem
-                        {
-                            EmployeeId = assignment.EmployeeId,
-                            Day = WeekdayIndex(assignment.Date),
-                            Message = $"Approved {request.Type} on {assignment.Date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)} but {shiftName} assigned.",
-                        });
-                    }
-                }
-            }
+            // C1 — approved leave (Day Off / Sick / Annual) is deliberately NOT a conflict: the
+            // roster stays as published and the day is reported as that leave type in attendance,
+            // so the manager never has to "fix" a schedule the employee already covered with leave.
 
             // C2 — employee not linked to the cycle's gym (gym row or UserGymAccess).
             foreach (var employee in employees)

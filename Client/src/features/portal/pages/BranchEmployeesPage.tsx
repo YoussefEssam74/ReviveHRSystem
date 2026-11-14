@@ -132,7 +132,7 @@ function EmployeesWorkspace() {
     can('recruitment.vacancy_request.create')
 
   return (
-    <div className="space-y-3">
+    <div className="flex flex-col gap-3 lg:h-[calc(100dvh-6.5rem)]">
       <div className="flex items-center justify-between gap-2">
         <div className="min-w-0">
           <h1 className="truncate text-lg font-bold text-charcoal-900 sm:text-xl">{t('Employees')}</h1>
@@ -205,7 +205,7 @@ function EmployeesWorkspace() {
           hint={t('Adjust the search or status filter — the list covers everyone in the active gym.')}
         />
       ) : (
-        <div className="hidden overflow-hidden rounded-xl border border-charcoal-200 bg-white lg:block">
+        <div className="hidden overflow-hidden rounded-xl border border-charcoal-200 bg-white lg:block lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
           <table className="data-table">
             <thead>
               <tr>

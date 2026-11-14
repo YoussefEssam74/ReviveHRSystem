@@ -2,7 +2,7 @@ import { useMemo, useState, type ReactNode } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { AlertTriangle, ArrowLeft, BadgeCheck, Briefcase, CalendarDays, Check, ChevronsLeft, CreditCard, Lock, MapPin, Pencil, X } from 'lucide-react'
+import { AlertTriangle, BadgeCheck, Briefcase, CalendarDays, Check, ChevronsLeft, CreditCard, Lock, MapPin, Pencil, X } from 'lucide-react'
 import { getShiftCycle, getTeamToday, setShiftAssignments, type SetAssignmentInput, type TeamMemberDay } from '../api/team.api'
 import { getOwnAttendance, getOwnLeaveBalance, getOwnSchedule, manualAttendance, type EmployeeScheduleDto, type EmployeeAttendanceResponse } from '../api/attendance.api'
 import { decideRequest, getOwnRequests, undoManagedDecision, type EmployeeRequestItem } from '../api/requests.api'
@@ -97,7 +97,6 @@ function initialsOf(name: string): string {
 export default function MemberProfilePage() {
   const { t } = useTranslation()
   const params = useParams()
-  const navigate = useNavigate()
   const location = useLocation()
   const headerState = (location.state ?? {}) as HeaderState
   const { can } = usePortalSession()
@@ -127,13 +126,8 @@ export default function MemberProfilePage() {
   const fullProfile = can('employees.view') && member != null
 
   return (
-    <div className="space-y-3">
-      <MemberHeaderBar
-        memberId={employeeId}
-        member={member}
-        fullProfile={fullProfile}
-        onBack={() => navigate(-1)}
-      />
+    <div className="flex flex-col gap-3 lg:h-[calc(100dvh-6.5rem)]">
+      <MemberHeaderBar memberId={employeeId} member={member} fullProfile={fullProfile} />
 
       {fullProfile && member ? (
         <BMProfile memberId={employeeId} member={member} />
@@ -168,13 +162,11 @@ function MemberHeaderBar({
   memberId,
   member,
   fullProfile,
-  onBack,
 }: {
   memberId: number
   member: MemberHeader | null
   /** Viewer holds employees.view — enables the lifecycle actions + grid fallback. */
   fullProfile: boolean
-  onBack: () => void
 }) {
   const { me, can } = usePortalSession()
   const navigate = useNavigate()
@@ -219,21 +211,16 @@ function MemberHeaderBar({
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center gap-2">
-        <Button size="sm" variant="secondary" onClick={onBack}>
-          <ArrowLeft className="h-3.5 w-3.5" aria-hidden="true" /> Back
-        </Button>
-        {fullProfile && (
-          <button
-            type="button"
-            onClick={() => navigate('/employee/branch/employees')}
-            className="flex items-center gap-1 rounded-lg px-2 py-1.5 text-[11px] font-medium text-charcoal-500 hover:bg-charcoal-50 hover:text-charcoal-800"
-          >
-            <ChevronsLeft className="h-3.5 w-3.5" aria-hidden="true" />
-            Employees
-          </button>
-        )}
-      </div>
+      {fullProfile && (
+        <button
+          type="button"
+          onClick={() => navigate('/employee/branch/employees')}
+          className="flex items-center gap-1 rounded-lg px-2 py-1.5 text-[11px] font-medium text-charcoal-500 hover:bg-charcoal-50 hover:text-charcoal-800"
+        >
+          <ChevronsLeft className="h-3.5 w-3.5" aria-hidden="true" />
+          Employees
+        </button>
+      )}
 
       <div className="rounded-xl border border-charcoal-200 bg-white p-4">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
@@ -777,7 +764,7 @@ function BMProfile({ memberId, member }: { memberId: number; member: MemberHeade
   const tabs = BM_TABS.filter((option) => option.id !== 'payroll' || can('payroll.view'))
 
   return (
-    <div className="overflow-hidden rounded-xl border border-charcoal-200 bg-white">
+    <div className="overflow-hidden rounded-xl border border-charcoal-200 bg-white lg:flex lg:min-h-0 lg:flex-1 lg:flex-col">
       <div className="flex overflow-x-auto border-b border-charcoal-100 bg-charcoal-50/60 px-1.5">
         {tabs.map((option) => (
           <button
@@ -807,7 +794,7 @@ function BMProfile({ memberId, member }: { memberId: number; member: MemberHeade
           </p>
         </div>
       )}
-      <div className="p-4">
+      <div className="p-4 lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
         {tab === 'personal' && <PersonalTab memberId={memberId} member={member} />}
         {tab === 'documents' && <DocumentsTab memberId={memberId} />}
         {tab === 'employment' && <EmploymentTab memberId={memberId} />}
@@ -846,12 +833,12 @@ function HrRow({
   valueClassName?: string
 }) {
   return (
-    <div className={divider ? 'flex items-end justify-between border-b border-charcoal-200 pb-2' : 'flex items-end justify-between'}>
-      <div className="min-w-0">
-        <p className="bento-label text-charcoal-500">{label}</p>
-        <p className={cn('mt-0.5 text-xs font-semibold text-charcoal-900', valueClassName)}>{value}</p>
-      </div>
-      {icon}
+    <div className={cn('flex items-center justify-between gap-2', divider && 'border-b border-charcoal-200 pb-1.5')}>
+      <p className="bento-label shrink-0 text-charcoal-500">{label}</p>
+      <span className="flex min-w-0 items-center justify-end gap-1.5">
+        <p className={cn('truncate text-xs font-semibold text-charcoal-900', valueClassName)}>{value}</p>
+        {icon}
+      </span>
     </div>
   )
 }
@@ -886,7 +873,7 @@ function PersonalTab({ memberId, member }: { memberId: number; member: MemberHea
       <div className="space-y-2 lg:col-span-2">
         {/* Personal Info — read-only for a Branch Manager */}
         <div className="overflow-hidden rounded-xl border border-charcoal-200 bg-white">
-          <div className="flex items-center justify-between border-b border-charcoal-100 bg-charcoal-50/50 px-3 py-2">
+          <div className="flex items-center justify-between border-b border-charcoal-100 bg-charcoal-50/50 px-3 py-1.5">
             <div>
               <p className="bento-label">{t('PROFILE DETAILS')}</p>
               <h3 className="mt-0.5 text-sm font-bold text-charcoal-900">{t('Personal Info')}</h3>
@@ -896,7 +883,7 @@ function PersonalTab({ memberId, member }: { memberId: number; member: MemberHea
               Read-only
             </span>
           </div>
-          <div className="grid grid-cols-1 gap-2 p-3 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-x-2 gap-y-1.5 p-2.5 sm:grid-cols-2">
             <InfoField label={t('Full Name')} value={profile?.fullName ?? member.name ?? null} />
             <InfoField
               label={t('Date of Birth')}
@@ -909,13 +896,13 @@ function PersonalTab({ memberId, member }: { memberId: number; member: MemberHea
 
         {/* Contact Info — a Branch Manager may read but not correct here (contact API is self-only) */}
         <div className="overflow-hidden rounded-xl border border-charcoal-200 bg-white">
-          <div className="flex items-center justify-between border-b border-charcoal-100 bg-charcoal-50/50 px-3 py-2">
+          <div className="flex items-center justify-between border-b border-charcoal-100 bg-charcoal-50/50 px-3 py-1.5">
             <div>
               <p className="bento-label">{t('COMMUNICATION')}</p>
               <h3 className="mt-0.5 text-sm font-bold text-charcoal-900">{t('Contact Info')}</h3>
             </div>
           </div>
-          <div className="grid grid-cols-1 gap-2 p-3 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-x-2 gap-y-1.5 p-2.5 sm:grid-cols-2">
             <InfoField label={t('Mobile Number')} value={member.phone ?? profile?.phone ?? null} />
             <InfoField label={t('Personal Email')} value={member.email ?? profile?.email ?? null} />
             <InfoField label={t('Residential Address')} value={profile?.address ?? null} className="sm:col-span-2" />
@@ -924,13 +911,13 @@ function PersonalTab({ memberId, member }: { memberId: number; member: MemberHea
       </div>
 
       {/* Employment Info — HR controlled, mirrors the My Profile right column */}
-      <div className="space-y-2">
-        <div className="relative overflow-hidden rounded-xl border border-charcoal-200 bg-charcoal-50">
+      <div className="flex flex-col">
+        <div className="relative flex flex-1 flex-col overflow-hidden rounded-xl border border-charcoal-200 bg-charcoal-50">
           <div
             className="pointer-events-none absolute inset-0 bg-[repeating-linear-gradient(45deg,transparent,transparent_10px,#000_10px,#000_20px)] opacity-[0.03]"
             aria-hidden="true"
           />
-          <div className="relative z-10 flex items-center justify-between border-b border-charcoal-200 bg-charcoal-100/50 px-3 py-2">
+          <div className="relative z-10 flex items-center justify-between border-b border-charcoal-200 bg-charcoal-100/50 px-3 py-1.5">
             <div>
               <p className="bento-label flex items-center gap-1 text-charcoal-600">
                 <Lock className="h-3 w-3" aria-hidden="true" />
@@ -939,7 +926,7 @@ function PersonalTab({ memberId, member }: { memberId: number; member: MemberHea
               <h3 className="mt-0.5 text-sm font-bold text-charcoal-900">{t('Employment Info')}</h3>
             </div>
           </div>
-          <div className="relative z-10 space-y-2 p-3">
+          <div className="relative z-10 flex flex-1 flex-col justify-between gap-1.5 p-3">
             <HrRow label={t('Employee ID')} value={employeeId} icon={<CreditCard className={iconClass} aria-hidden="true" />} />
             <HrRow label={t('Primary Location')} value={gymLabel} icon={<MapPin className={iconClass} aria-hidden="true" />} />
             <HrRow
@@ -1246,12 +1233,6 @@ function AttendanceTab({ memberId }: { memberId: number }) {
       {items.length > 12 && (
         <p className="mt-1 text-[10px] text-charcoal-400">Showing the 12 latest rows of {items.length}.</p>
       )}
-
-      {/* Deductions raised on this employee — full trail with branch actions */}
-      <div className="mt-3">
-        <p className="bento-label mb-1.5 text-charcoal-400">{t('DEDUCTIONS')}</p>
-        <MemberDeductions memberId={memberId} />
-      </div>
     </div>
   )
 }
@@ -1262,7 +1243,7 @@ function AttendanceTab({ memberId }: { memberId: number }) {
  * decisions — approve (goes to HR), reject (final) or re-price the amount — while
  * the line is still open.
  */
-function MemberDeductions({ memberId }: { memberId: number }) {
+export function MemberDeductions({ memberId }: { memberId: number }) {
   const { t } = useTranslation()
   const { toast } = useToast()
   const queryClient = useQueryClient()

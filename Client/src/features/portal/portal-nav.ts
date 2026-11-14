@@ -17,7 +17,6 @@ import {
   CalendarDays,
   ClipboardCheck,
   ClipboardList,
-  FileText,
   Gauge,
   LayoutDashboard,
   Megaphone,
@@ -124,7 +123,6 @@ export const DROPDOWN_ITEMS: PortalNavItem[] = [
   { id: 'history', path: PAGE_PATHS.history, label: 'Employment History', icon: Briefcase },
   { id: 'evaluations', path: PAGE_PATHS.evaluations, label: 'My Evaluations', icon: BadgeCheck },
   { id: 'schedule', path: PAGE_PATHS.schedule, label: 'My Schedule', icon: CalendarDays },
-  { id: 'documents', path: PAGE_PATHS.documents, label: 'My Documents', icon: FileText },
   { id: 'settings', path: PAGE_PATHS.settings, label: 'Settings', icon: Settings },
 ]
 

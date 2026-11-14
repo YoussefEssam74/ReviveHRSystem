@@ -201,12 +201,11 @@ export default function MySchedulePage() {
   }
 
   return (
-    <div className="flex min-h-0 flex-col space-y-1">
+    <div className="flex min-h-0 flex-col space-y-1 lg:h-[calc(100dvh-6.5rem)]">
       {/* Header */}
       <div className="flex flex-shrink-0 items-center justify-between gap-2">
         <div>
           <h1 className="text-sm font-bold text-charcoal-900">{t('My Schedule & Attendance')}</h1>
-          <p className="text-[11px] text-charcoal-500">{t('Monthly view of your shifts, check-ins and requests')}</p>
         </div>
         {!hasScheduleData && schedule && (
           <p className="rounded-lg bg-yellow-50 px-2 py-1 text-[9px] font-medium text-yellow-700">

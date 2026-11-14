@@ -354,6 +354,8 @@ function ExceptionList({
   /** Present on the cover list: opens the cover-day review (1/2 days or reject). */
   onReview?: (row: AttendanceGridRow) => void
 }) {
+  const { t } = useTranslation()
+
   if (rows.length === 0) return null
   return (
     <div className="overflow-hidden rounded-xl border border-charcoal-200 bg-white">
@@ -380,6 +382,17 @@ function ExceptionList({
                   <p className="truncate text-[10px] text-charcoal-500">
                     {identity?.position ?? '—'} · {hint(row)}
                   </p>
+                  {row.deduction && (row.status === 'Late' || row.status === 'Absent') && (
+                    <p className="mt-1 flex flex-wrap items-center gap-1.5 text-[10px]">
+                      <span className="font-semibold text-red-600">
+                        {t('Deduction: {{amount}}', { amount: formatMoney(row.deduction.amount) })}
+                      </span>
+                      <span className="text-charcoal-500">
+                        · {t('{{days}} days of pay', { days: Number(row.deduction.days.toFixed(3)) })}
+                      </span>
+                      <StatusBadge status={humanize(row.deduction.status)} />
+                    </p>
+                  )}
                 </div>
               </div>
               <AttendanceRowActions

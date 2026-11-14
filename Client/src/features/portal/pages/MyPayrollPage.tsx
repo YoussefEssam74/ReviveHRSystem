@@ -23,7 +23,7 @@ import {
   type PayrollSheet,
   type PayrollDeductionDetail,
 } from '../api/payroll.api'
-import { getOwnLeaveBalance, type LeaveBalanceResponse } from '../api/attendance.api'
+import { getOwnAttendance, getOwnSchedule, type LeaveBalanceResponse } from '../api/attendance.api'
 import { EmptyState, ProgressBar } from '../../../components/ui/primitives'
 import { ErrorState, LoadingState } from '../../../components/async-state'
 import { Skeleton } from '../../../components/ui/skeleton'
@@ -82,13 +82,8 @@ export default function MyPayrollPage() {
     queryFn: ({ signal }) => getOwnPayrollSheets(employeeId!, signal),
     enabled: employeeId != null,
   })
-  // The snapshot's right half answers "how much leave is left behind this money":
-  // the same year-to-date balance the requests page draws from.
-  const balanceQuery = useQuery({
-    queryKey: ['portal', 'leave-balance', employeeId],
-    queryFn: ({ signal }) => getOwnLeaveBalance(employeeId!, signal),
-    enabled: employeeId != null,
-  })
+  // The snapshot's right half answers "what does this month look like": the month's
+  // days, the days actually worked, and the yearly raise behind the money.
 
   if (employeeId == null) {
     return (
@@ -131,13 +126,7 @@ export default function MyPayrollPage() {
 
   return (
     <div className="space-y-1.5">
-      {snapshot && (
-        <PayrollSnapshotCard
-          sheet={snapshot}
-          balance={balanceQuery.data ?? null}
-          balanceError={balanceQuery.isError ? describeApiError(balanceQuery.error) : null}
-        />
-      )}
+      {snapshot && employeeId != null && <PayrollSnapshotCard sheet={snapshot} employeeId={employeeId} />}
 
       {/* Side by side on wide screens so the whole page lands inside one viewport. */}
       <MonthlyBreakdown
@@ -154,15 +143,7 @@ export default function MyPayrollPage() {
 
 /* ==================== Current payroll snapshot (mock §8 donut card) ==================== */
 
-function PayrollSnapshotCard({
-  sheet,
-  balance,
-  balanceError,
-}: {
-  sheet: PayrollSheet
-  balance: LeaveBalanceResponse | null
-  balanceError: string | null
-}) {
+function PayrollSnapshotCard({ sheet, employeeId }: { sheet: PayrollSheet; employeeId: number }) {
   const { t } = useTranslation()
   const net = sheet.netSalary
   const deductions = sheet.totalDeductions
@@ -221,9 +202,9 @@ function PayrollSnapshotCard({
           </dl>
         </div>
 
-        {/* Right half: the annual leave standing behind this money */}
+        {/* Right half: the month behind the money and the yearly raise */}
         <div className="border-t border-charcoal-100 pt-2.5 lg:flex lg:items-center lg:border-s lg:border-t-0 lg:ps-4 lg:pt-0">
-          <LeaveBalanceBlock balance={balance} error={balanceError} />
+          <MonthAndRaiseBlock sheet={sheet} employeeId={employeeId} />
         </div>
       </div>
     </section>
@@ -259,7 +240,89 @@ function annualLeaveOpensOn(hireDate: string | null | undefined): { opensOn: Dat
  * carries anything taken ahead of the accrual as an unpaid deficit that only costs
  * money if the employee leaves before the accrual catches up.
  */
-function LeaveBalanceBlock({
+/** The raise is applied when January's account is closed — i.e. from the year's first month. */
+function nextRaiseMonthYear(today: Date): number {
+  return today.getMonth() === 0 ? today.getFullYear() : today.getFullYear() + 1
+}
+
+/** "November 2026" → "2026-11"; falls back to the current month when unparsable. */
+function periodMonthKey(period: string, today: Date): string {
+  const parsed = new Date(`${period} 1`)
+  const base = Number.isNaN(parsed.getTime()) ? today : parsed
+  return `${base.getFullYear()}-${String(base.getMonth() + 1).padStart(2, '0')}`
+}
+
+/**
+ * The month behind the money, read from the attendance month itself: the calendar
+ * length, the days actually attended so far, the weekly offs, and the yearly raise
+ * with its percent and the month it is applied from.
+ */
+function MonthAndRaiseBlock({ sheet, employeeId }: { sheet: PayrollSheet; employeeId: number }) {
+  const { t } = useTranslation()
+  const monthKey = periodMonthKey(sheet.period, ACCRUAL_TODAY)
+
+  // The month as the schedule defines it: only days that actually carry a shift count
+  // as month days, and the weekly offs are the days the roster marks off.
+  const scheduleQuery = useQuery({
+    queryKey: ['portal', 'own-schedule', employeeId, monthKey],
+    queryFn: ({ signal }) => getOwnSchedule(employeeId, { month: monthKey }, signal),
+  })
+  const attendanceQuery = useQuery({
+    queryKey: ['portal', 'own-attendance', employeeId, monthKey],
+    queryFn: ({ signal }) => getOwnAttendance(employeeId, monthKey, 1, signal),
+  })
+
+  const scheduleDays = scheduleQuery.data?.days ?? []
+  const scheduleReady = scheduleDays.length > 0
+  const shiftDays = scheduleDays.filter((day) => !day.isOff).length
+  const weeklyOff = scheduleDays.filter((day) => day.isOff).length
+
+  const totals = attendanceQuery.data?.totals ?? null
+  const attended = totals?.present ?? null
+
+  const percent = sheet.annualIncreasePercent ?? null
+  // The snapshot's own slice is still 0 while the period is open — price the policy
+  // against the base salary instead so the raise is never shown as zero.
+  const raise =
+    sheet.annualIncrease != null && sheet.annualIncrease > 0
+      ? sheet.annualIncrease
+      : percent != null && sheet.baseSalary > 0
+        ? Math.round((sheet.baseSalary * percent) / 100)
+        : null
+
+  const rows: { label: string; value: string; tone?: string }[] = [
+    { label: t('Shift Days This Month'), value: scheduleReady ? String(shiftDays) : '—' },
+    { label: t('Actual Days This Month'), value: attended != null ? String(attended) : t('Loading…') },
+    { label: t('Weekly Off'), value: scheduleReady ? String(weeklyOff) : '—' },
+    {
+      label: t('Annual Increase'),
+      value: raise != null ? `${formatEGP(raise)}${percent != null ? ` · ${percent}%` : ''}` : '—',
+      tone: 'text-brand-600',
+    },
+    {
+      label: t('Applied With January Payroll'),
+      value: t('January {{year}}', { year: nextRaiseMonthYear(ACCRUAL_TODAY).toString() }),
+    },
+  ]
+
+  return (
+    <div className="w-full">
+      <p className="bento-label mb-1.5">
+        {t('CURRENT MONTH DATA ({{period}})', { period: sheet.period.toUpperCase() })}
+      </p>
+      <dl className="space-y-1">
+        {rows.map((row) => (
+          <div key={row.label} className="flex items-baseline justify-between gap-3">
+            <dt className="min-w-0 truncate text-[11px] text-charcoal-500">{row.label}</dt>
+            <dd className={cn('flex-shrink-0 text-[11px] font-semibold text-charcoal-900', row.tone)}>{row.value}</dd>
+          </div>
+        ))}
+      </dl>
+    </div>
+  )
+}
+
+export function LeaveBalanceBlock({
   balance,
   error,
 }: {
@@ -459,8 +522,8 @@ function MonthlyBreakdown({
             <tr className="bg-charcoal-50 text-[10px] uppercase tracking-wider text-charcoal-500">
               <th scope="col" className="px-3 py-2 text-start font-semibold">{t('Month & Year')}</th>
               <th scope="col" className="px-3 py-2 text-start font-semibold">{t('Status')}</th>
-              <th scope="col" className="px-3 py-2 text-end font-semibold">{t('Net Pay (EGP)')}</th>
-              <th scope="col" className="px-3 py-2 text-end font-semibold">{t('Gross Pay (EGP)')}</th>
+              <th scope="col" className="px-3 py-2 text-end font-semibold">{t('Net Salary (EGP)')}</th>
+              <th scope="col" className="px-3 py-2 text-end font-semibold">{t('Bonus (EGP)')}</th>
               <th scope="col" className="px-3 py-2 text-end font-semibold">{t('Deductions (EGP)')}</th>
               <th scope="col" className="px-3 py-2 text-end font-semibold">{t('Actions')}</th>
             </tr>
@@ -482,7 +545,7 @@ function MonthlyBreakdown({
                       {sheet.visible ? formatNumber(sheet.netSalary) : '—'}
                     </td>
                     <td className="whitespace-nowrap px-3 py-2.5 text-end text-sm text-charcoal-700">
-                      {sheet.visible ? formatNumber(grossPay(sheet)) : '—'}
+                                          {sheet.visible ? formatNumber(sheet.totalBonuses) : '—'}
                     </td>
                     <td
                       className={cn(
@@ -569,9 +632,6 @@ function SheetDetail({ sheet, onSlip }: { sheet: PayrollSheet; onSlip: () => voi
   const earnings = buildEarningsRows(sheet)
   const earningsTotal = earnings.reduce((sum, row) => sum + row.amount, 0)
   const deductionRows = buildDeductionRows(sheet)
-  const workedPct = sheet.workingDays
-    ? Math.round(((sheet.daysWorked ?? 0) / (sheet.workingDays ?? 1)) * 100)
-    : 0
   const notWorked = Math.max(0, (sheet.workingDays ?? 0) - (sheet.daysWorked ?? 0))
 
   return (
@@ -582,10 +642,6 @@ function SheetDetail({ sheet, onSlip }: { sheet: PayrollSheet; onSlip: () => voi
           <span className="rounded-full bg-charcoal-100 px-2 py-0.5 text-[10px] font-bold text-charcoal-700">
             {t('{{worked}}/{{total}} days', { worked: sheet.daysWorked ?? 0, total: sheet.workingDays ?? 0 })}
           </span>
-        </div>
-        <div className="flex h-2 w-full overflow-hidden rounded-full bg-charcoal-100">
-          <div className="h-full rounded-s-full bg-brand-500" style={{ width: `${workedPct}%` }} />
-          {notWorked > 0 && <div className="h-full flex-1 rounded-e-full bg-charcoal-200" />}
         </div>
         <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1">
           <span className="flex items-center gap-1 text-[10px] text-charcoal-500">
@@ -612,17 +668,25 @@ function SheetDetail({ sheet, onSlip }: { sheet: PayrollSheet; onSlip: () => voi
             <span className="text-[10px] text-red-600">{t('{{count}} unpaid', { count: sheet.unpaidLeaveDays ?? 0 })}</span>
           )}
         </div>
-        <div className="mt-2 grid grid-cols-3 gap-1.5 sm:grid-cols-6">
+        <div className="mt-2 grid grid-cols-3 gap-1.5 sm:grid-cols-7">
+          <StatTile label={t('Actual Attended')} value={String(sheet.daysWorked ?? 0)} bg="bg-brand-50" text="text-brand-600" />
+          <StatTile label={t('Absent')} value={String(sheet.absentDays ?? 0)} bg="bg-red-50" text="text-red-600" />
           <StatTile label={t('Late')} value={String(sheet.lateCount ?? 0)} bg="bg-amber-50" text="text-amber-600" />
-          <StatTile label={t('Early Leave')} value={String(sheet.earlyLeaveCount ?? 0)} />
+          <StatTile
+            label={t('Early Leave')}
+            value={String(sheet.earlyLeaveCount ?? 0)}
+            bg="bg-purple-50"
+            text="text-purple-600"
+          />
           <StatTile label={t('Sick Leave')} value={String(sheet.sickLeaveDays ?? 0)} bg="bg-blue-50" text="text-blue-600" />
           <StatTile label={t('Annual Leave')} value={String(sheet.annualLeaveDays ?? 0)} bg="bg-blue-50" text="text-blue-600" />
-          <StatTile label={t('Absent')} value={String(sheet.absentDays ?? 0)} bg="bg-red-50" text="text-red-600" />
           <StatTile
             label={t('Salary Advance')}
             value={(sheet.salaryAdvance ?? 0) > 0 ? formatMoney(sheet.salaryAdvance ?? 0) : '—'}
-            bg={(sheet.salaryAdvance ?? 0) > 0 ? 'bg-red-50' : undefined}
-            text={(sheet.salaryAdvance ?? 0) > 0 ? 'text-red-600' : undefined}
+            bg={(sheet.salaryAdvance ?? 0) > 0 ? 'bg-red-50 dark:bg-red-500/10' : 'bg-indigo-50 dark:bg-indigo-400/10'}
+            text={
+              (sheet.salaryAdvance ?? 0) > 0 ? 'text-red-600 dark:text-red-400' : 'text-indigo-600 dark:text-indigo-300'
+            }
           />
         </div>
         {(sheet.leaveDeduction ?? 0) > 0 && (
@@ -707,7 +771,28 @@ function ItemSection({
       ) : (
         <div className="divide-y divide-charcoal-50">
           {rows.map((row, index) => (
-            <SectionRow key={index} row={row} isEarnings={isEarnings} />
+            <div key={index}>
+              <SectionRow row={row} isEarnings={isEarnings} />
+              {row.children?.map((child, childIndex) => (
+                <div
+                  key={childIndex}
+                  className="flex items-start gap-2 border-t border-orange-100/60 bg-orange-50/40 px-3 py-2 ps-11 dark:border-orange-500/20 dark:bg-orange-500/10"
+                >
+                  <span className="mt-0.5 flex-shrink-0">{payItemIcon(child.label, isEarnings)}</span>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[11px] font-medium leading-snug text-charcoal-700">{child.label}</p>
+                    {child.reason && (
+                      <p className="mt-0.5 whitespace-pre-line text-[10px] leading-snug text-charcoal-400">
+                        {child.reason}
+                      </p>
+                    )}
+                  </div>
+                  <span className="flex-shrink-0 whitespace-nowrap text-[11px] font-semibold text-orange-600 dark:text-orange-300">
+                    {child.amount == null ? '-' : `${isEarnings ? '+' : '-'}${formatMoney(child.amount)}`}
+                  </span>
+                </div>
+              ))}
+            </div>
           ))}
         </div>
       )}
@@ -760,6 +845,10 @@ type DeductionDisplayRow = {
   amount: number | null
   reason?: string | null
   status?: string | null
+  /** "late" | "absent" | "candidate" — the rule behind the line. */
+  kind?: string
+  /** The individual days a grouped parent prints underneath it. */
+  children?: DeductionDisplayRow[]
 }
 
 /**
@@ -834,6 +923,7 @@ function buildDeductionRows(sheet: PayrollSheet): DeductionDisplayRow[] {
             : item.status === 'Rejected'
               ? 'Rejected'
               : (detail?.status ?? null),
+        kind: detail?.kind ?? 'candidate',
       } satisfies DeductionDisplayRow
     })
 
@@ -847,12 +937,54 @@ function buildDeductionRows(sheet: PayrollSheet): DeductionDisplayRow[] {
               amount: detail.amount,
               reason: detailSubline(detail) || null,
               status: detail.status,
+              kind: detail.kind,
             } satisfies DeductionDisplayRow,
           ],
     ),
   )
 
-  return rows
+  return groupDeductionRows(rows)
+}
+
+/**
+ * Groups attendance-rule days the way the mock prints them: one parent line per rule
+ * ("Late arrivals", "Absent days") carrying the sum of its days, with every day
+ * indented underneath. Branch/manager raises keep their own line.
+ */
+function groupDeductionRows(rows: DeductionDisplayRow[]): DeductionDisplayRow[] {
+  // The salary advance rides in as an ordinary deduction line, so it is grouped by
+  // its label rather than by an attendance rule.
+  const advanceRows = rows.filter((row) => row.label.toLowerCase().includes('advance'))
+  const attendanceRows = rows.filter((row) => !advanceRows.includes(row))
+
+  const groups = [
+    { kind: 'late', label: translate('Late arrivals') },
+    { kind: 'absent', label: translate('Absent days') },
+  ]
+
+  const parents = groups
+    .map((group) => {
+      const days = attendanceRows.filter((row) => row.kind === group.kind)
+      return {
+        label: group.label,
+        amount: days.reduce((sum, row) => sum + (row.amount ?? 0), 0),
+        children: days,
+      } satisfies DeductionDisplayRow
+    })
+    .filter((group) => (group.children?.length ?? 0) > 0)
+
+  const advance = advanceRows.length
+    ? [
+        {
+          label: translate('Salary advance'),
+          amount: advanceRows.reduce((sum, row) => sum + (row.amount ?? 0), 0),
+          children: advanceRows,
+        } satisfies DeductionDisplayRow,
+      ]
+    : []
+
+  const others = attendanceRows.filter((row) => !groups.some((group) => group.kind === row.kind))
+  return [...parents, ...advance, ...others]
 }
 
 /** Mock §8's per-line item glyph, keyed off the label. */

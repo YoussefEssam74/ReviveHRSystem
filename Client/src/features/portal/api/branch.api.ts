@@ -115,6 +115,18 @@ export interface AttendanceGridRow {
   coverDays: number | null
   /** True when the day was worked without a scheduled shift (cover / extra shift). */
   isCoverDay: boolean
+  /**
+   * The deduction the attendance rule raised for this late arrival or unexcused
+   * absence, priced by the server's sweep. Absent when the day carries none.
+   */
+  deduction?: {
+    id: number
+    amount: number
+    days: number
+    /** Raw DeductionStatus: Pending | BranchApproved | Approved | Rejected. */
+    status: string
+    reason: string
+  } | null
 }
 
 export interface AttendanceGridParams {

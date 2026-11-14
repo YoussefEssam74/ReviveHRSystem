@@ -1,14 +1,17 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { Plus, UserRound } from 'lucide-react'
+import { Phone, Plus, ScanFace, UserRound } from 'lucide-react'
 import {
   createVacancyRequest,
   decideVacancyRequest,
+  getEmployeeDirectory,
   getVacancyRequests,
   reopenVacancyRequest,
   type VacancyRequestRow,
 } from '../api/branch.api'
+import { getCandidates, getVacancies, type CandidateCard } from '../../recruitment/api/recruitment.api'
 import { EmptyState } from '../../../components/ui/primitives'
 import { StatusBadge } from '../../../components/ui/badge'
 import { ErrorState, LoadingState } from '../../../components/async-state'
@@ -29,8 +32,23 @@ import { formatDate, formatMoney, humanize } from '../../../lib/format'
  * render only for `recruitment.vacancy_request.approve` key holders.
  */
 
-type Tab = 'All' | 'Pending' | 'Approved' | 'Rejected'
-const TABS: Tab[] = ['All', 'Pending', 'Approved', 'Rejected']
+/**
+ * The branch's own hiring funnel, in the order a position travels it: a request
+ * waits for HR, its candidates reach the second interview, HR approves the
+ * position, and the accepted newcomer still needs his face enrolled.
+ */
+type Tab = 'All' | 'AwaitingMatch' | 'SecondInterview' | 'Approved' | 'NewComers'
+const TABS: Tab[] = ['All', 'AwaitingMatch', 'SecondInterview', 'Approved', 'NewComers']
+
+/** Tabs backed by vacancy requests; the pipeline tabs read a different feed. */
+const POSITION_TABS: Tab[] = ['All', 'AwaitingMatch', 'Approved']
+
+/** The status chips inside All Positions — the two decision states of a requisition. */
+type AllFilter = 'All' | 'Pending' | 'Rejected'
+const ALL_FILTERS: AllFilter[] = ['All', 'Pending', 'Rejected']
+
+/** How far back a hire still counts as a newcomer the branch must enroll. */
+const NEWCOMER_WINDOW_DAYS = 30
 
 const URGENCY_BADGE: Record<string, string> = {
   high: 'bg-red-50 text-red-700',
@@ -75,19 +93,28 @@ function RecruitmentWorkspace() {
   const { me, can } = usePortalSession()
   const queryClient = useQueryClient()
   const [tab, setTab] = useState<Tab>('All')
+  const [allFilter, setAllFilter] = useState<AllFilter>('All')
   const [page, setPage] = useState(1)
   const [newOpen, setNewOpen] = useState(false)
   const [detail, setDetail] = useState<VacancyRequestRow | null>(null)
 
+  const isPositionTab = POSITION_TABS.includes(tab)
+
+  // The requisition status the list asks for: All Positions narrows to the chip the
+  // manager picked, "no match yet" reads the approved feed, everything else is direct.
+  const statusFilter: string | undefined =
+    tab === 'All' ? (allFilter === 'All' ? undefined : allFilter) : tab === 'AwaitingMatch' ? 'Approved' : tab
+
   const listQuery = useQuery({
-    queryKey: ['portal', 'vacancy-requests', tab, page],
+    queryKey: ['portal', 'vacancy-requests', tab, allFilter, page],
     queryFn: ({ signal }) =>
       getVacancyRequests({
-        status: tab === 'All' ? undefined : tab,
+        status: statusFilter,
         page,
         pageSize: 12,
         signal,
       }),
+    enabled: isPositionTab,
     placeholderData: (previous) => previous,
   })
 
@@ -103,15 +130,82 @@ function RecruitmentWorkspace() {
       ),
   })
 
-  if (listQuery.isLoading) return <LoadingState />
-  if (listQuery.error)
+  // The two pipeline stages read their own feeds: candidates waiting on a second
+  // interview, and the newcomers whose face the kiosk still has to learn. They share
+  // their query keys with the sections below, so opening a tab costs no extra call.
+  const secondInterviewQuery = useQuery({
+    queryKey: ['portal', 'candidates', 'Second Interview'],
+    queryFn: ({ signal }) => getCandidates({ stage: 'Second Interview', pageSize: 50 }, signal),
+  })
+  const newcomersQuery = useQuery({
+    queryKey: ['portal', 'employees', 'new-comers'],
+    queryFn: ({ signal }) => getEmployeeDirectory({ page: 1, pageSize: 200, signal }),
+  })
+
+  // An approved opening splits on whether anyone has been matched to it yet: the
+  // vacancy row carries its count of non-rejected applicants.
+  const vacanciesQuery = useQuery({
+    queryKey: ['portal', 'vacancies', 'match-counts'],
+    queryFn: ({ signal }) => getVacancies({ page: 1, pageSize: 200 }, signal),
+  })
+  const approvedSplitQuery = useQuery({
+    queryKey: ['portal', 'vacancy-requests', 'approved-split'],
+    queryFn: ({ signal }) => getVacancyRequests({ status: 'Approved', page: 1, pageSize: 100, signal }),
+  })
+
+  if (isPositionTab && listQuery.isLoading) return <LoadingState />
+  if (isPositionTab && listQuery.error)
     return <ErrorState message={describeApiError(listQuery.error)} onRetry={() => void listQuery.refetch()} />
 
-  const rows = listQuery.data?.items ?? []
+  const applicationsByVacancy = new Map(
+    (vacanciesQuery.data?.items ?? []).map((vacancy) => [vacancy.id, vacancy.candidates]),
+  )
+  const applicationsByPosition = new Map(
+    (vacanciesQuery.data?.items ?? []).map((vacancy) => [vacancy.position.trim().toLowerCase(), vacancy.candidates]),
+  )
+  const applicantsOf = (row: VacancyRequestRow): number => {
+    if (row.vacancyId != null && applicationsByVacancy.has(row.vacancyId)) {
+      return applicationsByVacancy.get(row.vacancyId) ?? 0
+    }
+    // A requisition and its vacancy are seeded (and sometimes recorded) independently,
+    // so an approved request falls back to its position label to find its applicant count.
+    return applicationsByPosition.get(row.position.trim().toLowerCase()) ?? 0
+  }
+
+  const approvedItems = approvedSplitQuery.data?.items ?? []
+  const awaitingMatchCount = approvedItems.filter((row) => applicantsOf(row) === 0).length
+  const matchedApprovedCount = approvedItems.length - awaitingMatchCount
+
+  const rows = (listQuery.data?.items ?? []).filter((row) => {
+    if (tab !== 'AwaitingMatch' && tab !== 'Approved') return true
+    return tab === 'AwaitingMatch' ? applicantsOf(row) === 0 : applicantsOf(row) > 0
+  })
   const total = listQuery.data?.total ?? 0
   const totalPages = listQuery.data?.totalPages ?? 1
   const openPositions = rows.reduce((sum, row) => sum + row.headcount, 0)
   const counts = new Map(tabsQuery.data?.map(([status, value]) => [status, value]))
+
+  const newcomerCount = recentHires(newcomersQuery.data?.items ?? []).length
+  const tabCount = (option: Tab): number => {
+    if (option === 'All') return Math.max(total, 0)
+    if (option === 'AwaitingMatch') return awaitingMatchCount
+    if (option === 'SecondInterview') return secondInterviewQuery.data?.total ?? 0
+    if (option === 'NewComers') return newcomerCount
+    if (option === 'Approved') return matchedApprovedCount
+    return counts.get(option) ?? 0
+  }
+  const tabLabel = (option: Tab): string => {
+    if (option === 'All') return t('All Positions')
+    if (option === 'AwaitingMatch') return t('Approved · No Match Yet')
+    if (option === 'SecondInterview') return t('Waiting for 2nd Interview')
+    if (option === 'NewComers') return t('New Comers')
+    return t('{{status}} Positions', { status: t(option) })
+  }
+
+  const allFilterCount = (option: AllFilter): number =>
+    option === 'All'
+      ? (counts.get('Pending') ?? 0) + (counts.get('Approved') ?? 0) + (counts.get('Rejected') ?? 0)
+      : (counts.get(option) ?? 0)
 
   const refreshLists = () => {
     void queryClient.invalidateQueries({ queryKey: ['portal', 'vacancy-requests'] })
@@ -155,20 +249,48 @@ function RecruitmentWorkspace() {
                 : 'border-b-2 border-transparent text-charcoal-500 hover:text-charcoal-700',
             )}
           >
-            {option === 'All' ? t('All Positions') : t('{{status}} Positions', { status: t(option) })}
+            {tabLabel(option)}
             <span
               className={cn(
                 'rounded-full px-1.5 py-0.5 text-[10px] font-semibold',
                 tab === option ? 'bg-brand-100 text-brand-700' : 'bg-charcoal-100 text-charcoal-600',
               )}
             >
-              {option === 'All' ? Math.max(total, 0) : counts.get(option) ?? 0}
+              {tabCount(option)}
             </span>
           </button>
         ))}
       </div>
 
-      {rows.length === 0 ? (
+      {tab === 'All' && (
+        <div className="flex flex-wrap items-center gap-1">
+          {ALL_FILTERS.map((option) => (
+            <button
+              key={option}
+              type="button"
+              onClick={() => {
+                setAllFilter(option)
+                setPage(1)
+              }}
+              className={cn(
+                'rounded-full px-2.5 py-1 text-[11px] font-semibold transition-colors',
+                allFilter === option
+                  ? 'bg-charcoal-800 text-white'
+                  : 'bg-charcoal-100 text-charcoal-600 hover:bg-charcoal-200',
+              )}
+            >
+              {option === 'All' ? t('All') : t('{{status}} Positions', { status: t(option) })}
+              <span className="ms-1.5 text-[10px] opacity-70">{allFilterCount(option)}</span>
+            </button>
+          ))}
+        </div>
+      )}
+
+      {tab === 'SecondInterview' ? (
+        <SecondInterviewSection />
+      ) : tab === 'NewComers' ? (
+        <NewComersSection />
+      ) : rows.length === 0 ? (
         <div className="rounded-xl border border-charcoal-200 bg-white p-8 text-center">
           <UserRound className="mx-auto mb-2 h-10 w-10 text-charcoal-300" aria-hidden="true" />
           <p className="text-xs text-charcoal-500">{t('No requests here right now.')}</p>
@@ -181,7 +303,7 @@ function RecruitmentWorkspace() {
         </div>
       )}
 
-      {(totalPages > 1 || (listQuery.data?.page ?? 1) > 1) && (
+      {isPositionTab && (totalPages > 1 || (listQuery.data?.page ?? 1) > 1) && (
         <div className="flex items-center justify-between">
           <Button
             size="sm"
@@ -229,6 +351,182 @@ function RecruitmentWorkspace() {
 }
 
 /* ==================== card ==================== */
+
+/* ==================== pipeline stages ==================== */
+
+/** Employees hired inside the newcomer window — the faces the kiosk still has to learn. */
+function recentHires<T extends { hireDate: string | null }>(rows: T[]): T[] {
+  const cutoff = Date.now() - NEWCOMER_WINDOW_DAYS * 24 * 60 * 60 * 1000
+  return rows.filter((row) => {
+    if (!row.hireDate) return false
+    const hired = new Date(row.hireDate).getTime()
+    return Number.isFinite(hired) && hired >= cutoff
+  })
+}
+
+/**
+ * Candidates HR has pushed to the second interview for one of this branch's
+ * positions. The branch's job here is the phone call: agree a date with the
+ * applicant and tell HR, who records it on the application.
+ */
+function SecondInterviewSection() {
+  const { t } = useTranslation()
+  const query = useQuery({
+    queryKey: ['portal', 'candidates', 'Second Interview'],
+    queryFn: ({ signal }) => getCandidates({ stage: 'Second Interview', pageSize: 50 }, signal),
+  })
+
+  if (query.isLoading) return <LoadingState />
+  if (query.error) return <ErrorState message={describeApiError(query.error)} onRetry={() => void query.refetch()} />
+
+  const rows = query.data?.items ?? []
+  if (rows.length === 0) {
+    return (
+      <div className="rounded-xl border border-charcoal-200 bg-white p-8 text-center">
+        <UserRound className="mx-auto mb-2 h-10 w-10 text-charcoal-300" aria-hidden="true" />
+        <p className="text-xs text-charcoal-500">{t('Nobody is waiting for a second interview.')}</p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-1.5">
+      <p className="text-[11px] text-charcoal-500">
+        {t('Call the applicant to agree the second-interview date — HR records the appointment on the application.')}
+      </p>
+      {rows.map((candidate) => (
+        <SecondInterviewCard key={candidate.id} candidate={candidate} />
+      ))}
+    </div>
+  )
+}
+
+function SecondInterviewCard({ candidate }: { candidate: CandidateCard }) {
+  const { t } = useTranslation()
+  const form = candidate.form
+
+  return (
+    <div className="rounded-xl border border-charcoal-200 bg-white p-3">
+      <div className="flex flex-col justify-between gap-2 sm:flex-row sm:items-start">
+        <div className="flex items-start gap-3">
+          <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-brand-100 text-[11px] font-semibold text-brand-700">
+            {candidate.initials}
+          </span>
+          <div className="min-w-0">
+            <p className="text-xs font-semibold text-charcoal-900">{candidate.name}</p>
+            <p className="truncate text-[10px] text-charcoal-500">
+              {candidate.position}
+              {candidate.appliedDate ? ` · ${t('Applied {{date}}', { date: formatDate(candidate.appliedDate) })}` : ''}
+            </p>
+          </div>
+        </div>
+        {candidate.phone && (
+          <a
+            href={`tel:${candidate.phone.replace(/\s+/g, '')}`}
+            className="inline-flex items-center gap-1.5 self-start rounded-lg border border-brand-300 bg-brand-50 px-2.5 py-1.5 text-[11px] font-semibold text-brand-700 hover:bg-brand-100 sm:self-auto"
+          >
+            <Phone className="h-3.5 w-3.5" aria-hidden="true" />
+            {candidate.phone}
+          </a>
+        )}
+      </div>
+
+      <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-[10px] sm:grid-cols-4">
+        <Detail label={t('Email')} value={form?.email ?? null} />
+        <Detail
+          label={t('Experience')}
+          value={form?.expYears != null ? t('{{years}} years', { years: form.expYears }) : null}
+        />
+        <Detail label={t('Salary expectation')} value={form?.salaryExp != null ? formatMoney(form.salaryExp) : null} />
+        <Detail label={t('Availability')} value={form?.availability ?? null} />
+        <Detail label={t('Shift preference')} value={form?.shift ?? null} />
+        <Detail label={t('Preferred gym')} value={form?.gymPref ?? null} />
+        <Detail label={t('Source')} value={form?.source ?? null} />
+        <Detail
+          label={t('First interview')}
+          value={candidate.iv1?.verdict ?? (candidate.iv1?.date ? formatDate(candidate.iv1.date) : null)}
+        />
+      </dl>
+
+      {candidate.iv2?.date && (
+        <p className="mt-2 rounded-lg bg-charcoal-50 px-2 py-1 text-[10px] text-charcoal-600">
+          {t('Second interview booked for {{date}}', { date: formatDate(candidate.iv2.date) })}
+        </p>
+      )}
+    </div>
+  )
+}
+
+function Detail({ label, value }: { label: string; value: string | null }) {
+  if (!value) return null
+  return (
+    <div className="min-w-0">
+      <dt className="bento-label text-charcoal-400">{label}</dt>
+      <dd className="truncate font-medium text-charcoal-800">{value}</dd>
+    </div>
+  )
+}
+
+/** Accepted newcomers: enrolled into payroll already, just missing the face. */
+function NewComersSection() {
+  const { t } = useTranslation()
+  const query = useQuery({
+    queryKey: ['portal', 'employees', 'new-comers'],
+    queryFn: ({ signal }) => getEmployeeDirectory({ page: 1, pageSize: 200, signal }),
+  })
+
+  if (query.isLoading) return <LoadingState />
+  if (query.error) return <ErrorState message={describeApiError(query.error)} onRetry={() => void query.refetch()} />
+
+  const rows = recentHires(query.data?.items ?? [])
+  if (rows.length === 0) {
+    return (
+      <div className="rounded-xl border border-charcoal-200 bg-white p-8 text-center">
+        <UserRound className="mx-auto mb-2 h-10 w-10 text-charcoal-300" aria-hidden="true" />
+        <p className="text-xs text-charcoal-500">
+          {t('No newcomers from the last {{days}} days.', { days: NEWCOMER_WINDOW_DAYS })}
+        </p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-1.5">
+      <p className="text-[11px] text-charcoal-500">
+        {t('Newcomers hired in the last {{days}} days — enroll each face so the kiosk recognises them.', {
+          days: NEWCOMER_WINDOW_DAYS,
+        })}
+      </p>
+      {rows.map((row) => (
+        <div
+          key={row.id}
+          className="flex flex-col justify-between gap-2 rounded-xl border border-charcoal-200 bg-white p-3 sm:flex-row sm:items-center"
+        >
+          <div className="flex items-center gap-3">
+            <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-emerald-100 text-[11px] font-semibold text-emerald-700">
+              {row.initials}
+            </span>
+            <div className="min-w-0">
+              <p className="text-xs font-semibold text-charcoal-900">{row.name}</p>
+              <p className="truncate text-[10px] text-charcoal-500">
+                {[row.position, row.employeeNumber, row.hireDate ? t('Hired {{date}}', { date: formatDate(row.hireDate) }) : null]
+                  .filter(Boolean)
+                  .join(' · ')}
+              </p>
+            </div>
+          </div>
+          <Link
+            to={`/enrollment?employeeNumber=${encodeURIComponent(row.employeeNumber)}`}
+            className="inline-flex items-center gap-1.5 self-start rounded-lg border border-charcoal-300 px-2.5 py-1.5 text-[11px] font-semibold text-charcoal-700 hover:bg-charcoal-50 sm:self-auto"
+          >
+            <ScanFace className="h-3.5 w-3.5" aria-hidden="true" />
+            {t('Enroll face')}
+          </Link>
+        </div>
+      ))}
+    </div>
+  )
+}
 
 function RecruitmentCard({ row, onOpen }: { row: VacancyRequestRow; onOpen: () => void }) {
   const { t } = useTranslation()

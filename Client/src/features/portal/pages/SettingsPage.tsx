@@ -1,75 +1,22 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMutation } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
-import {
-  ClipboardList,
-  ExternalLink,
-  KeyRound,
-  LogOut,
-  Megaphone,
-  ShieldCheck,
-  UserCheck,
-  Users,
-} from 'lucide-react'
-import {
-  apiChangePassword,
-  getPreferences,
-  updatePreferences,
-  type NotificationPreference,
-} from '../api/settings.api'
+import { KeyRound, LogOut, ShieldCheck } from 'lucide-react'
+import { apiChangePassword } from '../api/settings.api'
 import { Modal } from '../../../components/ui/modal'
 import { Button } from '../../../components/ui/button'
-import { ErrorState, LoadingState } from '../../../components/async-state'
 import { useToast } from '../../../components/ui/toast'
 import { useAuthSession } from '../../../contexts/AuthSessionContext'
-import { PAGE_PATHS } from '../portal-nav'
 import { describeApiError } from '../../../lib/api-client'
-import { cn } from '../../../lib/utils'
-
-const PREFERENCE_ROWS: ReadonlyArray<{
-  key: keyof NotificationPreference
-  label: string
-  description: string
-  Icon: typeof Megaphone
-}> = [
-  { key: 'requests', label: 'Request Updates', description: 'Status changes to the requests you submit', Icon: ClipboardList },
-  { key: 'attendance', label: 'Attendance Alerts', description: 'Late check-ins and absence warnings', Icon: UserCheck },
-  { key: 'recruitment', label: 'Recruitment Updates', description: 'Progress of hiring stages you take part in', Icon: Users },
-  { key: 'management', label: 'Management Actions', description: 'Approvals, reviews and desk decisions', Icon: UserCheck },
-  { key: 'announcements', label: 'Announcements', description: 'Gym-wide HR announcements', Icon: Megaphone },
-]
 
 export default function SettingsPage() {
   const { t } = useTranslation()
   const { toast } = useToast()
   const navigate = useNavigate()
   const { session, signOut } = useAuthSession()
-  const queryClient = useQueryClient()
-
   const [passwordOpen, setPasswordOpen] = useState(false)
   const [logoutOpen, setLogoutOpen] = useState(false)
-
-  const prefsQuery = useQuery({
-    queryKey: ['portal', 'settings'],
-    queryFn: ({ signal }) => getPreferences(signal),
-  })
-
-  const prefsMutation = useMutation({
-    mutationFn: (preferences: NotificationPreference) => updatePreferences(preferences),
-    onSuccess: async (updated) => {
-      queryClient.setQueryData(['portal', 'settings'], updated)
-      toast(t('Preferences saved'))
-    },
-    onError: (error) => toast(describeApiError(error), 'error'),
-  })
-
-  function toggle(key: keyof NotificationPreference, current: boolean) {
-    if (!preferences) return
-    prefsMutation.mutate({ ...preferences, [key]: !current })
-  }
-
-  const preferences = prefsQuery.data ?? null
 
   return (
     <div className="max-w-xl space-y-1.5">
@@ -86,19 +33,6 @@ export default function SettingsPage() {
           <p className="mt-0.5 text-[10px] text-charcoal-500">{session?.user.email ?? ''}</p>
         </div>
         <div className="space-y-0.5 p-2">
-          <button
-            type="button"
-            onClick={() => navigate(PAGE_PATHS.documents)}
-            className="flex w-full items-center justify-between rounded-lg p-1.5 text-xs transition-colors hover:bg-charcoal-50"
-          >
-            <span className="flex items-center gap-3">
-              <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-charcoal-100">
-                <ExternalLink className="h-4 w-4 text-charcoal-600" aria-hidden="true" />
-              </span>
-              <span className="text-start font-medium text-charcoal-900">{t('My Documents')}</span>
-            </span>
-            <ExternalLink className="h-4 w-4 text-charcoal-400" aria-hidden="true" />
-          </button>
           <button
             type="button"
             onClick={() => setPasswordOpen(true)}
@@ -124,44 +58,6 @@ export default function SettingsPage() {
               <span className="font-medium text-red-600">{t('Sign out')}</span>
             </span>
           </button>
-        </div>
-      </div>
-
-      {/* Notifications */}
-      <div className="overflow-hidden rounded-xl border border-charcoal-200 bg-white">
-        <div className="border-b border-charcoal-100 bg-charcoal-50/50 px-3 py-1.5">
-          <p className="bento-label">{t('NOTIFICATIONS')}</p>
-        </div>
-        <div className="p-2">
-          {prefsQuery.isLoading ? (
-            <LoadingState label={t('Loading preferences…')} />
-          ) : prefsQuery.isError ? (
-            <ErrorState message={describeApiError(prefsQuery.error)} onRetry={() => prefsQuery.refetch()} />
-          ) : preferences ? (
-            <div className="space-y-0">
-              {PREFERENCE_ROWS.map((row, index) => {
-                const value = preferences[row.key]
-                return (
-                  <div
-                    key={row.key}
-                    className={cn(
-                      'flex items-center justify-between py-1.5',
-                      index < PREFERENCE_ROWS.length - 1 && 'border-b border-charcoal-50',
-                    )}
-                  >
-                    <div>
-                      <p className="flex items-center gap-1.5 text-xs font-medium text-charcoal-900">
-                        <row.Icon className="h-3.5 w-3.5 text-charcoal-400" aria-hidden="true" />
-                        {t(row.label)}
-                      </p>
-                      <p className="mt-0.5 text-[10px] text-charcoal-500">{t(row.description)}</p>
-                    </div>
-                    <Toggle checked={value} busy={prefsMutation.isPending} onChange={() => toggle(row.key, value)} />
-                  </div>
-                )
-              })}
-            </div>
-          ) : null}
         </div>
       </div>
 
@@ -203,33 +99,6 @@ export default function SettingsPage() {
         </Modal>
       )}
     </div>
-  )
-}
-
-function Toggle({ checked, busy, onChange }: { checked: boolean; busy?: boolean; onChange: () => void }) {
-  const { t } = useTranslation()
-  return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={checked}
-      disabled={busy}
-      onClick={onChange}
-      aria-label={t('Toggle notification preference')}
-      data-on={checked ? '' : undefined}
-      className={cn(
-        'relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer items-center rounded-full transition-colors',
-        checked ? 'bg-brand-600' : 'bg-charcoal-200',
-        'disabled:opacity-60',
-      )}
-    >
-      <span
-        className={cn(
-          'absolute start-[2px] h-4 w-4 rounded-full bg-white shadow transition-all',
-          checked && 'translate-x-4 rtl:-translate-x-4',
-        )}
-      />
-    </button>
   )
 }
 

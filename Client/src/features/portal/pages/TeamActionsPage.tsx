@@ -19,6 +19,7 @@ import { Button } from '../../../components/ui/button'
 import { useToast } from '../../../components/ui/toast'
 import { usePortalSession } from '../../../contexts/PortalSessionContext'
 import { describeApiError } from '../../../lib/api-client'
+import { formatMoney } from '../../../lib/format'
 import { cn } from '../../../lib/utils'
 
 /** Mock §19 severity vocabulary. */
@@ -53,7 +54,7 @@ const ACTION_HINTS: Record<ActionKind, string> = {
 
 const OPEN_ACTIONS: ActionKind[] = ['Deduction', 'Warning', 'EscalateToHR', 'Reminder']
 
-const DEDUCTION_AMOUNTS = ['Quarter Day', 'Half Day', 'Day', '3 Days'] as const
+const DEDUCTION_UNITS = ['Days', 'Hours'] as const
 
 export default function TeamActionsPage() {
   const { t } = useTranslation()
@@ -372,19 +373,33 @@ export function CreateFollowUpModal({
   const { t } = useTranslation()
   const { toast } = useToast()
   const queryClient = useQueryClient()
+  const { can } = usePortalSession()
   const [employeeId, setEmployeeId] = useState<number | null>(null)
   const [action, setAction] = useState<ActionKind>('Deduction')
   const [severity, setSeverity] = useState<Severity>('Medium')
   const [description, setDescription] = useState('')
   const [deductionDate, setDeductionDate] = useState(() => new Date().toISOString().slice(0, 10))
-  const [deductionAmount, setDeductionAmount] = useState<(typeof DEDUCTION_AMOUNTS)[number] | ''>('')
+  const [deductionAmount, setDeductionAmount] = useState('')
+  const [deductionUnit, setDeductionUnit] = useState<(typeof DEDUCTION_UNITS)[number]>('Days')
   const [note, setNote] = useState('')
 
-  // Deduction actions pick a day amount instead of writing a description —
-  // the backend still requires a description, so the amount fills it in.
+  // A deduction is priced from the employee's latest salary — the same source the
+  // server divides by 30 — so the manager sees the money before saving. Salary is
+  // HR/BM-controlled, so a Team Leader simply gets no preview.
+  const salaryQuery = useQuery({
+    queryKey: ['portal', 'employees', 'follow-up-picker'],
+    queryFn: ({ signal }) => getEmployeeDirectory({ page: 1, pageSize: 200, signal }),
+    enabled: action === 'Deduction' && can('employees.view'),
+    staleTime: 60_000,
+  })
+
+  // Deductions take a free-form duration (hours or days) instead of a description —
+  // the backend still requires a description, so the duration fills it in.
+  const deductionDuration = deductionAmount.trim()
+  const deductionValid = Number(deductionDuration) > 0
   const effectiveDescription = action === 'Deduction'
-    ? deductionAmount
-      ? `Deduction — ${deductionAmount}`
+    ? deductionValid
+      ? `Deduction — ${deductionDuration} ${deductionUnit}`
       : ''
     : description
 
@@ -397,7 +412,7 @@ export function CreateFollowUpModal({
         description: effectiveDescription,
         note: note.trim() || null,
         date: action === 'Deduction' ? deductionDate : null,
-        deductionSize: action === 'Deduction' ? deductionAmount : null,
+        deductionSize: action === 'Deduction' ? `${deductionDuration} ${deductionUnit}` : null,
       }),
     onSuccess: (created) => {
       toast(t('Follow-up raised for {{name}}.', { name: first(created.employee) }))
@@ -416,6 +431,18 @@ export function CreateFollowUpModal({
       ? [defaultMember, ...members]
       : members
   const effectiveEmployeeId = employeeId ?? defaultMember?.employeeId ?? null
+
+  // Mirrors DeductionPricing on the server: salary / 30 is the day rate, and an hour
+  // costs an eighth of a day (the same 0.125-day rate the late penalty uses).
+  const salary = salaryQuery.data?.items.find((row) => row.id === effectiveEmployeeId)?.salary ?? null
+  const deductionDays = deductionValid
+    ? deductionUnit === 'Hours'
+      ? Number(deductionDuration) / 8
+      : Number(deductionDuration)
+    : 0
+  const dailyRate = salary != null && salary > 0 ? Math.round((salary / 30) * 100) / 100 : null
+  const deductionMoney =
+    dailyRate != null && deductionDays > 0 ? Math.round(dailyRate * deductionDays * 100) / 100 : null
 
   return (
     <Modal
@@ -437,7 +464,7 @@ export function CreateFollowUpModal({
             disabled={
               effectiveEmployeeId == null ||
               effectiveDescription.trim().length === 0 ||
-              (action === 'Deduction' && (deductionAmount === '' || deductionDate === ''))
+              (action === 'Deduction' && (!deductionValid || deductionDate === ''))
             }
             loading={createMutation.isPending}
             onClick={() => createMutation.mutate()}
@@ -532,23 +559,38 @@ export function CreateFollowUpModal({
               </div>
               <div>
                 <label className="form-label" htmlFor="fu-deduction">
-                  {t('Deduction amount')}
+                  {t('Deduction duration')}
                 </label>
-                <select
-                  id="fu-deduction"
-                  value={deductionAmount}
-                  onChange={(e) => setDeductionAmount(e.target.value as (typeof DEDUCTION_AMOUNTS)[number] | '')}
-                  className="form-input"
-                >
-                  <option value="">{t('Choose deduction…')}</option>
-                  {DEDUCTION_AMOUNTS.map((amount) => (
-                    <option key={amount} value={amount}>
-                      {t(amount)}
-                    </option>
-                  ))}
-                </select>
-                {deductionAmount === '' && (
-                  <p className="mt-1 text-[10px] text-red-500">{t('Deduction amount is required.')}</p>
+                <div className="flex items-center gap-1.5">
+                  <input
+                    id="fu-deduction"
+                    type="number"
+                    inputMode="decimal"
+                    min="0.25"
+                    max="30"
+                    step="0.25"
+                    value={deductionAmount}
+                    onChange={(e) => setDeductionAmount(e.target.value)}
+                    placeholder="0"
+                    className="form-input min-w-0 flex-1"
+                  />
+                  <div className="w-[5.5rem] flex-shrink-0">
+                    <select
+                      aria-label={t('Deduction unit')}
+                      value={deductionUnit}
+                      onChange={(e) => setDeductionUnit(e.target.value as (typeof DEDUCTION_UNITS)[number])}
+                      className="form-input"
+                    >
+                      {DEDUCTION_UNITS.map((unit) => (
+                        <option key={unit} value={unit}>
+                          {t(unit)}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+                {!deductionValid && (
+                  <p className="mt-1 text-[10px] text-red-500">{t('Deduction duration is required.')}</p>
                 )}
               </div>
             </div>
@@ -567,6 +609,18 @@ export function CreateFollowUpModal({
               />
               {description.trim().length === 0 && (
                 <p className="mt-1 text-[10px] text-red-500">{t('Description is required.')}</p>
+              )}
+            </div>
+          )}
+          {action === 'Deduction' && (
+            <div className="flex items-center justify-between gap-2 rounded-lg border border-charcoal-200 bg-charcoal-50 px-3 py-2">
+              <span className="text-[11px] font-semibold text-charcoal-600">{t('Deduction amount')}</span>
+              {deductionMoney != null ? (
+                <span className="text-sm font-bold text-charcoal-900">{formatMoney(deductionMoney)}</span>
+              ) : (
+                <span className="text-[10px] text-charcoal-400">
+                  {salaryQuery.isFetching ? t('Calculating…') : t('No salary on file')}
+                </span>
               )}
             </div>
           )}

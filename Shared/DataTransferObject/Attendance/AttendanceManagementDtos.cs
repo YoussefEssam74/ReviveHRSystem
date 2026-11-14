@@ -57,6 +57,31 @@ namespace Shared.DataTransferObject.Attendance
 
         /// <summary>True when the approved cover/extra day was worked without a scheduled shift.</summary>
         public bool IsCoverDay { get; init; }
+
+        /// <summary>
+        /// The deduction the attendance rule raises for a late arrival or an unexcused
+        /// absence on this day, priced by the same sweep payroll settles from. Null when
+        /// the day carries no deduction; attached after the grid is composed.
+        /// </summary>
+        public AttendanceDeductionDto? Deduction { get; set; }
+    }
+
+    /// <summary>
+    /// The deduction one attendance row carries: an unexcused absence costs
+    /// <see cref="Days"/> days of pay, a late arrival a fraction of one.
+    /// <see cref="Amount"/> is the sweep's own price, so it is what payroll withholds
+    /// unless the branch revises the days.
+    /// </summary>
+    public class AttendanceDeductionDto
+    {
+        public int Id { get; init; }
+        public decimal Amount { get; init; }
+        public decimal Days { get; init; }
+
+        /// <summary>Raw DeductionStatus: Pending | BranchApproved | Approved | Rejected.</summary>
+        public required string Status { get; init; }
+
+        public required string Reason { get; init; }
     }
 
     /// <summary>Paged envelope for GET /api/attendance (A1).</summary>

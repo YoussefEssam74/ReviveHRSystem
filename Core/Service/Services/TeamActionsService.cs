@@ -1,3 +1,4 @@
+using System.Globalization;
 using AutoMapper;
 using DomainLayer.Contracts;
 using DomainLayer.Exceptions;
@@ -208,7 +209,7 @@ namespace Service.Services
 
         // ---------- helpers ----------
 
-        /// <summary>Deduction sizes the Team Actions modal offers, as a fraction of one day's pay.</summary>
+        /// <summary>Named deduction sizes older clients still send, as a fraction of one day's pay.</summary>
         private static readonly (string Term, decimal Multiplier, string Label)[] DeductionSizes =
         [
             ("Quarter Day", 0.25m, "Quarter Day"),
@@ -216,6 +217,12 @@ namespace Service.Services
             ("3 Days", 3m, "3 Days"),
             ("Day", 1m, "Day"),
         ];
+
+        /// <summary>Hours in one priced day — the payroll convention (a late hour costs 0.125 day).</summary>
+        private const decimal HoursPerDay = 8m;
+
+        /// <summary>Most days one follow-up may deduct — guards a mistyped amount.</summary>
+        private const decimal MaxDeductionDays = 30m;
 
         /// <summary>
         /// Prices and raises the real <see cref="DeductionCandidate"/> behind a Deduction
@@ -286,10 +293,53 @@ namespace Service.Services
                     description.Contains(s.Term, StringComparison.OrdinalIgnoreCase));
             }
 
-            return match.Term is null
-                ? throw new BadRequestException(
-                    "Deduction size must be Quarter Day, Half Day, Day, or 3 Days.")
-                : (match.Multiplier, match.Label);
+            if (match.Term is not null)
+            {
+                return (match.Multiplier, match.Label);
+            }
+
+            // Current clients send a free-form duration: "4 Hours", "2.5 Days".
+            return ParseDuration(term)
+                ?? throw new BadRequestException(
+                    "Deduction amount must be a number of hours or days between 0.25 and 30, "
+                    + "for example 4 Hours or 2.5 Days.");
+        }
+
+        /// <summary>
+        /// Reads a free-form duration as a fraction of one paid day. Hours divide by the
+        /// eight-hour payroll day, so one hour costs 0.125 day — the late-penalty rate.
+        /// </summary>
+        private static (decimal Multiplier, string Label)? ParseDuration(string term)
+        {
+            var parts = term.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            if (parts.Length != 2
+                || !decimal.TryParse(
+                    parts[0].Replace(',', '.'), NumberStyles.Number, CultureInfo.InvariantCulture, out var amount)
+                || amount <= 0)
+            {
+                return null;
+            }
+
+            var unit = parts[1];
+            var multiplier = unit.StartsWith("hour", StringComparison.OrdinalIgnoreCase)
+                ? amount / HoursPerDay
+                : unit.StartsWith("day", StringComparison.OrdinalIgnoreCase)
+                    ? amount
+                    : -1m;
+            if (multiplier <= 0 || multiplier > MaxDeductionDays)
+            {
+                return null;
+            }
+
+            var isHour = unit.StartsWith("hour", StringComparison.OrdinalIgnoreCase);
+            var noun = (isHour, amount == 1m) switch
+            {
+                (true, true) => "Hour",
+                (true, false) => "Hours",
+                (false, true) => "Day",
+                (false, false) => "Days",
+            };
+            return (multiplier, $"{amount.ToString("0.##", CultureInfo.InvariantCulture)} {noun}");
         }
 
         private async Task NotifyAsync(Employee employee, string title, string body, CancellationToken cancellationToken)

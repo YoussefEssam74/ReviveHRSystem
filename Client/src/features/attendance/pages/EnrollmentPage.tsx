@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Navigate } from 'react-router-dom'
+import { Navigate, useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useMutation } from '@tanstack/react-query'
 import { useForm } from 'react-hook-form'
@@ -26,6 +26,10 @@ export default function EnrollmentPage() {
   const { t } = useTranslation()
   const { session } = useAuthSession()
   const camera = useCamera()
+  const [searchParams] = useSearchParams()
+  // ?employeeNumber=EMP-1042 pre-fills the form when the recruitment board sends
+  // a newcomer straight to enrollment.
+  const presetEmployeeNumber = searchParams.get('employeeNumber') ?? ''
   const [enrolled, setEnrolled] = useState<FaceEnrollmentResponse | null>(null)
   const [formError, setFormError] = useState<string | null>(null)
 
@@ -39,7 +43,7 @@ export default function EnrollmentPage() {
     formState: { errors },
   } = useForm<EnrollmentFormValues>({
     resolver: zodResolver(enrollmentSchema),
-    defaultValues: { employeeNumber: '' },
+    defaultValues: { employeeNumber: presetEmployeeNumber },
   })
 
   if (!session) return <Navigate to="/login" replace />

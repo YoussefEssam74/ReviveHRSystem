@@ -6,6 +6,7 @@ import { getEmployeeDashboard } from '../api/dashboard.api'
 import {
   getEmployeeDeductions,
   getOwnAttendance,
+  getOwnSchedule,
   type EmployeeAttendanceItem,
   type EmployeeDeduction,
 } from '../api/attendance.api'
@@ -188,6 +189,7 @@ export default function MyAttendancePage() {
   const employeeId = me?.employeeId ?? null
 
   const [month, setMonth] = useState<string>(currentMonthIso())
+  const currentMonth = currentMonthIso()
   const [detailDate, setDetailDate] = useState<string | null>(null)
   /** The warning whose badge opened the detail drawer — its reason shows there. */
   const [detailWarning, setDetailWarning] = useState<WarningNoticeRow | null>(null)
@@ -217,6 +219,12 @@ export default function MyAttendancePage() {
   const warningsQuery = useQuery({
     queryKey: ['portal', 'warnings', employeeId],
     queryFn: ({ signal }) => listWarningNotices(employeeId!, signal),
+    enabled: employeeId != null,
+  })
+  // The published shift plan for the current month — the source of the working/off split.
+  const scheduleQuery = useQuery({
+    queryKey: ['portal', 'schedule', employeeId, currentMonth],
+    queryFn: ({ signal }) => getOwnSchedule(employeeId!, { month: currentMonth }, signal),
     enabled: employeeId != null,
   })
 
@@ -303,9 +311,29 @@ export default function MyAttendancePage() {
   const detailLeave = detailDate ? leaveOn(detailDate) : null
   const detailOthers = detailDate ? requestsOn(detailDate).filter((r) => r !== detailLeave) : []
 
+  // Working vs off days for the current month, straight from the published shift plan.
+  const scheduleDays = scheduleQuery.data?.days ?? []
+  const scheduleReady = scheduleDays.length > 0
+  const workingDays = scheduleDays.filter((day) => !day.isOff).length
+  const weeklyOffDays = scheduleDays.filter((day) => day.isOff).length
+  // Approved leave days this month — the same rule the day rows use to paint a leave badge.
+  const leaveCounts = (() => {
+    const [yearNumber, monthNumber] = currentMonth.split('-').map(Number)
+    const daysInMonth = new Date(yearNumber, monthNumber, 0).getDate()
+    let sick = 0
+    let annual = 0
+    for (let day = 1; day <= daysInMonth; day += 1) {
+      const date = `${currentMonth}-${String(day).padStart(2, '0')}`
+      const leave = leaveOn(date)
+      if (leave?.type === 'Sick Leave') sick += 1
+      else if (leave?.type === 'Annual Leave') annual += 1
+    }
+    return { sick, annual }
+  })()
+
   return (
     <div className="space-y-2 pb-2">
-      {/* Today's view — the dashboard session card is the real read-only display */}
+      {/* Month summary — working vs off days come straight from the published shift plan */}
       {dashboard && (
         <div className="card overflow-hidden">
           <div className="flex flex-col justify-between gap-1 border-b border-charcoal-100 px-4 py-2 sm:flex-row sm:items-center">
@@ -319,7 +347,7 @@ export default function MyAttendancePage() {
               Read-only
             </span>
           </div>
-          <div className="grid grid-cols-2 gap-px bg-charcoal-100 lg:grid-cols-5">
+          <div className="grid grid-cols-2 gap-px bg-charcoal-100 lg:grid-cols-7">
             <div className="bg-white px-3 py-2.5">
               <p className="bento-label mb-1 text-charcoal-400">{t('ASSIGNED SHIFT')}</p>
               <p className="text-sm font-bold leading-snug text-charcoal-900">{dashboard.todayShift?.shiftName ?? 'Off'}</p>
@@ -348,6 +376,16 @@ export default function MyAttendancePage() {
               <p className="text-sm font-bold leading-snug text-charcoal-900">{workedLabel(workedToday)}</p>
               <p className="mt-0.5 text-[10px] leading-snug text-charcoal-500">{today?.checkOut ? 'day complete' : 'updating live'}</p>
             </div>
+            <div className="bg-white px-3 py-2.5">
+              <p className="bento-label mb-1 text-charcoal-400">{t('WORKING DAYS')}</p>
+              <p className="text-sm font-bold leading-snug text-brand-600">{scheduleReady ? workingDays : '—'}</p>
+              <p className="mt-0.5 text-[10px] leading-snug text-charcoal-500">{monthLabel(currentMonth)}</p>
+            </div>
+            <div className="bg-white px-3 py-2.5">
+              <p className="bento-label mb-1 text-charcoal-400">{t('WEEKLY OFF')}</p>
+              <p className="text-sm font-bold leading-snug text-charcoal-900">{scheduleReady ? weeklyOffDays : '—'}</p>
+              <p className="mt-0.5 text-[10px] leading-snug text-charcoal-500">{monthLabel(currentMonth)}</p>
+            </div>
             <div className="col-span-2 bg-white px-3 py-2.5 lg:col-span-1">
               <p className="bento-label mb-1 text-charcoal-400">{t('ATTENDANCE STATUS')}</p>
               <div className="mt-0.5">
@@ -359,17 +397,16 @@ export default function MyAttendancePage() {
         </div>
       )}
 
-      {/* Stats row — one straight line of seven boxes on phones, so nothing is
+      {/* Stats row — one straight line of six boxes on phones, so nothing is
           pushed to a second row or clipped by the page edge. */}
       {dashboard && (
-        <div className="grid grid-cols-7 gap-1 sm:gap-2">
-          <StatPill value={`${Math.round(dashboard.monthSummary.rate)}%`} label={t('Attendance Rate')} color="text-brand-700" accent="border-s-brand-500" />
-          <StatPill value={dashboard.monthSummary.present} label={t('Present')} color="text-brand-600" accent="border-s-brand-500" />
-          <StatPill value={dashboard.monthSummary.late} label={t('Late')} color="text-yellow-600" accent="border-s-yellow-500" />
+        <div className="grid grid-cols-6 gap-1 sm:gap-2">
+          <StatPill value={dashboard.monthSummary.present} label={t('Actual Attendance')} color="text-brand-600" accent="border-s-brand-500" />
           <StatPill value={dashboard.monthSummary.absent} label={t('Absent')} color="text-red-600" accent="border-s-red-500" />
+          <StatPill value={dashboard.monthSummary.late} label={t('Late')} color="text-yellow-600" accent="border-s-yellow-500" />
           <StatPill value={dashboard.monthSummary.earlyCheckout} label={t('Early Out')} color="text-blue-600" accent="border-s-blue-500" />
-          <StatPill value={dashboard.monthSummary.missingCheckout} label={t('Missing Out')} color="text-charcoal-600" accent="border-s-charcoal-400" />
-          <StatPill value={dashboard.monthSummary.coverDays} label={t('Cover days')} color="text-violet-600" accent="border-s-violet-500" />
+          <StatPill value={leaveCounts.sick} label={t('Sick leave')} color="text-violet-600" accent="border-s-violet-500" />
+          <StatPill value={leaveCounts.annual} label={t('Annual leave')} color="text-emerald-600" accent="border-s-emerald-500" />
         </div>
       )}
 

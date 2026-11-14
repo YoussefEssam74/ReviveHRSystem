@@ -70,6 +70,8 @@ const STATUS_COLORS: Record<string, BadgeColor> = {
   disabled: 'gray',
   archived: 'gray',
   'day off': 'blue',
+  'annual leave': 'blue',
+  'sick leave': 'orange',
   open: 'blue',
   'off day': 'blue',
   // Evaluation results + server enum names (deal with .ToString() payloads)

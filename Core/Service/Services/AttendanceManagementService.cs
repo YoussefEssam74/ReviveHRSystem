@@ -5,6 +5,8 @@ using DomainLayer.Models.AttendanceModule;
 using DomainLayer.Models.AttendanceModule.Enums;
 using DomainLayer.Models.EmployeeModule;
 using DomainLayer.Models.EmployeeModule.Enums;
+using DomainLayer.Models.PayrollModule;
+using DomainLayer.Models.PayrollModule.Enums;
 using DomainLayer.Models.RequestModule.Enums;
 using DomainLayer.Models.SchedulingModule;
 using DomainLayer.Models.UserModule;
@@ -108,6 +110,7 @@ namespace Service.Services
             }
 
             var rows = await ComposeRowsAsync(employees, from, to, cancellationToken);
+            await AttachDayDeductionsAsync(rows, from, to, cancellationToken);
 
             var statusFilter = string.IsNullOrWhiteSpace(query.Status) ? null : query.Status.Trim();
             if (statusFilter is not null)
@@ -132,6 +135,51 @@ namespace Service.Services
                 Total = total,
                 TotalPages = total == 0 ? 0 : (int)Math.Ceiling(total / (double)pageSize),
             };
+        }
+
+        /// <summary>
+        /// Prices the viewed days with the attendance → deduction bridge and hangs each
+        /// row's deduction on the row. A late arrival and an unexcused absence are settled
+        /// here, on the attendance board, instead of through the requests desk, so the
+        /// manager sees the money on the same screen as the exception. Idempotent per day
+        /// (the sweep itself never double-raises).
+        /// </summary>
+        private async Task AttachDayDeductionsAsync(
+            List<AttendanceListItem> rows, DateOnly from, DateOnly to, CancellationToken cancellationToken)
+        {
+            if (rows.Count == 0)
+            {
+                return;
+            }
+
+            var employeeIds = rows.Select(r => r.EmployeeId).Distinct().ToArray();
+            await _deductionSweep.SweepAsync(employeeIds, from, to, cancellationToken);
+
+            var candidates = await _unitOfWork.GetRepository<DeductionCandidate, int>()
+                .GetAllAsync(new DeductionCandidatesByEmployeesSpec(employeeIds), cancellationToken);
+
+            // One candidate per (employee, day) — the unique index guarantees it; the
+            // newest wins if a legacy row ever slipped through.
+            var byDay = candidates
+                .GroupBy(d => (d.EmployeeId, PayrollService.CandidateDayOf(d)))
+                .ToDictionary(g => g.Key, g => g.OrderByDescending(d => d.Id).First());
+
+            foreach (var row in rows)
+            {
+                if (DateOnly.TryParseExact(
+                        row.Date, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var day)
+                    && byDay.TryGetValue((row.EmployeeId, day), out var candidate))
+                {
+                    row.Deduction = new AttendanceDeductionDto
+                    {
+                        Id = candidate.Id,
+                        Amount = candidate.Amount,
+                        Days = candidate.DeductionDays,
+                        Status = candidate.Status.ToString(),
+                        Reason = candidate.Reason,
+                    };
+                }
+            }
         }
 
         // ------------------------------------------------------------------
@@ -400,7 +448,7 @@ namespace Service.Services
                 .GetAllAsync(new ShiftAssignmentsByEmployeeIdsRangeSpec(employeeIds, from, to), cancellationToken);
             var assignmentIndex = assignments.ToDictionary(a => (a.EmployeeId, a.Date));
 
-            var dayOffDates = await LoadApprovedDayOffDatesAsync(employeeIds, from, to, cancellationToken);
+            var leaveByDate = await LoadApprovedLeaveByDateAsync(employeeIds, from, to, cancellationToken);
             var coverByEmployeeDate = await LoadCoverDaysByEmployeeDateAsync(employeeIds, from, to, cancellationToken);
 
             var today = Today();
@@ -451,7 +499,7 @@ namespace Service.Services
                         continue;
                     }
 
-                    rows.Add(DeriveRow(employee, date, shiftLabel, dayOffDates, today));
+                    rows.Add(DeriveRow(employee, date, shiftLabel, leaveByDate, today));
                 }
             }
 
@@ -462,9 +510,12 @@ namespace Service.Services
                 .ToList();
         }
 
-        /// <summary>A stored punch-less day: Off (scheduled off / approved day off / on leave), Scheduled (future), or Absent.</summary>
+        /// <summary>
+        /// A punch-less day: approved Sick/Annual leave reports itself (never Absent), then Off
+        /// (scheduled off / approved day off / on leave), Scheduled (future), or Absent.
+        /// </summary>
         private static AttendanceListItem DeriveRow(
-            Employee employee, DateOnly date, string shiftLabel, Dictionary<int, HashSet<DateOnly>> dayOffDates, DateOnly today)
+            Employee employee, DateOnly date, string shiftLabel, Dictionary<int, Dictionary<DateOnly, string>> leaveByDate, DateOnly today)
         {
             string status;
             string? notes;
@@ -479,15 +530,15 @@ namespace Service.Services
                 status = "Scheduled";
                 notes = "Upcoming shift";
             }
+            else if (leaveByDate.TryGetValue(employee.Id, out var leaveDays) && leaveDays.TryGetValue(date, out var leaveLabel))
+            {
+                status = leaveLabel;
+                notes = leaveLabel == "Off" ? "Day Off approved" : "Approved leave";
+            }
             else if (shiftLabel == "Off")
             {
                 status = "Off";
                 notes = "Scheduled off";
-            }
-            else if (dayOffDates.TryGetValue(employee.Id, out var days) && days.Contains(date))
-            {
-                status = "Off";
-                notes = "Day Off approved";
             }
             else if (employee.Status == EmployeeStatus.OnLeave)
             {
@@ -513,25 +564,27 @@ namespace Service.Services
             };
         }
 
-        private async Task<Dictionary<int, HashSet<DateOnly>>> LoadApprovedDayOffDatesAsync(
+        private async Task<Dictionary<int, Dictionary<DateOnly, string>>> LoadApprovedLeaveByDateAsync(
             int[] employeeIds, DateOnly from, DateOnly to, CancellationToken cancellationToken)
         {
             var requests = await _unitOfWork.GetRepository<DomainLayer.Models.RequestModule.EmployeeRequest, int>()
                 .GetAllAsync(new ApprovedLeaveByEmployeeIdsSpec(employeeIds, from, to), cancellationToken);
 
-            var map = new Dictionary<int, HashSet<DateOnly>>();
+            var map = new Dictionary<int, Dictionary<DateOnly, string>>();
             foreach (var request in requests)
             {
                 var start = request.TargetStartDate ?? request.RequestDate;
                 var end = request.TargetEndDate ?? request.RequestDate;
-                if (!map.TryGetValue(request.EmployeeId, out var set))
+                if (!map.TryGetValue(request.EmployeeId, out var byDate))
                 {
-                    map[request.EmployeeId] = set = [];
+                    map[request.EmployeeId] = byDate = [];
                 }
 
+                // Sick / annual leave report themselves; every other approved absence is a plain off day.
+                var label = request.Type is "Sick Leave" or "Annual Leave" ? request.Type : "Off";
                 for (var date = start; date <= end; date = date.AddDays(1))
                 {
-                    set.Add(date);
+                    byDate[date] = label;
                 }
             }
 
