@@ -49,8 +49,8 @@ export const teamSchedule: Record<string, string> = {
   'Start date must be on or before the end date.': 'يجب أن يكون تاريخ البداية في تاريخ النهاية أو قبله.',
   'A schedule already covers these dates ({{schedules}}). Delete it from the period strip first, or pick a different range.':
     'يوجد جدول يغطي هذه التواريخ بالفعل ({{schedules}}). احذفه من شريط الفترات أولًا، أو اختر نطاقًا مختلفًا.',
-  'Ranges longer than a week open in a 7-day view where every shift repeats on the same weekday of the following weeks — the “Show 30 days” button reveals the full range. A cycle already covering these dates will be rejected by the server.':
-    'النطاقات الأطول من أسبوع تُفتح في عرض 7 أيام تتكرر فيه كل وردية في نفس يوم الأسبوع من الأسابيع التالية — زر «عرض 30 يومًا» يكشف النطاق الكامل. وأي دورة تغطي هذه التواريخ بالفعل سيرفضها الخادم.',
+  'Ranges longer than a week open in the Week view — every shift repeats on the same weekday of the following weeks. Switch to Month to see the full range. A cycle already covering these dates will be rejected by the server.':
+    'النطاقات الأطول من أسبوع تُفتح في عرض «أسبوع» — تتكرر كل وردية في نفس يوم الأسبوع من الأسابيع التالية. بدّل إلى «شهر» لرؤية النطاق الكامل. وأي دورة تغطي هذه التواريخ بالفعل سيرفضها الخادم.',
 
   // Shift template manager
   'Shift Templates': 'قوالب الورديات',
@@ -89,4 +89,19 @@ export const teamSchedule: Record<string, string> = {
   // Compact meridiem markers in the mobile grid ("7a–3p")
   AM: 'ص',
   PM: 'م',
+
+  // De-noised toolbar: view switcher, overflow menu and the shortened hints.
+  Week: 'أسبوع',
+  'Days shown': 'الأيام المعروضة',
+  'Seven days — a painted weekday repeats weekly inside the cycle':
+    'سبعة أيام — يوم الأسبوع الملوَّن يتكرر أسبوعيًا داخل الدورة',
+  'Every day of the selected month': 'كل يوم في الشهر المحدد',
+  'New Schedule': 'جدول جديد',
+  'New Shift': 'وردية جديدة',
+  'Exit editing': 'إنهاء التعديل',
+  'Schedule actions': 'إجراءات الجدول',
+  '{{count}} days · {{start}} to {{end}}': '{{count}} يومًا · من {{start}} إلى {{end}}',
+  'Employees cannot see these shifts until you publish them.': 'لا يرى الموظفون هذه الورديات حتى تنشرها.',
+  'This schedule is published — saved edits reach employees immediately.':
+    'هذا الجدول منشور — التعديلات المحفوظة تصل إلى الموظفين فورًا.',
 }

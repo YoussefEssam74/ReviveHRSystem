@@ -5,6 +5,24 @@ export type RequestUrgency = 'Notice' | 'Urgent' | 'Review' | 'Normal'
 /** The catalog's balance-consuming types (plus the legacy "Day Off" label). */
 export const BALANCE_TYPES = ['Annual Leave', 'Day Off', 'Sick Leave']
 
+/**
+ * Every request type the HR catalog can raise. Filters show this whole list, not
+ * just the types an employee happens to have used so far.
+ */
+export const REQUEST_TYPE_CATALOG = [
+  'Annual Leave',
+  'Sick Leave',
+  'Late Attendance',
+  'Early Leave',
+  'Shift Swap',
+  'Weekly Off Swap',
+  'Check-in Correction',
+  'Salary Advance',
+  'Paid Holiday',
+  'Deduction Correction',
+  'Resignation',
+]
+
 /** Older rows store the enum-ish names; the cards print the mock's spaced labels. */
 const LEGACY_TYPE_LABELS: Record<string, string> = {
   DayOff: 'Day Off',

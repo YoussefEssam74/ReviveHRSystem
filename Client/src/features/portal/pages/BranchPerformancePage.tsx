@@ -62,6 +62,8 @@ function PerformanceWorkspace() {
   const { t } = useTranslation()
   const { me } = usePortalSession()
   const [month, setMonth] = useState<MonthKey>('all')
+  const [search, setSearch] = useState('')
+  const [status, setStatus] = useState('All')
   // Who is drilled into, and on which tab, lives in the URL: the sidebar's action
   // badge deep-links straight to the employee that still owes a decision, and the
   // view survives a refresh or a back button.
@@ -162,14 +164,23 @@ function PerformanceWorkspace() {
     [roster, inbox, deductions, warnings, bonuses, evaluations, leavingIds, month],
   )
 
-  const totals = useMemo(
-    () => ({
-      requests: rows.reduce((sum, row) => sum + row.requests, 0),
-      deductions: rows.reduce((sum, row) => sum + row.deductionTotal, 0),
-      needsReview: rows.filter((row) => row.needsReview).length,
-    }),
-    [rows],
+  // Statuses actually present on this roster — a hard-coded list would offer
+  // filters that can never match.
+  const statusOptions = useMemo(
+    () => [...new Set(roster.map((row) => row.status))].filter(Boolean).sort((a, b) => a.localeCompare(b)),
+    [roster],
   )
+
+  const visibleRows = useMemo(() => {
+    const needle = search.trim().toLowerCase()
+    return rows.filter((row) => {
+      if (status !== 'All' && row.employee.status !== status) return false
+      if (!needle) return true
+      return [row.employee.name, row.employee.employeeNumber, row.employee.position].some((value) =>
+        value?.toLowerCase().includes(needle),
+      )
+    })
+  }, [rows, search, status])
 
   if (rosterQuery.isLoading || inboxQuery.isLoading || deductionsQuery.isLoading || warningsQuery.isLoading || bonusesQuery.isLoading || evaluationsQuery.isLoading) {
     return <LoadingState />
@@ -209,7 +220,6 @@ function PerformanceWorkspace() {
   }
 
   const drillRow = rows.find((row) => row.employee.id === drillId) ?? null
-  const monthLabel = month === 'all' ? null : months.includes(month as string) ? month : null
 
   if (drillRow) {
     return (
@@ -230,34 +240,38 @@ function PerformanceWorkspace() {
 
   return (
     <div className="space-y-3">
-      {/* Title + month filter share one line so the roster stays high on a phone.
-          The title wraps instead of truncating when the filter needs its width. */}
-      <div className="flex items-center justify-between gap-2">
+      {/* Title + filters share one line so the roster stays high on a phone:
+          search leads, then the status and month scope. */}
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <h1 className="min-w-0 text-base font-bold leading-tight text-charcoal-900 sm:text-xl">{t('Employees Performance')}</h1>
-        <div className="w-40 shrink-0 sm:w-44">
-          <MonthSelect month={month} months={months} onChange={setMonth} />
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+          <input
+            type="search"
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder={t('Search name, ID or position...')}
+            aria-label={t('Search employees')}
+            className="form-input sm:max-w-sm sm:flex-1"
+          />
+          <div className="w-40 shrink-0">
+            <select
+              className="form-input"
+              aria-label={t('Filter by status')}
+              value={status}
+              onChange={(event) => setStatus(event.target.value)}
+            >
+              <option value="All">{t('All statuses')}</option>
+              {statusOptions.map((option) => (
+                <option key={option} value={option}>
+                  {t(humanize(option))}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="w-40 shrink-0 sm:w-44">
+            <MonthSelect month={month} months={months} onChange={setMonth} />
+          </div>
         </div>
-      </div>
-
-      {/* The four real stat tiles — one straight row on phones: a 2×2 grid read
-          as four separate cards and pushed the roster off the first screen. */}
-      <div className="grid grid-cols-4 gap-1.5 sm:gap-2">
-        <PerfTile accent="border-s-brand-500" label={t('Employees')} value={String(roster.length)} valueClass="text-brand-700" />
-        <PerfTile
-          label={`${t('Requests')}${monthLabel ? ` · ${monthLabel}` : ''}`}
-          value={String(totals.requests)}
-        />
-        <PerfTile
-          label={`${t('Deductions')}${monthLabel ? ` · ${monthLabel}` : ''}`}
-          value={formatNumber(totals.deductions)}
-          unit="EGP"
-          valueClass={totals.deductions ? 'text-red-600' : 'text-charcoal-900'}
-        />
-        <PerfTile
-          label={t('Need review')}
-          value={String(totals.needsReview)}
-          valueClass={totals.needsReview ? 'text-orange-600' : 'text-charcoal-900'}
-        />
       </div>
 
       {rows.length === 0 ? (

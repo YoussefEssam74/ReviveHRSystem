@@ -4,9 +4,9 @@ import { OMAR, PASSWORD } from '../support/api'
 /**
  * UI flows for the reported bugs, driven through the real SPA on :5173:
  *   - login + the multi-gym challenge
- *   - the "Assign Shifts" toolbar button now renders for a Branch Manager even
- *     on a Published cycle (disabled with an explanatory tooltip) instead of
- *     vanishing, and "New Template" is reachable
+ *   - the "Assign Shifts" toolbar button stays visible for a Branch Manager
+ *     even on a Published cycle, and the shift manager ("New Shift") is
+ *     reachable from the toolbar overflow menu
  *   - the template modal posts the <input type="time"> HH:mm payload and
  *     succeeds instead of a validation error
  *   - switching gyms remounts the portal with no "Employee not found" toast
@@ -37,20 +37,21 @@ test.describe('login + navigation', () => {
 })
 
 test.describe('schedule page — reported bug regressions', () => {
-  test('Branch Manager sees Assign Shifts + New Template on a Published cycle', async ({ page }) => {
+  test('Branch Manager sees Assign Shifts + the shift manager on a Published cycle', async ({ page }) => {
     await login(page, OMAR, 'Revive Main Gym')
     await page.goto('/employee/team/schedule')
     await expect(page.getByRole('heading', { name: 'Branch Schedule' })).toBeVisible({ timeout: 15_000 })
 
-    // The button must EXIST for a manager regardless of draft/publish state.
+    // The button must EXIST for a manager regardless of draft/publish state,
+    // and stays actionable: edits on a published cycle reach employees when saved.
     const assign = page.getByRole('button', { name: /Assign Shifts/ })
     await expect(assign).toBeVisible()
-    // gym1's current cycle is Published -> disabled but present, with the reason.
-    await expect(assign).toBeDisabled()
-    await expect(assign).toHaveAttribute('title', /read-only/)
+    await expect(assign).toBeEnabled()
+    await expect(assign).toHaveAttribute('title', /Paint shifts in the grid below/)
 
-    // "New Template" is reachable (the template manager opens).
-    await page.getByRole('button', { name: 'New Template' }).click()
+    // "New Shift" opens the template manager, from the toolbar overflow menu.
+    await page.getByRole('button', { name: 'Schedule actions' }).click()
+    await page.getByRole('menuitem', { name: 'New Shift' }).click()
     await expect(page.getByText('Create new template')).toBeVisible()
   })
 
@@ -58,7 +59,8 @@ test.describe('schedule page — reported bug regressions', () => {
     await login(page, OMAR, 'Revive Main Gym')
     await page.goto('/employee/team/schedule')
     await expect(page.getByRole('heading', { name: 'Branch Schedule' })).toBeVisible({ timeout: 15_000 })
-    await page.getByRole('button', { name: 'New Template' }).click()
+    await page.getByRole('button', { name: 'Schedule actions' }).click()
+    await page.getByRole('menuitem', { name: 'New Shift' }).click()
 
     const stamp = Date.now()
     await page.getByLabel('Template Name').fill(`PW UI ${stamp}`)

@@ -70,3 +70,4 @@ Tests/Performance/
 # Uploaded employee documents (runtime storage, never committed)
 ReviveHRSystem.Web/App_Data/
 .deslop/
+.github/prompts/

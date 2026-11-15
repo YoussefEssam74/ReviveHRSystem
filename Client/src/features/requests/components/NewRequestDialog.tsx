@@ -10,23 +10,11 @@ import { describeApiError } from '../../../lib/api-client'
 import { cn } from '../../../lib/utils'
 import { useEmployees } from '../../employees/hooks/useEmployees'
 import { getEmployeeLeaveBalance } from '../api/requests.api'
-import { BALANCE_TYPES } from '../lib/request-status'
+import { BALANCE_TYPES, REQUEST_TYPE_CATALOG } from '../lib/request-status'
 import { useCreateRequest } from '../hooks/useRequests'
 
 /** The HR form's type list — RequestTypeCatalog labels plus resignation. */
-const REQUEST_TYPES = [
-  'Annual Leave',
-  'Sick Leave',
-  'Late Attendance',
-  'Early Leave',
-  'Shift Swap',
-  'Weekly Off Swap',
-  'Check-in Correction',
-  'Salary Advance',
-  'Paid Holiday',
-  'Deduction Correction',
-  'Resignation',
-]
+const REQUEST_TYPES = REQUEST_TYPE_CATALOG
 
 const today = () => new Date().toISOString().slice(0, 10)
 

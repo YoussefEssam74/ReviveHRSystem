@@ -34,6 +34,10 @@ import {
   formatTimeLabel,
 } from "../../../lib/format";
 import { cn } from "../../../lib/utils";
+import {
+  REQUEST_TYPE_CATALOG,
+  requestTypeLabel,
+} from "../../requests/lib/request-status";
 
 type StatusFilter = "All" | "Pending" | "Approved" | "Rejected";
 
@@ -332,13 +336,21 @@ function RequestsWorkspace({
   const [currentMonth] = useState(currentMonthIso);
   const [month, setMonth] = useState(currentMonth);
 
-  const typeOptions = useMemo(
-    () =>
-      Array.from(new Set(requests.map((request) => request.type))).sort((a, b) =>
-        a.localeCompare(b),
-      ),
-    [requests],
-  );
+  // Every catalog type, not just the ones this employee used: the filter is a
+  // way to look for a type, so an unused one must still be selectable. Legacy
+  // spellings ("SickLeave") are folded onto their label and anything the catalog
+  // does not know is appended rather than dropped.
+  const typeOptions = useMemo(() => {
+    const extras = new Set<string>();
+    for (const request of requests) {
+      const label = requestTypeLabel(request.type);
+      if (!REQUEST_TYPE_CATALOG.includes(label)) extras.add(label);
+    }
+    return [
+      ...REQUEST_TYPE_CATALOG,
+      ...[...extras].sort((a, b) => a.localeCompare(b)),
+    ];
+  }, [requests]);
 
   // Months that actually hold a request (a range fills every month it covers),
   // newest first, with the running month always present.
@@ -366,7 +378,8 @@ function RequestsWorkspace({
   const scoped = useMemo(
     () =>
       requests.filter((request) => {
-        if (typeFilter !== "All" && request.type !== typeFilter) return false;
+        if (typeFilter !== "All" && requestTypeLabel(request.type) !== typeFilter)
+          return false;
         if (month) {
           // "yyyy-MM" compares lexicographically; a range matches when it covers the month.
           const startMonth = request.requestedDate.slice(0, 7);
@@ -474,7 +487,7 @@ function RequestsWorkspace({
               <option value="All">{t("All types")}</option>
               {typeOptions.map((option) => (
                 <option key={option} value={option}>
-                  {option}
+                  {t(option)}
                 </option>
               ))}
             </select>

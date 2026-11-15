@@ -120,6 +120,7 @@ export const portal: Record<string, string> = {
   Employee: 'الموظف',
   'Team member': 'عضو الفريق',
   Position: 'المنصب',
+  'Job Title': 'المسمى الوظيفي',
   Notes: 'ملاحظات',
   Reason: 'السبب',
   Description: 'الوصف',

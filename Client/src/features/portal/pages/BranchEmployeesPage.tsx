@@ -2,7 +2,7 @@ import { useState, useDeferredValue } from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { ChevronRight, Plus, Zap } from 'lucide-react'
+import { Plus, Zap } from 'lucide-react'
 import {
   getAttendanceGrid,
   getEmployeeDirectory,
@@ -21,19 +21,15 @@ import { useToast } from '../../../components/ui/toast'
 import { usePortalSession } from '../../../contexts/PortalSessionContext'
 import { describeApiError } from '../../../lib/api-client'
 import { fetchAllPages } from '../../../lib/paged'
-import { cn } from '../../../lib/utils'
 import { formatTimeOfDay, humanize } from '../../../lib/format'
 
 /**
  * Employees directory (mock §11 renderEmployees): the branch roster with the
- * Actions palette launcher, "Create Request for an Employee" filing and live
- * today-status columns built from the attendance grid. Clicking a row opens
- * the full employee profile.
+ * Actions palette launcher, "Create Request for an Employee" filing and
+ * row-level actions. Clicking a row opens the full employee profile.
  */
 
 const EMPLOYMENT_STATUSES = ['Active', 'OnLeave', 'Suspended', 'Terminated'] as const
-
-const WORKING_STATUSES = new Set(['On Time', 'Late', 'Present', 'Early Checkout', 'Missing Checkout'])
 
 /** Local "today" DateOnly in yyyy-MM-dd ("1928-01-01" safe: no timezone drift). */
 function todayIso(): string {
@@ -72,7 +68,8 @@ function EmployeesWorkspace() {
   const [status, setStatus] = useState<(typeof EMPLOYMENT_STATUSES)[number] | 'All'>('All')
   const [page, setPage] = useState(1)
   const [paletteOpen, setPaletteOpen] = useState(false)
-  const [createRequestOpen, setCreateRequestOpen] = useState(false)
+  /** closed = undefined, open with the employee picker = null, pre-selected = id. */
+  const [createRequestFor, setCreateRequestFor] = useState<number | null | undefined>(undefined)
   const today = todayIso()
 
   const directoryQuery = useQuery({
@@ -90,7 +87,7 @@ function EmployeesWorkspace() {
   })
 
   // One day of the composed attendance grid scopes to the caller's gym; rows
-  // join the directory by employeeId for the "today" columns.
+  // join the directory by employeeId for the mobile card's today summary.
   const gridQuery = useQuery({
     queryKey: ['portal', 'grid', activeGymId, today],
     queryFn: ({ signal }) => getAttendanceGrid({ date: today, page: 1, pageSize: 200, signal }),
@@ -115,12 +112,6 @@ function EmployeesWorkspace() {
   }
 
   const total = envelope?.totalCount ?? rows.length
-  const onShiftCount = gridRows.reduce(
-    (count, row) => count + (WORKING_STATUSES.has(row.status) ? 1 : 0),
-    0,
-  )
-  const scheduledCount = gridRows.filter((row) => row.status === 'Scheduled').length
-  const offCount = gridRows.filter((row) => row.status === 'Off').length
 
   const canRaise = can('attendance.edit') || can('employees.edit')
   const canOpenPalette =
@@ -151,7 +142,7 @@ function EmployeesWorkspace() {
             <Button
               size="sm"
               variant="primary"
-              onClick={() => setCreateRequestOpen(true)}
+              onClick={() => setCreateRequestFor(null)}
               aria-label={t('Create Request')}
               title={t('Create Request')}
             >
@@ -160,13 +151,6 @@ function EmployeesWorkspace() {
             </Button>
           )}
         </div>
-      </div>
-
-      <div className="grid grid-cols-4 gap-1.5 sm:gap-2">
-        <StatTile value={total} label={t('Employees')} accent />
-        <StatTile value={onShiftCount} label={t('On shift')} />
-        <StatTile value={scheduledCount} label={t('Upcoming today')} />
-        <StatTile value={offCount} label={t('Off today')} />
       </div>
 
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
@@ -178,7 +162,9 @@ function EmployeesWorkspace() {
             setPage(1)
           }}
           placeholder={t('Search name, email or phone...')}
-          className="form-input sm:max-w-xs"
+          // Search leads the row and the status filter sits at a fixed 10rem,
+          // so the two read as one control group instead of two odd widths.
+          className="form-input sm:max-w-sm sm:flex-1"
           aria-label={t('Search employees')}
         />
         <select
@@ -210,12 +196,11 @@ function EmployeesWorkspace() {
             <thead>
               <tr>
                 <th>{t('Employee')}</th>
-                <th>{t('Position')}</th>
+                <th>{t('Job Title')}</th>
                 <th>{t('Status')}</th>
-                <th>{t('Today')}</th>
-                <th className="text-end">{t('In')}</th>
-                <th className="text-end">{t('Out')}</th>
-                <th className="w-8" />
+                <th>
+                  <span className="block text-end">{t('Actions')}</span>
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -223,7 +208,10 @@ function EmployeesWorkspace() {
                 <EmployeeRow
                   key={row.id}
                   row={row}
-                  todayRow={gridByEmployee.get(row.id) ?? null}
+                  canOpenPalette={canOpenPalette}
+                  canCreateRequest={can('requests.view') && row.status !== 'Terminated'}
+                  onActions={() => setPaletteOpen(true)}
+                  onCreateRequest={() => setCreateRequestFor(row.id)}
                   onOpen={() =>
                     navigate(`/employee/branch/employees/${row.id}`, {
                       state: {
@@ -285,7 +273,12 @@ function EmployeesWorkspace() {
       )}
 
       <BranchActionsPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
-      {createRequestOpen && <CreateRequestForEmployeeModal onClose={() => setCreateRequestOpen(false)} />}
+      {createRequestFor !== undefined && (
+        <CreateRequestForEmployeeModal
+          initialEmployeeId={createRequestFor}
+          onClose={() => setCreateRequestFor(undefined)}
+        />
+      )}
 
       {gridQuery.error && !gridQuery.data && (
         <p className="text-[10px] text-charcoal-400">
@@ -296,29 +289,22 @@ function EmployeesWorkspace() {
   )
 }
 
-function StatTile({ value, label, accent }: { value: number; label: string; accent?: boolean }) {
-  return (
-    <div
-      className={cn(
-        'min-w-0 rounded-xl border border-charcoal-200 bg-white px-1 py-2 text-center sm:p-3',
-        accent && 'border-s-4 border-s-brand-500',
-      )}
-    >
-      <p className={cn('text-base font-bold leading-tight sm:text-xl', accent ? 'text-brand-700' : 'text-charcoal-900')}>{value}</p>
-      <p className="text-[9px] leading-tight text-charcoal-500 sm:text-[10px]">{label}</p>
-    </div>
-  )
-}
-
 function EmployeeRow({
   row,
-  todayRow,
+  canOpenPalette,
+  canCreateRequest,
+  onActions,
+  onCreateRequest,
   onOpen,
 }: {
   row: EmployeeDirectoryRow
-  todayRow: AttendanceGridRow | null
+  canOpenPalette: boolean
+  canCreateRequest: boolean
+  onActions: () => void
+  onCreateRequest: () => void
   onOpen: () => void
 }) {
+  const { t } = useTranslation()
   return (
     <tr className="cursor-pointer hover:bg-charcoal-50/50" onClick={onOpen}>
       <td>
@@ -336,11 +322,21 @@ function EmployeeRow({
       <td>
         <StatusBadge status={employmentLabel(row.status)} />
       </td>
-      <td>{todayRow ? <StatusBadge status={todayRow.status} /> : <span className="text-xs text-charcoal-400">—</span>}</td>
-      <td className="text-end text-xs">{formatTimeOfDay(todayRow?.checkIn)}</td>
-      <td className="text-end text-xs">{formatTimeOfDay(todayRow?.checkOut)}</td>
-      <td>
-        <ChevronRight className="ms-auto h-3.5 w-3.5 text-charcoal-300 rtl:rotate-180" />
+      <td className="text-end">
+        <div className="flex items-center justify-end gap-1" onClick={(event) => event.stopPropagation()}>
+          {canOpenPalette && (
+            <Button size="sm" variant="ghost" onClick={onActions} title={t('Actions')}>
+              <Zap className="h-3.5 w-3.5" aria-hidden="true" />
+              <span className="sr-only">{t('Actions')}</span>
+            </Button>
+          )}
+          {canCreateRequest && (
+            <Button size="sm" variant="ghost" onClick={onCreateRequest} title={t('Create Request')}>
+              <Plus className="h-3.5 w-3.5" aria-hidden="true" />
+              <span className="sr-only">{t('Create Request')}</span>
+            </Button>
+          )}
+        </div>
       </td>
     </tr>
   )
@@ -388,12 +384,18 @@ function DirectoryCard({
 
 /* Create Request for an Employee (mock §11 openNewEmployeeRequest) ---------- */
 
-function CreateRequestForEmployeeModal({ onClose }: { onClose: () => void }) {
+function CreateRequestForEmployeeModal({
+  initialEmployeeId,
+  onClose,
+}: {
+  initialEmployeeId?: number | null
+  onClose: () => void
+}) {
   const { t } = useTranslation()
   const { me } = usePortalSession()
   const activeGymId = me?.activeGym?.gymId
   const { toast } = useToast()
-  const [employeeId, setEmployeeId] = useState('')
+  const [employeeId, setEmployeeId] = useState(initialEmployeeId ? String(initialEmployeeId) : '')
   const [typeId, setTypeId] = useState('')
   const [requestedDate, setRequestedDate] = useState(todayIso())
   const [endDate, setEndDate] = useState('')

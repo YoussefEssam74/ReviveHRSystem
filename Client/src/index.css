@@ -422,7 +422,149 @@ body {
 .data-table-compact th { padding: 0.25rem 0.5rem; font-size: 0.6875rem; }
 .data-table-compact td { padding: 0.25rem 0.5rem; font-size: 0.75rem; }
 
-/* Form styles */
+/* ==================== Schedule roster table ====================
+   `.data-table` draws charcoal-100 hairlines, which disappear against the card
+   surface in both themes. The roster is a day-by-employee matrix, so it draws
+   visible row and column rules; nothing else about the table changes.
+   NB: class name must stay unique — `.schedule-grid` is a legacy div-grid. */
+.roster-grid thead th,
+.roster-grid tbody td {
+  border-bottom: 1px solid var(--color-charcoal-300);
+}
+/* Tight vertical rhythm: the two-line shift chip already carries the
+   hierarchy, so denser rows fit more of the roster in the same height. */
+.roster-grid tbody td {
+  padding-block: 0.3125rem;
+}
+.roster-grid thead th + th,
+.roster-grid tbody td + td {
+  border-inline-start: 1px solid var(--color-charcoal-200);
+}
+.roster-grid tbody tr:last-child td {
+  border-bottom: 1px solid var(--color-charcoal-300);
+}
+/* The schedule page owns its own scrolling: pin the shell so the browser window
+   never scrolls, and the roster scrolls inside the card instead. */
+@media (min-width: 64rem) {
+  main:has(> .schedule-page) {
+    overflow: hidden;
+  }
+}
+
+/* The roster body scrolls inside the card, so the day headers (and the corner
+   cell, which is sticky on both axes) have to stay pinned. */
+.roster-grid thead th {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+}
+.roster-grid thead th:first-child {
+  z-index: 30;
+}
+
+/* ---- Roster cells -------------------------------------------------------
+   A cell's tint derives from its shift template's accent colour
+   (--shift-tone) mixed with the theme's own surface/text tokens, so one rule
+   stays readable in light and dark mode. The old inline pastels only worked
+   on a white card and glared out of the dark theme. */
+.shift-cell {
+  --shift-tone: var(--color-charcoal-500);
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  min-width: 4.75rem;
+  padding: 0.25rem 0.5rem;
+  border: 1px solid color-mix(in srgb, var(--shift-tone) 32%, transparent);
+  border-radius: 0.375rem;
+  background: color-mix(in srgb, var(--shift-tone) 12%, var(--color-white));
+  color: color-mix(in srgb, var(--shift-tone) 62%, var(--color-charcoal-900));
+  font-size: 0.6875rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.15;
+  white-space: nowrap;
+}
+/* Shift name leads; the hours are the quieter supporting detail. */
+.shift-cell__name {
+  max-width: 6.75rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.shift-cell__time {
+  font-size: 0.5625rem;
+  font-weight: 500;
+  opacity: 0.72;
+}
+/* Narrow columns (the mobile 7-day strip) drop the floor width and the
+   desktop type/padding scale. */
+.shift-cell--fit { min-width: 0; width: 100%; padding-inline: 0.125rem; font-size: 0.5625rem; }
+.shift-cell--empty {
+  background: transparent;
+  border-style: dashed;
+  border-color: color-mix(in srgb, var(--color-charcoal-400) 60%, transparent);
+  color: var(--color-charcoal-400);
+  font-weight: 500;
+  letter-spacing: 0.08em;
+}
+.shift-cell--off {
+  background: color-mix(in srgb, var(--color-charcoal-300) 30%, transparent);
+  border-color: color-mix(in srgb, var(--color-charcoal-400) 22%, transparent);
+  color: var(--color-charcoal-600);
+  letter-spacing: 0.06em;
+}
+
+/* ---- Roster day headers -------------------------------------------------
+   Weekday above the date (the calendar convention) keeps a 7–31 column grid
+   scannable. Weekends and today are the first things a manager looks for, so
+   they get a tint instead of being colour-only noise. */
+.roster-grid .roster-day {
+  padding: 0.375rem 0.25rem;
+  text-align: center;
+  vertical-align: bottom;
+  background: var(--color-charcoal-50);
+  text-transform: none;
+  letter-spacing: normal;
+}
+.roster-day-dow {
+  display: block;
+  font-size: 0.5625rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-charcoal-500);
+  line-height: 1;
+}
+.roster-day-num {
+  display: block;
+  margin-top: 0.3125rem;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-charcoal-800);
+  line-height: 1;
+}
+.roster-grid .roster-day--weekend {
+  background: color-mix(in srgb, var(--color-charcoal-200) 45%, var(--color-charcoal-50));
+}
+.roster-grid .roster-day--today {
+  background: color-mix(in srgb, var(--color-brand-500) 12%, var(--color-charcoal-50));
+  box-shadow: inset 0 -2px 0 var(--color-brand-500);
+}
+.roster-day--today .roster-day-dow,
+.roster-day--today .roster-day-num {
+  color: var(--color-brand-700);
+}
+.roster-col--today {
+  background: color-mix(in srgb, var(--color-brand-500) 6%, transparent);
+}
+
+/* Form styles — in the components layer so sizing utilities (`w-40`,
+   `max-w-*`, `flex-1`) can override the full-width default. Unlayered, that
+   `width: 100%` beat every utility and a `sm:w-40` filter stretched to the
+   whole row. */
+@layer components {
 .form-input {
   width: 100%;
   padding: 0.5rem 0.75rem;
@@ -484,6 +626,7 @@ body {
   box-shadow: 0 0 0 3px rgba(22, 163, 74, 0.1);
 }
 .form-error { font-size: 0.75rem; color: #dc2626; margin-top: 0.25rem; }
+}
 
 /* Buttons */
 .btn { display: inline-flex; align-items: center; justify-content: center; gap: 0.375rem; font-size: 0.8125rem; font-weight: 500; border-radius: 0.5rem; transition: all 0.15s; cursor: pointer; white-space: nowrap; line-height: 1; }
@@ -661,8 +804,13 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 /* ==================== Touch & mobile ergonomics ==================== */
 
 /* Icon-only controls get a 44px hit area on touch. Pointer-based so the
-   desktop layout keeps its compact paddings. */
-.touch-target { display: inline-flex; align-items: center; justify-content: center; }
+   desktop layout keeps its compact paddings.
+   The display rule lives in the components layer: unlayered CSS outranks every
+   Tailwind utility, so a bare `.touch-target` kept `lg:hidden` controls (the
+   header menu button, the drawer's close button) visible on desktop. */
+@layer components {
+  .touch-target { display: inline-flex; align-items: center; justify-content: center; }
+}
 
 @media (pointer: coarse) {
   .touch-target { min-width: 2.75rem; min-height: 2.75rem; }

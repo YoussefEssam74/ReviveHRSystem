@@ -1,9 +1,9 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type MutableRefObject } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type MutableRefObject, type ReactNode } from 'react'
 import { useLocation } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import type { TFunction } from 'i18next'
 import { useMutation, useQuery, useQueries, useQueryClient } from '@tanstack/react-query'
-import { AlertTriangle, CheckSquare, Pencil, Plus, RotateCcw, Square, Trash2 } from 'lucide-react'
+import { AlertTriangle, CheckSquare, MoreHorizontal, PaintBucket, Pencil, Plus, RotateCcw, Trash2 } from 'lucide-react'
 import {
   copyPreviousCycle,
   createShiftCycle,
@@ -30,7 +30,7 @@ import { Button } from '../../../components/ui/button'
 import { useToast } from '../../../components/ui/toast'
 import { usePortalSession } from '../../../contexts/PortalSessionContext'
 import { describeApiError } from '../../../lib/api-client'
-import { formatTimeOfDay } from '../../../lib/format'
+import { formatDate, formatTimeOfDay } from '../../../lib/format'
 import { cn } from '../../../lib/utils'
 import { invalidateScheduleQueries, scheduleKeys } from '../api/schedule-keys'
 
@@ -106,6 +106,12 @@ function monthLabelOf(ym: string, t: TFunction): string {
   return `${t(monthName)} ${y}`
 }
 
+/** ISO "2026-09-01" → "Sep 1" from the local calendar (no UTC day shift). */
+function isoDayLabel(iso: string): string {
+  const [y, m, d] = iso.split('-').map(Number)
+  return formatDate(new Date(y, m - 1, d), { withYear: 'auto' })
+}
+
 /** Every month of the current year plus any month a cycle touches (spanning years). */
 function monthWindow(cycles: ShiftCycleItem[], todayYm: string): string[] {
   const keys = new Set<string>([todayYm])
@@ -127,15 +133,11 @@ function monthLockOf(ym: string, todayYm: string): MonthLock {
   return ym === todayYm ? 'current' : ym < todayYm ? 'past' : 'planned'
 }
 
-const EDIT_CELL: Record<number, string> = {
-  0: 'bg-charcoal-50',
-  1: 'bg-charcoal-50/60',
-  2: 'bg-charcoal-50',
-  3: 'bg-charcoal-50/60',
-  4: 'bg-charcoal-50',
-  5: 'bg-brand-50/50',
-  6: 'bg-brand-50/50',
-}
+/** Week / Month switcher — labels are English keys, translated at render. */
+const VIEW_OPTIONS: { value: 'week' | 'month'; label: string }[] = [
+  { value: 'week', label: 'Week' },
+  { value: 'month', label: 'Month' },
+]
 
 /** "HH:mm" → "7:00 AM" / "7:00 ص". */
 function clock12(value: string): string {
@@ -258,62 +260,55 @@ function ScheduleWorkspace({
   if (cyclesQuery.error)
     return <ErrorState message={describeApiError(cyclesQuery.error)} onRetry={() => cyclesQuery.refetch()} />
 
-  const histDesc =
-    selLock === 'current'
-      ? t('Live month — pick a period below to view or assign shifts.')
-      : selLock === 'past'
-        ? t('Past month — published and draft schedules of that month.')
-        : t('Future month — plan ahead and assign shifts.')
-
   return (
-    <div className="space-y-3">
-      {/* Header */}
-      <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
+    // Desktop pins the page to the viewport: the roster body scrolls inside the
+    // card, so the title, filters and legend never leave the screen. The negative
+    // margins trim the shared <main> padding (16px top / 32px bottom) down to an
+    // 8px inset — still a visible frame, but the height goes to the table.
+    <div className="schedule-page flex flex-col gap-3 lg:-mb-6 lg:-mt-2 lg:h-[calc(100dvh-4.5rem)] lg:min-h-0 lg:gap-2">
+      {/* Header — one primary action; the rare cycle actions live in the toolbar menu. */}
+      <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center lg:shrink-0">
         <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-50 text-brand-600">
+          {/* brand-700 flips to a light green under .dark, so the glyph stays
+              legible on the dark tint instead of going dark-on-dark. */}
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-100 text-brand-700">
             <CalendarGlyph className="h-5 w-5" />
           </div>
-          <div>
-            <h1 className="text-xl font-bold text-charcoal-900">{title}</h1>
-            <p className="mt-0.5 text-xs text-charcoal-500">{histDesc}</p>
-          </div>
+          <h1 className="text-xl font-bold text-charcoal-900">{title}</h1>
         </div>
         <div className="flex flex-wrap items-center gap-1.5">
-          {manage && editing && (
-            <Button size="sm" variant="secondary" onClick={() => setTemplateOpen(true)}>
-              <Pencil className="h-3.5 w-3.5" aria-hidden="true" /> {t('New Template')}
-            </Button>
-          )}
           {manage && (
-            <Button size="sm" onClick={() => setCreateOpen(true)}>
-              <Plus className="h-3.5 w-3.5" aria-hidden="true" /> {t('Create New Schedule')}
+            <Button size="sm" variant="ghost" onClick={() => setCreateOpen(true)}>
+              <Plus className="h-3.5 w-3.5" aria-hidden="true" /> {t('New Schedule')}
             </Button>
           )}
           {manage && selectedCycle && (
             <Button
               size="sm"
-              variant={editing && canEdit ? 'primary' : 'secondary'}
+              // The one action a manager comes here for, so it carries the
+              // primary fill until the grid is already in edit mode.
+              variant={editing ? 'outline' : 'primary'}
+              aria-pressed={editing}
               onClick={() => setEditing((value) => !value)}
               title={t('Paint shifts in the grid below — pick a shift in the palette, then click or drag across cells.')}
             >
-              <Pencil className="h-3.5 w-3.5" aria-hidden="true" /> {t('Assign Shifts')}
+              <Pencil className="h-3.5 w-3.5" aria-hidden="true" />{' '}
+              {editing ? t('Exit editing') : t('Assign Shifts')}
             </Button>
           )}
         </div>
       </div>
 
       {/* Main card */}
-      <div className="flex min-h-0 flex-col overflow-hidden rounded-xl border border-charcoal-200 bg-white">
-        {/* Month dropdown + state dot */}
-        <div className="flex flex-wrap items-center gap-3 px-4 pb-2 pt-3">
-          <label className="shrink-0 text-[10px] font-semibold uppercase tracking-wide text-charcoal-400" htmlFor="schedule-month">
-            {t('Month')}
-          </label>
+      <div className="flex min-h-0 flex-col overflow-hidden rounded-xl border border-charcoal-200 bg-white lg:flex-1">
+        {/* Period + view controls — one row, no label restating what the value says. */}
+        <div className="flex flex-wrap items-center gap-2 px-4 py-2.5 lg:shrink-0">
           <select
             id="schedule-month"
+            aria-label={t('Month')}
             value={selMonth}
             onChange={(e) => pickMonth(e.target.value)}
-            className="flex-1 rounded-lg border border-charcoal-200 bg-white px-2.5 py-1.5 text-[11px] font-semibold text-charcoal-800 shadow-sm outline-none transition-all focus:border-brand-400 focus:ring-2 focus:ring-brand-100 sm:max-w-[220px]"
+            className="rounded-lg border border-charcoal-200 bg-white px-2.5 py-1.5 text-[11px] font-semibold text-charcoal-800 shadow-sm outline-none transition-all focus:border-brand-400 focus:ring-2 focus:ring-brand-100 sm:max-w-[220px]"
           >
             {months.map((ym) => (
               <option key={ym} value={ym}>
@@ -324,32 +319,45 @@ function ScheduleWorkspace({
           <span
             className={cn(
               'flex shrink-0 items-center gap-1 text-[10px] font-semibold',
-              selLock === 'current' ? 'text-brand-600' : 'text-charcoal-400',
+              selLock === 'current' ? 'text-brand-700' : 'text-charcoal-500',
             )}
           >
             <span className={cn('inline-block h-1.5 w-1.5 rounded-full', selLock === 'current' ? 'bg-brand-500' : 'bg-charcoal-300')} />
             {selLock === 'current' ? t('Live') : selLock === 'past' ? t('Past') : t('Planned')}
           </span>
-          <Button
-            size="sm"
-            className="shrink-0 sm:ms-auto"
-            variant={view === 'month' ? 'primary' : 'secondary'}
-            onClick={() => setView(view === 'month' ? 'week' : 'month')}
-            title={
-              view === 'month'
-                ? t('Back to the 7-day view — shifts repeat weekly')
-                : t('Show every day of the month (up to 31 days)')
-            }
+          <div
+            className="ms-auto flex shrink-0 items-center gap-0.5 rounded-lg bg-charcoal-100 p-0.5"
+            role="tablist"
+            aria-label={t('Days shown')}
           >
-            <CalendarGlyph className="h-3.5 w-3.5" aria-hidden="true" />{' '}
-            {view === 'month' ? t('Show 7 days') : t('Show 30 days')}
-          </Button>
+            {VIEW_OPTIONS.map((option) => (
+              <button
+                key={option.value}
+                type="button"
+                role="tab"
+                aria-selected={view === option.value}
+                onClick={() => setView(option.value)}
+                title={
+                  option.value === 'week'
+                    ? t('Seven days — a painted weekday repeats weekly inside the cycle')
+                    : t('Every day of the selected month')
+                }
+                className={cn(
+                  'rounded-md px-2.5 py-1 text-[10px] font-semibold transition-all',
+                  view === option.value
+                    ? 'bg-white text-charcoal-900 shadow-sm'
+                    : 'text-charcoal-500 hover:text-charcoal-700',
+                )}
+              >
+                {t(option.label)}
+              </button>
+            ))}
+          </div>
         </div>
 
-        {/* Period strip — stacked on phones so a second period is never clipped
-            mid-chip; a row from sm up. */}
-        {monthCycles.length > 0 ? (
-          <div className="grid grid-cols-1 gap-1.5 px-4 pb-3 sm:flex sm:flex-wrap">
+        {/* Period strip — only earns a row when the month really holds several periods. */}
+        {monthCycles.length > 1 && (
+          <div className="flex flex-wrap gap-1.5 px-4 pb-2.5 lg:shrink-0">
             {monthCycles.map((cycle) => {
               const active = cycle.id === selectedId
               return (
@@ -360,25 +368,26 @@ function ScheduleWorkspace({
                     setEditing(false)
                     setView('week')
                   }}
+                  title={t('{{count}} days · {{start}} to {{end}}', {
+                    count: isoRange(cycle.startDate, cycle.endDate).length,
+                    start: isoDayLabel(cycle.startDate),
+                    end: isoDayLabel(cycle.endDate),
+                  })}
                   className={cn(
-                    'rounded-lg border px-2.5 py-1.5 text-start transition-all sm:shrink-0',
+                    'inline-flex items-center gap-2 rounded-lg border px-2.5 py-1 text-start transition-all',
                     active
                       ? 'border-brand-500 bg-brand-50/60 shadow-sm ring-1 ring-brand-500'
                       : 'border-charcoal-200 hover:border-charcoal-300 hover:bg-charcoal-50/60',
                   )}
                 >
-                  <div className="flex items-center gap-2">
-                    <p className="whitespace-nowrap text-[11px] font-bold text-charcoal-900">{cycle.label}</p>
-                    <StatusChip status={cycle.status} />
-                  </div>
-                  <p className="mt-0.5 whitespace-nowrap text-[9px] text-charcoal-500">
-                    {t('{{count}} days', { count: isoRange(cycle.startDate, cycle.endDate).length })}
-                  </p>
+                  <span className="whitespace-nowrap text-[11px] font-bold text-charcoal-900">{cycle.label}</span>
+                  <StatusChip status={cycle.status} />
                 </button>
               )
             })}
           </div>
-        ) : (
+        )}
+        {monthCycles.length === 0 && (
           <div className="px-4 pb-3">
             <EmptyState
               title={t('No schedule covers {{month}}', { month: monthLabelOf(selMonth, t) })}
@@ -386,7 +395,7 @@ function ScheduleWorkspace({
               action={
                 manage ? (
                   <Button size="sm" onClick={() => setCreateOpen(true)}>
-                    <Plus className="h-3.5 w-3.5" aria-hidden="true" /> {t('Create New Schedule')}
+                    <Plus className="h-3.5 w-3.5" aria-hidden="true" /> {t('New Schedule')}
                   </Button>
                 ) : undefined
               }
@@ -407,6 +416,7 @@ function ScheduleWorkspace({
               setExplicitId(null)
               setEditing(false)
             }}
+            onOpenTemplates={() => setTemplateOpen(true)}
           />
         )}
       </div>
@@ -452,10 +462,84 @@ function StatusChip({ status }: { status: string }) {
   return <span className={cn('badge', color)}>{status}</span>
 }
 
+interface ActionMenuItem {
+  label: string
+  icon: ReactNode
+  onSelect: () => void
+  disabled?: boolean
+  danger?: boolean
+}
+
+/** Overflow menu that keeps the rare cycle actions out of the toolbar. */
+function ActionMenu({ items }: { items: ActionMenuItem[] }) {
+  const { t } = useTranslation()
+  const [open, setOpen] = useState(false)
+  const root = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!open) return
+    const onPointerDown = (event: MouseEvent) => {
+      if (!root.current?.contains(event.target as Node)) setOpen(false)
+    }
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setOpen(false)
+    }
+    document.addEventListener('mousedown', onPointerDown)
+    document.addEventListener('keydown', onKeyDown)
+    return () => {
+      document.removeEventListener('mousedown', onPointerDown)
+      document.removeEventListener('keydown', onKeyDown)
+    }
+  }, [open])
+
+  return (
+    <div ref={root} className="relative">
+      <Button
+        size="sm"
+        variant="ghost"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-label={t('Schedule actions')}
+        onClick={() => setOpen((value) => !value)}
+      >
+        <MoreHorizontal className="h-4 w-4" aria-hidden="true" />
+      </Button>
+      {open && (
+        <div
+          role="menu"
+          // Above the roster's sticky header (z-20) and its corner cell (z-30):
+          // the menu overlaps the grid, so an equal z-index lost to DOM order.
+          className="absolute end-0 z-40 mt-1 min-w-[190px] overflow-hidden rounded-lg border border-charcoal-200 bg-white py-1 shadow-lg"
+        >
+          {items.map((item) => (
+            <button
+              key={item.label}
+              type="button"
+              role="menuitem"
+              disabled={item.disabled}
+              onClick={() => {
+                setOpen(false)
+                item.onSelect()
+              }}
+              className={cn(
+                'flex w-full items-center gap-2 px-3 py-1.5 text-start text-[11px] font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-40',
+                item.danger ? 'text-red-600 hover:bg-red-50' : 'text-charcoal-700 hover:bg-charcoal-50',
+              )}
+            >
+              {item.icon}
+              {item.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 /* ==================== cycle detail ==================== */
 
 /**
- * One selected cycle: toolbar (view toggle, copy/delete/save/publish), paint
+ * One selected cycle: toolbar (status, save/publish, overflow menu), paint
  * palette, legend and the date-column roster grid. Columns are real calendar
  * dates of the cycle — painting a weekday cell writes that weekday for every
  * matching date inside the cycle (the server's weekly-repeat semantics).
@@ -469,6 +553,7 @@ function CycleDetailPanel({
   selMonth,
   monthCycles,
   onDeleted,
+  onOpenTemplates,
 }: {
   gymId: number
   cycleId: number
@@ -480,6 +565,8 @@ function CycleDetailPanel({
    *  from the one that owns it. */
   monthCycles: { id: number; startDate: string; endDate: string }[]
   onDeleted: () => void
+  /** Opens the shift-template manager owned by the workspace. */
+  onOpenTemplates: () => void
 }) {
   const { toast } = useToast()
   const { t } = useTranslation()
@@ -511,7 +598,7 @@ function CycleDetailPanel({
   const paintValue: number | null =
     paintPick.kind === 'unset' ? (activeTemplates[0]?.id ?? null) : paintPick.kind === 'off' ? null : paintPick.id
 
-  // "Show 30 days" spans every schedule that overlaps the month, so each column has
+  // The Month view spans every schedule that overlaps the month, so each column has
   // to read from the cycle that actually owns that date: resolving them all from the
   // selected cycle painted one shift across the entire month. Sibling cycles are
   // fetched only for the month view and share the picker's cache key.
@@ -697,7 +784,7 @@ function CycleDetailPanel({
 
   // The visible day columns: week = the current week clipped to the cycle (the
   // same Mon–Sun an employee sees in their Shift tab); month = the selected
-  // month ∩ the cycle range ("Show 30 days").
+  // month ∩ the cycle range (Month view).
   const weekCols = weekColsOf(detail)
   const monthCols = monthColsOf(selMonth)
   const cols = view === 'week' ? weekCols : monthCols
@@ -706,7 +793,6 @@ function CycleDetailPanel({
   const readOnlyDates = new Set(
     cols.filter((col) => ownerCycleOf(col.date)?.id !== cycleId).map((col) => col.date),
   )
-  const cycleDays = isoRange(detail.startDate, detail.endDate).length
 
   // Assignments are weekly patterns, so "missing" counts weekdays that have no
   // row yet (Not assigned) rather than every date they repeat on. This keeps the
@@ -722,64 +808,36 @@ function CycleDetailPanel({
 
   const employeesWithMissingDays = detail.assignments.filter((row) => missingDaysOf(row.employeeId) > 0).length
 
-  // Visible non-Off cells.
-  const assignedCount = detail.assignments.reduce(
-    (acc, row) =>
-      acc +
-      cols.filter((col) => {
-        const value = cellValueAtDate(row.employeeId, col.date)
-        if (typeof value !== 'number') return false
-        const template = templateById.get(value)
-        return template ? !template.isOff : true
-      }).length,
-    0,
-  )
-
-  const statsLabel =
-    view === 'week'
-      ? cols.length < cycleDays
-        ? t('{{shown}} of {{total}} days (weekly repeat)', { shown: cols.length, total: cycleDays })
-        : t('{{count}} days', { count: cols.length })
-      : t('{{count}} days · whole {{month}}', { count: cols.length, month: monthLabelOf(selMonth, t) })
-
   return (
     <>
-      {/* Toolbar */}
-      <div className="flex flex-col gap-2 border-t border-charcoal-100 px-4 py-2 sm:flex-row sm:flex-wrap sm:items-center">
-        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-charcoal-500">
-          <span className="font-semibold text-charcoal-700">{statsLabel}</span>
-          <span className="text-charcoal-300">·</span>
+      {/* Toolbar — status + coverage on the left, one primary action on the right. */}
+      <div className="flex flex-col gap-2 border-t border-charcoal-100 px-4 py-2.5 sm:flex-row sm:flex-wrap sm:items-center lg:shrink-0">
+        <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1.5 text-[11px] text-charcoal-600">
+          <StatusChip status={detail.status} />
+          <span className="font-semibold text-charcoal-800">
+            {isoDayLabel(detail.startDate)} – {isoDayLabel(detail.endDate)}
+          </span>
+          <span aria-hidden="true" className="h-1 w-1 rounded-full bg-charcoal-400" />
           <span>{t('{{count}} employees', { count: detail.assignments.length })}</span>
-          <span className="text-charcoal-300">·</span>
-          <span>{t('{{count}} shifts assigned', { count: assignedCount })}</span>
           {employeesWithMissingDays > 0 && (
             <span
-              className="badge badge-yellow"
+              className="badge badge-yellow inline-flex items-center gap-1"
               title={t('Employees who still have weekdays marked Not assigned')}
             >
+              <AlertTriangle className="h-3 w-3" aria-hidden="true" />
               {t('{{count}} with missing days', { count: employeesWithMissingDays })}
             </span>
           )}
-        </div>
-        <div className="flex flex-wrap items-center gap-1.5 sm:ms-auto">
           {detail.conflicts.length > 0 && (
             <span className="badge badge-red flex items-center gap-1">
-              <AlertTriangle className="h-3 w-3" aria-hidden="true" />{' '}
+              <AlertTriangle className="h-3 w-3" aria-hidden="true" />
               {detail.conflicts.length === 1
                 ? t('{{count}} conflict', { count: detail.conflicts.length })
                 : t('{{count}} conflicts', { count: detail.conflicts.length })}
             </span>
           )}
-          {manage && editing && (
-            <Button size="sm" variant="secondary" loading={copyMutation.isPending} onClick={() => copyMutation.mutate()}>
-              <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" /> {t('Copy Previous')}
-            </Button>
-          )}
-          {manage && (
-            <Button size="sm" variant="dangerOutline" onClick={() => setConfirmDelete(true)}>
-              <Trash2 className="h-3.5 w-3.5" aria-hidden="true" /> {t('Delete Schedule')}
-            </Button>
-          )}
+        </div>
+        <div className="flex flex-wrap items-center gap-1.5 sm:ms-auto">
           {manage && dirtyCountOf(edits) > 0 && (
             <Button
               size="sm"
@@ -805,46 +863,46 @@ function CycleDetailPanel({
               <CheckSquare className="h-3.5 w-3.5" aria-hidden="true" /> {t('Publish Shift')}
             </Button>
           )}
+          {manage && (
+            <ActionMenu
+              items={[
+                {
+                  label: t('New Shift'),
+                  icon: <Plus className="h-3.5 w-3.5" aria-hidden="true" />,
+                  onSelect: onOpenTemplates,
+                },
+                {
+                  label: t('Copy Previous'),
+                  icon: <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />,
+                  onSelect: () => copyMutation.mutate(),
+                  disabled: !editing || copyMutation.isPending,
+                },
+                {
+                  label: t('Delete Schedule'),
+                  icon: <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />,
+                  onSelect: () => setConfirmDelete(true),
+                  danger: true,
+                },
+              ]}
+            />
+          )}
         </div>
       </div>
 
-      {/* Draft visibility gate */}
+      {/* Draft visibility gate — one line; the Publish action sits right above. */}
       {isDraft && (
-        <div className="flex items-start gap-2 border-t border-amber-200 bg-amber-50 px-4 py-2 text-[11px] text-amber-800">
+        <div className="flex items-start gap-2 border-t border-amber-200 bg-amber-50 px-4 py-2 text-[11px] text-amber-800 lg:shrink-0">
           <AlertTriangle className="mt-px h-3.5 w-3.5 flex-shrink-0" aria-hidden="true" />
           <p>
             <span className="font-semibold">{t('Draft schedule.')}</span>{' '}
-            {t(
-              'Employees (and their profile Shift tab) can only see published schedules — paint the week, save, then press',
-            )}{' '}
-            <span className="font-semibold">{t('Publish Shift')}</span>{' '}
-            {t('above to make these shifts visible.')}
+            {t('Employees cannot see these shifts until you publish them.')}
           </p>
         </div>
       )}
 
-      {/* Hint — the full instructions are desktop-only: phones get the one-liner
-          above the employee cards instead. */}
-      <div className="hidden border-t border-charcoal-100 px-4 py-2 sm:block">
-        <p className="text-[10px] text-charcoal-400">
-          {editing
-            ? isDraft
-              ? t('Editing enabled — pick a shift below, then click or drag across the grid to paint it. “Off” books an explicit rest day; days left untouched stay “Not assigned”. Row ➤ and day ⬇ buttons fill in one click. Remember to Publish — draft shifts stay invisible to employees until then.')
-              : t('Editing enabled — pick a shift below, then click or drag across the grid to paint it. “Off” books an explicit rest day; days left untouched stay “Not assigned”. Row ➤ and day ⬇ buttons fill in one click. This schedule is already Published — saved edits reach employees immediately; no re-publish is needed.')
-            : isDraft
-              ? t('Preview — read only. Press “Assign Shifts” above to paint shifts onto this draft.')
-              : t('Preview — read only. Press “Assign Shifts” above to adjust shifts on this published schedule.')}
-          {' '}
-          {t('The Missing column counts weekdays that still need a shift or an Off day.')}
-          {view === 'month' && editing
-            ? ` ${t('Whole month visible — a painted weekday repeats every following week inside the cycle.')}`
-            : ''}
-        </p>
-      </div>
-
       {/* Paint palette */}
       {editing && (
-        <div className="flex flex-wrap items-center gap-1.5 border-t border-charcoal-100 bg-brand-50/40 px-4 py-2 sm:flex-nowrap sm:overflow-x-auto">
+        <div className="flex flex-wrap items-center gap-1.5 border-t border-charcoal-100 bg-brand-50/40 px-4 py-2 sm:flex-nowrap sm:overflow-x-auto lg:shrink-0">
           <span className="me-1 shrink-0 text-[10px] font-semibold text-charcoal-600">{t('Paint shift:')}</span>
           {activeTemplates.map((template) => {
             const selected = paintPick.kind === 'tpl' && paintPick.id === template.id
@@ -881,81 +939,67 @@ function CycleDetailPanel({
             {t('Off')}
           </button>
           <span className="ms-auto hidden shrink-0 text-[10px] text-charcoal-400 sm:inline">
-            {t('Click a cell or drag across the grid to paint it.')}
+            {isDraft
+              ? t('Click a cell or drag across the grid to paint it.')
+              : t('This schedule is published — saved edits reach employees immediately.')}
           </span>
         </div>
       )}
 
-      {/* Legend — desktop only: on phones the cells spell out their own label
-          ("OFF", "8a–4p") and the paint palette already lists the shifts. */}
-      <div className="hidden flex-wrap items-center gap-3 border-t border-charcoal-100 bg-charcoal-50/40 px-4 py-2 text-[10px] text-charcoal-500 sm:flex">
-        {activeTemplates.map((template) => (
-          <span key={template.id} className="inline-flex items-center gap-1">
-            <span
-              className="inline-block h-2.5 w-2.5 rounded border"
-              style={{ background: template.bgColor, borderColor: `${template.color}40` }}
+      {/* Roster scroll area — the only region of the card that scrolls, so the
+          page itself never does on a desktop viewport. */}
+      <div className="lg:min-h-0 lg:flex-1 lg:overflow-auto">
+        {detail.assignments.length === 0 ? (
+          <div className="px-4 py-8">
+            <EmptyState
+              title={t("No employees in this cycle's roster")}
+              hint={t(
+                "Assignments appear for the gym's employees; either no workers belong here yet, or none are scheduled.",
+              )}
             />
-            {template.name}
-          </span>
-        ))}
-        <span className="inline-flex items-center gap-1">
-          <span className="inline-block h-2.5 w-2.5 rounded border border-dashed border-charcoal-300 bg-white" />
-          {t('Not assigned')}
-        </span>
-        <span className="inline-flex items-center gap-1">
-          <span className="inline-block h-2.5 w-2.5 rounded border border-charcoal-200 bg-charcoal-100" />
-          {t('Off')}
-        </span>
+          </div>
+        ) : (
+          <ScheduleGrid
+            detail={detail}
+            cols={cols}
+            view={view}
+            editing={editing}
+            templateById={gridTemplateById}
+            cellValueForDate={cellValueAtDate}
+            readOnlyDates={readOnlyDates}
+            missingDaysOf={missingDaysOf}
+            paintingRef={paintingRef}
+            onCell={(employeeId, day) => setCell(employeeId, day, paintValue)}
+            onRowFill={(row) => {
+              const weekdays = [...new Set(cols.map((col) => weekdayIndex(col.date)))]
+              weekdays.forEach((day) => setCell(row.employeeId, day, paintValue))
+            }}
+            onDayFill={(day) => {
+              detail.assignments.forEach((row) => setCell(row.employeeId, day, paintValue))
+            }}
+          />
+        )}
+
+        {detail.conflicts.length > 0 && (
+          <div className="border-t border-charcoal-100 px-4 py-3">
+            <p className="bento-label text-red-700">
+              <AlertTriangle className="me-1 inline h-3.5 w-3.5" aria-hidden="true" />{' '}
+              {t('CONFLICTS ({{count}})', { count: detail.conflicts.length })}
+            </p>
+            <ul className="mt-2 space-y-1">
+              {detail.conflicts.map((conflict, index) => (
+                <li key={index} className="text-[11px] text-charcoal-600">
+                  {memberName(detail.assignments, conflict.employeeId)} · {t(DOW[conflict.day])} — {conflict.message}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
       </div>
 
-      {/* Roster grid */}
-      {detail.assignments.length === 0 ? (
-        <div className="px-4 py-8">
-          <EmptyState
-            title={t("No employees in this cycle's roster")}
-            hint={t(
-              "Assignments appear for the gym's employees; either no workers belong here yet, or none are scheduled.",
-            )}
-          />
-        </div>
-      ) : (
-        <ScheduleGrid
-          detail={detail}
-          cols={cols}
-          view={view}
-          editing={editing}
-          templateById={gridTemplateById}
-          cellValueForDate={cellValueAtDate}
-          readOnlyDates={readOnlyDates}
-          missingDaysOf={missingDaysOf}
-          paintingRef={paintingRef}
-          onCell={(employeeId, day) => setCell(employeeId, day, paintValue)}
-          onRowFill={(row) => {
-            const weekdays = [...new Set(cols.map((col) => weekdayIndex(col.date)))]
-            weekdays.forEach((day) => setCell(row.employeeId, day, paintValue))
-          }}
-          onDayFill={(day) => {
-            detail.assignments.forEach((row) => setCell(row.employeeId, day, paintValue))
-          }}
-        />
-      )}
-
-      {/* Conflicts */}
-      {detail.conflicts.length > 0 && (
-        <div className="border-t border-charcoal-100 px-4 py-3">
-          <p className="bento-label text-red-700">
-            <AlertTriangle className="me-1 inline h-3.5 w-3.5" aria-hidden="true" />{' '}
-            {t('CONFLICTS ({{count}})', { count: detail.conflicts.length })}
-          </p>
-          <ul className="mt-2 space-y-1">
-            {detail.conflicts.map((conflict, index) => (
-              <li key={index} className="text-[11px] text-charcoal-600">
-                {memberName(detail.assignments, conflict.employeeId)} · {t(DOW[conflict.day])} — {conflict.message}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
+      {/* Legend is a footer: it explains what was just read and stays visible
+          while the roster scrolls. While editing the palette takes over. */}
+      {!editing && <ScheduleLegend templates={activeTemplates} />}
 
       <ConfirmDialog
         open={confirmDelete}
@@ -1003,6 +1047,41 @@ function dirtyCountOf(edits: Map<string, number | null>): number {
   return edits.size
 }
 
+/** Swatch tint that mirrors `.shift-cell` without needing the class. */
+function shiftTint(tone: string, strength = 12) {
+  return {
+    background: `color-mix(in srgb, ${tone} ${strength}%, var(--color-white))`,
+    borderColor: `color-mix(in srgb, ${tone} ${strength + 20}%, transparent)`,
+  }
+}
+
+/** Key for the roster: swatches reuse the cells' own tint maths, so the legend
+ *  cannot drift away from what is on screen. */
+function ScheduleLegend({ templates }: { templates: ShiftTemplateItem[] }) {
+  const { t } = useTranslation()
+  return (
+    <div className="hidden flex-wrap items-center gap-x-4 gap-y-2 border-t border-charcoal-100 px-4 py-2.5 text-[11px] text-charcoal-600 sm:flex lg:shrink-0">
+      {templates.map((template) => (
+        <span key={template.id} className="inline-flex items-center gap-1.5">
+          {/* A key reads as a colour chip, so it carries more of the accent than
+              the cells themselves do. */}
+          <span className="h-3.5 w-3.5 rounded-[4px] border" style={shiftTint(template.color, 42)} aria-hidden="true" />
+          <span className="font-medium text-charcoal-800">{template.name}</span>
+          <span className="text-charcoal-500">{cellLabel(template, t)}</span>
+        </span>
+      ))}
+      <span className="inline-flex items-center gap-1.5">
+        <span className="h-3 w-3 rounded-[3px] border border-dashed border-charcoal-400" aria-hidden="true" />
+        {t('Not assigned')}
+      </span>
+      <span className="inline-flex items-center gap-1.5">
+        <span className="h-3 w-3 rounded-[3px] border border-charcoal-300 bg-charcoal-200/60" aria-hidden="true" />
+        {t('Off')}
+      </span>
+    </div>
+  )
+}
+
 /* ==================== roster grid (date columns) ==================== */
 
 function ScheduleGrid({
@@ -1034,39 +1113,58 @@ function ScheduleGrid({
   onDayFill: (day: number) => void
 }) {
   const { t } = useTranslation()
-  const { me, isBranchManager } = usePortalSession()
+  const { me } = usePortalSession()
   // The gym-wide Branch Schedule roster includes every non-terminated gym
   // employee — including the manager's own record (a BM is staff of their
   // branch, by seed and by design). Mark that self-row so it reads as
   // intentional instead of looking like a data leak.
   const selfEmployeeId = me?.employeeId ?? null
+  const today = todayISO()
   const selfBadge = (
     <span
       className="shrink-0 rounded bg-brand-100 px-1.5 py-0.5 text-[9px] font-semibold text-brand-700"
       title={t('This row is your own employee record — a Branch Manager is staff of their branch too.')}
     >
-      {isBranchManager ? t('You (Branch Manager)') : t('You')}
+      {t('You')}
     </span>
   )
 
   return (
     <>
-      {/* Desktop grid */}
-      <div className="hidden flex-col overflow-x-auto px-1 pb-4 lg:flex">
-        <table className="data-table" style={{ flex: '1 1 auto' }}>
+      {/* Desktop grid — scrolling belongs to the card's roster area, so the
+          sticky header and the sticky name column share one scroll box. */}
+      <div className="hidden flex-col px-1 pb-4 lg:flex">
+        <table className="data-table roster-grid">
           <thead>
             <tr>
-              <th className="sticky start-0 z-10 bg-charcoal-50">{t('Employee')}</th>
-              <th className="text-center" title={t('Weekdays this employee has not been assigned yet')}>
+              <th scope="col" className="sticky start-0 z-10 w-[240px] bg-charcoal-50">
+                {t('Employee')}
+              </th>
+              <th
+                scope="col"
+                className="text-center"
+                title={t('Weekdays this employee has not been assigned yet')}
+              >
                 {t('Missing')}
               </th>
               {cols.map((col) => {
                 const day = weekdayIndex(col.date)
                 const foreign = readOnlyDates.has(col.date)
+                const isToday = col.date === today
                 return (
-                  <th key={col.date} className={cn('text-center', foreign && 'opacity-60')}>
-                    <span className="block text-[11px] font-semibold text-charcoal-700">{col.num}</span>
-                    <span className="text-[9px] font-normal text-charcoal-400">{t(col.dow)}</span>
+                  <th
+                    key={col.date}
+                    scope="col"
+                    aria-current={isToday ? 'date' : undefined}
+                    className={cn(
+                      'roster-day',
+                      day >= 5 && 'roster-day--weekend',
+                      isToday && 'roster-day--today',
+                      foreign && 'opacity-60',
+                    )}
+                  >
+                    <span className="roster-day-dow">{t(col.dow)}</span>
+                    <span className="roster-day-num">{col.num}</span>
                     {editing && !foreign && (
                       <button
                         type="button"
@@ -1076,9 +1174,9 @@ function ScheduleGrid({
                           weekday: t(col.dow),
                           date: col.num,
                         })}
-                        className="mx-auto mt-0.5 block rounded p-0.5 text-charcoal-400 hover:bg-brand-100 hover:text-brand-600"
+                        className="mx-auto mt-1 block rounded bg-charcoal-200/60 p-0.5 text-charcoal-600 transition-colors hover:bg-brand-200 hover:text-brand-800"
                       >
-                        <Square className="h-3 w-3" aria-hidden="true" />
+                        <PaintBucket className="h-3.5 w-3.5" aria-hidden="true" />
                       </button>
                     )}
                   </th>
@@ -1089,7 +1187,7 @@ function ScheduleGrid({
           <tbody>
             {detail.assignments.map((row) => (
               <tr key={row.employeeId}>
-                <td className="sticky start-0 z-10 bg-white">
+                <td className="sticky start-0 z-10 w-[240px] bg-white">
                   <div className="flex items-center gap-2">
                     <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-brand-100 text-[10px] font-semibold text-brand-700">
                       {row.initials}
@@ -1105,9 +1203,10 @@ function ScheduleGrid({
                         onMouseDown={(event) => event.preventDefault()}
                         onClick={() => onRowFill(row)}
                         title={t('Fill the visible days for this employee')}
-                        className="ms-auto shrink-0 rounded p-1 text-charcoal-400 hover:bg-brand-100 hover:text-brand-600"
+                        aria-label={t('Fill the visible days for {{name}}', { name: row.name })}
+                        className="ms-auto shrink-0 rounded p-1 text-charcoal-500 transition-colors hover:bg-brand-100 hover:text-brand-700"
                       >
-                        <Square className="h-3.5 w-3.5 rotate-180" aria-hidden="true" />
+                        <PaintBucket className="h-3.5 w-3.5" aria-hidden="true" />
                       </button>
                     )}
                   </div>
@@ -1122,8 +1221,31 @@ function ScheduleGrid({
                   const unassigned = value === 'unassigned'
                   const template = typeof value === 'number' ? templateById.get(value) : undefined
                   const off = !unassigned && (value === null || template?.isOff === true)
+                  const tone = cellTone(template)
+                  const shift = template ?? unknownTemplate()
+                  // The shift name leads and the hours follow: a bare "8p–4a"
+                  // only read as a shift to whoever memorised the templates.
+                  const content = unassigned ? (
+                    <>
+                      —
+                      <span className="sr-only">{t('Not assigned')}</span>
+                    </>
+                  ) : off ? (
+                    t('OFF')
+                  ) : (
+                    <>
+                      <span className="shift-cell__name">{shift.name}</span>
+                      <span className="shift-cell__time">{shortCellLabel(shift, t)}</span>
+                    </>
+                  )
+                  const describe = t('{{name}}, {{weekday}} {{date}}: {{status}}', {
+                    name: row.name,
+                    weekday: t(col.dow),
+                    date: col.num,
+                    status: unassigned ? t('not assigned') : off ? t('off') : (template?.name ?? t('shift')),
+                  })
                   return (
-                    <td key={col.date} className={cn('text-center', editing && !foreign && EDIT_CELL[day])}>
+                    <td key={col.date} className={cn('text-center', col.date === today && 'roster-col--today')}>
                       {editing && !foreign ? (
                         <button
                           type="button"
@@ -1135,17 +1257,23 @@ function ScheduleGrid({
                           onMouseEnter={() => {
                             if (paintingRef.current) onCell(row.employeeId, day)
                           }}
-                          className="schedule-shift-badge w-full cursor-pointer select-none border text-[10px] hover:opacity-90 hover:ring-1 hover:ring-brand-400"
-                          style={unassigned ? UNASSIGNED_CELL : cellStyle(template, off)}
+                          className={cn(
+                            'shift-cell cursor-pointer select-none transition-shadow hover:ring-2 hover:ring-brand-400',
+                            unassigned && 'shift-cell--empty',
+                            off && 'shift-cell--off',
+                          )}
+                          style={tone}
+                          aria-label={describe}
                         >
-                          {unassigned ? t('Not assigned') : off ? t('OFF') : cellLabel(template ?? unknownTemplate(), t)}
+                          {content}
                         </button>
                       ) : (
                         <span
-                          className="schedule-shift-badge inline-block border text-[10px]"
-                          style={unassigned ? UNASSIGNED_CELL : cellStyle(template, off)}
+                          className={cn('shift-cell', unassigned && 'shift-cell--empty', off && 'shift-cell--off')}
+                          style={tone}
+                          title={describe}
                         >
-                          {unassigned ? t('Not assigned') : off ? t('OFF') : (template?.start ?? '')}
+                          {content}
                         </span>
                       )}
                     </td>
@@ -1193,9 +1321,9 @@ function ScheduleGrid({
                           weekday: t(col.dow),
                           date: col.num,
                         })}
-                        className="mx-auto mt-1 flex rounded p-0.5 text-charcoal-400 hover:bg-brand-100 hover:text-brand-600"
+                        className="mx-auto mt-1 flex rounded bg-charcoal-200/60 p-0.5 text-charcoal-600 transition-colors hover:bg-brand-200 hover:text-brand-800"
                       >
-                        <Square className="h-2.5 w-2.5" aria-hidden="true" />
+                        <PaintBucket className="h-3 w-3" aria-hidden="true" />
                       </button>
                     )}
                   </div>
@@ -1228,9 +1356,9 @@ function ScheduleGrid({
                       onClick={() => onRowFill(row)}
                       title={t('Fill the visible days for this employee')}
                       aria-label={t('Fill the visible days for {{name}}', { name: row.name })}
-                      className="shrink-0 rounded p-1 text-charcoal-400 hover:bg-brand-100 hover:text-brand-600"
+                      className="shrink-0 rounded p-1 text-charcoal-500 hover:bg-brand-100 hover:text-brand-700"
                     >
-                      <Square className="h-3 w-3 rotate-180" aria-hidden="true" />
+                      <PaintBucket className="h-3 w-3" aria-hidden="true" />
                     </button>
                   )}
                 </div>
@@ -1243,9 +1371,12 @@ function ScheduleGrid({
                     const template = typeof value === 'number' ? templateById.get(value) : undefined
                     const off = !unassigned && (value === null || template?.isOff === true)
                     const label = unassigned ? '—' : off ? t('OFF') : shortCellLabel(template ?? unknownTemplate(), t)
-                    const style = unassigned ? UNASSIGNED_CELL : cellStyle(template, off)
-                    const cellClass =
-                      'flex h-10 flex-col items-center justify-center rounded-md border text-[9px] font-semibold leading-none tabular-nums'
+                    const style = cellTone(template)
+                    const cellClass = cn(
+                      'shift-cell shift-cell--fit h-10 flex-col leading-none',
+                      unassigned && 'shift-cell--empty',
+                      off && 'shift-cell--off',
+                    )
                     const describe = t('{{name}}, {{weekday}} {{date}}: {{status}}', {
                       name: row.name,
                       weekday: t(col.dow),
@@ -1303,7 +1434,7 @@ function MissingDaysBadge({ count, compact = false }: { count: number; compact?:
       </span>
     ) : (
       <span className="text-[10px] text-charcoal-400" title={t('Every weekday is assigned or marked Off')}>
-        0
+        —
       </span>
     )
   }
@@ -1329,22 +1460,14 @@ function memberName(rows: ShiftRosterRow[], employeeId: number): string {
   return rows.find((r) => r.employeeId === employeeId)?.name ?? `#${employeeId}`
 }
 
-const FALLBACK_CELL: CSSProperties = { background: '#f5f5f6', color: '#6b7280', borderColor: '#e5e7eb80' }
-
-const UNASSIGNED_CELL: CSSProperties = {
-  background: '#ffffff',
-  color: '#9ca3af',
-  borderColor: '#d1d5db',
-  borderStyle: 'dashed',
-}
-
-function cellStyle(template: ShiftTemplateItem | undefined, off: boolean): CSSProperties {
-  if (off || !template) return FALLBACK_CELL
-  return {
-    background: template.bgColor,
-    color: template.textColor,
-    borderColor: `${template.color}40`,
-  }
+/**
+ * Hands the template accent to `.shift-cell`, which mixes it with the active
+ * theme's surface/text tokens. Passing the API's pre-baked `bgColor`/`textColor`
+ * pastels painted light blocks onto the dark surface.
+ */
+function cellTone(template: ShiftTemplateItem | undefined): CSSProperties | undefined {
+  if (!template || template.isOff) return undefined
+  return { '--shift-tone': template.color } as CSSProperties
 }
 
 function unknownTemplate(): ShiftTemplateItem {
@@ -1522,7 +1645,7 @@ function CreateCycleInner({
           </p>
         )}
         <p className="bg-charcoal-50 px-3 py-2 text-[11px] text-charcoal-500">
-          {t('Ranges longer than a week open in a 7-day view where every shift repeats on the same weekday of the following weeks — the “Show 30 days” button reveals the full range. A cycle already covering these dates will be rejected by the server.')}
+          {t('Ranges longer than a week open in the Week view — every shift repeats on the same weekday of the following weeks. Switch to Month to see the full range. A cycle already covering these dates will be rejected by the server.')}
         </p>
       </div>
     </Modal>
