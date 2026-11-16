@@ -28,22 +28,32 @@ namespace Service.Services
 
         /// <summary>
         /// The entitlement actually in force for one employee and leave type. Annual
-        /// leave accrues from the hire date; every other type keeps its flat default.
+        /// leave accrues from the hire date (an HR grant can raise it up to the yearly
+        /// maximum); every other type keeps the total HR granted on its row, falling
+        /// back to the type's flat default when no row exists yet.
         /// </summary>
         internal static async Task<decimal> EntitlementForAsync(
             IUnitOfWork unitOfWork, int employeeId, LeaveType leaveType, CancellationToken cancellationToken)
         {
+            var year = DateTime.UtcNow.Year;
+            var rows = await unitOfWork.GetRepository<LeaveBalance, int>()
+                .GetAllAsync(new LeaveBalancesByEmployeeSpec(employeeId, year), cancellationToken);
+            var row = rows.FirstOrDefault(b => b.LeaveType == leaveType);
+
             if (leaveType != LeaveType.Annual)
             {
-                return DefaultEntitlement(leaveType);
+                return row?.TotalEntitlement ?? DefaultEntitlement(leaveType);
             }
 
             var employee = await unitOfWork.GetRepository<Employee, int>()
                 .GetByIdAsync(new EmployeeByIdSpec(employeeId), cancellationToken);
+            if (employee is null)
+            {
+                return 0m;
+            }
 
-            return employee is null
-                ? 0m
-                : AnnualLeaveAccrual.EntitledDays(employee.HireDate, DateOnly.FromDateTime(DateTime.UtcNow));
+            return AnnualLeaveAccrual.EntitledDays(
+                employee.HireDate, DateOnly.FromDateTime(DateTime.UtcNow), row?.TotalEntitlement);
         }
 
         /// <summary>Leave type a request consumes, or null when it consumes none.</summary>

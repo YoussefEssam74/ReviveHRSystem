@@ -71,8 +71,16 @@ namespace Service.Services
             var gymFilter = await ResolveGymFilterAsync(actor, query.Gym, cancellationToken);
             var (statusFilter, decidedOnly) = ParseStatusFilter(query.Status);
             var dateFilter = ParseDate(query.Date);
+            var fromFilter = ParseDate(query.From);
+            var toFilter = ParseDate(query.To);
+            if (fromFilter.HasValue && toFilter.HasValue && fromFilter.Value > toFilter.Value)
+            {
+                throw new BadRequestException("from must be on or before to.");
+            }
+
             var quick = ParseQuick(query.Quick);
             var typeFilter = string.IsNullOrWhiteSpace(query.Type) ? null : query.Type.Trim();
+            var searchFilter = string.IsNullOrWhiteSpace(query.Search) ? null : query.Search.Trim();
 
             var sortBy = (query.SortBy ?? "submitted").Trim().ToLowerInvariant();
             // The inbox opens newest-first; an explicit "asc" flips it.
@@ -89,12 +97,13 @@ namespace Service.Services
 
             var countSpec = new RequestDirectorySpec(
                 gymFilter, statusFilter, decidedOnly, typeFilter, dateFilter, quick, 0, 0, sortBy, sortDescending,
-                idFilter, includeAwaitingManager);
+                idFilter, includeAwaitingManager, from: fromFilter, to: toFilter, search: searchFilter);
             var total = await _unitOfWork.GetRepository<EmployeeRequest, int>().CountAsync(countSpec, cancellationToken);
 
             var pageSpec = new RequestDirectorySpec(
                 gymFilter, statusFilter, decidedOnly, typeFilter, dateFilter, quick,
-                (page - 1) * pageSize, pageSize, sortBy, sortDescending, idFilter, includeAwaitingManager);
+                (page - 1) * pageSize, pageSize, sortBy, sortDescending, idFilter, includeAwaitingManager,
+                from: fromFilter, to: toFilter, search: searchFilter);
             var requests = await _unitOfWork.GetRepository<EmployeeRequest, int>().GetAllAsync(pageSpec, cancellationToken);
 
             // Unscheduled Attendance rows from before the request carried its own
@@ -758,6 +767,7 @@ namespace Service.Services
                     BmDecidedAt = bm?.DecidedAt,
                     BmComment = bm?.Comment,
                     HrDecision = hr?.Decision.ToString(),
+                    HrDecidedAt = hr?.DecidedAt,
                 };
             }).ToList();
         }
@@ -1076,8 +1086,9 @@ namespace Service.Services
             // Annual leave accrues with service, so its stored total can lag the
             // entitlement in force today; every other type keeps its granted total.
             var total = leaveType == LeaveType.Annual && entity.Employee is not null
-                ? (int)Math.Round(AnnualLeaveAccrual.EntitledDays(entity.Employee.HireDate, DateOnly.FromDateTime(DateTime.UtcNow)))
-                : (int)Math.Round(balance?.TotalEntitlement ?? 0);
+                ? (int)Math.Round(AnnualLeaveAccrual.EntitledDays(
+                    entity.Employee.HireDate, DateOnly.FromDateTime(DateTime.UtcNow), balance?.TotalEntitlement))
+                : (int)Math.Round(balance?.TotalEntitlement ?? LeaveBalanceReservation.DefaultEntitlement(leaveType));
             var used = (int)Math.Round(balance?.UsedDays ?? 0);
             var reserved = (int)Math.Round(balance?.PendingDays ?? 0);
             var left = Math.Max(0, total - used - reserved);

@@ -1,9 +1,17 @@
 import { Button } from '../../../components/ui/button'
 import { Dialog } from '../../../components/ui/dialog'
-import { formatDate } from '../../../lib/format'
+import { formatDate, formatTimeLabel } from '../../../lib/format'
 import { cn } from '../../../lib/utils'
 import type { RequestListItem } from '../api/requests.api'
-import { isDecisionUndoable, requestStatusLabel, requestTypeLabel, requestUrgency } from '../lib/request-status'
+import {
+  bmDecisionTimeLabel,
+  hrDecisionTimeLabel,
+  isDecisionUndoable,
+  requestStatusLabel,
+  requestTypeLabel,
+  requestUrgency,
+  submittedTimeLabel,
+} from '../lib/request-status'
 import { UrgencyTag } from './RequestCard'
 
 export interface RequestDetailDialogProps {
@@ -11,11 +19,16 @@ export interface RequestDetailDialogProps {
   canDecide: boolean
   onClose: () => void
   onDecide: (mode: 'approve' | 'undo') => void
+  /** Optional archive/restore action (the inbox table keeps it out of the row actions). */
+  onArchive?: (restore: boolean) => void
 }
 
 /** Read-only request detail: identity, reason, balance, BM + HR blocks, timeline. */
-export function RequestDetailDialog({ request, canDecide, onClose, onDecide }: RequestDetailDialogProps) {
+export function RequestDetailDialog({ request, canDecide, onClose, onDecide, onArchive }: RequestDetailDialogProps) {
   const balance = request.leaveBalance
+  const submittedTime = submittedTimeLabel(request)
+  const bmDecided = bmDecisionTimeLabel(request)
+  const hrDecided = hrDecisionTimeLabel(request)
   const undoable =
     canDecide && (request.status === 'Approved' || request.status === 'Rejected') && isDecisionUndoable(request)
 
@@ -33,6 +46,11 @@ export function RequestDetailDialog({ request, canDecide, onClose, onDecide }: R
           {undoable && (
             <Button variant="dangerOutline" onClick={() => onDecide('undo')}>
               Undo Decision
+            </Button>
+          )}
+          {onArchive && (
+            <Button variant="ghost" onClick={() => onArchive(request.status === 'Archived')}>
+              {request.status === 'Archived' ? 'Restore to inbox' : 'Archive'}
             </Button>
           )}
           <Button variant="outline" onClick={onClose}>
@@ -55,6 +73,7 @@ export function RequestDetailDialog({ request, canDecide, onClose, onDecide }: R
           {formatDate(request.requestedDate)}
           {request.endDate && request.endDate !== request.requestedDate ? ` – ${formatDate(request.endDate)}` : ''} ·
           Submitted {formatDate(request.submittedDate)}
+          {submittedTime ? ` · ${submittedTime}` : ''}
         </p>
 
         {request.reason && (
@@ -103,6 +122,7 @@ export function RequestDetailDialog({ request, canDecide, onClose, onDecide }: R
             {request.bmDecision ?? 'No BM decision recorded yet.'}
             {request.bmComment ? ` — ${request.bmComment}` : ''}
           </p>
+          {bmDecided && <p className="mt-0.5 text-[10px] text-charcoal-400">{bmDecided}</p>}
         </div>
 
         {request.hrDecision && (
@@ -122,6 +142,7 @@ export function RequestDetailDialog({ request, canDecide, onClose, onDecide }: R
               )}
               {request.hrComment ? ` — ${request.hrComment}` : ''}
             </p>
+            {hrDecided && <p className="mt-0.5 text-[10px] text-charcoal-400">{hrDecided}</p>}
           </div>
         )}
 
@@ -137,7 +158,7 @@ export function RequestDetailDialog({ request, canDecide, onClose, onDecide }: R
                 </div>
                 <div className="pb-3">
                   <p className="text-xs font-medium text-charcoal-800">{step.step}</p>
-                  <p className="text-[9px] text-charcoal-400">{step.date}</p>
+                  <p className="text-[9px] text-charcoal-400">{formatTimeLabel(step.date)}</p>
                 </div>
               </div>
             ))

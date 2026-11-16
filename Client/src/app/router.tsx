@@ -16,7 +16,7 @@ const EnrollmentPage = lazy(() => import('../features/attendance/pages/Enrollmen
 const StationCodePage = lazy(() => import('../features/attendance/pages/StationCodePage'))
 const DashboardPage = lazy(() => import('../features/dashboard/pages/DashboardPage'))
 const RoleDashboardPage = lazy(() => import('../features/dashboard/pages/RoleDashboardPage'))
-// HR console (the 17-route back office).
+// HR console (the back office).
 const HrDashboardPage = lazy(() => import('../features/dashboard/pages/HrDashboardPage'))
 const EmployeesPage = lazy(() => import('../features/employees/pages/EmployeesPage'))
 const EmployeeProfilePage = lazy(() => import('../features/employees/pages/EmployeeProfilePage'))
@@ -27,14 +27,8 @@ const TerminationsPage = lazy(() => import('../features/terminations/pages/Termi
 const RecruitmentPage = lazy(() => import('../features/recruitment/pages/RecruitmentPage'))
 const PayrollPage = lazy(() => import('../features/payroll/pages/PayrollPage'))
 const EvaluationsPage = lazy(() => import('../features/evaluations/pages/EvaluationsPage'))
-const ReportsPage = lazy(() => import('../features/reports/pages/ReportsPage'))
-const PositionsPage = lazy(() => import('../features/positions/pages/PositionsPage'))
-const SchedulePage = lazy(() => import('../features/schedule/pages/SchedulePage'))
 const EventsPage = lazy(() => import('../features/events/pages/EventsPage'))
-const ConsoleNotificationsPage = lazy(() => import('../features/notifications/pages/NotificationsPage'))
-const AuditPage = lazy(() => import('../features/audit/pages/AuditPage'))
 const HrTeamPage = lazy(() => import('../features/hr-team/pages/HrTeamPage'))
-const MyAccessPage = lazy(() => import('../features/my-access/pages/MyAccessPage'))
 
 // Employee portal pages (Mock UI/Employee) — built per phase.
 const EmployeeDashboardPage = lazy(() => import('../features/portal/pages/EmployeeDashboardPage'))
@@ -113,7 +107,7 @@ export const router = createBrowserRouter([
       { path: '*', element: <Navigate to="/" replace /> },
     ],
   },
-  // HR console: the 17-route back office behind its own sidebar shell.
+  // HR console: the back office behind its own sidebar shell.
   {
     path: '/console',
     element: (
@@ -135,16 +129,10 @@ export const router = createBrowserRouter([
       { path: 'evaluations', element: <Page><EvaluationsPage /></Page> },
       // Legacy deep-link: the mock's form-builder route aliases Evaluations.
       { path: 'form-builder', element: <Page><EvaluationsPage /></Page> },
-      { path: 'reports', element: <Page><ReportsPage /></Page> },
-      { path: 'positions', element: <Page><PositionsPage /></Page> },
-      { path: 'schedule', element: <Page><SchedulePage /></Page> },
       // HR/TopManagement: generate the 6-digit kiosk pairing code.
       { path: 'station-code', element: <Page><StationCodePage /></Page> },
       { path: 'events', element: <Page><EventsPage /></Page> },
-      { path: 'notifications', element: <Page><ConsoleNotificationsPage /></Page> },
-      { path: 'audit', element: <Page><AuditPage /></Page> },
       { path: 'hr-team', element: <Page><HrTeamPage /></Page> },
-      { path: 'my-access', element: <Page><MyAccessPage /></Page> },
       { path: 'settings', element: <Page><SettingsPage /></Page> },
       // Fallback for any unknown console sub-path.
       { path: '*', element: <ConsolePlaceholder /> },

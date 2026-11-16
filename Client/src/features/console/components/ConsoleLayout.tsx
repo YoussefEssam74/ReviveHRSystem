@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { ChevronDown, ChevronLeft, KeyRound, Languages, LogOut, Menu, Moon, Settings, Sun, X } from 'lucide-react'
+import { ChevronDown, ChevronLeft, Languages, LogOut, Menu, Moon, Settings, Sun, X } from 'lucide-react'
 import { useAuthSession } from '../../../contexts/AuthSessionContext'
 import { useMe } from '../../../contexts/MeContext'
 import { useTheme } from '../../../contexts/ThemeContext'
@@ -170,10 +170,7 @@ function AccountMenu() {
   const [open, setOpen] = useState(false)
   const ref = useDismiss(open, setOpen)
 
-  const items = [
-    { to: '/console/my-access', label: t('My Access'), icon: KeyRound },
-    { to: '/console/settings', label: t('Settings'), icon: Settings },
-  ]
+  const items = [{ to: '/console/settings', label: t('Settings'), icon: Settings }]
 
   return (
     <div className="relative" ref={ref}>

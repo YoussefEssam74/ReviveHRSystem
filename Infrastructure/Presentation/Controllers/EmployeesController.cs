@@ -46,6 +46,19 @@ namespace Presentation.Controllers
             return Ok(result);
         }
 
+        /// <summary>
+        /// GET /api/employees/leave-defaults — the numbers the Create Account form starts
+        /// from: annual days earned by the hire date, the standard sick allowance, and the
+        /// branch's monthly excused-hours cap.
+        /// </summary>
+        [HttpGet("leave-defaults")]
+        public async Task<ActionResult<LeaveDefaultsResponse>> GetLeaveDefaults(
+            [FromQuery] int gymId, [FromQuery] DateOnly? hireDate, CancellationToken cancellationToken)
+        {
+            var result = await _service.GetLeaveDefaultsAsync(GetActorUserId(), gymId, hireDate, cancellationToken);
+            return Ok(result);
+        }
+
         /// <summary>POST /api/employees/bulk-import — CSV upload (name, email, position, level, gym, salary).</summary>
         [HttpPost("bulk-import")]
         [RequestSizeLimit(5 * 1024 * 1024)]

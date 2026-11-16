@@ -4,11 +4,11 @@ import { Dialog } from '../../../components/ui/dialog'
 import { Label } from '../../../components/ui/label'
 import { Textarea } from '../../../components/ui/textarea'
 import { describeApiError } from '../../../lib/api-client'
-import { formatDate } from '../../../lib/format'
+import { formatDate, formatTimeLabel } from '../../../lib/format'
 import { cn } from '../../../lib/utils'
 import type { RequestDecisionResult, RequestListItem } from '../api/requests.api'
 import { useDecideRequest, useUndoDecision } from '../hooks/useRequests'
-import { isDecisionUndoable, requestStatusLabel, requestTypeLabel } from '../lib/request-status'
+import { isDecisionUndoable, requestStatusLabel, requestTypeLabel, submittedTimeLabel } from '../lib/request-status'
 import { UrgencyTag } from './RequestCard'
 
 export type DecisionMode = 'approve' | 'reject' | 'undo'
@@ -69,6 +69,7 @@ function BalanceStrip({ request }: { request: RequestListItem }) {
 /** Approve / Reject / Undo — payment choice, note, BM block, timeline, rule hints. */
 export function RequestDecisionDialog({ request, mode, onClose, onDecided }: RequestDecisionDialogProps) {
   const balance = request.leaveBalance
+  const submittedTime = submittedTimeLabel(request)
   const [payment, setPayment] = useState<'paid' | 'unpaid'>(balance && balance.left <= 0 ? 'unpaid' : 'paid')
   const [note, setNote] = useState('')
   const [error, setError] = useState<string | null>(null)
@@ -158,7 +159,10 @@ export function RequestDecisionDialog({ request, mode, onClose, onDecided }: Req
           </div>
           <div>
             <p className="text-[9px] uppercase text-charcoal-400">Submitted</p>
-            <p className="font-medium text-charcoal-800">{formatDate(request.submittedDate)}</p>
+            <p className="font-medium text-charcoal-800">
+              {formatDate(request.submittedDate)}
+              {submittedTime ? ` · ${submittedTime}` : ''}
+            </p>
           </div>
           <div className="col-span-2">
             <p className="text-[9px] uppercase text-charcoal-400">Reason</p>
@@ -232,7 +236,7 @@ export function RequestDecisionDialog({ request, mode, onClose, onDecided }: Req
                 </div>
                 <div className="pb-3">
                   <p className="text-xs font-medium text-charcoal-800">{step.step}</p>
-                  <p className="text-[9px] text-charcoal-400">{step.date}</p>
+                  <p className="text-[9px] text-charcoal-400">{formatTimeLabel(step.date)}</p>
                 </div>
               </div>
             ))

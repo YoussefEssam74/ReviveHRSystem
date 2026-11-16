@@ -29,7 +29,7 @@ to real backend APIs. Work proceeds **one page at a time**; a page is only repor
 | # | Console page | Mock reference | UI updated | API integration | Missing APIs | Tested |
 |---|---|---|---|---|---|---|
 | 1 | HR Dashboard `/console/dashboard` | `HR\js\pages-dashboard.js` | ✅ | ✅ (see notes) | none — all endpoints existed | ✅ build + manual |
-| 2 | Employees + profile `/console/employees` | `HR\js\pages-employees.js` | ⬜ | ⬜ | — | — |
+| 2 | Employees + profile `/console/employees` | `HR\js\pages-employees.js` | ✅ | ✅ | none — all endpoints existed | ✅ build + manual |
 | 3 | Terminations `/console/terminations` | `HR\js\pages-employees.js` (renderTerminations/Offboarding) | ⬜ | ⬜ | — | — |
 | 4 | Recruitment `/console/recruitment` | `HR\js\pages-recruitment.js` | ⬜ | ⬜ | — | — |
 | 5 | Attendance `/console/attendance` | `HR\js\pages-attendance.js` | ⬜ | ⬜ | — | — |
@@ -100,6 +100,61 @@ Super Admin pages, Attendance Station kiosk — queued after the HR console.
 ### Remaining issues
 - None blocking. Face enrollment requires a live camera; failure keeps the dialog open
   with a warning (no test in CI).
+
+## Page 2 — Employees + profile (completed)
+
+Rebuilt to the **branch portal's roster design** (`/employee/branch/employees` list +
+`/employee/branch/employees/:id` management profile), not the older HR mock layout.
+
+### UI changes
+- `features/employees/pages/EmployeesPage.tsx`: compact header with a live
+  `{count} employees · {gym}` subtitle, **Actions** (command palette) + **Create Request**
+  buttons, search/status filter row, a `data-table` that fills the viewport, mobile
+  directory cards with today's punch, and the Previous/Next pager (`Page X of Y · N total`).
+- New `features/employees/components/`:
+  - `EmployeeActionsPalette.tsx` — console counterpart of the portal's Branch Actions
+    palette (create request, review requests, correct attendance, payroll, evaluations,
+    recruitment, terminations), each card feature-gated.
+  - `CreateRequestForEmployeeModal.tsx` — on-behalf filing (employee picker over the whole
+    gym roster, catalog types, requested/end date, reason) → skips the manager stage and
+    lands in HR review.
+  - `EmployeeFileTabs.tsx` — the eight-section employee file (Personal, Documents,
+    Employment, Attendance, Shift, Requests, Evaluations, Payroll) reusing the portal
+    profile's tab strip, 3-column personal layout (incl. the HR employment-record card),
+    segmented attendance bar + tiles, current-week shift grid, and payslip snapshot.
+- `EmployeeProfilePage.tsx` rebuilt as the branch management profile shell: back link,
+  header card (avatar, name + status, position · employee number · level · gym · hire date)
+  with **Change status** / **Offboard**, then the file card whose body scrolls inside a
+  fixed-height viewport (no page scroll on desktop).
+- Old summary cards ("Details", "Compensation & access") and the `Dialog` status form were
+  replaced by the mock-styled `Table`/`Modal` primitives.
+
+### API integrations (all real)
+| Tab / element | Endpoint |
+|---|---|
+| Directory + pager | `GET /api/employees?search=&status=&page=&pageSize=12` |
+| Mobile card punch | `GET /api/attendance?date=<today>&pageSize=200` (joined by employee id) |
+| Personal | `GET /api/employees/{id}` |
+| Documents | `GET /api/employees/{id}/documents` + `GET …/documents/{docId}/download` |
+| Employment | `GET /api/employees/{id}/history` |
+| Attendance | `GET /api/employees/{id}/attendance?month=` + `GET …/leave-balance` |
+| Shift | `GET /api/employees/{id}/schedule?from=&to=` (added to `employees.api.ts`) |
+| Requests | `GET /api/employees/{id}/requests` |
+| Evaluations | `GET /api/employees/{id}/evaluations` |
+| Payroll | `GET /api/employees/{id}/payroll` |
+| Change status | `POST /api/employees/{id}/status-change` |
+| Create Request | `POST /api/requests` (on-behalf; skips the manager stage) |
+
+### Honest deviations from the reference
+- The portal profile carries a ninth section (Leave Balance). HR reads the same balances
+  inside **Attendance** (sick/annual/unpaid tiles + segmented bar), so the tab strip stays
+  the reference's eight.
+- Shift is read-only here: the portal's "Edit shift" modal writes the cycle-assignment API
+  owned by the Schedule page. Documents/Requests/Evaluations are history views — request
+  decisions stay on the Requests inbox.
+- The roster header keeps the reference's two actions: HR-only extras from the older mock
+  (Add Employee, Bulk Import, salary column) were removed from the directory; salary and
+  contract data remain in the profile's employment card.
 
 ## Two-sided flows: employee ⇄ HR (Requests, Payroll, Create Account)
 

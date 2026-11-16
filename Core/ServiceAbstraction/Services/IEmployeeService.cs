@@ -17,6 +17,9 @@ namespace ServiceAbstraction.Services
         /// <summary>Onboards a new employee (user account + profile + hire history).</summary>
         Task<EmployeeDataResponse> CreateEmployeeAsync(int? actorUserId, CreateEmployeeRequest request, CancellationToken cancellationToken = default);
 
+        /// <summary>Leave and attendance numbers the Create Account form starts from.</summary>
+        Task<LeaveDefaultsResponse> GetLeaveDefaultsAsync(int? actorUserId, int gymId, DateOnly? hireDate, CancellationToken cancellationToken = default);
+
         /// <summary>Onboards employees from a CSV document (name, email, position, level, gym, salary).</summary>
         Task<BulkImportResultResponse> BulkImportAsync(int? actorUserId, string csvContent, CancellationToken cancellationToken = default);
 

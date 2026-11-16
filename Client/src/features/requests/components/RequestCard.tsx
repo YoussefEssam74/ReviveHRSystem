@@ -1,7 +1,7 @@
 import { CalendarDays, Clock3, LogOut, Receipt, Repeat2, Stethoscope, TriangleAlert, Wallet } from 'lucide-react'
 import { Badge } from '../../../components/ui/badge'
 import { Button } from '../../../components/ui/button'
-import { formatDate, relativeDayLabel, tenureLabel } from '../../../lib/format'
+import { formatDate, formatTimeLabel, relativeDayLabel, tenureLabel } from '../../../lib/format'
 import { cn } from '../../../lib/utils'
 import type { RequestListItem } from '../api/requests.api'
 import { isDecisionUndoable, requestStatusLabel, requestTypeLabel, requestUrgency } from '../lib/request-status'
@@ -171,7 +171,7 @@ export function RequestCard({ request, canDecide, onDecide, onDetail, onArchive 
               <span className={cn('text-[9px] font-medium', step.done ? 'text-charcoal-700' : 'text-charcoal-400')}>
                 {step.step}
               </span>
-              <span className="text-[8px] text-charcoal-400">{step.date}</span>
+              <span className="text-[8px] text-charcoal-400">{formatTimeLabel(step.date)}</span>
             </span>
           ))}
         </div>

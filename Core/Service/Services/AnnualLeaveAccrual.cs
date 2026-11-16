@@ -51,5 +51,18 @@ namespace Service.Services
                 ? 0m
                 : Math.Min(MaxDaysPerYear, months);
         }
+
+        /// <summary>
+        /// Effective annual allowance: the earned days, raised by an HR grant but never
+        /// lowered by it and never above <see cref="MaxDaysPerYear"/>. A stored total
+        /// above the yearly maximum predates the accrual rule (legacy seed data) and is
+        /// ignored rather than honoured.
+        /// </summary>
+        internal static decimal EntitledDays(DateOnly hireDate, DateOnly asOf, decimal? grantedTotal)
+        {
+            var earned = EntitledDays(hireDate, asOf);
+            var grant = grantedTotal is > 0m and <= MaxDaysPerYear ? grantedTotal.Value : 0m;
+            return Math.Min(MaxDaysPerYear, Math.Max(earned, grant));
+        }
     }
 }

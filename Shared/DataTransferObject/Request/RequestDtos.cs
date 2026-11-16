@@ -13,7 +13,8 @@ namespace Shared.DataTransferObject.Request
     /// Query for GET /api/requests (R1). Status accepts the display values the UI
     /// tabs send (Pending HR Review, Approved, Rejected, Archived) plus the pseudo
     /// value Decided; type filters by request type; date (A2) matches requests whose
-    /// effective span covers that day; quick applies the KPI shortcuts
+    /// effective span covers that day; from/to (inclusive) keep requests whose span
+    /// overlaps that requested-date window; quick applies the KPI shortcuts
     /// (urgent | bmRejected | balance | approved).
     /// </summary>
     public class RequestListQuery
@@ -22,6 +23,15 @@ namespace Shared.DataTransferObject.Request
         public string? Type { get; init; }
         public int? Gym { get; init; }
         public string? Date { get; init; }
+
+        /// <summary>yyyy-MM-dd — inclusive start of the requested-date range.</summary>
+        public string? From { get; init; }
+
+        /// <summary>yyyy-MM-dd — inclusive end of the requested-date range.</summary>
+        public string? To { get; init; }
+
+        /// <summary>Free-text employee name search (case-insensitive contains).</summary>
+        public string? Search { get; init; }
         public string? Quick { get; init; }
         /// <summary>Comma-separated ids (e.g. "12,15") — the payroll settlement sheet's linked requests.</summary>
         public string? Ids { get; init; }
@@ -227,6 +237,9 @@ namespace Shared.DataTransferObject.Request
 
         /// <summary>HR stage outcome (null until HR decides).</summary>
         public string? HrDecision { get; init; }
+
+        /// <summary>When HR recorded that decision — the row prints both stages' stamps.</summary>
+        public DateTime? HrDecidedAt { get; init; }
     }
 
     /// <summary>One type-pill count on the inbox (R10).</summary>

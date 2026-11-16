@@ -36,5 +36,23 @@ namespace Shared.DataTransferObject.Employee
         public int Gym { get; init; }
 
         public DateOnly StartDate { get; init; }
+
+        /// <summary>
+        /// Annual days granted for the hire year. Annual leave is still earned from the
+        /// hire date, so a grant only raises the ceiling (capped by the yearly maximum).
+        /// </summary>
+        [Range(typeof(decimal), "0", "12")]
+        public decimal? AnnualLeaveDays { get; init; }
+
+        /// <summary>Days granted for the current year's sick-leave allowance.</summary>
+        [Range(typeof(decimal), "0", "365")]
+        public decimal? SickLeaveDays { get; init; }
+
+        /// <summary>
+        /// Employee-specific monthly cap of excused late-attendance / early-leave hours.
+        /// Omitted keeps the branch attendance policy.
+        /// </summary>
+        [Range(typeof(decimal), "0", "99.99")]
+        public decimal? ExcusedHoursPerMonth { get; init; }
     }
 }

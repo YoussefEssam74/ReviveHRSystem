@@ -138,6 +138,12 @@ export interface RequestListParams {
   gym?: number
   /** yyyy-MM-dd — matches requests whose span covers that day. */
   date?: string
+  /** yyyy-MM-dd — inclusive start of the requested-date range. */
+  from?: string
+  /** yyyy-MM-dd — inclusive end of the requested-date range. */
+  to?: string
+  /** Employee-name search (case-insensitive contains). */
+  search?: string
   /** urgent | bmRejected | balance | approved. */
   quick?: string
   /** Comma-separated ids (the payroll settlement sheet's linked requests). */
@@ -154,6 +160,9 @@ export function getRequests(params: RequestListParams = {}, signal?: AbortSignal
   if (params.type) query.set('type', params.type)
   if (params.gym != null) query.set('gym', String(params.gym))
   if (params.date) query.set('date', params.date)
+  if (params.from) query.set('from', params.from)
+  if (params.to) query.set('to', params.to)
+  if (params.search) query.set('search', params.search)
   if (params.quick) query.set('quick', params.quick)
   if (params.ids) query.set('ids', params.ids)
   if (params.page) query.set('page', String(params.page))
@@ -208,6 +217,8 @@ export interface EmployeeRequestRow {
   bmDecidedAt: string | null
   bmComment: string | null
   hrDecision: string | null
+  /** When HR recorded its decision (absent on older API builds). */
+  hrDecidedAt?: string | null
 }
 
 /**

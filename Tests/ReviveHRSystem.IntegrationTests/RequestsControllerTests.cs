@@ -154,6 +154,70 @@ namespace ReviveHRSystem.IntegrationTests
         }
 
         [Fact]
+        public async Task GetRequests_DateRangeFilter_MatchesOverlappingSpans()
+        {
+            var builder = new TestDataBuilder(_fixture.Services);
+            var gym = await builder.CreateGymWithStationAsync();
+            var employee = await builder.CreateEmployeeAsync(gym);
+            var token = await _fixture.GetAdminTokenAsync();
+
+            // Span [10, 12] overlaps the [8, 11] window; the 20th does not.
+            var overlapping = await CreateRequestAsync(token, employee.FullName, "Day Off", FutureDate(10), FutureDate(12));
+            var outside = await CreateRequestAsync(token, employee.FullName, "Day Off", FutureDate(20));
+
+            var request = _fixture.AuthorizedRequest(
+                HttpMethod.Get, $"/api/requests?from={FutureDate(8)}&to={FutureDate(11)}", null, token);
+            var response = await _fixture.Client.SendAsync(request);
+            var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+            var items = body.GetProperty("items").EnumerateArray().ToList();
+
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            var overlappingId = overlapping.GetProperty("data").GetProperty("id").GetInt32();
+            var outsideId = outside.GetProperty("data").GetProperty("id").GetInt32();
+            Assert.Contains(items, i => i.GetProperty("id").GetInt32() == overlappingId);
+            Assert.DoesNotContain(items, i => i.GetProperty("id").GetInt32() == outsideId);
+        }
+
+        [Fact]
+        public async Task GetRequests_DateRangeFilter_Reversed_Returns400()
+        {
+            var token = await _fixture.GetAdminTokenAsync();
+
+            var request = _fixture.AuthorizedRequest(
+                HttpMethod.Get, $"/api/requests?from={FutureDate(12)}&to={FutureDate(8)}", null, token);
+            var response = await _fixture.Client.SendAsync(request);
+
+            Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        }
+
+        [Fact]
+        public async Task GetRequests_SearchFilter_MatchesEmployeeName()
+        {
+            var builder = new TestDataBuilder(_fixture.Services);
+            var gym = await builder.CreateGymWithStationAsync();
+            var karim = await builder.CreateEmployeeAsync(gym);
+            var other = await builder.CreateEmployeeAsync(gym);
+            var token = await _fixture.GetAdminTokenAsync();
+
+            var karimRequest = await CreateRequestAsync(token, karim.FullName, "Day Off", FutureDate(6));
+            var otherRequest = await CreateRequestAsync(token, other.FullName, "Day Off", FutureDate(7));
+
+            // The helper names employees "IT Employee {unique 8-char suffix}", so a
+            // suffix search must hit only the first employee (and must be case-insensitive).
+            var term = Uri.EscapeDataString(karim.FullName[^8..].ToLowerInvariant());
+            var request = _fixture.AuthorizedRequest(HttpMethod.Get, $"/api/requests?search={term}", null, token);
+            var response = await _fixture.Client.SendAsync(request);
+            var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+            var items = body.GetProperty("items").EnumerateArray().ToList();
+
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            var karimId = karimRequest.GetProperty("data").GetProperty("id").GetInt32();
+            var otherId = otherRequest.GetProperty("data").GetProperty("id").GetInt32();
+            Assert.Contains(items, i => i.GetProperty("id").GetInt32() == karimId);
+            Assert.DoesNotContain(items, i => i.GetProperty("id").GetInt32() == otherId);
+        }
+
+        [Fact]
         public async Task GetRequests_QuickUrgent_ReturnsOnlyUrgentPendingTypes()
         {
             var builder = new TestDataBuilder(_fixture.Services);
