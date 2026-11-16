@@ -321,7 +321,11 @@ Permission: `employees.view` (gym-scoped). Query: `gym` (optional; HR may only p
 
 ### POST /api/employees
 
-Permission: `employees.create` on the target gym. Request: { firstName, lastName, email, phone?, position, level, salary?, gym, startDate }. Creates the login account (UserType Employee, active), the employee profile, an optional starting Compensation, the UserGymAccess row, an EMP-#### number (highest existing suffix + 1, floored at 1001), and a "Joined Revive" history entry. Returns 200 { data: <profile> }. Errors: 400 (duplicate email, inactive/unknown gym), 401 (no access to the gym).
+Permission: `employees.create` on the target gym. Request: { firstName, lastName, email, phone?, position, level, salary?, gym, startDate, annualLeaveDays?, sickLeaveDays?, excusedHoursPerMonth? }. Creates the login account (UserType Employee, active), the employee profile, an optional starting Compensation, the UserGymAccess row, an EMP-#### number (highest existing suffix + 1, floored at 1001), and a "Joined Revive" history entry. The optional leave numbers are saved with the account: annualLeaveDays (0–12) upserts the current-year annual grant (annual leave still accrues from the hire date, so a grant only raises the ceiling, capped at 12), sickLeaveDays (0–365) seeds the sick-leave entitlement (default 10), and excusedHoursPerMonth (0–99.99) overrides the branch attendance policy for this employee (null keeps following it). Returns 200 { data: <profile> }. Errors: 400 (duplicate email, inactive/unknown gym, leave numbers out of range), 401 (no access to the gym).
+
+### GET /api/employees/leave-defaults
+
+Permission: `employees.create` on `gymId`. Query: `gymId` (required), `hireDate` (optional "yyyy-MM-dd"). Returns 200 { annualLeaveDays, annualLeaveMaxDays, sickLeaveDays, excusedHoursPerMonth } — the numbers the Create Account form starts from before HR edits them: the annual days earned by the hire date (0 for a fresh hire), the yearly annual ceiling (12), the standard sick allowance (10), and the branch's monthly excused late/early-hours cap (`Gym.ExcusedLateHoursCapPerMonth`). Errors: 400 (unknown/suspended gym), 401.
 
 ### POST /api/employees/bulk-import
 
@@ -329,7 +333,7 @@ Permission: `employees.bulk_import`. Multipart file upload (.csv only, max 5 MB)
 
 ### GET /api/employees/{id}
 
-Permission: `employees.view` on the employee's gym. Returns 200 { data: <profile> } where profile is { id, employeeNumber, name, position, level, gymId, gym, status, initials, hireDate, email, phone, salary (latest), systemRole, branches: [{ id, name, branch }] } — branches lists the gyms the employee's user account may access (gym switcher data). Errors: 401 (other gym), 404 (unknown id).
+Permission: `employees.view` on the employee's gym. Returns 200 { data: <profile> } where profile is { id, employeeNumber, name, position, level, gymId, gym, status, initials, hireDate, email, phone, salary (latest), systemRole, branches: [{ id, name, branch }], excusedHoursPerMonth } — branches lists the gyms the employee's user account may access (gym switcher data); excusedHoursPerMonth is the employee-specific monthly excused-hours cap, or null when the branch policy applies. Errors: 401 (other gym), 404 (unknown id).
 
 ### PUT /api/employees/{id}
 
@@ -345,11 +349,11 @@ Permission: `employees.view`. Returns 200 [{ type, from, to, date, detail }] ord
 
 ### GET /api/employees/{id}/leave-balance
 
-Permission: `employees.view`. Returns 200 { employeeId, dayOff: { used, total }, sick: { used, total }, unpaid: { used, total } } for the current year; missing rows read as zeros. Errors: 401, 404.
+Permission: `employees.view`. Returns 200 { employeeId, dayOff: { used, total }, sick: { used, total }, unpaid: { used, total } } for the current year; missing rows read as the type's default (annual accrual from the hire date, sick 10). Annual total is the days earned by today, raised by an HR grant but capped at 12; sick total is the granted total (default 10). Errors: 401, 404.
 
 ### PUT /api/employees/{id}/leave-balance
 
-Permission: `employees.leave_balance.manage`. Request: { dayOff: { used, total }, sick: { used, total }, unpaid: { used, total } } (0–365 each; pending days are preserved). Upserts the current-year rows. Returns 200 { message }. Errors: 400 (out of range), 401, 404.
+Permission: `employees.leave_balance.manage`. Request: { dayOff: { used, total }, sick: { used, total }, unpaid: { used, total } } (0–365 each; pending days are preserved). Upserts the current-year rows; annual totals are clamped to the yearly maximum (12). Returns 200 { message }. Errors: 400 (out of range), 401, 404.
 
 ### POST /api/employees/{id}/transfer
 
@@ -473,7 +477,7 @@ Permission: `requests.view`. Archive sets the request to Archived; restore deriv
 
 ### GET /api/employees/{id}/requests
 
-Permission: `requests.view` on the employee's gym (A8 — the employee-file requests tab). Returns 200 a plain array of `{ id, employee, gym, type, requestedDate, startDate, endDate, days, reason, status, bmDecision, bmComment, payment, submittedDate, urgent }`, newest-first. Errors: 401, 404.
+Permission: `requests.view` on the employee's gym (A8 — the employee-file requests tab). Returns 200 a plain array of `{ id, type, requestedDate, endDate, submittedDate, submittedAt, status, reason, payment, calculatedDays, bmDecision, bmApprover, bmDecidedAt, bmComment, hrDecision, hrDecidedAt }`, newest-first — the tab prints each row's stamps (submitted, branch-manager decision, HR decision). Errors: 401, 404.
 
 ## Attendance station
 

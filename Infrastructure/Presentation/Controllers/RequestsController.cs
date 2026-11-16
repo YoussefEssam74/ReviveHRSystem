@@ -19,7 +19,7 @@ namespace Presentation.Controllers
     [Authorize]
     public class RequestsController(IRequestService _service) : ApiControllerBase
     {
-        /// <summary>GET /api/requests â€” paged inbox with status/type/gym/date/quick filters (R1, requests.view).</summary>
+        /// <summary>GET /api/requests — paged inbox with status/type/gym/date/from-to/search/quick filters (R1, requests.view).</summary>
         [HttpGet]
         public async Task<ActionResult<RequestListResponse>> GetRequests([FromQuery] RequestListQuery query, CancellationToken cancellationToken)
         {

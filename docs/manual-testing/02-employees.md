@@ -1,10 +1,9 @@
 # 02 — Employees (directory, profile tabs, lifecycle modals)
 
-**Screens:** `employees` — directory grid, employee detail with **9 tabs**
-(Personal Info, Documents, Employment History, Attendance Summary, Current Shift,
-Requests History, Leave Balance, Evaluations History, Payroll Snapshot) and the
-lifecycle modals (create, edit, status, transfer, position, compensation, contract,
-role, leave balance, bulk import).
+**Screens:** `employees` — directory grid, employee detail with **8 tabs**
+(Personal, Documents, Employment, Attendance — leave balances included, Shift,
+Requests, Evaluations, Payroll) and the lifecycle modals (create, edit, status,
+transfer, position, compensation, contract, role, leave balance, bulk import).
 **Guards:** `employees.*`, `requests.view`, `attendance.view`, `payroll.view`,
 `evaluations.view` per endpoint — all gym-scoped (ADR-003).
 

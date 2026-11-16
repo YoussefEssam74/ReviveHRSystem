@@ -19,7 +19,7 @@ decision has no HTTP route in this build; see cases 6.36–6.37).
 
 ### GET /api/requests — directory
 
-Query: `?gym=&status=&type=&date=&quick=&ids=&page=1&pageSize=20&sortBy=submitted|requested|employee|status&sortOrder=asc|desc`
+Query: `?gym=&status=&type=&date=&from=&to=&search=&quick=&ids=&page=1&pageSize=20&sortBy=submitted|requested|employee|status&sortOrder=asc|desc`
 
 | # | Actor | Input | Expected |
 |---|---|---|---|
@@ -31,6 +31,9 @@ Query: `?gym=&status=&type=&date=&quick=&ids=&page=1&pageSize=20&sortBy=submitte
 | 6.6 | hrm | `?type=Emergency Leave` | **200 empty list** (type filter is exact-match, no 400 — api.md is stale here) |
 | 6.7 | hrm | `?date=2026-10-21` | 200 requests whose `(TargetStartDate ?? RequestDate)…(TargetEndDate ?? RequestDate)` span covers the day |
 | 6.8 | hrm | `?date=21-10-2026` | 400 "date must be a valid date (yyyy-MM-dd)." |
+| 6.8a | hrm | `?from=2026-10-01&to=2026-10-15` | 200 requests whose span overlaps that inclusive window (the inbox's date-range filter); a one-sided `from` or `to` works too |
+| 6.8b | hrm | `?from=2026-10-15&to=2026-10-01` | 400 "from must be on or before to." |
+| 6.8c | hrm | `?search=karim` | 200 only requests whose employee name contains the term (case-insensitive; blank/whitespace = no filter) |
 | 6.9 | hrm | `?quick=urgent` | 200 resignation/termination rows; `?quick=approved`, `?quick=bmRejected`, `?quick=balance` each work |
 | 6.10 | hrm | `?quick=weird` | 400 "quick must be urgent, approved, bmRejected, or balance." |
 | 6.11 | hrm | `?ids=1,2,3` | 200 explicit ids only (payroll linked-requests pane) |

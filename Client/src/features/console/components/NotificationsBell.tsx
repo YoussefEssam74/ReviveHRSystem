@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Bell, CheckCheck, Loader2 } from 'lucide-react'
@@ -10,7 +9,6 @@ import { formatDate } from '../../../lib/format'
 /** Header notifications bell with unread badge and a recent-items dropdown. */
 export function NotificationsBell() {
   const { t } = useTranslation()
-  const navigate = useNavigate()
   const queryClient = useQueryClient()
   const [open, setOpen] = useState(false)
 
@@ -79,16 +77,9 @@ export function NotificationsBell() {
                 <EmptyState title={t('No notifications')} message={t("You're all caught up.")} />
               ) : (
                 recent!.items.map((item) => (
-                  <button
+                  <div
                     key={item.id}
-                    type="button"
-                    onClick={() => {
-                      setOpen(false)
-                      navigate('/console/notifications')
-                    }}
-                    className={`block w-full border-b border-slate-50 px-4 py-3 text-start transition-colors last:border-0 hover:bg-slate-50 ${
-                      item.read ? 'opacity-70' : ''
-                    }`}
+                    className={`border-b border-slate-50 px-4 py-3 last:border-0 ${item.read ? 'opacity-70' : ''}`}
                   >
                     <div className="flex items-start gap-2">
                       {!item.read && <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-emerald-500" aria-hidden="true" />}
@@ -98,22 +89,9 @@ export function NotificationsBell() {
                         <p className="mt-1 text-xs text-slate-400">{formatDate(item.date)}</p>
                       </div>
                     </div>
-                  </button>
+                  </div>
                 ))
               )}
-            </div>
-
-            <div className="border-t border-slate-100 px-4 py-2">
-              <button
-                type="button"
-                onClick={() => {
-                  setOpen(false)
-                  navigate('/console/notifications')
-                }}
-                className="w-full rounded-lg py-1.5 text-center text-sm font-medium text-emerald-600 hover:bg-emerald-50"
-              >
-                {t('View all')}
-              </button>
             </div>
           </div>
         </>

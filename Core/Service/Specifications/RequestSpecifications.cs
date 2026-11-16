@@ -58,6 +58,9 @@ namespace Service.Specifications
     /// <item><c>type</c> — exact request type ("Day Off", "Sick Leave", ...).</item>
     /// <item><c>date</c> (A2) — the request's effective span (end falling back to the
     /// submitted date) covers that calendar day.</item>
+    /// <item><c>from</c> / <c>to</c> — the request's effective span overlaps that
+    /// inclusive requested-date window (the inbox's date-range filter).</item>
+    /// <item><c>search</c> — case-insensitive employee-name contains (the inbox's name filter).</item>
     /// <item><c>quick</c> — KPI tile filters: "urgent" (same-day types still in HR review),
     /// "approved", "bmRejected" (branch-manager rejection awaiting review), "balance"
     /// (pending Day Off/Sick Leave whose matching balance for the current year is
@@ -87,7 +90,10 @@ namespace Service.Specifications
             bool desc,
             int[]? ids = null,
             bool includeAwaitingManager = false,
-            bool tracking = false)
+            bool tracking = false,
+            DateOnly? from = null,
+            DateOnly? to = null,
+            string? search = null)
         {
             Expression<Func<EmployeeRequest, bool>> predicate = _ => true;
 
@@ -121,6 +127,12 @@ namespace Service.Specifications
                 predicate = And(predicate, r => r.Type == wantedType);
             }
 
+            if (!string.IsNullOrWhiteSpace(search))
+            {
+                var term = search.Trim().ToLower();
+                predicate = And(predicate, r => r.Employee.FullName.ToLower().Contains(term));
+            }
+
             if (ids is { Length: > 0 })
             {
                 var wantedIds = ids;
@@ -133,6 +145,19 @@ namespace Service.Specifications
                 predicate = And(predicate, r =>
                     (r.TargetStartDate ?? r.RequestDate) <= day &&
                     (r.TargetEndDate ?? r.RequestDate) >= day);
+            }
+
+            // Date-range filter: the request's span must overlap [from, to].
+            if (from.HasValue)
+            {
+                var windowStart = from.Value;
+                predicate = And(predicate, r => (r.TargetEndDate ?? r.RequestDate) >= windowStart);
+            }
+
+            if (to.HasValue)
+            {
+                var windowEnd = to.Value;
+                predicate = And(predicate, r => (r.TargetStartDate ?? r.RequestDate) <= windowEnd);
             }
 
             switch (quick?.Trim().ToLowerInvariant())

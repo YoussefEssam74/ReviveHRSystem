@@ -1,4 +1,5 @@
 import type { RequestListItem } from '../api/requests.api'
+import { formatTimeOfDay } from '../../../lib/format'
 
 export type RequestUrgency = 'Notice' | 'Urgent' | 'Review' | 'Normal'
 
@@ -63,6 +64,45 @@ export function requestUrgency(request: Pick<RequestListItem, 'type' | 'bmDecisi
   }
   if (request.bmDecision === 'Rejected') return 'Review'
   return 'Normal'
+}
+
+/**
+ * Clock time the request was filed ("2:35 PM"), or null when the payload has none.
+ *
+ * The inbox row's `submittedDate` is a date-only value, so the exact instant is
+ * read from the timeline's "Submitted" stamp — the API renders it as
+ * "MMM d, yyyy · HH:mm" (invariant culture).
+ */
+export function submittedTimeLabel(request: Pick<RequestListItem, 'timeline'>): string | null {
+  return splitStepStamp(stepStamp(request, 'Submitted'))?.time ?? null
+}
+
+/** "Nov 11 · 10:48 PM" — when the branch manager decided (Approved/Rejected), or null. */
+export function bmDecisionTimeLabel(request: Pick<RequestListItem, 'timeline'>): string | null {
+  return shortStepStamp(stepStamp(request, 'BM '))
+}
+
+/** "Nov 12 · 9:02 AM" — when HR recorded its final decision, or null. */
+export function hrDecisionTimeLabel(request: Pick<RequestListItem, 'timeline'>): string | null {
+  return shortStepStamp(stepStamp(request, 'HR '))
+}
+
+/** The date stamp of the first timeline step whose label starts with `prefix`. */
+function stepStamp(request: Pick<RequestListItem, 'timeline'>, prefix: string): string | undefined {
+  return request.timeline?.find((step) => step.step.startsWith(prefix))?.date
+}
+
+/** Splits the API's step stamp ("Nov 11, 2026 · 22:48") into its date and clock parts. */
+function splitStepStamp(stamp: string | undefined): { date: string; time: string } | null {
+  const match = stamp ? /^(.*?)\s*·\s*(\d{1,2}):(\d{2})\s*$/.exec(stamp) : null
+  if (!match) return null
+  return { date: match[1], time: formatTimeOfDay(`${match[2]}:${match[3]}`) }
+}
+
+/** "Nov 11 · 10:48 PM" — the step stamp with the year dropped and a 12-hour clock. */
+function shortStepStamp(stamp: string | undefined): string | null {
+  const parts = splitStepStamp(stamp)
+  return parts ? `${parts.date.replace(/,\s*\d{4}$/, '')} · ${parts.time}` : null
 }
 
 /** "Sep" — the KPI tile's "Approved (Sep)" month label. */

@@ -633,6 +633,10 @@ namespace Persistence.Data.Migrations
                         .HasMaxLength(50)
                         .HasColumnType("character varying(50)");
 
+                    b.Property<decimal?>("ExcusedHoursCapPerMonth")
+                        .HasPrecision(4, 2)
+                        .HasColumnType("numeric(4,2)");
+
                     b.Property<byte[]>("FaceEncoding")
                         .HasColumnType("bytea");
 
@@ -2416,6 +2420,15 @@ namespace Persistence.Data.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
+                    b.Property<int?>("ApprovedLeavesOverride")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("AttendanceAdjustedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int?>("AttendanceAdjustedBy")
+                        .HasColumnType("integer");
+
                     b.Property<decimal>("BaseSalary")
                         .HasPrecision(18, 2)
                         .HasColumnType("numeric(18,2)");
@@ -2429,15 +2442,6 @@ namespace Persistence.Data.Migrations
                         .HasColumnType("integer");
 
                     b.Property<int>("DaysWorked")
-                        .HasColumnType("integer");
-
-                    b.Property<int?>("ApprovedLeavesOverride")
-                        .HasColumnType("integer");
-
-                    b.Property<DateTime?>("AttendanceAdjustedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<int?>("AttendanceAdjustedBy")
                         .HasColumnType("integer");
 
                     b.Property<int>("EmployeeId")
@@ -2468,12 +2472,6 @@ namespace Persistence.Data.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
-                    b.Property<int?>("UnexcusedAbsencesOverride")
-                        .HasColumnType("integer");
-
-                    b.Property<int?>("WeeklyOffsOverride")
-                        .HasColumnType("integer");
-
                     b.Property<decimal>("TotalBonuses")
                         .HasPrecision(18, 2)
                         .HasColumnType("numeric(18,2)");
@@ -2482,10 +2480,16 @@ namespace Persistence.Data.Migrations
                         .HasPrecision(18, 2)
                         .HasColumnType("numeric(18,2)");
 
+                    b.Property<int?>("UnexcusedAbsencesOverride")
+                        .HasColumnType("integer");
+
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<int?>("UpdatedBy")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("WeeklyOffsOverride")
                         .HasColumnType("integer");
 
                     b.HasKey("Id");

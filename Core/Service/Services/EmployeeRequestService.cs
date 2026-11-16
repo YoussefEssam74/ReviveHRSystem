@@ -521,7 +521,7 @@ namespace Service.Services
 
             var today = DateOnly.FromDateTime(DateTime.UtcNow);
             var usage = await ExcusedHoursUsedInMonthAsync(employee.Id, today, cancellationToken);
-            var cap = gym?.ExcusedLateHoursCapPerMonth ?? 0;
+            var cap = employee.ExcusedHoursCapPerMonth ?? gym?.ExcusedLateHoursCapPerMonth ?? 0;
 
             return new ExcusedHoursBudgetDto
             {
@@ -637,9 +637,10 @@ namespace Service.Services
                 ? LateHours(template, request.RequestTime.Value)
                 : EarlyHours(template, request.RequestTime.Value);
 
-            // Late attendance and early leave draw on the same monthly allowance.
+            // Late attendance and early leave draw on the same monthly allowance; an
+            // employee-specific cap overrides the branch policy.
             var usage = await ExcusedHoursUsedInMonthAsync(employee.Id, entity.RequestDate, cancellationToken);
-            var cap = gym.ExcusedLateHoursCapPerMonth;
+            var cap = employee.ExcusedHoursCapPerMonth ?? gym.ExcusedLateHoursCapPerMonth;
             var used = usage.Total;
             if (used + hours > cap)
             {

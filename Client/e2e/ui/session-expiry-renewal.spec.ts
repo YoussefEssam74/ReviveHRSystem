@@ -140,15 +140,15 @@ test('a slow silent renewal still persists the rotated token', async ({ browser 
   await page.waitForTimeout(1_500)
 
   // A navigation while the renewal is pending must not cancel it either.
-  await page.getByRole('link', { name: 'Notifications' }).first().click()
-  await expect(page).toHaveURL(/\/console\/notifications/)
+  await page.getByRole('link', { name: 'HR Team Management' }).first().click()
+  await expect(page).toHaveURL(/\/console\/hr-team/)
 
   releaseRefresh()
 
   // The rotated credential must be persisted and the user must stay signed in.
   await expect.poll(() => storedToken(page), { timeout: 20_000 }).not.toBe(session.accessToken)
   await expect(page).not.toHaveURL(/\/login/)
-  await expect(page.getByRole('link', { name: 'Notifications' }).first()).toBeVisible({ timeout: 20_000 })
+  await expect(page.getByRole('link', { name: 'HR Team Management' }).first()).toBeVisible({ timeout: 20_000 })
 
   await context.close()
 })

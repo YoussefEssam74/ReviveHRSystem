@@ -22,6 +22,7 @@ namespace Presistence.Data.Configurations
             builder.Property(e => e.EmergencyContactRelationship).HasMaxLength(100);
             builder.Property(e => e.EmergencyContactPhone).HasMaxLength(50);
             builder.Property(e => e.PhotoPath).HasMaxLength(500);
+            builder.Property(e => e.ExcusedHoursCapPerMonth).HasPrecision(4, 2);
 
             builder.HasIndex(e => e.EmployeeNumber).IsUnique();
             builder.HasIndex(e => e.GymId);

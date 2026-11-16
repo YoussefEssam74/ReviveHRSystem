@@ -550,13 +550,74 @@ namespace ReviveHRSystem.IntegrationTests
 
             Assert.Equal(HttpStatusCode.OK, response.StatusCode);
             Assert.Equal(id, body.GetProperty("employeeId").GetInt32());
-            // No stored row yet: the portal reports the type's default entitlement so a
-            // brand-new employee can submit a leave request (matching the submit rule).
+            // No stored row yet: annual leave is earned from the hire date (nothing is
+            // released before the sixth month), so a hire from yesterday holds 0 days.
             Assert.Equal(0, body.GetProperty("dayOff").GetProperty("used").GetDecimal());
-            Assert.Equal(21, body.GetProperty("dayOff").GetProperty("total").GetDecimal());
+            Assert.Equal(0, body.GetProperty("dayOff").GetProperty("total").GetDecimal());
             Assert.Equal(0, body.GetProperty("sick").GetProperty("used").GetDecimal());
             Assert.Equal(10, body.GetProperty("sick").GetProperty("total").GetDecimal());
             Assert.Equal(0, body.GetProperty("unpaid").GetProperty("total").GetDecimal());
+        }
+
+        [Fact]
+        public async Task LeaveDefaults_ReturnBranchPolicyAndStandardAllowances()
+        {
+            var gym = await new TestDataBuilder(_fixture.Services).CreateGymWithStationAsync();
+            var token = await _fixture.GetAdminTokenAsync();
+            var hireDate = DateOnly.FromDateTime(DateTime.UtcNow).ToString("yyyy-MM-dd");
+
+            var request = _fixture.AuthorizedRequest(
+                HttpMethod.Get, $"/api/employees/leave-defaults?gymId={gym.GymId}&hireDate={hireDate}", null, token);
+            var response = await _fixture.Client.SendAsync(request);
+            var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            // A hire from today has earned no annual days yet.
+            Assert.Equal(0, body.GetProperty("annualLeaveDays").GetDecimal());
+            Assert.Equal(12, body.GetProperty("annualLeaveMaxDays").GetDecimal());
+            Assert.Equal(10, body.GetProperty("sickLeaveDays").GetDecimal());
+            // A gym created without an explicit policy uses the 4h database default.
+            Assert.Equal(4, body.GetProperty("excusedHoursPerMonth").GetDecimal());
+        }
+
+        [Fact]
+        public async Task CreateEmployee_WithLeaveSetup_SavesGrantsAndExcusedCap()
+        {
+            var builder = new TestDataBuilder(_fixture.Services);
+            var gym = await builder.CreateGymWithStationAsync();
+            // A gym-scoped HR session creates the account, as the portal does.
+            var hr = await builder.CreateUserAsync(UserType.HR, new[] { gym });
+            await builder.GrantPermissionAsync(hr.UserId, "employees.create");
+            await builder.GrantPermissionAsync(hr.UserId, "employees.view");
+            var token = await _fixture.LoginAsync(hr.Email, hr.Password);
+
+            var created = await CreateViaApiAsync(token, new
+            {
+                firstName = "Lea",
+                lastName = "Grant",
+                email = UniqueEmail(),
+                position = "Trainer",
+                level = "2",
+                gym = gym.GymId,
+                startDate = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(-1)),
+                annualLeaveDays = 9m,
+                sickLeaveDays = 7m,
+                excusedHoursPerMonth = 6m,
+            });
+            var id = created.GetProperty("id").GetInt32();
+
+            var balanceRequest = _fixture.AuthorizedRequest(
+                HttpMethod.Get, $"/api/employees/{id}/leave-balance", null, token);
+            var balance = await (await _fixture.Client.SendAsync(balanceRequest))
+                .Content.ReadFromJsonAsync<JsonElement>();
+            Assert.Equal(9, balance.GetProperty("dayOff").GetProperty("total").GetDecimal());
+            Assert.Equal(7, balance.GetProperty("sick").GetProperty("total").GetDecimal());
+
+            var detailRequest = _fixture.AuthorizedRequest(
+                HttpMethod.Get, $"/api/employees/{id}", null, token);
+            var detail = await (await _fixture.Client.SendAsync(detailRequest))
+                .Content.ReadFromJsonAsync<JsonElement>();
+            Assert.Equal(6, detail.GetProperty("data").GetProperty("excusedHoursPerMonth").GetDecimal());
         }
 
         [Fact]
@@ -591,8 +652,11 @@ namespace ReviveHRSystem.IntegrationTests
             var body = await getResponse.Content.ReadFromJsonAsync<JsonElement>();
 
             Assert.Equal(3, body.GetProperty("dayOff").GetProperty("used").GetDecimal());
-            Assert.Equal(21, body.GetProperty("dayOff").GetProperty("total").GetDecimal());
+            // An annual grant can raise the entitlement but never above the yearly
+            // maximum (AnnualLeaveAccrual.MaxDaysPerYear = 12).
+            Assert.Equal(12, body.GetProperty("dayOff").GetProperty("total").GetDecimal());
             Assert.Equal(1, body.GetProperty("sick").GetProperty("used").GetDecimal());
+            Assert.Equal(14, body.GetProperty("sick").GetProperty("total").GetDecimal());
         }
 
         [Fact]

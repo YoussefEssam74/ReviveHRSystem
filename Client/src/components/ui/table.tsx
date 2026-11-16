@@ -2,10 +2,19 @@ import type { ReactNode } from 'react'
 import { cn } from '../../lib/utils'
 
 /** Responsive table wrapper: horizontal scroll on narrow screens. */
-export function Table({ children, className }: { children: ReactNode; className?: string }) {
+export function Table({
+  children,
+  className,
+  tableClassName,
+}: {
+  children: ReactNode
+  className?: string
+  /** Extra classes on the <table> element (e.g. `table-fixed` + a wider min width). */
+  tableClassName?: string
+}) {
   return (
     <div className={cn('overflow-x-auto', className)}>
-      <table className="w-full min-w-[640px] border-collapse text-sm">{children}</table>
+      <table className={cn('w-full min-w-[640px] border-collapse text-sm', tableClassName)}>{children}</table>
     </div>
   )
 }

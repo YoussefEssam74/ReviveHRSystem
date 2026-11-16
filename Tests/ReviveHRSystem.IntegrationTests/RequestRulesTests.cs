@@ -56,7 +56,9 @@ namespace ReviveHRSystem.IntegrationTests
         public async Task AnnualLeave_ExceedingRemainingBalance_Returns400()
         {
             var employee = await CreateSelfServiceEmployeeAsync("annual-over@revive.hr");
-            await SeedLeaveBalanceAsync(employee.EmployeeId, LeaveType.Annual, total: 2, used: 0, pending: 0);
+            // Annual leave may be booked up to the twelve days a full year earns, even
+            // before they accrue — eleven already consumed leaves one.
+            await SeedLeaveBalanceAsync(employee.EmployeeId, LeaveType.Annual, total: 12, used: 11, pending: 0);
 
             var created = await SubmitAsync(employee.Token, employee.EmployeeId, new Dictionary<string, string>
             {

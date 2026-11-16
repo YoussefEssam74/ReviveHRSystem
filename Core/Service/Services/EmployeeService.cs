@@ -149,8 +149,32 @@ namespace Service.Services
                 request.StartDate,
                 cancellationToken);
 
+            await ApplyLeaveSetupAsync(actor.Id, employee, request, cancellationToken);
+
             var detail = await BuildDetailAsync(employee, cancellationToken);
             return new EmployeeDataResponse { Data = detail };
+        }
+
+        public async Task<LeaveDefaultsResponse> GetLeaveDefaultsAsync(
+            int? actorUserId, int gymId, DateOnly? hireDate, CancellationToken cancellationToken = default)
+        {
+            var actor = await ResolveActorAsync(actorUserId, cancellationToken);
+            await _accessControl.EnsurePermissionForGymAsync(actor.Id, "employees.create", gymId, cancellationToken);
+
+            var gym = await EnsureGymAsync(gymId, cancellationToken);
+            var asOf = DateOnly.FromDateTime(DateTime.UtcNow);
+
+            return new LeaveDefaultsResponse
+            {
+                // A fresh hire has earned nothing yet; a backdated hire date carries
+                // whatever the accrual already released.
+                AnnualLeaveDays = hireDate.HasValue
+                    ? AnnualLeaveAccrual.EntitledDays(hireDate.Value, asOf)
+                    : 0m,
+                AnnualLeaveMaxDays = AnnualLeaveAccrual.MaxDaysPerYear,
+                SickLeaveDays = LeaveBalanceReservation.DefaultEntitlement(LeaveType.Sick),
+                ExcusedHoursPerMonth = gym.ExcusedLateHoursCapPerMonth,
+            };
         }
 
         public async Task<BulkImportResultResponse> BulkImportAsync(int? actorUserId, string csvContent, CancellationToken cancellationToken = default)
@@ -531,11 +555,13 @@ namespace Service.Services
                 var row = rows.FirstOrDefault(b => b.LeaveType == type);
                 // Annual leave is earned, not granted: its entitlement follows completed
                 // service (AnnualLeaveAccrual), so the stored total is never trusted for
-                // it. Every other type keeps the row's total or the type's default.
+                // it beyond the HR grant ceiling. Every other type keeps the row's total
+                // or the type's default.
                 var total = type == LeaveType.Annual
                     ? (employee is null
                         ? 0m
-                        : AnnualLeaveAccrual.EntitledDays(employee.HireDate, DateOnly.FromDateTime(DateTime.UtcNow)))
+                        : AnnualLeaveAccrual.EntitledDays(
+                            employee.HireDate, DateOnly.FromDateTime(DateTime.UtcNow), row?.TotalEntitlement))
                     : row?.TotalEntitlement ?? LeaveBalanceReservation.DefaultEntitlement(type);
 
                 return new LeaveBalanceBucket
@@ -586,7 +612,9 @@ namespace Service.Services
             var annualUsed = rows.FirstOrDefault(b => b.LeaveType == LeaveType.Annual)?.UsedDays ?? 0;
             var annualEntitled = employee is null
                 ? 0m
-                : AnnualLeaveAccrual.EntitledDays(employee.HireDate, DateOnly.FromDateTime(DateTime.UtcNow));
+                : AnnualLeaveAccrual.EntitledDays(
+                    employee.HireDate, DateOnly.FromDateTime(DateTime.UtcNow),
+                    rows.FirstOrDefault(b => b.LeaveType == LeaveType.Annual)?.TotalEntitlement);
             var openDeficit = Math.Max(0m, annualUsed - annualEntitled);
 
             return new LeaveBalanceBucket
@@ -625,9 +653,12 @@ namespace Service.Services
                 }
 
                 // PendingDays (awaiting approval) is preserved: only the granted
-                // totals and used days are managed here.
+                // totals and used days are managed here. Annual grants are clamped to
+                // the yearly maximum the accrual rule enforces on read.
                 row.UsedDays = used;
-                row.TotalEntitlement = total;
+                row.TotalEntitlement = type == LeaveType.Annual
+                    ? Math.Min(total, AnnualLeaveAccrual.MaxDaysPerYear)
+                    : total;
                 row.UpdatedBy = actor.Id;
             }
 
@@ -879,6 +910,52 @@ namespace Service.Services
             }
 
             return requested.Select(key => idByKey[key]).Distinct().ToList();
+        }
+
+        /// <summary>
+        /// Seeds the numbers entered in the Create Account form: the employee-specific
+        /// excused-hours cap and the annual/sick grants for the current year. Omitted
+        /// values keep the branch defaults (no rows are created).
+        /// </summary>
+        private async Task ApplyLeaveSetupAsync(
+            int actorId, Employee employee, CreateEmployeeRequest request, CancellationToken cancellationToken)
+        {
+            if (request.ExcusedHoursPerMonth.HasValue)
+            {
+                employee.ExcusedHoursCapPerMonth = request.ExcusedHoursPerMonth.Value;
+                _unitOfWork.GetRepository<Employee, int>().Update(employee);
+            }
+
+            var year = DateTime.UtcNow.Year;
+            if (request.AnnualLeaveDays is > 0m)
+            {
+                await _unitOfWork.GetRepository<LeaveBalance, int>().AddAsync(new LeaveBalance
+                {
+                    EmployeeId = employee.Id,
+                    Year = year,
+                    LeaveType = LeaveType.Annual,
+                    TotalEntitlement = Math.Min(request.AnnualLeaveDays.Value, AnnualLeaveAccrual.MaxDaysPerYear),
+                    UsedDays = 0,
+                    PendingDays = 0,
+                    UpdatedBy = actorId,
+                }, cancellationToken);
+            }
+
+            if (request.SickLeaveDays.HasValue)
+            {
+                await _unitOfWork.GetRepository<LeaveBalance, int>().AddAsync(new LeaveBalance
+                {
+                    EmployeeId = employee.Id,
+                    Year = year,
+                    LeaveType = LeaveType.Sick,
+                    TotalEntitlement = request.SickLeaveDays.Value,
+                    UsedDays = 0,
+                    PendingDays = 0,
+                    UpdatedBy = actorId,
+                }, cancellationToken);
+            }
+
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
         }
 
         private async Task<Employee> CreateEmployeeCoreAsync(
@@ -1154,6 +1231,7 @@ namespace Service.Services
                 Phone = employee.Phone,
                 Salary = latestSalary,
                 SystemRole = null, // populated when roles ship (S2)
+                ExcusedHoursPerMonth = employee.ExcusedHoursCapPerMonth,
                 Branches = branches.Select(b => new Shared.DataTransferObject.Gym.GymSummary
                 {
                     Id = b.Id,

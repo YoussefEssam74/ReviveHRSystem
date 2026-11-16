@@ -24,6 +24,12 @@ namespace Shared.DataTransferObject.Employee
         public decimal? Salary { get; init; }
         public string? SystemRole { get; init; }
         public IReadOnlyList<GymSummary>? Branches { get; init; }
+
+        /// <summary>
+        /// Employee-specific monthly excused-hours cap; null follows the branch
+        /// attendance policy (Gym.ExcusedLateHoursCapPerMonth).
+        /// </summary>
+        public decimal? ExcusedHoursPerMonth { get; init; }
     }
 
     /// <summary>
