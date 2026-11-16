@@ -556,7 +556,7 @@
         "hr": 200, "hrManager": 200, "topManagement": 200, "crossTenantTwin": 401
       },
       "notes": [
-        "USER DECISION (phase 3): R4 reverts the decision while the request date is ahead. Targets are per-identity Approved sick-leave requests; the Branch Manager may undo his branch-final sick-leave decisions."
+        "USER DECISION (phase 3): R4 reverts the decision with no time limit — the request date may already have passed (a late correction still returns the days and drops the absence). Targets are per-identity Approved sick-leave requests; the Branch Manager may undo his branch-final sick-leave decisions."
       ]
     },
     {

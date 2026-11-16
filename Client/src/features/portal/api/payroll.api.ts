@@ -64,6 +64,8 @@ export interface PayrollSheet {
   paidLeaveDays?: number
   sickLeaveDays?: number
   annualLeaveDays?: number
+  /** Approved paid-holiday days — never counted as absences. */
+  paidHolidayDays?: number
   absentDays?: number
   lateCount?: number
   earlyLeaveCount?: number

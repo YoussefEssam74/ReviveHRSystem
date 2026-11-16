@@ -579,8 +579,7 @@ namespace Service.Services
         /// </summary>
         private static bool IsApprovedLeave(EmployeeRequest request) =>
             string.Equals(request.Payment, "unpaid", StringComparison.OrdinalIgnoreCase)
-            || request.Type.Equals("Day Off", StringComparison.OrdinalIgnoreCase)
-            || RequestTypeCatalog.LeaveTypeFor(request.Type) is not null;
+            || RequestTypeCatalog.IsLeaveType(request.Type);
 
         /// <summary>
         /// The money and the note one attendance exception costs: the sheet covering

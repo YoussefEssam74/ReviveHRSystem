@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { AlertTriangle, CalendarClock, CheckCircle2, ChevronLeft, ChevronRight, ClipboardCheck, Inbox, LogIn, LogOut, Zap } from 'lucide-react'
+import { CalendarClock, ChevronLeft, ChevronRight, ClipboardCheck, Inbox, LogIn, LogOut, Zap } from 'lucide-react'
 import {
   getAttendanceGrid,
   getEmployeeDirectory,
@@ -32,8 +32,57 @@ import { activeLocale, formatDate, formatMoney, formatTimeLabel, formatTimeOfDay
  * absent rows (manualAttendance, `attendance.manual_entry` key).
  */
 
-/** "Showed up" statuses for the Present tile (Late and Missing Checkout count separately). */
-const PRESENT_SET = new Set(['On Time', 'Present', 'Early Checkout'])
+/** Days with no attendance to judge — neither on time, late nor absent. */
+const OFF_STATUSES = new Set(['Off', 'Scheduled'])
+
+/** Statuses that count as attended on time: a punch landed and the day is not late. */
+const ON_TIME_STATUSES = new Set(['On Time', 'Early Checkout', 'Missing Checkout', 'Covering (Extra Shift)'])
+
+/** The statuses the filter offers; any other status the day carries is appended. */
+const ATTENDANCE_STATUSES = [
+  'On Time',
+  'Late',
+  'Early Checkout',
+  'Absent',
+  'Sick Leave',
+  'Annual Leave',
+  'Paid Holiday',
+]
+
+/** The stored status vocabulary mapped onto what the board shows. */
+function attendanceStatusLabel(status: string): string {
+  return status === 'Early Checkout' ? 'Early Leaving' : status
+}
+
+/** The three departments the board rolls up into, in display order. */
+type DepartmentId = 'sales' | 'trainers' | 'hk'
+
+const DEPARTMENTS: {
+  id: DepartmentId
+  label: string
+  accent: string
+  bar: string
+  number: string
+}[] = [
+  { id: 'sales', label: 'Sales', accent: 'border-s-blue-500', bar: 'bg-blue-500', number: 'text-blue-600' },
+  { id: 'trainers', label: 'Trainers', accent: 'border-s-brand-500', bar: 'bg-brand-500', number: 'text-brand-600' },
+  { id: 'hk', label: 'Housekeeping', accent: 'border-s-amber-500', bar: 'bg-amber-500', number: 'text-amber-600' },
+]
+
+/**
+ * Positions are free text, so a department is matched by keyword rather than an
+ * exact title. Housekeeping is tested first ("maintenance" must not fall through
+ * to another bucket); reception/front-desk count as Sales — they sit on the
+ * front-of-house team. An unmatched title (e.g. "Branch Manager") belongs to no
+ * card but still appears in the status tables below.
+ */
+function departmentOf(position: string): DepartmentId | null {
+  const value = position.toLowerCase()
+  if (/house ?keeping|\bhk\b|clean|laundry|janitor|maintenance/.test(value)) return 'hk'
+  if (/sales|consult|reception|front ?desk|cashier|member/.test(value)) return 'sales'
+  if (/train|coach|instructor|fitness|nutrition|yoga|zumba|pilates|physical/.test(value)) return 'trainers'
+  return null
+}
 
 type IdentityRow = { employeeId: number; position: string; initials: string }
 
@@ -116,7 +165,9 @@ function AttendanceBoard({
   const { me } = usePortalSession()
   const [detailRow, setDetailRow] = useState<AttendanceGridRow | null>(null)
   const [reviewRow, setReviewRow] = useState<AttendanceGridRow | null>(null)
+  const [statusFilter, setStatusFilter] = useState('All')
   const [followUpMember, setFollowUpMember] = useState<TeamMemberDay | null>(null)
+  const [followUpDeduction, setFollowUpDeduction] = useState<{ days: number; date: string | null } | null>(null)
 
   // Identity join: the grid row carries name + shift + punches but no position.
   // BMs (employees.view) join the directory; TLs join the team-day roster.
@@ -128,11 +179,13 @@ function AttendanceBoard({
   })
   const identities = identityQuery.data ?? []
 
-  const lateRows = rows.filter((row) => row.status === 'Late')
-  const absentRows = rows.filter((row) => row.status === 'Absent')
-  const coverRows = rows.filter((row) => row.isCoverDay)
-  const presentCount = rows.filter((row) => PRESENT_SET.has(row.status)).length
-  const missingCheckoutCount = rows.filter((row) => row.status === 'Missing Checkout').length
+  // Everyone the day asked something of: Off/Scheduled staff are neither on
+  // time, late nor absent, so they stay out of the department cards.
+  const scheduledRows = rows.filter((row) => !OFF_STATUSES.has(row.status))
+  const positionOf = (row: AttendanceGridRow) =>
+    identities.find((item) => item.employeeId === row.employeeId)?.position ?? ''
+  const departmentRows = (id: DepartmentId) =>
+    scheduledRows.filter((row) => departmentOf(positionOf(row)) === id)
 
   // TeamMemberDay-shaped view of the day: every roster row for lookups (the detail
   // modal and the follow-up preselection), minus Off/Scheduled for the picker.
@@ -155,8 +208,11 @@ function AttendanceBoard({
   const memberById = new Map(allMembers.map((member) => [member.employeeId, member]))
 
   // Every "Take action" entry point carries its own row, so the popup opens on the
-  // employee that was clicked — never on whoever happens to head the list.
+  // employee that was clicked — never on whoever happens to head the list. When the
+  // day already carries a pending deduction, that deduction is handed over too: the
+  // form opens as "Deduction, N days, this date" ready to confirm.
   const openFollowUpFor = (row: AttendanceGridRow) => {
+    setFollowUpDeduction(row.deduction ? { days: row.deduction.days, date: row.date } : null)
     const member = memberById.get(row.employeeId)
     setFollowUpMember(
       member ?? {
@@ -175,7 +231,7 @@ function AttendanceBoard({
   }
 
   return (
-    <div className="space-y-3">
+    <div className="flex flex-col gap-3 lg:h-[calc(100dvh-6.5rem)]">
       <div className="flex flex-col justify-between gap-1.5 sm:flex-row sm:items-center sm:gap-2">
         <div>
           <h1 className="text-base font-bold text-charcoal-900">{t('Attendance Management')}</h1>
@@ -195,90 +251,58 @@ function AttendanceBoard({
         />
       </div>
 
-      {/* Stats — real counts from the day's grid (compact) */}
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
-        <StatTile
-          value={presentCount}
-          label={t('Present')}
-          accent="border-s-brand-500"
-          numberClass="text-brand-600"
-        />
-        <StatTile
-          value={lateRows.length}
-          label={t('Late')}
-          numberClass="text-yellow-600"
-        />
-        <StatTile
-          value={absentRows.length}
-          label={t('Absent')}
-          numberClass="text-red-600"
-        />
-        <StatTile
-          value={coverRows.length}
-          label={t('Covering')}
-          numberClass="text-purple-600"
-        />
-        <StatTile
-          value={missingCheckoutCount}
-          label={t('Missing Checkout')}
-          numberClass="text-blue-600"
-        />
+      {/* Department roll-up: one card per team, counting the day's scheduled
+          staff so "on time / scheduled" always reads against a real roster. */}
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+        {DEPARTMENTS.map((department) => {
+          const teamRows = departmentRows(department.id)
+          const onTime = teamRows.filter((row) => ON_TIME_STATUSES.has(row.status)).length
+          const late = teamRows.filter((row) => row.status === 'Late').length
+          const absent = teamRows.filter((row) => row.status === 'Absent').length
+          const pct = teamRows.length ? Math.round((onTime / teamRows.length) * 100) : 0
+          return (
+            <div
+              key={department.id}
+              className={cn(
+                'rounded-xl border border-charcoal-200 border-s-4 bg-white px-3 py-2.5',
+                department.accent,
+              )}
+            >
+              <div className="flex items-baseline justify-between gap-2">
+                <p className="bento-label text-charcoal-500">{t(department.label)}</p>
+                <p className={cn('text-lg font-bold leading-none tabular-nums', teamRows.length ? department.number : 'text-charcoal-400')}>
+                  {teamRows.length ? `${onTime}/${teamRows.length}` : '—'}
+                </p>
+              </div>
+              <p className="mt-0.5 text-[10px] text-charcoal-500">{t('On time')}</p>
+              <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-charcoal-100">
+                <div className={cn('h-full rounded-full transition-[width]', department.bar)} style={{ width: `${pct}%` }} />
+              </div>
+              <p className="mt-1.5 text-[10px] text-charcoal-500">
+                {t('{{late}} late · {{absent}} absent', { late, absent })}
+              </p>
+            </div>
+          )
+        })}
       </div>
 
-      {lateRows.length === 0 && absentRows.length === 0 && coverRows.length === 0 ? (
+      {rows.length === 0 ? (
         <EmptyState
-          icon={<CheckCircle2 className="h-8 w-8" aria-hidden="true" />}
-          title={t('No attendance exceptions')}
-          hint={t('Everyone scheduled on this day checked in on time. Pick another date to review late or absent days.')}
+          icon={<CalendarClock className="h-8 w-8" aria-hidden="true" />}
+          title={t('No attendance for this day')}
+          hint={t('Nobody is rostered on this date. Pick another day to review the branch.')}
         />
       ) : (
-        <div className="space-y-3">
-          <ExceptionList
-            title={t('LATE CHECK-INS')}
-            titleIcon={<AlertTriangle className="h-3.5 w-3.5" aria-hidden="true" />}
-            headerClass="bg-yellow-50/50"
-            titleClass="text-yellow-700"
-            rows={lateRows}
-            identities={identities}
-            hint={(row) =>
-              row.checkIn ? t('Checked in {{time}}', { time: formatTimeOfDay(row.checkIn) }) : t('No check-in')
-            }
-            onView={setDetailRow}
-            onFollowUp={openFollowUpFor}
-          />
-          <ExceptionList
-            title={t('ABSENT')}
-            titleIcon={<AlertTriangle className="h-3.5 w-3.5" aria-hidden="true" />}
-            headerClass="bg-red-50/50"
-            titleClass="text-red-700"
-            rows={absentRows}
-            identities={identities}
-            hint={() => t('No check-in')}
-            onView={setDetailRow}
-            onFollowUp={openFollowUpFor}
-          />
-          <ExceptionList
-            title={t('COVERING / EXTRA SHIFTS')}
-            titleIcon={<Zap className="h-3.5 w-3.5" aria-hidden="true" />}
-            headerClass="bg-purple-50/50"
-            titleClass="text-purple-700"
-            rows={coverRows}
-            identities={identities}
-            hint={(row) =>
-              row.coverDays
-                ? t('Covering (Extra Shift) · in {{time}} · cover {{days}}d', {
-                    time: row.checkIn ? formatTimeOfDay(row.checkIn) : '—',
-                    days: row.coverDays,
-                  })
-                : row.checkIn
-                  ? t('Covering (Extra Shift) · in {{time}}', { time: formatTimeOfDay(row.checkIn) })
-                  : t('Covering (Extra Shift)')
-            }
-            onView={setDetailRow}
-            onFollowUp={openFollowUpFor}
-            onReview={setReviewRow}
-          />
-        </div>
+        <AttendanceTable
+          rows={rows}
+          statusFilter={statusFilter}
+          onStatusFilterChange={setStatusFilter}
+          positionOf={positionOf}
+          initialsOfRow={(row) => identities.find((item) => item.employeeId === row.employeeId)?.initials ?? initialsOf(row.name)}
+          onView={setDetailRow}
+          onFollowUp={openFollowUpFor}
+          onReview={setReviewRow}
+        />
       )}
 
       {detailRow && (
@@ -302,108 +326,190 @@ function AttendanceBoard({
         <CreateFollowUpModal
           members={members}
           defaultMember={followUpMember}
-          onClose={() => setFollowUpMember(null)}
+          defaultDeduction={followUpDeduction}
+          onClose={() => {
+            setFollowUpMember(null)
+            setFollowUpDeduction(null)
+          }}
         />
       )}
     </div>
   )
 }
 
-/* ==================== tiles + lists ==================== */
+/* ==================== status table ==================== */
 
-function StatTile({
-  value,
-  label,
-  accent,
-  numberClass,
-}: {
-  value: number
-  label: string
-  accent?: string
-  numberClass: string
-}) {
-  return (
-    <div className={cn('rounded-lg border border-charcoal-200 border-s-4 bg-white px-3 py-2 text-center', accent)}>
-      <p className={cn('text-base font-bold leading-tight', numberClass)}>{value}</p>
-      <p className="text-[10px] text-charcoal-500">{label}</p>
-    </div>
-  )
-}
-
-function ExceptionList({
-  title,
-  titleIcon,
-  headerClass,
-  titleClass,
+/**
+ * The whole branch roster for one day as a single table (Name, Job Title,
+ * Shift, Status, Check-in, Check-out, Action), filtered by status. The same
+ * rows stack as cards on phones, where seven columns cannot fit.
+ */
+function AttendanceTable({
   rows,
-  identities,
-  hint,
+  statusFilter,
+  onStatusFilterChange,
+  positionOf,
+  initialsOfRow,
   onView,
   onFollowUp,
   onReview,
 }: {
-  title: string
-  titleIcon: React.ReactNode
-  headerClass: string
-  titleClass: string
   rows: AttendanceGridRow[]
-  identities: IdentityRow[]
-  hint: (row: AttendanceGridRow) => string
+  statusFilter: string
+  onStatusFilterChange: (status: string) => void
+  positionOf: (row: AttendanceGridRow) => string
+  initialsOfRow: (row: AttendanceGridRow) => string
   onView: (row: AttendanceGridRow) => void
   onFollowUp: (row: AttendanceGridRow) => void
-  /** Present on the cover list: opens the cover-day review (1/2 days or reject). */
-  onReview?: (row: AttendanceGridRow) => void
+  onReview: (row: AttendanceGridRow) => void
 }) {
   const { t } = useTranslation()
+  const statusOptions = Array.from(new Set([...ATTENDANCE_STATUSES, ...rows.map((row) => row.status)]))
+  const visibleRows = statusFilter === 'All' ? rows : rows.filter((row) => row.status === statusFilter)
 
-  if (rows.length === 0) return null
   return (
-    <div className="overflow-hidden rounded-xl border border-charcoal-200 bg-white">
-      <div className={cn('flex items-center gap-1.5 border-b border-charcoal-100 px-4 py-2.5', headerClass)}>
-        <p className={cn('bento-label flex items-center gap-1.5', titleClass)}>
-          {titleIcon}
-          {title} ({rows.length})
+    <div className="flex flex-col overflow-hidden rounded-xl border border-charcoal-200 bg-white lg:min-h-0 lg:flex-1">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-charcoal-100 px-4 py-2.5">
+        <p className="bento-label text-charcoal-500">
+          {t('{{count}} employees', { count: visibleRows.length })}
         </p>
+        <select
+          value={statusFilter}
+          onChange={(event) => onStatusFilterChange(event.target.value)}
+          className="form-select h-8 w-40 py-1 text-xs"
+          aria-label={t('Filter by status')}
+        >
+          <option value="All">{t('All Status')}</option>
+          {statusOptions.map((status) => (
+            <option key={status} value={status}>
+              {t(attendanceStatusLabel(status))}
+            </option>
+          ))}
+        </select>
       </div>
-      <div className="divide-y divide-charcoal-50">
-        {rows.map((row) => {
-          const identity = identities.find((item) => item.employeeId === row.employeeId)
-          return (
-            <div
-              key={`${row.employeeId}-${row.date}`}
-              className="flex flex-col justify-between gap-2 p-3 transition-colors hover:bg-charcoal-50/50 sm:flex-row sm:items-center"
-            >
-              <div className="flex items-center gap-3">
-                <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-brand-100 text-[10px] font-semibold text-brand-700">
-                  {identity?.initials ?? initialsOf(row.name)}
-                </span>
-                <div className="min-w-0">
-                  <p className="text-xs font-medium text-charcoal-900">{row.name}</p>
-                  <p className="truncate text-[10px] text-charcoal-500">
-                    {identity?.position ?? '—'} · {hint(row)}
-                  </p>
-                  {row.deduction && (row.status === 'Late' || row.status === 'Absent') && (
-                    <p className="mt-1 flex flex-wrap items-center gap-1.5 text-[10px]">
-                      <span className="font-semibold text-red-600">
-                        {t('Deduction: {{amount}}', { amount: formatMoney(row.deduction.amount) })}
-                      </span>
-                      <span className="text-charcoal-500">
-                        · {t('{{days}} days of pay', { days: Number(row.deduction.days.toFixed(3)) })}
-                      </span>
-                      <StatusBadge status={humanize(row.deduction.status)} />
+
+      {visibleRows.length === 0 ? (
+        <p className="px-4 py-8 text-center text-[11px] text-charcoal-500">{t('No employees with this status.')}</p>
+      ) : (
+        <>
+          {/* Desktop table: the card owns the scroll so the header stays pinned. */}
+          <div className="hidden min-h-0 flex-1 overflow-auto lg:block">
+            <table className="data-table min-w-[880px]">
+              <thead className="sticky top-0 z-10">
+                <tr>
+                  <th>{t('Name')}</th>
+                  <th>{t('Job Title')}</th>
+                  <th>{t('Shift')}</th>
+                  {/* Punches are short and often a dash, so these two columns are
+                      centred — the dash then sits mid-cell instead of hugging the
+                      text edge. */}
+                  <th key="Check-in" className="is-center">
+                    {t('Check-in')}
+                  </th>
+                  <th key="Check-out" className="is-center">
+                    {t('Check-out')}
+                  </th>
+                  <th>{t('Status')}</th>
+                  <th className="is-end">{t('Action')}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {visibleRows.map((row) => (
+                  <tr key={`${row.employeeId}-${row.date}`}>
+                    <td>
+                      <div className="flex items-center gap-2">
+                        <span className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full bg-brand-100 text-[10px] font-semibold text-brand-700">
+                          {initialsOfRow(row)}
+                        </span>
+                        <div className="min-w-0">
+                          <p className="truncate text-xs font-medium text-charcoal-900">{row.name}</p>
+                          {row.deduction && (row.status === 'Late' || row.status === 'Absent') && (
+                            <p className="flex flex-wrap items-center gap-1 text-[10px]">
+                              <span className="font-semibold text-red-600">
+                                {formatMoney(row.deduction.amount)}
+                              </span>
+                              <StatusBadge status={humanize(row.deduction.status)} />
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    </td>
+                    <td className="text-xs text-charcoal-600">{positionOf(row) || '—'}</td>
+                    <td className="whitespace-nowrap text-xs text-charcoal-600">{row.shift ? formatTimeLabel(row.shift) : '—'}</td>
+                    <td className="is-center whitespace-nowrap text-xs tabular-nums text-charcoal-900">
+                      {row.checkIn ? formatTimeOfDay(row.checkIn) : <span className="text-charcoal-400">—</span>}
+                    </td>
+                    <td className="is-center whitespace-nowrap text-xs tabular-nums text-charcoal-900">
+                      {row.checkOut ? formatTimeOfDay(row.checkOut) : <span className="text-charcoal-400">—</span>}
+                    </td>
+                    <td className="whitespace-nowrap">
+                      <StatusBadge status={attendanceStatusLabel(row.status)} />
+                    </td>
+                    <td>
+                      <div className="flex justify-end">
+                        <AttendanceRowActions
+                          onView={() => onView(row)}
+                          onFollowUp={() => onFollowUp(row)}
+                          onReview={row.isCoverDay ? () => onReview(row) : undefined}
+                        />
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Phone cards */}
+          <div className="divide-y divide-charcoal-50 lg:hidden">
+            {visibleRows.map((row) => (
+              <div key={`${row.employeeId}-${row.date}`} className="p-3">
+                <div className="flex items-center gap-3">
+                  <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-brand-100 text-[10px] font-semibold text-brand-700">
+                    {initialsOfRow(row)}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-xs font-medium text-charcoal-900">{row.name}</p>
+                    <p className="truncate text-[10px] text-charcoal-500">
+                      {positionOf(row) || '—'} · {row.shift ? formatTimeLabel(row.shift) : '—'}
                     </p>
-                  )}
+                  </div>
+                  <StatusBadge status={attendanceStatusLabel(row.status)} />
+                </div>
+                <dl className="mt-2 grid grid-cols-2 gap-1 text-[10px]">
+                  <div className="rounded-lg bg-charcoal-50 px-2 py-1">
+                    <dt className="text-charcoal-500">{t('Check-in')}</dt>
+                    <dd className="font-semibold tabular-nums text-charcoal-900">
+                      {row.checkIn ? formatTimeOfDay(row.checkIn) : '—'}
+                    </dd>
+                  </div>
+                  <div className="rounded-lg bg-charcoal-50 px-2 py-1">
+                    <dt className="text-charcoal-500">{t('Check-out')}</dt>
+                    <dd className="font-semibold tabular-nums text-charcoal-900">
+                      {row.checkOut ? formatTimeOfDay(row.checkOut) : '—'}
+                    </dd>
+                  </div>
+                </dl>
+                {row.deduction && (row.status === 'Late' || row.status === 'Absent') && (
+                  <p className="mt-1.5 flex flex-wrap items-center gap-1.5 text-[10px]">
+                    <span className="font-semibold text-red-600">
+                      {t('Deduction: {{amount}}', { amount: formatMoney(row.deduction.amount) })}
+                    </span>
+                    <StatusBadge status={humanize(row.deduction.status)} />
+                  </p>
+                )}
+                <div className="mt-2">
+                  <AttendanceRowActions
+                    onView={() => onView(row)}
+                    onFollowUp={() => onFollowUp(row)}
+                    onReview={row.isCoverDay ? () => onReview(row) : undefined}
+                  />
                 </div>
               </div>
-              <AttendanceRowActions
-                onView={() => onView(row)}
-                onFollowUp={() => onFollowUp(row)}
-                onReview={onReview ? () => onReview(row) : undefined}
-              />
-            </div>
-          )
-        })}
-      </div>
+            ))}
+          </div>
+        </>
+      )}
     </div>
   )
 }
@@ -435,7 +541,7 @@ function AttendanceRowActions({
       <Button size="sm" variant="secondary" onClick={onFollowUp}>
         <Zap className="h-3.5 w-3.5" aria-hidden="true" /> {t('Take action')}
       </Button>
-      <Button size="sm" variant="secondary" onClick={onView}>
+      <Button size="sm" variant="ghost" onClick={onView}>
         {t('View')}
       </Button>
     </div>

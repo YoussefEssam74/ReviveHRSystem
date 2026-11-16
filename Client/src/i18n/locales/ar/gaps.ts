@@ -8,7 +8,6 @@ export const gaps: Record<string, string> = {
   '{{count}} conflict': '{{count}} تعارض',
   '{{count}} days · whole {{month}}': '{{count}} أيام · كامل {{month}}',
   '{{count}} shifts assigned': 'تم إسناد {{count}} وردية',
-  '{{count}} with missing days': '{{count}} لديهم أيام ناقصة',
   '{{date}} · Submitted {{submitted}}': '{{date}} · أُرسل {{submitted}}',
   '{{document}} full view': 'عرض {{document}} كاملًا',
   '{{message}} Check your connection and try again.': '{{message}} تحقق من اتصالك وحاول مرة أخرى.',
@@ -111,6 +110,12 @@ export const gaps: Record<string, string> = {
   'Back to the 7-day view — shifts repeat weekly': 'العودة إلى عرض 7 أيام — تتكرر الورديات أسبوعيًا',
   'Click a cell or drag across the grid to paint it.': 'انقر على خلية أو اسحب عبر الشبكة لتلوينها.',
   'Copy Previous': 'نسخ السابق',
+  'Copy Previous Schedule': 'نسخ جدول سابق',
+  'Pick the schedule to copy its weekly pattern from.': 'اختر الجدول الذي تنسخ نمطه الأسبوعي.',
+  'Copy Schedule': 'نسخ الجدول',
+  'Schedules to copy from': 'الجداول المتاحة للنسخ',
+  'No other schedule exists in this gym yet — create one and assign its shifts first.':
+    'لا يوجد جدول آخر في هذه الصالة بعد — أنشئ جدولًا وأسند وردياته أولًا.',
   'Create New Schedule': 'إنشاء جدول جديد',
   'Create a schedule whose dates overlap this month, or pick another month.':
     'أنشئ جدولًا تتقاطع تواريخه مع هذا الشهر، أو اختر شهرًا آخر.',
@@ -124,7 +129,6 @@ export const gaps: Record<string, string> = {
     'التعديل مُفعّل — اختر وردية أدناه، ثم انقر أو اسحب عبر الشبكة لتلوينها. «راحة» يحجز يوم راحة صريحًا؛ والأيام التي تُركت دون تغيير تبقى «غير مسندة». أزرار ➤ للصف و⬇ لليوم تملأ بنقرة واحدة. هذا الجدول منشور بالفعل — تصل التعديلات المحفوظة إلى الموظفين فورًا؛ ولا حاجة لإعادة النشر.',
   'Employees (and their profile Shift tab) can only see published schedules — paint the week, save, then press':
     'لا يرى الموظفون (وتبويب الورديات في ملفهم) إلا الجداول المنشورة — لوّن الأسبوع، واحفظ، ثم اضغط',
-  'Employees who still have weekdays marked Not assigned': 'الموظفون الذين لا تزال أيام الأسبوع لديهم غير مسندة',
   'Future month — plan ahead and assign shifts.': 'شهر قادم — خطّط مسبقًا وأسند الورديات.',
   'Live month — pick a period below to view or assign shifts.': 'الشهر الحالي — اختر فترة أدناه لعرض الورديات أو إسنادها.',
   "No employees in this cycle's roster": 'لا يوجد موظفون في جدول هذه الدورة',

@@ -4,7 +4,7 @@ import { Button } from '../../../components/ui/button'
 import { formatDate, relativeDayLabel, tenureLabel } from '../../../lib/format'
 import { cn } from '../../../lib/utils'
 import type { RequestListItem } from '../api/requests.api'
-import { isDecisionUndoable, requestStatusLabel, requestTypeLabel, requestUrgency } from '../lib/request-status'
+import { requestStatusLabel, requestTypeLabel, requestUrgency } from '../lib/request-status'
 
 /** Type glyphs the mock draws inside the avatar's corner chip. */
 const TYPE_ICONS: Record<string, typeof CalendarDays> = {
@@ -52,8 +52,7 @@ export function RequestCard({ request, canDecide, onDecide, onDetail, onArchive 
   // branch manager is assigned.
   const pending = request.status === 'Pending HR Review' || request.awaitingManager
   const decided = !pending && request.status !== 'Archived'
-  const undoable = decided && canDecide && isDecisionUndoable(request)
-  const isFinal = decided && !isDecisionUndoable(request)
+  const undoable = decided && canDecide
   const relative = relativeDayLabel(request.requestedDate)
   const tenure = tenureLabel(request.hireDate)
   const balance = request.leaveBalance
@@ -82,7 +81,6 @@ export function RequestCard({ request, canDecide, onDecide, onDetail, onArchive 
                 {requestStatusLabel(request.status, request.awaitingManager)}
               </Badge>
               {pending && <UrgencyTag request={request} />}
-              {isFinal && <Badge className="text-[9px]">Final</Badge>}
             </div>
             <p className="mt-0.5 text-[10px] text-charcoal-500">
               {request.position && `${request.position}${request.level ? ` · ${request.level}` : ''} · `}

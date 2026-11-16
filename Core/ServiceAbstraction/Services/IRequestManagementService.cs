@@ -15,7 +15,7 @@ namespace ServiceAbstraction.Services
         Task DecideAsync(
             int actorUserId, int requestId, int? activeGymId, RequestDecisionDto decision, CancellationToken cancellationToken = default);
 
-        /// <summary>Undo a stage-1 decision while the request date is still ahead.</summary>
+        /// <summary>Undo a stage-1 decision — no time limit, the day may already have passed.</summary>
         Task UndoAsync(
             int actorUserId, int requestId, int? activeGymId, CancellationToken cancellationToken = default);
 

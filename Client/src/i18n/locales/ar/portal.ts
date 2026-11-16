@@ -459,6 +459,7 @@ export const portal: Record<string, string> = {
   'Scheduled Working Days': 'أيام العمل المجدولة',
   'Actual Days This Month': 'أيام العمل الفعلية هذا الشهر',
   'Weekly Off': 'أيام الراحة الأسبوعية',
+  'Daily Rate': 'الأجر اليومي',
   'Annual Increase Percentage': 'نسبة الزيادة السنوية',
   'Applied With January Payroll': 'تُطبَّق مع رواتب يناير',
   'January {{year}}': 'يناير {{year}}',
@@ -608,8 +609,16 @@ export const portal: Record<string, string> = {
   'Search employees': 'بحث في الموظفين',
   'Filter by status': 'تصفية حسب الحالة',
   'All statuses': 'كل الحالات',
+  'All Status': 'كل الحالات',
   'No employees match': 'لا يوجد موظفون مطابقون',
+  'No employees with this status.': 'لا يوجد موظفون بهذه الحالة.',
+  'Early Leaving': 'انصراف مبكر',
+  'New Comer': 'موظف جديد',
+  'Paid Holiday': 'عطلة مدفوعة',
   'Adjust the search or status filter — the list covers everyone in the active gym.':
+    'عدّل البحث أو عامل التصفية — تشمل القائمة جميع العاملين في الصالة النشطة.',
+  'Search name, ID or position...': 'ابحث بالاسم أو الرقم الوظيفي أو المسمى الوظيفي...',
+  'Adjust the search or status filter — the roster covers everyone in the active gym.':
     'عدّل البحث أو عامل التصفية — تشمل القائمة جميع العاملين في الصالة النشطة.',
 
   // Payroll
@@ -658,6 +667,20 @@ export const portal: Record<string, string> = {
     'تغطية (وردية إضافية) · حضور {{time}} · تغطية {{days}} يوم',
   'Review cover day': 'مراجعة يوم التغطية',
   'Take action': 'اتخاذ إجراء',
+  // Department cards + status tables
+  Sales: 'المبيعات',
+  Trainers: 'المدربون',
+  Housekeeping: 'النظافة',
+  '{{late}} late · {{absent}} absent': '{{late}} متأخر · {{absent}} غائب',
+  'ON TIME': 'في الموعد',
+  LATE: 'متأخر',
+  ABSENT: 'غائب',
+  'Nobody has checked in late.': 'لا يوجد من تأخر في الحضور.',
+  'Nobody is absent.': 'لا يوجد غائبون.',
+  'Everyone scheduled today is late or absent.': 'كل المجدولين اليوم متأخرون أو غائبون.',
+  'No attendance for this day': 'لا يوجد حضور في هذا اليوم',
+  'Nobody is rostered on this date. Pick another day to review the branch.':
+    'لا يوجد موظفون مجدولون في هذا التاريخ. اختر يوماً آخر لمراجعة الفرع.',
   'Full profile': 'الملف الكامل',
   'Scheduled today': 'المجدول اليوم',
   'Check in': 'تسجيل الحضور',

@@ -2,7 +2,7 @@ import { useState, useDeferredValue } from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { Plus, Zap } from 'lucide-react'
+import { Clock, Plus, Zap } from 'lucide-react'
 import {
   getAttendanceGrid,
   getEmployeeDirectory,
@@ -20,7 +20,7 @@ import { Button } from '../../../components/ui/button'
 import { useToast } from '../../../components/ui/toast'
 import { usePortalSession } from '../../../contexts/PortalSessionContext'
 import { describeApiError } from '../../../lib/api-client'
-import { fetchAllPages } from '../../../lib/paged'
+import { fetchAllPages, type PagedCountResult } from '../../../lib/paged'
 import { formatTimeOfDay, humanize } from '../../../lib/format'
 
 /**
@@ -29,7 +29,16 @@ import { formatTimeOfDay, humanize } from '../../../lib/format'
  * row-level actions. Clicking a row opens the full employee profile.
  */
 
-const EMPLOYMENT_STATUSES = ['Active', 'OnLeave', 'Suspended', 'Terminated'] as const
+/** One page of the desktop roster and of the mobile card list. */
+const DIRECTORY_PAGE_SIZE = 12
+
+/**
+ * Filter-bar options: the stored statuses the directory endpoint accepts plus
+ * "New Comer", which the roster derives from the hire date.
+ */
+const STATUS_FILTERS = ['Active', 'New Comer', 'OnLeave', 'Suspended', 'Terminated'] as const
+type DirectoryStatus = (typeof STATUS_FILTERS)[number] | 'All'
+const NEW_COMER = 'New Comer'
 
 /** Local "today" DateOnly in yyyy-MM-dd ("1928-01-01" safe: no timezone drift). */
 function todayIso(): string {
@@ -40,6 +49,60 @@ function todayIso(): string {
 /** Directory statuses render through humanize ("OnLeave" → "On Leave"). */
 function employmentLabel(status: string): string {
   return humanize(status)
+}
+
+/** Months an employee counts as a new comer before the roster calls them Active. */
+const NEW_COMER_MONTHS = 6
+
+/** True while an Active employee is still inside their first six months of service. */
+function isNewComer(status: string, hireDate: string | null): boolean {
+  if (status !== 'Active' || !hireDate) return false
+  const hired = new Date(`${hireDate}T00:00:00`)
+  if (Number.isNaN(hired.getTime())) return false
+  const veteranFrom = new Date(hired.getFullYear(), hired.getMonth() + NEW_COMER_MONTHS, hired.getDate())
+  return new Date() < veteranFrom
+}
+
+/**
+ * The roster's status: an Active employee inside their first six months of service
+ * reads "New Comer"; once the probation window closes the same row reads "Active".
+ */
+function rosterStatusLabel(status: string, hireDate: string | null): string {
+  return isNewComer(status, hireDate) ? NEW_COMER : employmentLabel(status)
+}
+
+/**
+ * "New Comer" is derived from the hire date, so the server cannot filter on it:
+ * walk the Active roster and slice the derived matches into the requested page.
+ */
+async function getNewComerPage({
+  gym,
+  search,
+  page,
+  pageSize,
+  signal,
+}: {
+  gym?: number
+  search?: string
+  page: number
+  pageSize: number
+  signal?: AbortSignal
+}): Promise<PagedCountResult<EmployeeDirectoryRow>> {
+  const active = await fetchAllPages(
+    (pageNumber) =>
+      getEmployeeDirectory({ gym, search, status: 'Active', page: pageNumber, pageSize: 100, signal }),
+    signal,
+  )
+  const matches = active.filter((row) => isNewComer(row.status, row.hireDate))
+  const totalPages = Math.max(1, Math.ceil(matches.length / pageSize))
+  const safePage = Math.min(Math.max(1, page), totalPages)
+  return {
+    items: matches.slice((safePage - 1) * pageSize, safePage * pageSize),
+    page: safePage,
+    pageSize,
+    totalCount: matches.length,
+    totalPages,
+  }
 }
 
 export default function BranchEmployeesPage() {
@@ -65,7 +128,7 @@ function EmployeesWorkspace() {
   const activeGymId = me?.activeGym?.gymId
   const [searchInput, setSearchInput] = useState('')
   const search = useDeferredValue(searchInput.trim())
-  const [status, setStatus] = useState<(typeof EMPLOYMENT_STATUSES)[number] | 'All'>('All')
+  const [status, setStatus] = useState<DirectoryStatus>('All')
   const [page, setPage] = useState(1)
   const [paletteOpen, setPaletteOpen] = useState(false)
   /** closed = undefined, open with the employee picker = null, pre-selected = id. */
@@ -75,14 +138,22 @@ function EmployeesWorkspace() {
   const directoryQuery = useQuery({
     queryKey: ['portal', 'directory', activeGymId, search, status, page],
     queryFn: ({ signal }) =>
-      getEmployeeDirectory({
-        gym: activeGymId ?? undefined,
-        search: search || undefined,
-        status: status === 'All' ? undefined : status,
-        page,
-        pageSize: 12,
-        signal,
-      }),
+      status === NEW_COMER
+        ? getNewComerPage({
+            gym: activeGymId,
+            search: search || undefined,
+            page,
+            pageSize: DIRECTORY_PAGE_SIZE,
+            signal,
+          })
+        : getEmployeeDirectory({
+            gym: activeGymId ?? undefined,
+            search: search || undefined,
+            status: status === 'All' ? undefined : status,
+            page,
+            pageSize: DIRECTORY_PAGE_SIZE,
+            signal,
+          }),
     placeholderData: (previous) => previous,
   })
 
@@ -162,9 +233,9 @@ function EmployeesWorkspace() {
             setPage(1)
           }}
           placeholder={t('Search name, email or phone...')}
-          // Search leads the row and the status filter sits at a fixed 10rem,
-          // so the two read as one control group instead of two odd widths.
-          className="form-input sm:max-w-sm sm:flex-1"
+          // The search fills the row and the status filter closes it, so the
+          // filter bar has no dead space at any width.
+          className="form-input sm:flex-1"
           aria-label={t('Search employees')}
         />
         <select
@@ -173,13 +244,13 @@ function EmployeesWorkspace() {
             setStatus(e.target.value as typeof status)
             setPage(1)
           }}
-          className="form-input sm:w-40"
+          className="form-select sm:w-40"
           aria-label={t('Filter by status')}
         >
-          <option value="All">{t('All statuses')}</option>
-          {EMPLOYMENT_STATUSES.map((s) => (
-            <option key={s} value={s}>
-              {employmentLabel(s)}
+          <option value="All">{t('All Status')}</option>
+          {STATUS_FILTERS.map((option) => (
+            <option key={option} value={option}>
+              {option === NEW_COMER ? t(NEW_COMER) : employmentLabel(option)}
             </option>
           ))}
         </select>
@@ -191,16 +262,14 @@ function EmployeesWorkspace() {
           hint={t('Adjust the search or status filter — the list covers everyone in the active gym.')}
         />
       ) : (
-        <div className="hidden overflow-hidden rounded-xl border border-charcoal-200 bg-white lg:block lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
-          <table className="data-table">
+        <div className="hidden overflow-hidden rounded-xl border border-charcoal-200 bg-white shadow-sm lg:block lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
+          <table className="data-table data-table-sticky">
             <thead>
               <tr>
                 <th>{t('Employee')}</th>
                 <th>{t('Job Title')}</th>
                 <th>{t('Status')}</th>
-                <th>
-                  <span className="block text-end">{t('Actions')}</span>
-                </th>
+                <th className="is-end">{t('Action')}</th>
               </tr>
             </thead>
             <tbody>
@@ -218,7 +287,7 @@ function EmployeesWorkspace() {
                         name: row.name,
                         position: row.position,
                         initials: row.initials,
-                        status: employmentLabel(row.status),
+                        status: rosterStatusLabel(row.status, row.hireDate),
                       },
                     })
                   }
@@ -229,7 +298,7 @@ function EmployeesWorkspace() {
         </div>
       )}
 
-      <div className="space-y-1.5 lg:hidden">
+      <div className="space-y-2 lg:hidden">
         {rows.map((row) => (
           <DirectoryCard
             key={row.id}
@@ -241,7 +310,7 @@ function EmployeesWorkspace() {
                   name: row.name,
                   position: row.position,
                   initials: row.initials,
-                  status: employmentLabel(row.status),
+                  status: rosterStatusLabel(row.status, row.hireDate),
                 },
               })
             }
@@ -306,34 +375,55 @@ function EmployeeRow({
 }) {
   const { t } = useTranslation()
   return (
-    <tr className="cursor-pointer hover:bg-charcoal-50/50" onClick={onOpen}>
+    <tr
+      className="cursor-pointer outline-none"
+      tabIndex={0}
+      onClick={onOpen}
+      onKeyDown={(event) => {
+        if (event.key !== 'Enter' && event.key !== ' ') return
+        event.preventDefault()
+        onOpen()
+      }}
+    >
       <td>
         <div className="flex items-center gap-2.5">
           <EmployeeAvatar employeeId={row.id} initials={row.initials} />
-          <div>
-            <p className="text-xs font-medium text-charcoal-900">{row.name}</p>
-            <p className="text-[10px] text-charcoal-500">
+          <div className="min-w-0">
+            <p className="truncate text-[13px] font-semibold leading-tight text-charcoal-900">{row.name}</p>
+            <p className="mt-0.5 truncate text-[11px] leading-tight text-charcoal-500">
               {row.employeeNumber} · {row.level}
             </p>
           </div>
         </div>
       </td>
-      <td className="text-xs">{row.position}</td>
-      <td>
-        <StatusBadge status={employmentLabel(row.status)} />
+      <td>{row.position}</td>
+      <td className="whitespace-nowrap">
+        <StatusBadge status={rosterStatusLabel(row.status, row.hireDate)} />
       </td>
-      <td className="text-end">
-        <div className="flex items-center justify-end gap-1" onClick={(event) => event.stopPropagation()}>
+      <td className="is-end whitespace-nowrap">
+        <div className="flex items-center justify-end gap-0.5" onClick={(event) => event.stopPropagation()}>
           {canOpenPalette && (
-            <Button size="sm" variant="ghost" onClick={onActions} title={t('Actions')}>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="btn-row-action"
+              onClick={onActions}
+              title={t('Actions')}
+            >
               <Zap className="h-3.5 w-3.5" aria-hidden="true" />
-              <span className="sr-only">{t('Actions')}</span>
+              <span>{t('Actions')}</span>
             </Button>
           )}
           {canCreateRequest && (
-            <Button size="sm" variant="ghost" onClick={onCreateRequest} title={t('Create Request')}>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="btn-row-action"
+              onClick={onCreateRequest}
+              title={t('Create Request')}
+            >
               <Plus className="h-3.5 w-3.5" aria-hidden="true" />
-              <span className="sr-only">{t('Create Request')}</span>
+              <span>{t('Create Request')}</span>
             </Button>
           )}
         </div>
@@ -355,28 +445,31 @@ function DirectoryCard({
   return (
     <button
       onClick={onOpen}
-      className="card-interactive w-full rounded-xl border border-charcoal-200 bg-white p-3 text-start"
+      className="card-interactive w-full rounded-xl border border-charcoal-200 bg-white p-3 text-start shadow-sm"
     >
-      <div className="flex items-center justify-between gap-2">
+      <div className="flex items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-2.5">
           <EmployeeAvatar employeeId={row.id} initials={row.initials} />
           <div className="min-w-0">
-            <p className="truncate text-xs font-medium text-charcoal-900">{row.name}</p>
-            <p className="truncate text-[10px] text-charcoal-500">{row.position}</p>
+            <p className="truncate text-[13px] font-semibold leading-tight text-charcoal-900">{row.name}</p>
+            <p className="mt-0.5 truncate text-[11px] leading-tight text-charcoal-500">{row.position}</p>
           </div>
         </div>
-        <StatusBadge status={employmentLabel(row.status)} />
+        <StatusBadge status={rosterStatusLabel(row.status, row.hireDate)} className="shrink-0" />
       </div>
-      <div className="mt-2 flex items-center justify-between gap-2 text-[10px] text-charcoal-500">
-        <span>
-          {todayRow
-            ? t('In {{checkIn}} · Out {{checkOut}}', {
-                checkIn: formatTimeOfDay(todayRow.checkIn),
-                checkOut: formatTimeOfDay(todayRow.checkOut),
-              })
-            : t('Not on today’s shift')}
+      <div className="mt-2.5 flex items-center justify-between gap-2 border-t border-charcoal-200 pt-2 text-[11px] text-charcoal-500">
+        <span className="inline-flex min-w-0 items-center gap-1.5">
+          <Clock className="h-3 w-3 shrink-0" aria-hidden="true" />
+          <span className="truncate">
+            {todayRow
+              ? t('In {{checkIn}} · Out {{checkOut}}', {
+                  checkIn: formatTimeOfDay(todayRow.checkIn),
+                  checkOut: formatTimeOfDay(todayRow.checkOut),
+                })
+              : t('Not on today’s shift')}
+          </span>
         </span>
-        {todayRow && <StatusBadge status={todayRow.status} />}
+        {todayRow && <StatusBadge status={todayRow.status} className="shrink-0" />}
       </div>
     </button>
   )

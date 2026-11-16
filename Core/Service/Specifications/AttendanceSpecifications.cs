@@ -9,6 +9,8 @@ using DomainLayer.Models.SchedulingModule;
 using DomainLayer.Models.UserModule;
 using DomainLayer.Models.UserModule.Enums;
 
+using Service.Services;
+
 namespace Service.Specifications
 {
     /// <summary>Finds an active station code by its 6-digit value, including its gym.</summary>
@@ -301,21 +303,22 @@ namespace Service.Specifications
     }
 
     /// <summary>
-    /// Approved leave requests whose effective span overlaps the range. Every leave
-    /// type exempts the day from absence derivation — Day Off, Annual Leave, Sick
-    /// Leave and unpaid leave alike (the deduction sweep and the attendance grid
-    /// read the same set).
+    /// Leave requests the desk (or HR) already accepted whose effective span overlaps
+    /// the range. A stage-1 branch approval excuses the day from that moment — HR only
+    /// signs off afterwards — so a late acceptance still repaints the day and drops the
+    /// absence deduction. Every leave type exempts the day: Day Off, Annual Leave, Sick
+    /// Leave and unpaid leave alike (the deduction sweep and the attendance grid read
+    /// the same set).
     /// </summary>
     public class ApprovedLeaveByEmployeeIdsSpec : BaseSpecification<EmployeeRequest, int>
     {
         public ApprovedLeaveByEmployeeIdsSpec(int[] employeeIds, DateOnly from, DateOnly to)
         {
-            Criteria = r => r.Status == RequestStatus.Approved
+            Criteria = r => (r.Status == RequestStatus.Approved || r.Status == RequestStatus.PendingHRReview)
                 && employeeIds.Contains(r.EmployeeId)
-                && (r.Type == "Day Off"
-                    || r.Type == "Annual Leave"
-                    || r.Type == "Sick Leave"
-                    || r.Payment == "unpaid")
+                // Every spelling the rows are stored with (legacy seeds included), plus
+                // unpaid leave, which exempts the day without consuming a paid balance.
+                && (RequestTypeCatalog.LeaveTypeSpellings.Contains(r.Type) || r.Payment == "unpaid")
                 && (r.TargetStartDate ?? r.RequestDate) <= to
                 && (r.TargetEndDate ?? r.RequestDate) >= from;
         }

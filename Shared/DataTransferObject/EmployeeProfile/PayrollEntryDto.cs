@@ -26,6 +26,9 @@ public sealed record PayrollEntryDto
     public int PaidLeaveDays { get; init; }
     public int SickLeaveDays { get; init; }
     public int AnnualLeaveDays { get; init; }
+
+    /// <summary>Approved paid-holiday days of the period (they never count as absences).</summary>
+    public int PaidHolidayDays { get; init; }
     public int AbsentDays { get; init; }
     public int LateCount { get; init; }
     public int EarlyLeaveCount { get; init; }

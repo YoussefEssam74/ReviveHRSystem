@@ -45,6 +45,23 @@ namespace Service.Services
         public const string DeductionCorrectionLabel = "Deduction Correction";
         public const string UnscheduledAttendanceLabel = "Unscheduled Attendance";
 
+        /// <summary>The day-off type as the catalog names it (it predates the catalog: no id).</summary>
+        public const string DayOffLabel = "Day Off";
+
+        /// <summary>
+        /// Every spelling a stored request row carries for an absence that exempts the
+        /// day from absence derivation: the catalog labels, their ids, and the legacy
+        /// seed spellings ("Leave", "SickLeave", "DayOff"). The attendance specs match
+        /// rows against this list.
+        /// </summary>
+        public static readonly IReadOnlyList<string> LeaveTypeSpellings = new[]
+        {
+            DayOffLabel, "DayOff",
+            "Annual Leave", AnnualLeaveId, "AnnualLeave", "Leave",
+            "Sick Leave", SickLeaveId, "SickLeave",
+            "Paid Holiday", PaidHolidayId,
+        };
+
         private static readonly IReadOnlyList<RequestTypeDefinition> Types = new[]
         {
             new RequestTypeDefinition(
@@ -114,6 +131,26 @@ namespace Service.Services
 
         /// <summary>Leave type a request consumes, or null when it consumes none.</summary>
         public static LeaveType? LeaveTypeFor(string? type) => Find(type)?.ConsumesLeave;
+
+        /// <summary>
+        /// True when a stored type string is a leave type — spelling-tolerant, so the
+        /// legacy seed labels ("Leave", "SickLeave", "DayOff") count as well.
+        /// </summary>
+        public static bool IsLeaveType(string? type)
+        {
+            if (string.IsNullOrWhiteSpace(type))
+            {
+                return false;
+            }
+
+            var normalized = type
+                .Replace(" ", string.Empty, StringComparison.Ordinal)
+                .Replace("-", string.Empty, StringComparison.Ordinal)
+                .Replace("_", string.Empty, StringComparison.Ordinal)
+                .ToLowerInvariant();
+
+            return normalized is "dayoff" or "annualleave" or "leave" or "sickleave" or "paidholiday";
+        }
 
         /// <summary>Types whose hours count against the gym's monthly excused-hours cap.</summary>
         public static bool CountsAgainstExcusedHoursCap(string? type) =>

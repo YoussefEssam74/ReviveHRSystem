@@ -412,6 +412,7 @@ function ScheduleWorkspace({
             manage={manage}
             selMonth={selMonth}
             monthCycles={monthCycles}
+            allCycles={cycles}
             onDeleted={() => {
               setExplicitId(null)
               setEditing(false)
@@ -552,6 +553,7 @@ function CycleDetailPanel({
   manage,
   selMonth,
   monthCycles,
+  allCycles,
   onDeleted,
   onOpenTemplates,
 }: {
@@ -564,6 +566,8 @@ function CycleDetailPanel({
   /** Every schedule overlapping the selected month — the month view reads each date
    *  from the one that owns it. */
   monthCycles: { id: number; startDate: string; endDate: string }[]
+  /** Every schedule of the gym — the source choices behind Copy Previous. */
+  allCycles: ShiftCycleItem[]
   onDeleted: () => void
   /** Opens the shift-template manager owned by the workspace. */
   onOpenTemplates: () => void
@@ -579,6 +583,7 @@ function CycleDetailPanel({
   const [edits, setEdits] = useState<Map<string, number | null>>(new Map())
   const [paintPick, setPaintPick] = useState<{ kind: 'unset' } | { kind: 'off' } | { kind: 'tpl'; id: number }>({ kind: 'unset' })
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const [copyOpen, setCopyOpen] = useState(false)
   const paintingRef = useRef(false)
 
   // Drag painting stops when the mouse is released anywhere on the page.
@@ -745,11 +750,15 @@ function CycleDetailPanel({
   })
 
   const copyMutation = useMutation({
-    mutationFn: () => copyPreviousCycle(cycleId, null),
+    // The manager picks the source schedule, so the copy never guesses which
+    // earlier week the pattern should come from.
+    mutationFn: (sourceCycleId: number) => copyPreviousCycle(cycleId, sourceCycleId),
     onSuccess: (result) => {
       toast(result.message)
+      setCopyOpen(false)
       invalidate()
     },
+    // Keep the picker open on failure so another source can be tried.
     onError: (error) => toast(describeApiError(error), 'error'),
   })
 
@@ -806,8 +815,6 @@ function CycleDetailPanel({
   const missingDaysOf = (employeeId: number) =>
     cycleWeekdays.reduce((count, day) => count + (weeklyCellValue(employeeId, day) === 'unassigned' ? 1 : 0), 0)
 
-  const employeesWithMissingDays = detail.assignments.filter((row) => missingDaysOf(row.employeeId) > 0).length
-
   return (
     <>
       {/* Toolbar — status + coverage on the left, one primary action on the right. */}
@@ -819,15 +826,6 @@ function CycleDetailPanel({
           </span>
           <span aria-hidden="true" className="h-1 w-1 rounded-full bg-charcoal-400" />
           <span>{t('{{count}} employees', { count: detail.assignments.length })}</span>
-          {employeesWithMissingDays > 0 && (
-            <span
-              className="badge badge-yellow inline-flex items-center gap-1"
-              title={t('Employees who still have weekdays marked Not assigned')}
-            >
-              <AlertTriangle className="h-3 w-3" aria-hidden="true" />
-              {t('{{count}} with missing days', { count: employeesWithMissingDays })}
-            </span>
-          )}
           {detail.conflicts.length > 0 && (
             <span className="badge badge-red flex items-center gap-1">
               <AlertTriangle className="h-3 w-3" aria-hidden="true" />
@@ -874,8 +872,10 @@ function CycleDetailPanel({
                 {
                   label: t('Copy Previous'),
                   icon: <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />,
-                  onSelect: () => copyMutation.mutate(),
-                  disabled: !editing || copyMutation.isPending,
+                  onSelect: () => setCopyOpen(true),
+                  // Only a Draft can receive a copied pattern (server rule), so the
+                  // action never opens a picker that could only fail.
+                  disabled: !editing || !isDraft || copyMutation.isPending,
                 },
                 {
                   label: t('Delete Schedule'),
@@ -1000,6 +1000,16 @@ function CycleDetailPanel({
       {/* Legend is a footer: it explains what was just read and stays visible
           while the roster scrolls. While editing the palette takes over. */}
       {!editing && <ScheduleLegend templates={activeTemplates} />}
+
+      {copyOpen && (
+        <CopyPreviousModal
+          cycle={detail}
+          cycles={allCycles}
+          loading={copyMutation.isPending}
+          onClose={() => setCopyOpen(false)}
+          onCopy={(sourceCycleId) => copyMutation.mutate(sourceCycleId)}
+        />
+      )}
 
       <ConfirmDialog
         open={confirmDelete}
@@ -1648,6 +1658,104 @@ function CreateCycleInner({
           {t('Ranges longer than a week open in the Week view — every shift repeats on the same weekday of the following weeks. Switch to Month to see the full range. A cycle already covering these dates will be rejected by the server.')}
         </p>
       </div>
+    </Modal>
+  )
+}
+
+/* ==================== copy previous ==================== */
+
+/**
+ * Copy Previous is a choice, not a guess: every other schedule in the gym is
+ * listed newest first, with the one ending just before this cycle starts
+ * pre-selected — the source the server would have picked on its own. The weekly
+ * pattern is copied onto the selected draft; the picker stays open on failure.
+ */
+function CopyPreviousModal({
+  cycle,
+  cycles,
+  loading,
+  onClose,
+  onCopy,
+}: {
+  cycle: ShiftCycleItem
+  /** Every schedule in the gym, the copy target included — it is filtered out here. */
+  cycles: ShiftCycleItem[]
+  loading: boolean
+  onClose: () => void
+  onCopy: (sourceCycleId: number) => void
+}) {
+  const { t } = useTranslation()
+  const candidates = useMemo(
+    () => cycles.filter((candidate) => candidate.id !== cycle.id).sort((a, b) => (a.startDate < b.startDate ? 1 : -1)),
+    [cycles, cycle.id],
+  )
+  const [sourceId, setSourceId] = useState<number | null>(
+    () => candidates.find((candidate) => candidate.endDate < cycle.startDate)?.id ?? null,
+  )
+
+  return (
+    <Modal
+      open
+      title={t('Copy Previous Schedule')}
+      subtitle={t('Pick the schedule to copy its weekly pattern from.')}
+      onClose={onClose}
+      footer={
+        <>
+          <Button size="sm" variant="secondary" onClick={onClose} disabled={loading}>
+            {t('Cancel')}
+          </Button>
+          <Button
+            size="sm"
+            loading={loading}
+            disabled={sourceId == null}
+            onClick={() => sourceId != null && onCopy(sourceId)}
+          >
+            {t('Copy Schedule')}
+          </Button>
+        </>
+      }
+    >
+      {candidates.length === 0 ? (
+        <p className="text-[11px] text-charcoal-500">
+          {t('No other schedule exists in this gym yet — create one and assign its shifts first.')}
+        </p>
+      ) : (
+        <fieldset>
+          <legend className="sr-only">{t('Schedules to copy from')}</legend>
+          <div className="space-y-1.5">
+            {candidates.map((candidate) => {
+              const active = candidate.id === sourceId
+              return (
+                <label
+                  key={candidate.id}
+                  className={cn(
+                    'flex cursor-pointer items-start gap-2 rounded-lg border px-3 py-2 transition-colors',
+                    active ? 'border-brand-500 bg-brand-50/40' : 'border-charcoal-200 hover:bg-charcoal-50',
+                  )}
+                >
+                  <input
+                    type="radio"
+                    name="copy-source-cycle"
+                    className="mt-0.5 accent-brand-600"
+                    checked={active}
+                    onChange={() => setSourceId(candidate.id)}
+                  />
+                  <span className="min-w-0 flex-1">
+                    <span className="flex flex-wrap items-center gap-1.5">
+                      <span className="text-[11px] font-bold text-charcoal-900">{candidate.label}</span>
+                      <StatusChip status={candidate.status} />
+                    </span>
+                    <span className="mt-0.5 block text-[10px] text-charcoal-500">
+                      {isoDayLabel(candidate.startDate)} – {isoDayLabel(candidate.endDate)} ·{' '}
+                      {t('{{count}} days', { count: isoRange(candidate.startDate, candidate.endDate).length })}
+                    </span>
+                  </span>
+                </label>
+              )
+            })}
+          </div>
+        </fieldset>
+      )}
     </Modal>
   )
 }

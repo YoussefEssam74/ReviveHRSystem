@@ -196,11 +196,8 @@ namespace Service.Services
                 throw new BadRequestException("An HR decision is recorded for this request — only unfinalized branch-stage decisions can be undone.");
             }
 
-            var lastDate = request.TargetEndDate ?? request.RequestDate;
-            if (lastDate < DateOnly.FromDateTime(DateTime.UtcNow.Date))
-            {
-                throw new BadRequestException("The requested date has passed — the decision can no longer be changed.");
-            }
+            // No time limit: the desk can pull a decision back however late it files the
+            // correction; a request for a day that already passed reopens just the same.
 
             var leaveType = LeaveBalanceReservation.LeaveTypeFor(request);
             if (request.Status == RequestStatus.Rejected && leaveType is not null)

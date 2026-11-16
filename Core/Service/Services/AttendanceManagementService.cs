@@ -474,16 +474,31 @@ namespace Service.Services
                             && coverDays > 0
                             && (record.CheckInTime is not null || record.CheckOutTime is not null);
 
-                        // A stored Absent is a real finding: never repaint it "Off"
-                        // just because the day had no scheduled shift.
+                        // A leave accepted after the fact (the desk approves the request
+                        // days later) repaints the stored day, so the absence stops
+                        // counting and the day reads as the leave it was.
+                        var leaveLabel =
+                            leaveByDate.TryGetValue(employee.Id, out var employeeLeave)
+                            && employeeLeave.TryGetValue(date, out var approvedLeave)
+                                ? approvedLeave
+                                : null;
+
+                        // Otherwise a stored Absent is a real finding: never repaint it
+                        // "Off" just because the day had no scheduled shift.
                         var statusOverride = isCoverDay
                             ? CoverDayStatus
-                            : isOffDay
-                                && record.Status != AttendanceStatus.Absent
-                                && record.CheckInTime is null
-                                && record.CheckOutTime is null
-                                    ? "Off"
-                                    : null;
+                            : leaveLabel is not null && record.Status is AttendanceStatus.Absent or AttendanceStatus.Off
+                                ? leaveLabel
+                                : isOffDay
+                                    && record.Status != AttendanceStatus.Absent
+                                    && record.CheckInTime is null
+                                    && record.CheckOutTime is null
+                                        ? "Off"
+                                        : null;
+
+                        var notesOverride = statusOverride is not null && statusOverride == leaveLabel
+                            ? leaveLabel == "Off" ? "Day Off approved" : "Approved leave"
+                            : null;
 
                         rows.Add(MapRow(
                             record,
@@ -495,7 +510,8 @@ namespace Service.Services
                             assignment is null ? null : shiftLabel,
                             statusOverride,
                             coverDays > 0 ? coverDays : null,
-                            isCoverDay));
+                            isCoverDay,
+                            notesOverride));
                         continue;
                     }
 
@@ -581,7 +597,7 @@ namespace Service.Services
                 }
 
                 // Sick / annual leave report themselves; every other approved absence is a plain off day.
-                var label = request.Type is "Sick Leave" or "Annual Leave" ? request.Type : "Off";
+                var label = LeaveLabelFor(request.Type);
                 for (var date = start; date <= end; date = date.AddDays(1))
                 {
                     byDate[date] = label;
@@ -589,6 +605,27 @@ namespace Service.Services
             }
 
             return map;
+        }
+
+        /// <summary>
+        /// The leave label a stored request type reports on the grid: sick and annual
+        /// leave name themselves (legacy spellings included), everything else — a day
+        /// off, unpaid leave — reads as a plain off day.
+        /// </summary>
+        private static string LeaveLabelFor(string type)
+        {
+            var normalized = type
+                .Replace(" ", string.Empty, StringComparison.Ordinal)
+                .Replace("-", string.Empty, StringComparison.Ordinal)
+                .ToLowerInvariant();
+
+            return normalized switch
+            {
+                "sickleave" => "Sick Leave",
+                "paidholiday" => "Paid Holiday",
+                "annualleave" or "leave" => "Annual Leave",
+                _ => "Off",
+            };
         }
 
         /// <summary>Approved cover/extra days per (employee, date). Display-only.</summary>
@@ -739,7 +776,8 @@ namespace Service.Services
             string? shiftLabel = null,
             string? statusOverride = null,
             int? coverDays = null,
-            bool isCoverDay = false)
+            bool isCoverDay = false,
+            string? notesOverride = null)
         {
             var source = record.CheckInMethod.HasValue || record.CheckOutMethod.HasValue
                 ? ((record.CheckInMethod ?? record.CheckOutMethod) == AttendanceMethod.Manual ? "Manual" : "Biometric")
@@ -760,7 +798,7 @@ namespace Service.Services
                 CheckOut = FormatPunch(record.CheckOutTime),
                 Status = statusOverride ?? DisplayStatus(record.Status),
                 Source = source,
-                Notes = record.Notes,
+                Notes = notesOverride ?? record.Notes,
                 CorrectedBy = latestCorrection is null
                     ? null
                     : latestCorrection.CorrectedByUser?.EmployeeProfile?.FullName

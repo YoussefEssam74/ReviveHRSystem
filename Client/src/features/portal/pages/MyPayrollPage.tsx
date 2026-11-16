@@ -261,6 +261,10 @@ function MonthAndRaiseBlock({ sheet, employeeId }: { sheet: PayrollSheet; employ
   const { t } = useTranslation()
   const monthKey = periodMonthKey(sheet.period, ACCRUAL_TODAY)
 
+  // Calendar length of the period's month (30 for November), independent of the roster.
+  const [periodYear, periodMonth] = monthKey.split('-').map(Number)
+  const daysInMonth = new Date(periodYear, periodMonth, 0).getDate()
+
   // The month as the schedule defines it: only days that actually carry a shift count
   // as month days, and the weekly offs are the days the roster marks off.
   const scheduleQuery = useQuery({
@@ -280,6 +284,10 @@ function MonthAndRaiseBlock({ sheet, employeeId }: { sheet: PayrollSheet; employ
   const totals = attendanceQuery.data?.totals ?? null
   const attended = totals?.present ?? null
 
+  // Priced on the server's fixed 30-day month (DeductionPricing.StandardDays), so the
+  // day the employee sees is the day a deduction charges.
+  const dailyRate = sheet.baseSalary > 0 ? Math.round((sheet.baseSalary / 30) * 100) / 100 : 0
+
   const percent = sheet.annualIncreasePercent ?? null
   // The snapshot's own slice is still 0 while the period is open — price the policy
   // against the base salary instead so the raise is never shown as zero.
@@ -294,6 +302,7 @@ function MonthAndRaiseBlock({ sheet, employeeId }: { sheet: PayrollSheet; employ
     { label: t('Shift Days This Month'), value: scheduleReady ? String(shiftDays) : '—' },
     { label: t('Actual Days This Month'), value: attended != null ? String(attended) : t('Loading…') },
     { label: t('Weekly Off'), value: scheduleReady ? String(weeklyOff) : '—' },
+    { label: t('Daily Rate'), value: sheet.baseSalary > 0 ? formatEGP(dailyRate) : '—' },
     {
       label: t('Annual Increase'),
       value: raise != null ? `${formatEGP(raise)}${percent != null ? ` · ${percent}%` : ''}` : '—',
@@ -309,6 +318,7 @@ function MonthAndRaiseBlock({ sheet, employeeId }: { sheet: PayrollSheet; employ
     <div className="w-full">
       <p className="bento-label mb-1.5">
         {t('CURRENT MONTH DATA ({{period}})', { period: sheet.period.toUpperCase() })}
+        {` · ${t('{{count}} days', { count: daysInMonth })}`}
       </p>
       <dl className="space-y-1">
         {rows.map((row) => (
@@ -670,7 +680,6 @@ function SheetDetail({ sheet, onSlip }: { sheet: PayrollSheet; onSlip: () => voi
         </div>
         <div className="mt-2 grid grid-cols-3 gap-1.5 sm:grid-cols-7">
           <StatTile label={t('Actual Attended')} value={String(sheet.daysWorked ?? 0)} bg="bg-brand-50" text="text-brand-600" />
-          <StatTile label={t('Absent')} value={String(sheet.absentDays ?? 0)} bg="bg-red-50" text="text-red-600" />
           <StatTile label={t('Late')} value={String(sheet.lateCount ?? 0)} bg="bg-amber-50" text="text-amber-600" />
           <StatTile
             label={t('Early Leave')}
@@ -680,6 +689,12 @@ function SheetDetail({ sheet, onSlip }: { sheet: PayrollSheet; onSlip: () => voi
           />
           <StatTile label={t('Sick Leave')} value={String(sheet.sickLeaveDays ?? 0)} bg="bg-blue-50" text="text-blue-600" />
           <StatTile label={t('Annual Leave')} value={String(sheet.annualLeaveDays ?? 0)} bg="bg-blue-50" text="text-blue-600" />
+          <StatTile
+            label={t('Paid Holiday')}
+            value={String(sheet.paidHolidayDays ?? 0)}
+            bg="bg-purple-50"
+            text="text-purple-600"
+          />
           <StatTile
             label={t('Salary Advance')}
             value={(sheet.salaryAdvance ?? 0) > 0 ? formatMoney(sheet.salaryAdvance ?? 0) : '—'}

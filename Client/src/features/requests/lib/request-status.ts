@@ -65,14 +65,6 @@ export function requestUrgency(request: Pick<RequestListItem, 'type' | 'bmDecisi
   return 'Normal'
 }
 
-/** The requested date is still ahead, so an HR decision can still be undone. */
-export function isDecisionUndoable(request: Pick<RequestListItem, 'requestedDate'>): boolean {
-  const start = new Date(`${request.requestedDate}T00:00:00`)
-  if (Number.isNaN(start.getTime())) return false
-  const today = new Date()
-  return start.getTime() >= new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime()
-}
-
 /** "Sep" — the KPI tile's "Approved (Sep)" month label. */
 export function currentMonthShort(): string {
   return new Date().toLocaleDateString('en-US', { month: 'short' })

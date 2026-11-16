@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
+import type { TFunction } from 'i18next'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Check, Download, Eye, FileText, Paperclip, X } from 'lucide-react'
+import { Check, Download, Eye, FileText, Paperclip, Undo2, X } from 'lucide-react'
 import {
   decideRequest,
   decideRequestHr,
@@ -11,6 +12,8 @@ import {
   getOwnLeaveBalance,
   getRequestDetail,
   getRequestInbox,
+  undoDecision,
+  undoManagedDecision,
   type DeskRequestRow,
   type HrRequestItem,
   type RequestDetail,
@@ -42,6 +45,59 @@ function coverPayText(salary: number | null | undefined, days: number | null | u
  *  render as the raw payment string; the cover-pay amount is shown instead. */
 function isCoverDaysPayment(payment: string | null | undefined): boolean {
   return /^\d+\s*days?\s*$/i.test((payment ?? '').trim())
+}
+
+/** Detail-drawer fact boxes in reading order — the grid pairs them two per row. */
+function detailFactBoxes(
+  t: TFunction,
+  detail: RequestDetail,
+  coverPay: string | null,
+  balance: { label: string; value: string } | null,
+): { label: string; value: string }[] {
+  const facts = [
+    { label: t('Type'), value: detail.type },
+    { label: t('Status'), value: detail.status },
+    { label: t('Submitted on'), value: formatDateWithYear(detail.submittedDate) },
+    { label: t('Requested for'), value: rangeLabel(detail.requestedDate, detail.endDate) },
+  ]
+  if (balance) facts.push(balance)
+  if (detail.requestTime) facts.push({ label: t('Time'), value: formatTimeOfDay(detail.requestTime) })
+  if (detail.calculatedDays != null) {
+    facts.push({
+      label: t('Cover days'),
+      value:
+        detail.calculatedDays === 1
+          ? t('{{count}} day', { count: detail.calculatedDays })
+          : t('{{count}} days', { count: detail.calculatedDays }),
+    })
+  }
+  if (coverPay) facts.push({ label: t('Cover pay'), value: coverPay })
+  if (detail.amount != null) facts.push({ label: t('Amount'), value: formatMoney(detail.amount) })
+  if (detail.payment && !(detail.type === 'Unscheduled Attendance' && isCoverDaysPayment(detail.payment))) {
+    facts.push({ label: t('Payment'), value: detail.payment })
+  }
+  if (detail.bmDecision) facts.push({ label: t('Desk decision'), value: detail.bmDecision })
+  if (detail.hrDecision) facts.push({ label: t('HR decision'), value: detail.hrDecision })
+  return facts
+}
+
+/** Decision state behind a row's status. The desk inbox sends the enum name
+ *  ("PendingHRReview"); the HR inbox sends the display label ("Pending HR Review"). */
+type DecisionState = 'pending' | 'awaitingHr' | 'approved' | 'rejected' | 'other'
+
+function decisionState(status: string): DecisionState {
+  switch (status.replace(/\s+/g, '').toLowerCase()) {
+    case 'pending':
+      return 'pending'
+    case 'pendinghrreview':
+      return 'awaitingHr'
+    case 'approved':
+      return 'approved'
+    case 'rejected':
+      return 'rejected'
+    default:
+      return 'other'
+  }
 }
 
 /** The four real workflow states behind the mock's tab bar (mock §17). */
@@ -186,10 +242,26 @@ function HrList({ status }: { status: HrTab }) {
   return (
     <div className="space-y-2">
       {rows.length > 0 ? (
-        <div className="divide-y divide-charcoal-50 overflow-hidden rounded-xl border border-charcoal-200 bg-white">
-          {rows.map((row) => (
-            <HrRow key={row.id} row={row} status={status} />
-          ))}
+        <div className="table-responsive rounded-xl border border-charcoal-200 bg-white">
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>{t('Name')}</th>
+                <th>{t('Type')}</th>
+                <th>{t('Date')}</th>
+                <th>{t('Time')}</th>
+                <th>{t('Reason')}</th>
+                <th>
+                  <span className="block text-end">{t('Action')}</span>
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row) => (
+                <HrRow key={row.id} row={row} />
+              ))}
+            </tbody>
+          </table>
         </div>
       ) : (
         <EmptyState
@@ -220,7 +292,7 @@ function HrList({ status }: { status: HrTab }) {
 
 /** HR final decision: approve/reject Pending HR Review rows, with the 1/2-day
  *  cover selector for Unscheduled Attendance. Rejection requires a comment. */
-function HrRow({ row, status }: { row: HrRequestItem; status: HrTab }) {
+function HrRow({ row }: { row: HrRequestItem }) {
   const { t } = useTranslation()
   const { toast } = useToast()
   const queryClient = useQueryClient()
@@ -228,6 +300,7 @@ function HrRow({ row, status }: { row: HrRequestItem; status: HrTab }) {
   const [decision, setDecision] = useState<'Approve' | 'Reject' | null>(null)
   const [calculatedDays, setCalculatedDays] = useState<1 | 2>(1)
   const [comment, setComment] = useState('')
+  const state = decisionState(row.status)
 
   const salaryQuery = useQuery({
     queryKey: ['portal', 'employee', 'salary', row.employee],
@@ -248,8 +321,20 @@ function HrRow({ row, status }: { row: HrRequestItem; status: HrTab }) {
   }
 
   const decideMutation = useMutation({
-    mutationFn: (input: { decision: string; comment: string | null; calculatedDays?: 1 | 2 }) =>
-      decideRequestHr(row.id, input.decision, input.comment, input.calculatedDays),
+    mutationFn: async (input: { decision: 'Approve' | 'Reject'; comment: string | null; calculatedDays?: 1 | 2 }) => {
+      // A rejected request cannot be approved in place: reopen it first, then record
+      // the approval on the request that comes back. This stage speaks the
+      // "Approved"/"Rejected" vocabulary.
+      if (input.decision === 'Approve' && state === 'rejected') {
+        await undoDecision(row.id)
+      }
+      return decideRequestHr(
+        row.id,
+        input.decision === 'Approve' ? 'Approved' : 'Rejected',
+        input.comment,
+        input.calculatedDays,
+      )
+    },
     onSuccess: () => {
       toast(
         decision === 'Approve'
@@ -271,52 +356,72 @@ function HrRow({ row, status }: { row: HrRequestItem; status: HrTab }) {
       : null
   const coverPay = row.type === 'Unscheduled Attendance' ? coverPayText(salary, row.calculatedDays) : null
 
+  // HR undo is the way back from a final decision: it reopens the request as
+  // Pending HR Review.
+  const undoMutation = useMutation({
+    mutationFn: () => undoDecision(row.id),
+    onSuccess: () => {
+      toast(t('Request #{{id}} decision undone.', { id: row.id }))
+      invalidate()
+    },
+    onError: (error) => toast(describeApiError(error), 'error'),
+  })
+
   return (
-    <div
-      className="cursor-pointer p-3 transition-colors hover:bg-charcoal-50/50"
-      onClick={() => setDetailId(row.id)}
-    >
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-        <div className="flex min-w-0 items-start gap-3">
-          <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-brand-100 text-[10px] font-semibold text-brand-700">
-            {initialsOf(row.employee)}
-          </span>
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-2">
-              <p className="text-xs font-semibold text-charcoal-900">{row.employee}</p>
-              <StatusBadge status={row.status} />
-              {coverLabel && (
-                <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
-                  {coverLabel}
-                </span>
+    <>
+      <tr className="cursor-pointer" onClick={() => setDetailId(row.id)}>
+        <td>
+          <div className="flex items-center gap-2.5">
+            <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-brand-100 text-[10px] font-semibold text-brand-700">
+              {initialsOf(row.employee)}
+            </span>
+            <div className="min-w-0">
+              <p className="truncate text-xs font-semibold text-charcoal-900">{row.employee}</p>
+              <p className="text-[10px] text-charcoal-500">{employeeIdLabel(row.employeeId, row.employeeNumber)}</p>
+              {row.gym && (
+                <p className="mt-0.5 text-[10px] text-charcoal-400">{t('Gym · {{gym}}', { gym: row.gym })}</p>
               )}
             </div>
-            <p className="mt-0.5 text-[10px] text-charcoal-500">
-              {t('{{type}} · {{range}} · Submitted {{date}}', {
-                type: row.type,
-                range: rangeLabel(row.requestedDate, row.endDate),
-                date: formatDate(row.submittedDate),
-              })}
-              {row.requestTime ? ` · ${formatTimeOfDay(row.requestTime)}` : ''}
-              {row.amount != null ? ` · ${formatMoney(row.amount)}` : ''}
-            </p>
-            {row.gym && (
-              <p className="mt-0.5 text-[10px] text-charcoal-400">{t('Gym · {{gym}}', { gym: row.gym })}</p>
-            )}
-            {row.reason && <p className="mt-0.5 line-clamp-2 text-[10px] text-charcoal-400">{formatTimeLabel(row.reason)}</p>}
-            {row.payment && !(row.type === 'Unscheduled Attendance' && isCoverDaysPayment(row.payment)) && (
-              <p className="mt-0.5 text-[10px] text-charcoal-500">{t('Payment: {{payment}}', { payment: row.payment })}</p>
-            )}
-            {coverPay && (
-              <p className="mt-0.5 text-[10px] text-charcoal-500">{t('Cover pay: {{amount}}', { amount: coverPay })}</p>
+          </div>
+        </td>
+        <td>
+          <div className="flex flex-wrap items-center gap-1.5">
+            <p className="text-xs font-medium text-charcoal-900">{row.type}</p>
+            {coverLabel && (
+              <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
+                {coverLabel}
+              </span>
             )}
           </div>
-        </div>
-        <div
-          className="flex flex-wrap items-center gap-1.5 sm:flex-shrink-0"
-          onClick={(event) => event.stopPropagation()}
-        >
-          {status === 'PendingHRReview' && (
+          {row.amount != null && (
+            <p className="mt-0.5 text-[10px] text-charcoal-500">{formatMoney(row.amount)}</p>
+          )}
+          {row.payment && !(row.type === 'Unscheduled Attendance' && isCoverDaysPayment(row.payment)) && (
+            <p className="mt-0.5 text-[10px] text-charcoal-500">{t('Payment: {{payment}}', { payment: row.payment })}</p>
+          )}
+        </td>
+        <td>
+          <p className="whitespace-nowrap text-xs font-medium text-charcoal-900">
+            {rangeLabel(row.requestedDate, row.endDate)}
+          </p>
+        </td>
+        <td className="whitespace-nowrap text-xs text-charcoal-700">
+          {row.requestTime ? formatTimeOfDay(row.requestTime) : '—'}
+        </td>
+        <td>
+          <p className="line-clamp-2 text-xs text-charcoal-700">
+            {row.reason ? formatTimeLabel(row.reason) : '—'}
+          </p>
+          {coverPay && (
+            <p className="mt-0.5 text-[10px] text-charcoal-500">{t('Cover pay: {{amount}}', { amount: coverPay })}</p>
+          )}
+        </td>
+        <td className="text-end">
+          <div
+            className="flex items-center justify-end gap-1.5 whitespace-nowrap"
+            onClick={(event) => event.stopPropagation()}
+          >
+          {state === 'pending' || state === 'awaitingHr' ? (
             <>
               <Button size="sm" onClick={() => setDecision('Approve')}>
                 <Check className="h-3.5 w-3.5" aria-hidden="true" /> {t('Approve')}
@@ -325,15 +430,25 @@ function HrRow({ row, status }: { row: HrRequestItem; status: HrTab }) {
                 <X className="h-3.5 w-3.5" aria-hidden="true" /> {t('Reject')}
               </Button>
             </>
-          )}
+          ) : state === 'rejected' ? (
+            <Button size="sm" onClick={() => setDecision('Approve')}>
+              <Check className="h-3.5 w-3.5" aria-hidden="true" /> {t('Approve')}
+            </Button>
+          ) : state === 'approved' ? (
+            <Button size="sm" variant="secondary" loading={undoMutation.isPending} onClick={() => undoMutation.mutate()}>
+              <Undo2 className="h-3.5 w-3.5" aria-hidden="true" /> {t('Undo')}
+            </Button>
+          ) : null}
           <Button size="sm" variant="secondary" onClick={() => setDetailId(row.id)}>
             {t('View')}
           </Button>
-        </div>
-      </div>
+          </div>
+        </td>
+      </tr>
 
-      {decision && (
-        <div onClick={(event) => event.stopPropagation()}>
+      {decision &&
+        createPortal(
+          <div onClick={(event) => event.stopPropagation()}>
           <Modal
             open
             title={
@@ -343,7 +458,9 @@ function HrRow({ row, status }: { row: HrRequestItem; status: HrTab }) {
             }
             subtitle={
               decision === 'Approve'
-                ? t('Final HR sign-off — the employee is notified.')
+                ? state === 'rejected'
+                  ? t('Reopens the rejected request, then records the final HR approval.')
+                  : t('Final HR sign-off — the employee is notified.')
                 : t('Rejection of an unscheduled day keeps the punch as present with no cover day.')
             }
             onClose={() => setDecision(null)}
@@ -416,15 +533,18 @@ function HrRow({ row, status }: { row: HrRequestItem; status: HrTab }) {
               </div>
             </div>
           </Modal>
-        </div>
-      )}
+          </div>,
+          document.body,
+        )}
 
-      {detailId != null && (
-        <div onClick={(event) => event.stopPropagation()}>
-          <HrDetailDrawer requestId={detailId} onClose={() => setDetailId(null)} />
-        </div>
-      )}
-    </div>
+      {detailId != null &&
+        createPortal(
+          <div onClick={(event) => event.stopPropagation()}>
+            <HrDetailDrawer requestId={detailId} onClose={() => setDetailId(null)} />
+          </div>,
+          document.body,
+        )}
+    </>
   )
 }
 
@@ -458,6 +578,9 @@ function HrDetailDrawer({ requestId, onClose }: { requestId: number; onClose: ()
 
   if (!detail) return null
 
+  const facts = detailFactBoxes(t, detail, coverPay, null)
+  const oddFactCount = facts.length % 2 === 1
+
   return (
     <Drawer open onClose={onClose} title={t('Request #{{id}}', { id: detail.id })}>
       <div className="space-y-3">
@@ -476,39 +599,16 @@ function HrDetailDrawer({ requestId, onClose }: { requestId: number; onClose: ()
           <p className="mt-0.5 text-[11px] text-charcoal-500">{t('Gym · {{gym}}', { gym: detail.gym })}</p>
         </div>
         <dl className="grid grid-cols-2 gap-2 text-xs">
-          <Field label={t('Type')} value={detail.type} />
-          <Field label={t('Status')} value={detail.status} />
-          <Field label={t('Submitted on')} value={formatDateWithYear(detail.submittedDate)} />
-          <Field label={t('Requested for')} value={rangeLabel(detail.requestedDate, detail.endDate)} />
-          {detail.requestTime && (
-            <Field label={t('Time')} value={formatTimeOfDay(detail.requestTime)} />
-          )}
-          {detail.amount != null && (
-            <Field label={t('Amount')} value={formatMoney(detail.amount)} />
-          )}
-          {coverPay && (
-            <div className="col-span-2">
-              <Field label={t('Cover pay')} value={coverPay} />
-            </div>
-          )}
-          {detail.payment &&
-            !(detail.type === 'Unscheduled Attendance' && isCoverDaysPayment(detail.payment)) && (
-              <Field label={t('Payment')} value={detail.payment} />
-            )}
-          {detail.calculatedDays != null && (
+          {facts.map((fact, index) => (
             <Field
-              label={t('Cover days')}
-              value={
-                detail.calculatedDays === 1
-                  ? t('{{count}} day', { count: detail.calculatedDays })
-                  : t('{{count}} days', { count: detail.calculatedDays })
-              }
+              key={fact.label}
+              label={fact.label}
+              value={fact.value}
+              className={oddFactCount && index === facts.length - 1 ? 'col-span-2' : undefined}
             />
-          )}
-          {detail.bmDecision && <Field label={t('Desk decision')} value={detail.bmDecision} />}
-          {detail.bmComment && <Field label={t('Desk comment')} value={detail.bmComment} />}
-          {detail.hrDecision && <Field label={t('HR decision')} value={detail.hrDecision} />}
-          {detail.hrComment && <Field label={t('HR comment')} value={detail.hrComment} />}
+          ))}
+          {detail.bmComment && <Field className="col-span-2" label={t('Desk comment')} value={detail.bmComment} />}
+          {detail.hrComment && <Field className="col-span-2" label={t('HR comment')} value={detail.hrComment} />}
         </dl>
         {detail.hasAttachment && <RequestAttachmentCard requestId={detail.id} type={detail.type} />}
         <div className="rounded-lg bg-charcoal-50 p-3">
@@ -858,10 +958,26 @@ function DeskList({ status }: { status: DeskTab }) {
   return (
     <div className="space-y-2">
       {rows.length > 0 ? (
-        <div className="divide-y divide-charcoal-50 overflow-hidden rounded-xl border border-charcoal-200 bg-white">
-          {rows.map((row) => (
-            <DeskRow key={row.id} row={row} status={status} />
-          ))}
+        <div className="table-responsive rounded-xl border border-charcoal-200 bg-white">
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>{t('Name')}</th>
+                <th>{t('Type')}</th>
+                <th>{t('Date')}</th>
+                <th>{t('Time')}</th>
+                <th>{t('Reason')}</th>
+                <th>
+                  <span className="block text-end">{t('Action')}</span>
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row) => (
+                <DeskRow key={row.id} row={row} />
+              ))}
+            </tbody>
+          </table>
         </div>
       ) : (
         <EmptyState
@@ -891,7 +1007,7 @@ function DeskList({ status }: { status: DeskTab }) {
 }
 
 /** The real stage-1 rule set: decide only Pending rows and view everything. */
-function DeskRow({ row, status }: { row: DeskRequestRow; status: DeskTab }) {
+function DeskRow({ row }: { row: DeskRequestRow }) {
   const { t } = useTranslation()
   const { toast } = useToast()
   const queryClient = useQueryClient()
@@ -903,6 +1019,13 @@ function DeskRow({ row, status }: { row: DeskRequestRow; status: DeskTab }) {
   const [hrComment, setHrComment] = useState('')
 
   const canHrDecide = can('requests.approve')
+
+  // A decided request can't be re-decided in place, so the way back is an undo:
+  // a row HR never voted on reopens through the branch route, anything carrying an
+  // HR decision reopens through HR's own route.
+  const state = decisionState(row.status)
+  const hasHrDecision = row.timeline.some((step) => step.step.startsWith('HR '))
+  const reopenRoute: 'desk' | 'hr' = hasHrDecision ? 'hr' : 'desk'
 
   const salaryQuery = useQuery({
     queryKey: ['portal', 'employee', 'salary', row.employeeName],
@@ -922,13 +1045,25 @@ function DeskRow({ row, status }: { row: DeskRequestRow; status: DeskTab }) {
   }
 
   const decideMutation = useMutation({
-    mutationFn: (input: { decision: string; comment: string | null; calculatedDays?: 1 | 2 }) =>
-      decideRequest(row.id, input.decision, input.comment, input.calculatedDays),
+    mutationFn: async (input: { decision: 'Approve' | 'Reject'; comment: string | null; calculatedDays?: 1 | 2 }) => {
+      // A rejected request cannot be approved in place: reopen the rejection first,
+      // then record the approval on the request that comes back.
+      if (input.decision === 'Approve' && state === 'rejected') {
+        if (reopenRoute === 'hr') {
+          await undoDecision(row.id)
+          return decideRequestHr(row.id, 'Approved', input.comment, input.calculatedDays)
+        }
+        await undoManagedDecision(row.id)
+      }
+      return decideRequest(row.id, input.decision, input.comment, input.calculatedDays)
+    },
     onSuccess: () => {
       toast(
-        status === 'Pending' && decision === 'Approve'
-          ? t('Request #{{id}} approved to HR review.', { id: row.id })
-          : t('Request #{{id}} rejected.', { id: row.id }),
+        decision === 'Reject'
+          ? t('Request #{{id}} rejected.', { id: row.id })
+          : state === 'rejected' && reopenRoute === 'hr'
+            ? t('Request #{{id}} approved.', { id: row.id })
+            : t('Request #{{id}} approved to HR review.', { id: row.id }),
       )
       setDecision(null)
       invalidate()
@@ -937,6 +1072,7 @@ function DeskRow({ row, status }: { row: DeskRequestRow; status: DeskTab }) {
   })
 
   const hrDecideMutation = useMutation({
+    // The HR stage speaks the "Approved"/"Rejected" vocabulary (RequestService).
     mutationFn: (input: { decision: string; comment: string | null; calculatedDays?: 1 | 2 }) =>
       decideRequestHr(row.id, input.decision, input.comment, input.calculatedDays),
     onSuccess: () => {
@@ -961,87 +1097,114 @@ function DeskRow({ row, status }: { row: DeskRequestRow; status: DeskTab }) {
       : null
   const coverPay = row.type === 'Unscheduled Attendance' ? coverPayText(salary, row.calculatedDays) : null
 
+  const undoMutation = useMutation({
+    mutationFn: () => undoDecision(row.id),
+    onSuccess: () => {
+      toast(t('Request #{{id}} decision undone.', { id: row.id }))
+      invalidate()
+    },
+    onError: (error) => toast(describeApiError(error), 'error'),
+  })
+
   return (
-    <div
-      className="cursor-pointer p-3 transition-colors hover:bg-charcoal-50/50"
-      onClick={() => setDetailId(row.id)}
-    >
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-        <div className="flex min-w-0 items-start gap-3">
-          <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-brand-100 text-[10px] font-semibold text-brand-700">
-            {initialsOf(row.employeeName)}
-          </span>
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-2">
-              <p className="text-xs font-semibold text-charcoal-900">{row.employeeName}</p>
-              <StatusBadge status={row.status} />
-              {coverLabel && (
-                <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
-                  {coverLabel}
-                </span>
-              )}
+    <>
+      <tr className="cursor-pointer" onClick={() => setDetailId(row.id)}>
+        <td>
+          <div className="flex items-center gap-2.5">
+            <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-brand-100 text-[10px] font-semibold text-brand-700">
+              {initialsOf(row.employeeName)}
+            </span>
+            <div className="min-w-0">
+              <p className="truncate text-xs font-semibold text-charcoal-900">{row.employeeName}</p>
+              <p className="text-[10px] text-charcoal-500">{employeeIdLabel(row.employeeId)}</p>
             </div>
-            <p className="mt-0.5 text-[10px] text-charcoal-500">
-              {t('{{type}} · {{range}} · Submitted {{date}}', {
-                type: row.type,
-                range: rangeLabel(row.requestedDate, row.endDate),
-                date: formatDate(row.submittedDate),
-              })}
-              {row.requestTime ? ` · ${formatTimeOfDay(row.requestTime)}` : ''}
-              {row.amount != null ? ` · ${formatMoney(row.amount)}` : ''}
-            </p>
-            {row.reason && <p className="mt-0.5 line-clamp-2 text-[10px] text-charcoal-400">{formatTimeLabel(row.reason)}</p>}
-            {row.hasAttachment && (
-              <span className="mt-1 inline-flex items-center gap-1 rounded-full bg-brand-50 px-2 py-0.5 text-[10px] font-medium text-brand-700">
-                <Paperclip className="h-3 w-3" aria-hidden="true" />
-                {attachmentLabel(row.type)}
+          </div>
+        </td>
+        <td>
+          <div className="flex flex-wrap items-center gap-1.5">
+            <p className="text-xs font-medium text-charcoal-900">{row.type}</p>
+            {coverLabel && (
+              <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
+                {coverLabel}
               </span>
             )}
-            {rejectionNote && (
-              <p className="mt-0.5 text-[10px] text-red-500">
-                {rejectionNote.step}
-                {rejectionNote.date ? ` · ${rejectionNote.date}` : ''}
-              </p>
-            )}
           </div>
-        </div>
-        <div
-          className="flex flex-wrap items-center gap-1.5 sm:flex-shrink-0"
-          onClick={(event) => event.stopPropagation()}
-        >
-          {status === 'Pending' && (
+          {row.amount != null && (
+            <p className="mt-0.5 text-[10px] text-charcoal-500">{formatMoney(row.amount)}</p>
+          )}
+        </td>
+        <td>
+          <p className="whitespace-nowrap text-xs font-medium text-charcoal-900">
+            {rangeLabel(row.requestDate, row.endDate)}
+          </p>
+        </td>
+        <td className="whitespace-nowrap text-xs text-charcoal-700">
+          {row.requestTime ? formatTimeOfDay(row.requestTime) : '—'}
+        </td>
+        <td>
+          <p className="line-clamp-2 text-xs text-charcoal-700">
+            {row.reason ? formatTimeLabel(row.reason) : '—'}
+          </p>
+          {row.hasAttachment && (
+            <span className="mt-1 inline-flex items-center gap-1 rounded-full bg-brand-50 px-2 py-0.5 text-[10px] font-medium text-brand-700">
+              <Paperclip className="h-3 w-3" aria-hidden="true" />
+              {attachmentLabel(row.type)}
+            </span>
+          )}
+          {rejectionNote && (
+            <p className="mt-0.5 text-[10px] text-red-500">
+              {rejectionNote.step}
+              {rejectionNote.date ? ` · ${rejectionNote.date}` : ''}
+            </p>
+          )}
+        </td>
+        <td className="text-end">
+          <div
+            className="flex items-center justify-end gap-1.5 whitespace-nowrap"
+            onClick={(event) => event.stopPropagation()}
+          >
+          {state === 'pending' && (
+            <Button size="sm" onClick={() => setDecision('Approve')}>
+              <Check className="h-3.5 w-3.5" aria-hidden="true" /> {t('Approve')}
+            </Button>
+          )}
+          {state === 'awaitingHr' && (
             <>
-              <Button size="sm" onClick={() => setDecision('Approve')}>
-                <Check className="h-3.5 w-3.5" aria-hidden="true" /> {t('Approve')}
-              </Button>
               <Button size="sm" variant="dangerOutline" onClick={() => setDecision('Reject')}>
                 <X className="h-3.5 w-3.5" aria-hidden="true" /> {t('Reject')}
               </Button>
+              {canHrDecide && (
+                <>
+                  <Button size="sm" onClick={() => setHrDecision('Approve')}>
+                    <Check className="h-3.5 w-3.5" aria-hidden="true" /> {t('HR Approve')}
+                  </Button>
+                  <Button size="sm" variant="dangerOutline" onClick={() => setHrDecision('Reject')}>
+                    <X className="h-3.5 w-3.5" aria-hidden="true" /> {t('HR Reject')}
+                  </Button>
+                </>
+              )}
             </>
           )}
-          {status === 'PendingHRReview' && (
-            <Button size="sm" variant="dangerOutline" onClick={() => setDecision('Reject')}>
-              <X className="h-3.5 w-3.5" aria-hidden="true" /> {t('Reject')}
+          {state === 'rejected' && (
+            <Button size="sm" onClick={() => setDecision('Approve')}>
+              <Check className="h-3.5 w-3.5" aria-hidden="true" /> {t('Approve')}
             </Button>
           )}
-          {status === 'PendingHRReview' && canHrDecide && (
-            <>
-              <Button size="sm" onClick={() => setHrDecision('Approve')}>
-                <Check className="h-3.5 w-3.5" aria-hidden="true" /> {t('HR Approve')}
-              </Button>
-              <Button size="sm" variant="dangerOutline" onClick={() => setHrDecision('Reject')}>
-                <X className="h-3.5 w-3.5" aria-hidden="true" /> {t('HR Reject')}
-              </Button>
-            </>
+          {state === 'approved' && (
+            <Button size="sm" variant="secondary" loading={undoMutation.isPending} onClick={() => undoMutation.mutate()}>
+              <Undo2 className="h-3.5 w-3.5" aria-hidden="true" /> {t('Undo')}
+            </Button>
           )}
           <Button size="sm" variant="secondary" onClick={() => setDetailId(row.id)}>
             {t('View')}
           </Button>
-        </div>
-      </div>
+          </div>
+        </td>
+      </tr>
 
-      {decision && (
-        <div onClick={(event) => event.stopPropagation()}>
+      {decision &&
+        createPortal(
+          <div onClick={(event) => event.stopPropagation()}>
           <Modal
             open
             title={
@@ -1051,7 +1214,11 @@ function DeskRow({ row, status }: { row: DeskRequestRow; status: DeskTab }) {
             }
             subtitle={
               decision === 'Approve'
-                ? t('Approves to HR review — HR gives the final sign-off.')
+                ? state === 'rejected'
+                  ? reopenRoute === 'desk'
+                    ? t('Reopens the rejected request, then approves it to HR review.')
+                    : t('Reopens the rejected request, then records the final HR approval.')
+                  : t('Approves to HR review — HR gives the final sign-off.')
                 : t('Rejects the request; reserved leave days are released.')
             }
             onClose={() => setDecision(null)}
@@ -1089,8 +1256,8 @@ function DeskRow({ row, status }: { row: DeskRequestRow; status: DeskTab }) {
                 <div className="rounded-lg bg-charcoal-50 p-2.5">
                   <p className="bento-label text-charcoal-500">{t('Date')}</p>
                   <p className="mt-0.5 text-xs font-semibold text-charcoal-900">
-                    {row.requestedDate
-                      ? rangeLabel(row.requestedDate, row.endDate)
+                    {row.requestDate
+                      ? rangeLabel(row.requestDate, row.endDate)
                       : t('{{date}} (submitted)', { date: formatDate(row.submittedDate) })}
                   </p>
                 </div>
@@ -1172,11 +1339,13 @@ function DeskRow({ row, status }: { row: DeskRequestRow; status: DeskTab }) {
               {row.hasAttachment && <RequestAttachmentCard requestId={row.id} type={row.type} />}
             </div>
           </Modal>
-        </div>
-      )}
+          </div>,
+          document.body,
+        )}
 
-      {hrDecision && (
-        <div onClick={(event) => event.stopPropagation()}>
+      {hrDecision &&
+        createPortal(
+          <div onClick={(event) => event.stopPropagation()}>
           <Modal
             open
             title={
@@ -1202,7 +1371,7 @@ function DeskRow({ row, status }: { row: DeskRequestRow; status: DeskTab }) {
                   disabled={hrDecision === 'Reject' && !hrComment.trim()}
                   onClick={() =>
                     hrDecideMutation.mutate({
-                      decision: hrDecision,
+                      decision: hrDecision === 'Approve' ? 'Approved' : 'Rejected',
                       comment: hrComment.trim() || null,
                       calculatedDays:
                         hrDecision === 'Approve' && row.type === 'Unscheduled Attendance'
@@ -1259,19 +1428,56 @@ function DeskRow({ row, status }: { row: DeskRequestRow; status: DeskTab }) {
               </div>
             </div>
           </Modal>
-        </div>
-      )}
+          </div>,
+          document.body,
+        )}
 
-      {detailId != null && (
-        <div onClick={(event) => event.stopPropagation()}>
-          <RequestDetailDrawer
-            requestId={detailId}
-            employeeId={row.employeeId}
-            onClose={() => setDetailId(null)}
-          />
-        </div>
-      )}
-    </div>
+      {detailId != null &&
+        createPortal(
+          <div onClick={(event) => event.stopPropagation()}>
+            <RequestDetailDrawer
+              requestId={detailId}
+              employeeId={row.employeeId}
+              onClose={() => setDetailId(null)}
+              actions={{
+                // The confirm modals must not stack over the drawer (two focus traps
+                // fight) — picking a decision closes the drawer first.
+                onApprove:
+                  state === 'pending' || state === 'rejected'
+                    ? () => {
+                        setDetailId(null)
+                        setDecision('Approve')
+                      }
+                    : null,
+                onReject:
+                  state === 'pending' || state === 'awaitingHr'
+                    ? () => {
+                        setDetailId(null)
+                        setDecision('Reject')
+                      }
+                    : null,
+                onHrApprove:
+                  state === 'awaitingHr' && canHrDecide
+                    ? () => {
+                        setDetailId(null)
+                        setHrDecision('Approve')
+                      }
+                    : null,
+                onHrReject:
+                  state === 'awaitingHr' && canHrDecide
+                    ? () => {
+                        setDetailId(null)
+                        setHrDecision('Reject')
+                      }
+                    : null,
+                onUndo: state === 'approved' ? () => undoMutation.mutate() : null,
+                undoPending: undoMutation.isPending,
+              }}
+            />
+          </div>,
+          document.body,
+        )}
+    </>
   )
 }
 
@@ -1280,11 +1486,21 @@ function RequestDetailDrawer({
   requestId,
   employeeId,
   onClose,
+  actions,
 }: {
   requestId: number
   /** Target employee of the request — drives the leave-balance tile. */
   employeeId: number
   onClose: () => void
+  /** Desk decisions the row can still take; a null handler hides its button. */
+  actions: {
+    onApprove: (() => void) | null
+    onReject: (() => void) | null
+    onHrApprove: (() => void) | null
+    onHrReject: (() => void) | null
+    onUndo: (() => void) | null
+    undoPending: boolean
+  }
 }) {
   const { t } = useTranslation()
   const detailQuery = useQuery({
@@ -1324,6 +1540,27 @@ function RequestDetailDrawer({
 
   if (!detail) return null
 
+  // The boxes flow two per row; an odd count would leave a dangling half-cell, so
+  // the last one takes the full width instead. Long free text always spans both.
+  const facts = detailFactBoxes(
+    t,
+    detail,
+    coverPay,
+    leaveBucket
+      ? {
+          label: leaveBucket === 'sick' ? t('Sick leave limit') : t('Annual leave limit'),
+          value: balanceLabel(balanceQuery.data?.[leaveBucket] ?? null, balanceQuery.isLoading),
+        }
+      : null,
+  )
+  const oddFactCount = facts.length % 2 === 1
+  const hasAction =
+    actions.onApprove != null ||
+    actions.onReject != null ||
+    actions.onHrApprove != null ||
+    actions.onHrReject != null ||
+    actions.onUndo != null
+
   return (
     <Drawer open onClose={onClose} title={t('Request #{{id}}', { id: detail.id })}>
       <div className="space-y-3">
@@ -1342,47 +1579,16 @@ function RequestDetailDrawer({
           <p className="mt-0.5 text-[11px] text-charcoal-500">{t('Gym · {{gym}}', { gym: detail.gym })}</p>
         </div>
         <dl className="grid grid-cols-2 gap-2 text-xs">
-          <Field label={t('Type')} value={detail.type} />
-          <Field label={t('Status')} value={detail.status} />
-          <Field label={t('Submitted on')} value={formatDateWithYear(detail.submittedDate)} />
-          <Field label={t('Requested for')} value={rangeLabel(detail.requestedDate, detail.endDate)} />
-          {leaveBucket && (
-            <div className="col-span-2">
-              <Field
-                label={leaveBucket === 'sick' ? t('Sick leave limit') : t('Annual leave limit')}
-                value={balanceLabel(balanceQuery.data?.[leaveBucket] ?? null, balanceQuery.isLoading)}
-              />
-            </div>
-          )}
-          {detail.requestTime && (
-            <Field label={t('Time')} value={formatTimeOfDay(detail.requestTime)} />
-          )}
-          {detail.amount != null && (
-            <Field label={t('Amount')} value={formatMoney(detail.amount)} />
-          )}
-          {coverPay && (
-            <div className="col-span-2">
-              <Field label={t('Cover pay')} value={coverPay} />
-            </div>
-          )}
-          {detail.payment &&
-            !(detail.type === 'Unscheduled Attendance' && isCoverDaysPayment(detail.payment)) && (
-              <Field label={t('Payment')} value={detail.payment} />
-            )}
-          {detail.calculatedDays != null && (
+          {facts.map((fact, index) => (
             <Field
-              label={t('Cover days')}
-              value={
-                detail.calculatedDays === 1
-                  ? t('{{count}} day', { count: detail.calculatedDays })
-                  : t('{{count}} days', { count: detail.calculatedDays })
-              }
+              key={fact.label}
+              label={fact.label}
+              value={fact.value}
+              className={oddFactCount && index === facts.length - 1 ? 'col-span-2' : undefined}
             />
-          )}
-          {detail.bmDecision && <Field label={t('Desk decision')} value={detail.bmDecision} />}
-          {detail.bmComment && <Field label={t('Desk comment')} value={detail.bmComment} />}
-          {detail.hrDecision && <Field label={t('HR decision')} value={detail.hrDecision} />}
-          {detail.hrComment && <Field label={t('HR comment')} value={detail.hrComment} />}
+          ))}
+          {detail.bmComment && <Field className="col-span-2" label={t('Desk comment')} value={detail.bmComment} />}
+          {detail.hrComment && <Field className="col-span-2" label={t('HR comment')} value={detail.hrComment} />}
         </dl>
         {detail.hasAttachment && <RequestAttachmentCard requestId={detail.id} type={detail.type} />}
         <div className="rounded-lg bg-charcoal-50 p-3">
@@ -1404,13 +1610,42 @@ function RequestDetailDrawer({
           </ol>
         </div>
       </div>
+      {hasAction && (
+        <div className="sticky bottom-0 -mx-4 -mb-4 mt-3 flex flex-wrap items-center justify-end gap-2 border-t border-charcoal-100 bg-white px-4 py-3">
+          {actions.onUndo && (
+            <Button size="sm" variant="secondary" loading={actions.undoPending} onClick={actions.onUndo}>
+              <Undo2 className="h-3.5 w-3.5" aria-hidden="true" /> {t('Undo')}
+            </Button>
+          )}
+          {actions.onHrReject && (
+            <Button size="sm" variant="dangerOutline" onClick={actions.onHrReject}>
+              <X className="h-3.5 w-3.5" aria-hidden="true" /> {t('HR Reject')}
+            </Button>
+          )}
+          {actions.onReject && (
+            <Button size="sm" variant="dangerOutline" onClick={actions.onReject}>
+              <X className="h-3.5 w-3.5" aria-hidden="true" /> {t('Reject')}
+            </Button>
+          )}
+          {actions.onHrApprove && (
+            <Button size="sm" onClick={actions.onHrApprove}>
+              <Check className="h-3.5 w-3.5" aria-hidden="true" /> {t('HR Approve')}
+            </Button>
+          )}
+          {actions.onApprove && (
+            <Button size="sm" onClick={actions.onApprove}>
+              <Check className="h-3.5 w-3.5" aria-hidden="true" /> {t('Approve')}
+            </Button>
+          )}
+        </div>
+      )}
     </Drawer>
   )
 }
 
-function Field({ label, value }: { label: string; value: string }) {
+function Field({ label, value, className }: { label: string; value: string; className?: string }) {
   return (
-    <div className="rounded-lg bg-charcoal-50 p-2.5">
+    <div className={cn('rounded-lg bg-charcoal-50 p-2.5', className)}>
       <dt className="text-[10px] text-charcoal-500">{label}</dt>
       <dd className="mt-0.5 font-semibold text-charcoal-900">{value}</dd>
     </div>
@@ -1424,4 +1659,10 @@ function initialsOf(name: string): string {
     .slice(0, 2)
     .map((word) => word[0]?.toUpperCase() ?? '')
     .join('')
+}
+
+/** The roster prints EMP-#### numbers; fall back to the same shape from the id. */
+function employeeIdLabel(employeeId?: number | null, employeeNumber?: string | null): string {
+  if (employeeNumber) return employeeNumber
+  return employeeId ? `EMP-${String(employeeId).padStart(4, '0')}` : '—'
 }

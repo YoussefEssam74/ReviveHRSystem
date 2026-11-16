@@ -31,6 +31,8 @@ const STATUS_COLORS: Record<string, BadgeColor> = {
   valid: 'green',
   eligible: 'green',
   'on shift': 'green',
+  // First six months of service still read as an active employee
+  'new comer': 'blue',
   // Warning-ish
   late: 'yellow',
   pending: 'yellow',
@@ -63,6 +65,7 @@ const STATUS_COLORS: Record<string, BadgeColor> = {
   'on leave': 'orange',
   'notice period': 'orange',
   'early checkout': 'orange',
+  'early leaving': 'orange',
   'covering (extra shift)': 'purple',
   'cover / extra day': 'purple',
   off: 'gray',
@@ -72,6 +75,7 @@ const STATUS_COLORS: Record<string, BadgeColor> = {
   'day off': 'blue',
   'annual leave': 'blue',
   'sick leave': 'orange',
+  'paid holiday': 'purple',
   open: 'blue',
   'off day': 'blue',
   // Evaluation results + server enum names (deal with .ToString() payloads)

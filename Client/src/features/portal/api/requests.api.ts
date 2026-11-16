@@ -138,7 +138,8 @@ export interface DeskRequestRow {
   submittedDate: string
   /** Date + clock time the request was filed (UTC ISO); null on older payloads. */
   submittedAt?: string | null
-  requestedDate: string
+  /** The API's EmployeeRequestDto carries the asked-for day as `requestDate`. */
+  requestDate: string
   /** End of a leave/swap range, null on single-day types. */
   endDate: string | null
   /** Second date where the type uses one (swap exchange day). */
@@ -160,6 +161,9 @@ export interface DeskRequestRow {
 /** One card of the HR requests inbox (GET /api/requests items). */
 export interface HrRequestItem {
   id: number
+  /** Requester identity: the id plus the stored EMP-#### number. */
+  employeeId?: number
+  employeeNumber?: string
   employee: string
   gym: string
   type: string

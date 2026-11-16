@@ -30,6 +30,7 @@ export const teamRequests: Record<string, string> = {
 
   // Row summaries
   '{{type}} · {{range}} · Submitted {{date}}': '{{type}} · {{range}} · قُدِّم {{date}}',
+  '{{range}} · Submitted {{date}}': '{{range}} · قُدِّم {{date}}',
   'Gym · {{gym}}': 'الصالة · {{gym}}',
   'Gym: {{gym}}': 'الصالة: {{gym}}',
   'Payment: {{payment}}': 'الدفع: {{payment}}',
@@ -45,6 +46,10 @@ export const teamRequests: Record<string, string> = {
   'HR reject request #{{id}}': 'رفض الموارد البشرية للطلب #{{id}}',
   'HR Approve': 'موافقة الموارد البشرية',
   'HR Reject': 'رفض الموارد البشرية',
+  'Reopens the rejected request, then approves it to HR review.':
+    'يُعاد فتح الطلب المرفوض ثم تتم الموافقة عليه وإحالته لمراجعة الموارد البشرية.',
+  'Reopens the rejected request, then records the final HR approval.':
+    'يُعاد فتح الطلب المرفوض ثم يُسجَّل اعتماد الموارد البشرية النهائي.',
   'Final HR sign-off — the employee is notified.': 'اعتماد الموارد البشرية النهائي — يُبلَّغ الموظف بذلك.',
   'Rejection of an unscheduled day keeps the punch as present with no cover day.':
     'رفض يوم غير مجدول يُبقي البصمة حاضرًا دون يوم تغطية.',

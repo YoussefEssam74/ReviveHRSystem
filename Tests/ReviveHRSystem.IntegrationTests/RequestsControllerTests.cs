@@ -398,8 +398,10 @@ namespace ReviveHRSystem.IntegrationTests
         }
 
         [Fact]
-        public async Task UndoDecision_PastDate_Returns400()
+        public async Task UndoDecision_PastDate_StillReopensTheRequest()
         {
+            // No time limit: the desk files corrections whenever it notices them, so a
+            // decision on a day that already passed is still undoable.
             var builder = new TestDataBuilder(_fixture.Services);
             var gym = await builder.CreateGymWithStationAsync();
             var employee = await builder.CreateEmployeeAsync(gym);
@@ -411,8 +413,10 @@ namespace ReviveHRSystem.IntegrationTests
                 HttpMethod.Post, $"/api/requests/{id}/decide", new { stage = "HR", decision = "Approved", payment = "unpaid" }, token));
             var response = await _fixture.Client.SendAsync(_fixture.AuthorizedRequest(
                 HttpMethod.Post, $"/api/requests/{id}/undo-decision", new { }, token));
+            var body = await response.Content.ReadFromJsonAsync<JsonElement>();
 
-            Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            Assert.Equal("Pending HR Review", body.GetProperty("item").GetProperty("status").GetString());
         }
 
         // ------------------------------------------------------------------

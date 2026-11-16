@@ -8,7 +8,7 @@ import { formatDate } from '../../../lib/format'
 import { cn } from '../../../lib/utils'
 import type { RequestDecisionResult, RequestListItem } from '../api/requests.api'
 import { useDecideRequest, useUndoDecision } from '../hooks/useRequests'
-import { isDecisionUndoable, requestStatusLabel, requestTypeLabel } from '../lib/request-status'
+import { requestStatusLabel, requestTypeLabel } from '../lib/request-status'
 import { UrgencyTag } from './RequestCard'
 
 export type DecisionMode = 'approve' | 'reject' | 'undo'
@@ -120,7 +120,6 @@ export function RequestDecisionDialog({ request, mode, onClose, onDecided }: Req
             variant={isReject || isUndo ? 'dangerOutline' : 'primary'}
             onClick={submit}
             loading={pending}
-            disabled={isUndo && !isDecisionUndoable(request)}
           >
             {isUndo ? 'Undo & Return to Review' : isReject ? 'Reject' : 'Approve'}
           </Button>

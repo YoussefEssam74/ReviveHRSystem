@@ -553,11 +553,8 @@ function MemberRequestRow({
   // BM acts on Pending; once it reaches HR it is HR's call (same as the team desk).
   const canApprove = canDecide && request.status === 'Pending'
   const canReject = canDecide && (request.status === 'Pending' || request.status === 'PendingHRReview')
-  // Mirror the service's undo rule (RequestManagementService.UndoAsync): the
-  // request's last date must not have passed — the range's end date counts
-  // (inclusive), so only `lastDate < today` closes the undo window.
-  const undoDeadlinePassed =
-    (request.endDate ?? request.requestedDate) < todayIso()
+  // Mirror the service's undo rule (RequestManagementService.UndoAsync): there is no
+  // time limit, so a decision can be pulled back however late the desk files it.
 
   return (
     <li className="flex items-center justify-between gap-2 py-2.5">
@@ -596,7 +593,7 @@ function MemberRequestRow({
             )}
           </div>
         )}
-        {canDecide && (request.status === 'PendingHRReview' || request.status === 'Rejected') && !undoDeadlinePassed && (
+        {canDecide && (request.status === 'PendingHRReview' || request.status === 'Rejected') && (
           <Button size="sm" variant="secondary" loading={undoMutation.isPending} onClick={() => undoMutation.mutate()}>
             {t('Undo')}
           </Button>

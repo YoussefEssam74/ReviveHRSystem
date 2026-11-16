@@ -416,7 +416,23 @@ body {
 .data-table tr:last-child td { border-bottom: none; }
 .data-table tbody tr { transition: background 0.15s; }
 .data-table tbody tr:hover { background: var(--color-charcoal-50); }
+/* Long rosters scroll inside their own card, so the header row stays pinned. */
+.data-table-sticky thead th { position: sticky; top: 0; z-index: 1; }
+/* Clickable rows are keyboard reachable; mark where focus landed. */
+.data-table tbody tr[tabindex]:focus-visible {
+  outline: 2px solid var(--color-brand-500);
+  outline-offset: -2px;
+  background: var(--color-charcoal-50);
+}
 .table-responsive { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+
+/* Alignment helpers for table cells. `.data-table th/td` sets `text-align: left`
+   from this unlayered block, which outranks every Tailwind `text-*` utility, so
+   a centred punch column or an end-aligned action header needs its own class. */
+.data-table th.is-center,
+.data-table td.is-center { text-align: center; }
+.data-table th.is-end,
+.data-table td.is-end { text-align: end; }
 
 /* Compact variant for dense tables (mock parity, 12px floor on body cells). */
 .data-table-compact th { padding: 0.25rem 0.5rem; font-size: 0.6875rem; }
@@ -591,7 +607,10 @@ body {
 }
 .form-select {
   width: 100%;
-  padding: 0.5rem 2rem 0.5rem 0.75rem;
+  /* Logical padding: the extra room for the chevron sits on the end side, so
+     it flips with the interface direction. */
+  padding-block: 0.5rem;
+  padding-inline: 0.75rem 2rem;
   border: 1px solid var(--color-charcoal-300);
   border-radius: 0.5rem;
   font-size: 0.875rem;
@@ -603,6 +622,11 @@ body {
   background-position: right 0.5rem center;
   background-size: 1.5em 1.5em;
   transition: border-color 0.15s, box-shadow 0.15s;
+}
+/* A background-position is physical, so the chevron follows the padding to the
+   start side on its own only if it is flipped here. */
+html[dir="rtl"] .form-select {
+  background-position: left 0.5rem center;
 }
 .form-select:focus {
   outline: none;
@@ -631,6 +655,8 @@ body {
 /* Buttons */
 .btn { display: inline-flex; align-items: center; justify-content: center; gap: 0.375rem; font-size: 0.8125rem; font-weight: 500; border-radius: 0.5rem; transition: all 0.15s; cursor: pointer; white-space: nowrap; line-height: 1; }
 .btn-sm { padding: 0.375rem 0.75rem; font-size: 0.75rem; }
+/* Compact row action; `.btn-sm`'s padding makes a repeated action column bulky. */
+.btn-row-action { padding: 0.25rem 0.5rem; font-size: 0.6875rem; }
 .btn-md { padding: 0.4375rem 0.875rem; }
 .btn-primary { background: #16a34a; color: white; border: 1px solid #16a34a; }
 .btn-primary:hover { background: #15803d; border-color: #15803d; }

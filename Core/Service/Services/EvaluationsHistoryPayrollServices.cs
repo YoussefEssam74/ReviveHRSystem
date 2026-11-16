@@ -648,17 +648,15 @@ namespace Service.Services
                 var annual = 0;
                 var sick = 0;
                 var unpaid = 0;
+                var paidHoliday = 0;
+                // Every day an accepted leave excuses — an absence recorded before the
+                // approval must not be charged once the leave is on file.
+                var leaveDates = new HashSet<DateOnly>();
                 foreach (var request in approvedLeaves)
                 {
                     var reqStart = request.TargetStartDate ?? request.RequestDate;
                     var reqEnd = request.TargetEndDate ?? reqStart;
                     if (reqEnd < start || reqStart > end)
-                    {
-                        continue;
-                    }
-
-                    var leaveType = RequestTypeCatalog.LeaveTypeFor(request.Type);
-                    if (leaveType is null)
                     {
                         continue;
                     }
@@ -673,20 +671,37 @@ namespace Service.Services
                     {
                         unpaid += days;
                     }
-                    else if (leaveType == LeaveType.Annual)
+                    else if (RequestTypeCatalog.IsLeaveType(request.Type))
                     {
-                        annual += days;
-                    }
-                    else if (leaveType == LeaveType.Sick)
-                    {
-                        sick += days;
+                        var normalized = request.Type
+                            .Replace(" ", string.Empty, StringComparison.Ordinal)
+                            .Replace("-", string.Empty, StringComparison.Ordinal)
+                            .ToLowerInvariant();
+                        if (normalized is "paidholiday")
+                        {
+                            paidHoliday += days;
+                        }
+                        else if (normalized is "sickleave")
+                        {
+                            sick += days;
+                        }
+                        else
+                        {
+                            annual += days;
+                        }
+
+                        for (var day = overlapStart; day <= overlapEnd; day = day.AddDays(1))
+                        {
+                            leaveDates.Add(day);
+                        }
                     }
                 }
 
                 var records = attendance.Where(a => a.Date >= start && a.Date <= end).ToList();
                 var late = records.Count(a => a.Status == AttendanceStatus.Late);
                 var early = records.Count(a => a.Status == AttendanceStatus.EarlyCheckout);
-                var absent = records.Count(a => a.Status == AttendanceStatus.Absent);
+                // An absence recorded before the leave was accepted is not an absence.
+                var absent = records.Count(a => a.Status == AttendanceStatus.Absent && !leaveDates.Contains(a.Date));
 
                 var deductionDetails = BuildDeductionDetails(
                     start, end, records, candidates, absenceFollowUps, attendanceTimeZone);
@@ -713,6 +728,7 @@ namespace Service.Services
                     PaidLeaveDays = annual + sick,
                     AnnualLeaveDays = annual,
                     SickLeaveDays = sick,
+                    PaidHolidayDays = paidHoliday,
                     AbsentDays = absent,
                     LateCount = late,
                     EarlyLeaveCount = early,

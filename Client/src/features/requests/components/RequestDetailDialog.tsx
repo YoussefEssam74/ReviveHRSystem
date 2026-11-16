@@ -3,7 +3,7 @@ import { Dialog } from '../../../components/ui/dialog'
 import { formatDate } from '../../../lib/format'
 import { cn } from '../../../lib/utils'
 import type { RequestListItem } from '../api/requests.api'
-import { isDecisionUndoable, requestStatusLabel, requestTypeLabel, requestUrgency } from '../lib/request-status'
+import { requestStatusLabel, requestTypeLabel, requestUrgency } from '../lib/request-status'
 import { UrgencyTag } from './RequestCard'
 
 export interface RequestDetailDialogProps {
@@ -16,8 +16,7 @@ export interface RequestDetailDialogProps {
 /** Read-only request detail: identity, reason, balance, BM + HR blocks, timeline. */
 export function RequestDetailDialog({ request, canDecide, onClose, onDecide }: RequestDetailDialogProps) {
   const balance = request.leaveBalance
-  const undoable =
-    canDecide && (request.status === 'Approved' || request.status === 'Rejected') && isDecisionUndoable(request)
+  const undoable = canDecide && (request.status === 'Approved' || request.status === 'Rejected')
 
   return (
     <Dialog

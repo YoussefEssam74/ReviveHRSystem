@@ -363,11 +363,18 @@ function ActionModal({
 export function CreateFollowUpModal({
   members,
   defaultMember = null,
+  defaultDeduction = null,
   onClose,
 }: {
   members: TeamMemberDay[]
   /** The employee whose row the manager clicked — preselected so an action can never land on someone else. */
   defaultMember?: TeamMemberDay | null
+  /**
+   * The deduction that already waits on this employee's attendance day. When the
+   * manager opens Take action from such a row, the form arrives as a ready-to-
+   * confirm deduction for that many days instead of a blank sheet.
+   */
+  defaultDeduction?: { days: number; date: string | null } | null
   onClose: () => void
 }) {
   const { t } = useTranslation()
@@ -378,8 +385,12 @@ export function CreateFollowUpModal({
   const [action, setAction] = useState<ActionKind>('Deduction')
   const [severity, setSeverity] = useState<Severity>('Medium')
   const [description, setDescription] = useState('')
-  const [deductionDate, setDeductionDate] = useState(() => new Date().toISOString().slice(0, 10))
-  const [deductionAmount, setDeductionAmount] = useState('')
+  const [deductionDate, setDeductionDate] = useState(
+    () => defaultDeduction?.date ?? new Date().toISOString().slice(0, 10),
+  )
+  const [deductionAmount, setDeductionAmount] = useState(() =>
+    defaultDeduction && defaultDeduction.days > 0 ? String(Number(defaultDeduction.days.toFixed(3))) : '',
+  )
   const [deductionUnit, setDeductionUnit] = useState<(typeof DEDUCTION_UNITS)[number]>('Days')
   const [note, setNote] = useState('')
 

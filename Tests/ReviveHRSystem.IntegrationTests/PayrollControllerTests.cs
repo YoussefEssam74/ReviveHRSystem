@@ -1021,6 +1021,34 @@ namespace ReviveHRSystem.IntegrationTests
         }
 
         [Fact]
+        public async Task EmployeePayrollSheets_ApprovedPaidHoliday_CountsAsHolidayAndNeverAbsent()
+        {
+            var builder = NewBuilder();
+            var gym = await builder.CreateGymWithStationAsync();
+            var employee = await builder.CreateEmployeeAsync(gym);
+            var start = new DateOnly(2031, 8, 1);
+            var periodId = await builder.CreatePayrollPeriodAsync(
+                gym.GymId, start, start.AddMonths(1).AddDays(-1), PayrollPeriodStatus.Locked, new DateOnly(2031, 9, 3));
+            await builder.CreatePayrollEntryAsync(periodId, employee.EmployeeId, 17600m);
+
+            // The day was recorded Absent before HR accepted the paid holiday: the
+            // payroll must show a holiday, not an absence.
+            var holiday = start.AddDays(2);
+            await builder.CreateAttendanceRecordAsync(
+                employee.EmployeeId, gym.GymId, holiday, status: AttendanceStatus.Absent);
+            await builder.CreateLeaveRequestAsync(employee.EmployeeId, "Paid Holiday", holiday, holiday);
+            // The portal route is self-service: read it as the employee themself.
+            var token = await _fixture.LoginAsync(employee.Email, employee.Password);
+
+            var sheets = await GetJsonAsync($"/api/employees/{employee.EmployeeId}/payroll-sheets", token);
+            var august = sheets.EnumerateArray()
+                .First(s => s.GetProperty("period").GetString() == "August 2031");
+
+            Assert.Equal(1, august.GetProperty("paidHolidayDays").GetInt32());
+            Assert.Equal(0, august.GetProperty("absentDays").GetInt32());
+        }
+
+        [Fact]
         public async Task EmployeePayroll_WithoutPermission_IsConcealed()
         {
             // Payroll visibility model (matrix rows 13/34): no key holders and no

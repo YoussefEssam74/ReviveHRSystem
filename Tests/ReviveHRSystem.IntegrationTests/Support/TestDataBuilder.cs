@@ -379,6 +379,32 @@ namespace ReviveHRSystem.IntegrationTests.Support
             return request.Id;
         }
 
+        /// <summary>Inserts a leave request of <paramref name="type"/> covering [start, end] (inclusive).
+        /// <paramref name="status"/> stays configurable so a desk approval awaiting the HR
+        /// sign-off (PendingHRReview) can be exercised too.</summary>
+        public async Task<int> CreateLeaveRequestAsync(
+            int employeeId,
+            string type,
+            DateOnly start,
+            DateOnly end,
+            DomainLayer.Models.RequestModule.Enums.RequestStatus status =
+                DomainLayer.Models.RequestModule.Enums.RequestStatus.Approved)
+        {
+            var request = new DomainLayer.Models.RequestModule.EmployeeRequest
+            {
+                EmployeeId = employeeId,
+                Type = type,
+                RequestDate = start,
+                TargetStartDate = start,
+                TargetEndDate = end,
+                Details = $"Integration-test {type}",
+                Status = status
+            };
+            _db.EmployeeRequests.Add(request);
+            await _db.SaveChangesAsync();
+            return request.Id;
+        }
+
         /// <summary>Inserts a shift template at the gym (template CRUD is org-settings scope, no HR API).</summary>
         public async Task<int> CreateShiftTemplateAsync(
             TestGym gym, string name, TimeOnly start, TimeOnly end, bool isActive = true, string color = "#0ea5e9")

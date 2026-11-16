@@ -110,6 +110,113 @@ namespace ReviveHRSystem.IntegrationTests
         }
 
         [Fact]
+        public async Task GetAttendance_StoredAbsentWithApprovedSickLeave_IsSickLeave()
+        {
+            var builder = new TestDataBuilder(_fixture.Services);
+            var gym = await builder.CreateGymWithStationAsync();
+            var employee = await builder.CreateEmployeeAsync(gym);
+            var sickDate = builder.AttendanceToday.AddDays(-2);
+            // The biometric record already says Absent: the leave was accepted days later,
+            // and the day must read as the leave instead of the absence.
+            await builder.CreateAttendanceRecordAsync(
+                employee.EmployeeId, gym.GymId, sickDate, status: AttendanceStatus.Absent);
+            await builder.CreateLeaveRequestAsync(employee.EmployeeId, "Sick Leave", sickDate, sickDate);
+            var token = await _fixture.GetAdminTokenAsync();
+
+            var request = _fixture.AuthorizedRequest(
+                HttpMethod.Get, $"/api/attendance?from={sickDate:yyyy-MM-dd}&to={sickDate:yyyy-MM-dd}&gymId={gym.GymId}", null, token);
+            var response = await _fixture.Client.SendAsync(request);
+            var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            var item = Assert.Single(
+                body.GetProperty("items").EnumerateArray().ToList(),
+                i => i.GetProperty("employeeId").GetInt32() == employee.EmployeeId);
+            Assert.Equal("Sick Leave", item.GetProperty("status").GetString());
+            Assert.Equal("Approved leave", item.GetProperty("notes").GetString());
+        }
+
+        [Fact]
+        public async Task GetAttendance_StoredAbsentWithDeskApprovedLeave_IsSickLeave()
+        {
+            var builder = new TestDataBuilder(_fixture.Services);
+            var gym = await builder.CreateGymWithStationAsync();
+            var employee = await builder.CreateEmployeeAsync(gym);
+            var sickDate = builder.AttendanceToday.AddDays(-2);
+            // The desk accepted the request; the HR sign-off is still pending, but the
+            // manager already excused the day, so it stops counting as an absence.
+            await builder.CreateAttendanceRecordAsync(
+                employee.EmployeeId, gym.GymId, sickDate, status: AttendanceStatus.Absent);
+            await builder.CreateLeaveRequestAsync(
+                employee.EmployeeId, "Sick Leave", sickDate, sickDate,
+                DomainLayer.Models.RequestModule.Enums.RequestStatus.PendingHRReview);
+            var token = await _fixture.GetAdminTokenAsync();
+
+            var request = _fixture.AuthorizedRequest(
+                HttpMethod.Get, $"/api/attendance?from={sickDate:yyyy-MM-dd}&to={sickDate:yyyy-MM-dd}&gymId={gym.GymId}", null, token);
+            var response = await _fixture.Client.SendAsync(request);
+            var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            var item = Assert.Single(
+                body.GetProperty("items").EnumerateArray().ToList(),
+                i => i.GetProperty("employeeId").GetInt32() == employee.EmployeeId);
+            Assert.Equal("Sick Leave", item.GetProperty("status").GetString());
+            Assert.Equal("Approved leave", item.GetProperty("notes").GetString());
+        }
+
+        [Fact]
+        public async Task GetAttendance_StoredAbsentWithPaidHoliday_IsPaidHoliday()
+        {
+            var builder = new TestDataBuilder(_fixture.Services);
+            var gym = await builder.CreateGymWithStationAsync();
+            var employee = await builder.CreateEmployeeAsync(gym);
+            var holiday = builder.AttendanceToday.AddDays(-2);
+            // The roster already said Absent when HR accepted the paid holiday for the day.
+            await builder.CreateAttendanceRecordAsync(
+                employee.EmployeeId, gym.GymId, holiday, status: AttendanceStatus.Absent);
+            await builder.CreateLeaveRequestAsync(employee.EmployeeId, "Paid Holiday", holiday, holiday);
+            var token = await _fixture.GetAdminTokenAsync();
+
+            var request = _fixture.AuthorizedRequest(
+                HttpMethod.Get, $"/api/attendance?from={holiday:yyyy-MM-dd}&to={holiday:yyyy-MM-dd}&gymId={gym.GymId}", null, token);
+            var response = await _fixture.Client.SendAsync(request);
+            var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            var item = Assert.Single(
+                body.GetProperty("items").EnumerateArray().ToList(),
+                i => i.GetProperty("employeeId").GetInt32() == employee.EmployeeId);
+            Assert.Equal("Paid Holiday", item.GetProperty("status").GetString());
+            Assert.Equal("Approved leave", item.GetProperty("notes").GetString());
+        }
+
+        [Fact]
+        public async Task GetAttendance_LegacyLeaveSpellings_ReportTheirLeave()
+        {
+            var builder = new TestDataBuilder(_fixture.Services);
+            var gym = await builder.CreateGymWithStationAsync();
+            var sickEmployee = await builder.CreateEmployeeAsync(gym);
+            var annualEmployee = await builder.CreateEmployeeAsync(gym);
+            var date = builder.AttendanceToday.AddDays(-2);
+            // The seed history carries the pre-catalog spellings ("SickLeave", "Leave"):
+            // they must still excuse the day and name the leave it was.
+            await builder.CreateLeaveRequestAsync(sickEmployee.EmployeeId, "SickLeave", date, date);
+            await builder.CreateLeaveRequestAsync(annualEmployee.EmployeeId, "Leave", date, date);
+            var token = await _fixture.GetAdminTokenAsync();
+
+            var request = _fixture.AuthorizedRequest(
+                HttpMethod.Get, $"/api/attendance?from={date:yyyy-MM-dd}&to={date:yyyy-MM-dd}&gymId={gym.GymId}", null, token);
+            var response = await _fixture.Client.SendAsync(request);
+            var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            var items = body.GetProperty("items").EnumerateArray().ToList();
+            Assert.Equal("Sick Leave", items.Single(i => i.GetProperty("employeeId").GetInt32() == sickEmployee.EmployeeId).GetProperty("status").GetString());
+            Assert.Equal("Annual Leave", items.Single(i => i.GetProperty("employeeId").GetInt32() == annualEmployee.EmployeeId).GetProperty("status").GetString());
+        }
+
+        [Fact]
         public async Task GetAttendance_UnscheduledAbsentRecord_StaysAbsent()
         {
             var builder = new TestDataBuilder(_fixture.Services);

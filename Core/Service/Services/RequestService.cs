@@ -426,7 +426,7 @@ namespace Service.Services
         }
 
         // ------------------------------------------------------------------
-        // R4 — undo the HR decision while the date is still ahead
+        // R4 — undo the HR decision; there is no time limit on it
         // ------------------------------------------------------------------
 
         public async Task<RequestDecisionResponse> UndoDecisionAsync(int? actorUserId, int requestId, UndoDecisionRequest request, CancellationToken cancellationToken = default)
@@ -443,14 +443,9 @@ namespace Service.Services
                 throw new BadRequestException("Only decided requests can be undone.");
             }
 
-            var lastDate = entity.TargetEndDate ?? entity.RequestDate;
-            if (lastDate < DateOnly.FromDateTime(DateTime.UtcNow.Date)
-                && !await _accessControl.HasPermissionForGymAsync(actor.Id, "payroll.edit", entity.Employee.GymId, cancellationToken))
-            {
-                // Settlement reconciles the month that just ended, so payroll editors may
-                // still undo there; everyone else is bound to the date still being ahead.
-                throw new BadRequestException("The requested date has passed — the decision can no longer be changed.");
-            }
+            // No time limit: a decision can be reverted whenever the desk files the
+            // correction, however late — the leave days move back to reserved and the
+            // absence/deduction for the day returns on the next sweep.
 
             // Undo restores what the decision moved: the days go back to reserved and a
             // paid approval gives its consumed days back.

@@ -30,7 +30,7 @@ namespace ServiceAbstraction.Services
         /// <summary>HR approves or rejects a pending request (R3, A6) — sets payment and the resignation offboarding prompt.</summary>
         Task<RequestDecisionResponse> DecideRequestAsync(int? actorUserId, int requestId, DecideRequestRequest request, CancellationToken cancellationToken = default);
 
-        /// <summary>Reverts an HR decision while the requested date is still ahead (R4).</summary>
+        /// <summary>Reverts an HR decision — no time limit, however late the correction lands (R4).</summary>
         Task<RequestDecisionResponse> UndoDecisionAsync(int? actorUserId, int requestId, UndoDecisionRequest request, CancellationToken cancellationToken = default);
 
         /// <summary>Approves pending requests in bulk, deriving each payment from the leave balance (R5).</summary>
