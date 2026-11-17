@@ -34,12 +34,17 @@ function renderUserProfile() {
         </div>
         <p class="text-[11px] text-charcoal-500 mt-0.5">${esc(user.email)} · ${esc(user.phone)}</p>
         <div class="flex items-center gap-3 mt-1.5 flex-wrap text-[10px] text-charcoal-500">
-          <button onclick="navigateTo('gym-detail',{gymId:'${user.gymId}'})" class="flex items-center gap-1 hover:text-brand-700">
-            ${gymLogo(gym, 36)}
-            <span>${esc(gym ? gym.name : user.gymName)} — ${esc(gym ? gym.location : '')}</span>
-          </button>
+          ${user.gymId
+            ? `<button onclick="navigateTo('gym-detail',{gymId:'${user.gymId}'})" class="flex items-center gap-1 hover:text-brand-700">
+                ${gymLogo(gym, 36)}
+                <span>${esc(gym ? gym.name : user.gymName)} — ${esc(gym ? gym.location : '')}${(user.gymIds || []).length > 1 ? ` · <span class="text-brand-700 font-semibold">${user.gymIds.length} gyms</span>` : ''}</span>
+              </button>`
+            : `<span class="flex items-center gap-1 text-purple-700 font-semibold">
+                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/></svg>
+                All ${GYMS.length} gym accounts
+              </span>`}
           <span class="flex items-center gap-1">
-            <svg class="w-3 h-3 text-charcoal-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+            <svg class="w-3 h-3 text-charcoal-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
             ${esc(user.branch || '—')}
           </span>
         </div>
@@ -56,7 +61,7 @@ function renderUserProfile() {
   <div class="grid grid-cols-2 lg:grid-cols-4 gap-2.5 mb-3">
     ${kpiTile('Role', esc(user.role), role ? role.type + ' role' : 'No role assigned', 'shield')}    ${kpiTile('Permissions', String(perms.length), role ? `${role.scope} scope` : '—', 'lock')}
     ${kpiTile('Last sign-in', user.lastLogin ? relativeTime(user.lastLogin) : 'Never', user.lastLogin ? formatDate(user.lastLogin) : 'Invitation pending', 'check')}
-    ${kpiTile('Branch', esc(user.branch || '—'), esc(user.branchCode || 'Not assigned'), 'building')}
+    ${kpiTile('Scope', user.gymId ? esc(user.branch || '—') : `All ${GYMS.length} gyms`, user.gymId ? esc(user.branchCode || 'Not assigned') : 'platform-wide', 'building')}
   </div>
 
   <div class="grid grid-cols-1 xl:grid-cols-3 gap-3">
@@ -124,8 +129,8 @@ function renderUserProfile() {
         <div class="card-head"><p class="bento-label flex-1">Access details</p></div>
         <dl class="px-3 py-2.5 text-[10px] space-y-1.5">
           <div class="flex justify-between gap-2"><dt class="text-charcoal-500">Last sign-in</dt><dd class="font-semibold text-charcoal-800 text-right">${user.lastLogin ? formatDateTime(user.lastLogin) : 'Never'}</dd></div>
-          <div class="flex justify-between gap-2"><dt class="text-charcoal-500">Gym scope</dt><dd class="font-semibold text-charcoal-800 text-right">${esc(gym ? gym.name : '—')}</dd></div>
-          <div class="flex justify-between gap-2"><dt class="text-charcoal-500">Branch scope</dt><dd class="font-semibold text-charcoal-800 text-right">${esc(user.branch || 'All branches')}</dd></div>
+          <div class="flex justify-between gap-2"><dt class="text-charcoal-500">Gym scope</dt><dd class="font-semibold text-charcoal-800 text-right">${esc(gym ? gym.name : `All ${GYMS.length} gym accounts`)}</dd></div>
+          <div class="flex justify-between gap-2"><dt class="text-charcoal-500">Branch scope</dt><dd class="font-semibold text-charcoal-800 text-right">${esc(user.gymId ? (user.branch || 'All branches') : 'All branches')}</dd></div>
         </dl>
       </div>
     </div>

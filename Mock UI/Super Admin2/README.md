@@ -12,8 +12,8 @@ a sibling of it.**
 | Role | Scope | Can reach the console? |
 | --- | --- | --- |
 | Super Admin | Every gym account, plus platform settings | Yes |
-| HR Manager | One gym — the account owner | No |
-| HR | One gym, operational (no approvals, payroll lock or audit) | No |
+| HR Manager | **Every gym account** — a platform-wide HR lead | No |
+| HR | The gym accounts they are assigned to — one or many | No |
 | Branch Manager | One branch | No |
 | Team Leader | One team | No |
 | Employee | Own profile and records | No |
@@ -22,16 +22,21 @@ Inside a gym, the Super Admin inherits every HR Manager permission. On top of th
 ten platform-only capabilities that no gym role can ever reach. System roles are fixed;
 custom roles are created on **Roles & permissions** and can be assigned to staff.
 
+**Assignment model:** an HR Manager is *not* attached to a gym — one account covers all
+of them. Only **HR** staff carry gym assignments, and an HR user can hold several gyms
+at once. Assign or revoke that access from a gym's **HR staff** tab, or while creating
+the gym in the wizard.
+
 ## Pages
 
 | Page | What it answers |
 | --- | --- |
 | **Dashboard** | Four numbers that matter — gyms, users, revenue, seat utilisation — plus the gym table and the decisions waiting on you. |
 | **Gym accounts** | A sortable table of every subscribed gym: plan, branches, MRR, renewal and status. `Open` goes to the full account. |
-| **Gym detail** | Everything about one account across six tabs: overview, **branches**, **employees** (filterable per branch), HR managers, **billing**, audit. |
-| **Users** | Who is on the platform. Gym chips double as the per-gym count **and** the filter, then narrow by role, status or search. |
+| **Gym detail** | Everything about one account across six tabs: overview, **branches**, **employees** (filterable per branch), **HR staff** assigned to it, **billing**, audit. |
+| **Users** | Who is on the platform. Gym dropdown doubles as the per-gym count **and** the filter, then narrow by role, status or search. |
 | **User profile** | A full page per person — employment record, permissions from their role, access details and their own audit trail. |
-| **HR managers** | The accounts you provisioned, as a table: owner, gym, preset, status, last sign-in — plus the workspace launcher to enter any gym as any role. |
+| **HR managers** | The platform HR accounts: every one of them reaches all gym accounts. Create, suspend or reset.
 | **Billing & quotas** | Platform revenue **and the plans you sell**: MRR/ARR, the plan table (price, cycle, trial, limits), the invoice ledger with issue→paid ranges and aging buckets, seat consumption per gym. |
 | **Roles & permissions** | The role catalog. Create a role, tick its permissions grouped by module, edit or duplicate existing roles. |
 | **Security & audit** | The exceptions first: a review queue of critical and warning events, your own impersonation sessions, then the complete immutable trail. |
@@ -55,11 +60,12 @@ custom roles are created on **Roles & permissions** and can be assigned to staff
 
 ## Key flows
 
-1. **Create gym account** — four-step wizard: gym details → subscription plan →
-   HR Manager account → review. Writes a `Gym` and a `User` event, then opens the
-   new account.
-2. **Create HR manager account** — from the dashboard, the gym detail page or the
-   HR managers page. Seat-limit and duplicate-email guards run inline.
+1. **Create gym account** — four-step wizard: gym details (with logo upload) →
+   subscription (14-day trial) → assign HR staff → review. Writes a `Gym` event plus one
+   `User` event per assigned HR member, then opens the new account.
+2. **Create HR manager account** — a platform account that instantly reaches every gym.
+3. **Assign HR staff to a gym** — from the gym's HR staff tab or the creation wizard.
+   Removing someone revokes that gym only; their other gyms are untouched.
 3. **Add branch** — from a gym's Branches tab, bounded by the plan's branch limit.
    Staff are scoped to a branch and the Employees tab can be filtered by it.
 4. **Create or edit a role** — Roles & permissions → Create role (or Duplicate on a
