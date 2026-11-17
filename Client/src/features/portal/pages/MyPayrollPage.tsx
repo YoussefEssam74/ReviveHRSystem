@@ -145,9 +145,12 @@ export default function MyPayrollPage() {
 
 function PayrollSnapshotCard({ sheet, employeeId }: { sheet: PayrollSheet; employeeId: number }) {
   const { t } = useTranslation()
-  const net = sheet.netSalary
+  // The card reads top-down as net pay − deductions = total payout: "Net Pay" is the
+  // period's pay before deductions (gross earnings), and the closing row is the amount
+  // actually left to pay out.
   const deductions = sheet.totalDeductions
-  const gross = grossPay(sheet) || net + deductions
+  const netPay = grossPay(sheet) || sheet.netSalary + deductions
+  const totalPayout = sheet.netSalary
 
   return (
     <section className="card p-2.5 sm:p-3">
@@ -161,12 +164,12 @@ function PayrollSnapshotCard({ sheet, employeeId }: { sheet: PayrollSheet; emplo
         {/* Left half: the money of this period */}
         <div className="flex items-center gap-3 lg:pe-4">
           <DonutChart
-            net={net}
+            netPay={netPay}
             deductions={deductions}
-            netLabel={t('Net Pay')}
-            netValue={formatEGP(net)}
+            netPayLabel={t('Net Pay')}
+            netPayValue={formatEGP(netPay)}
             ariaLabel={t('Payroll split: net pay {{net}}, deductions {{deductions}}', {
-              net: formatEGP(net),
+              net: formatEGP(netPay),
               deductions: formatEGP(deductions),
             })}
           />
@@ -177,7 +180,7 @@ function PayrollSnapshotCard({ sheet, employeeId }: { sheet: PayrollSheet; emplo
                 <span className="h-2 w-2 flex-shrink-0 rounded-full bg-brand-500" aria-hidden="true" />
                 <span className="truncate">{t('Net Pay')}</span>
               </dt>
-              <dd className="flex-shrink-0 font-semibold text-charcoal-900">{formatEGP(net)}</dd>
+              <dd className="flex-shrink-0 font-semibold text-charcoal-900">{formatEGP(netPay)}</dd>
             </div>
             {/* Bonus rides inside the net figure — same row rhythm as the other
                 legend entries, marked by its purple dot. */}
@@ -197,7 +200,7 @@ function PayrollSnapshotCard({ sheet, employeeId }: { sheet: PayrollSheet; emplo
             </div>
             <div className="flex items-center justify-between gap-2 border-t border-charcoal-100 pt-1.5">
               <dt className="min-w-0 leading-tight text-charcoal-600">{t('Total Payout this period')}</dt>
-              <dd className="flex-shrink-0 text-sm font-bold text-charcoal-900">{formatEGP(gross)}</dd>
+              <dd className="flex-shrink-0 text-sm font-bold text-charcoal-900">{formatEGP(totalPayout)}</dd>
             </div>
           </dl>
         </div>
@@ -424,23 +427,23 @@ export function LeaveBalanceBlock({
 }
 
 function DonutChart({
-  net,
+  netPay,
   deductions,
-  netLabel,
-  netValue,
+  netPayLabel,
+  netPayValue,
   ariaLabel,
 }: {
-  net: number
+  netPay: number
   deductions: number
-  netLabel: string
-  netValue: string
+  netPayLabel: string
+  netPayValue: string
   ariaLabel: string
 }) {
   const radius = 42
   const circumference = 2 * Math.PI * radius
-  const total = net + deductions
+  const total = netPay + deductions
   const segments = [
-    { id: 'net', value: net, color: '#16a34a' },
+    { id: 'net', value: netPay, color: '#16a34a' },
     { id: 'deductions', value: deductions, color: '#ef4444' },
   ].filter((segment) => segment.value > 0)
 
@@ -471,8 +474,8 @@ function DonutChart({
         })}
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center px-5 text-center">
-        <p className="text-[9px] font-semibold uppercase tracking-wider text-charcoal-400">{netLabel}</p>
-        <p className="mt-0.5 text-sm font-bold leading-tight text-charcoal-900">{netValue}</p>
+        <p className="text-[9px] font-semibold uppercase tracking-wider text-charcoal-400">{netPayLabel}</p>
+        <p className="mt-0.5 text-sm font-bold leading-tight text-charcoal-900">{netPayValue}</p>
       </div>
     </div>
   )
