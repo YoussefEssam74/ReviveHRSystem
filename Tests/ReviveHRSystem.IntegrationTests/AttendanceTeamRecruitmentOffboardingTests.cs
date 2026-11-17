@@ -10,9 +10,10 @@ using Xunit;
 namespace ReviveHRSystem.IntegrationTests
 {
     /// <summary>
-    /// Management surface part 3 (mock §§13, 22, 23, 24): attendance day view, team
-    /// overview, vacancy requests, offboarding — feature-gated, team-scoped for Team
-    /// Leaders and gym-scoped for Branch Managers.
+    /// Management surface part 3 (mock §§13, 24): team overview and offboarding —
+    /// feature-gated, team-scoped for Team Leaders and gym-scoped for Branch Managers.
+    /// The attendance day view and vacancy requests are covered by the HR-portal
+    /// suites (AttendanceManagementControllerTests / RecruitmentControllerTests).
     /// </summary>
     [Collection(ApiTestFixture.CollectionName)]
     public class AttendanceTeamRecruitmentOffboardingTests
@@ -20,47 +21,6 @@ namespace ReviveHRSystem.IntegrationTests
         private readonly ApiTestFixture _fixture;
 
         public AttendanceTeamRecruitmentOffboardingTests(ApiTestFixture fixture) => _fixture = fixture;
-
-        [Fact]
-        public async Task Attendance_PlainEmployee_Returns403()
-        {
-            var token = await _fixture.LoginAsync("karim@revive.hr", "Revive!2026");
-
-            var request = _fixture.AuthorizedRequest(HttpMethod.Get, "/api/attendance?date=2026-10-11", null, token);
-            var response = await _fixture.Client.SendAsync(request);
-
-            Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
-        }
-
-        [Fact]
-        public async Task Attendance_DayView_SeparatesLateAbsentAndNoShows()
-        {
-            var gym1Id = await GymIdByNameAsync("Revive Main Gym");
-            var today = DateOnly.FromDateTime(DateTime.UtcNow);
-
-            // Late arrival, clean present, and a scheduled no-show in one day.
-            var onTime = await CreateEmployeeAsync("ontime@revive.hr", gym1Id, "EMP-7001");
-            var late = await CreateEmployeeAsync("late@revive.hr", gym1Id, "EMP-7002");
-            var noShow = await CreateEmployeeAsync("noshow@revive.hr", gym1Id, "EMP-7003");
-            var templateId = await AnyShiftTemplateIdAsync(gym1Id);
-
-            await SeedAssignmentAsync(late, today, templateId);
-            await SeedAssignmentAsync(onTime, today, templateId);
-            await SeedAssignmentAsync(noShow, today, templateId);
-
-            await SeedAttendanceAsync(late, today, DomainLayer.Models.AttendanceModule.Enums.AttendanceStatus.Late, new TimeOnly(8, 45));
-            await SeedAttendanceAsync(onTime, today, DomainLayer.Models.AttendanceModule.Enums.AttendanceStatus.OnTime, new TimeOnly(7, 55));
-
-            var token = await LoginSelectingGymAsync("omar@revive.hr", gym1Id);
-            var request = _fixture.AuthorizedRequest(HttpMethod.Get, $"/api/attendance?date={today:yyyy-MM-dd}", null, token);
-            var response = await _fixture.Client.SendAsync(request);
-
-            response.EnsureSuccessStatusCode();
-            var body = await response.Content.ReadFromJsonAsync<JsonElement>();
-            Assert.Contains(body.GetProperty("late").EnumerateArray(), p => p.GetProperty("name").GetString() == "Late Comer");
-            Assert.Contains(body.GetProperty("absent").EnumerateArray(), p => p.GetProperty("name").GetString() == "No Show");
-            Assert.DoesNotContain(body.GetProperty("absent").EnumerateArray(), p => p.GetProperty("name").GetString() == "On Time");
-        }
 
         [Fact]
         public async Task Teams_TeamLeader_SeesOwnTeamOnly()
@@ -112,45 +72,10 @@ namespace ReviveHRSystem.IntegrationTests
         }
 
         [Fact]
-        public async Task VacancyRequests_CreateAndList_GymScoped()
-        {
-            var gym1Id = await GymIdByNameAsync("Revive Main Gym");
-            var gym2Id = await GymIdByNameAsync("Revive Second Gym");
-            var positionId = await AnyPositionIdAsync(gym1Id);
-
-            var token = await LoginSelectingGymAsync("omar@revive.hr", gym1Id);
-            var create = _fixture.AuthorizedRequest(HttpMethod.Post, "/api/vacancy-requests", new
-            {
-                positionId,
-                justification = "Q4 class load is increasing"
-            }, token);
-            var createResponse = await _fixture.Client.SendAsync(create);
-            createResponse.EnsureSuccessStatusCode();
-            var created = await createResponse.Content.ReadFromJsonAsync<JsonElement>();
-            var createdId = created.GetProperty("id").GetInt32();
-            Assert.Equal("Pending", created.GetProperty("status").GetString());
-
-            var list = _fixture.AuthorizedRequest(HttpMethod.Get, "/api/vacancy-requests", null, token);
-            var listResponse = await _fixture.Client.SendAsync(list);
-            listResponse.EnsureSuccessStatusCode();
-            var listBody = await listResponse.Content.ReadFromJsonAsync<JsonElement>();
-            Assert.Contains(listBody.GetProperty("items").EnumerateArray(), r => r.GetProperty("id").GetInt32() == createdId);
-
-            // The other gym's manager never sees it.
-            var gym2Token = await LoginSelectingGymAsync("omar@revive.hr", gym2Id);
-            var gym2List = _fixture.AuthorizedRequest(HttpMethod.Get, "/api/vacancy-requests", null, gym2Token);
-            var gym2Response = await _fixture.Client.SendAsync(gym2List);
-            gym2Response.EnsureSuccessStatusCode();
-            var gym2Body = await gym2Response.Content.ReadFromJsonAsync<JsonElement>();
-            Assert.DoesNotContain(gym2Body.GetProperty("items").EnumerateArray(), r => r.GetProperty("id").GetInt32() == createdId);
-        }
-
-        [Fact]
         public async Task Offboarding_InitiateAndList_Scoped()
         {
             var gym1Id = await GymIdByNameAsync("Revive Main Gym");
-            var employeeId = await CreateEmployeeAsync("leaving@revive.hr", gym1Id, "EMP-7103");
-
+            var employeeId = await OwnEmployeeIdAsync("karim@revive.hr");
             var token = await LoginSelectingGymAsync("omar@revive.hr", gym1Id);
             var initiate = _fixture.AuthorizedRequest(HttpMethod.Post, "/api/offboarding-requests", new
             {
@@ -162,7 +87,7 @@ namespace ReviveHRSystem.IntegrationTests
             initiateResponse.EnsureSuccessStatusCode();
             var created = await initiateResponse.Content.ReadFromJsonAsync<JsonElement>();
             Assert.Equal("Notice Period", created.GetProperty("status").GetString());
-            Assert.Equal("Leaving Comer", created.GetProperty("employee").GetString());
+            Assert.Equal("Karim Hassan", created.GetProperty("employee").GetString());
 
             var list = _fixture.AuthorizedRequest(HttpMethod.Get, "/api/offboarding-requests", null, token);
             var listResponse = await _fixture.Client.SendAsync(list);
@@ -197,6 +122,89 @@ namespace ReviveHRSystem.IntegrationTests
             var response = await _fixture.Client.SendAsync(initiate);
 
             Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        }
+
+        [Fact]
+        public async Task Offboarding_RescheduleAndClose_InFlightCase()
+        {
+            // The Branch Manager moves the last working day of an in-flight case
+            // and can close it without completing the separation — the person
+            // stays employed and a new process may start afterwards. A dedicated
+            // employee keeps this fact independent from the shared-fixture cases
+            // InitiateAndList uses.
+            var gym1Id = await GymIdByNameAsync("Revive Main Gym");
+            var targetUserId = await CreateUserAsync("hamad@revive.hr");
+            var employeeId = await CreateEmployeeForUserAsync(targetUserId, gym1Id, "EMP-7801");
+            var token = await LoginSelectingGymAsync("omar@revive.hr", gym1Id);
+
+            var initiate = _fixture.AuthorizedRequest(HttpMethod.Post, "/api/offboarding-requests", new
+            {
+                employeeId,
+                lastWorkingDate = DateOnly.FromDateTime(DateTime.UtcNow).AddDays(30),
+                reason = "Resignation"
+            }, token);
+            var initiateResponse = await _fixture.Client.SendAsync(initiate);
+            initiateResponse.EnsureSuccessStatusCode();
+            var created = await initiateResponse.Content.ReadFromJsonAsync<JsonElement>();
+            var caseId = created.GetProperty("id").GetInt32();
+
+            var newDay = DateOnly.FromDateTime(DateTime.UtcNow).AddDays(60);
+            var reschedule = _fixture.AuthorizedRequest(
+                HttpMethod.Put, $"/api/offboarding-requests/{caseId}/last-day", new { lastWorkingDate = newDay }, token);
+            var rescheduleResponse = await _fixture.Client.SendAsync(reschedule);
+            rescheduleResponse.EnsureSuccessStatusCode();
+            var rescheduled = await rescheduleResponse.Content.ReadFromJsonAsync<JsonElement>();
+            Assert.Equal("Notice Period", rescheduled.GetProperty("status").GetString());
+            Assert.Equal(newDay.ToString("yyyy-MM-dd"), rescheduled.GetProperty("lastWorkingDate").GetString());
+
+            var close = _fixture.AuthorizedRequest(HttpMethod.Post, $"/api/offboarding-requests/{caseId}/close", null, token);
+            var closeResponse = await _fixture.Client.SendAsync(close);
+            closeResponse.EnsureSuccessStatusCode();
+            var closed = await closeResponse.Content.ReadFromJsonAsync<JsonElement>();
+            Assert.Equal("Cancelled", closed.GetProperty("status").GetString());
+
+            // The closed case no longer blocks a new leaving process…
+            var reinitiate = _fixture.AuthorizedRequest(HttpMethod.Post, "/api/offboarding-requests", new
+            {
+                employeeId,
+                lastWorkingDate = newDay,
+                reason = "The real one this time"
+            }, token);
+            var reinitiateResponse = await _fixture.Client.SendAsync(reinitiate);
+            reinitiateResponse.EnsureSuccessStatusCode();
+            var reinitiated = await reinitiateResponse.Content.ReadFromJsonAsync<JsonElement>();
+            Assert.Equal("Notice Period", reinitiated.GetProperty("status").GetString());
+
+            // …but the cancelled case itself can no longer be modified.
+            var closeAgain = _fixture.AuthorizedRequest(HttpMethod.Post, $"/api/offboarding-requests/{caseId}/close", null, token);
+            Assert.Equal(HttpStatusCode.BadRequest, (await _fixture.Client.SendAsync(closeAgain)).StatusCode);
+            var rescheduleAgain = _fixture.AuthorizedRequest(
+                HttpMethod.Put, $"/api/offboarding-requests/{caseId}/last-day", new { lastWorkingDate = newDay }, token);
+            Assert.Equal(HttpStatusCode.BadRequest, (await _fixture.Client.SendAsync(rescheduleAgain)).StatusCode);
+
+            // Employment continues: the employee is not Terminated by the close.
+            var employeeStatus = await OwnEmployeeStatusAsync(employeeId);
+            Assert.Equal("Active", employeeStatus);
+        }
+
+        [Fact]
+        public async Task VacancyRequests_TeamLeaderGym_IsDenied()
+        {
+            // Closing the cross-gym key hole: omar is only a Team Leader in gym2,
+            // so his gym2 token must NOT act with the manager-side recruitment
+            // keys he holds through his Branch Manager role in gym1.
+            var gym2Id = await GymIdByNameAsync("Revive Second Gym");
+            var token = await LoginSelectingGymAsync("omar@revive.hr", gym2Id);
+
+            var request = _fixture.AuthorizedRequest(HttpMethod.Post, "/api/vacancy-requests", new
+            {
+                gymId = gym2Id,
+                position = "Req Coach TL-Poke",
+                reason = "Team Leaders must not reach requisitions."
+            }, token);
+            var response = await _fixture.Client.SendAsync(request);
+
+            Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
         }
 
         // ---------- helpers ----------
@@ -444,6 +452,13 @@ namespace ReviveHRSystem.IntegrationTests
             using var scope = _fixture.Services.CreateScope();
             var db = scope.ServiceProvider.GetRequiredService<ReviveHrDbContext>();
             return await db.Employees.Where(e => e.User!.Email == email).Select(e => e.Id).SingleAsync();
+        }
+
+        private async Task<string> OwnEmployeeStatusAsync(int employeeId)
+        {
+            using var scope = _fixture.Services.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<ReviveHrDbContext>();
+            return await db.Employees.Where(e => e.Id == employeeId).Select(e => e.Status.ToString()).SingleAsync();
         }
     }
 }

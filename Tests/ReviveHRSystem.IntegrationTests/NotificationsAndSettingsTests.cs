@@ -7,8 +7,9 @@ using Xunit;
 namespace ReviveHRSystem.IntegrationTests
 {
     /// <summary>
-    /// Notifications inbox and account settings (mock §§11-12): list, unread count,
-    /// mark read (one/all), preferences round-trip, password change validation.
+    /// Account settings (mock §12): preferences round-trip and password change
+    /// validation. The notifications inbox itself is covered by
+    /// NotificationsControllerTests (HR portal contract).
     /// </summary>
     [Collection(ApiTestFixture.CollectionName)]
     public class NotificationsAndSettingsTests
@@ -16,29 +17,6 @@ namespace ReviveHRSystem.IntegrationTests
         private readonly ApiTestFixture _fixture;
 
         public NotificationsAndSettingsTests(ApiTestFixture fixture) => _fixture = fixture;
-
-        [Fact]
-        public async Task Notifications_MarkRead_UpdatesUnreadCount()
-        {
-            var token = await _fixture.LoginAsync("karim@revive.hr", "Revive!2026");
-
-            var countRequest = _fixture.AuthorizedRequest(HttpMethod.Get, "/api/notifications/unread-count", null, token);
-            var countResponse = await _fixture.Client.SendAsync(countRequest);
-            countResponse.EnsureSuccessStatusCode();
-            var countBody = await countResponse.Content.ReadFromJsonAsync<JsonElement>();
-            var total = countBody.GetProperty("count").GetInt32();
-
-            var listRequest = _fixture.AuthorizedRequest(HttpMethod.Get, "/api/notifications", null, token);
-            var listResponse = await _fixture.Client.SendAsync(listRequest);
-            listResponse.EnsureSuccessStatusCode();
-            var list = await listResponse.Content.ReadFromJsonAsync<JsonElement>();
-
-            // No seeded notifications for this user yet: the inbox is empty and count is zero.
-            Assert.Equal(0, total);
-            Assert.Equal(0, list.GetProperty("totalCount").GetInt32());
-            Assert.Equal(1, list.GetProperty("totalPages").GetInt32());
-            Assert.Empty(list.GetProperty("items").EnumerateArray());
-        }
 
         [Fact]
         public async Task Notifications_WithoutToken_Returns401()

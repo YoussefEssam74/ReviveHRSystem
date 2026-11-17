@@ -344,7 +344,8 @@ Employee → Submit Request → Pending
 - View payroll per gym per pay period
 - Employee row: base salary, deductions, bonuses, net pay
 - Deductions auto-linked to attendance/leave exceptions
-- HR approval flow for deductions before they become visible to employees
+- HR approval flow for deductions before they are applied to payroll — the priced
+  deduction is already shown to the employee as **Pending** while it is reviewed
 - Payslip preview per employee
 - Export (CSV/PDF)
 
@@ -356,13 +357,18 @@ Employee → Submit Request → Pending
 
 ### Deduction Flow
 ```
-Attendance Exception (late/absent/early)
-    → Deduction Candidate (auto-generated)
-    → HR Review
+Attendance Exception (late/absent)
+    → Deduction Candidate (auto-generated and priced)
+    → Shown to the employee as Pending on that day (Attendance History)
+    → Branch Manager Review → HR Review
     → Approve / Reject
-    → Finalized in Payroll History
-    → Visible to Employee
+    → Applied (finalized in Payroll History) or Rejected (waived)
 ```
+
+The employee's Attendance History shows the day's deduction amount with its live
+state — `Pending` (branch/HR still deciding), `Pending HR` (branch approved, HR to
+apply), `Applied`, or `Rejected` — instead of repeating the day's Late/Absent
+status, which the Status column already carries.
 
 ### Employee Self-Service Payroll View
 

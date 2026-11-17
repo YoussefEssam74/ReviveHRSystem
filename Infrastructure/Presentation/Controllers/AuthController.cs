@@ -7,10 +7,10 @@ using Shared.DataTransferObject.Auth;
 namespace Presentation.Controllers
 {
     /// <summary>
-    /// Web login (email + password → access token) and the login-time gym selection
-    /// flow for employees assigned to multiple gyms (ADR-002). Both endpoints are
-    /// anonymous by nature; the gym switch requires a valid access token; everything
-    /// else requires a JWT.
+    /// Web login (email + password → access token), the login-time gym selection
+    /// flow for employees assigned to multiple gyms (ADR-002), and the signed-in
+    /// user's portal profile. Login endpoints are anonymous by nature; the gym
+    /// switch requires a valid access token; everything else requires a JWT.
     /// </summary>
     [Route("api/auth")]
     public class AuthController(IAuthService _authService, ISessionContextService _sessionContextService) : ApiControllerBase
@@ -66,6 +66,44 @@ namespace Presentation.Controllers
 
         #endregion
 
+        #region Current User
+
+        /// <summary>
+        /// The signed-in user's portal profile: identity, derived name pieces, position,
+        /// assigned gyms, the token's selected gym, and granted permission keys.
+        /// </summary>
+        /// <response code="200">The current user's profile.</response>
+        /// <response code="401">Missing, invalid, or inactive account session.</response>
+        [HttpGet("me")]
+        [Authorize]
+        public async Task<ActionResult<CurrentUserResponse>> GetCurrentUser(CancellationToken cancellationToken)
+        {
+            var gymIdFromToken = GetGymIdFromToken();
+            var response = await _authService.GetCurrentUserAsync(
+                GetActorUserId(),
+                gymIdFromToken > 0 ? gymIdFromToken : null,
+                cancellationToken);
+            return Ok(response);
+        }
+
+        #endregion
+
+        #region Refresh
+
+        /// <summary>Exchanges a valid refresh token for a new access token and a rotated refresh token.</summary>
+        /// <response code="200">New access + refresh tokens issued.</response>
+        /// <response code="401">Refresh token missing, invalid, expired, or revoked.</response>
+        [HttpPost("refresh")]
+        [AllowAnonymous]
+        [EnableRateLimiting("auth-login")]
+        public async Task<ActionResult<LoginResponse>> Refresh([FromBody] RefreshRequest request, CancellationToken cancellationToken)
+        {
+            var response = await _authService.RefreshAsync(request?.RefreshToken ?? string.Empty, cancellationToken);
+            return Ok(response);
+        }
+
+        #endregion
+
         #region Logout
 
         /// <summary>
@@ -78,9 +116,9 @@ namespace Presentation.Controllers
         /// <response code="204">Logout recorded.</response>
         /// <response code="401">No valid session.</response>
         [HttpPost("logout")]
-        public async Task<IActionResult> Logout(CancellationToken cancellationToken)
+        public async Task<IActionResult> Logout([FromBody] RefreshRequest? request, CancellationToken cancellationToken)
         {
-            await _authService.LogoutAsync(GetActorUserId(), cancellationToken);
+            await _authService.LogoutAsync(GetActorUserId(), request?.RefreshToken, cancellationToken);
             return NoContent();
         }
 

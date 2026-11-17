@@ -23,6 +23,12 @@ namespace DomainLayer.Models.NotificationModule
         /// <summary>When the event was raised (shown on the employee-facing feed).</summary>
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
+        /// <summary>"high" | "medium" | "low" (UI urgency badge / filter).</summary>
+        public string Urgency { get; set; } = "medium";
+
+        /// <summary>Due / effective date shown on the card and used by the due-label helper.</summary>
+        public DateTime? DueDate { get; set; }
+
         public int? ResolvedBy { get; set; }
         public virtual User? Resolver { get; set; }
 

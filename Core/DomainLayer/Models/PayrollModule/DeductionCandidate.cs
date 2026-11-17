@@ -19,6 +19,19 @@ namespace DomainLayer.Models.PayrollModule
 
         public decimal Amount { get; set; }
 
+        /// <summary>Number of salary days deducted; money is calculated from salary / 30.</summary>
+        public decimal DeductionDays { get; set; } = 1m;
+
+        /// <summary>
+        /// The day this deduction punishes. One employee can carry at most one
+        /// deduction per day — the unique index on (EmployeeId, DeductionDate)
+        /// enforces it even when two sweeps race.
+        /// </summary>
+        public DateOnly DeductionDate { get; set; }
+
+        /// <summary>True when the attendance sweep raised the row; false for manager-issued rows.</summary>
+        public bool IsSystemGenerated { get; set; }
+
         /// <summary>Category picked by the issuing manager (e.g. "Unapproved absence").</summary>
         public string Reason { get; set; } = string.Empty;
 
@@ -38,4 +51,3 @@ namespace DomainLayer.Models.PayrollModule
         public DateTime? ReviewedAt { get; set; }
     }
 }
-

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Navigate } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { useMutation } from '@tanstack/react-query'
 import { Check, Copy, ExternalLink, Smartphone, Unplug, Zap } from 'lucide-react'
 import { useAuthSession } from '../../../contexts/AuthSessionContext'
@@ -22,6 +23,7 @@ import { rotateStationCode, revokeStationSessions } from '../api/attendance.api'
  * left sitting on screen.
  */
 export default function StationCodePage() {
+  const { t } = useTranslation()
   const { session } = useAuthSession()
   const [copyState, setCopyState] = useState<'idle' | 'copied'>('idle')
 
@@ -52,8 +54,8 @@ export default function StationCodePage() {
     return () => window.clearInterval(id)
   }, [generated?.expiresAtUtc])
 
-  const expiresInLabel = useMemo(
-    () => formatRemaining(generated?.expiresAtUtc ?? undefined, now),
+  const remaining = useMemo(
+    () => remainingSeconds(generated?.expiresAtUtc ?? undefined, now),
     [generated?.expiresAtUtc, now],
   )
 
@@ -69,8 +71,8 @@ export default function StationCodePage() {
       <StationCodeShell>
         <Card>
           <CardHeader>
-            <CardTitle>No gym assigned</CardTitle>
-            <CardDescription>Your account is not linked to a gym, so there is no station code to show.</CardDescription>
+            <CardTitle>{t('No gym assigned')}</CardTitle>
+            <CardDescription>{t('Your account is not linked to a gym, so there is no station code to show.')}</CardDescription>
           </CardHeader>
         </Card>
       </StationCodeShell>
@@ -78,8 +80,12 @@ export default function StationCodePage() {
   }
 
   const code = generated?.code ?? null
-  const gymName = gyms.find((gym) => gym.gymId === gymId)?.gymName ?? generated?.gymName ?? 'this gym'
-  const expired = expiresInLabel === null ? false : expiresInLabel.startsWith('expired')
+  const gymName = gyms.find((gym) => gym.gymId === gymId)?.gymName ?? generated?.gymName ?? t('this gym')
+  const expired = remaining !== null && remaining <= 0
+  const expiresInLabel =
+    remaining !== null && remaining > 0
+      ? `${Math.floor(remaining / 60)}:${String(remaining % 60).padStart(2, '0')}`
+      : null
 
   const onCopy = async () => {
     if (!code) return
@@ -94,7 +100,7 @@ export default function StationCodePage() {
 
   const onGenerate = () => {
     // Rotating immediately invalidates the code stations would redeem next.
-    if (window.confirm('Generate a new station code? Any previous code stops working immediately.')) {
+    if (window.confirm(t('Generate a new station code? Any previous code stops working immediately.'))) {
       rotate.mutate()
     }
   }
@@ -102,7 +108,10 @@ export default function StationCodePage() {
   const onRevokeSessions = () => {
     if (
       window.confirm(
-        `Disconnect every station currently enrolled with ${gymName} only? Other branches are unaffected, and these stations will have to enter a new code.`,
+        t(
+          'Disconnect every station currently enrolled with {{gym}} only? Other branches are unaffected, and these stations will have to enter a new code.',
+          { gym: gymName },
+        ),
       )
     ) {
       revoke.mutate()
@@ -113,10 +122,9 @@ export default function StationCodePage() {
     <StationCodeShell>
       <Card>
         <CardHeader>
-          <CardTitle>Station code</CardTitle>
+          <CardTitle>{t('Station code')}</CardTitle>
           <CardDescription>
-            Generate a six-digit code for a gym branch. The terminal computer at the gym enters this
-            code on the Attendance Station page, which binds it to that branch.
+            {t('Generate a six-digit code for a gym branch. The terminal computer at the gym enters this code on the Attendance Station page, which binds it to that branch.')}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -125,16 +133,15 @@ export default function StationCodePage() {
               <Smartphone className="h-4 w-4" aria-hidden="true" />
             </span>
             <div>
-              <p className="text-sm font-bold text-slate-900">Authorize attendance kiosk terminal</p>
+              <p className="text-sm font-bold text-slate-900">{t('Authorize attendance kiosk terminal')}</p>
               <p className="mt-0.5 text-xs leading-relaxed text-slate-600">
-                Generate a secure 6-digit code for a gym branch. The terminal computer at the gym will
-                enter this code on the Attendance Station page to bind itself strictly to that gym branch.
+                {t('Generate a secure 6-digit code for a gym branch. The terminal computer at the gym will enter this code on the Attendance Station page to bind itself strictly to that gym branch.')}
               </p>
             </div>
           </div>
 
           <div>
-            <Label htmlFor="station-code-gym">Target gym branch</Label>
+            <Label htmlFor="station-code-gym">{t('Target gym branch')}</Label>
             <select
               id="station-code-gym"
               value={gymId}
@@ -149,7 +156,7 @@ export default function StationCodePage() {
             >
               {gyms.map((gym) => (
                 <option key={gym.gymId} value={gym.gymId}>
-                  {gym.gymName} (Branch ID: {gym.gymId})
+                  {t('{{gym}} (Branch ID: {{id}})', { gym: gym.gymName, id: gym.gymId })}
                 </option>
               ))}
             </select>
@@ -163,7 +170,7 @@ export default function StationCodePage() {
 
           <Button size="lg" className="w-full" loading={rotate.isPending} onClick={onGenerate}>
             <Zap className="h-4 w-4" aria-hidden="true" />
-            Generate 6-digit pairing code
+            {t('Generate 6-digit pairing code')}
           </Button>
 
           {code && (
@@ -174,14 +181,14 @@ export default function StationCodePage() {
                   {gymName}
                 </span>
                 <span className="font-mono text-slate-400">
-                  {expired ? 'Expired' : `Valid for ${expiresInLabel ?? DEFAULT_EXPIRY_HINT}`}
+                  {expired ? t('Expired') : t('Valid for {{duration}}', { duration: expiresInLabel ?? t('5 minutes') })}
                 </span>
               </div>
 
               <div className="my-3 flex items-center justify-center">
                 <span
                   className="rounded-xl border border-slate-600 bg-slate-800 px-4 py-2 font-mono text-3xl font-extrabold tracking-widest text-white shadow-inner sm:text-4xl"
-                  aria-label={`Station code ${code.split('').join(' ')}`}
+                  aria-label={t('Station code {{code}}', { code: code.split('').join(' ') })}
                 >
                   {code}
                 </span>
@@ -206,12 +213,12 @@ export default function StationCodePage() {
                   {copyState === 'copied' ? (
                     <>
                       <Check className="h-3.5 w-3.5" aria-hidden="true" />
-                      Copied
+                      {t('Copied')}
                     </>
                   ) : (
                     <>
                       <Copy className="h-3.5 w-3.5" aria-hidden="true" />
-                      Copy code
+                      {t('Copy code')}
                     </>
                   )}
                 </button>
@@ -221,7 +228,7 @@ export default function StationCodePage() {
                   rel="noreferrer"
                   className="inline-flex items-center justify-center gap-1 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-emerald-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
                 >
-                  Open attendance station
+                  {t('Open attendance station')}
                   <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
                 </a>
               </div>
@@ -229,18 +236,19 @@ export default function StationCodePage() {
           )}
 
           <div className="space-y-1 rounded-xl border border-slate-200 bg-slate-50 p-3 text-[11px] leading-relaxed text-slate-600">
-            <p className="font-bold text-slate-800">Branch geofence security rules:</p>
+            <p className="font-bold text-slate-800">{t('Branch geofence security rules:')}</p>
             <ul className="list-inside list-disc space-y-0.5">
-              <li>Once connected, the station only shows employees assigned to this gym.</li>
-              <li>Employees from another branch are refused at the terminal.</li>
-              <li>If the computer breaks down, generate a new code here and pair the replacement PC.</li>
+              <li>{t('Once connected, the station only shows employees assigned to this gym.')}</li>
+              <li>{t('Employees from another branch are refused at the terminal.')}</li>
+              <li>{t('If the computer breaks down, generate a new code here and pair the replacement PC.')}</li>
             </ul>
           </div>
 
           {revoke.data && (
             <p role="status" className="text-center text-xs text-slate-500">
-              Disconnected {revoke.data.revokedCount} station session
-              {revoke.data.revokedCount === 1 ? '' : 's'} at {gymName}.
+              {revoke.data.revokedCount === 1
+                ? t('Disconnected {{count}} station session at {{gym}}.', { count: revoke.data.revokedCount, gym: gymName })
+                : t('Disconnected {{count}} station sessions at {{gym}}.', { count: revoke.data.revokedCount, gym: gymName })}
             </p>
           )}
           {revoke.error && (
@@ -251,7 +259,7 @@ export default function StationCodePage() {
 
           <Button variant="outline" className="w-full" loading={revoke.isPending} onClick={onRevokeSessions}>
             <Unplug className="h-4 w-4" aria-hidden="true" />
-            Disconnect stations at {gymName}
+            {t('Disconnect stations at {{gym}}', { gym: gymName })}
           </Button>
         </CardContent>
       </Card>
@@ -259,32 +267,25 @@ export default function StationCodePage() {
   )
 }
 
-/** Marketing-free fallback when the server did not report an expiry (never expires). */
-const DEFAULT_EXPIRY_HINT = '5 minutes'
-
-/** "4:32" until the code stops being accepted; null when it never expires. */
-function formatRemaining(expiresAtUtc: string | undefined, now: number): string | null {
+/** "4:32" worth of seconds until the code stops being accepted; null when it never expires. */
+function remainingSeconds(expiresAtUtc: string | undefined, now: number): number | null {
   if (!expiresAtUtc) return null
   // `now` is seeded by the ticking effect one tick after the code lands; until
   // then report no countdown so the badge falls back to the static lifetime.
   if (now <= 0) return null
-  const remainingMs = new Date(expiresAtUtc).getTime() - now
-  if (remainingMs <= 0) return 'expired - generate a new code'
-  const totalSeconds = Math.floor(remainingMs / 1000)
-  const minutes = Math.floor(totalSeconds / 60)
-  const seconds = totalSeconds % 60
-  return `${minutes}:${String(seconds).padStart(2, '0')}`
+  return Math.floor((new Date(expiresAtUtc).getTime() - now) / 1000)
 }
 
 function StationCodeShell({ children }: { children: React.ReactNode }) {
+  const { t } = useTranslation()
   return (
     <div className="mx-auto max-w-lg px-4 py-12">
       <div className="mb-8 text-center">
         <span className="mx-auto mb-3 flex h-11 w-11 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-600">
           <Zap className="h-5 w-5" aria-hidden="true" />
         </span>
-        <h1 className="text-2xl font-bold tracking-tight text-slate-900">Authorize attendance kiosk</h1>
-        <p className="mt-1 text-sm text-slate-500">Pair an attendance station to a gym branch with a one-time code.</p>
+        <h1 className="text-2xl font-bold tracking-tight text-slate-900">{t('Authorize attendance kiosk')}</h1>
+        <p className="mt-1 text-sm text-slate-500">{t('Pair an attendance station to a gym branch with a one-time code.')}</p>
       </div>
       {children}
     </div>

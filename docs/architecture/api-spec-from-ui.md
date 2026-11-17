@@ -60,7 +60,7 @@ Auth model per endpoint type (current):
 | Station login (`POST /api/kiosk/login`) | **Public** — 6-digit code only, rate-limited |
 | Attendance events / manual | **Public** — 6-digit `code` in the request body, rate-limited |
 | Roster / today feed (planned) | **Public** — 6-digit `code` in the request body (not yet implemented) |
-| Biometric AI service (`Station.biometricUrl`) | **None sent by UI** (separate dedicated service; network-restricted) |
+| Face-ID scan / enroll (`POST /api/attendance/face-scan`, `POST /api/employees/face/enroll`) | **Station token** for scans · **User-JWT** for HR enrollment (in-process ONNX pipeline) |
 | HR side: station-code rotation / read | **User-JWT**, gym-scoped (`/api/gyms/{gymId}/station-codes`) |
 
 ---
@@ -259,42 +259,29 @@ No separate search endpoint is called: datalist is populated from the full branc
 
 ---
 
-### 6. Enroll Face Modal
+### 6. Enroll Face Modal — **now in the backend**
 
-Calls the **separate Biometric AI service** (`Station.biometricUrl`, configurable — default `https://revive-hr-biometrics.onrender.com`; **not** the `/api` backend, **no user JWT**, no device token sent):
+> **Superseded:** the standalone Python biometric service (`biometric_test/`) was removed. Face detection, liveness and recognition run in-process in the .NET API (`Infrastructure/Biometrics`, ONNX Runtime), and the real client (`Client/src` → `/enrollment`) calls the endpoints below. The mock's `{biometricUrl}/*` calls (`/enroll_frame`, `/enroll`, `/employees`, `/status`, `/ping`, `/process_frame`, `/video_feed`) are kept in the mock for design reference only; nothing serves them anymore.
 
-#### 6.1 `POST {biometricUrl}/enroll_frame` — service API (not in api.md)
-- **Auth:** none sent (dedicated service).
-- **Called by:** `submitFaceEnrollment()` when a browser frame was captured.
-- **Body:** `{ "image": "data:image/jpeg;base64,…", "name": "Karim Hassan", "employee_code": "EMP-1042" }`
-  - `name` ← `#enroll-emp-name` (required, else toast); `employee_code` ← `#enroll-emp-id` (uppercased)
-- **Response:** `{ "success": true, "message": "…" }` — `message` → toast; on `success:false` → error toast.
+#### 6.1 `POST /api/employees/face/enroll` — **EXISTING**
+- **Auth:** HR user JWT.
+- **Called by:** the enrollment page and the create-employee dialog (`useDashboardFaceEnroll`).
+- **Body:** `{ "employeeNumber": "EMP-1042", "image": "data:image/jpeg;base64,…" }`.
+- **Response:** `{ employeeId, employeeNumber, fullName, enrolledAt }`.
 
-#### 6.2 `POST {biometricUrl}/enroll?name=…&employee_code=…` — service API
-Fallback (query-string variant) when no frame captured; same `{success, message}` response.
-
-#### 6.3 `GET {biometricUrl}/employees` — service API
-- **Called by:** `loadEnrolledEmployees()` (modal open, after enroll/delete, on init).
-- **Response:** array of `{ "id", "employee_code", "name", "enrolled_at", "thumb" }` — all rendered in `#enrolled-faces-list` (`name`, `employee_code||id`, `enrolled_at`, `thumb` image) and counts `enroll-list-count` ("N registered") + `enrolled-count-pill` ("N Enrolled"). Merged with `localStorage.revive_enrolled_faces_web`, deduped by `id`.
-
-#### 6.4 `DELETE {biometricUrl}/employees/{id}` — service API
-- **Called by:** `deleteEnrolledEmployee(id)` (trash button per row).
-- **Response:** `{ "success": true, "message": "…" }`.
+#### 6.2 `DELETE /api/employees/face/{employeeReference}` — **EXISTING**
+- **Auth:** HR user JWT. Removes the stored embedding (204).
 
 ---
 
-### 7. Cloud API Config Modal + Biometric Viewfinder (service APIs)
-
-Same dedicated Biometric AI service, **no user JWT**:
+### 7. Biometric Viewfinder — **now in the backend**
 
 | # | Method + path | Called by | Request | Response fields rendered |
 |---|---|---|---|---|
-| 7.1 | `GET {biometricUrl}/ping` — service API | `testAndSaveApiUrl()` ("Connect" `btn-test-api`) | none | `{ "device", "enrolled_count" }` → "Device: … · Registered: N" |
-| 7.2 | `GET {biometricUrl}/status` — service API | `checkBiometricConnection()` (every 5 s) | none | `{ "fps", "total_enrolled", "device" }` → status pill "Face-ID · Online (…)", `enrolled-count-pill` |
-| 7.3 | `POST {biometricUrl}/process_frame` — service API | `sendClientFrame()` (every 320 ms) | `{ "image": "<base64 jpeg>" }` | `{ "face_detected", "is_live", "is_match", "recognized_id", "recognized_name", "liveness_score", "similarity", "total_enrolled", "bbox" }` → HUD (MATCHED / SPOOF BLOCKED / UNKNOWN / VERIFYING), dwell & latch logic feeding scan 2.1 |
-| 7.4 | `GET {biometricUrl}/video_feed` — service API | fallback MJPEG `<img src>` when browser webcam unavailable | none | multipart stream |
+| 7.1 | `POST /api/attendance/face-scan` — **EXISTING** | kiosk scanner (`useKioskScanner`, ~every 320 ms) | `{ "type": "AUTO", "image": "<base64 data URL>", "timestamp": "…", "confirmCheckout": false }` | `{ outcome, livenessScore, similarity, … }` — `outcome` drives the HUD (`no_face` / `low_liveness` / `unrecognized` / `already_complete` / `rejected` / `recorded` / `pending_checkout`) |
+| 7.2 | `GET /api/attendance/station-summary` — **EXISTING** | kiosk status pill (every 5 s) | none (station token) | present/expected counters that replace the old `/status` `total_enrolled` |
 
-*(7.1–7.4 are outside the Revive `/api` backend and outside `api.md`; listed for completeness because the UI calls them.)*
+Face-ID liveness and match thresholds are configured under the `Biometrics` section (`MatchThreshold`, `LivenessThreshold`, `ScanLivenessThreshold`), not per-URL.
 
 ---
 
@@ -315,7 +302,7 @@ Same dedicated Biometric AI service, **no user JWT**:
 | 3 | `POST /api/attendance/manual` | **EXISTING** ✅ (UI omits `reason` & `gymId`; adds `employeeName`,`type`,`method`,`time`) | Device-token | Manual Fallback — "Record" |
 | 4 | `GET /api/attendance/roster` | **NEW** ✱ | Device-token | Datalist lookup, feed roster, enroll dropdown, expected count, shift display |
 | 5 | `GET /api/attendance?date=` | **EXISTING** ✅ (gym+date filters) | Device-token | Attendance feed + counters hydration |
-| 6 | `{biometricUrl}/enroll_frame`, `/enroll`, `/employees` (GET/DELETE), `/status`, `/ping`, `/process_frame`, `/video_feed` | Service APIs (outside `/api`, outside api.md) | None sent | Enroll modal, API config modal, viewfinder |
+| 6 | `POST /api/employees/face/enroll`, `DELETE /api/employees/face/{employeeReference}`, `POST /api/attendance/face-scan` | **EXISTING** ✅ (in-process ONNX pipeline; the old `{biometricUrl}/*` service APIs were removed) | User JWT (enroll/delete) · Station token (scan) | Enroll modal, viewfinder |
 
 ### Key discrepancies to resolve
 
@@ -367,7 +354,7 @@ Personal Info "Edit" and Employment Info are **read-only** (toast "Profile editi
 | 3.1 | `GET /api/employees/{id}/documents` | JWT (own) | — | paged `{items:[{id,name,category,uploadDate,expiryDate,status,canDownload}]}` — statuses `Valid\|Expiring Soon\|Expired` | "All On-File Documents" table + mobile cards | EXISTING |
 | 3.2 | `GET /api/employees/{id}/required-documents` | JWT (own) | — | `{items:[{key,label,docId}]}` — keys `national-id, contract, certificates, bank, graduation, military`; `docId` null until uploaded | "REQUIRED DOCUMENTS · EMPLOYEE UPLOADS" checklist + sidebar badge | **NEW** |
 | 3.3 | `GET /api/employees/{id}/hr-documents` | JWT (own) | — | `{items:[{id,name,category,addedDate,size}]}` (`size` e.g. "PDF · 2.1 MB") | "HR UPLOADED · OFFICIAL COMPANY DOCUMENTS" list | **NEW** |
-| 3.4 | `POST /api/employees/{id}/documents` | JWT (own) | multipart: `documentType` (select of required-doc labels), `documentName` (text), `file` (PDF/JPG/PNG ≤10MB) | created doc `{id,name,category,uploadDate,expiryDate,status,canDownload}` | Upload modal → Upload (header button + per-row Upload) | EXISTING |
+| 3.4 | `POST /api/employees/{id}/documents` | JWT (own) | multipart: `category` (required-doc key), `expiryDate` (optional), `file` (PDF/Word/JPG/PNG/WEBP ≤10MB) | created doc `{id,name,category,uploadDate,expiryDate,status}` | Upload modal → Upload (header button + per-row Upload) | EXISTING |
 | 3.5 | `GET /api/employees/{id}/documents/{docId}/download` | JWT (own); respect `canDownload` | — | binary stream | Download icons/buttons (toast in mock) | **NEW** |
 | 3.6 | `GET /api/employees/{id}/hr-documents/{docId}/download` | JWT (own) | — | binary stream | HR-documents Download button | **NEW** |
 
@@ -564,9 +551,9 @@ Uses 13.6 (list), 13.7 (Action modal), and the Branch Actions palette (§20). "T
 | 20.1 | `POST /api/deduction-candidates` | JWT, [attendance:Edit] | body: `{employee, amount, date, reason, note}` — reason select: `Unapproved absence, Late arrival (30+ min), Early checkout without approval, Damaged equipment / property, Policy violation, Other (see note)`; `issuedBy`,`status:"Pending HR"` server-set | `{id,employee,amount,reason,date,note,issuedBy,status}` | Issue Deduction modal → Send to HR | **NEW** (docs only have list + HR review) |
 | 20.2 | `GET /api/deduction-candidates` | JWT, [attendance:Edit]/HR [payroll:View] | query: `status` | items as 20.1 | "Awaiting HR" merged queue | EXISTING |
 | 20.3 | `POST /api/warning-notices` | JWT, [employees:Edit] | body: `{employee, type, date, reason, note}` — `type` select: `Attendance, Conduct, Performance, Safety, Policy violation` | `{id,employee,type,date,reason,note,issuedBy,status:"Pending HR"}` | Issue Warning Notice → Send to HR | **NEW** |
-| 20.4 | `GET /api/warning-notices` | JWT, [employees:Edit] | query: `status` | items as 20.3 | Awaiting HR queue | **NEW** |
+| 20.4 | `GET /api/warning-notices/queue` | JWT, [employees:Edit] | query: `status` | items as 20.3 | Awaiting HR queue | **NEW** |
 | 20.5 | `POST /api/bonus-proposals` | JWT, [employees:Edit] | body: `{employee, type, amount, date, reason, note}` — `type` select: `Performance Bonus, Overtime Pay, Attendance Reward, Referral Bonus, Other` | `{id,employee,type,amount,date,reason,note,issuedBy,status:"Pending HR"}` | Propose Bonus → Send to HR | **NEW** |
-| 20.6 | `GET /api/bonus-proposals` | JWT, [employees:Edit] | query: `status` | items as 20.5 | Awaiting HR queue | **NEW** |
+| 20.6 | `GET /api/bonus-proposals/queue` | JWT, [employees:Edit] | query: `status` | items as 20.5 | Awaiting HR queue | **NEW** |
 | 20.7 | `POST /api/branch-reports` | JWT (palette action `perm:null` — any employee may report to HR) | body: `{period ("August 2026"), type ("Monthly branch summary"\|"Attendance exceptions"\|"Incident report"\|"Request escalations"), message}` | created report | Send Report to HR modal — **mock stub** (form values discarded; endpoint makes it real) | **NEW** |
 | 20.8 | Palette queue badge | JWT | `GET` 20.2/20.4/20.6 filtered `status=Pending HR` | counts | Sidebar "Actions" badge `awaiting HR` | see above |
 
@@ -627,8 +614,7 @@ Uses 13.6 (list), 13.7 (Action modal), and the Branch Actions palette (§20). "T
 
 ---
 
-## Section 4 - HR Portal - Dashboard, Employees, Attendance, Schedule, Requests, Branch Queue, HR Team
-
+mb  
 **Scope:** `Mock UI/HR` — app.js, core.js, data.js, pages-dashboard, pages-employees, pages-attendance, pages-schedule, pages-requests, pages-branch-queue, pages-hr-team, index.html
 **Marked against:** `docs/architecture/api.md`
 
@@ -676,7 +662,7 @@ Uses 13.6 (list), 13.7 (Action modal), and the Branch Actions palette (§20). "T
 
 | # | Endpoint | Auth + Permission | Request | Response | Called by | Mark |
 |---|---|---|---|---|---|---|
-| D1 | `GET /api/dashboard/hr` | Bearer, `dashboard.view`/HR | query: `gymId` (`all` or branch id) | `{ totalGyms, totalStaff, pendingRequests, actionsNeeded }` (KPI strip; panel items may be composed from D2–D5 instead) | renderDashboard KPI strip | EXISTING |
+| D1 | `GET /api/dashboard/hr` | Bearer, `dashboard.view`/HR | query: `gymId` (`all` or branch id), else the token's active gym | `{ greeting, userName, kpis:{ totalGyms, totalStaff, totalPendingRequests, actionsNeeded }, actions:[{ id, kind: request\|vacancy\|deduction\|warning\|bonus\|contract\|payroll, badge, badgeClass, title, subtitle, detail, refId, employeeId, date, gymId, gym }], branches:[{ gymId, name, location, headcount, pendingActions, summary }] }` | KPI strip, action cards (Approve/Decline/Review), Branches Overview | EXISTING (`refId` + `employeeId` added so decisions need no id parsing) |
 | D2 | `GET /api/requests` | Bearer, `requests.view` | query: `status=PendingHRReview`, `gym`, `page,pageSize` | items `[{ id, employee, gym, type, submittedDate, requestedDate, status, bmDecision, bmComment, reason, timeline[{step,date,done}] }]` | dashboard action cards (request type); also Requests page | EXISTING |
 | D3 | `GET /api/vacancy-requests` | Bearer, `recruitment.view` | query: `status=Pending`, `gym` | items `[{ id, position, gym, urgency, status, submittedBy, submittedDate, reason, salary, shift, headcount }]` | dashboard vacancy cards, `openVacancyRequestModal` | EXISTING |
 | D4 | `PUT /api/vacancy-requests/{id}/decide` | Bearer, `recruitment.vacancy_request.approve` | body `{ decision: "Approved"\|"Rejected", positionId?, headcount?, salary?, shift? }` (approve opens the Vacancy) | `{ message, item, vacancy? }` | `approveVacancyRequest` / `rejectVacancyRequest` / `quickApproveVacancy` | EXISTING |
@@ -710,7 +696,7 @@ Uses 13.6 (list), 13.7 (Action modal), and the Branch Actions palette (§20). "T
 | E2 | `POST /api/employees` | Bearer, `employees.create` | body `{ firstName, lastName, email, phone, position, level, salary, gym, startDate }` | `{ data:{ id, name, position, level, gym, status:'Active', initials, hireDate, salary, phone, email } }` | Add Employee modal (`submitAddEmployee`) | EXISTING |
 | E3 | `POST /api/employees/bulk-import` | Bearer, `employees.bulk_import` | multipart/form-data `{ file }` — CSV columns `name, email, position, level, gym, salary` | `{ message, added, skipped }` | Bulk Import modal | EXISTING |
 | E4 | `GET /api/employees/{id}` | Bearer, `employees.view` | — | `{ data:{ id, name, position, level, gym, status, initials, hireDate, email, phone, salary, systemRole?, branches? } }` | `renderEmployeeProfile` Personal Info | EXISTING |
-| E5 | `GET /api/employees/{id}/documents` + `POST /api/employees/{id}/documents` | Bearer, `employees.documents.view` / `.manage` | GET —; POST multipart `{ file, category }` | items `[{ name, category, status }]` (Employment Contract/Identification/Personal Photo/First Aid Certification/Medical Fitness Certificate/Degree Certificate; status `Valid`\|`Expiring Soon`) | Documents tab, Upload Document | EXISTING |
+| E5 | `GET /api/employees/{id}/documents` + `POST /api/employees/{id}/documents` | Bearer, `employees.documents.view` / `.manage`, or the employee's own JWT for self upload | GET —; POST multipart `{ file, category, expiryDate? }` — PDF/Word/JPG/PNG/WEBP ≤10MB | items `[{ id, name, category, status, uploadDate, expiryDate }]` (Employment Contract/Identification/Certification/Other; status `Valid`/`Expiring Soon`) | Documents tab, Upload Document | EXISTING |
 | E6 | `GET /api/employees/{id}/history` | Bearer, `employees.view` | — | items `[{ type, from, to, date, detail }]` (`Position Changed`, `Gym Transfer`, `Joined Revive`) | Employment History tab | EXISTING |
 | E7 | `GET /api/employees/{id}/attendance` | Bearer, `attendance.view` | query: `dateFrom,dateTo` (default last 30 days / month) | items `[{ date, shift, checkIn, checkOut, status }]` + `{ rate, present, late, absent }` | Attendance Summary tab (rate 96.4%, Present/Late/Absent, day rows) | EXISTING |
 | E8 | `GET /api/employees/{id}/requests` | Bearer, `requests.view` | — | items `[{ id, type, requestedDate, submittedDate, status, reason }]` | Requests History tab | EXISTING |
@@ -725,7 +711,7 @@ Uses 13.6 (list), 13.7 (Action modal), and the Branch Actions palette (§20). "T
 | E17 | `POST /api/employees/{id}/compensation` | Bearer, `employees.compensation.manage` | body `{ salary, effectiveDate }` | `{ message }` | profile "Manage Compensation" | EXISTING |
 | E18 | `POST /api/employees/{id}/contract` | Bearer, `employees.contract.manage` | body `{ level?, salary?, effectiveDate? }` | `{ message }` | profile contract action | EXISTING |
 | E19 | `POST /api/employees/{id}/offboard` | Bearer, `employees.offboard` | body `{ lastDay, reason, notes }` | `{ data:{ separationId } }` | "+ Initiate Offboarding" modal (`submitInitiateOffboarding`), profile "Offboard" | EXISTING |
-| E20 | `POST /api/employee-action-requests` | Bearer, `employees.request_action` (HR preset) | body `{ employeeId, actionType: "Transfer"\|"CompensationChange"\|"RoleAssign"\|"Offboard"\|"BulkImport", proposedDetails{ fromGym,toGym,effectiveDate \| currentSalary,newSalary,effectiveDate \| systemRole \| lastDay,reason \| source }, justification }` | `{ data:{ id, status:'Pending' } }` | "Request Transfer" / "Request Compensation" / "Request Role" / "Request Offboard" / "Request Bulk Import" (`openActionRequest`, `submitTransferRequest`, `submitBulkImport` request variant) | **NEW** |
+| E20 | `POST /api/employee-action-requests` | Bearer, `employees.request_action` (HR preset) | body `{ employeeId, actionType: "Transfer"\|"CompensationChange"\|"RoleAssign"\|"Offboard"\|"BulkImport", proposedDetails{ fromGym,toGym,effectiveDate \| currentSalary,newSalary,effectiveDate \| systemRole \| lastDay,reason \| source }, justification }` | `{ data:{ id, status:'Pending' } }` | "Request Transfer" / "Request Compensation" / "Request Role" / "Request Offboard" / "Request Bulk Import" (`openActionRequest`, `submitTransferRequest`, `submitBulkImport` request variant) | **IMPLEMENTED (2026-10-22)** as `POST /api/action-requests` (same route family as GET/approve/reject; gated by the action type's meta key on the employee's gym — no `employees.request_action` catalog key was added) |
 | E21 | `GET /api/candidates?blocked=true` | Bearer, `recruitment.candidates.manage` | query `blocked=true` | items `[{ id, name, position, stage, blocked, blockReason }]` | "Blocked from hiring" strip (Profile/Restore) | EXISTING (endpoint; `blocked` filter/restore action belongs to recruitment scope) |
 
 ---
@@ -746,7 +732,7 @@ Uses 13.6 (list), 13.7 (Action modal), and the Branch Actions palette (§20). "T
 | T5 | `PUT /api/separations/{id}/verdict` | Bearer, `employees.offboard` | body `{ finalReason, settlement:{ direction:'none'\|'owedToEmployee'\|'employeeOwes', amount, note }, rehire:{ status:'Eligible'\|'Banned', note } }` | `{ message }` (sets status → `Under Review`) | `saveExitVerdict` | **NEW** |
 | T6 | `POST /api/separations/{id}/finalize` | Bearer, `employees.offboard` | — | `{ message }` (requires checklist complete + verdict; archives employee) | `finalizeSeparation` | **NEW** |
 | T7 | `PUT /api/employees/{id}/payroll/gross` | Bearer, `payroll.edit` | body `{ gross }` | `{ data:{ gross, deductions, net } }` | `updateSepGross` (Employee Data tab) | **NEW** (api.md has no payroll-line edit beyond deduction-candidate review) |
-| T8 | `PUT /api/employees/{id}/payroll/deductions` | Bearer, `payroll.edit` | body `{ op:'add', label, amount, reason }` \| `{ op:'remove', deductionId }` | `{ data:{ deductionLines[], deductions, net } }` (`line: {id,date,label,amount,reason,requestId,status}`) | `addSepDeduction` / `removeSepDeduction` | **NEW** |
+| T8 | `PUT /api/employees/{id}/payroll/deductions` | Bearer, `payroll.edit` | body `{ op:'add', label, amount, reason }` \| `{ op:'remove', deductionId }` | `{ data:{ deductionLines[], deductions, net } }` (`line: {id,date,label,amount,reason,requestId,status}`) | `addSepDeduction` (uses the existing `POST …/deductions`) / `removeSepDeduction` | **remove side IMPLEMENTED (2026-10-22)** as `DELETE /api/payroll-periods/{periodId}/entries/{employeeId}/deductions/{lineId}` (payroll.edit, open period only — `api.md`) |
 | T9 | `GET /api/employees/{id}/requests`, `GET /api/employees/{id}/attendance`, `GET /api/employees/{id}/history` | Bearer | as E6–E8 | as above | Employee Data tab blocks | EXISTING |
 | T10 | Resignation-approval hook: approving a `Resignation` request may return `{ offboardingPrompt: true, separationId }` → client then calls T-cascade | `requests.approve` | — | — | `applyRequestDecision` → `triggerOffboardingFromRequest` | uses E19/T2 |
 
@@ -801,16 +787,17 @@ Uses 13.6 (list), 13.7 (Action modal), and the Branch Actions palette (§20). "T
 
 | # | Endpoint | Auth + Permission | Request | Response | Called by | Mark |
 |---|---|---|---|---|---|---|
-| R1 | `GET /api/requests` | Bearer, `requests.view`, gym-scoped | query: `status=PendingHRReview\|Approved\|Rejected\|Archived`, `type`, `gym`, `date`, `quick=urgent\|bmRejected\|balance`, `page,pageSize,sortBy,sortOrder` | envelope; items `[{ id, employee, gym, type, submittedDate, requestedDate, status:'Pending HR Review'\|'Approved'\|'Rejected'\|'Archived', bmDecision:'Approved'\|'Rejected', bmComment, reason, hrDecision, hrComment, payment:'paid'\|'unpaid', timeline:[{step,date,done}] }]` | list, tabs, KPI counts, type pills | EXISTING |
+| R1 | `GET /api/requests` | Bearer, `requests.view`, gym-scoped | query: `status=PendingHRReview\|Approved\|Rejected\|Archived\|Decided`, `type`, `gym`, `date`, `quick=urgent\|approved\|bmRejected\|balance`, `ids`, `page,pageSize,sortBy,sortOrder` | envelope; items `[{ id, employee, employeeId, employeeNumber, initials, position, level, hireDate, gym, type, submittedDate, requestedDate, endDate, status, awaitingManager, bmDecision, bmComment, reason, hrDecision, hrComment, payment:'paid'\|'unpaid', hasAttachment, leaveBalance:{label,total,used,left,afterApproval}\|null, timeline:[{step,date,done}] }]`. **`status=Pending HR Review` also returns stage-1 `Pending` rows** (`awaitingManager: true`) so HR sees employee submissions before a manager decision | list, cards, decision modal, payroll linked-requests pane | EXISTING |
+| R10 | `GET /api/requests/summary` | Bearer, `requests.view`, gym-scoped (`gym` query) | — | `{ pending, awaitingManager, urgent, approvedThisMonth, bmRejected, balanceAlerts, decided, archived, total, byType:[{type,count}] }` — `pending` counts `PendingHRReview` **and** stage-1 `Pending`; `awaitingManager` is the stage-1 subset | the four KPI tiles, tab badges and type pills in one call | **NEW** |
 | R2 | `GET /api/requests/{id}` | Bearer, `requests.view` | — | `{ data: (item as R1, incl. BM-stage decision) }` | `openRequestDetail`, Decision modal, attendance Details | EXISTING |
-| R3 | `POST /api/requests/{id}/decide` | Bearer, `requests.approve` | body `{ stage:'HR', decision:'Approved'\|'Rejected', comment, payment:'paid'\|'unpaid' }` (`payment` only for Day Off/Sick Leave when balance exhausted UI forces choice; null otherwise) | `{ message, item }` (Approve on Resignation → `status:'Notice Period'` on employee + returns `offboardingPrompt`) | `applyRequestDecision`, dashboard quick approve/reject, attendance inline | EXISTING (endpoint + `stage/decision/comment`; `payment` is a UI-required addition) |
+| R3 | `POST /api/requests/{id}/decide` | Bearer, `requests.approve` | body `{ stage:'HR', decision:'Approved'\|'Rejected', comment, payment:'paid'\|'unpaid' }` (`payment` only for balance types; null otherwise). Accepts **stage-1 `Pending`** requests too: a `BranchManager` row with the comment `"Manager stage skipped — advanced by HR."` is recorded so the timeline stays honest, and the submission's reserved days are released on every outcome (paid moves them into used) | `{ message, item }` (Approve on Resignation → `status:'Notice Period'` on employee + returns `offboardingPrompt`) | `applyRequestDecision`, dashboard quick approve/reject, attendance inline | EXISTING (endpoint + `stage/decision/comment`; `payment` is a UI-required addition) |
 | R4 | `POST /api/requests/{id}/undo-decision` | Bearer, `requests.approve` | body `{ comment? }` — allowed only while `requestedDate` hasn't passed; reverts to `Pending HR Review`, returns paid balance day | `{ message, item }` | "Undo Decision" (`applyRequestDecision` mode `undo`) | **NEW** (api.md has no undo/revert) |
 | R5 | `POST /api/requests/bulk-decide` | Bearer, `requests.approve` | body `{ decision:'Approved', comment:'Bulk approved', requestIds?:[] }` (default = all `Pending HR Review`) + server applies `payment` per balance | `{ message, approved, unpaidApplied }` | `bulkApproveRequests` / `doBulkApprove` | **NEW** |
 | R6 | `POST /api/requests/{id}/archive` and `POST /api/requests/{id}/restore` | Bearer, `requests.view`+inbox owner (UI gates only on status) | — | `{ message }` | card Archive / Restore buttons | **NEW** (status `Archived` is rendered but no endpoint mutates it) |
 | R7 | `POST /api/requests` | Bearer, HR creating on behalf (or employee) | body `{ employee /*name in UI*/, type, requestedDate, endDate?, reason }` (type ∈ Day Off, Sick Leave, Leave Early, Late Arrival, Shift Swap, Resignation) | `{ data:{ id, status:'Pending HR Review', timeline:[…] } }` | New Request modal (`submitNewRequest`) | EXISTING |
 | R8 | `GET /api/employees/{id}/leave-balance` | Bearer, `requests.view` | — | `{ dayOff:{used,total,left,after}, sick:{used,total}, unpaid:{used,total} }` | balance strip/warn/cell, New Request live balance, Bulk Approve alert | **NEW** (mirrors E9; drives paid/unpaid decision) |
 | R9 | `PUT /api/employees/{id}/leave-balance` (server-side on approve when `payment='paid'`) | Bearer, implicit via `requests.approve` | server action | — | `adjustLeaveBal` | **NEW** (or automatic side-effect of R3 — implement inside R3) |
-| R10 | Branch queue cards inside Requests page | as D9/D10 | `GET /api/branch-submissions`, `POST /api/branch-submissions/{id}/decide` | as D9/D10 | type pills Deduction/Warning/Bonus, merged card list | **NEW** |
+| R11 | Branch queue cards inside Requests page | as D9/D10 | `GET /api/branch-submissions`, `POST /api/branch-submissions/{id}/decide` | as D9/D10 | type pills Deduction/Warning/Bonus, merged card list | **NEW** |
 
 ---
 
@@ -837,10 +824,10 @@ Uses 13.6 (list), 13.7 (Action modal), and the Branch Actions palette (§20). "T
 |---|---|---|---|---|---|---|
 | H1 | `GET /api/users` | Bearer, `team.view` | query: `role=HR`, `page,pageSize` | envelope; items `[{ id, name, email, phone, initials, role, preset, gyms:[branch names], permissions:[keys], status:'Active'\|'Suspended', lastLogin, hireDate }]` | HR Team table/cards, KPI counts | EXISTING (endpoint; `preset` = applied role-template name the UI renders) |
 | H2 | `GET /api/users/{id}` | Bearer, `team.view` | — | `{ data: item + effectivePermissions[] }` | member detail modal (visible pages preview) | EXISTING |
-| H3 | `POST /api/users` | Bearer, `team.manage` | body `{ name, email, phone, hireDate /*UI "Start Date"*/, role:'HR' }` (credentials auto-emailed) | `{ data:{ id, ... } }` | Create HR Account wizard (`finalizeHRAccount`) | EXISTING |
+| H3 | `POST /api/users` | Bearer, `team.manage` | body `{ fullName, email, gymIds[≥1], permissions?[], rolePreset? }` (phone / Start Date dropped — no home on the User row; a standard temp password is issued server-side and never echoed — set a known one via D12) | `{ data:{ id, name, initials, roles[], gyms[], permissions[], status } }` (201) | Create HR Account wizard (`finalizeHRAccount`) | **IMPLEMENTED (2026-10-22)** |
 | H4 | `PUT /api/users/{id}/gym-access` | Bearer, `team.manage` | body `{ gyms:['Nasr City','Heliopolis',…] }` (min 1) | `{ message }` | wizard step 2 | EXISTING |
 | H5 | `PUT /api/users/{id}/permissions` | Bearer, `team.manage` | body `{ permissions:[ 'employees.view', … ] }` (full dotted keys; template optionally recorded as `preset`) | `{ data:{ permissions[], count } }` | wizard step 3, `saveHRMemberEdit` ("Save Permissions") | EXISTING |
-| H6 | `PUT /api/users/{id}/status` | Bearer, `team.manage` | body `{ status:'Active'\|'Suspended', reason }` (reason required) | `{ message }` (suspend revokes login immediately; audit `HR Account {status}`) | `toggleHRMemberStatus` / `confirmToggleStatus` | **NEW** (api.md users CRUD has no status/suspend op) |
+| H6 | `PUT /api/users/{id}/status` | Bearer, `team.manage` | body `{ status:'Active'\|'Suspended', reason }` (reason required) | `{ message }` (suspend revokes login immediately; audit `HR Account {status}`) | `toggleHRMemberStatus` / `confirmToggleStatus` | **IMPLEMENTED (2026-10-22)** — `api.md`: `PUT /api/users/{id}/status` |
 | H7 | `GET /api/roles` | Bearer, `team.view` | — | items `[{ id, name, description, color:'brand'\|'blue'\|'yellow'\|'purple', permissions[] }]` (HR (Default), HR-FullAccess, HR-AttendanceOnly, HR-NoPayroll) | Role Templates tab cards | EXISTING |
 | H8 | `POST /api/roles` | Bearer, `team.manage` | body `{ name, description, color, permissions[] }` | `{ data:{ id, … } }` | New Template modal (`saveNewTemplate`), wizard "Save as Template" (`confirmSaveTemplate`) | EXISTING |
 | H9 | `PUT /api/roles/{id}` | Bearer, `team.manage` | body `{ name, permissions[] }` | `{ message }` | Edit Template (`saveEditTpl`) | EXISTING |
@@ -1140,13 +1127,28 @@ Selectors: **Gym branch** (`Nasr City | Heliopolis | 6th October`) and **Period*
 
 **`GET /api/payroll-periods`** — EXISTING
 - Auth: JWT + `payroll.view` (gym-filtered). Query: `gym`, `status` (`Open|Partially Published|Published|Paid`), `page, pageSize`.
-- Response `items[]`: `{ id, period, status, locked, paidDate, publishedGyms[], totalEmployees, totalGross, totalDeductions, totalNet }`.
-- Used by: period selector + Locked/Open header badge ("🔒 Locked" / "🟢 Open for Reconciliation", "Published").
+- Response `items[]`: `{ id, gymId, gym, period, status, locked, paidDate, publishedGyms[], totalEmployees, totalGross, totalDeductions, totalNet }`.
+- `gymId`/`gym` identify the branch row (periods are per-gym), feeding the sheet header and the publish target.
+- Used by: branch + period selectors and the Locked/Open header badge ("🔒 Locked" / "🟢 Open for Reconciliation", "Published").
 
 **`GET /api/payroll-periods/{id}`** — EXISTING *(period detail with entries — the core read for this page)*
 - Auth: JWT + `payroll.view`. Query: `gym`.
 - Response `{ data: { id, period, status, locked, paidDate, publishedGyms[], totalEmployees, totalGross, totalDeductions, totalNet, items: [ …payroll entries… ] } }`.
-- Payroll **entry** item fields (exact names rendered): `{ employeeId, name, initials, gym, position, employmentStatus, days, overtime, baseSalary, bonus, gross, deductions, net, status: "Draft"|"Reviewed"|"Approved"|"Locked", reviewed, relatedRequestIds[], deductionLines: [{ id, date, label, reason, source: "biometric"|"manager", amount, status: "Pending"|"Accepted"|"Approved"|"Rejected", attendanceRef, requestId }] }`.
+- Payroll **entry** item fields (exact names rendered): `{ employeeId, name, employeeNumber, initials, gym, position, employmentStatus, days, overtime, baseSalary, bonus, gross, deductions, net, status: "Draft"|"Reviewed"|"Approved"|"Locked", reviewed, relatedRequestIds[], deductionLines: [{ id, date, label, reason, source: "biometric"|"manager", amount, status: "Pending"|"Accepted"|"Approved"|"Rejected", attendanceRef, requestId }], attendance: { daysAttended, weeklyOffs, approvedLeaves, overtimeHours, lateArrivals, unexcusedAbsences, punches: [{ attendanceRef, date, firstIn, lastOut, device, exception, detail, onTime }] } }`.
+- `attendance` powers the whole right-hand evidence column (Work Days & Attendance Log + Biometric Punch Proof) from the same call — no per-employee round trips.
+- `attendance.adjustedAt` is set when HR corrected the counters by hand (see the write endpoint below); the day log and punches always remain the raw evidence.
+
+**`PUT /api/payroll-periods/{id}/entries/{employeeId}/attendance`** — **NEW** *(sheet reconciliation; `payroll.edit`, open period)*
+- Body `{ daysAttended, weeklyOffs, approvedLeaves, overtimeHours, lateArrivals, unexcusedAbsences }` (all required, non-negative).
+- Persists `DaysWorked` / `OvertimeHours` on the entry and stores the four derived counters as overrides (`WeeklyOffsOverride`, `ApprovedLeavesOverride`, `LateArrivalsOverride`, `UnexcusedAbsencesOverride`) plus `AttendanceAdjustedAt` / `AttendanceAdjustedBy`; overtime reprices the gross. Returns the recomputed entry totals.
+- UI: the *Work Days & Attendance Log* card's **Edit** button turns the six rows into inputs; an **Adjusted** chip marks a corrected sheet.
+
+- `attendance.days[]` is the click-through log behind the six counters: `{ date, kind: Attended|WeeklyOff|ApprovedLeave|Late|Absent|EarlyCheckout|MissingCheckout, status, shift, checkIn, checkOut, workedHours, overtimeHours, note, attendanceRef }`, oldest first. Clicking a counter row opens that log filtered to the row's bucket; `attendanceRef` feeds the existing punch audit (`GET /api/attendance/{id}`).
+
+**`POST /api/payroll-periods/ensure?gym={id}`** — **NEW** *(current-month provisioning; `payroll.edit`)*
+- Idempotent. Finds the gym's period whose `StartDate` is the first of the current month, creates it (`Open`) when missing, and — while it is open — adds a `Draft` entry for every **Active** employee that has none (`BaseSalary` = latest compensation, `DaysWorked` = attendance punches in the window, `OvertimeHours` 0).
+- Response `{ periodId, period, created, entriesAdded, open }`. Published/paid periods are never modified (`open: false`, `entriesAdded: 0`).
+- Called by the payroll page on load, so the ledger (and the employee's *My Payroll*) always includes newly created staff.
 - Derived client-side (must be computable from these fields): OT pay = `(baseSalary/176)*1.5*overtime`; gross = base+bonus+OT; approved deductions = lines with `Accepted|Approved`; net = gross − approved; pending count = lines `Pending`; status badge = `Closed & Settled` | `{n} Actions Needed` | `Ready to Close`.
 - Used by: **overview table** columns (Employee initials/name/employeeId, Role/position, Base Salary, OT & Bonus, Deductions, Net Final, Status, Action "Review Sheet →"), 4 stat cards (Total Staff, Settled & Closed %, Pending Review, Net Disbursed + Gross), and the **settlement sheet** (earnings card, deductions list, net strip).
 
@@ -1191,8 +1193,9 @@ Selectors: **Gym branch** (`Nasr City | Heliopolis | 6th October`) and **Period*
 **`GET /api/payroll-periods/{id}/export`** — NEW *(spec §4.7 "Export (CSV/PDF)"; permission `payroll.export`)*
 - Query: `gym`, `format=csv|pdf`. Response: streamed file (CSV columns = overview table columns). Used by: Export action.
 
-**`GET /api/employees/{id}/attendance`** — EXISTING *(evidence pane)*
-- Query: `from`, `to` (period). Response supplies: Days Attended, Weekly Offs, Approved Leaves, Overtime Logged, Late Arrivals, Unexcused Absences (settlement sheet right column).
+**`GET /api/employees/{id}/attendance`** — EXISTING *(alternate evidence source)*
+- Query: `month`, `page`, `pageSize`. Returns the day rows + month totals (`present`, `late`, `early`, `absent`, `off`, `hours`).
+- The settlement sheet no longer needs it: the period detail's `attendance` block already carries the six counters and the punch proof (see above).
 
 **`GET /api/attendance/{id}`** — NEW *(biometric punch audit for a referenced record)*
 - Auth: JWT + `payroll.view` or `attendance.view`. Response `{ data: { id, date, firstIn, lastOut, device, exception, detail } }`. Used by: **View Log** → `openPayrollAttendanceRef` modal (Record Date, Punch In/Out, Terminal Source, System Exception Notes) for refs like `ATT-2608-0417`.

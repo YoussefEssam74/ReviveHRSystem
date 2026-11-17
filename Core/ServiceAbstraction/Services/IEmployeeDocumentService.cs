@@ -17,9 +17,6 @@ namespace ServiceAbstraction.Services
         Task<IReadOnlyList<RequiredDocumentDto>> GetRequiredDocumentsAsync(
             int actorUserId, int employeeId, int? activeGymId, CancellationToken cancellationToken = default);
 
-        Task<EmployeeDocumentDto> UploadAsync(
-            int actorUserId, int employeeId, UploadDocumentRequestDto request, CancellationToken cancellationToken = default);
-
         /// <summary>Official company documents HR published for this employee (mock §3.3).</summary>
         Task<IReadOnlyList<HrDocumentDto>> GetHrDocumentsAsync(
             int actorUserId, int employeeId, int? activeGymId, CancellationToken cancellationToken = default);

@@ -1,0 +1,176 @@
+### ============================================================
+### Attendance deductions (mock §8 / §20 / §25).
+///
+/// The branch's Employees Performance → Deductions tab reads
+/// GET /api/deduction-candidates/branch. That route runs the
+/// attendance sweep first (1st of month → the gym's local today):
+/// every derived absence and every stored Late/Absent day is
+/// raised as a PRICED, pending DeductionCandidate — absence =
+/// 3 × (base ÷ scheduled workdays), late = a quarter day — so
+/// the list is never empty and never bare.
+///
+/// Run auth.http first (adminLogin). omarLogin below signs in
+/// the seeded Branch Manager and picks his gym.
+### ============================================================
+
+### Branch Manager login + gym selection -> sets {{bmToken}}
+# @name omarLogin
+POST {{baseUrl}}/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "omar@revive.hr",
+  "password": "Revive!2026"
+}
+
+###
+# @name omarSelectGym
+POST {{baseUrl}}/api/auth/login/select-gym
+Content-Type: application/json
+
+{
+  "gymId": 1,
+  "tempSessionToken": "{{omarLogin.response.body.tempSessionToken}}"
+}
+
+> {%
+client.global.set('bmToken', response.body.accessToken);
+%}
+
+###
+### ============================================================
+### The tab's list — sweeps, then returns the priced rows.
+### Run it twice: the sweep is idempotent per (employee, day),
+### so the second read returns the very same rows.
+### ============================================================
+
+### Branch deductions (scoped to the BM's gym) -> 200 array
+GET {{baseUrl}}/api/deduction-candidates/branch
+Authorization: Bearer {{bmToken}}
+
+###
+### Only one employee's rows
+GET {{baseUrl}}/api/deduction-candidates/branch?employeeId={{employeeKarim}}
+Authorization: Bearer {{bmToken}}
+
+###
+### ============================================================
+### The branch's decision on one row (Performance tab buttons).
+### approve -> BranchApproved (goes to HR), reject -> final,
+### edit -> re-prices while the status stays as it was.
+### ============================================================
+
+### Approve a row -> 200 { status: "BranchApproved" }
+# @name branchApprove
+POST {{baseUrl}}/api/deduction-candidates/1/branch-review
+Authorization: Bearer {{bmToken}}
+Content-Type: application/json
+
+{
+  "decision": "approve"
+}
+
+###
+### Re-price while approving (amount travels with the decision)
+POST {{baseUrl}}/api/deduction-candidates/1/branch-review
+Authorization: Bearer {{bmToken}}
+Content-Type: application/json
+
+{
+  "decision": "approve",
+  "amount": 150
+}
+
+###
+### Re-price only (edit) -> 200 with the new amount
+POST {{baseUrl}}/api/deduction-candidates/1/branch-review
+Authorization: Bearer {{bmToken}}
+Content-Type: application/json
+
+{
+  "decision": "edit",
+  "amount": 250
+}
+
+###
+### Reject -> 200 { status: "Rejected" } (final)
+POST {{baseUrl}}/api/deduction-candidates/1/branch-review
+Authorization: Bearer {{bmToken}}
+Content-Type: application/json
+
+{
+  "decision": "reject"
+}
+
+###
+### ============================================================
+### HR at month end (adminLogin): the queue of pending payroll
+### lines, and the re-price — the review may carry the amount the
+### sheet should actually charge; the line AND the candidate it
+### materialized from both move to it.
+### ============================================================
+
+### Pending deduction lines -> 200 { items: [...] }
+GET {{baseUrl}}/api/deduction-candidates?status=Pending
+Authorization: Bearer {{adminLogin.response.body.accessToken}}
+
+###
+### Accept at a revised amount (line + source candidate + totals)
+# @name hrReview
+POST {{baseUrl}}/api/deduction-candidates/1/review
+Authorization: Bearer {{adminLogin.response.body.accessToken}}
+Content-Type: application/json
+
+{
+  "decision": "Accepted",
+  "amount": 100
+}
+
+###
+### Reject / waive it -> 400 when the amount is not positive
+POST {{baseUrl}}/api/deduction-candidates/1/review
+Authorization: Bearer {{adminLogin.response.body.accessToken}}
+Content-Type: application/json
+
+{
+  "decision": "Accepted",
+  "amount": 0
+}
+
+###
+### ============================================================
+### Why a row can stand at 0: no salary source exists yet.
+### The sweep prices (sheet covering the day → salary history →
+### 0 + "No salary on file"). Record a salary and the very next
+### read of the branch tab re-prices every still-pending row
+### raised while nothing was on file — no manual entry, no new
+### row (the branch's own edit/approve decisions are untouched).
+### ============================================================
+
+### Record Karim's salary -> 200 (salary history rung of the chain)
+POST {{baseUrl}}/api/employees/{{employeeKarim}}/compensation
+Authorization: Bearer {{adminLogin.response.body.accessToken}}
+Content-Type: application/json
+
+{
+  "salary": 7800,
+  "effectiveDate": "2026-10-01"
+}
+
+###
+### The same rows again — now priced (3 × base ÷ workdays)
+GET {{baseUrl}}/api/deduction-candidates/branch?employeeId={{employeeKarim}}
+Authorization: Bearer {{bmToken}}
+
+###
+### ============================================================
+### The employee's own trail: candidates (priced) merged with
+### legacy follow-ups, each with date / amount / status and any
+/// correction request sitting on it.
+### ============================================================
+
+### Karim's deductions -> 200 array
+GET {{baseUrl}}/api/employees/{{employeeKarim}}/deductions
+Authorization: Bearer {{employeeLogin.response.body.accessToken}}
+
+###

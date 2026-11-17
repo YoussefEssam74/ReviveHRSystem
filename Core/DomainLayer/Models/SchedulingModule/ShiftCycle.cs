@@ -13,6 +13,12 @@ namespace DomainLayer.Models.SchedulingModule
         public int GymId { get; set; }
         public virtual Gym Gym { get; set; } = null!;
 
+        /// <summary>
+        /// Human-readable cycle label shown in the UI selector chips and header
+        /// (e.g. "Sep 13 – Sep 22"). Null → the service derives it from the dates.
+        /// </summary>
+        public string? Label { get; set; }
+
         public DateOnly StartDate { get; set; }
         public DateOnly EndDate { get; set; }
         public ShiftCycleStatus Status { get; set; } = ShiftCycleStatus.Draft;

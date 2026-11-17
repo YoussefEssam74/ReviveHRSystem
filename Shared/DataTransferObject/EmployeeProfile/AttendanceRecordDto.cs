@@ -11,4 +11,8 @@ public sealed class AttendanceRecordDto
     public string Status { get; init; } = string.Empty;
     public string Source { get; init; } = string.Empty;
     public string? Notes { get; init; }
+
+    /// <summary>Approved cover/extra days for an unscheduled punch (1 or 2), else null.
+    /// Display-only: never affects the monthly day-off (leave) balance.</summary>
+    public int? CoverDays { get; init; }
 }

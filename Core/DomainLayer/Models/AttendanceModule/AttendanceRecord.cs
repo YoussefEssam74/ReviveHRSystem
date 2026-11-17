@@ -30,6 +30,13 @@ namespace DomainLayer.Models.AttendanceModule
         public virtual ShiftTemplate? ScheduledShiftTemplate { get; set; }
 
         /// <summary>
+        /// Free-text context surfaced on the HR attendance grid (S4, A1): manual-entry or
+        /// correction reasons ("Manual entry: …" / "Corrected: …"). Null for untouched
+        /// biometric records.
+        /// </summary>
+        public string? Notes { get; set; }
+
+        /// <summary>
         /// Station session that issued this record — tenant isolation + audit trail
         /// ("where was attendance taken"). Null only when the event was recorded with
         /// a gym-scoped user token instead of a station session. The plaintext station

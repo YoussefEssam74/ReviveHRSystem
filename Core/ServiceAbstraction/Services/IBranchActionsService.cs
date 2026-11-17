@@ -12,6 +12,14 @@ namespace ServiceAbstraction.Services
         Task<DeductionCandidateDto> IssueDeductionAsync(
             int actorUserId, int? activeGymId, CreateDeductionCandidateDto request, CancellationToken cancellationToken = default);
 
+        /// <summary>
+        /// The branch's decision on one of its deductions before HR applies it to
+        /// payroll: approve (BranchApproved), reject (final) or re-price the amount.
+        /// Requires the caller's management scope over the deduction's employee.
+        /// </summary>
+        Task<DeductionCandidateDto> BranchReviewDeductionAsync(
+            int actorUserId, int candidateId, BranchDeductionReviewRequest request, int? activeGymId, CancellationToken cancellationToken = default);
+
         Task<WarningNoticeDto> IssueWarningAsync(
             int actorUserId, int? activeGymId, CreateWarningNoticeDto request, CancellationToken cancellationToken = default);
 
@@ -22,7 +30,43 @@ namespace ServiceAbstraction.Services
         Task<IReadOnlyList<BranchQueueItemDto>> GetPendingForHrAsync(
             int actorUserId, int? activeGymId, CancellationToken cancellationToken = default);
 
+        /// <summary>
+        /// Branch-raised deductions in the caller's management scope (team for a Team
+        /// Leader, gym for a Branch Manager), newest first, in every HR decision
+        /// state. The optional employee id narrows one employee's performance tab.
+        /// </summary>
+        Task<IReadOnlyList<DeductionCandidateDto>> GetDeductionsAsync(
+            int actorUserId, int? employeeId, int? activeGymId, CancellationToken cancellationToken = default);
+
+        /// <summary>Warning notices in the caller's management scope, newest first (<see cref="GetDeductionsAsync"/> semantics).</summary>
+        Task<IReadOnlyList<WarningNoticeDto>> GetWarningsAsync(
+            int actorUserId, int? employeeId, int? activeGymId, CancellationToken cancellationToken = default);
+
+        /// <summary>Bonus proposals in the caller's management scope, newest first (<see cref="GetDeductionsAsync"/> semantics).</summary>
+        Task<IReadOnlyList<BonusProposalDto>> GetBonusesAsync(
+            int actorUserId, int? employeeId, int? activeGymId, CancellationToken cancellationToken = default);
+
         /// <summary>Sends a free-form report to HR (any employee may report; lands in the HR queue).</summary>
         Task SendReportAsync(int actorUserId, int? activeGymId, CreateBranchReportDto request, CancellationToken cancellationToken = default);
+
+        // ------------------------------------------------------------------
+        // HR-side review (requests.approve / requests.view)
+        // ------------------------------------------------------------------
+
+        /// <summary>Paged warning-notice review queue (requests.view).</summary>
+        Task<ProposalListResponse<WarningNoticeDto>> GetWarningsAsync(
+            int? actorUserId, ProposalListQuery query, CancellationToken cancellationToken = default);
+
+        /// <summary>Files or declines a warning notice (requests.approve).</summary>
+        Task<ReviewProposalResponse<WarningNoticeDto>> ReviewWarningAsync(
+            int? actorUserId, int noticeId, ReviewProposalRequest request, CancellationToken cancellationToken = default);
+
+        /// <summary>Paged bonus-proposal review queue (requests.view).</summary>
+        Task<ProposalListResponse<BonusProposalDto>> GetBonusesAsync(
+            int? actorUserId, ProposalListQuery query, CancellationToken cancellationToken = default);
+
+        /// <summary>Approves or declines a bonus proposal (requests.approve).</summary>
+        Task<ReviewProposalResponse<BonusProposalDto>> ReviewBonusAsync(
+            int? actorUserId, int proposalId, ReviewProposalRequest request, CancellationToken cancellationToken = default);
     }
 }

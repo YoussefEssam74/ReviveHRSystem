@@ -227,10 +227,31 @@ useAttendance({ gymId: selectedGym, employeeIds: teamMemberIds });
 useEmployees({ gymId: selectedGym });
 ```
 
-### RTL Support
-- `dir` attribute on `<html>` toggles based on language
-- Tailwind's `rtl:` variant for directional styles
-- All layouts use logical properties (start/end instead of left/right)
+### Internationalization & RTL Support
+**Status: implemented.** The SPA ships English (LTR) and Arabic (RTL).
+
+- **Library** — `i18next` + `react-i18next`, initialized in `src/i18n/index.ts`
+  and imported once from `src/main.tsx`.
+- **Keys** — the English copy *is* the key (`keySeparator: false`,
+  `nsSeparator: false`). Arabic lives in `src/i18n/locales/ar/*.ts` and is
+  merged in `src/i18n/locales/ar.ts`. A missing Arabic entry falls back to the
+  English text, so untranslated copy degrades gracefully instead of showing a
+  raw key.
+- **Usage** — components call `useTranslation()` and wrap copy in `t('...')`;
+  non-React modules import `translate` from `src/i18n`. Interpolation uses
+  `{{name}}` placeholders.
+- **Switching** — the account menu (bottom-left avatar) has a Language row that
+  toggles English ⇄ العربية. The choice persists in `localStorage` under
+  `revivehr-lang`.
+- **Direction** — switching sets `lang` + `dir` on `<html>`; a pre-paint script
+  in `index.html` applies the stored language before React mounts so an Arabic
+  session never flashes an LTR layout.
+- **Layout** — use Tailwind logical utilities (`ms-*`, `me-*`, `ps-*`, `pe-*`,
+  `start-*`, `end-*`, `border-s`, `border-e`, `text-start`, `text-end`) instead
+  of physical `left`/`right` ones so both directions lay out correctly. Mirror
+  directional icons with `rtl:rotate-180`.
+- **Formatting** — `src/lib/format.ts` localizes dates, times, weekdays, month
+  names, relative times and enum labels from the active language.
 
 ### Top Bar — Notifications & Settings
 - **Notifications bell** — redesigned visually in this MVP round, stays a dropdown (not a full page); permission/role-aware; shows System Notifications, Required Actions, Request Updates, Attendance Alerts, and (for Branch Manager/Team Leader) Management Notifications relevant to their scope. Purely informational — see the **Events** sidebar page (below) for items that need HR to actually act.
@@ -241,12 +262,19 @@ useEmployees({ gymId: selectedGym });
   - **Rule:** never show an admin settings section purely because of a role label (e.g. "Branch Manager") — gate every section by its actual permission, same as page/button visibility elsewhere
 
 ### Profile Menu
-Clicking the profile picture (next to Settings) shows:
+Clicking the profile picture (next to the notifications bell) shows:
 - Employee Name, Position, Role, Gym (read-only header)
 - My Profile
 - Account Settings
 - Logout
 - (optional, future) Help & Support, Change Password shortcut
+
+### Sidebar Account Menu
+The avatar at the bottom of the portal sidebar opens a small menu with:
+- **Language** — toggles the whole UI between English and العربية (persisted)
+- **Dark mode** — light/dark theme toggle
+- (the previous **Settings** row was removed; the Settings page is still
+  reachable from the profile menu)
 
 ## Design System
 
@@ -277,3 +305,47 @@ content this applies to.
   view** right after login (see user-flows.md Flow 1b) — the existing
   in-app Gym Context Switcher (above) still works afterward with no
   re-login. This is a UX addition only, not a session-scope change.
+
+## Responsive & Mobile
+
+Full rules live in [docs/ux/mobile-standard.md](../ux/mobile-standard.md).
+Summary of how the shell behaves:
+
+| Surface | Breakpoint below `lg` (1024px) | Notes |
+|---|---|---|
+| `/console/*` (HR) | Fixed sidebar becomes an overlay drawer (`max-w-[85vw]`), opened from the header | Bottom nav absent — console is data-dense |
+| `/employee/*` (portal) | Sidebar becomes a drawer **and** a 4-item fixed bottom nav | Bottom nav uses `.safe-bottom` |
+| `/`, `/login`, `/enrollment`, `/station-code`, `/dashboard` | Header nav scrolls horizontally (`.no-scrollbar`), sign-out collapses to an icon | — |
+| `/attendance` (kiosk) | **Desktop only** — designed for a 1080p station terminal | `100vh`, no scroll, no mobile layout |
+
+Shell-level requirements:
+
+- `viewport-fit=cover` in `index.html`; the portal bottom nav and every overlay
+  panel carry `.safe-bottom` so the iOS home indicator never covers controls.
+- Every overlay (`Dialog`, `Modal`, `Drawer`) is a bottom sheet on phones and a
+  centered card from `sm` up, capped by `.overlay-panel` (`92dvh`) with the body
+  scrolling inside.
+- `useOverlay` (`src/lib/use-overlay.ts`) owns Escape, focus trap, initial
+  focus, focus restore, and body-scroll lock for all three overlays. Do not
+  re-implement Escape handling in feature components.
+- Tables are desktop-only on the portal (`hidden lg:block`); each has a card or
+  compact-grid equivalent below `lg`. Wrap any new table in `.table-responsive`.
+- Forms keep real controls at ≥16px on coarse pointers (`.form-*` plus a global
+  non-checkbox input rule) to stop iOS focus zoom; buttons get a 44px minimum
+  and icon-only controls use `.touch-target`.
+
+## Accessibility
+
+- **Focus**: `useOverlay` traps Tab inside dialogs, moves focus to the first
+  control on open, and returns it to the trigger on close.
+- **Labelling**: every icon-only control needs `aria-label`; overlays expose
+  `role="dialog"`, `aria-modal`, and `aria-label`.
+- **Live regions**: toasts and scanner status use `role="status"` /
+  `aria-live="polite"`; form errors use `role="alert"`.
+- **Focus visibility**: a single global `:focus-visible` ring (brand green) is
+  defined in `index.css` — do not remove outlines.
+- **Motion**: `prefers-reduced-motion` disables the modal, drawer, toast, and
+  scanner animations.
+- **Type floor**: 12px minimum for body copy. The 10px/11px labels still present
+  in some portal pages are the main remaining accessibility debt.
+

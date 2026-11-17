@@ -24,7 +24,8 @@ public sealed class AttendanceMappingProfile : Profile
             .ForMember(d => d.CheckOut, o => o.MapFrom(s => s.CheckOutTime.HasValue ? TimeOnly.FromDateTime(s.CheckOutTime.Value) : (TimeOnly?)null))
             .ForMember(d => d.Status, o => o.MapFrom(s => StatusLabel(s.Status)))
             .ForMember(d => d.Source, o => o.MapFrom(s => s.CheckInMethod != null ? s.CheckInMethod.ToString() : string.Empty))
-            .ForMember(d => d.Notes, o => o.MapFrom(s => (string?)null));
+            .ForMember(d => d.Notes, o => o.MapFrom(s => (string?)null))
+            .ForMember(d => d.CoverDays, o => o.MapFrom(_ => (int?)null));
 
         CreateMap<LeaveBalance, LeaveBalanceDto>()
             .ForMember(d => d.Total, o => o.MapFrom(s => s.TotalEntitlement))

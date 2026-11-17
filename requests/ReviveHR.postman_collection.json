@@ -1018,7 +1018,7 @@
                                                                                "station-summary"
                                                                            ]
                                                               },
-                                                      "description":  "GET /api/attendance/station-summary - today counters and recent feed for the station gym (the kiosk dashboard data)."
+                                                      "description":  "GET /api/attendance/station-summary - today counters and the scheduled roster (shift, check-in/out, lateness/early leave) for the station gym (the kiosk dashboard data)."
                                                   },
                                       "event":  [
                                                     {

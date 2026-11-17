@@ -12,6 +12,12 @@ public sealed class LoginResponse
     public int? ExpiresInSeconds { get; init; }
 
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? RefreshToken { get; init; }
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? RefreshExpiresInSeconds { get; init; }
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public UserInfo? User { get; init; }
 
     public bool RequiresGymSelection { get; init; }

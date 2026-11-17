@@ -6,7 +6,6 @@ using DomainLayer.Models.EmployeeModule.Enums;
 using DomainLayer.Models.UserModule.Enums;
 using Service.Specifications;
 using ServiceAbstraction.Services;
-using Shared.Authorization;
 using Shared.DataTransferObject;
 using Shared.DataTransferObject.EmployeeProfile;
 
@@ -21,6 +20,7 @@ namespace Service.Services
     public class EmployeeDocumentService(
         IUnitOfWork unitOfWork,
         IEmployeeAccessService employeeAccess,
+        IUserAccessRepository userAccess,
         IFileStorage fileStorage,
         IMapper mapper) : IEmployeeDocumentService
     {
@@ -30,7 +30,7 @@ namespace Service.Services
             int actorUserId, int employeeId, int? activeGymId, CancellationToken cancellationToken = default)
         {
             await employeeAccess.EnsureCanAccessAsync(
-                actorUserId, employeeId, Features.Employees, AccessLevel.View, activeGymId, cancellationToken);
+                actorUserId, employeeId, activeGymId, cancellationToken);
 
             return await ProjectAsync(employeeId, cancellationToken);
         }
@@ -39,7 +39,7 @@ namespace Service.Services
             int actorUserId, int employeeId, int? activeGymId, CancellationToken cancellationToken = default)
         {
             await employeeAccess.EnsureCanAccessAsync(
-                actorUserId, employeeId, Features.Employees, AccessLevel.View, activeGymId, cancellationToken);
+                actorUserId, employeeId, activeGymId, cancellationToken);
 
             var documents = await ProjectAsync(employeeId, cancellationToken);
             var uploaded = documents.ToLookup(d => d.Category, StringComparer.OrdinalIgnoreCase);
@@ -52,45 +52,6 @@ namespace Service.Services
                     DocumentId = uploaded[type.ToString()].FirstOrDefault()?.Id
                 })
                 .ToList();
-        }
-
-        public async Task<EmployeeDocumentDto> UploadAsync(
-            int actorUserId, int employeeId, UploadDocumentRequestDto request, CancellationToken cancellationToken = default)
-        {
-            var employee = await unitOfWork.GetRepository<Employee, int>()
-                .GetByIdAsync(new EmployeeByUserIdSpec(actorUserId), cancellationToken)
-                ?? throw new UnAuthorizedException("This account has no employee profile.");
-
-            if (employee.Id != employeeId)
-            {
-                throw new NotFoundException("Employee not found.");
-            }
-
-            if (string.IsNullOrWhiteSpace(request.FileName))
-            {
-                throw new BadRequestException("A file name is required.");
-            }
-
-            if (!Enum.TryParse<DocumentType>(request.Category, ignoreCase: true, out var documentType))
-            {
-                throw new BadRequestException($"Unknown document category '{request.Category}'.");
-            }
-
-            var document = new EmployeeDocument
-            {
-                EmployeeId = employee.Id,
-                Type = documentType,
-                FileName = request.FileName.Trim(),
-                FilePath = request.FilePath?.Trim() ?? string.Empty,
-                ExpiryDate = request.ExpiryDate,
-                EmployeeEditable = true
-            };
-
-            await unitOfWork.GetRepository<EmployeeDocument, int>().AddAsync(document, cancellationToken);
-            await unitOfWork.SaveChangesAsync(cancellationToken);
-
-            var documents = await ProjectAsync(employee.Id, cancellationToken);
-            return documents.First(d => d.Id == document.Id);
         }
 
         /// <summary>
@@ -112,7 +73,7 @@ namespace Service.Services
             int actorUserId, int employeeId, int? activeGymId, CancellationToken cancellationToken = default)
         {
             await employeeAccess.EnsureCanAccessAsync(
-                actorUserId, employeeId, Features.Employees, AccessLevel.View, activeGymId, cancellationToken);
+                actorUserId, employeeId, activeGymId, cancellationToken);
 
             var documents = await unitOfWork.GetRepository<EmployeeDocument, int>()
                 .GetAllAsync(new DocumentsByEmployeeSpec(employeeId, DocumentSource.Hr), cancellationToken);
@@ -135,7 +96,7 @@ namespace Service.Services
             CancellationToken cancellationToken = default)
         {
             await employeeAccess.EnsureCanAccessAsync(
-                actorUserId, employeeId, Features.Employees, AccessLevel.View, activeGymId, cancellationToken);
+                actorUserId, employeeId, activeGymId, cancellationToken);
 
             var document = await unitOfWork.GetRepository<EmployeeDocument, int>()
                 .GetByIdAsync(new DocumentByIdSpec(documentId), cancellationToken);
@@ -166,6 +127,11 @@ namespace Service.Services
             if (string.IsNullOrWhiteSpace(fileName))
             {
                 throw new BadRequestException("A file name is required.");
+            }
+
+            if (!FileContentTypes.IsImage(fileName))
+            {
+                throw new BadRequestException("Profile photos must be PNG, JPG, WEBP, or GIF.");
             }
 
             var stored = await SaveOrRefuseAsync("avatars", fileName, content, cancellationToken);
@@ -206,12 +172,25 @@ namespace Service.Services
         public async Task<FileDownload> GetPhotoAsync(
             int actorUserId, int employeeId, int? activeGymId, CancellationToken cancellationToken = default)
         {
-            await employeeAccess.EnsureCanAccessAsync(
-                actorUserId, employeeId, Features.Employees, AccessLevel.View, activeGymId, cancellationToken);
-
             var employee = await unitOfWork.GetRepository<Employee, int>()
                 .GetByIdAsync(new EmployeeProfileByIdSpec(employeeId), cancellationToken)
                 ?? throw new NotFoundException("Employee not found.");
+
+            // Matrix row 28: any authenticated member of the target's gym can read a
+            // photo (avatars are tenant-wide profile data), Top Management likewise.
+            // Out-of-gym targets are concealed with 404. Writes stay self-service.
+            if (activeGymId.HasValue && employee.GymId == activeGymId.Value)
+            {
+                // in-gym: ok
+            }
+            else if (await userAccess.HasGymAccessAsync(actorUserId, employee.GymId, cancellationToken))
+            {
+                // gym access via other assignments: ok
+            }
+            else
+            {
+                throw new NotFoundException("Employee not found.");
+            }
 
             if (string.IsNullOrWhiteSpace(employee.PhotoPath))
             {
@@ -289,6 +268,8 @@ namespace Service.Services
             "image/jpeg" => "JPG",
             "image/webp" => "WEBP",
             "image/gif" => "GIF",
+            "application/msword" => "DOC",
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document" => "DOCX",
             _ => contentType
         };
 

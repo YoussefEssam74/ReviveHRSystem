@@ -24,7 +24,9 @@ public sealed class PayrollHistoryMappingProfile : Profile
             .ForMember(d => d.PaidDate, o => o.MapFrom(s => s.PayrollPeriod.Status == PayrollPeriodStatus.Locked ? s.PayrollPeriod.EndDate : (DateOnly?)null))
             .ForMember(d => d.Visible, o => o.MapFrom(s => s.PayrollPeriod.Status != PayrollPeriodStatus.Open))
             .ForMember(d => d.NetSalary, o => o.MapFrom(s => s.NetPay))
-            .ForMember(d => d.Items, o => o.MapFrom(s => s.LineItems.OrderBy(li => li.EffectiveDate)));
+            .ForMember(d => d.Items, o => o.MapFrom(s => s.LineItems.OrderBy(li => li.EffectiveDate)))
+            .ForMember(d => d.DaysWorked, o => o.MapFrom(s => s.DaysWorked))
+            .ForMember(d => d.OvertimeHours, o => o.MapFrom(s => s.OvertimeHours));
 
         CreateMap<PayrollEntryLineItem, PayrollLineItemDto>()
             .ForMember(d => d.Kind, o => o.MapFrom(s => s.Type.Equals("Deduction", StringComparison.OrdinalIgnoreCase) ? "deduction" : "earning"));

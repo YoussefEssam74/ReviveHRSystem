@@ -20,6 +20,10 @@ namespace DomainLayer.Models.PayrollModule
         public virtual AttendanceRecord? AttendanceRecord { get; set; }
         public int? EmployeeRequestId { get; set; }
         public virtual EmployeeRequest? EmployeeRequest { get; set; }
+
+        /// <summary>The candidate this line materialized from (null for manual lines).</summary>
+        public int? DeductionCandidateId { get; set; }
+        public virtual DeductionCandidate? DeductionCandidate { get; set; }
         public string Status { get; set; } = "Approved";
         public int? ReviewedBy { get; set; }
         public virtual User? Reviewer { get; set; }

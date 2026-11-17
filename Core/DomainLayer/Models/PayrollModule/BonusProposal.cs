@@ -30,5 +30,14 @@ namespace DomainLayer.Models.PayrollModule
         public DateTime IssuedAt { get; set; } = DateTime.UtcNow;
 
         public ProposalStatus Status { get; set; } = ProposalStatus.Pending;
+
+        /// <summary>HR reviewer (approval decision) — null while Pending.</summary>
+        public int? ReviewedBy { get; set; }
+        public virtual User? Reviewer { get; set; }
+
+        public DateTime? ReviewedAt { get; set; }
+
+        /// <summary>HR's reason when the proposal is declined (required by the UI).</summary>
+        public string? ReviewNote { get; set; }
     }
 }

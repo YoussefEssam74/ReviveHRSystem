@@ -19,8 +19,8 @@ namespace Biometrics
     }
 
     /// <summary>
-    /// In-process face pipeline, a 1:1 port of biometric_test/app.py with identical
-    /// models and thresholds: YuNet detection (ONNX) -&gt; Silent-Face anti-spoofing
+    /// In-process face pipeline with the same models and thresholds as the original
+    /// OpenCV prototype: YuNet detection (ONNX) -&gt; Silent-Face anti-spoofing
     /// ensemble (ONNX, scales 2.7 + 4.0) -&gt; SFace 128-d embedding (ONNX).
     /// Pure ONNX Runtime + SkiaSharp: no OpenCV, no Python. Thread-safe; concurrent
     /// inferences are capped by MaxConcurrentScans.
@@ -180,7 +180,25 @@ namespace Biometrics
 
         private FaceProcessOutcome ProcessCore(byte[] imageBytes)
         {
-            using var bitmap = SKBitmap.Decode(imageBytes);
+            // Malformed frames must surface as input errors (the enroll flow answers
+            // FaceDetected=false with 400), not as 500s: the SkiaSharp decoder can
+            // throw (e.g. ArgumentNullException 'codec') on hostile or truncated
+            // bytes instead of returning a null bitmap.
+            SKBitmap? bitmap;
+            try
+            {
+                bitmap = SKBitmap.Decode(imageBytes);
+            }
+            catch (Exception ex)
+            {
+                return new FaceProcessOutcome
+                {
+                    FaceDetected = false,
+                    Debug = $"decode-failure: {ex.GetType().Name} ({ex.Message})"
+                };
+            }
+
+            using var _ = bitmap; // dispose ownership from here on
             if (bitmap is null || bitmap.Width < 16 || bitmap.Height < 16)
                 return new FaceProcessOutcome { FaceDetected = false };
 
@@ -197,7 +215,7 @@ namespace Biometrics
                 return new FaceProcessOutcome { FaceDetected = false, Debug = debug };
             }
 
-            // --- 2) Silent-Face anti-spoofing ensemble (same math as anti_spoofing_engine.py).
+            // --- 2) Silent-Face anti-spoofing ensemble.
             var (isReal, livenessScore) = CheckLiveness(frame, box);
             if (!isReal)
                 return new FaceProcessOutcome { FaceDetected = true, IsLive = false, LivenessScore = livenessScore };
@@ -406,7 +424,7 @@ namespace Biometrics
 
         // ----------------------------------------------------------------- liveness
 
-        /// <summary>Dual-scale Silent-Face ensemble (same math as anti_spoofing_engine.py).</summary>
+        /// <summary>Dual-scale Silent-Face ensemble.</summary>
         private (bool IsReal, double Score) CheckLiveness(FrameRgba frame, DetectedBox box)
         {
             var total = new double[3];

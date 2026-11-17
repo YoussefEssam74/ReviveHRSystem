@@ -15,6 +15,10 @@ namespace ServiceAbstraction.Services
         Task DecideAsync(
             int actorUserId, int requestId, int? activeGymId, RequestDecisionDto decision, CancellationToken cancellationToken = default);
 
+        /// <summary>Undo a stage-1 decision — no time limit, the day may already have passed.</summary>
+        Task UndoAsync(
+            int actorUserId, int requestId, int? activeGymId, CancellationToken cancellationToken = default);
+
         /// <summary>Edits a pending request on behalf of an in-scope employee.</summary>
         Task EditAsync(
             int actorUserId, int requestId, int? activeGymId, UpdateRequestDto update, CancellationToken cancellationToken = default);
@@ -37,6 +41,7 @@ public sealed class RequestDecisionDto
 
     public string Decision { get; init; } = string.Empty;
     public string? Comment { get; init; }
+    public int? CalculatedDays { get; init; }
 }
 
 /// <summary>Manager edit body for a pending request.</summary>

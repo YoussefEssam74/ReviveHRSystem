@@ -13,7 +13,6 @@
 
         public virtual ICollection<RolePermission> RolePermissions { get; set; } = new List<RolePermission>();
         public virtual ICollection<UserPermission> UserPermissions { get; set; } = new List<UserPermission>();
-        public virtual ICollection<UserGymPermission> UserGymPermissions { get; set; } = new List<UserGymPermission>();
     }
 }
 

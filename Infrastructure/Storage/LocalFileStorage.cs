@@ -194,7 +194,7 @@ namespace Storage
             if (!FileContentTypes.IsSupported(extension))
             {
                 throw new InvalidOperationException(
-                    "Only PDF, PNG, JPG, WEBP and GIF files can be stored.");
+                    "Only PDF, Word, PNG, JPG, WEBP and GIF files can be stored.");
             }
 
             return extension;

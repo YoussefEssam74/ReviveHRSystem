@@ -16,6 +16,8 @@ namespace DomainLayer.Models.RecruitmentModule
         public string? RequiredAction { get; set; }
         public DateTime? ActionDueDate { get; set; }
         public DateTime? CompletedDate { get; set; }
+        /// <summary>Who moved/completed this stage (nullable — system moves have no actor).</summary>
+        public int? ByUserId { get; set; }
         public string? Outcome { get; set; }
         public string? Notes { get; set; }
     }

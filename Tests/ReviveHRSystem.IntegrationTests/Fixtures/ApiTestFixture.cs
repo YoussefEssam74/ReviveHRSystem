@@ -53,6 +53,17 @@ namespace ReviveHRSystem.IntegrationTests.Fixtures
             var baseConnection = configuration.GetConnectionString("DefaultConnection")
                 ?? throw new InvalidOperationException("DefaultConnection is missing from appsettings.json.");
 
+            // QA pipeline hook: an automation harness may supply a dedicated
+            // test-database connection string (e.g. a Dockerized PostgreSQL on port
+            // 5433) that must take precedence over appsettings.json so the suite
+            // never touches the developer's local dev database. Unset -> unchanged
+            // default behavior.
+            var qaPipelineConnection = Environment.GetEnvironmentVariable("QA_TEST_CONNECTION_STRING");
+            if (!string.IsNullOrWhiteSpace(qaPipelineConnection))
+            {
+                baseConnection = qaPipelineConnection;
+            }
+
             var maintenanceConnection = new NpgsqlConnectionStringBuilder(baseConnection) { Database = "postgres" };
             var testConnection = new NpgsqlConnectionStringBuilder(baseConnection) { Database = TestDatabaseName };
 

@@ -16,5 +16,14 @@ namespace ServiceAbstraction.Services
 
         /// <summary>Access token lifetime in seconds (for the login response).</summary>
         int AccessTokenExpiresInSeconds { get; }
+
+        /// <summary>Generates a cryptographically random opaque refresh token (returned to client once).</summary>
+        string GenerateRefreshToken();
+
+        /// <summary>SHA-256 hex hash of an opaque refresh token (what is stored in the database).</summary>
+        string HashRefreshToken(string token);
+
+        /// <summary>When a freshly issued refresh token expires (UTC).</summary>
+        DateTime RefreshTokenExpiresAtUtc { get; }
     }
 }

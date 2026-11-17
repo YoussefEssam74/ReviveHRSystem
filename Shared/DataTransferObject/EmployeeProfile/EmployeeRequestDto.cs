@@ -4,8 +4,15 @@ namespace Shared.DataTransferObject.EmployeeProfile;
 public sealed class EmployeeRequestDto
 {
     public int Id { get; init; }
+    public int EmployeeId { get; init; }
+    public string EmployeeName { get; init; } = string.Empty;
     public string Type { get; init; } = string.Empty;
     public DateOnly SubmittedDate { get; init; }
+
+    /// <summary>Date and clock time the request was filed (the desk shows the time
+    /// when the request type itself carries none).</summary>
+    public DateTime SubmittedAt { get; init; }
+
     public DateOnly RequestDate { get; init; }
     public DateOnly? EndDate { get; init; }
 
@@ -30,5 +37,7 @@ public sealed class EmployeeRequestDto
 
     public string Status { get; init; } = string.Empty;
     public string Reason { get; init; } = string.Empty;
+    public string? Payment { get; init; }
+    public int? CalculatedDays { get; init; }
     public IReadOnlyList<RequestTimelineStepDto> Timeline { get; init; } = Array.Empty<RequestTimelineStepDto>();
 }

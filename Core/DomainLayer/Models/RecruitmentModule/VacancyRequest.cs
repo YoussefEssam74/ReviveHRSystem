@@ -22,6 +22,15 @@ namespace DomainLayer.Models.RecruitmentModule
         public string Justification { get; set; } = string.Empty;
         public VacancyRequestStatus Status { get; set; } = VacancyRequestStatus.Pending;
 
+        // ---- Requisition details the request cards render ----
+        public string? Urgency { get; set; }
+        public decimal? Salary { get; set; }
+        public string? Shift { get; set; }
+        public int Headcount { get; set; } = 1;
+
+        /// <summary>When the requisition was submitted (the UI's "Submitted" column).</summary>
+        public DateTime SubmittedDate { get; set; } = DateTime.UtcNow;
+
         public int? DecidedBy { get; set; }
         public virtual User? Decider { get; set; }
 

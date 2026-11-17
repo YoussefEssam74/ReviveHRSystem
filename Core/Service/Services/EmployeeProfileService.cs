@@ -25,7 +25,7 @@ namespace Service.Services
                 .GetByIdAsync(new EmployeeByUserIdSpec(actorUserId), cancellationToken);
 
             await employeeAccess.EnsureCanAccessAsync(
-                actorUserId, employeeId, Features.Employees, AccessLevel.View, activeGymId, cancellationToken);
+                actorUserId, employeeId, activeGymId, cancellationToken);
 
             var profile = await LoadProfileAsync(employeeId, cancellationToken);
 

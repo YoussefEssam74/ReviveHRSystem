@@ -33,7 +33,8 @@ namespace ReviveHRSystem.IntegrationTests
                 employeeId = karimId,
                 amount = 150m,
                 reason = "Unapproved absence",
-                note = "Absent with no prior notice"
+                note = "Absent with no prior notice",
+                date = await FreeDeductionDateAsync(karimId)
             }, token);
             var issueResponse = await _fixture.Client.SendAsync(issue);
             issueResponse.EnsureSuccessStatusCode();
@@ -156,14 +157,193 @@ namespace ReviveHRSystem.IntegrationTests
         }
 
         [Fact]
-        public async Task Actions_PlainEmployee_Returns403()
+        public async Task Deduction_BranchReview_ApproveThenReprice_KeepsOpenForHr()
         {
-            var token = await _fixture.LoginAsync("karim@revive.hr", "Revive!2026");
+            var gym1Id = await GymIdByNameAsync("Revive Main Gym");
+            var token = await LoginSelectingGymAsync("omar@revive.hr", gym1Id);
+            var karimId = await OwnEmployeeIdAsync("karim@revive.hr");
 
-            var response = await _fixture.Client.SendAsync(_fixture.AuthorizedRequest(
-                HttpMethod.Get, "/api/branch-actions/pending-hr", null, token));
+            var candidateId = await IssueDeductionAndGetIdAsync(token, karimId, 120m, "Branch review approve test");
 
-            Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+            var approve = _fixture.AuthorizedRequest(HttpMethod.Post, $"/api/deduction-candidates/{candidateId}/branch-review", new
+            {
+                decision = "approve"
+            }, token);
+            var approveResponse = await _fixture.Client.SendAsync(approve);
+            approveResponse.EnsureSuccessStatusCode();
+            var approved = await approveResponse.Content.ReadFromJsonAsync<JsonElement>();
+            Assert.Equal("BranchApproved", approved.GetProperty("status").GetString());
+            Assert.Equal(120m, approved.GetProperty("amount").GetDecimal());
+
+            // edit travelled together with approve — 150 EGP
+            var edit = _fixture.AuthorizedRequest(HttpMethod.Post, $"/api/deduction-candidates/{candidateId}/branch-review", new
+            {
+                decision = "approve",
+                amount = 150m
+            }, token);
+            var editResponse = await _fixture.Client.SendAsync(edit);
+            editResponse.EnsureSuccessStatusCode();
+            var repriced = await editResponse.Content.ReadFromJsonAsync<JsonElement>();
+            Assert.Equal("BranchApproved", repriced.GetProperty("status").GetString());
+            Assert.Equal(150m, repriced.GetProperty("amount").GetDecimal());
+        }
+
+        [Fact]
+        public async Task Deduction_BranchReview_RejectOnlyAmountChange_Returns400()
+        {
+            var gym1Id = await GymIdByNameAsync("Revive Main Gym");
+            var token = await LoginSelectingGymAsync("omar@revive.hr", gym1Id);
+            var karimId = await OwnEmployeeIdAsync("karim@revive.hr");
+
+            var candidateId = await IssueDeductionAndGetIdAsync(token, karimId, 80m, "Branch review reprice test");
+
+            var edit = _fixture.AuthorizedRequest(HttpMethod.Post, $"/api/deduction-candidates/{candidateId}/branch-review", new
+            {
+                decision = "edit"
+            }, token);
+            var editResponse = await _fixture.Client.SendAsync(edit);
+
+            Assert.Equal(HttpStatusCode.BadRequest, editResponse.StatusCode);
+        }
+
+        [Fact]
+        public async Task Deduction_BranchReview_RejectionCanBeReopened_ButAnAppliedRowIsFinal()
+        {
+            var gym1Id = await GymIdByNameAsync("Revive Main Gym");
+            var token = await LoginSelectingGymAsync("omar@revive.hr", gym1Id);
+            var karimId = await OwnEmployeeIdAsync("karim@revive.hr");
+
+            var candidateId = await IssueDeductionAndGetIdAsync(token, karimId, 60m, "Branch review reject test");
+
+            var reject = _fixture.AuthorizedRequest(HttpMethod.Post, $"/api/deduction-candidates/{candidateId}/branch-review", new
+            {
+                decision = "reject"
+            }, token);
+            var rejectResponse = await _fixture.Client.SendAsync(reject);
+            rejectResponse.EnsureSuccessStatusCode();
+            var rejected = await rejectResponse.Content.ReadFromJsonAsync<JsonElement>();
+            Assert.Equal("Rejected", rejected.GetProperty("status").GetString());
+
+            // A wrong rejection can still be undone by the branch (documented rule:
+            // only an HR-applied row is frozen).
+            var second = _fixture.AuthorizedRequest(HttpMethod.Post, $"/api/deduction-candidates/{candidateId}/branch-review", new
+            {
+                decision = "approve"
+            }, token);
+            var secondResponse = await _fixture.Client.SendAsync(second);
+            Assert.Equal(HttpStatusCode.OK, secondResponse.StatusCode);
+
+            // HR applies it → the row is final; another branch decision is refused.
+            // (Set directly: applying through the API would require an open payroll
+            // period for the chosen day, which is environment state we don't control.)
+            using (var scope = _fixture.Services.CreateScope())
+            {
+                var db = scope.ServiceProvider.GetRequiredService<ReviveHrDbContext>();
+                var candidate = await db.DeductionCandidates.SingleAsync(c => c.Id == candidateId);
+                candidate.Status = DomainLayer.Models.PayrollModule.Enums.DeductionStatus.Approved;
+                await db.SaveChangesAsync();
+            }
+
+            var third = _fixture.AuthorizedRequest(HttpMethod.Post, $"/api/deduction-candidates/{candidateId}/branch-review", new
+            {
+                decision = "reject"
+            }, token);
+            var thirdResponse = await _fixture.Client.SendAsync(third);
+            Assert.Equal(HttpStatusCode.BadRequest, thirdResponse.StatusCode);
+        }
+
+        [Fact]
+        public async Task Deduction_BranchReview_PlainEmployee_Returns404()
+        {
+            var gym1Id = await GymIdByNameAsync("Revive Main Gym");
+            var token = await LoginSelectingGymAsync("omar@revive.hr", gym1Id);
+            var karimId = await OwnEmployeeIdAsync("karim@revive.hr");
+
+            var candidateId = await IssueDeductionAndGetIdAsync(token, karimId, 40m, "Branch review scope test");
+
+            var karimToken = await _fixture.LoginAsync("karim@revive.hr", "Revive!2026");
+            var acting = _fixture.AuthorizedRequest(HttpMethod.Post, $"/api/deduction-candidates/{candidateId}/branch-review", new
+            {
+                decision = "approve"
+            }, karimToken);
+            var actingResponse = await _fixture.Client.SendAsync(acting);
+
+            // A non-manager answers exactly like the row never existed.
+            Assert.Equal(HttpStatusCode.NotFound, actingResponse.StatusCode);
+        }
+
+        /// <summary>Issues a deduction as the active manager and returns the created candidate id.</summary>
+        private async Task<int> IssueDeductionAndGetIdAsync(
+            string token, int employeeId, decimal amount, string note, string? date = null)
+        {
+            var issue = _fixture.AuthorizedRequest(HttpMethod.Post, "/api/deduction-candidates", new
+            {
+                employeeId,
+                amount,
+                reason = "Unapproved absence",
+                note,
+                date = date ?? await FreeDeductionDateAsync(employeeId)
+            }, token);
+            var issueResponse = await _fixture.Client.SendAsync(issue);
+            issueResponse.EnsureSuccessStatusCode();
+            var created = await issueResponse.Content.ReadFromJsonAsync<JsonElement>();
+            return created.GetProperty("id").GetInt32();
+        }
+
+        /// <summary>
+        /// One deduction per employee/day, so every issue in this class needs a day of
+        /// its own: the nearest earlier day the employee has no deduction on yet.
+        /// </summary>
+        private async Task<string> FreeDeductionDateAsync(int employeeId)
+        {
+            using var scope = _fixture.Services.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<ReviveHrDbContext>();
+            var taken = await db.DeductionCandidates
+                .Where(c => c.EmployeeId == employeeId)
+                .Select(c => c.DeductionDate)
+                .ToListAsync();
+
+            var today = DateOnly.FromDateTime(DateTime.Today);
+            for (var offset = 1; offset <= 180; offset++)
+            {
+                var date = today.AddDays(-offset);
+                if (!taken.Contains(date))
+                {
+                    return date.ToString("yyyy-MM-dd");
+                }
+            }
+
+            throw new InvalidOperationException($"No free deduction date left for employee {employeeId}.");
+        }
+
+        /// <summary>
+        /// A rejected day is final for the branch too: re-issuing the same day is
+        /// refused instead of quietly reviving a waived deduction.
+        /// </summary>
+        [Fact]
+        public async Task Deduction_Issue_OnRejectedDay_Returns400()
+        {
+            var gym1Id = await GymIdByNameAsync("Revive Main Gym");
+            var token = await LoginSelectingGymAsync("omar@revive.hr", gym1Id);
+            var karimId = await OwnEmployeeIdAsync("karim@revive.hr");
+            var date = await FreeDeductionDateAsync(karimId);
+            var candidateId = await IssueDeductionAndGetIdAsync(token, karimId, 90m, "Rejected day re-issue test", date);
+
+            var reject = _fixture.AuthorizedRequest(HttpMethod.Post, $"/api/deduction-candidates/{candidateId}/branch-review", new
+            {
+                decision = "reject"
+            }, token);
+            Assert.Equal(HttpStatusCode.OK, (await _fixture.Client.SendAsync(reject)).StatusCode);
+
+            var again = _fixture.AuthorizedRequest(HttpMethod.Post, "/api/deduction-candidates", new
+            {
+                employeeId = karimId,
+                amount = 90m,
+                reason = "Unapproved absence",
+                note = "Second attempt on the rejected day",
+                date
+            }, token);
+            Assert.Equal(HttpStatusCode.BadRequest, (await _fixture.Client.SendAsync(again)).StatusCode);
         }
 
         [Fact]

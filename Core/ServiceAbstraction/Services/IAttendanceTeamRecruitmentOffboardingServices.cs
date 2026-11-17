@@ -4,17 +4,6 @@ using Shared.DataTransferObject.QueryParams;
 
 namespace ServiceAbstraction.Services
 {
-    /// <summary>
-    /// Branch/team attendance management (mock §22): the day view with late,    /// absent and missing-checkout breakdowns plus the paged roster, scoped to the
-    /// caller's team (Team Leader) or gym (Branch Manager). Corrections are manual
-    /// entries, not edits.
-    /// </summary>
-    public interface IAttendanceManagementService
-    {
-        Task<AttendanceManagementDto> GetDayAsync(
-            int actorUserId, int? activeGymId, AttendanceQueryParams query, CancellationToken cancellationToken = default);
-    }
-
     /// <summary>Team overview (mock §13 My Team): the caller's teams and a team-day view.</summary>
     public interface ITeamOverviewService
     {
@@ -51,5 +40,16 @@ namespace ServiceAbstraction.Services
 
         Task<OffboardingCaseDto> InitiateAsync(
             int actorUserId, int? activeGymId, InitiateOffboardingDto request, CancellationToken cancellationToken = default);
+
+        /// <summary>Moves the last working day of an in-flight leaving process (BM reschedule).</summary>
+        Task<OffboardingCaseDto> UpdateLastDayAsync(
+            int actorUserId, int? activeGymId, int caseId, UpdateOffboardingLastDayDto request, CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// Closes an in-flight leaving process without completing the separation:
+        /// the person stays employed and a new process may be initiated later.
+        /// </summary>
+        Task<OffboardingCaseDto> CloseAsync(
+            int actorUserId, int? activeGymId, int caseId, CancellationToken cancellationToken = default);
     }
 }

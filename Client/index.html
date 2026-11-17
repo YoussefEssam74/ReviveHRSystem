@@ -3,14 +3,40 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Cairo:wght@400;500;600;700;800&display=swap"
       rel="stylesheet"
     />
     <title>Revive HR</title>
+    <script>
+      // Pre-paint theme: apply the stored (or system) theme before React loads
+      // so the first paint never flashes the wrong colors. Keep in sync with
+      // src/contexts/ThemeContext.tsx (same storage key).
+      (function () {
+        try {
+          var stored = localStorage.getItem('revivehr-theme')
+          var dark = stored ? stored === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches
+          if (dark) document.documentElement.classList.add('dark')
+        } catch (e) {
+          /* storage unavailable — keep the light default */
+        }
+      })()
+      // Pre-paint language: set lang/dir before React loads so an Arabic
+      // session never flashes an LTR layout. Keep in sync with
+      // src/i18n/index.ts (same storage key).
+      (function () {
+        try {
+          var lang = localStorage.getItem('revivehr-lang') === 'ar' ? 'ar' : 'en'
+          document.documentElement.lang = lang
+          document.documentElement.dir = lang === 'ar' ? 'rtl' : 'ltr'
+        } catch (e) {
+          /* storage unavailable — keep English */
+        }
+      })()
+    </script>
   </head>
   <body>
     <div id="root"></div>

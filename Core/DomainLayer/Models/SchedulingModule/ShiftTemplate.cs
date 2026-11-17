@@ -14,6 +14,11 @@ namespace DomainLayer.Models.SchedulingModule
         public string Name { get; set; } = string.Empty;
         public TimeOnly StartTime { get; set; }
         public TimeOnly EndTime { get; set; }
+
+        /// <summary>Base #rrggbb color chosen by the manager; the API derives
+        /// readable badge background/text tones from it.</summary>
+        public string Color { get; set; } = "#0ea5e9";
+
         public bool IsActive { get; set; } = true;
     }
 }

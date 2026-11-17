@@ -1,3 +1,4 @@
+using System.Globalization;
 using AutoMapper;
 using DomainLayer.Contracts;
 using DomainLayer.Exceptions;
@@ -6,6 +7,9 @@ using DomainLayer.Models.EmployeeModule.Enums;
 using DomainLayer.Models.NotificationModule;
 using DomainLayer.Models.NotificationModule.Enums;
 using DomainLayer.Models.OrganizationModule;
+using DomainLayer.Models.PayrollModule;
+using DomainLayer.Models.PayrollModule.Enums;
+using DomainLayer.Models.SchedulingModule;
 using DomainLayer.Models.UserModule;
 using Service.Specifications;
 using ServiceAbstraction.Services;
@@ -17,11 +21,15 @@ namespace Service.Services
     /// <summary>
     /// Team Actions (mock 13.4-13.8 / 19). Scope resolves exactly like the rest of the
     /// management surface: the caller's teams in the active gym — every team for a
-    /// Branch Manager, otherwise the member-or-leader set from
-    /// <see cref="TeamsByMemberOrLeaderSpec"/>. The follow-up list covers all of those
-    /// teams unless a specific team is requested. A target outside that scope answers
-    /// 404 so the API never confirms another team's data exists; a caller with no team
-    /// in that gym gets 404 on every route here (fails closed).
+    /// Branch Manager, otherwise only the teams he leads
+    /// (<see cref="TeamsLedByUserSpec"/>; members answer NotFound). The follow-up list
+    /// covers all of those teams unless a specific team is requested. A target outside
+    /// that scope answers 404 so the API never confirms another team's data exists; a
+    /// caller with no team in that gym gets 404 on every route here (fails closed).
+    /// A Branch Manager additionally covers gym employees who are not assigned to
+    /// any team yet (the branch pages list them): he can raise a follow-up about any
+    /// of them and those items — which hang off no team — appear in his scope-wide
+    /// list. A Team Leader stays team-scoped and cannot reach them.
     /// </summary>
     public class TeamActionsService(
         IUnitOfWork unitOfWork,
@@ -32,12 +40,12 @@ namespace Service.Services
             int actorUserId, int? activeGymId, int? teamId, CancellationToken cancellationToken = default)
         {
             var gymId = RequireGym(activeGymId);
-            var teams = await MyTeamsAsync(actorUserId, gymId, cancellationToken);
+            var scope = await ResolveScopeAsync(actorUserId, gymId, cancellationToken);
 
             IEnumerable<TeamFollowUp> followUps;
             if (teamId is not null)
             {
-                var team = teams.FirstOrDefault(t => t.Id == teamId.Value)
+                var team = scope.Teams.FirstOrDefault(t => t.Id == teamId.Value)
                     ?? throw new NotFoundException("Team not found.");
 
                 followUps = await unitOfWork.GetRepository<TeamFollowUp, int>()
@@ -45,13 +53,18 @@ namespace Service.Services
             }
             else
             {
-                if (teams.Count == 0)
+                // Fail closed for a leader with no team in this gym. A Branch Manager
+                // still has a scope: the gym's teams plus its team-less employees.
+                if (scope.Teams.Count == 0 && !scope.IsBranchManager)
                 {
                     throw new NotFoundException("Team not found.");
                 }
 
-                followUps = await unitOfWork.GetRepository<TeamFollowUp, int>()
-                    .GetAllAsync(new TeamFollowUpsByTeamsSpec(teams.Select(t => t.Id).ToList()), cancellationToken);
+                followUps = scope.IsBranchManager
+                    ? await unitOfWork.GetRepository<TeamFollowUp, int>()
+                        .GetAllAsync(new TeamFollowUpsForGymScopeSpec(scope.Teams.Select(t => t.Id).ToList(), gymId), cancellationToken)
+                    : await unitOfWork.GetRepository<TeamFollowUp, int>()
+                        .GetAllAsync(new TeamFollowUpsByTeamsSpec(scope.Teams.Select(t => t.Id).ToList()), cancellationToken);
             }
 
             return followUps.Select(f => mapper.Map<TeamFollowUpDto>(f)).ToList();
@@ -61,7 +74,7 @@ namespace Service.Services
             int actorUserId, int? activeGymId, CreateTeamFollowUpDto request, CancellationToken cancellationToken = default)
         {
             var gymId = RequireGym(activeGymId);
-            var teams = await MyTeamsAsync(actorUserId, gymId, cancellationToken);
+            var scope = await ResolveScopeAsync(actorUserId, gymId, cancellationToken);
 
             var employee = await unitOfWork.GetRepository<Employee, int>()
                 .GetByIdAsync(new EmployeeProfileByIdSpec(request.EmployeeId), cancellationToken)
@@ -72,8 +85,17 @@ namespace Service.Services
                 throw new NotFoundException("Employee not found.");
             }
 
-            var team = teams.FirstOrDefault(t => t.Id == employee.TeamId)
-                ?? throw new NotFoundException("Employee not found.");
+            var team = scope.Teams.FirstOrDefault(t => t.Id == employee.TeamId);
+
+            // A Branch Manager's scope is the whole gym roster (the same rows the
+            // branch pages list), so an employee nobody has assigned to a team yet
+            // still takes a follow-up — it simply hangs off no team. Everyone else
+            // stays team-scoped and answers the concealment 404.
+            var teamlessInGymScope = employee.TeamId is null && scope.IsBranchManager;
+            if (team is null && !teamlessInGymScope)
+            {
+                throw new NotFoundException("Employee not found.");
+            }
 
             if (string.IsNullOrWhiteSpace(request.Description))
             {
@@ -84,10 +106,17 @@ namespace Service.Services
             var severity = ParseSeverity(request.Severity);
             var resolving = action == FollowUpActionType.Resolution;
 
+            // A Deduction action must have financial effect, not just a follow-up row:
+            // the same priced candidate the branch/HR queue reviews is raised here.
+            if (action == FollowUpActionType.Deduction)
+            {
+                await RaiseDeductionAsync(actorUserId, employee, request, cancellationToken);
+            }
+
             var followUp = new TeamFollowUp
             {
                 EmployeeId = employee.Id,
-                TeamId = team.Id,
+                TeamId = team?.Id,
                 ActionType = action,
                 Severity = severity,
                 Description = RequiredText(request.Description, 1000, "description"),
@@ -128,21 +157,27 @@ namespace Service.Services
         {
             var gymId = RequireGym(activeGymId);
             var record = await ResolveTeamMemberAsync(actorUserId, employeeId, gymId, cancellationToken);
+            EnsureNotSelf(actorUserId, record.Employee);
 
             // The reminder is recorded as a follow-up so the trail is preserved, and
-            // surfaced to the employee immediately through his inbox.
-            var followUp = new TeamFollowUp
+            // surfaced to the employee immediately through his inbox. A team-less
+            // employee has no follow-up list to hang the row on (TeamId is required),
+            // so only the notification is sent for him.
+            if (record.Team is not null)
             {
-                EmployeeId = record.Employee.Id,
-                TeamId = record.Team.Id,
-                ActionType = FollowUpActionType.Reminder,
-                Severity = FollowUpSeverity.Medium,
-                Description = "Attendance reminder",
-                LastAction = "Send reminder",
-                IsResolved = true,
-                RaisedByUserId = actorUserId
-            };
-            await unitOfWork.GetRepository<TeamFollowUp, int>().AddAsync(followUp, cancellationToken);
+                var followUp = new TeamFollowUp
+                {
+                    EmployeeId = record.Employee.Id,
+                    TeamId = record.Team.Id,
+                    ActionType = FollowUpActionType.Reminder,
+                    Severity = FollowUpSeverity.Medium,
+                    Description = "Attendance reminder",
+                    LastAction = "Send reminder",
+                    IsResolved = true,
+                    RaisedByUserId = actorUserId
+                };
+                await unitOfWork.GetRepository<TeamFollowUp, int>().AddAsync(followUp, cancellationToken);
+            }
 
             await NotifyAsync(record.Employee, "Reminder", "Your manager sent you a reminder.", cancellationToken);
             await unitOfWork.SaveChangesAsync(cancellationToken);
@@ -158,6 +193,7 @@ namespace Service.Services
 
             var gymId = RequireGym(activeGymId);
             var record = await ResolveTeamMemberAsync(actorUserId, employeeId, gymId, cancellationToken);
+            EnsureNotSelf(actorUserId, record.Employee);
 
             var message = new TeamMessage
             {
@@ -173,6 +209,139 @@ namespace Service.Services
 
         // ---------- helpers ----------
 
+        /// <summary>Named deduction sizes older clients still send, as a fraction of one day's pay.</summary>
+        private static readonly (string Term, decimal Multiplier, string Label)[] DeductionSizes =
+        [
+            ("Quarter Day", 0.25m, "Quarter Day"),
+            ("Half Day", 0.5m, "Half Day"),
+            ("3 Days", 3m, "3 Days"),
+            ("Day", 1m, "Day"),
+        ];
+
+        /// <summary>Hours in one priced day — the payroll convention (a late hour costs 0.125 day).</summary>
+        private const decimal HoursPerDay = 8m;
+
+        /// <summary>Most days one follow-up may deduct — guards a mistyped amount.</summary>
+        private const decimal MaxDeductionDays = 30m;
+
+        /// <summary>
+        /// Prices and raises the real <see cref="DeductionCandidate"/> behind a Deduction
+        /// follow-up. The day is unique per employee (a rejected day stays final), and
+        /// the amount comes from the shared salary/schedule pricing path — never from a
+        /// category label alone.
+        /// </summary>
+        private async Task RaiseDeductionAsync(
+            int actorUserId,
+            Employee employee,
+            CreateTeamFollowUpDto request,
+            CancellationToken cancellationToken)
+        {
+            var date = request.Date ?? DateOnly.FromDateTime(DateTime.UtcNow);
+            var (multiplier, label) = ParseDeductionSize(request.DeductionSize, request.Description);
+
+            var existing = await unitOfWork.GetRepository<DeductionCandidate, int>()
+                .GetAllAsync(new DeductionCandidatesByEmployeesSpec([employee.Id]), cancellationToken);
+            if (existing.Any(c => PayrollService.CandidateDayOf(c) == date))
+            {
+                throw new BadRequestException(
+                    "A deduction already exists for this employee on that date.");
+            }
+
+            var sheets = (await unitOfWork.GetRepository<PayrollEntry, int>()
+                    .GetAllAsync(new PayrollEntriesByEmployeeIdsSpec([employee.Id]), cancellationToken))
+                .ToList();
+            var monthStart = new DateOnly(date.Year, date.Month, 1);
+            var monthEnd = monthStart.AddMonths(1).AddDays(-1);
+            var assignments = (await unitOfWork.GetRepository<ShiftAssignment, int>()
+                    .GetAllAsync(
+                        new ShiftAssignmentsByEmployeeIdsRangeSpec([employee.Id], monthStart, monthEnd),
+                        cancellationToken))
+                .ToList();
+
+            var (daily, _) = DeductionPricing.DailyRate(employee, date, sheets, assignments);
+            if (daily <= 0)
+            {
+                throw new BadRequestException(
+                    "No salary is on file for this employee yet — add a salary or compensation before issuing a deduction.");
+            }
+
+            await unitOfWork.GetRepository<DeductionCandidate, int>().AddAsync(new DeductionCandidate
+            {
+                EmployeeId = employee.Id,
+                DeductionDate = date,
+                IsSystemGenerated = false,
+                Amount = Math.Round(daily * multiplier, 2),
+                DeductionDays = multiplier,
+                Reason = $"Deduction — {label}",
+                Note = OptionalText(request.Note, 1000, "note"),
+                IssuedBy = actorUserId,
+                IssuedAt = DateTime.UtcNow,
+                Status = DeductionStatus.Pending,
+            }, cancellationToken);
+        }
+
+        private static (decimal Multiplier, string Label) ParseDeductionSize(string? size, string? description)
+        {
+            var term = (size ?? string.Empty).Trim();
+            var match = DeductionSizes.FirstOrDefault(s =>
+                s.Term.Equals(term, StringComparison.OrdinalIgnoreCase));
+
+            // Older clients only sent the size inside "Deduction — 3 Days".
+            if (match.Term is null && term.Length == 0 && !string.IsNullOrWhiteSpace(description))
+            {
+                match = DeductionSizes.FirstOrDefault(s =>
+                    description.Contains(s.Term, StringComparison.OrdinalIgnoreCase));
+            }
+
+            if (match.Term is not null)
+            {
+                return (match.Multiplier, match.Label);
+            }
+
+            // Current clients send a free-form duration: "4 Hours", "2.5 Days".
+            return ParseDuration(term)
+                ?? throw new BadRequestException(
+                    "Deduction amount must be a number of hours or days between 0.25 and 30, "
+                    + "for example 4 Hours or 2.5 Days.");
+        }
+
+        /// <summary>
+        /// Reads a free-form duration as a fraction of one paid day. Hours divide by the
+        /// eight-hour payroll day, so one hour costs 0.125 day — the late-penalty rate.
+        /// </summary>
+        private static (decimal Multiplier, string Label)? ParseDuration(string term)
+        {
+            var parts = term.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            if (parts.Length != 2
+                || !decimal.TryParse(
+                    parts[0].Replace(',', '.'), NumberStyles.Number, CultureInfo.InvariantCulture, out var amount)
+                || amount <= 0)
+            {
+                return null;
+            }
+
+            var unit = parts[1];
+            var multiplier = unit.StartsWith("hour", StringComparison.OrdinalIgnoreCase)
+                ? amount / HoursPerDay
+                : unit.StartsWith("day", StringComparison.OrdinalIgnoreCase)
+                    ? amount
+                    : -1m;
+            if (multiplier <= 0 || multiplier > MaxDeductionDays)
+            {
+                return null;
+            }
+
+            var isHour = unit.StartsWith("hour", StringComparison.OrdinalIgnoreCase);
+            var noun = (isHour, amount == 1m) switch
+            {
+                (true, true) => "Hour",
+                (true, false) => "Hours",
+                (false, true) => "Day",
+                (false, false) => "Days",
+            };
+            return (multiplier, $"{amount.ToString("0.##", CultureInfo.InvariantCulture)} {noun}");
+        }
+
         private async Task NotifyAsync(Employee employee, string title, string body, CancellationToken cancellationToken)
         {
             await unitOfWork.GetRepository<Notification, int>().AddAsync(new Notification
@@ -182,6 +351,17 @@ namespace Service.Services
                 Message = body,
                 Type = NotificationType.SystemUpdate
             }, cancellationToken);
+        }
+
+        // A manager's own employee row sits inside his own roster, so without this
+        // guard a self-reminder would silently deliver the notification to the
+        // sender's own inbox instead of a real target.
+        private static void EnsureNotSelf(int actorUserId, Employee employee)
+        {
+            if (employee.UserId == actorUserId)
+            {
+                throw new BadRequestException("You cannot send this to your own account.");
+            }
         }
 
         private async Task<TeamFollowUpDto> MapAsync(int followUpId, CancellationToken cancellationToken)
@@ -211,8 +391,21 @@ namespace Service.Services
                 throw new NotFoundException("Follow-up not found.");
             }
 
-            var teams = await MyTeamsAsync(actorUserId, gymId, cancellationToken);
-            if (!teams.Any(t => t.Id == followUp.TeamId))
+            var scope = await ResolveScopeAsync(actorUserId, gymId, cancellationToken);
+
+            // A team-less follow-up only exists inside a Branch Manager's gym scope;
+            // the employee's gym was already checked above.
+            if (followUp.TeamId is null)
+            {
+                if (!scope.IsBranchManager)
+                {
+                    throw new NotFoundException("Follow-up not found.");
+                }
+
+                return followUp;
+            }
+
+            if (!scope.Teams.Any(t => t.Id == followUp.TeamId.Value))
             {
                 throw new NotFoundException("Follow-up not found.");
             }
@@ -220,17 +413,25 @@ namespace Service.Services
             return followUp;
         }
 
-        private async Task<List<Team>> MyTeamsAsync(int actorUserId, int gymId, CancellationToken cancellationToken)
+        /// <summary>
+        /// The caller's reach in one gym: the teams he may act on and whether he is a
+        /// Branch Manager (whose scope is the whole roster, team-less rows included).
+        /// </summary>
+        private async Task<(List<Team> Teams, bool IsBranchManager)> ResolveScopeAsync(
+            int actorUserId, int gymId, CancellationToken cancellationToken)
         {
             // Branch Managers see every team in the gym without belonging to any of
-            // them; everyone else resolves the member-or-leader set from his profile.
+            // them; everyone else is leader-only — just the teams he leads (plain
+            // members of a team do not get the team management surface).
             var roleNames = await userAccess.GetGymRoleNamesAsync(actorUserId, gymId, cancellationToken);
-            if (roleNames.Contains(RoleNames.BranchManager, StringComparer.Ordinal))
+            var isBranchManager = roleNames.Contains(RoleNames.BranchManager, StringComparer.Ordinal);
+
+            if (isBranchManager)
             {
                 var gymTeams = await unitOfWork.GetRepository<Team, int>()
                     .GetAllAsync(new TeamsByGymSpec(gymId), cancellationToken);
 
-                return gymTeams.ToList();
+                return (gymTeams.ToList(), true);
             }
 
             var employee = await unitOfWork.GetRepository<Employee, int>()
@@ -238,12 +439,12 @@ namespace Service.Services
                 ?? throw new UnAuthorizedException("This account has no employee profile.");
 
             var teams = await unitOfWork.GetRepository<Team, int>()
-                .GetAllAsync(new TeamsByMemberOrLeaderSpec(employee.Id, gymId), cancellationToken);
+                .GetAllAsync(new TeamsLedByUserSpec(employee.Id, gymId), cancellationToken);
 
-            return teams.ToList();
+            return (teams.ToList(), false);
         }
 
-        private async Task<(Team Team, Employee Employee)> ResolveTeamMemberAsync(
+        private async Task<(Team? Team, Employee Employee)> ResolveTeamMemberAsync(
             int actorUserId, int employeeId, int gymId, CancellationToken cancellationToken)
         {
             var employee = await unitOfWork.GetRepository<Employee, int>()
@@ -257,12 +458,25 @@ namespace Service.Services
                 throw new NotFoundException("Employee not found.");
             }
 
-            var teams = await MyTeamsAsync(actorUserId, gymId, cancellationToken);
+            var scope = await ResolveScopeAsync(actorUserId, gymId, cancellationToken);
 
-            var team = teams.FirstOrDefault(t => t.Id == employee.TeamId)
-                ?? throw new NotFoundException("Employee not found.");
+            var team = scope.Teams.FirstOrDefault(t => t.Id == employee.TeamId);
+            if (team is not null)
+            {
+                return (team, employee);
+            }
 
-            return (team, employee);
+            // The branch pages (attendance grid, employee directory) list the whole gym
+            // roster, including employees nobody has put in a team yet — a Branch
+            // Manager acting inside his own gym covers them too, otherwise the remind /
+            // message buttons on rows that are plainly visible answered a misleading
+            // "Employee not found." Everyone else stays fail-closed.
+            if (employee.TeamId is null && scope.IsBranchManager)
+            {
+                return (null, employee);
+            }
+
+            throw new NotFoundException("Employee not found.");
         }
 
         private static FollowUpActionType ParseAction(string action) =>

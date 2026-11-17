@@ -1,3 +1,4 @@
+using DomainLayer.Models.EmployeeModule;
 using Shared.DataTransferObject.EmployeeProfile;
 
 namespace ServiceAbstraction.Services

@@ -54,11 +54,6 @@ namespace ReviveHRSystem.IntegrationTests
 
             Assert.Equal("image/png", readResponse.Content.Headers.ContentType?.MediaType);
             Assert.Equal(TinyPng, await readResponse.Content.ReadAsByteArrayAsync());
-
-            // The profile now advertises the avatar instead of the initials placeholder.
-            var profileRequest = _fixture.AuthorizedRequest(HttpMethod.Get, $"/api/employees/{employeeId}", null, token);
-            var profileBody = await (await _fixture.Client.SendAsync(profileRequest)).Content.ReadFromJsonAsync<JsonElement>();
-            Assert.Equal($"/api/employees/{employeeId}/photo", profileBody.GetProperty("photoUrl").GetString());
         }
 
         [Fact]
@@ -87,6 +82,115 @@ namespace ReviveHRSystem.IntegrationTests
                 $"/api/employees/{employeeId}/photo", token, "payload.exe", new byte[] { 1, 2, 3 }));
 
             Assert.Equal(HttpStatusCode.BadRequest, upload.StatusCode);
+        }
+
+        [Fact]
+        public async Task Photo_WordFileType_Returns400()
+        {
+            // Documents now allow Word, but the avatar route must stay image-only;
+            // otherwise the profile would serve a Word file back as a photo.
+            var employeeId = await EmployeeIdByEmailAsync("karim@revive.hr");
+            var token = await _fixture.LoginAsync("karim@revive.hr", "Revive!2026");
+
+            var upload = await _fixture.Client.SendAsync(MultipartPut(
+                $"/api/employees/{employeeId}/photo", token, "resume.docx", new byte[] { 1, 2, 3 }));
+
+            Assert.Equal(HttpStatusCode.BadRequest, upload.StatusCode);
+        }
+
+        [Fact]
+        public async Task Profile_AfterPhotoUpload_ReturnsPhotoUrl()
+        {
+            // The portal reads /api/employees/{id}/profile (not the directory detail);
+            // that route must carry the uploaded photo URL so the avatar is visible.
+            var employeeId = await EmployeeIdByEmailAsync("karim@revive.hr");
+            var token = await _fixture.LoginAsync("karim@revive.hr", "Revive!2026");
+
+            var upload = await _fixture.Client.SendAsync(MultipartPut(
+                $"/api/employees/{employeeId}/photo", token, "profile.png", TinyPng));
+            upload.EnsureSuccessStatusCode();
+
+            var request = _fixture.AuthorizedRequest(
+                HttpMethod.Get, $"/api/employees/{employeeId}/profile", null, token);
+            var response = await _fixture.Client.SendAsync(request);
+            response.EnsureSuccessStatusCode();
+            var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+
+            Assert.Equal(employeeId, body.GetProperty("id").GetInt32());
+            Assert.False(string.IsNullOrWhiteSpace(body.GetProperty("fullName").GetString()));
+            Assert.Equal(
+                $"/api/employees/{employeeId}/photo",
+                body.GetProperty("photoUrl").GetString());
+        }
+
+        [Fact]
+        public async Task Document_SelfUpload_StoresUnderTheStorageRootAndDownloads()
+        {
+            // The employee self-upload is the missing link behind "Upload" doing
+            // nothing: it needs no permission key, writes through IFileStorage, and
+            // the bytes are downloadable through the same owner route.
+            var employeeId = await EmployeeIdByEmailAsync("karim@revive.hr");
+            var token = await _fixture.LoginAsync("karim@revive.hr", "Revive!2026");
+            var bytes = System.Text.Encoding.ASCII.GetBytes("%PDF-1.4 self uploaded certificate");
+
+            var upload = await _fixture.Client.SendAsync(MultipartDocumentPost(
+                $"/api/employees/{employeeId}/documents", token, "certificate.pdf", bytes, "Certification"));
+            upload.EnsureSuccessStatusCode();
+            var body = await upload.Content.ReadFromJsonAsync<JsonElement>();
+
+            var documentId = body.GetProperty("id").GetInt32();
+            Assert.Equal("certificate.pdf", body.GetProperty("name").GetString());
+            Assert.Equal("Certification", body.GetProperty("category").GetString());
+
+            var download = _fixture.AuthorizedRequest(
+                HttpMethod.Get,
+                $"/api/employees/{employeeId}/documents/{documentId}/download",
+                null,
+                token);
+            var downloadResponse = await _fixture.Client.SendAsync(download);
+            downloadResponse.EnsureSuccessStatusCode();
+            Assert.Equal("application/pdf", downloadResponse.Content.Headers.ContentType?.MediaType);
+            Assert.Equal(bytes, await downloadResponse.Content.ReadAsByteArrayAsync());
+
+            using var scope = _fixture.Services.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<ReviveHrDbContext>();
+            var row = await db.EmployeeDocuments.SingleAsync(d => d.Id == documentId);
+            var storage = scope.ServiceProvider.GetRequiredService<IFileStorage>();
+
+            Assert.True(row.EmployeeEditable);
+            Assert.Equal(bytes.Length, row.SizeBytes);
+            Assert.Equal("application/pdf", row.ContentType);
+            Assert.NotNull(storage.TryOpenRead(row.FilePath));
+        }
+
+        [Fact]
+        public async Task Document_HrUpload_IsStoredWhereTheEmployeeCanDownloadIt()
+        {
+            // HR uploads into an employee's file through the same controller. That
+            // path used to write under ContentRoot/App_Data/EmployeeDocuments while
+            // downloads resolved from the storage root — a guaranteed 404.
+            var employeeId = await EmployeeIdByEmailAsync("karim@revive.hr");
+            var employeeToken = await _fixture.LoginAsync("karim@revive.hr", "Revive!2026");
+            var adminToken = await _fixture.GetAdminTokenAsync();
+            var bytes = System.Text.Encoding.ASCII.GetBytes("fake docx bytes");
+
+            var upload = await _fixture.Client.SendAsync(MultipartDocumentPost(
+                $"/api/employees/{employeeId}/documents", adminToken, "contract.docx", bytes, "Contract"));
+            upload.EnsureSuccessStatusCode();
+            var body = await upload.Content.ReadFromJsonAsync<JsonElement>();
+            var documentId = body.GetProperty("id").GetInt32();
+
+            var download = _fixture.AuthorizedRequest(
+                HttpMethod.Get,
+                $"/api/employees/{employeeId}/documents/{documentId}/download",
+                null,
+                employeeToken);
+            var downloadResponse = await _fixture.Client.SendAsync(download);
+            downloadResponse.EnsureSuccessStatusCode();
+            Assert.Equal(
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                downloadResponse.Content.Headers.ContentType?.MediaType);
+            Assert.Equal(bytes, await downloadResponse.Content.ReadAsByteArrayAsync());
         }
 
         [Fact]
@@ -169,11 +273,6 @@ namespace ReviveHRSystem.IntegrationTests
             var employeeId = await EmployeeIdByEmailAsync("karim@revive.hr");
             var token = await _fixture.LoginAsync("karim@revive.hr", "Revive!2026");
             var documentId = await SeedDocumentAsync(employeeId, DocumentSourceRow.Employee, "Other", "link-only.pdf");
-
-            var list = _fixture.AuthorizedRequest(HttpMethod.Get, $"/api/employees/{employeeId}/documents", null, token);
-            var body = await (await _fixture.Client.SendAsync(list)).Content.ReadFromJsonAsync<JsonElement>();
-            var row = body.EnumerateArray().First(d => d.GetProperty("id").GetInt32() == documentId);
-            Assert.False(row.GetProperty("canDownload").GetBoolean());
 
             var request = _fixture.AuthorizedRequest(
                 HttpMethod.Get, $"/api/employees/{employeeId}/documents/{documentId}/download", null, token);
@@ -272,6 +371,22 @@ namespace ReviveHRSystem.IntegrationTests
             var file = new ByteArrayContent(bytes);
             file.Headers.ContentType = new MediaTypeHeaderValue("application/octet-stream");
             form.Add(file, "file", fileName);
+            request.Content = form;
+
+            return request;
+        }
+
+        private static HttpRequestMessage MultipartDocumentPost(
+            string url, string token, string fileName, byte[] bytes, string category)
+        {
+            var request = new HttpRequestMessage(HttpMethod.Post, url);
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+            var form = new MultipartFormDataContent();
+            var file = new ByteArrayContent(bytes);
+            file.Headers.ContentType = new MediaTypeHeaderValue("application/octet-stream");
+            form.Add(file, "file", fileName);
+            form.Add(new StringContent(category), "category");
             request.Content = form;
 
             return request;

@@ -10,9 +10,8 @@ using Xunit;
 namespace ReviveHRSystem.IntegrationTests
 {
     /// <summary>
-    /// GET /api/me - session context: identity, gym options, per-gym role, led team
-    /// and effective feature levels (ADR-003 Amendment 1). Feature levels are
-    /// resolved for the gym the access token is scoped to.
+    /// GET /api/me - session context: identity, gym options, per-gym role and led team.
+    /// The active gym comes from the gym the access token is scoped to.
     /// </summary>
     [Collection(ApiTestFixture.CollectionName)]
     public class MeControllerTests
@@ -28,11 +27,6 @@ namespace ReviveHRSystem.IntegrationTests
             var body = await response.Content.ReadFromJsonAsync<JsonElement>();
             return (response.StatusCode, body);
         }
-
-        private static int LevelOf(JsonElement body, string feature) =>
-            body.GetProperty("featureLevels").TryGetProperty(feature, out var level)
-                ? level.GetInt32()
-                : 0;
 
         [Fact]
         public async Task GetMe_WithoutToken_Returns401()
@@ -57,21 +51,10 @@ namespace ReviveHRSystem.IntegrationTests
 
             var gym1Name = await Gym1NameAsync();
             Assert.Equal(gym1Name, body.GetProperty("activeGym").GetProperty("gymName").GetString());
-
-            // Branch Manager bundle: management features at Edit, evaluations View, rest None.
-            Assert.Equal(2, LevelOf(body, "employees"));
-            Assert.Equal(2, LevelOf(body, "attendance"));
-            Assert.Equal(2, LevelOf(body, "schedule"));
-            Assert.Equal(2, LevelOf(body, "requests"));
-            Assert.Equal(2, LevelOf(body, "recruitment"));
-            Assert.Equal(2, LevelOf(body, "offboarding"));
-            Assert.Equal(1, LevelOf(body, "evaluations"));
-            Assert.Equal(0, LevelOf(body, "payroll"));
-            Assert.Equal(0, LevelOf(body, "reports"));
         }
 
         [Fact]
-        public async Task GetMe_TeamLeaderAtActiveGym_KeepsFullCapabilityLevels()
+        public async Task GetMe_TeamLeaderAtActiveGym_ReportsRoleAfterSwitch()
         {
             // Same user as the Branch Manager case, active gym switched to gym2 where he is Team Leader.
             var switchRequest = _fixture.AuthorizedRequest(
@@ -86,19 +69,10 @@ namespace ReviveHRSystem.IntegrationTests
 
             Assert.Equal(HttpStatusCode.OK, status);
             Assert.Equal("Team Leader", body.GetProperty("roleInActiveGym").GetString());
-
-            // Full parity with Branch Manager at feature level (ADR-003 Amendment 1):
-            // scope is the only difference, and it is resolved from the server side.
-            Assert.Equal(2, LevelOf(body, "employees"));
-            Assert.Equal(2, LevelOf(body, "attendance"));
-            Assert.Equal(2, LevelOf(body, "schedule"));
-            Assert.Equal(2, LevelOf(body, "requests"));
-            Assert.Equal(1, LevelOf(body, "evaluations"));
-            Assert.Equal(0, LevelOf(body, "payroll"));
         }
 
         [Fact]
-        public async Task GetMe_PlainEmployee_HasNoManagementLevels()
+        public async Task GetMe_PlainEmployee_ReportsRole()
         {
             var token = await _fixture.LoginAsync("karim@revive.hr", "Revive!2026");
 
@@ -106,11 +80,10 @@ namespace ReviveHRSystem.IntegrationTests
 
             Assert.Equal(HttpStatusCode.OK, status);
             Assert.Equal("Employee", body.GetProperty("roleInActiveGym").GetString());
-            Assert.Empty(body.GetProperty("featureLevels").EnumerateObject());
         }
 
         [Fact]
-        public async Task GetMe_HRUser_ReportsHRBundle()
+        public async Task GetMe_HRUser_ReportsRole()
         {
             var token = await _fixture.LoginAsync("hr@revive.hr", "Revive!2026");
 
@@ -118,15 +91,90 @@ namespace ReviveHRSystem.IntegrationTests
 
             Assert.Equal(HttpStatusCode.OK, status);
             Assert.Equal("HR", body.GetProperty("roleInActiveGym").GetString());
-            Assert.Equal(2, LevelOf(body, "employees"));
-            Assert.Equal(2, LevelOf(body, "evaluations"));
-            Assert.Equal(1, LevelOf(body, "payroll"));
-            Assert.Equal(2, LevelOf(body, "announcements"));
-            Assert.Equal(1, LevelOf(body, "audit"));
         }
 
         [Fact]
-        public async Task GetMe_SuperAdmin_HasWildcardAccess()
+        public async Task GetMe_HRUser_ReportsFeatureLevelsForActiveGym()
+        {
+            var token = await _fixture.LoginAsync("hr@revive.hr", "Revive!2026");
+
+            var (status, body) = await GetMeAsync(token);
+
+            Assert.Equal(HttpStatusCode.OK, status);
+            // The HR bundle holds a write key for every writable feature, so the
+            // console gates open; reports/audit are read-only and top out at View.
+            Assert.Equal(2, Level(body, "employees"));
+            Assert.Equal(2, Level(body, "attendance"));
+            Assert.Equal(2, Level(body, "schedule"));
+            Assert.Equal(2, Level(body, "requests"));
+            Assert.Equal(2, Level(body, "payroll"));
+            Assert.Equal(2, Level(body, "evaluations"));
+            Assert.Equal(2, Level(body, "recruitment"));
+            Assert.Equal(2, Level(body, "offboarding"));
+            Assert.Equal(2, Level(body, "documents"));
+            Assert.Equal(2, Level(body, "announcements"));
+            Assert.Equal(1, Level(body, "reports"));
+            Assert.Equal(1, Level(body, "audit"));
+        }
+
+        [Fact]
+        public async Task GetMe_BranchManager_ReportsPerGymFeatureLevels()
+        {
+            // Omar holds the Branch Manager bundle in gym1 and Team Leader in gym2 —
+            // levels must follow the ACTIVE gym, not the union of both.
+            var token = await LoginOmarAtGym1Async();
+
+            var (status, body) = await GetMeAsync(token);
+
+            Assert.Equal(HttpStatusCode.OK, status);
+            Assert.Equal(2, Level(body, "employees"));    // employees.status.change
+            Assert.Equal(2, Level(body, "attendance"));    // attendance.edit + manual_entry
+            Assert.Equal(2, Level(body, "schedule"));      // schedule.manage
+            Assert.Equal(2, Level(body, "recruitment"));   // vacancy_request.create
+            Assert.Equal(1, Level(body, "requests"));      // requests.view only
+            Assert.Equal(1, Level(body, "evaluations"));   // evaluations.view only
+            Assert.Equal(1, Level(body, "documents"));     // employees.documents.view only
+            // Offboarding, reports and audit are HR-only — the BM bundle has no key.
+            Assert.Equal(0, Level(body, "offboarding"));
+            Assert.Equal(0, Level(body, "reports"));
+            Assert.Equal(0, Level(body, "audit"));
+        }
+
+        [Fact]
+        public async Task GetMe_PlainEmployee_ReportsNoConsoleFeatures()
+        {
+            var token = await _fixture.LoginAsync("karim@revive.hr", "Revive!2026");
+
+            var (status, body) = await GetMeAsync(token);
+
+            Assert.Equal(HttpStatusCode.OK, status);
+            // The Employee role carries no permission keys — self-service is scope-based,
+            // so every console feature is None and the HR console nav stays empty.
+            Assert.Equal(0, Level(body, "employees"));
+            Assert.Equal(0, Level(body, "payroll"));
+            Assert.Equal(0, Level(body, "audit"));
+        }
+
+        [Fact]
+        public async Task GetMe_SuperAdmin_ReportsEditOnEveryFeature()
+        {
+            // Top Management bypasses permission checks (ADR-003), so it reports Edit
+            // everywhere even though the seeded account holds no explicit grants.
+            var token = await _fixture.GetAdminTokenAsync();
+
+            var (status, body) = await GetMeAsync(token);
+
+            Assert.Equal(HttpStatusCode.OK, status);
+            var levels = body.GetProperty("featureLevels");
+            Assert.True(levels.EnumerateObject().Any(), "featureLevels must not be empty.");
+            Assert.All(levels.EnumerateObject(), entry => Assert.Equal(2, entry.Value.GetInt32()));
+        }
+
+        private static int Level(JsonElement body, string feature) =>
+            body.GetProperty("featureLevels").TryGetProperty(feature, out var level) ? level.GetInt32() : -1;
+
+        [Fact]
+        public async Task GetMe_SuperAdmin_ReportsRoleAfterGymSwitch()
         {
             // Super Admin holds two gyms, so login issues an unscoped token: the
             // active gym is chosen with the in-session switcher (ADR-002 Amendment 1).
@@ -142,9 +190,6 @@ namespace ReviveHRSystem.IntegrationTests
 
             Assert.Equal(HttpStatusCode.OK, status);
             Assert.Equal("Super Admin", body.GetProperty("roleInActiveGym").GetString());
-            // The seeded wildcard grant covers payroll - a feature no management bundle grants.
-            Assert.Equal(2, LevelOf(body, "payroll"));
-            Assert.Equal(2, LevelOf(body, "audit"));
         }
 
         private async Task<string> LoginOmarAtGym1Async()

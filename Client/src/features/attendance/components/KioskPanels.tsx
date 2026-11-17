@@ -1,55 +1,111 @@
 import { useEffect, useState } from 'react'
-import { CheckCircle2, LogOut, XCircle } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
+import { CheckCircle2, Clock3, LogOut, XCircle } from 'lucide-react'
 import type { StationSummaryRecord } from '../api/attendance.api'
 import { Button } from '../../../components/ui/button'
+import { activeLocale, formatTime, formatTimeOfDay } from '../../../lib/format'
+import { cn } from '../../../lib/utils'
 import type { AttendanceResult, FaceMatchDetail } from '../types'
 
 const STATUS_BADGE: Record<string, string> = {
   PRESENT: 'bg-emerald-100 text-emerald-800',
   LEFT: 'bg-slate-200 text-slate-600',
-  DAY_OFF: 'bg-slate-100 text-slate-500',
+  SCHEDULED: 'bg-sky-100 text-sky-800',
+  ABSENT: 'bg-red-100 text-red-700',
 }
 
+/** English labels double as i18next keys; they are translated where rendered. */
 const STATUS_LABEL: Record<string, string> = {
   PRESENT: 'Present',
   LEFT: 'Left',
-  DAY_OFF: 'Day off',
+  SCHEDULED: 'Not in yet',
+  ABSENT: 'Absent',
 }
 
-function formatClock(iso: string | null | undefined): string {
-  if (!iso) return '-'
-  const date = new Date(iso)
-  return Number.isNaN(date.getTime()) ? '-' : date.toLocaleTimeString()
+function formatClock(value: string | null | undefined): string {
+  if (!value) return '—'
+  // The API sends the kiosk-local "HH:mm"; tolerate an ISO stamp from older payloads.
+  if (!value.includes('T')) return formatTimeOfDay(value)
+  return formatTime(value)
 }
 
-/** One row of the kiosk dashboard feed. */
+/** One row of the kiosk roster: shift, punches, and lateness/early-leave minutes. */
 export function FeedRow({ row }: { row: StationSummaryRecord }) {
+  const { t } = useTranslation()
   const status = (row.status ?? '').toUpperCase()
   const isManual = (row.method ?? '').toUpperCase() === 'MANUAL'
+  const late = row.lateMinutes ?? 0
+  const early = row.earlyLeaveMinutes ?? 0
 
   return (
-    <div className="flex items-center justify-between gap-2 rounded-lg border border-charcoal-100 bg-white px-2.5 py-2">
-      <div className="min-w-0">
-        <p className="truncate text-xs font-bold text-charcoal-800">{row.employeeName || row.employeeId}</p>
-        <p className="truncate font-mono text-[10px] leading-tight text-charcoal-500">
-          {row.employeeId}
-          {row.attendanceStatus ? ' - ' + row.attendanceStatus : ''}
-        </p>
+    <div className="rounded-lg border border-charcoal-100 bg-white px-2.5 py-2">
+      <div className="flex items-center justify-between gap-2">
+        <div className="min-w-0">
+          <p className="truncate text-xs font-bold text-charcoal-800">{row.employeeName || row.employeeId}</p>
+          <p className="truncate font-mono text-[10px] leading-tight text-charcoal-500">{row.employeeId}</p>
+        </div>
+        <div className="flex shrink-0 items-center gap-1.5">
+          {isManual && (
+            <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-800">{t('manual')}</span>
+          )}
+          <span
+            className={
+              'rounded px-1.5 py-0.5 text-[10px] font-bold ' +
+              (STATUS_BADGE[status] ?? 'bg-slate-100 text-slate-500')
+            }
+          >
+            {t(STATUS_LABEL[status] ?? status)}
+          </span>
+        </div>
       </div>
-      <div className="flex shrink-0 items-center gap-1.5">
-        {isManual && (
-          <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-800">manual</span>
-        )}
-        <span
-          className={
-            'rounded px-1.5 py-0.5 text-[10px] font-bold ' +
-            (STATUS_BADGE[status] ?? 'bg-slate-100 text-slate-500')
-          }
-        >
-          {STATUS_LABEL[status] ?? status}
-        </span>
-        <span className="font-mono text-[10px] tabular-nums text-charcoal-400">{formatClock(row.lastEventTime)}</span>
+
+      {/* Shift + punches, each on its own labelled line so the roster reads at a glance */}
+      <div className="mt-1.5 space-y-1 text-[10px]">
+        <div className="flex items-center justify-between gap-2">
+          <span className="flex min-w-0 items-center gap-1">
+            <Clock3 className="h-3 w-3 shrink-0 text-charcoal-400" aria-hidden="true" />
+            <span className="truncate font-semibold text-charcoal-700">{row.shiftName || t('Shift')}</span>
+          </span>
+          <span className="shrink-0 font-mono tabular-nums text-charcoal-600">
+            {formatTimeOfDay(row.shiftStart)} – {formatTimeOfDay(row.shiftEnd)}
+          </span>
+        </div>
+        <div className="grid grid-cols-2 gap-1.5">
+          <span
+            className={cn(
+              'inline-flex items-center justify-between gap-1 rounded px-1.5 py-0.5 font-mono tabular-nums',
+              row.checkIn ? 'bg-emerald-50 text-emerald-700' : 'bg-charcoal-50 text-charcoal-400',
+            )}
+          >
+            <span className="font-sans text-[9px] font-bold uppercase tracking-wide">{t('In')}</span>
+            {formatClock(row.checkIn)}
+          </span>
+          <span
+            className={cn(
+              'inline-flex items-center justify-between gap-1 rounded px-1.5 py-0.5 font-mono tabular-nums',
+              row.checkOut ? 'bg-sky-50 text-sky-700' : 'bg-charcoal-50 text-charcoal-400',
+            )}
+          >
+            <span className="font-sans text-[9px] font-bold uppercase tracking-wide">{t('Out')}</span>
+            {formatClock(row.checkOut)}
+          </span>
+        </div>
       </div>
+
+      {(late > 0 || early > 0) && (
+        <div className="mt-1 flex flex-wrap items-center gap-1">
+          {late > 0 && (
+            <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-800">
+              {t('Late {{minutes}}m', { minutes: late })}
+            </span>
+          )}
+          {early > 0 && (
+            <span className="rounded bg-orange-100 px-1.5 py-0.5 text-[10px] font-semibold text-orange-800">
+              {t('Left early {{minutes}}m', { minutes: early })}
+            </span>
+          )}
+        </div>
+      )}
     </div>
   )
 }
@@ -70,27 +126,34 @@ export function ResultOverlay({
   rejection: string | null
   onDismiss: () => void
 }) {
+  const { t } = useTranslation()
   const isError = rejection !== null && rejection !== undefined
   if (!result && !isError) return null
 
   return (
     <div className="absolute inset-0 z-20 flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm fade-in">
+      {/* Always-dark panel: bg-*-950 never flips with the theme, while dark
+          mode remaps text-*-50/100/200 to dark tints (they pair with pastel
+          backgrounds there). Literal light hexes keep this copy readable in
+          both modes — the same convention the rest of the kiosk uses. */}
       <div
         role="alertdialog"
         aria-modal="true"
-        aria-label={isError ? 'Attendance rejected' : 'Attendance recorded'}
+        aria-label={isError ? t('Attendance rejected') : t('Attendance recorded')}
         className={
           'w-full max-w-md rounded-2xl border p-6 shadow-2xl ' +
-          (isError ? 'border-red-500/30 bg-red-950/95 text-red-50' : 'border-emerald-500/30 bg-emerald-950/95 text-emerald-50')
+          (isError
+            ? 'border-red-500/30 bg-red-950/95 text-[#fef2f2]'
+            : 'border-emerald-500/30 bg-emerald-950/95 text-[#ecfdf5]')
         }
       >
         {isError ? (
           <>
             <div className="flex items-center gap-3">
               <XCircle className="h-8 w-8 text-red-400" aria-hidden="true" />
-              <h2 className="text-lg font-bold">Attendance rejected</h2>
+              <h2 className="text-lg font-bold">{t('Attendance rejected')}</h2>
             </div>
-            <p className="mt-3 text-sm text-red-200">{rejection}</p>
+            <p className="mt-3 text-sm text-[#fecaca]">{rejection}</p>
           </>
         ) : (
           result && (
@@ -98,37 +161,66 @@ export function ResultOverlay({
               <div className="flex items-center gap-3">
                 <CheckCircle2 className="h-8 w-8 text-emerald-400" aria-hidden="true" />
                 <h2 className="text-lg font-bold">
-                  {result.type === 'OUT' ? 'Check-out recorded' : 'Check-in recorded'}
+                  {result.type === 'OUT' ? t('Check-out recorded') : t('Check-in recorded')}
                 </h2>
               </div>
               <p className="mt-3 text-base font-semibold">{result.employeeName ?? result.employeeId}</p>
-              <dl className="mt-2 space-y-1 text-sm text-emerald-200">
+              <dl className="mt-2 space-y-1 text-sm text-[#a7f3d0]">
                 <div className="flex justify-between gap-3">
-                  <dt>Employee</dt>
+                  <dt>{t('Employee')}</dt>
                   <dd className="font-mono">{result.employeeId}</dd>
                 </div>
                 <div className="flex justify-between gap-3">
-                  <dt>Branch</dt>
+                  <dt>{t('Branch')}</dt>
                   <dd>{result.gymName}</dd>
                 </div>
                 <div className="flex justify-between gap-3">
-                  <dt>Time</dt>
+                  <dt>{t('Time')}</dt>
                   <dd>{formatClock(result.timestamp)}</dd>
                 </div>
                 <div className="flex justify-between gap-3">
-                  <dt>Status</dt>
+                  <dt>{t('Status')}</dt>
                   <dd>{result.attendanceStatus}</dd>
                 </div>
+                {result.shiftComparison === 'UNSCHEDULED' && (
+                  <div className="mt-2 rounded-lg border border-amber-400/40 bg-amber-500/10 p-2.5 text-xs text-[#fde68a]">
+                    <p className="font-semibold">{t('Unscheduled / off day')}</p>
+                    <p className="mt-0.5">{t('No shift was scheduled for today — a request was sent to the branch manager and HR for cover/extra-day approval (1 or 2 days).')}</p>
+                  </div>
+                )}
+                {result.shiftComparison === 'EARLY_LEAVE' && (
+                  <div className="mt-2 rounded-lg border border-amber-400/40 bg-amber-500/10 p-2.5 text-xs text-[#fde68a]">
+                    <p className="font-semibold">{t('Early leaving warning')}</p>
+                    <p className="mt-0.5">
+                      {t('You checked out {{minutes}} min before your shift ends — your branch manager and HR were notified.', {
+                        minutes: result.earlyLeaveMinutes ?? 0,
+                      })}
+                    </p>
+                  </div>
+                )}
+                {result.shiftComparison === 'EARLY_LEAVE_COVERED' && (
+                  <div className="mt-2 rounded-lg border border-emerald-400/40 bg-emerald-500/10 p-2.5 text-xs text-[#bbf7d0]">
+                    <p className="font-semibold">{t('Early leave request on file')}</p>
+                    <p className="mt-0.5">
+                      {t('You checked out {{minutes}} min before your shift ends — your early leave request covers it.', {
+                        minutes: result.earlyLeaveMinutes ?? 0,
+                      })}
+                    </p>
+                  </div>
+                )}
                 {face && (
                   <div className="flex justify-between gap-3">
-                    <dt>Face match</dt>
+                    <dt>{t('Face match')}</dt>
                     <dd>
-                      {Math.round(face.similarity * 100)}% - liveness {Math.round(face.livenessScore * 100)}%
+                      {t('{{similarity}}% - liveness {{liveness}}%', {
+                        similarity: Math.round(face.similarity * 100),
+                        liveness: Math.round(face.livenessScore * 100),
+                      })}
                     </dd>
                   </div>
                 )}
                 <div className="flex justify-between gap-3">
-                  <dt>Record</dt>
+                  <dt>{t('Record')}</dt>
                   <dd className="font-mono">{result.recordId}</dd>
                 </div>
               </dl>
@@ -137,7 +229,7 @@ export function ResultOverlay({
         )}
 
         <Button variant="outline" size="sm" className="mt-5 w-full" onClick={onDismiss}>
-          Dismiss
+          {t('Dismiss')}
         </Button>
       </div>
     </div>
@@ -160,28 +252,29 @@ export function CheckoutConfirmCard({
   onConfirm: () => void
   onCancel: () => void
 }) {
+  const { t } = useTranslation()
   return (
     <div className="absolute inset-0 z-20 flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm fade-in">
       <div
         role="alertdialog"
         aria-modal="true"
-        aria-label="Confirm check-out"
-        className="w-full max-w-md rounded-2xl border border-amber-500/30 bg-amber-950/95 p-6 text-amber-50 shadow-2xl"
+        aria-label={t('Confirm check-out')}
+        className="w-full max-w-md rounded-2xl border border-amber-500/30 bg-amber-950/95 p-6 text-[#fffbeb] shadow-2xl"
       >
         <div className="flex items-center gap-3">
-          <LogOut className="h-8 w-8 text-amber-400" aria-hidden="true" />
-          <h2 className="text-lg font-bold">Check out now?</h2>
+          <LogOut className="h-8 w-8 text-amber-400 rtl:rotate-180" aria-hidden="true" />
+          <h2 className="text-lg font-bold">{t('Check out now?')}</h2>
         </div>
-        <p className="mt-3 text-base font-semibold">{employeeName ?? employeeId ?? 'This employee'}</p>
-        <p className="mt-1 text-sm text-amber-200">
-          You are checked in for today. Confirming records your check-out with the current time.
+        <p className="mt-3 text-base font-semibold">{employeeName ?? employeeId ?? t('This employee')}</p>
+        <p className="mt-1 text-sm text-[#fde68a]">
+          {t('You are checked in for today. Confirming records your check-out with the current time.')}
         </p>
         <div className="mt-5 flex gap-2">
           <Button size="sm" className="flex-1" onClick={onConfirm}>
-            Check out now
+            {t('Check out now')}
           </Button>
           <Button variant="outline" size="sm" className="flex-1" onClick={onCancel}>
-            Not yet
+            {t('Not yet')}
           </Button>
         </div>
       </div>
@@ -198,7 +291,7 @@ export function useClock(): { time: string; date: string } {
   }, [])
 
   return {
-    time: now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+    time: now.toLocaleTimeString(activeLocale(), { hour: 'numeric', minute: '2-digit', second: '2-digit', hour12: true }),
     date: now.toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'short' }),
   }
 }

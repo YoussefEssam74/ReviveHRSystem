@@ -39,6 +39,17 @@ namespace Presistence.Repository
             }
         }
 
+        public async Task AcquireTransactionLockAsync(int key, CancellationToken cancellationToken = default)
+        {
+            // Transaction-scoped: PostgreSQL releases the lock when the surrounding
+            // transaction commits or rolls back, so a crashed sweep can never wedge
+            // the attendance pipeline.
+            await _dbContext.Database.ExecuteSqlRawAsync(
+                "SELECT pg_advisory_xact_lock({0})",
+                new object[] { key },
+                cancellationToken);
+        }
+
         public async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
         {
             try

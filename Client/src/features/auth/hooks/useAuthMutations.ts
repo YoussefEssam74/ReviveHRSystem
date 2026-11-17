@@ -11,7 +11,11 @@ function toStoredSession(response: LoginResponse): StoredSession | null {
   if (!response.accessToken || !user) return null
   return {
     accessToken: response.accessToken,
+    refreshToken: response.refreshToken ?? undefined,
     expiresAt: Date.now() + (response.expiresInSeconds ?? DEFAULT_EXPIRES_IN_SECONDS) * 1000,
+    refreshExpiresAt: response.refreshExpiresInSeconds
+      ? Date.now() + response.refreshExpiresInSeconds * 1000
+      : undefined,
     user: {
       id: user.id ?? 0,
       email: user.email ?? '',

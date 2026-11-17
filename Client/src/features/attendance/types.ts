@@ -12,7 +12,12 @@ export interface ConnectedStation {
 }
 
 /** A recorded attendance event as returned by the API (fields are optional in the schema). */
-export type AttendanceResult = components['schemas']['AttendanceResponse']
+export type AttendanceResult = components['schemas']['AttendanceResponse'] & {
+  /** Minutes the check-out ran before the shift end (0 when not early). */
+  earlyLeaveMinutes?: number | null
+  /** True when the early departure raised a Branch Manager / HR warning. */
+  earlyLeaveWarning?: boolean | null
+}
 
 /** Face-match detail attached to a successful face scan. */
 export interface FaceMatchDetail {

@@ -15,8 +15,8 @@ namespace Presentation.Controllers
     {
         /// <summary>
         /// Returns the caller's session context. Feature levels are resolved for the
-        /// gym the access token is scoped to; without a gym scope the levels map is
-        /// empty (HR/TopManagement sessions without a chosen gym).
+        /// gym the access token is scoped to; a session without a gym scope (multi-gym
+        /// account before the in-session switch) falls back to the caller's global keys.
         /// </summary>
         [HttpGet]
         public async Task<ActionResult<MeResponse>> GetMe(CancellationToken cancellationToken)

@@ -1,23 +1,20 @@
 using Microsoft.AspNetCore.Mvc;
-using Presentation.Authorization;
 using ServiceAbstraction.Services;
-using Shared.Authorization;
 using Shared.DataTransferObject.EmployeeProfile;
-using DomainLayer.Models.UserModule.Enums;
 
 namespace Presentation.Controllers
 {
     /// <summary>
     /// Branch Actions queue (mock §20): deductions, warning notices and bonus
-    /// proposals raised by a Branch/Team Leader for HR. Deductions ride on the
-    /// attendance feature (like attendance corrections), warnings and bonuses on the
-    /// employees feature; the service enforces team/gym scope on the target.
+    /// proposals raised by in-gym management for HR. The service enforces the
+    /// acting-manager role (Team Leader within his team, Branch Manager gym-wide)
+    /// so a plain employee cannot reach the queue.
     /// </summary>
+    /// <summary>Branch-raised deduction candidate (attendance Edit → HR review).</summary>
     [Route("api/deduction-candidates")]
-    public class DeductionCandidatesController(IBranchActionsService branchActionsService) : ApiControllerBase
+    public class BranchDeductionController(IBranchActionsService branchActionsService) : ApiControllerBase
     {
         [HttpPost]
-        [HasFeatureAccess(Features.Attendance, AccessLevel.Edit)]
         public async Task<ActionResult<DeductionCandidateDto>> Issue(
             CreateDeductionCandidateDto request, CancellationToken cancellationToken)
         {
@@ -25,14 +22,44 @@ namespace Presentation.Controllers
                 GetActorUserId(), GetGymIdFromToken(), request, cancellationToken);
             return Created($"/api/deduction-candidates/{created.Id}", created);
         }
+
+        /// <summary>
+        /// POST /api/deduction-candidates/{id}/branch-review — the branch's own decision
+        /// on a deduction (employees performance tab): approve (BranchApproved — goes to
+        /// HR), reject (final) or re-price the amount, before HR applies it to payroll.
+        /// </summary>
+        [HttpPost("{id}/branch-review")]
+        public async Task<ActionResult<DeductionCandidateDto>> BranchReview(
+            int id, BranchDeductionReviewRequest request, CancellationToken cancellationToken)
+            => Ok(await branchActionsService.BranchReviewDeductionAsync(
+                GetActorUserId(), id, request, GetGymIdFromToken(), cancellationToken));
+
+        /// <summary>
+        /// GET /api/deduction-candidates/branch - the branch-facings list behind the
+        /// Employees Performance deductions tab and the Actions palette history:
+        /// the caller's team (Team Leader) or gym (Branch Manager), newest first,
+        /// in every HR decision state. The separate GET /api/deduction-candidates
+        /// route keeps its HR-queue semantics (payroll key).
+        /// </summary>
+        [HttpGet("branch")]
+        public async Task<ActionResult<IReadOnlyList<DeductionCandidateDto>>> GetBranch(
+            [FromQuery] int? employeeId, CancellationToken cancellationToken)
+            => Ok(await branchActionsService.GetDeductionsAsync(
+                GetActorUserId(), employeeId, GetGymIdFromToken(), cancellationToken));
     }
 
     /// <summary>Warning notices raised for HR to file.</summary>
     [Route("api/warning-notices")]
     public class WarningNoticesController(IBranchActionsService branchActionsService) : ApiControllerBase
     {
+        /// <summary>GET /api/warning-notices - the caller's team/gym scope, newest first (employees.performance tabs).</summary>
+        [HttpGet]
+        public async Task<ActionResult<IReadOnlyList<WarningNoticeDto>>> GetWarnings(
+            [FromQuery] int? employeeId, CancellationToken cancellationToken)
+            => Ok(await branchActionsService.GetWarningsAsync(
+                GetActorUserId(), employeeId, GetGymIdFromToken(), cancellationToken));
+
         [HttpPost]
-        [HasFeatureAccess(Features.Employees, AccessLevel.Edit)]
         public async Task<ActionResult<WarningNoticeDto>> Issue(
             CreateWarningNoticeDto request, CancellationToken cancellationToken)
         {
@@ -40,14 +67,32 @@ namespace Presentation.Controllers
                 GetActorUserId(), GetGymIdFromToken(), request, cancellationToken);
             return Created($"/api/warning-notices/{created.Id}", created);
         }
+
+        /// <summary>GET /api/warning-notices/queue — HR review queue (requests.view); ?status=Pending|Approved|Rejected&amp;gym=.</summary>
+        [HttpGet("queue")]
+        public async Task<ActionResult<ProposalListResponse<WarningNoticeDto>>> GetWarnings(
+            [FromQuery] ProposalListQuery query, CancellationToken cancellationToken)
+            => Ok(await branchActionsService.GetWarningsAsync(GetActorUserId(), query, cancellationToken));
+
+        /// <summary>POST /api/warning-notices/{id}/review — File (Approved) / Decline (Rejected, reason required) (requests.approve).</summary>
+        [HttpPost("{id:int}/review")]
+        public async Task<ActionResult<ReviewProposalResponse<WarningNoticeDto>>> ReviewWarning(
+            int id, [FromBody] ReviewProposalRequest request, CancellationToken cancellationToken)
+            => Ok(await branchActionsService.ReviewWarningAsync(GetActorUserId(), id, request, cancellationToken));
     }
 
     /// <summary>Bonus proposals awaiting HR approval.</summary>
     [Route("api/bonus-proposals")]
     public class BonusProposalsController(IBranchActionsService branchActionsService) : ApiControllerBase
     {
+        /// <summary>GET /api/bonus-proposals - the caller's team/gym scope, newest first (employees.performance tabs).</summary>
+        [HttpGet]
+        public async Task<ActionResult<IReadOnlyList<BonusProposalDto>>> GetBonuses(
+            [FromQuery] int? employeeId, CancellationToken cancellationToken)
+            => Ok(await branchActionsService.GetBonusesAsync(
+                GetActorUserId(), employeeId, GetGymIdFromToken(), cancellationToken));
+
         [HttpPost]
-        [HasFeatureAccess(Features.Employees, AccessLevel.Edit)]
         public async Task<ActionResult<BonusProposalDto>> Propose(
             CreateBonusProposalDto request, CancellationToken cancellationToken)
         {
@@ -55,6 +100,18 @@ namespace Presentation.Controllers
                 GetActorUserId(), GetGymIdFromToken(), request, cancellationToken);
             return Created($"/api/bonus-proposals/{created.Id}", created);
         }
+
+        /// <summary>GET /api/bonus-proposals/queue — HR review queue (requests.view); ?status=Pending|Approved|Rejected&amp;gym=.</summary>
+        [HttpGet("queue")]
+        public async Task<ActionResult<ProposalListResponse<BonusProposalDto>>> GetBonuses(
+            [FromQuery] ProposalListQuery query, CancellationToken cancellationToken)
+            => Ok(await branchActionsService.GetBonusesAsync(GetActorUserId(), query, cancellationToken));
+
+        /// <summary>POST /api/bonus-proposals/{id}/review — Approve / Decline (reason required) (requests.approve).</summary>
+        [HttpPost("{id:int}/review")]
+        public async Task<ActionResult<ReviewProposalResponse<BonusProposalDto>>> ReviewBonus(
+            int id, [FromBody] ReviewProposalRequest request, CancellationToken cancellationToken)
+            => Ok(await branchActionsService.ReviewBonusAsync(GetActorUserId(), id, request, cancellationToken));
     }
 
     /// <summary>
@@ -65,7 +122,6 @@ namespace Presentation.Controllers
     public class BranchActionsQueueController(IBranchActionsService branchActionsService) : ApiControllerBase
     {
         [HttpGet]
-        [HasFeatureAccess(Features.Attendance, AccessLevel.View)]
         public async Task<ActionResult<IReadOnlyList<BranchQueueItemDto>>> GetPending(CancellationToken cancellationToken)
         {
             var items = await branchActionsService.GetPendingForHrAsync(

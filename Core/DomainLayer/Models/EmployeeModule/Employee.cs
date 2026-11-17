@@ -1,4 +1,4 @@
-﻿using DomainLayer.Models.EmployeeModule.Enums;
+using DomainLayer.Models.EmployeeModule.Enums;
 using DomainLayer.Models.OrganizationModule;
 using DomainLayer.Models.RecruitmentModule;
 using DomainLayer.Models.UserModule;
@@ -47,6 +47,12 @@ namespace DomainLayer.Models.EmployeeModule
 
         public bool BiometricRegistered { get; set; } = false;
         public byte[]? FaceEncoding { get; set; }
+
+        /// <summary>
+        /// Monthly cap of excused late-attendance / early-leave hours for this employee,
+        /// in hours. Null follows the branch policy (<see cref="Gym.ExcusedLateHoursCapPerMonth"/>).
+        /// </summary>
+        public decimal? ExcusedHoursCapPerMonth { get; set; }
 
         /// <summary>
         /// Storage-relative path of the avatar uploaded through

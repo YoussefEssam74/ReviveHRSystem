@@ -1,6 +1,7 @@
 using AutoMapper;
 using DomainLayer.Contracts;
 using DomainLayer.Exceptions;
+using DomainLayer.Models.AttendanceModule;
 using DomainLayer.Models.EmployeeModule.Enums;
 using DomainLayer.Models.RequestModule;
 using DomainLayer.Models.RequestModule.Enums;
@@ -16,69 +17,139 @@ namespace Service.Services
     /// Management-side request workflow (mock §17 Team/Requests Management): the
     /// scoped inbox and the two-stage approval. Stage 1 (BranchManager) is the
     /// TL/BM decision that moves a request to HR review; HR's final decision lives
-    /// in the HR portal. Every write requires the requests feature at Edit level in
-    /// the active gym; the inbox is team-scoped for team leaders (ADR-003 Amendment 1).
+    /// in the HR portal. The desk belongs to the manager roles of the active gym
+    /// (Team Leader / Branch Manager / Super Admin): data scope comes from the
+    /// per-gym role — team for Team Leaders, the whole gym for Branch Managers —
+    /// and plain employees hold no desk at all (ADR-003 Amendment 1).
     /// </summary>
     public class RequestManagementService(
         IUnitOfWork unitOfWork,
         ITeamScopeService teamScopeService,
-        IMapper mapper) : IRequestManagementService
+        IUserAccessRepository userAccess,
+        IMapper mapper,
+        TimeZoneInfo attendanceTimeZone) : IRequestManagementService
     {
         public async Task<PaginationResult<EmployeeRequestDto>> GetInboxAsync(
             int actorUserId, int? activeGymId, RequestQueryParams query, CancellationToken cancellationToken = default)
         {
             var gymId = RequireGym(activeGymId);
+            await EnsureDeskRoleAsync(actorUserId, gymId, cancellationToken);
             var employeeIds = await ScopedEmployeeIdsAsync(actorUserId, gymId, cancellationToken);
 
-            var requests = await unitOfWork.GetRepository<EmployeeRequest, int>()
-                .GetAllAsync(new RequestsByEmployeesSpec(employeeIds), cancellationToken);
+            // The status arrives as a free-form label: an unknown label matched no row
+            // under the old in-memory compare, so it yields an empty page, not an error.
+            RequestStatus? status = null;
+            if (!string.IsNullOrWhiteSpace(query.Status))
+            {
+                if (!Enum.TryParse<RequestStatus>(query.Status.Trim(), ignoreCase: true, out var parsedStatus))
+                {
+                    return new PaginationResult<EmployeeRequestDto>(query.PageNumber, query.PageSize, 0, []);
+                }
 
-            var filtered = requests
-                .Where(r => string.IsNullOrWhiteSpace(query.Status)
-                    || r.Status.ToString().Equals(query.Status, StringComparison.OrdinalIgnoreCase))
-                .Where(r => string.IsNullOrWhiteSpace(query.Type)
-                    || r.Type.Equals(query.Type, StringComparison.OrdinalIgnoreCase))
-                .Where(r => query.DateFrom is null || r.RequestDate >= query.DateFrom)
-                .Where(r => query.DateTo is null || r.RequestDate <= query.DateTo)
-                .OrderByDescending(r => r.SubmittedAt)
-                .ToList();
+                status = parsedStatus;
+            }
 
-            var page = filtered
-                .Skip(query.SkipCount)
-                .Take(query.PageSize)
-                .Select(r => mapper.Map<EmployeeRequestDto>(r))
-                .ToList();
+            // The desk list can cover a team's or a gym's whole history — filter, sort
+            // (spec keeps SubmittedAt desc) and page execute in SQL; the count repeats
+            // the filters without paging for the envelope total.
+            var repository = unitOfWork.GetRepository<EmployeeRequest, int>();
+            var total = await repository.CountAsync(
+                new RequestsByEmployeesSpec(employeeIds, status, query.Type, query.DateFrom, query.DateTo),
+                cancellationToken);
+            var rows = await repository.GetAllAsync(
+                new RequestsByEmployeesSpec(employeeIds, status, query.Type, query.DateFrom, query.DateTo, query.SkipCount, query.PageSize),
+                cancellationToken);
 
-            return new PaginationResult<EmployeeRequestDto>(query.PageNumber, query.PageSize, filtered.Count, page);
+            // Unscheduled Attendance rows from before the request carried its own
+            // check-in time have no TargetTime: the linked attendance record is the
+            // source of truth for the check-in shown on the desk.
+            var checkInFallbacks = await ResolveCheckInTimeFallbacksAsync(rows, cancellationToken);
+
+            var page = rows.Select(r =>
+            {
+                var dto = mapper.Map<EmployeeRequestDto>(r);
+                return dto.RequestTime is null && checkInFallbacks.TryGetValue((r.EmployeeId, r.RequestDate), out var checkIn)
+                    ? WithRequestTime(dto, checkIn)
+                    : dto;
+            }).ToList();
+            return new PaginationResult<EmployeeRequestDto>(query.PageNumber, query.PageSize, total, page);
         }
 
         public async Task DecideAsync(
             int actorUserId, int requestId, int? activeGymId, RequestDecisionDto decision, CancellationToken cancellationToken = default)
         {
             var gymId = RequireGym(activeGymId);
+            await EnsureDeskRoleAsync(actorUserId, gymId, cancellationToken);
             var request = await LoadInScopeAsync(actorUserId, requestId, gymId, cancellationToken);
 
-            if (request.Status != RequestStatus.Pending)
+            if (request.Status is not (RequestStatus.Pending or RequestStatus.PendingHRReview))
             {
                 throw new BadRequestException("Only pending requests can be decided at this stage.");
             }
 
             var outcome = ParseDecision(decision.Decision);
-            var stage = ParseStage(decision.Stage);            request.Status = outcome == DecisionOutcome.Approved
+            var stage = ParseStage(decision.Stage);
+
+            // A request already forwarded to HR can no longer be approved again at
+            // the desk — but the desk can still pull it back with a rejection.
+            if (request.Status == RequestStatus.PendingHRReview && outcome != DecisionOutcome.Rejected)
+            {
+                throw new BadRequestException("This request is already approved to HR — you can only reject it from here.");
+            }
+
+            request.Status = outcome == DecisionOutcome.Approved
                 ? RequestStatus.PendingHRReview
                 : RequestStatus.Rejected;
 
-            request.Decisions.Add(new RequestDecision
+            // The desk may re-decide his own stage — most commonly reject after an
+            // earlier acceptance. (RequestId, Stage) is unique, so a second insert
+            // used to blow up as the misleading "concurrent update" error: rewrite
+            // the existing stage row in place instead.
+            var stageDecision = request.Decisions.FirstOrDefault(d => d.Stage == stage);
+            if (stageDecision is null)
             {
-                RequestId = request.Id,
-                Stage = stage,
-                Decision = outcome,
-                Comment = string.IsNullOrWhiteSpace(decision.Comment) ? null : decision.Comment.Trim(),
-                DecidedBy = actorUserId,
-                DecidedAt = DateTime.UtcNow
-            });
+                request.Decisions.Add(new RequestDecision
+                {
+                    RequestId = request.Id,
+                    Stage = stage,
+                    Decision = outcome,
+                    Comment = string.IsNullOrWhiteSpace(decision.Comment) ? null : decision.Comment.Trim(),
+                    DecidedBy = actorUserId,
+                    DecidedAt = DateTime.UtcNow
+                });
+            }
+            else
+            {
+                stageDecision.Decision = outcome;
+                stageDecision.Comment = string.IsNullOrWhiteSpace(decision.Comment) ? null : decision.Comment.Trim();
+                stageDecision.DecidedBy = actorUserId;
+                stageDecision.DecidedAt = DateTime.UtcNow;
+            }
 
             unitOfWork.GetRepository<EmployeeRequest, int>().Update(request);
+
+            if (request.Type == RequestTypeCatalog.UnscheduledAttendanceLabel)
+            {
+                var attendanceRepo = unitOfWork.GetRepository<AttendanceRecord, int>();
+                var records = await attendanceRepo.GetAllAsync(
+                    new AttendanceRecordByEmployeeDatesSpec(request.EmployeeId, request.RequestDate), cancellationToken);
+                var record = records.FirstOrDefault(r => r.Date == request.RequestDate);
+                if (record is not null)
+                {
+                    if (outcome == DecisionOutcome.Approved)
+                    {
+                        var days = ValidateUnscheduledAttendanceDays(decision.CalculatedDays);
+                        request.Payment = $"{days} day{(days > 1 ? "s" : "")}";
+                        request.OvertimeHoursRequested = days;
+                        record.Notes = $"Approved by BM as {days} day(s) (Pending HR review)";
+                    }
+                    else
+                    {
+                        record.Notes = "Unscheduled attendance rejected by Branch Manager";
+                    }
+                    attendanceRepo.Update(record);
+                }
+            }
 
             // A rejected stage-1 decision releases any reserved leave days immediately;
             // approval consumes them at the HR stage.
@@ -92,10 +163,79 @@ namespace Service.Services
             await unitOfWork.SaveChangesAsync(cancellationToken);
         }
 
+        private static int ValidateUnscheduledAttendanceDays(int? calculatedDays)
+        {
+            var days = calculatedDays ?? 1;
+            // A cover/extra day can be credited as more than two days (HR decides).
+            if (days is < 1 or > RequestTypeCatalog.MaxCoverDays)
+            {
+                throw new BadRequestException($"Unscheduled attendance can be counted as 1 to {RequestTypeCatalog.MaxCoverDays} days.");
+            }
+
+            return days;
+        }
+
+        public async Task UndoAsync(
+            int actorUserId, int requestId, int? activeGymId, CancellationToken cancellationToken = default)
+        {
+            var gymId = RequireGym(activeGymId);
+            await EnsureDeskRoleAsync(actorUserId, gymId, cancellationToken);
+            var request = await LoadInScopeAsync(actorUserId, requestId, gymId, cancellationToken);
+
+            if (request.Status is not (RequestStatus.PendingHRReview or RequestStatus.Rejected))
+            {
+                throw new BadRequestException("Only decided requests can be undone at this stage.");
+            }
+
+            // An HR decision on record is final here: HR-managed requests go through the
+            // HR undo-decision route. Status "Rejected" alone does not prove a stage-1
+            // rejection — HR's final rejection also lands in that status, so the decision
+            // record (not the status) is what separates the two.
+            if (request.Decisions.Any(d => d.Stage == ApprovalStage.HR))
+            {
+                throw new BadRequestException("An HR decision is recorded for this request — only unfinalized branch-stage decisions can be undone.");
+            }
+
+            // No time limit: the desk can pull a decision back however late it files the
+            // correction; a request for a day that already passed reopens just the same.
+
+            var leaveType = LeaveBalanceReservation.LeaveTypeFor(request);
+            if (request.Status == RequestStatus.Rejected && leaveType is not null)
+            {
+                await LeaveBalanceReservation.AdjustPendingDaysAsync(
+                    unitOfWork, request.EmployeeId, leaveType.Value, +LeaveBalanceReservation.DaysRequested(request), cancellationToken);
+            }
+
+            foreach (var stageDecision in request.Decisions.Where(d => d.Stage == ApprovalStage.BranchManager).ToList())
+            {
+                request.Decisions.Remove(stageDecision);
+                unitOfWork.GetRepository<RequestDecision, int>().Remove(stageDecision);
+            }
+
+            request.Status = RequestStatus.Pending;
+            unitOfWork.GetRepository<EmployeeRequest, int>().Update(request);
+
+            if (request.Type == RequestTypeCatalog.UnscheduledAttendanceLabel)
+            {
+                var attendanceRepo = unitOfWork.GetRepository<AttendanceRecord, int>();
+                var records = await attendanceRepo.GetAllAsync(
+                    new AttendanceRecordByEmployeeDatesSpec(request.EmployeeId, request.RequestDate), cancellationToken);
+                var record = records.FirstOrDefault(r => r.Date == request.RequestDate);
+                if (record is not null)
+                {
+                    record.Notes = "Unscheduled / Off-day check-in (pending approval)";
+                    attendanceRepo.Update(record);
+                }
+            }
+
+            await unitOfWork.SaveChangesAsync(cancellationToken);
+        }
+
         public async Task EditAsync(
             int actorUserId, int requestId, int? activeGymId, UpdateRequestDto update, CancellationToken cancellationToken = default)
         {
             var gymId = RequireGym(activeGymId);
+            await EnsureDeskRoleAsync(actorUserId, gymId, cancellationToken);
             var request = await LoadInScopeAsync(actorUserId, requestId, gymId, cancellationToken);
 
             if (request.Status is not (RequestStatus.Pending or RequestStatus.PendingHRReview))
@@ -109,7 +249,21 @@ namespace Service.Services
                 // the catalog knows so its rules (balance, caps) still apply.
                 var type = RequestTypeCatalog.Find(update.Type)
                     ?? throw new BadRequestException($"Unknown request type '{update.Type}'.");
+                // System-generated cover requests are tied to the attendance record
+                // for that date; re-typing one would orphan the record.
+                if (request.Type == RequestTypeCatalog.UnscheduledAttendanceLabel
+                    && type.Label != RequestTypeCatalog.UnscheduledAttendanceLabel)
+                {
+                    throw new BadRequestException("Unscheduled Attendance requests cannot change type.");
+                }
                 request.Type = type.Label;
+            }
+
+            if (request.Type == RequestTypeCatalog.UnscheduledAttendanceLabel
+                && ((update.RequestDate.HasValue && update.RequestDate.Value != request.RequestDate)
+                    || update.EndDate.HasValue))
+            {
+                throw new BadRequestException("Unscheduled Attendance requests cannot change date.");
             }
 
             if (update.RequestDate.HasValue)
@@ -136,6 +290,7 @@ namespace Service.Services
             int actorUserId, int requestId, int? activeGymId, CreateRequestCommentDto request, CancellationToken cancellationToken = default)
         {
             var gymId = RequireGym(activeGymId);
+            await EnsureDeskRoleAsync(actorUserId, gymId, cancellationToken);
 
             if (string.IsNullOrWhiteSpace(request.Comment))
             {
@@ -176,6 +331,61 @@ namespace Service.Services
 
         // ---------- helpers ----------
 
+        /// <summary>Re-emits a mapped inbox row with the resolved check-in time: the DTO
+        /// is init-only, so a copy is needed to overlay the attendance-record fallback.</summary>
+        private static EmployeeRequestDto WithRequestTime(EmployeeRequestDto dto, TimeOnly checkIn) => new()
+        {
+            Id = dto.Id,
+            EmployeeId = dto.EmployeeId,
+            EmployeeName = dto.EmployeeName,
+            Type = dto.Type,
+            SubmittedDate = dto.SubmittedDate,
+            SubmittedAt = dto.SubmittedAt,
+            RequestDate = dto.RequestDate,
+            EndDate = dto.EndDate,
+            TargetDate = dto.TargetDate,
+            RequestTime = checkIn,
+            Hours = dto.Hours,
+            Amount = dto.Amount,
+            SwapWithEmployeeId = dto.SwapWithEmployeeId,
+            SwapWithEmployeeName = dto.SwapWithEmployeeName,
+            HasAttachment = dto.HasAttachment,
+            Status = dto.Status,
+            Reason = dto.Reason,
+            Payment = dto.Payment,
+            CalculatedDays = dto.CalculatedDays,
+            Timeline = dto.Timeline,
+        };
+
+        /// <summary>Check-in wall times (attendance timezone) for Unscheduled Attendance
+        /// rows whose own TargetTime was never recorded: one range query over the
+        /// linked attendance records covers the whole page.</summary>
+        private async Task<Dictionary<(int EmployeeId, DateOnly Date), TimeOnly>> ResolveCheckInTimeFallbacksAsync(
+            IEnumerable<EmployeeRequest> entities, CancellationToken cancellationToken)
+        {
+            var needed = entities
+                .Where(e => e.TargetTime is null && e.Type == RequestTypeCatalog.UnscheduledAttendanceLabel)
+                .ToList();
+            if (needed.Count == 0)
+            {
+                return [];
+            }
+
+            var ids = needed.Select(e => e.EmployeeId).Distinct().ToArray();
+            var from = needed.Min(e => e.RequestDate);
+            var to = needed.Max(e => e.RequestDate);
+            var records = await unitOfWork.GetRepository<AttendanceRecord, int>()
+                .GetAllAsync(new AttendanceRecordsByEmployeeIdsRangeSpec(ids, from, to), cancellationToken);
+
+            return records
+                .Where(r => r.CheckInTime is not null)
+                .GroupBy(r => (r.EmployeeId, r.Date))
+                .ToDictionary(
+                    g => g.Key,
+                    g => TimeOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(
+                        g.Min(r => r.CheckInTime!.Value), attendanceTimeZone)));
+        }
+
         private async Task<List<int>> ScopedEmployeeIdsAsync(int actorUserId, int gymId, CancellationToken cancellationToken)
         {
             var ledTeamId = await teamScopeService.GetLedTeamIdAsync(actorUserId, gymId, cancellationToken);
@@ -186,7 +396,15 @@ namespace Service.Services
                 : await unitOfWork.GetRepository<DomainLayer.Models.EmployeeModule.Employee, int>()
                     .GetAllAsync(new EmployeesByGymSpec(gymId), cancellationToken);
 
-            return employees.Select(e => e.Id).ToList();
+            // Exclude the actor's own employee record — a BM or TL must not appear
+            // in request management lists they oversee.
+            var ownEmployee = await unitOfWork.GetRepository<DomainLayer.Models.EmployeeModule.Employee, int>()
+                .GetByIdAsync(new EmployeeByUserIdSpec(actorUserId), cancellationToken);
+
+            return employees
+                .Where(e => ownEmployee is null || e.Id != ownEmployee.Id)
+                .Select(e => e.Id)
+                .ToList();
         }
 
         private async Task<EmployeeRequest> LoadInScopeAsync(
@@ -212,10 +430,19 @@ namespace Service.Services
             return request;
         }
 
-        private static DecisionOutcome ParseDecision(string decision) =>
-            Enum.TryParse<DecisionOutcome>(decision, ignoreCase: true, out var parsed) && Enum.IsDefined(parsed)
-                ? parsed
-                : throw new BadRequestException($"Unknown decision '{decision}'.");
+        private static DecisionOutcome ParseDecision(string decision)
+        {
+            // The portals send "approve"/"reject"; the HR vocabulary is
+            // "Approved"/"Rejected" — both are accepted so the desk and the HR
+            // portal speak one contract.
+            var normalized = decision.Trim().ToLowerInvariant();
+            return normalized switch
+            {
+                "approve" or "approved" or "accept" or "accepted" => DecisionOutcome.Approved,
+                "reject" or "rejected" => DecisionOutcome.Rejected,
+                _ => throw new BadRequestException($"Unknown decision '{decision}'."),
+            };
+        }
 
         /// <summary>
         /// Stage carried by the decision. Omitted means stage 1 (BranchManager), which
@@ -243,6 +470,27 @@ namespace Service.Services
             }
 
             return parsed;
+        }
+
+        /// <summary>
+        /// The stage-1 desk belongs to the manager roles of the active gym
+        /// (Team Leader / Branch Manager / Super Admin). A plain employee answers
+        /// NotFound so the surface does not exist for him.
+        /// </summary>
+        private static readonly string[] DeskRoleNames =
+        [
+            Shared.Authorization.RoleNames.TeamLeader,
+            Shared.Authorization.RoleNames.BranchManager,
+            Shared.Authorization.RoleNames.SuperAdmin,
+        ];
+
+        private async Task EnsureDeskRoleAsync(int actorUserId, int gymId, CancellationToken cancellationToken)
+        {
+            var roleNames = await userAccess.GetGymRoleNamesAsync(actorUserId, gymId, cancellationToken);
+            if (!roleNames.Any(DeskRoleNames.Contains))
+            {
+                throw new NotFoundException("Request not found.");
+            }
         }
 
         private static int RequireGym(int? activeGymId) =>

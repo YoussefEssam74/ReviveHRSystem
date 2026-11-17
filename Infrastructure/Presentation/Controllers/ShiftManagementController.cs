@@ -1,9 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
-using Presentation.Authorization;
 using ServiceAbstraction.Services;
-using Shared.Authorization;
 using Shared.DataTransferObject.EmployeeProfile;
-using DomainLayer.Models.UserModule.Enums;
 
 namespace Presentation.Controllers
 {
@@ -12,34 +9,14 @@ namespace Presentation.Controllers
     /// Gated by the `schedule` feature (View to read, Edit to manage); team-scoped
     /// leaders act on their team's members inside the gym's cycles, Branch Managers
     /// on the whole roster. Publishing makes the cycle visible to employees.
+    /// The gym-level list/create verbs live in the HR schedule controllers
+    /// (GymShiftCyclesController / ShiftTemplatesController); this surface owns the
+    /// per-cycle and per-template operations.
     /// </summary>
     [Route("api/gyms/{gymId}/shift-cycles")]
-    public class ShiftCyclesController(IShiftManagementService shiftManagementService) : ApiControllerBase
+    public class ShiftCycleManagementController(IShiftManagementService shiftManagementService) : ApiControllerBase
     {
-        [HttpGet]
-        [HasFeatureAccess(Features.Schedule, AccessLevel.View)]
-        public async Task<ActionResult<IReadOnlyList<ShiftCycleDto>>> GetCycles(
-            int gymId, [FromQuery] string? month, CancellationToken cancellationToken)
-        {
-            EnsureGymScope(gymId);
-            var cycles = await shiftManagementService.GetCyclesAsync(
-                GetActorUserId(), gymId, month, cancellationToken);
-            return Ok(cycles);
-        }
-
-        [HttpPost]
-        [HasFeatureAccess(Features.Schedule, AccessLevel.Edit)]
-        public async Task<ActionResult<ShiftCycleDto>> Create(
-            int gymId, CreateShiftCycleDto request, CancellationToken cancellationToken)
-        {
-            EnsureGymScope(gymId);
-            var created = await shiftManagementService.CreateCycleAsync(
-                GetActorUserId(), gymId, request, cancellationToken);
-            return Created($"/api/gyms/{gymId}/shift-cycles/{created.Id}", created);
-        }
-
         [HttpGet("~/api/gyms/{gymId}/shift-cycles/{cycleId}")]
-        [HasFeatureAccess(Features.Schedule, AccessLevel.View)]
         public async Task<ActionResult<ShiftCycleDetailDto>> GetCycle(
             int gymId, int cycleId, CancellationToken cancellationToken)
         {
@@ -50,7 +27,6 @@ namespace Presentation.Controllers
         }
 
         [HttpPut("~/api/gyms/{gymId}/shift-cycles/{cycleId}/assignments")]
-        [HasFeatureAccess(Features.Schedule, AccessLevel.Edit)]
         public async Task<IActionResult> UpdateAssignments(
             int gymId, int cycleId, UpdateAssignmentsDto request, CancellationToken cancellationToken)
         {
@@ -61,7 +37,6 @@ namespace Presentation.Controllers
         }
 
         [HttpPost("~/api/gyms/{gymId}/shift-cycles/{cycleId}/publish")]
-        [HasFeatureAccess(Features.Schedule, AccessLevel.Edit)]
         public async Task<IActionResult> Publish(int gymId, int cycleId, CancellationToken cancellationToken)
         {
             EnsureGymScope(gymId);
@@ -70,7 +45,6 @@ namespace Presentation.Controllers
         }
 
         [HttpDelete("~/api/gyms/{gymId}/shift-cycles/{cycleId}")]
-        [HasFeatureAccess(Features.Schedule, AccessLevel.Edit)]
         public async Task<IActionResult> Delete(int gymId, int cycleId, CancellationToken cancellationToken)
         {
             EnsureGymScope(gymId);
@@ -81,21 +55,9 @@ namespace Presentation.Controllers
 
     /// <summary>Reusable shift templates of a gym (mock §16).</summary>
     [Route("api/gyms/{gymId}/shift-templates")]
-    public class ShiftTemplatesController(IShiftManagementService shiftManagementService) : ApiControllerBase
+    public class ShiftTemplateManagementController(IShiftManagementService shiftManagementService) : ApiControllerBase
     {
-        [HttpGet]
-        [HasFeatureAccess(Features.Schedule, AccessLevel.View)]
-        public async Task<ActionResult<IReadOnlyList<ShiftTemplateDto>>> GetTemplates(
-            int gymId, CancellationToken cancellationToken)
-        {
-            EnsureGymScope(gymId);
-            var templates = await shiftManagementService.GetTemplatesAsync(
-                GetActorUserId(), gymId, cancellationToken);
-            return Ok(templates);
-        }
-
         [HttpPost]
-        [HasFeatureAccess(Features.Schedule, AccessLevel.Edit)]
         public async Task<ActionResult<ShiftTemplateDto>> Create(
             int gymId, CreateShiftTemplateDto request, CancellationToken cancellationToken)
         {
@@ -106,7 +68,6 @@ namespace Presentation.Controllers
         }
 
         [HttpPut("{templateId}")]
-        [HasFeatureAccess(Features.Schedule, AccessLevel.Edit)]
         public async Task<ActionResult<ShiftTemplateDto>> Update(
             int gymId, int templateId, UpdateShiftTemplateDto request, CancellationToken cancellationToken)
         {
@@ -117,7 +78,6 @@ namespace Presentation.Controllers
         }
 
         [HttpDelete("{templateId}")]
-        [HasFeatureAccess(Features.Schedule, AccessLevel.Edit)]
         public async Task<IActionResult> Delete(int gymId, int templateId, CancellationToken cancellationToken)
         {
             EnsureGymScope(gymId);
