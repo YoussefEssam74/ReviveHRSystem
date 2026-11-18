@@ -118,6 +118,12 @@ function getGym(id) { return GYMS.find((g) => g.id === id) || null; }
 function getPlan(planId) { return PLANS.find((p) => p.id === planId) || PLANS[0]; }
 function gymLabel(gym) { return gym ? `${gym.name} — ${gym.location}` : 'Platform'; }
 function getGymUsers(gymId) { return USERS.filter((u) => u.gymId === gymId); }
+// HR staff are granted access per gym and may hold several gyms at once.
+function getGymHrStaff(gymId) { return USERS.filter((u) => u.role === 'HR' && (u.gymIds || []).includes(gymId)); }
+function gymsForUser(user) {
+  const ids = user.gymIds || (user.gymId ? [user.gymId] : []);
+  return ids.map((id) => getGym(id)).filter(Boolean);
+}
 function getHRManagers() { return USERS.filter((u) => u.role === 'HR Manager'); }
 function getInvoices(gymId) { return INVOICES.filter((i) => i.gymId === gymId); }
 function getGymAudit(gymId) { return AUDIT.filter((a) => a.gymId === gymId); }
@@ -153,7 +159,8 @@ function activeAlerts() {
 
 function platformTotals() {
   const alerts = activeAlerts();
-  const totalUsers = GYMS.reduce((s, g) => s + g.userCounts.total, 0);
+  const totalUsers = USERS.length;
+  const gymMembers = USERS.filter((u) => !!u.gymId).length;
   const activeGyms = GYMS.filter((g) => g.status === 'Active').length;
   const trialGyms = GYMS.filter((g) => g.status === 'Trial').length;
   const overdueGyms = GYMS.filter((g) => g.status === 'Payment overdue').length;
@@ -165,7 +172,7 @@ function platformTotals() {
   const hrManagers = getHRManagers().length;
   const criticalAlerts = alerts.filter((a) => a.severity === 'critical').length;
   return {
-    totalUsers, activeGyms, trialGyms, overdueGyms, suspendedGyms,
+    totalUsers, gymMembers, activeGyms, trialGyms, overdueGyms, suspendedGyms,
     totalGyms: GYMS.length, mrr, seatCapacity, seatsOnLimitedPlans,
     hrManagers, criticalAlerts, alerts: alerts.length,
     atRisk: GYMS.filter((g) => g.status === 'Payment overdue').reduce((s, g) => s + g.mrr, 0),
@@ -220,7 +227,11 @@ function avatarHtml(user, size) {
 }
 
 function gymLogo(gym, size) {
-  return `<span class="gym-logo gym-logo-${size || 36}">${esc(gym.logo)}</span>`;
+  const cls = `gym-logo gym-logo-${size || 36}`;
+  if (gym.logoUrl) {
+    return `<span class="${cls}" style="background-image:url('${gym.logoUrl}');background-size:cover;background-position:center;color:transparent">.</span>`;
+  }
+  return `<span class="${cls}">${esc(gym.logo)}</span>`;
 }
 
 function meterHtml(value, max, tone) {

@@ -105,7 +105,7 @@ const GYMS = [
     contact: { name: 'Youssef Essam', email: 'ops@revivegym.com', phone: '+20 100 111 2233' },
     health: 94, attendanceRate: 92, payrollStatus: 'Locked · Nov 2026',
     lastActivity: '2026-11-17T14:22:00',
-    userCounts: { total: 58, hrManager: 1, hr: 1, branchManager: 1, teamLeader: 3, employee: 52 },
+    userCounts: { total: 58, hrManager: 0, hr: 2, branchManager: 1, teamLeader: 3, employee: 52 },
     activity: [22, 28, 24, 31, 26, 34, 29, 36, 33, 38, 35, 41, 37, 44],
   },
   {
@@ -117,7 +117,7 @@ const GYMS = [
     contact: { name: 'Youssef Essam', email: 'ops@revivegym.com', phone: '+20 100 111 2233' },
     health: 88, attendanceRate: 89, payrollStatus: 'Locked · Nov 2026',
     lastActivity: '2026-11-17T13:05:00',
-    userCounts: { total: 45, hrManager: 1, hr: 1, branchManager: 1, teamLeader: 2, employee: 40 },
+    userCounts: { total: 45, hrManager: 0, hr: 2, branchManager: 1, teamLeader: 2, employee: 40 },
     activity: [18, 21, 19, 24, 22, 27, 25, 29, 26, 31, 28, 33, 30, 35],
   },
   {
@@ -129,7 +129,7 @@ const GYMS = [
     contact: { name: 'Mona Khalil', email: 'front@revivefitness.com', phone: '+20 101 222 3344' },
     health: 81, attendanceRate: 84, payrollStatus: 'Pending approval · Nov 2026',
     lastActivity: '2026-11-17T12:40:00',
-    userCounts: { total: 39, hrManager: 1, hr: 1, branchManager: 1, teamLeader: 2, employee: 34 },
+    userCounts: { total: 39, hrManager: 0, hr: 2, branchManager: 1, teamLeader: 2, employee: 34 },
     activity: [14, 17, 15, 19, 16, 21, 18, 22, 20, 24, 21, 25, 23, 27],
   },
   {
@@ -141,7 +141,7 @@ const GYMS = [
     contact: { name: 'Hany Darwish', email: 'admin@ironhouse.com', phone: '+20 102 333 4455' },
     health: 97, attendanceRate: 95, payrollStatus: 'Locked · Nov 2026',
     lastActivity: '2026-11-17T15:48:00',
-    userCounts: { total: 96, hrManager: 1, hr: 2, branchManager: 3, teamLeader: 6, employee: 84 },
+    userCounts: { total: 96, hrManager: 0, hr: 3, branchManager: 3, teamLeader: 6, employee: 84 },
     activity: [38, 44, 41, 49, 45, 53, 48, 57, 52, 61, 56, 64, 59, 68],
   },
   {
@@ -153,7 +153,7 @@ const GYMS = [
     contact: { name: 'Nour Shehata', email: 'hello@peakperformance.com', phone: '+20 103 444 5566' },
     health: 72, attendanceRate: 68, payrollStatus: 'Not started',
     lastActivity: '2026-11-17T10:12:00',
-    userCounts: { total: 31, hrManager: 1, hr: 0, branchManager: 1, teamLeader: 2, employee: 27 },
+    userCounts: { total: 31, hrManager: 0, hr: 1, branchManager: 1, teamLeader: 2, employee: 27 },
     activity: [9, 12, 10, 14, 11, 16, 13, 18, 15, 19, 17, 21, 18, 23],
   },
   {
@@ -165,7 +165,7 @@ const GYMS = [
     contact: { name: 'Ashraf Selim', email: 'accounts@flexfactory.com', phone: '+20 104 555 6677' },
     health: 54, attendanceRate: 61, payrollStatus: 'Blocked · invoice overdue',
     lastActivity: '2026-11-15T09:30:00',
-    userCounts: { total: 24, hrManager: 1, hr: 1, branchManager: 1, teamLeader: 1, employee: 20 },
+    userCounts: { total: 24, hrManager: 0, hr: 2, branchManager: 1, teamLeader: 1, employee: 20 },
     activity: [11, 13, 12, 15, 10, 14, 9, 12, 8, 11, 7, 10, 6, 9],
   },
 ];
@@ -207,15 +207,13 @@ GYMS.forEach((gym) => {
 const FIRST_NAMES = ['Ahmed', 'Mohamed', 'Sara', 'Omar', 'Nour', 'Yasmin', 'Tarek', 'Mona', 'Hassan', 'Fatma', 'Karim', 'Laila', 'Youssef', 'Hana', 'Khalid', 'Dina', 'Rania', 'Mostafa', 'Aya', 'Sherif', 'Nada', 'Islam', 'Heba', 'Amr', 'Mariam', 'Salma', 'Ziad', 'Rana', 'Ashraf', 'Mai', 'Bassem', 'Reem'];
 const LAST_NAMES = ['Mohamed', 'Hassan', 'Ali', 'Youssef', 'Ibrahim', 'Adel', 'Nabil', 'Said', 'Mahmoud', 'Zaki', 'Mostafa', 'Kamal', 'El-Sayed', 'Fahmy', 'Mansour', 'Fouad', 'Samir', 'Tawfik', 'Rashad', 'Gaber', 'Helal', 'Nassar', 'Shaheen', 'Farid'];
 
-// One hand-written HR Manager per gym — the accounts the Super Admin provisions.
-const HR_MANAGER_SEED = {
-  'gym-1': { name: 'Mona El-Sayed', email: 'mona.elsayed@revivegym.com', phone: '+20 103 456 7890', status: 'Active', preset: 'HR Manager — Full', lastLogin: '2026-11-17T08:12:00', createdAt: '2024-01-15' },
-  'gym-2': { name: 'Rania Adel', email: 'rania.adel@revivegym.com', phone: '+20 109 876 5432', status: 'Active', preset: 'HR Manager — Full', lastLogin: '2026-11-17T09:40:00', createdAt: '2024-08-02' },
-  'gym-3': { name: 'Khalid Mansour', email: 'khalid.mansour@revivefitness.com', phone: '+20 111 222 3333', status: 'Active', preset: 'HR Manager — Standard', lastLogin: '2026-11-16T17:22:00', createdAt: '2025-02-11' },
-  'gym-4': { name: 'Hoda Kamel', email: 'hoda.kamel@ironhouse.com', phone: '+20 112 777 8899', status: 'Active', preset: 'HR Manager — Full', lastLogin: '2026-11-17T07:55:00', createdAt: '2023-11-04' },
-  'gym-5': { name: 'Sherif Nabil', email: 'sherif.nabil@peakperformance.com', phone: '+20 115 111 2244', status: 'Active', preset: 'HR Manager — Trial', lastLogin: '2026-11-17T10:02:00', createdAt: '2026-10-28' },
-  'gym-6': { name: 'Dina Fahmy', email: 'dina.fahmy@flexfactory.com', phone: '+20 116 999 0011', status: 'Suspended', preset: 'HR Manager — Standard', lastLogin: '2026-10-30T14:00:00', createdAt: '2025-06-19' },
-};
+// HR Managers are a **platform** role: they reach every gym account, so they are not
+// attached to any single gym and live outside the gym rosters below.
+const PLATFORM_HR_MANAGERS = [
+  { id: 'RV-00001', name: 'Mona El-Sayed', email: 'mona.elsayed@revivehr.com', phone: '+20 103 456 7890', status: 'Active', preset: 'HR Manager — Full', lastLogin: '2026-11-17T08:12:00', createdAt: '2024-01-15' },
+  { id: 'RV-00002', name: 'Hoda Kamel', email: 'hoda.kamel@revivehr.com', phone: '+20 112 777 8899', status: 'Active', preset: 'HR Manager — Full', lastLogin: '2026-11-17T07:55:00', createdAt: '2023-11-04' },
+  { id: 'RV-00003', name: 'Rania Adel', email: 'rania.adel@revivehr.com', phone: '+20 109 876 5432', status: 'Active', preset: 'HR Manager — Standard', lastLogin: '2026-11-17T09:40:00', createdAt: '2024-08-02' },
+];
 
 const ROLE_SPECS = [
   { key: 'hrManager', role: 'HR Manager', avatar: 'avatar-purple' },
@@ -237,19 +235,16 @@ function buildUsers() {
       const count = gym.userCounts[spec.key] || 0;
       for (let n = 0; n < count; n++) {
         seed += 7;
-        const isHRManager = spec.key === 'hrManager';
-        const identity = isHRManager ? HR_MANAGER_SEED[gym.id] : null;
 
-        const name = identity ? identity.name : `${FIRST_NAMES[seed % FIRST_NAMES.length]} ${LAST_NAMES[(seed * 3 + n) % LAST_NAMES.length]}`;
+        const name = `${FIRST_NAMES[seed % FIRST_NAMES.length]} ${LAST_NAMES[(seed * 3 + n) % LAST_NAMES.length]}`;
         const local = name.toLowerCase().replace(/[^a-z\s]/g, '').trim().replace(/\s+/g, '.');
-        let email = identity ? identity.email : `${local}@${gym.domain}`;
+        let email = `${local}@${gym.domain}`;
         let suffix = 1;
         while (usedEmails.has(email)) { email = `${local}${++suffix}@${gym.domain}`; }
         usedEmails.add(email);
 
         let status = 'Active';
-        if (isHRManager) status = identity.status;
-        else if (seed % 29 === 0) status = 'Suspended';
+        if (seed % 29 === 0) status = 'Suspended';
         else if (seed % 19 === 0) status = 'On leave';
         else if (seed % 23 === 0) status = 'Invited';
 
@@ -263,20 +258,52 @@ function buildUsers() {
           name,
           initials: name.split(' ').map((p) => p[0]).slice(0, 2).join('').toUpperCase(),
           email,
-          phone: identity ? identity.phone : `+20 1${(seed % 9) + 1} ${String(100 + (seed % 899)).slice(0, 3)} ${String(1000 + (seed % 8999))}`,
+          phone: `+20 1${(seed % 9) + 1} ${String(100 + (seed % 899)).slice(0, 3)} ${String(1000 + (seed % 8999))}`,
           role: spec.role,
           avatar: spec.avatar,
           gymId: gym.id,
+          gymIds: [gym.id],
           gymName: `${gym.name} — ${gym.location}`,
           branch: branch ? branch.name : gym.location,
           branchCode: branch ? branch.code : gym.code,
           status,
           lastLogin,
-          createdAt: isHRManager ? identity.createdAt : new Date(Date.UTC(2026, 10, 17) - joinedDaysAgo * 86400000).toISOString().slice(0, 10),
-          preset: isHRManager ? identity.preset : null,
-          source: isHRManager ? 'Super Admin' : 'HR Manager',
+          createdAt: new Date(Date.UTC(2026, 10, 17) - joinedDaysAgo * 86400000).toISOString().slice(0, 10),
+          preset: null,
+          source: 'HR Manager',
         });
       }
+    });
+  });
+
+  // Only the HR role is assigned to gym accounts — and it can hold several at once.
+  users.filter((u) => u.role === 'HR').forEach((u, i) => {
+    if (i % 3 !== 0) return;
+    const current = GYMS.findIndex((g) => g.id === u.gymId);
+    const extra = GYMS[(current + 1) % GYMS.length];
+    if (extra && !u.gymIds.includes(extra.id)) u.gymIds.push(extra.id);
+  });
+
+  PLATFORM_HR_MANAGERS.forEach((m) => {
+    usedEmails.add(m.email);
+    users.push({
+      id: m.id,
+      name: m.name,
+      initials: m.name.split(' ').map((p) => p[0]).slice(0, 2).join('').toUpperCase(),
+      email: m.email,
+      phone: m.phone,
+      role: 'HR Manager',
+      avatar: 'avatar-purple',
+      gymId: null,
+      gymIds: GYMS.map((g) => g.id),
+      gymName: 'All gym accounts',
+      branch: 'All gyms',
+      branchCode: '—',
+      status: m.status,
+      lastLogin: m.lastLogin,
+      createdAt: m.createdAt,
+      preset: m.preset,
+      source: 'Super Admin',
     });
   });
 
@@ -502,8 +529,8 @@ function permissionKeysFor(roleKey) {
 
 const ROLES = [
   { id: 'role-sa', name: 'Super Admin', type: 'System', scope: 'Platform', description: 'Platform owner — every gym permission plus platform administration.', permissions: PERMISSION_CATALOG.map((p) => p.key) },
-  { id: 'role-hrm', name: 'HR Manager', type: 'System', scope: 'One gym', description: 'Owns a single gym: approvals, payroll lock and audit review.', permissions: permissionKeysFor('hrm') },
-  { id: 'role-hr', name: 'HR', type: 'System', scope: 'One gym', description: 'Operational HR. Escalates lifecycle actions to the HR Manager.', permissions: permissionKeysFor('hr') },
+  { id: 'role-hrm', name: 'HR Manager', type: 'System', scope: 'All gym accounts', description: 'Platform HR lead — full HR access to every gym account. No platform administration.', permissions: permissionKeysFor('hrm') },
+  { id: 'role-hr', name: 'HR', type: 'System', scope: 'One or more gyms', description: 'Operational HR, assigned to the gym accounts they work in. Escalates lifecycle actions to an HR Manager.', permissions: permissionKeysFor('hr') },
   { id: 'role-bm', name: 'Branch Manager', type: 'System', scope: 'One branch', description: 'Runs a branch: attendance, schedules and team evaluations.', permissions: permissionKeysFor('bm') },
   { id: 'role-tl', name: 'Team Leader', type: 'System', scope: 'One team', description: 'Team-scoped evaluator and schedule viewer.', permissions: permissionKeysFor('tl') },
   { id: 'role-emp', name: 'Employee', type: 'System', scope: 'Own profile', description: 'Self-service: own profile, payslips, requests and evaluations.', permissions: permissionKeysFor('emp') },

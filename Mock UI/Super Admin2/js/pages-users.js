@@ -12,8 +12,9 @@ function renderUsers() {
   const activeUsers = USERS.filter((u) => u.status === 'Active').length;
   const suspended = USERS.filter((u) => u.status === 'Suspended').length;
 
-  const gymOptions = [{ id: 'all', label: 'All gyms', count: t.totalUsers }]
+  const gymOptions = [{ id: 'all', label: 'All users', count: t.totalUsers }]
     .concat(GYMS.map((g) => ({ id: g.id, label: `${g.name} — ${g.location}`, count: g.userCounts.total })))
+    .concat([{ id: 'platform', label: 'Platform only (no gym)', count: USERS.filter((u) => !u.gymId).length }])
     .map((g) => `<option value="${g.id}"${f.gym === g.id ? ' selected' : ''}>${esc(g.label)} (${g.count})</option>`).join('');
 
   const roleOptions = [['all', 'All roles', counts.total], ['HR Manager', 'HR managers', counts.hrManager], ['HR', 'HR staff', counts.hr], ['Branch Manager', 'Branch managers', counts.branchManager], ['Team Leader', 'Team leaders', counts.teamLeader], ['Employee', 'Employees', counts.employee]]
@@ -36,8 +37,10 @@ function renderUsers() {
       </td>
       <td><span class="badge ${u.role === 'HR Manager' ? 'badge-purple' : u.role === 'HR' ? 'badge-blue' : 'badge-gray'}">${esc(u.role)}</span></td>
       <td class="min-w-0">
-        <span class="block text-[11px] text-charcoal-600 truncate max-w-[170px] text-left">${esc(gym ? gym.name : u.gymName)}</span>
-        <p class="text-[9px] text-charcoal-400">${esc(gym ? gym.location : '')}</p>
+        ${!u.gymId
+          ? '<span class="badge badge-brand">All gym accounts</span>'
+          : `<span class="block text-[11px] text-charcoal-600 truncate max-w-[170px] text-left">${esc(gym ? gym.name : u.gymName)}</span>
+             <p class="text-[9px] text-charcoal-400">${esc(gym ? gym.location : '')}${(u.gymIds || []).length > 1 ? ` · <span class="text-brand-700 font-semibold">${u.gymIds.length} gyms</span>` : ''}</p>`}
       </td>
       <td>${statusBadge(u.status)}</td>
       <td class="whitespace-nowrap text-[11px] text-charcoal-500">${u.lastLogin ? relativeTime(u.lastLogin) : 'Never'}</td>
@@ -58,8 +61,8 @@ function renderUsers() {
   )}
 
   <div class="grid grid-cols-2 lg:grid-cols-4 gap-2.5 mb-3">
-    ${kpiTile('Total users', formatNumber(counts.total), `${counts.employee} employees · ${counts.hr + counts.hrManager} HR staff`, 'users')}
-    ${kpiTile('HR managers', String(counts.hrManager), 'one owner per gym', 'shield')}
+    ${kpiTile('Total users', formatNumber(counts.total), `${formatNumber(t.gymMembers)} in gyms · ${t.hrManagers} platform HR managers`, 'users')}
+    ${kpiTile('HR managers', String(counts.hrManager), 'platform-wide · every gym', 'shield')}
     ${kpiTile('Active accounts', formatNumber(activeUsers), `${counts.total - activeUsers} inactive or invited`, 'check')}
     ${kpiTile('Suspended', formatNumber(suspended), suspended ? 'access blocked' : 'none suspended', 'lock', suspended ? 'amber' : '')}
   </div>
@@ -101,7 +104,8 @@ function renderUsers() {
 function filterUsers(f) {
   const q = f.q.toLowerCase();
   return USERS.filter((u) => {
-    if (f.gym !== 'all' && u.gymId !== f.gym) return false;
+    if (f.gym === 'platform') { if (u.gymId) return false; }
+    else if (f.gym !== 'all' && u.gymId !== f.gym) return false;
     if (f.role !== 'all' && u.role !== f.role) return false;
     if (f.status !== 'all' && u.status !== f.status) return false;
     if (q && !(u.name + ' ' + u.email + ' ' + u.gymName).toLowerCase().includes(q)) return false;
