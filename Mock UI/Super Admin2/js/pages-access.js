@@ -139,7 +139,7 @@ function openRoleEditor(roleId, duplicateFromId, readOnly) {
           <input class="form-input" id="role-name" placeholder="e.g. Payroll Auditor" value="${esc(base && !readOnly ? (isEdit ? base.name : base.name + ' copy') : base ? base.name : '')}" ${readOnly ? 'disabled' : ''}></div>
         <div><label class="form-label">Scope</label>
           <select class="form-select" id="role-scope" ${readOnly ? 'disabled' : ''}>
-            ${['One gym', 'One branch', 'One team', 'Own profile', 'Platform'].map((s) => `<option${base && base.scope === s ? ' selected' : ''}>${s}</option>`).join('')}
+            ${['All gym accounts', 'One or more gyms', 'One gym', 'One branch', 'One team', 'Own profile', 'Platform'].map((s) => `<option${base && base.scope === s ? ' selected' : ''}>${s}</option>`).join('')}
           </select></div>
       </div>
       <div class="mb-2.5"><label class="form-label">Description</label>

@@ -155,7 +155,7 @@ function renderGymDetail() {
   if (!gym) return `<div class="card">${emptyState('Gym account not found')}</div>`;
 
   const users = getGymUsers(gym.id);
-  const managers = users.filter((u) => u.role === 'HR Manager');
+  const hrStaff = getGymHrStaff(gym.id);
   const invoices = getInvoices(gym.id);
   const audit = getGymAudit(gym.id);
   const plan = getPlan(gym.planId);
@@ -165,7 +165,7 @@ function renderGymDetail() {
     { id: 'overview', label: 'Overview' },
     { id: 'branches', label: 'Branches', count: gym.branchList.length },
     { id: 'employees', label: 'Employees', count: users.length },
-    { id: 'managers', label: 'HR managers', count: managers.length },
+    { id: 'managers', label: 'HR staff', count: hrStaff.length },
     { id: 'billing', label: 'Billing', count: invoices.length },
     { id: 'audit', label: 'Audit', count: audit.length },
   ].map((tab) => `<button class="tab-btn ${state.gymTab === tab.id ? 'active' : ''}" onclick="setGymTab('${tab.id}')">
@@ -210,7 +210,7 @@ function renderGymDetail() {
           <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1"/></svg>
           Enter workspace
         </button>
-        <button onclick="openCreateHRManager('${gym.id}')" class="btn btn-secondary btn-sm">Create HR manager</button>
+        <button onclick="openAssignHR('${gym.id}')" class="btn btn-secondary btn-sm">Assign HR staff</button>
         <button onclick="openChangePlan('${gym.id}')" class="btn btn-secondary btn-sm">Change plan</button>
         <button onclick="toggleGymStatus('${gym.id}')" class="btn ${gym.status === 'Suspended' ? 'btn-success' : 'btn-danger-outline'} btn-sm">
           ${gym.status === 'Suspended' ? 'Restore account' : 'Suspend'}
@@ -233,7 +233,7 @@ function renderGymDetail() {
   ${state.gymTab === 'overview' ? gymOverviewTab(gym, users, plan) : ''}
   ${state.gymTab === 'branches' ? gymBranchesTab(gym) : ''}
   ${state.gymTab === 'employees' ? gymEmployeesTab(gym, users) : ''}
-  ${state.gymTab === 'managers' ? gymManagersTab(gym, managers) : ''}
+  ${state.gymTab === 'managers' ? gymHrStaffTab(gym, hrStaff) : ''}
   ${state.gymTab === 'billing' ? gymBillingTab(gym, plan, invoices) : ''}
   ${state.gymTab === 'audit' ? gymAuditTab(gym, audit) : ''}
   </div>`;
@@ -247,7 +247,6 @@ function setGymTab(tab) {
 function gymOverviewTab(gym, users, plan) {
   const counts = roleCounts(users);
   const roles = [
-    { label: 'HR managers', value: counts.hrManager },
     { label: 'HR staff', value: counts.hr },
     { label: 'Branch managers', value: counts.branchManager },
     { label: 'Team leaders', value: counts.teamLeader },
@@ -266,7 +265,7 @@ function gymOverviewTab(gym, users, plan) {
     <div class="xl:col-span-2 space-y-3">
       <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
         ${statTile({ label: 'Total users', value: formatNumber(counts.total), sub: `${counts.employee} employees`, accent: true })}
-        ${statTile({ label: 'HR managers', value: counts.hrManager, sub: 'account owners' })}
+        ${statTile({ label: 'HR staff', value: counts.hr, sub: 'assigned to this gym' })}
         ${statTile({ label: 'Attendance', value: gym.attendanceRate + '%', sub: 'last 30 days' })}
         ${statTile({ label: 'Seats used', value: gym.seatLimit ? `${pct}%` : formatNumber(counts.total), sub: gym.seatLimit ? `${counts.total} of ${gym.seatLimit}` : 'no seat cap' })}
       </div>
@@ -336,7 +335,7 @@ function gymOverviewTab(gym, users, plan) {
         <div class="card-head"><p class="bento-label flex-1">Super Admin actions</p></div>
         <div class="p-2 space-y-1.5">
           <button onclick="openWorkspace('${gym.id}','HR Manager')" class="btn btn-secondary btn-sm w-full justify-start">Enter workspace as HR Manager</button>
-          <button onclick="openCreateHRManager('${gym.id}')" class="btn btn-secondary btn-sm w-full justify-start">Create HR manager account</button>
+          <button onclick="openAssignHR('${gym.id}')" class="btn btn-secondary btn-sm w-full justify-start">Assign HR staff to this gym</button>
           <button onclick="setGymTab('audit')" class="btn btn-secondary btn-sm w-full justify-start">Review gym audit trail</button>
         </div>
       </div>
@@ -346,49 +345,54 @@ function gymOverviewTab(gym, users, plan) {
 
 function gymBranchesTab(gym) {
   const totalStaff = gym.userCounts.total;
-  const maxStaff = Math.max(...gym.branchList.map((b) => getBranchStaff(gym.id, b.name).length), 1);
 
-  const cards = gym.branchList.map((branch, index) => {
+  const rows = gym.branchList.map((branch, index) => {
     const staff = getBranchStaff(gym.id, branch.name);
     const counts = roleCounts(staff);
-    const pct = totalStaff ? Math.round((staff.length / totalStaff) * 100) : 0;
-    return `<div class="card p-3">
-      <div class="flex items-start justify-between gap-2">
-        <div class="min-w-0">
-          <p class="text-xs font-semibold text-charcoal-900 truncate leading-tight">${esc(branch.name)}</p>
-          <p class="text-[10px] text-charcoal-500 truncate leading-tight">${esc(branch.area)} · ${esc(branch.code)}</p>
-        </div>
-        <span class="badge badge-brand">${staff.length} staff</span>
-      </div>
-      <dl class="text-[10px] mt-2 space-y-1">
-        <div class="flex justify-between gap-2"><dt class="text-charcoal-500 flex-shrink-0">Address</dt><dd class="text-charcoal-700 text-right truncate">${esc(branch.address)}</dd></div>
-        <div class="flex justify-between gap-2"><dt class="text-charcoal-500 flex-shrink-0">Phone</dt><dd class="text-charcoal-700 text-right">${esc(branch.phone)}</dd></div>
-        <div class="flex justify-between gap-2"><dt class="text-charcoal-500 flex-shrink-0">Branch manager</dt><dd class="text-charcoal-700 text-right truncate">${esc(branch.manager)}</dd></div>
-      </dl>
-      <div class="mt-2">
-        <div class="flex items-center justify-between text-[9px] text-charcoal-400 mb-1">
-          <span>${counts.employee} employees · ${counts.teamLeader} team leaders · ${counts.branchManager} managers</span>
-          <span class="flex-shrink-0 ml-1">${pct}% of gym</span>
-        </div>
-        ${meterHtml(staff.length, maxStaff, 'blue')}
-      </div>
-      <button onclick="openBranchStaff('${gym.id}', ${index})" class="btn btn-sm btn-secondary w-full mt-2.5">View branch staff</button>
-    </div>`;
+    return `<tr class="is-clickable" onclick="openBranchStaff('${gym.id}', ${index})">
+      <td class="min-w-0">
+        <p class="text-xs font-semibold text-charcoal-800 truncate leading-tight">${esc(branch.name)}</p>
+        <p class="text-[10px] text-charcoal-500 truncate leading-tight">${esc(branch.area)}</p>
+      </td>
+      <td class="whitespace-nowrap"><span class="badge badge-gray font-mono">${esc(branch.code)}</span></td>
+      <td class="min-w-0"><span class="block text-[11px] text-charcoal-600 truncate max-w-[190px]">${esc(branch.address)}</span></td>
+      <td class="whitespace-nowrap text-[11px] text-charcoal-600">${esc(branch.phone)}</td>
+      <td class="whitespace-nowrap text-[11px] text-charcoal-700">${esc(branch.manager)}</td>
+      <td class="whitespace-nowrap">
+        <span class="text-xs font-semibold text-charcoal-800">${staff.length}</span>
+        <p class="text-[9px] text-charcoal-400 leading-tight">${counts.employee} emp · ${counts.teamLeader} TL · ${counts.branchManager} mgr</p>
+      </td>
+      <td class="text-right whitespace-nowrap">
+        <button onclick="event.stopPropagation();openBranchStaff('${gym.id}', ${index})" class="btn btn-sm btn-ghost text-brand-700">View staff</button>
+      </td>
+    </tr>`;
   }).join('');
 
-  return `<div class="flex items-center justify-between gap-2 mb-2 flex-wrap">
-      <div>
-        <p class="text-xs font-semibold text-charcoal-800">${gym.branchList.length} ${gym.branchList.length === 1 ? 'branch' : 'branches'} at ${esc(gym.name)}</p>
-        <p class="text-[10px] text-charcoal-500 mt-0.5">Every branch belongs to this gym account. Staff are scoped to the branch they work in.</p>
+  return `<div class="card">
+    <div class="card-head">
+      <div class="flex-1 min-w-0">
+        <p class="bento-label">Branches</p>
+        <p class="text-[10px] text-charcoal-500 mt-0.5">${gym.branchList.length} ${gym.branchList.length === 1 ? 'site' : 'sites'} at ${esc(gym.name)} — every branch belongs to this account, and staff are scoped to the branch they work in.</p>
       </div>
       <button onclick="openBranchEditor('${gym.id}')" class="btn btn-primary btn-sm">
-        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
         Add branch
       </button>
     </div>
     ${gym.branchList.length
-      ? `<div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2.5">${cards}</div>`
-      : `<div class="card">${emptyState('No branches yet', 'Add the first branch for this gym account.')}</div>`}`;
+      ? `<div class="data-table-wrap">
+      <table class="data-table">
+        <thead><tr>
+          <th>Branch</th><th>Code</th><th>Address</th><th>Phone</th><th>Manager</th><th>Staff</th><th></th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>`
+      : `<div>${emptyState('No branches yet', 'Add the first branch for this gym account.')}</div>`}
+    <div class="px-3 py-2 border-t border-charcoal-100">
+      <p class="text-[10px] text-charcoal-500">${gym.branchList.length} branches · ${formatNumber(totalStaff)} staff assigned · click a row to see its people</p>
+    </div>
+  </div>`;
 }
 
 function openBranchStaff(gymId, index) {
@@ -417,7 +421,6 @@ function gymEmployeesTab(gym, users) {
 
   const roleOptions = [
     ['all', 'All roles', counts.total],
-    ['HR Manager', 'HR managers', counts.hrManager],
     ['HR', 'HR staff', counts.hr],
     ['Branch Manager', 'Branch managers', counts.branchManager],
     ['Team Leader', 'Team leaders', counts.teamLeader],
@@ -547,46 +550,108 @@ function saveBranch(gymId) {
   toast(`${name} added to ${gym.name}`, 'success');
 }
 
-function gymManagersTab(gym, managers) {
-  const rows = managers.map((m) => `<tr class="is-clickable" onclick="navigateTo('user-detail',{userId:'${m.id}'})">
+function gymHrStaffTab(gym, hrStaff) {
+  const rows = hrStaff.map((u) => {
+    const gyms = gymsForUser(u);
+    return `<tr class="is-clickable" onclick="navigateTo('user-detail',{userId:'${u.id}'})">
       <td>
         <div class="flex items-center gap-2">
-          ${avatarHtml(m, 28)}
+          ${avatarHtml(u, 28)}
           <div class="min-w-0">
-            <p class="text-xs font-semibold text-charcoal-800 truncate leading-tight">${esc(m.name)}</p>
-            <p class="text-[10px] text-charcoal-500 truncate leading-tight">${esc(m.email)}</p>
+            <p class="text-xs font-semibold text-charcoal-800 truncate leading-tight">${esc(u.name)}</p>
+            <p class="text-[10px] text-charcoal-500 truncate leading-tight">${esc(u.email)}</p>
           </div>
         </div>
       </td>
-      <td class="whitespace-nowrap text-[11px] text-charcoal-600">${esc(m.phone)}</td>
-      <td><span class="badge badge-purple">${esc((m.preset || 'HR Manager').replace('HR Manager — ', ''))}</span></td>
-      <td>${statusBadge(m.status)}</td>
-      <td class="whitespace-nowrap text-[11px] text-charcoal-500">${m.lastLogin ? relativeTime(m.lastLogin) : 'Never'}</td>
-      <td class="whitespace-nowrap text-[11px] text-charcoal-500">${formatDate(m.createdAt)}</td>
-      <td class="text-right whitespace-nowrap">
-        <button onclick="event.stopPropagation();openWorkspace('${gym.id}','${esc(m.role)}')" class="btn btn-sm btn-primary">Enter</button>
-        <button onclick="event.stopPropagation();openResetPassword('${m.id}')" class="btn btn-sm btn-ghost text-charcoal-600">Reset</button>
+      <td class="min-w-0">
+        <span class="block text-[11px] text-charcoal-700 truncate max-w-[220px]">${gyms.map((g) => esc(g.name + ' — ' + g.location)).join(', ')}</span>
+        <p class="text-[9px] text-charcoal-400">${gyms.length} gym${gyms.length === 1 ? '' : 's'} assigned</p>
       </td>
-    </tr>`).join('');
+      <td class="whitespace-nowrap text-[11px] text-charcoal-600">${esc(u.branch || '—')}</td>
+      <td>${statusBadge(u.status)}</td>
+      <td class="whitespace-nowrap text-[11px] text-charcoal-500">${u.lastLogin ? relativeTime(u.lastLogin) : 'Never'}</td>
+      <td class="text-right whitespace-nowrap">
+        <button onclick="event.stopPropagation();navigateTo('user-detail',{userId:'${u.id}'})" class="btn btn-sm btn-ghost text-brand-700">View</button>
+      </td>
+    </tr>`;
+  }).join('');
 
   return `<div class="card">
     <div class="card-head">
       <div class="flex-1 min-w-0">
-        <p class="bento-label">HR managers</p>
-        <p class="text-[10px] text-charcoal-500 mt-0.5">Only a Super Admin can create, suspend or reset an HR Manager account.</p>
+        <p class="bento-label">HR staff with access to this gym</p>
+        <p class="text-[10px] text-charcoal-500 mt-0.5">HR Managers already reach every gym. Only HR staff need assigning — and one person can hold several gyms.</p>
       </div>
-      <button onclick="openCreateHRManager('${gym.id}')" class="btn btn-primary btn-sm">
+      <button onclick="openAssignHR('${gym.id}')" class="btn btn-primary btn-sm">
         <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
-        Create HR manager
+        Assign HR staff
       </button>
     </div>
     <div class="data-table-wrap">
       <table class="data-table">
-        <thead><tr><th>Manager</th><th>Phone</th><th>Preset</th><th>Status</th><th>Last sign-in</th><th>Created</th><th></th></tr></thead>
-        <tbody>${rows || `<tr><td colspan="7">${emptyState('No HR manager on this account', 'Create one so the gym has an owner.')}</td></tr>`}</tbody>
+        <thead><tr><th>Person</th><th>Gym access</th><th>Primary branch</th><th>Status</th><th>Last sign-in</th><th></th></tr></thead>
+        <tbody>${rows || `<tr><td colspan="6">${emptyState('No HR staff assigned to this gym', 'Assign an HR account so this gym has operational cover.')}</td></tr>`}</tbody>
       </table>
     </div>
   </div>`;
+}
+
+function openAssignHR(gymId) {
+  const gym = getGym(gymId);
+  if (!gym) return;
+  const hrStaff = USERS.filter((u) => u.role === 'HR');
+  openModal({
+    title: 'Assign HR staff',
+    subtitle: `${gym.name} — ${gym.location} · one person can hold several gyms`,
+    width: 'max-w-lg',
+    body: `<div id="assign-hr-list" class="border border-charcoal-200 rounded-lg px-2.5 py-2 max-h-[46vh] overflow-y-auto">
+        ${hrStaff.map((u) => `<label class="form-check py-0.5">
+          <input type="checkbox" value="${u.id}" ${(u.gymIds || []).includes(gymId) ? 'checked' : ''}>
+          <span class="text-[10px] leading-snug flex-1 min-w-0">${esc(u.name)}
+            <span class="block text-[9px] text-charcoal-400">${esc(u.email)} · currently in ${(u.gymIds || []).length} gym${(u.gymIds || []).length === 1 ? '' : 's'}</span>
+          </span>
+        </label>`).join('')}
+      </div>
+      <p class="text-[10px] text-charcoal-400 mt-2">Removing a person revokes their access to this gym only; other gyms are untouched. Every change is logged as a User event.</p>`,
+    footer: `<button onclick="closeModal()" class="btn btn-sm btn-secondary">Cancel</button>
+      <button onclick="saveHrAssignment('${gymId}')" class="btn btn-sm btn-primary">Save assignment</button>`,
+  });
+}
+
+function saveHrAssignment(gymId) {
+  const gym = getGym(gymId);
+  if (!gym) return;
+  const boxes = Array.from(document.querySelectorAll('#assign-hr-list input[type="checkbox"]'));
+  const selected = boxes.filter((b) => b.checked).map((b) => b.value);
+  let added = 0;
+  let removed = 0;
+
+  USERS.filter((u) => u.role === 'HR').forEach((u) => {
+    const ids = u.gymIds || [];
+    const has = ids.includes(gymId);
+    const should = selected.includes(u.id);
+    if (should && !has) {
+      u.gymIds = ids.concat([gymId]);
+      added += 1;
+      logAudit({
+        gymId, category: 'User', severity: 'info', action: 'Assigned HR to gym',
+        target: `${u.name} · ${gymLabel(gym)}`,
+        detail: `HR access granted. Account now covers ${u.gymIds.length} gym${u.gymIds.length === 1 ? '' : 's'}.`,
+      });
+    } else if (!should && has) {
+      u.gymIds = ids.filter((id) => id !== gymId);
+      removed += 1;
+      logAudit({
+        gymId, category: 'User', severity: 'warning', action: 'Removed HR from gym',
+        target: `${u.name} · ${gymLabel(gym)}`,
+        detail: `HR access revoked for this gym. Account still covers ${u.gymIds.length} gym${u.gymIds.length === 1 ? '' : 's'}.`,
+      });
+    }
+  });
+
+  closeModal();
+  renderAll();
+  toast(`HR assignment saved — ${added} added, ${removed} removed`, 'success');
 }
 
 function gymBillingTab(gym, plan, invoices) {
@@ -758,15 +823,15 @@ function confirmResetPassword(userId) {
 }
 
 // ==================== CREATE GYM WIZARD ====================
-const WIZARD_STEPS = ['Gym details', 'Subscription', 'HR manager', 'Review'];
+const WIZARD_STEPS = ['Gym details', 'Subscription', 'HR access', 'Review'];
 
 function startGymWizard() {
   state.wizard = {
     step: 0,
     data: {
-      name: '', location: '', city: '', email: '', phone: '',
+      name: '', location: '', city: '', email: '', phone: '', logoUrl: null,
       planId: 'growth', billingCycle: 'Monthly', trial: true,
-      hrName: '', hrEmail: '', hrPhone: '', preset: 'HR Manager — Full', sendInvite: true,
+      hrIds: [], decideLater: false,
     },
   };
   renderGymWizard();
@@ -775,6 +840,58 @@ function startGymWizard() {
 function wizardSet(field, value) {
   if (!state.wizard) return;
   state.wizard.data[field] = value;
+}
+
+function wizardToggleHr(userId, checked) {
+  if (!state.wizard) return;
+  const ids = state.wizard.data.hrIds;
+  const i = ids.indexOf(userId);
+  if (checked && i < 0) ids.push(userId);
+  if (!checked && i >= 0) ids.splice(i, 1);
+  wizardUpdateHrCount();
+}
+
+function wizardUpdateHrCount() {
+  const el = document.getElementById('wz-hr-count');
+  if (el && state.wizard) el.textContent = `· ${state.wizard.data.hrIds.length} selected`;
+}
+
+function wizardToggleHrRow(row, userId) {
+  const box = row.querySelector('input[type="checkbox"]');
+  if (!box) return;
+  box.checked = !box.checked;
+  wizardToggleHr(userId, box.checked);
+}
+
+function wizardFilterHr(q) {
+  const term = (q || '').toLowerCase();
+  document.querySelectorAll('#wz-hr-body tr').forEach((tr) => {
+    tr.style.display = !term || (tr.dataset.search || '').indexOf(term) >= 0 ? '' : 'none';
+  });
+}
+
+function wizardSetDecideLater(checked) {
+  if (!state.wizard) return;
+  state.wizard.data.decideLater = checked;
+  if (checked) state.wizard.data.hrIds = [];
+  const picker = document.getElementById('wz-hr-picker');
+  if (picker) picker.style.display = checked ? 'none' : '';
+  document.querySelectorAll('#wz-hr-body input[type="checkbox"]').forEach((b) => { b.checked = false; });
+  wizardUpdateHrCount();
+}
+
+function wizardLogo(input) {
+  const file = input.files && input.files[0];
+  if (!file) return;
+  if (!/^image\//.test(file.type)) { toast('Choose an image file', 'error'); return; }
+  const reader = new FileReader();
+  reader.onload = () => { wizardSet('logoUrl', reader.result); renderGymWizard(); };
+  reader.readAsDataURL(file);
+}
+
+function wizardClearLogo() {
+  wizardSet('logoUrl', null);
+  renderGymWizard();
 }
 
 function renderGymWizard() {
@@ -791,7 +908,19 @@ function renderGymWizard() {
   let footer = '';
 
   if (w.step === 0) {
+    const preview = d.logoUrl
+      ? `<span class="gym-logo gym-logo-44" style="background-image:url('${d.logoUrl}');background-size:cover;background-position:center;color:transparent">.</span>`
+      : `<span class="gym-logo gym-logo-44">${esc(initialsOf(d.name || 'Gym'))}</span>`;
     body = `<div class="space-y-2.5">
+      <div class="flex items-center gap-2.5">
+        ${preview}
+        <div class="flex-1 min-w-0">
+          <label class="form-label">Gym logo</label>
+          <input type="file" accept="image/png,image/jpeg,image/svg+xml,image/webp" class="form-input" onchange="wizardLogo(this)" aria-label="Upload gym logo">
+          <p class="form-hint">Square PNG, JPG or SVG. Falls back to the gym initials.</p>
+        </div>
+        ${d.logoUrl ? '<button type="button" onclick="wizardClearLogo()" class="btn btn-sm btn-ghost text-charcoal-500 flex-shrink-0">Remove</button>' : ''}
+      </div>
       <div><label class="form-label">Gym name <span class="text-red-500">*</span></label>
         <input class="form-input" id="wz-name" placeholder="e.g. Iron House Gym" value="${esc(d.name)}" oninput="wizardSet('name',this.value)"></div>
       <div class="grid grid-cols-2 gap-2">
@@ -804,7 +933,7 @@ function renderGymWizard() {
         <input class="form-input" type="email" placeholder="accounts@gym.com" value="${esc(d.email)}" oninput="wizardSet('email',this.value)"></div>
       <div><label class="form-label">Contact phone</label>
         <input class="form-input" placeholder="+20 100 000 0000" value="${esc(d.phone)}" oninput="wizardSet('phone',this.value)"></div>
-      <p class="form-hint">The gym account is created empty — you add the HR Manager in step 3 and they add everyone else.</p>
+      <p class="form-hint">The account starts empty. You can assign HR staff in step 3 — they add everyone else.</p>
     </div>`;
     footer = `<button onclick="closeModal()" class="btn btn-sm btn-secondary">Cancel</button>
       <button onclick="wizardNext()" class="btn btn-sm btn-primary">Continue</button>`;
@@ -814,7 +943,7 @@ function renderGymWizard() {
     const planCards = PLANS.map((p) => `<button class="plan-card ${d.planId === p.id ? 'selected' : ''}" onclick="wizardPlan('${p.id}')">
         <div class="flex items-center justify-between">
           <p class="text-xs font-bold text-charcoal-900">${p.name}</p>
-          <p class="text-[11px] font-semibold text-charcoal-700">${formatMoney(p.price)}<span class="text-[9px] font-normal text-charcoal-400">/mo</span></p>
+          <p class="text-[11px] font-semibold text-charcoal-700">${formatMoney(p.price)}<span class="text-[9px] font-normal text-charcoal-400">${cycleLabel(p)}</span></p>
         </div>
         <p class="text-[10px] text-charcoal-500 mt-0.5">${esc(p.tagline)}</p>
         <p class="text-[9px] text-charcoal-400 mt-1">${p.seatLimit ? p.seatLimit + ' seats' : 'Unlimited seats'} · ${p.branchLimit ? p.branchLimit + ' branch' + (p.branchLimit > 1 ? 'es' : '') : 'Unlimited branches'}</p>
@@ -830,9 +959,9 @@ function renderGymWizard() {
         <div><label class="form-label">Start date</label>
           <input class="form-input" value="${formatDate(PLATFORM.today)}" disabled></div>
       </div>
-      <label class="form-check mt-2.5"><input type="checkbox" ${d.trial ? 'checked' : ''} onchange="wizardSet('trial',this.checked);renderGymWizard()"> Start with a 30-day free trial</label>
+      <label class="form-check mt-2.5"><input type="checkbox" ${d.trial ? 'checked' : ''} onchange="wizardSet('trial',this.checked);renderGymWizard()"> Start with a 14-day free trial</label>
       <div class="rounded-lg bg-charcoal-50 border border-charcoal-200 px-3 py-2 mt-2.5 flex items-center justify-between">
-        <span class="text-[10px] text-charcoal-500">${d.trial ? 'Trial — no charge for 30 days' : 'Monthly recurring'}</span>
+        <span class="text-[10px] text-charcoal-500">${d.trial ? 'Trial — no charge for 14 days' : 'Monthly recurring'}</span>
         <span class="text-xs font-bold text-charcoal-800">${d.trial ? 'EGP 0' : formatMoney(getPlan(d.planId).price)}</span>
       </div>`;
     footer = `<button onclick="wizardBack()" class="btn btn-sm btn-secondary">Back</button>
@@ -840,24 +969,52 @@ function renderGymWizard() {
   }
 
   if (w.step === 2) {
+    const hrStaff = USERS.filter((u) => u.role === 'HR');
+    const candidateRows = hrStaff.map((u) => {
+      const home = getGym(u.gymId);
+      const gymCount = (u.gymIds || []).length;
+      const search = `${u.name} ${u.email} ${home ? home.name + ' ' + home.location : ''} ${u.branch || ''}`.toLowerCase();
+      return `<tr class="is-clickable" data-search="${esc(search)}" onclick="wizardToggleHrRow(this,'${u.id}')">
+        <td class="w-6">
+          <input type="checkbox" value="${u.id}" ${d.hrIds.includes(u.id) ? 'checked' : ''} onclick="event.stopPropagation()" onchange="wizardToggleHr('${u.id}',this.checked)" aria-label="Assign ${esc(u.name)}">
+        </td>
+        <td class="min-w-0">
+          <div class="flex items-center gap-1.5">
+            ${avatarHtml(u, 24)}
+            <div class="min-w-0">
+              <p class="text-[11px] font-semibold text-charcoal-800 truncate leading-tight">${esc(u.name)}</p>
+              <p class="text-[9px] text-charcoal-400 truncate leading-tight">${esc(u.email)}</p>
+            </div>
+          </div>
+        </td>
+        <td class="min-w-0">
+          <span class="block text-[10px] text-charcoal-600 truncate max-w-[150px]">${esc(home ? home.name + ' — ' + home.location : 'No home gym')}</span>
+          <p class="text-[9px] text-charcoal-400 truncate max-w-[150px]">${esc(u.branch || '—')}</p>
+        </td>
+        <td class="whitespace-nowrap"><span class="badge ${gymCount > 1 ? 'badge-purple' : 'badge-gray'}">${gymCount} gym${gymCount === 1 ? '' : 's'}</span></td>
+        <td>${statusBadge(u.status)}</td>
+        <td class="whitespace-nowrap text-[10px] text-charcoal-500">${u.lastLogin ? relativeTime(u.lastLogin) : 'Never'}</td>
+      </tr>`;
+    }).join('');
+
     body = `<div class="rounded-lg border border-brand-200 bg-brand-50 px-3 py-2 mb-2.5">
-        <p class="text-[10px] text-brand-800 leading-relaxed">Only a Super Admin can create an HR Manager. This account becomes the gym's owner and can then invite HR staff, branch managers and employees.</p>
+        <p class="text-[10px] text-brand-800 leading-relaxed">HR Managers already reach every gym account. Only <strong class="font-semibold">HR staff</strong> are assigned to gyms, and one person can hold several. <strong class="font-semibold">This step is optional</strong> — an HR Manager can decide and assign the right people later from the gym account.</p>
       </div>
-      <div class="space-y-2.5">
-        <div><label class="form-label">Full name <span class="text-red-500">*</span></label>
-          <input class="form-input" placeholder="e.g. Hoda Kamel" value="${esc(d.hrName)}" oninput="wizardSet('hrName',this.value)"></div>
-        <div><label class="form-label">Work email <span class="text-red-500">*</span></label>
-          <input class="form-input" type="email" placeholder="name@gym.com" value="${esc(d.hrEmail)}" oninput="wizardSet('hrEmail',this.value)"></div>
-        <div class="grid grid-cols-2 gap-2">
-          <div><label class="form-label">Phone</label>
-            <input class="form-input" placeholder="+20 100 000 0000" value="${esc(d.hrPhone)}" oninput="wizardSet('hrPhone',this.value)"></div>
-          <div><label class="form-label">Permission preset</label>
-            <select class="form-select" onchange="wizardSet('preset',this.value)">
-              <option${d.preset === 'HR Manager — Full' ? ' selected' : ''}>HR Manager — Full</option>
-              <option${d.preset === 'HR Manager — Standard' ? ' selected' : ''}>HR Manager — Standard</option>
-            </select></div>
+      <label class="form-check mb-2"><input type="checkbox" ${d.decideLater ? 'checked' : ''} onchange="wizardSetDecideLater(this.checked)"> Decide later — leave HR assignment to an HR Manager</label>
+      <div id="wz-hr-picker" style="${d.decideLater ? 'display:none' : ''}">
+        <div class="rounded-lg border border-charcoal-200 overflow-hidden">
+          <div class="px-2.5 py-1.5 border-b border-charcoal-200 flex items-center gap-2">
+            <p class="text-[9px] font-bold uppercase tracking-wider text-charcoal-400 flex-1">Candidates <span id="wz-hr-count" class="text-charcoal-600 normal-case font-semibold">· ${d.hrIds.length} selected</span></p>
+            <input class="form-input form-input-sm w-40" placeholder="Filter name or gym…" oninput="wizardFilterHr(this.value)" aria-label="Filter HR candidates">
+          </div>
+          <div class="max-h-[32vh] overflow-y-auto">
+            <table class="data-table">
+              <thead><tr><th class="w-6"></th><th>Person</th><th>Home gym</th><th>Gyms</th><th>Status</th><th>Last sign-in</th></tr></thead>
+              <tbody id="wz-hr-body">${candidateRows}</tbody>
+            </table>
+          </div>
         </div>
-        <label class="form-check"><input type="checkbox" ${d.sendInvite ? 'checked' : ''} onchange="wizardSet('sendInvite',this.checked)"> Email an activation invite now</label>
+        <p class="form-hint">Pick who should cover this gym now, or skip it — nothing is assigned unless you tick someone.</p>
       </div>`;
     footer = `<button onclick="wizardBack()" class="btn btn-sm btn-secondary">Back</button>
       <button onclick="wizardNext()" class="btn btn-sm btn-primary">Review</button>`;
@@ -865,34 +1022,33 @@ function renderGymWizard() {
 
   if (w.step === 3) {
     const plan = getPlan(d.planId);
+    const assigned = USERS.filter((u) => d.hrIds.includes(u.id)).map((u) => u.name);
     body = `<dl class="text-[11px] divide-soft">
         ${[
           ['Gym', `${d.name || '—'} — ${d.location || '—'}${d.city ? ', ' + d.city : ''}`],
+          ['Logo', d.logoUrl ? 'Uploaded' : 'Initials'],
           ['Billing contact', d.email || '—'],
           ['Phone', d.phone || '—'],
-          ['Plan', `${plan.name} · ${d.trial ? '30-day trial' : formatMoney(plan.price) + '/month'}`],
+          ['Plan', `${plan.name} · ${d.trial ? '14-day trial' : formatMoney(plan.price) + '/month'}`],
           ['Billing cycle', d.billingCycle],
           ['Seat limit', plan.seatLimit ? plan.seatLimit + ' seats' : 'Unlimited'],
-          ['HR Manager', d.hrName || '—'],
-          ['HR Manager email', d.hrEmail || '—'],
-          ['Preset', d.preset],
-          ['Invite', d.sendInvite ? 'Sent immediately' : 'Not sent'],
+          ['HR staff', d.decideLater ? 'Left to an HR Manager' : (assigned.length ? assigned.join(', ') : 'None assigned')],
         ].map(([k, v]) => `<div class="flex justify-between gap-3 py-1.5">
           <dt class="text-charcoal-500">${esc(k)}</dt>
           <dd class="font-semibold text-charcoal-800 text-right">${esc(v)}</dd></div>`).join('')}
       </dl>
-      <p class="text-[10px] text-charcoal-400 mt-2">Creating the account writes a Gym event and a User event to the platform audit trail.</p>`;
+      <p class="text-[10px] text-charcoal-400 mt-2">Creating the account writes a Gym event to the platform audit trail${assigned.length ? ', plus one User event per assigned HR staff member' : ''}. HR assignment can be done later from the gym's HR staff tab.</p>`;
     footer = `<button onclick="wizardBack()" class="btn btn-sm btn-secondary">Back</button>
       <button onclick="submitGymWizard()" class="btn btn-sm btn-primary">
-        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
         Create gym account
       </button>`;
   }
 
   updateModal({
     title: 'Create gym account',
-    subtitle: 'Provision a tenant, its subscription and its HR Manager in one flow',
-    width: 'max-w-xl',
+    subtitle: 'Provision a tenant, its subscription and its HR access in one flow',
+    width: 'max-w-2xl',
     body: `<div class="stepper mb-3 flex-wrap gap-y-1.5">${stepper}</div>${body}`,
     footer,
   });
@@ -918,12 +1074,6 @@ function wizardNext() {
       return;
     }
   }
-  if (state.wizard.step === 2) {
-    if (!d.hrName.trim() || !d.hrEmail.trim()) {
-      toast('HR manager name and email are required', 'error');
-      return;
-    }
-  }
   state.wizard.step = Math.min(WIZARD_STEPS.length - 1, state.wizard.step + 1);
   renderGymWizard();
 }
@@ -932,53 +1082,42 @@ function submitGymWizard() {
   const d = state.wizard.data;
   const plan = getPlan(d.planId);
   const id = 'gym-' + (GYMS.length + 1);
-  const code = (d.name.replace(/[^A-Za-z ]/g, '').split(' ').filter(Boolean).map((w) => w[0]).join('').slice(0, 2).toUpperCase() || 'GY') + '-' + (d.location.slice(0, 2).toUpperCase() || 'NA');
-  const logo = (d.name.replace(/[^A-Za-z ]/g, '').split(' ').filter(Boolean).map((w) => w[0]).join('').slice(0, 2).toUpperCase() || 'GY');
+  const initials = (d.name.replace(/[^A-Za-z ]/g, '').split(' ').filter(Boolean).map((w) => w[0]).join('').slice(0, 2).toUpperCase() || 'GY');
+  const code = initials + '-' + (d.location.slice(0, 2).toUpperCase() || 'NA');
   const domain = (d.email.split('@')[1] || 'gym.com').toLowerCase();
-  const renews = new Date(new Date(PLATFORM.today).getTime() + (d.trial ? 30 : 365) * 86400000).toISOString().slice(0, 10);
+  const renews = new Date(new Date(PLATFORM.today).getTime() + (d.trial ? 14 : 365) * 86400000).toISOString().slice(0, 10);
+  const assignedHr = d.decideLater ? [] : USERS.filter((u) => d.hrIds.includes(u.id));
 
   const gym = {
     id, code, name: d.name.trim(), location: d.location.trim(), city: d.city.trim() || '—',
-    logo, domain, status: d.trial ? 'Trial' : 'Active', planId: d.planId,
+    logo: initials, logoUrl: d.logoUrl || null, domain,
+    status: d.trial ? 'Trial' : 'Active', planId: d.planId,
     seatLimit: plan.seatLimit, branches: 1,
+    branchList: [{ code: code + '-1', name: `${d.location.trim()} Club`, area: d.location.trim(), address: '—', phone: d.phone.trim() || '—', manager: assignedHr.length ? assignedHr[0].name : 'Unassigned' }],
     subscribedOn: PLATFORM.today.slice(0, 10), renewsOn: renews,
-    billingCycle: d.trial ? 'Trial · 30 days' : d.billingCycle,
+    billingCycle: d.trial ? 'Trial · 14 days' : d.billingCycle,
     mrr: d.trial ? 0 : plan.price,
-    contact: { name: d.hrName.trim(), email: d.email.trim(), phone: d.phone.trim() || '—' },
+    contact: { name: assignedHr.length ? assignedHr[0].name : 'Unassigned', email: d.email.trim(), phone: d.phone.trim() || '—' },
     health: 70, attendanceRate: 0, payrollStatus: 'Not started',
     lastActivity: PLATFORM.today,
-    userCounts: { total: 1, hrManager: 1, hr: 0, branchManager: 0, teamLeader: 0, employee: 0 },
+    userCounts: { total: 0, hrManager: 0, hr: 0, branchManager: 0, teamLeader: 0, employee: 0 },
     activity: new Array(14).fill(0),
   };
   GYMS.unshift(gym);
 
-  const manager = {
-    id: 'RV-' + String(300 + USERS.length).padStart(5, '0'),
-    name: d.hrName.trim(),
-    initials: initialsOf(d.hrName),
-    email: d.hrEmail.trim(),
-    phone: d.hrPhone.trim() || '—',
-    role: 'HR Manager',
-    avatar: 'avatar-purple',
-    gymId: id,
-    gymName: `${gym.name} — ${gym.location}`,
-    status: d.sendInvite ? 'Invited' : 'Active',
-    lastLogin: null,
-    createdAt: PLATFORM.today.slice(0, 10),
-    preset: d.preset,
-    source: 'Super Admin',
-  };
-  USERS.unshift(manager);
+  assignedHr.forEach((u) => {
+    u.gymIds = (u.gymIds || []).concat([id]);
+    logAudit({
+      gymId: id, category: 'User', severity: 'info', action: 'Assigned HR to gym',
+      target: `${u.name} · ${gymLabel(gym)}`,
+      detail: `HR access granted. Account now covers ${u.gymIds.length} gym${u.gymIds.length === 1 ? '' : 's'}.`,
+    });
+  });
 
   logAudit({
     gymId: id, category: 'Gym', severity: 'info', action: 'Created gym account',
     target: gymLabel(gym),
-    detail: `Provisioned on ${plan.name}${d.trial ? ' (30-day trial)' : ' at ' + formatMoney(plan.price) + '/month'}. Seat limit ${plan.seatLimit || 'unlimited'}.`,
-  });
-  logAudit({
-    gymId: id, category: 'User', severity: 'info', action: 'Created HR Manager account',
-    target: `${manager.name} · ${gymLabel(gym)}`,
-    detail: `Preset ${d.preset}. ${d.sendInvite ? 'Activation invite emailed.' : 'Invite withheld.'}`,
+    detail: `Provisioned on ${plan.name}${d.trial ? ' (14-day trial)' : ' at ' + formatMoney(plan.price) + '/month'}. Seat limit ${plan.seatLimit || 'unlimited'}. ${assignedHr.length} HR staff assigned.`,
   });
 
   state.wizard = null;
@@ -986,5 +1125,5 @@ function submitGymWizard() {
   state.gymTab = 'overview';
   state.currentPage = 'gym-detail';
   renderAll();
-  toast(`${gym.name} created with an HR Manager account`, 'success');
+  toast(`${gym.name} created${assignedHr.length ? ` with ${assignedHr.length} HR staff assigned` : ''}`, 'success');
 }
