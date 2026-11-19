@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using Presistence.Data;
 using DomainLayer.Models.OrganizationModule.Enums;
 using DomainLayer.Models.UserModule;
+using DomainLayer.Models.UserModule.Enums;
 using Shared.Authorization;
 
 namespace Presistence.Repository
@@ -34,6 +35,14 @@ namespace Presistence.Repository
         public async Task<bool> HasGymAccessAsync(int userId, int gymId, CancellationToken cancellationToken = default) =>
             await _dbContext.UserGymAccesses.AsNoTracking()
                 .AnyAsync(uga => uga.UserId == userId && uga.GymId == gymId, cancellationToken);
+
+        public async Task<bool> IsTopManagementAsync(int userId, CancellationToken cancellationToken = default) =>
+            await _dbContext.Users.AsNoTracking()
+                .AnyAsync(u => u.Id == userId && u.UserType == UserType.TopManagement, cancellationToken);
+
+        public async Task<bool> CoversGymAsync(int userId, int gymId, CancellationToken cancellationToken = default) =>
+            await IsTopManagementAsync(userId, cancellationToken)
+            || await HasGymAccessAsync(userId, gymId, cancellationToken);
 
         public async Task AddGymAccessAsync(int userId, int gymId, CancellationToken cancellationToken = default)
         {
@@ -86,6 +95,74 @@ namespace Presistence.Repository
             ).Distinct()
              .ToListAsync(cancellationToken);
 
+        public async Task<IReadOnlyList<int>> GetUserGymRoleIdsAsync(int userId, int gymId, CancellationToken cancellationToken = default) =>
+            await _dbContext.UserGymRoles.AsNoTracking()
+                .Where(ugr => ugr.UserId == userId && ugr.GymId == gymId)
+                .Select(ugr => ugr.RoleId)
+                .Distinct()
+                .ToListAsync(cancellationToken);
+
+        public async Task ReplaceUserGymRolesAsync(int userId, int gymId, IReadOnlyCollection<int> roleIds, CancellationToken cancellationToken = default)
+        {
+            var desired = roleIds.Distinct().ToHashSet();
+            var current = await _dbContext.UserGymRoles
+                .Where(ugr => ugr.UserId == userId && ugr.GymId == gymId)
+                .ToListAsync(cancellationToken);
+
+            var stale = current.Where(ugr => !desired.Contains(ugr.RoleId)).ToList();
+            if (stale.Count > 0)
+            {
+                _dbContext.UserGymRoles.RemoveRange(stale);
+            }
+
+            var existing = current.Select(ugr => ugr.RoleId).ToHashSet();
+            foreach (var roleId in desired.Where(id => !existing.Contains(id)))
+            {
+                _dbContext.UserGymRoles.Add(new UserGymRole { UserId = userId, GymId = gymId, RoleId = roleId });
+            }
+        }
+
+        public async Task ReplaceUserGymRolesForGymsAsync(int userId, IReadOnlyCollection<int> gymIds, IReadOnlyCollection<int> roleIds, CancellationToken cancellationToken = default)
+        {
+            foreach (var gymId in gymIds.Distinct())
+            {
+                await ReplaceUserGymRolesAsync(userId, gymId, roleIds, cancellationToken);
+            }
+        }
+
+        public async Task SyncGlobalRolesFromGymRolesAsync(int userId, CancellationToken cancellationToken = default)
+        {
+            var persisted = await _dbContext.UserGymRoles.AsNoTracking()
+                .Where(ugr => ugr.UserId == userId)
+                .Select(ugr => ugr.RoleId)
+                .ToListAsync(cancellationToken);
+
+            // The per-gym rows were just written in this unit of work and are not
+            // flushed yet, so the tracked Added rows must join the union too.
+            var pending = _dbContext.ChangeTracker.Entries<UserGymRole>()
+                .Where(entry => entry.Entity.UserId == userId
+                    && entry.State is EntityState.Added or EntityState.Unchanged or EntityState.Modified)
+                .Select(entry => entry.Entity.RoleId);
+
+            var desired = persisted.Concat(pending).ToHashSet();
+
+            var current = await _dbContext.UserRoles
+                .Where(ur => ur.UserId == userId)
+                .ToListAsync(cancellationToken);
+
+            var stale = current.Where(ur => !desired.Contains(ur.RoleId)).ToList();
+            if (stale.Count > 0)
+            {
+                _dbContext.UserRoles.RemoveRange(stale);
+            }
+
+            var existing = current.Select(ur => ur.RoleId).ToHashSet();
+            foreach (var roleId in desired.Where(id => !existing.Contains(id)))
+            {
+                _dbContext.UserRoles.Add(new UserRole { UserId = userId, RoleId = roleId });
+            }
+        }
+
         /// <inheritdoc />
         public async Task<bool> HasActiveGymDeskAsync(int gymId, int excludeUserId, CancellationToken cancellationToken = default)
         {
@@ -111,14 +188,14 @@ namespace Presistence.Repository
 
             var roleKeys = await GymRoleKeysAsync(userId, gymId, cancellationToken);
 
-            // No per-gym role in the active gym (HR/TopManagement-style accounts,
-            // or users whose roles were only ever granted globally): the global
-            // role keys carry over rather than dropping the user to key-less.
+            // Global role keys apply only to accounts that hold NO per-gym role
+            // anywhere (legacy HR/TopManagement-style accounts). A user who holds
+            // a role in another gym must not borrow that gym's keys here.
             if (gymId.HasValue && roleKeys.Count == 0)
             {
-                var hasGymRole = await _dbContext.UserGymRoles.AsNoTracking()
-                    .AnyAsync(ugr => ugr.UserId == userId && ugr.GymId == gymId.Value, cancellationToken);
-                if (!hasGymRole)
+                var hasAnyGymRole = await _dbContext.UserGymRoles.AsNoTracking()
+                    .AnyAsync(ugr => ugr.UserId == userId, cancellationToken);
+                if (!hasAnyGymRole)
                 {
                     roleKeys = await GlobalRoleKeysAsync(userId, cancellationToken);
                 }
@@ -208,12 +285,20 @@ namespace Presistence.Repository
             }
         }
 
-        public async Task<int> CountUsersWithRoleAsync(int roleId, CancellationToken cancellationToken = default) =>
-            await _dbContext.UserRoles
+        public async Task<int> CountUsersWithRoleAsync(int roleId, CancellationToken cancellationToken = default)
+        {
+            var globalUsers = await _dbContext.UserRoles.AsNoTracking()
                 .Where(ur => ur.RoleId == roleId)
                 .Select(ur => ur.UserId)
-                .Distinct()
-                .CountAsync(cancellationToken);
+                .ToListAsync(cancellationToken);
+
+            var gymUsers = await _dbContext.UserGymRoles.AsNoTracking()
+                .Where(ugr => ugr.RoleId == roleId)
+                .Select(ugr => ugr.UserId)
+                .ToListAsync(cancellationToken);
+
+            return globalUsers.Concat(gymUsers).Distinct().Count();
+        }
 
         public async Task ArchiveRoleAsync(int roleId, CancellationToken cancellationToken = default)
         {

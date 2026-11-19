@@ -55,12 +55,16 @@ namespace Service.Services
             return actor;
         }
 
-        /// <summary>null = unrestricted (Top Management without a gym filter); empty array = matches nobody.</summary>
-        internal static async Task<int[]> ResolveGymScopeAsync(IUnitOfWork unitOfWork, IUserAccessRepository userAccess, User actor, int? requestedGym, CancellationToken cancellationToken)
+        /// <summary>
+        /// Resolves the gym scope for a read/query operation.
+        /// <c>null</c> = unrestricted (Top Management without a gym filter);
+        /// an empty array = matches nobody (a user with no active gym access).
+        /// </summary>
+        internal static async Task<int[]?> ResolveGymScopeAsync(IUnitOfWork unitOfWork, IUserAccessRepository userAccess, User actor, int? requestedGym, CancellationToken cancellationToken)
         {
             if (actor.UserType == UserType.TopManagement)
             {
-                return requestedGym.HasValue ? [requestedGym.Value] : [];
+                return requestedGym.HasValue ? [requestedGym.Value] : null;
             }
 
             var allowedIds = (await userAccess.GetGymAccessAsync(actor.Id, cancellationToken))

@@ -195,7 +195,7 @@ namespace Service.Services
             var scope = await HrPortalHelpers.ResolveGymScopeAsync(_unitOfWork, _userAccess, actor, null, cancellationToken);
 
             var (periodLabel, from) = ResolvePeriod(query.Period);
-            Func<int, bool> inScope = scope.Length == 0 ? _ => true : id => scope.Contains(id);
+            Func<int, bool> inScope = id => scope is null || scope.Contains(id);
 
             var sb = new StringBuilder();
             sb.AppendLine("Section,Metric,Value");
@@ -255,7 +255,7 @@ namespace Service.Services
             Append(sb, "Hiring", "Open vacancies", vacancies.Count(v => v.Status == VacancyStatus.Open));
             Append(sb, "Hiring", "Open slots", vacancies.Where(v => v.Status == VacancyStatus.Open).Sum(v => v.HeadcountNeeded));
             var applications = (await _unitOfWork.GetRepository<Application, int>().GetAllAsync(cancellationToken))
-                .Where(a => a.Vacancy is null ? scope.Length == 0 : inScope(a.Vacancy.GymId))
+                .Where(a => a.Vacancy is null ? scope is null : inScope(a.Vacancy.GymId))
                 .ToList();
             Append(sb, "Hiring", "Applications in pipeline", applications.Count(a => a.Status == ApplicationStatus.InProgress));
             Append(sb, "Hiring", "Hired in period", applications.Count(a =>
@@ -299,7 +299,7 @@ namespace Service.Services
             var scope = await HrPortalHelpers.ResolveGymScopeAsync(_unitOfWork, _userAccess, actor, gymFilter, cancellationToken);
 
             var (periodLabel, from) = ResolvePeriod(query.Period);
-            Func<int, bool> inScope = scope.Length == 0 ? _ => true : id => scope.Contains(id);
+            Func<int, bool> inScope = id => scope is null || scope.Contains(id);
             var fromDate = DateOnly.FromDateTime(from);
             var today = DateOnly.FromDateTime(DateTime.UtcNow);
 
@@ -395,7 +395,7 @@ namespace Service.Services
                 .ToList();
             var openVacancies = vacancies.Where(v => v.Status == VacancyStatus.Open).ToList();
             var applications = (await _unitOfWork.GetRepository<Application, int>().GetAllAsync(cancellationToken))
-                .Where(a => a.Vacancy is null ? scope.Length == 0 : inScope(a.Vacancy.GymId))
+                .Where(a => a.Vacancy is null ? scope is null : inScope(a.Vacancy.GymId))
                 .ToList();
 
             var recruitingDto = new ReportRecruitingDto

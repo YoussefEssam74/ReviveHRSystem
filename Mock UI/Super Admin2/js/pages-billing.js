@@ -119,24 +119,15 @@ function renderBilling() {
         <div class="card-head">
           <div class="flex-1 min-w-0">
             <p class="bento-label">Invoices</p>
-            <p class="text-[10px] text-charcoal-500 mt-0.5">${visible.length} shown of ${INVOICES.length} · ${formatMoney(r.billed)} billed in November</p>
+            <p class="text-[10px] text-charcoal-500 mt-0.5">
+              ${visible.length} shown of ${INVOICES.length} · ${formatMoney(r.billed)} billed in November
+              <span class="text-charcoal-300 mx-1">|</span>
+              current <span class="font-semibold text-charcoal-700">${formatMoney(Math.max(0, r.billed - r.collected - aging.current30 - aging.over30))}</span>
+              · 1–30d late <span class="font-semibold ${aging.current30 ? 'text-amber-600' : 'text-charcoal-700'}">${formatMoney(aging.current30)}</span>
+              · 30d+ late <span class="font-semibold ${aging.over30 ? 'text-red-600' : 'text-charcoal-700'}">${formatMoney(aging.over30)}</span>
+            </p>
           </div>
           ${overdueList.length ? `<button onclick="remindAllOverdue()" class="btn btn-sm btn-secondary">Remind all overdue</button>` : ''}
-        </div>
-
-        <div class="px-3 py-2 border-b border-charcoal-100 grid grid-cols-3 gap-2">
-          <div>
-            <p class="text-[9px] uppercase tracking-wider text-charcoal-400">Current</p>
-            <p class="text-xs font-semibold text-charcoal-800">${formatMoney(Math.max(0, r.billed - r.collected - aging.current30 - aging.over30))}</p>
-          </div>
-          <div>
-            <p class="text-[9px] uppercase tracking-wider text-charcoal-400">1–30 days late</p>
-            <p class="text-xs font-semibold ${aging.current30 ? 'text-amber-600' : 'text-charcoal-800'}">${formatMoney(aging.current30)}</p>
-          </div>
-          <div>
-            <p class="text-[9px] uppercase tracking-wider text-charcoal-400">30+ days late</p>
-            <p class="text-xs font-semibold ${aging.over30 ? 'text-red-600' : 'text-charcoal-800'}">${formatMoney(aging.over30)}</p>
-          </div>
         </div>
 
         <div class="px-3 py-2 flex items-center gap-2 flex-wrap border-b border-charcoal-100">
@@ -191,12 +182,9 @@ function plansCard() {
     const mrr = gymsOn.reduce((s, g) => s + g.mrr, 0);
     return `<tr>
       <td>
-        <div class="min-w-0">
-          <div class="flex items-center gap-1.5">
-            <p class="text-xs font-semibold text-charcoal-800 truncate leading-tight">${esc(plan.name)}</p>
-            ${plan.highlighted ? '<span class="badge badge-brand">Popular</span>' : ''}
-          </div>
-          <p class="text-[10px] text-charcoal-500 truncate leading-tight mt-0.5">${esc(plan.tagline)}</p>
+        <div class="flex items-center gap-1.5 min-w-0">
+          <p class="text-xs font-semibold text-charcoal-800 truncate leading-tight">${esc(plan.name)}</p>
+          ${plan.highlighted ? '<span class="badge badge-brand">Popular</span>' : ''}
         </div>
       </td>
       <td class="text-right whitespace-nowrap">

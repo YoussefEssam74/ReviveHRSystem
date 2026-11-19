@@ -160,7 +160,8 @@ namespace Persistence.Data.Migrations
                     b.HasIndex("StationSessionId");
 
                     b.HasIndex("EmployeeId", "Date")
-                        .IsUnique();
+                        .IsUnique()
+                        .HasFilter("\"IsDeleted\" = FALSE");
 
                     b.ToTable("AttendanceRecords", (string)null);
                 });
@@ -210,7 +211,8 @@ namespace Persistence.Data.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("DeviceToken")
-                        .IsUnique();
+                        .IsUnique()
+                        .HasFilter("\"IsDeleted\" = FALSE");
 
                     b.HasIndex("GymId");
 
@@ -257,7 +259,8 @@ namespace Persistence.Data.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("EmployeeId")
-                        .IsUnique();
+                        .IsUnique()
+                        .HasFilter("\"IsDeleted\" = FALSE");
 
                     b.ToTable("FaceEmbeddings", (string)null);
                 });
@@ -312,7 +315,8 @@ namespace Persistence.Data.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("Code")
-                        .IsUnique();
+                        .IsUnique()
+                        .HasFilter("\"IsDeleted\" = FALSE");
 
                     b.HasIndex("GeneratedBy");
 
@@ -377,7 +381,8 @@ namespace Persistence.Data.Migrations
                     b.HasIndex("StationCodeId");
 
                     b.HasIndex("TokenHash")
-                        .IsUnique();
+                        .IsUnique()
+                        .HasFilter("\"IsDeleted\" = FALSE");
 
                     b.ToTable("StationSessions", (string)null);
                 });
@@ -701,7 +706,8 @@ namespace Persistence.Data.Migrations
                     b.HasIndex("CandidateId");
 
                     b.HasIndex("EmployeeNumber")
-                        .IsUnique();
+                        .IsUnique()
+                        .HasFilter("\"IsDeleted\" = FALSE");
 
                     b.HasIndex("GymId");
 
@@ -710,7 +716,8 @@ namespace Persistence.Data.Migrations
                     b.HasIndex("PositionId");
 
                     b.HasIndex("UserId")
-                        .IsUnique();
+                        .IsUnique()
+                        .HasFilter("\"IsDeleted\" = FALSE");
 
                     b.HasIndex("TeamId", "GymId");
 
@@ -897,7 +904,8 @@ namespace Persistence.Data.Migrations
                     b.HasIndex("UpdatedBy");
 
                     b.HasIndex("EmployeeId", "LeaveType", "Year")
-                        .IsUnique();
+                        .IsUnique()
+                        .HasFilter("\"IsDeleted\" = FALSE");
 
                     b.ToTable("LeaveBalances", (string)null);
                 });
@@ -1054,7 +1062,8 @@ namespace Persistence.Data.Migrations
                     b.HasIndex("CompletedBy");
 
                     b.HasIndex("OffboardingCaseId", "SortOrder")
-                        .IsUnique();
+                        .IsUnique()
+                        .HasFilter("\"IsDeleted\" = FALSE");
 
                     b.ToTable("OffboardingChecklistItems", (string)null);
                 });
@@ -1115,7 +1124,8 @@ namespace Persistence.Data.Migrations
                     b.HasIndex("CompletedBy");
 
                     b.HasIndex("EmployeeId", "SortOrder")
-                        .IsUnique();
+                        .IsUnique()
+                        .HasFilter("\"IsDeleted\" = FALSE");
 
                     b.ToTable("OnboardingChecklistItems", (string)null);
                 });
@@ -1911,7 +1921,8 @@ namespace Persistence.Data.Migrations
                     b.HasIndex("GymId", "Status");
 
                     b.HasIndex("Type", "EntityType", "EntityId")
-                        .IsUnique();
+                        .IsUnique()
+                        .HasFilter("\"IsDeleted\" = FALSE");
 
                     b.ToTable("Events", (string)null);
                 });
@@ -2497,7 +2508,8 @@ namespace Persistence.Data.Migrations
                     b.HasIndex("EmployeeId");
 
                     b.HasIndex("PayrollPeriodId", "EmployeeId")
-                        .IsUnique();
+                        .IsUnique()
+                        .HasFilter("\"IsDeleted\" = FALSE");
 
                     b.ToTable("PayrollEntries", (string)null);
                 });
@@ -3242,7 +3254,8 @@ namespace Persistence.Data.Migrations
                     b.HasIndex("PositionId");
 
                     b.HasIndex("PublicLinkToken")
-                        .IsUnique();
+                        .IsUnique()
+                        .HasFilter("\"IsDeleted\" = FALSE");
 
                     b.HasIndex("RequestedBy");
 
@@ -3750,7 +3763,8 @@ namespace Persistence.Data.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("Key")
-                        .IsUnique();
+                        .IsUnique()
+                        .HasFilter("\"IsDeleted\" = FALSE");
 
                     b.ToTable("Permissions", (string)null);
                 });
@@ -3814,7 +3828,8 @@ namespace Persistence.Data.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("TokenHash")
-                        .IsUnique();
+                        .IsUnique()
+                        .HasFilter("\"IsDeleted\" = FALSE");
 
                     b.HasIndex("UserId");
 
@@ -3863,7 +3878,8 @@ namespace Persistence.Data.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("Name")
-                        .IsUnique();
+                        .IsUnique()
+                        .HasFilter("\"IsDeleted\" = FALSE");
 
                     b.ToTable("Roles", (string)null);
                 });
@@ -3942,10 +3958,12 @@ namespace Persistence.Data.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("Email")
-                        .IsUnique();
+                        .IsUnique()
+                        .HasFilter("\"IsDeleted\" = FALSE");
 
                     b.HasIndex("UserName")
-                        .IsUnique();
+                        .IsUnique()
+                        .HasFilter("\"IsDeleted\" = FALSE");
 
                     b.ToTable("Users", (string)null);
                 });

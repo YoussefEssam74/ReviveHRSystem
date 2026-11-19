@@ -126,7 +126,7 @@ function reviewQueueCard(queue) {
       </div>
       <span class="badge badge-red">${queue.length}</span>
     </div>
-    <div class="flex-1 min-h-0 overflow-y-auto max-h-[34vh]">${rows}</div>
+    <div class="flex-1 min-h-0 overflow-y-auto max-h-[24vh]">${rows}</div>
   </div>`;
 }
 
@@ -151,7 +151,7 @@ function impersonationCard(sessions) {
       </div>
       <span class="badge badge-brand">${sessions.length}</span>
     </div>
-    <div class="flex-1 min-h-0 overflow-y-auto max-h-[34vh]">${rows || emptyState('No impersonation sessions recorded')}</div>
+    <div class="flex-1 min-h-0 overflow-y-auto max-h-[24vh]">${rows || emptyState('No impersonation sessions recorded')}</div>
     <div class="px-3 py-2 border-t border-charcoal-100">
       <p class="text-[10px] text-charcoal-400 leading-snug">Impersonation is intentional and always logged. Sessions stay attributable to your Super Admin identity.</p>
     </div>

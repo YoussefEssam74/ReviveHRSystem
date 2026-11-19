@@ -528,12 +528,16 @@ namespace Service.Services
         /// </summary>
         private async Task<List<Employee>> LoadRosterEmployeesAsync(int actorUserId, int gymId, CancellationToken cancellationToken)
         {
-            var ledTeamId = await _teamScope.GetLedTeamIdAsync(actorUserId, gymId, cancellationToken);
             var employeeRepo = _unitOfWork.GetRepository<Employee, int>();
-            var employees = ledTeamId is int teamId
-                ? await employeeRepo.GetAllAsync(new EmployeesByTeamSpec(teamId), cancellationToken)
-                : await employeeRepo.GetAllAsync(new EmployeesForRosterSpec(new[] { gymId }), cancellationToken);
-            return employees.ToList();
+            if (!await _teamScope.IsTeamScopedAsync(actorUserId, gymId, cancellationToken))
+            {
+                return (await employeeRepo.GetAllAsync(new EmployeesForRosterSpec(new[] { gymId }), cancellationToken)).ToList();
+            }
+
+            var ledTeamIds = await _teamScope.GetLedTeamIdsAsync(actorUserId, gymId, cancellationToken);
+            return ledTeamIds.Count > 0
+                ? (await employeeRepo.GetAllAsync(new EmployeesByTeamsSpec(ledTeamIds), cancellationToken)).ToList()
+                : [];
         }
 
         /// <summary>All rows of these employees inside [from, to], keyed by (employee, date) — cross-cycle collision lookup.</summary>

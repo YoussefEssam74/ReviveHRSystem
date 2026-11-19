@@ -267,19 +267,22 @@ namespace Service.Services
         private async Task<DashboardOverviewDto?> LoadOverviewAsync(
             DomainLayer.Models.UserModule.User user, Employee employee, int activeGymId, DateOnly today, CancellationToken cancellationToken)
         {
-            var ledTeamId = await teamScopeService.GetLedTeamIdAsync(user.Id, activeGymId, cancellationToken);
             var roleNames = await userAccess.GetGymRoleNamesAsync(user.Id, activeGymId, cancellationToken);
             var isBranchManager = roleNames.Contains(RoleNames.BranchManager, StringComparer.Ordinal);
             // A TeamLeaders row alone is not a role: the seeded roster carries leaders
             // who only hold the plain Employee role, and they must not see a manager strip.
-            var isTeamLeader = roleNames.Contains(RoleNames.TeamLeader, StringComparer.Ordinal);
+            // A leader who also holds a gym-wide role is not team-scoped (Branch Manager wins).
+            var isTeamScoped = await teamScopeService.IsTeamScopedAsync(user.Id, activeGymId, cancellationToken);
 
             List<Employee> scoped;
             string scope;
-            if (isTeamLeader && ledTeamId is not null)
+            if (isTeamScoped)
             {
-                scoped = (await unitOfWork.GetRepository<Employee, int>()
-                    .GetAllAsync(new EmployeesByTeamSpec(ledTeamId.Value), cancellationToken)).ToList();
+                var ledTeamIds = await teamScopeService.GetLedTeamIdsAsync(user.Id, activeGymId, cancellationToken);
+                scoped = ledTeamIds.Count > 0
+                    ? (await unitOfWork.GetRepository<Employee, int>()
+                        .GetAllAsync(new EmployeesByTeamsSpec(ledTeamIds), cancellationToken)).ToList()
+                    : [];
                 scope = "team";
             }
             else if (isBranchManager)
@@ -361,7 +364,7 @@ namespace Service.Services
                 ? (activeGymId.HasValue ? new[] { activeGymId.Value } : Array.Empty<int>())
                 : (activeGymId.HasValue && allowed.Contains(activeGymId.Value) ? new[] { activeGymId.Value } : allowed.ToArray());
 
-            bool InScope(int gymId) => inScope.Length == 0 || inScope.Contains(gymId);
+            bool InScope(int gymId) => inScope is null || inScope.Contains(gymId);
 
             // ---- gyms + headcount (Branches Oversight + KPI) ----
             var allGyms = await unitOfWork.GetRepository<Gym, int>().GetAllAsync(cancellationToken);

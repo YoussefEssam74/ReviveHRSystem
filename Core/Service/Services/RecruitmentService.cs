@@ -12,6 +12,7 @@ using DomainLayer.Models.UserModule;
 using DomainLayer.Models.UserModule.Enums;
 using Service.Specifications;
 using ServiceAbstraction.Services;
+using Shared.Authorization;
 using Shared.DataTransferObject.Recruitment;
 using System.Globalization;
 using System.Text.Json;
@@ -1240,8 +1241,11 @@ namespace Service.Services
                 ChangedBy = actor.Id,
             }, cancellationToken);
 
-            // System role from the wizard, when one resolves by name.
+            // System role from the wizard, when one resolves by name. Every hire also
+            // gets the baseline "Employee" role in the hiring gym so the per-gym role
+            // table (the authorization source) always has a row for him.
             string? assignedRole = null;
+            var hireRoleIds = new List<int>();
             if (NullIfBlank(request.Role) is string roleName)
             {
                 var role = (await _unitOfWork.GetRepository<Role, int>()
@@ -1252,8 +1256,24 @@ namespace Service.Services
                     throw new BadRequestException($"Unknown system role '{roleName}'. Create it under Roles & Permissions first.");
                 }
 
-                await _userAccess.ReplaceUserRolesAsync(user.Id, [role.Id], cancellationToken);
+                hireRoleIds.Add(role.Id);
                 assignedRole = role.Name;
+            }
+            else
+            {
+                var employeeRole = (await _unitOfWork.GetRepository<Role, int>()
+                        .GetAllAsync(new RoleByNameSpec(RoleNames.Employee), cancellationToken))
+                    .FirstOrDefault();
+                if (employeeRole is not null)
+                {
+                    hireRoleIds.Add(employeeRole.Id);
+                }
+            }
+
+            if (hireRoleIds.Count > 0)
+            {
+                await _userAccess.ReplaceUserRolesAsync(user.Id, hireRoleIds, cancellationToken);
+                await _userAccess.ReplaceUserGymRolesAsync(user.Id, gym.Id, hireRoleIds, cancellationToken);
             }
 
             // Onboarding checklist (New Comers tab).
@@ -1353,12 +1373,12 @@ namespace Service.Services
             // Manager holds recruitment.view as a per-gym role key, so a null-gym
             // global check would wrongly hide the queue from him). No accessible
             // gym means nothing to check against — deny like any unscoped caller.
-            if (gymIds.Length == 0 && actor.UserType != UserType.TopManagement)
+            if (gymIds is { Length: 0 })
             {
                 throw new UnAuthorizedException("You do not have permission to perform this action.");
             }
 
-            foreach (var gymId in gymIds)
+            foreach (var gymId in gymIds ?? [])
             {
                 await _accessControl.EnsurePermissionForGymAsync(actor.Id, "recruitment.view", gymId, cancellationToken);
             }
@@ -1492,45 +1512,23 @@ namespace Service.Services
             return actor;
         }
 
-        /// <summary>null = unrestricted (Top Management without a gym filter); empty array = matches nobody.</summary>
-        private async Task<int[]> ResolveGymScopeAsync(User actor, int? requestedGym, CancellationToken cancellationToken)
-        {
-            if (actor.UserType == UserType.TopManagement)
-            {
-                return requestedGym.HasValue ? [requestedGym.Value] : [];
-            }
-
-            var allowedIds = (await _userAccess.GetGymAccessAsync(actor.Id, cancellationToken))
-                .Select(a => a.GymId)
-                .ToHashSet();
-            if (requestedGym.HasValue)
-            {
-                if (!allowedIds.Contains(requestedGym.Value))
-                {
-                    throw new UnAuthorizedException("You are not assigned to this gym.");
-                }
-
-                return [requestedGym.Value];
-            }
-
-            return allowedIds.ToArray();
-        }
+        /// <summary>
+        /// Gym scope for the recruitment reads — delegates to the shared resolver so the
+        /// "null = unrestricted / empty = nobody" contract lives in one place.
+        /// </summary>
+        private Task<int[]?> ResolveGymScopeAsync(User actor, int? requestedGym, CancellationToken cancellationToken) =>
+            HrPortalHelpers.ResolveGymScopeAsync(_unitOfWork, _userAccess, actor, requestedGym, cancellationToken);
 
         /// <summary>
         /// Gym display names for a resolved scope. Vacancy-less applications (converted
         /// hiring-form submissions) carry a typed branch name instead of a GymId, so the
         /// list specs match those against the scope's names.
         /// </summary>
-        private async Task<string[]> ResolveGymNamesAsync(int[] gymIds, CancellationToken cancellationToken)
+        private async Task<string[]> ResolveGymNamesAsync(int[]? gymIds, CancellationToken cancellationToken)
         {
-            if (gymIds.Length == 0)
-            {
-                return [];
-            }
-
             var gyms = await _unitOfWork.GetRepository<Gym, int>().GetAllAsync(cancellationToken);
             return gyms
-                .Where(g => gymIds.Contains(g.Id))
+                .Where(g => gymIds is null || gymIds.Contains(g.Id))
                 .Select(g => g.Name)
                 .ToArray();
         }

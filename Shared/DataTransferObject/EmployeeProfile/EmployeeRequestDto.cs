@@ -13,6 +13,14 @@ public sealed class EmployeeRequestDto
     /// when the request type itself carries none).</summary>
     public DateTime SubmittedAt { get; init; }
 
+    /// <summary>Outcome of the latest approval decision (Approved / Rejected) — the
+    /// automatic advance markers count as the transition they record — or null while
+    /// the request still awaits its first decision.</summary>
+    public string? LatestDecision { get; init; }
+
+    /// <summary>When that latest decision was recorded; null while undecided.</summary>
+    public DateTime? LatestDecisionAt { get; init; }
+
     public DateOnly RequestDate { get; init; }
     public DateOnly? EndDate { get; init; }
 

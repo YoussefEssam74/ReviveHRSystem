@@ -49,7 +49,7 @@ namespace Service.Services
             await _accessControl.EnsurePermissionForGymAsync(actor.Id, "employees.view", query.Gym ?? activeGymId, cancellationToken);
 
             int[]? gymFilter;
-            int? teamFilter = null;
+            int[]? teamFilter = null;
 
             if (actor.UserType == UserType.TopManagement)
             {
@@ -88,8 +88,9 @@ namespace Service.Services
                     gymFilter = [targetGymId.Value];
                     if (await _teamScope.IsTeamScopedAsync(actor.Id, targetGymId.Value, cancellationToken))
                     {
-                        var ledTeamId = await _teamScope.GetLedTeamIdAsync(actor.Id, targetGymId.Value, cancellationToken);
-                        teamFilter = ledTeamId ?? -1;
+                        // A leader may lead several teams; an unassigned leader gets an
+                        // empty set, which matches nobody.
+                        teamFilter = (await _teamScope.GetLedTeamIdsAsync(actor.Id, targetGymId.Value, cancellationToken)).ToArray();
                     }
                 }
                 else
@@ -320,10 +321,10 @@ namespace Service.Services
 
                 if (activeGymId.HasValue && await _teamScope.IsTeamScopedAsync(actor.Id, activeGymId.Value, cancellationToken))
                 {
-                    var ledTeamId = await _teamScope.GetLedTeamIdAsync(actor.Id, activeGymId.Value, cancellationToken);
                     var targetEmp = await _unitOfWork.GetRepository<Employee, int>()
                         .GetByIdAsync(new EmployeeByIdSpec(employeeId), cancellationToken);
-                    if (targetEmp is null || targetEmp.TeamId != ledTeamId)
+                    if (targetEmp is null
+                        || !await _teamScope.LeadsTeamAsync(actor.Id, activeGymId.Value, targetEmp.TeamId ?? 0, cancellationToken))
                     {
                         throw new NotFoundException("Employee not found.");
                     }
@@ -863,8 +864,9 @@ namespace Service.Services
                         $"Unknown system role '{systemRole}'. Create it under Roles & Permissions first.");
             }
 
-            await _userAccess.ReplaceUserRolesAsync(
-                userId, targetRole is null ? [] : [targetRole.Id], cancellationToken);
+            var assignedRoleIds = targetRole is null ? [] : new[] { targetRole.Id };
+            await _userAccess.ReplaceUserGymRolesAsync(userId, employee.GymId, assignedRoleIds, cancellationToken);
+            await _userAccess.SyncGlobalRolesFromGymRolesAsync(userId, cancellationToken);
 
             // permissions: null leaves direct overrides untouched; a list replaces
             // them wholesale (the modal submits its complete toggle state).
@@ -1098,13 +1100,10 @@ namespace Service.Services
 
             await _accessControl.EnsurePermissionForGymAsync(actorUserId, permissionKey, employee.GymId, cancellationToken);
 
-            if (await _teamScope.IsTeamScopedAsync(actorUserId, employee.GymId, cancellationToken))
+            if (await _teamScope.IsTeamScopedAsync(actorUserId, employee.GymId, cancellationToken)
+                && !await _teamScope.LeadsTeamAsync(actorUserId, employee.GymId, employee.TeamId ?? 0, cancellationToken))
             {
-                var ledTeamId = await _teamScope.GetLedTeamIdAsync(actorUserId, employee.GymId, cancellationToken);
-                if (ledTeamId is null || employee.TeamId != ledTeamId.Value)
-                {
-                    throw new NotFoundException("Employee not found.");
-                }
+                throw new NotFoundException("Employee not found.");
             }
 
             return employee;
@@ -1215,6 +1214,17 @@ namespace Service.Services
                 .ThenByDescending(c => c.Id)
                 .FirstOrDefault()?.Amount;
 
+            string? systemRole = null;
+            if (employee.UserId is int roleUserId)
+            {
+                var roleIds = await _userAccess.GetUserGymRoleIdsAsync(roleUserId, employee.GymId, cancellationToken);
+                if (roleIds.Count > 0)
+                {
+                    systemRole = (await _unitOfWork.GetRepository<Role, int>()
+                        .GetByIdAsync(roleIds[0], cancellationToken))?.Name;
+                }
+            }
+
             return new EmployeeDetailResponse
             {
                 Id = employee.Id,
@@ -1230,7 +1240,7 @@ namespace Service.Services
                 Email = employee.User?.Email ?? string.Empty,
                 Phone = employee.Phone,
                 Salary = latestSalary,
-                SystemRole = null, // populated when roles ship (S2)
+                SystemRole = systemRole,
                 ExcusedHoursPerMonth = employee.ExcusedHoursCapPerMonth,
                 Branches = branches.Select(b => new Shared.DataTransferObject.Gym.GymSummary
                 {

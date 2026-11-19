@@ -493,11 +493,20 @@ namespace Service.Services
 
         private async Task<List<int>> ScopedEmployeeIdsAsync(int actorUserId, int gymId, CancellationToken cancellationToken)
         {
-            var ledTeamId = await teamScopeService.GetLedTeamIdAsync(actorUserId, gymId, cancellationToken);
+            var isTeamScoped = await teamScopeService.IsTeamScopedAsync(actorUserId, gymId, cancellationToken);
 
-            var employees = ledTeamId is not null
-                ? await unitOfWork.GetRepository<Employee, int>().GetAllAsync(new EmployeesByTeamSpec(ledTeamId.Value), cancellationToken)
-                : await unitOfWork.GetRepository<Employee, int>().GetAllAsync(new EmployeesByGymSpec(gymId), cancellationToken);
+            IEnumerable<Employee> employees;
+            if (isTeamScoped)
+            {
+                var ledTeamIds = await teamScopeService.GetLedTeamIdsAsync(actorUserId, gymId, cancellationToken);
+                employees = ledTeamIds.Count > 0
+                    ? await unitOfWork.GetRepository<Employee, int>().GetAllAsync(new EmployeesByTeamsSpec(ledTeamIds), cancellationToken)
+                    : [];
+            }
+            else
+            {
+                employees = await unitOfWork.GetRepository<Employee, int>().GetAllAsync(new EmployeesByGymSpec(gymId), cancellationToken);
+            }
 
             // Exclude the actor's own employee record — a BM or TL must not appear
             // in lists they manage (offboarding, attendance, team operations).

@@ -96,7 +96,7 @@ namespace Service.Services
             var pageSize = HrPortalHelpers.NormalizePageSize(query.PageSize);
 
             var (rows, scope, keys) = await PrepareQueueAsync(actor, query.Gym, cancellationToken);
-            bool InScope(Event e) => scope.Length == 0 || scope.Contains(e.GymId);
+            bool InScope(Event e) => scope is null || scope.Contains(e.GymId);
             bool Holds(Event e) => keys is null || keys.Contains(PermissionOf(e.Type));
 
             var typeFilter = ParseTypeFilter(query.Type);
@@ -142,7 +142,7 @@ namespace Service.Services
             await _accessControl.EnsurePermissionAsync(actor.Id, "events.view", cancellationToken);
 
             var (rows, scope, keys) = await PrepareQueueAsync(actor, gym, cancellationToken);
-            bool InScope(Event e) => scope.Length == 0 || scope.Contains(e.GymId);
+            bool InScope(Event e) => scope is null || scope.Contains(e.GymId);
             bool Holds(Event e) => keys is null || keys.Contains(PermissionOf(e.Type));
 
             var visible = rows.Where(InScope).Where(Holds).ToList();

@@ -105,7 +105,7 @@ namespace Presistence.Data.Configurations
             builder.HasIndex(e => new { e.GymId, e.Status });
 
             // One queue row per underlying entity — the sync-on-read upsert keys on it.
-            builder.HasIndex(e => new { e.Type, e.EntityType, e.EntityId }).IsUnique();
+            builder.HasIndex(e => new { e.Type, e.EntityType, e.EntityId }).IsUnique().HasFilter("\"IsDeleted\" = FALSE");
         }
     }
 

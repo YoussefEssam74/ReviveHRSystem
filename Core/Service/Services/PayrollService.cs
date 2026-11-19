@@ -1105,7 +1105,7 @@ namespace Service.Services
             var scope = await HrPortalHelpers.ResolveGymScopeAsync(_unitOfWork, _userAccess, actor, null, cancellationToken);
             var rows = (await _unitOfWork.GetRepository<PayrollEntry, int>()
                     .GetAllAsync(new PayrollEntriesByEmployeeSpec(employeeId), cancellationToken))
-                .Where(e => scope.Length == 0 || scope.Contains(e.PayrollPeriod.GymId))
+                .Where(e => scope is null || scope.Contains(e.PayrollPeriod.GymId))
                 .OrderByDescending(e => e.PayrollPeriod.StartDate)
                 .ToList();
 
@@ -1205,11 +1205,10 @@ namespace Service.Services
 
             var roleNames = await _userAccess.GetGymRoleNamesAsync(actor.Id, employee.GymId, cancellationToken);
 
-            // Team Leader: the team he leads in the employee's gym, members only.
-            if (roleNames.Contains(Shared.Authorization.RoleNames.TeamLeader, StringComparer.Ordinal))
+            // Team Leader: the teams he leads in the employee's gym, members only.
+            if (await _teamScope.IsTeamScopedAsync(actor.Id, employee.GymId, cancellationToken))
             {
-                var ledTeamId = await _teamScope.GetLedTeamIdAsync(actor.Id, employee.GymId, cancellationToken);
-                if (ledTeamId is null || employee.TeamId != ledTeamId.Value)
+                if (!await _teamScope.LeadsTeamAsync(actor.Id, employee.GymId, employee.TeamId ?? 0, cancellationToken))
                 {
                     throw new NotFoundException("Employee not found.");
                 }

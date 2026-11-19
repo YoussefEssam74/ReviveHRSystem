@@ -274,7 +274,7 @@ namespace Biometrics
                 return;
             }
 
-            if (!await userAccess.HasGymAccessAsync(actor.Id, gymId, cancellationToken))
+            if (!await userAccess.CoversGymAsync(actor.Id, gymId, cancellationToken))
             {
                 throw new UnAuthorizedException("You do not have access to this gym.");
             }

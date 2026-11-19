@@ -69,11 +69,12 @@ namespace Service.Services
 
             if (roleNames.Contains(Shared.Authorization.RoleNames.TeamLeader, StringComparer.Ordinal))
             {
-                var ledTeamId = await teamScope.GetLedTeamIdAsync(actorUserId, employee.GymId, cancellationToken);
-                if (ledTeamId is not null && employee.TeamId == ledTeamId.Value)
+                if (!await teamScope.LeadsTeamAsync(actorUserId, employee.GymId, employee.TeamId ?? 0, cancellationToken))
                 {
-                    return employee;
+                    throw new NotFoundException("Employee not found.");
                 }
+
+                return employee;
             }
 
             throw new NotFoundException("Employee not found.");
@@ -558,8 +559,7 @@ namespace Service.Services
             {
                 if (roleNames.Contains(Shared.Authorization.RoleNames.TeamLeader, StringComparer.Ordinal))
                 {
-                    var ledTeamId = await teamScope.GetLedTeamIdAsync(actorUserId, employee.GymId, cancellationToken);
-                    if (ledTeamId is null || employee.TeamId != ledTeamId.Value)
+                    if (!await teamScope.LeadsTeamAsync(actorUserId, employee.GymId, employee.TeamId ?? 0, cancellationToken))
                     {
                         throw new NotFoundException("Employee not found.");
                     }

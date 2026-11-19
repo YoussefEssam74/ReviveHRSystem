@@ -226,7 +226,7 @@ namespace Service.Specifications
         public SeparationListSpec(int[]? gymIds, string? status, string? separationType, int skip, int take)
         {
             Criteria = c =>
-                (gymIds == null || gymIds.Length == 0 || gymIds.Contains(c.Employee.GymId)) &&
+                (gymIds == null || gymIds.Contains(c.Employee.GymId)) &&
                 (status == null || c.Status.ToLower() == status) &&
                 (separationType == null || c.SeparationType.ToLower() == separationType);
 
@@ -286,7 +286,7 @@ namespace Service.Specifications
         public ActionRequestListSpec(int[]? gymIds, string? status, string? actionType, string[]? allowedActionTypes, int skip, int take)
         {
             Criteria = a =>
-                (gymIds == null || gymIds.Length == 0 || gymIds.Contains(a.GymId)) &&
+                (gymIds == null || gymIds.Contains(a.GymId)) &&
                 (status == null || a.Status.ToLower() == status) &&
                 (actionType == null || a.ActionType.ToLower() == actionType) &&
                 (allowedActionTypes == null || allowedActionTypes.Contains(a.ActionType.ToLower()));

@@ -20,7 +20,7 @@ namespace Service.Specifications
             var cleanPosition = string.IsNullOrWhiteSpace(position) ? null : position.Trim();
 
             Criteria = f =>
-                (gymIds == null || gymIds.Length == 0 || f.GymId == null || gymIds.Contains(f.GymId.Value)) &&
+                (gymIds == null || f.GymId == null || gymIds.Contains(f.GymId.Value)) &&
                 (gym == null || f.GymId == null || f.GymId == gym) &&
                 (cleanStatus == null || f.Status == cleanStatus) &&
                 (cleanPosition == null ||
@@ -66,7 +66,7 @@ namespace Service.Specifications
             var cleanPosition = string.IsNullOrWhiteSpace(position) ? null : position.Trim();
 
             Criteria = h =>
-                (gymIds == null || gymIds.Length == 0 || h.GymId == null || gymIds.Contains(h.GymId.Value)) &&
+                (gymIds == null || h.GymId == null || gymIds.Contains(h.GymId.Value)) &&
                 (gym == null || h.GymId == null || h.GymId == gym) &&
                 (cleanStatus == null || h.Status == cleanStatus) &&
                 (cleanPosition == null || (h.Position != null && h.Position.ToLower() == cleanPosition.ToLower()));
@@ -103,7 +103,7 @@ namespace Service.Specifications
             var cleanStatus = string.IsNullOrWhiteSpace(status) ? null : status.Trim();
 
             Criteria = r =>
-                (gymIds == null || gymIds.Length == 0 || gymIds.Contains(r.Employee.GymId)) &&
+                (gymIds == null || gymIds.Contains(r.Employee.GymId)) &&
                 (gym == null || r.Employee.GymId == gym) &&
                 (employeeId == null || r.EmployeeId == employeeId) &&
                 (formId == null || r.EvaluationFormId == formId) &&

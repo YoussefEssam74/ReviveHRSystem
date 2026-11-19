@@ -62,6 +62,43 @@ namespace Service.Services
             "Paid Holiday", PaidHolidayId,
         };
 
+        /// <summary>
+        /// Every spelling a stored request row may carry for the type a filter names
+        /// (catalog label, its id, or a legacy/seed spelling), so one dropdown entry
+        /// finds all of them. An unknown value is matched literally.
+        /// </summary>
+        public static IReadOnlyList<string> StoredSpellingsFor(string? value)
+        {
+            var wanted = value?.Trim();
+            if (string.IsNullOrEmpty(wanted))
+            {
+                return [];
+            }
+
+            return TypeAliasGroups
+                .FirstOrDefault(group => group.Contains(wanted, StringComparer.OrdinalIgnoreCase))
+                ?? [wanted];
+        }
+
+        /// <summary>
+        /// Spellings the stored rows use for one business type: the catalog names plus
+        /// the legacy seed labels ("Leave", "SickLeave", "ShiftSwap", ...).
+        /// </summary>
+        private static readonly string[][] TypeAliasGroups =
+        [
+            [DayOffLabel, "DayOff", "Annual Leave", AnnualLeaveId, "AnnualLeave", "Leave"],
+            ["Sick Leave", SickLeaveId, "SickLeave"],
+            ["Late Attendance", LateAttendanceId, "Late Arrival"],
+            ["Early Leave", EarlyLeaveId, "Leave Early"],
+            ["Shift Swap", ShiftSwapId, "ShiftSwap"],
+            ["Weekly Off Swap", WeeklyOffSwapId, "WeeklyOffSwap"],
+            ["Check-in Correction", CheckInCorrectionId, "CheckInCorrection"],
+            ["Salary Advance", SalaryAdvanceId, "SalaryAdvance"],
+            ["Paid Holiday", PaidHolidayId, "PaidHoliday"],
+            [DeductionCorrectionLabel, DeductionCorrectionId, "DeductionCorrection"],
+            [UnscheduledAttendanceLabel, UnscheduledAttendanceId, "UnscheduledAttendance"],
+        ];
+
         private static readonly IReadOnlyList<RequestTypeDefinition> Types = new[]
         {
             new RequestTypeDefinition(

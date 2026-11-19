@@ -36,6 +36,14 @@ namespace Service.Services
         private const int DefaultPageSize = 20;
         private const int MaxPageSize = 100;
 
+        /// <summary>Roles that run a gym's request desk (mirrors the desk service).</summary>
+        private static readonly string[] DeskRoleNames =
+        [
+            Shared.Authorization.RoleNames.TeamLeader,
+            Shared.Authorization.RoleNames.BranchManager,
+            Shared.Authorization.RoleNames.SuperAdmin,
+        ];
+
         /// <summary>
         /// Request types the HR form offers: the catalog's labels plus resignation.
         /// The legacy labels stay accepted so older clients and existing rows keep
@@ -435,7 +443,8 @@ namespace Service.Services
         }
 
         // ------------------------------------------------------------------
-        // R4 — undo the HR decision; there is no time limit on it
+        // R4 — undo the HR decision; HR has no time limit, the desk is held to the
+        // current month (payroll owns the months before it)
         // ------------------------------------------------------------------
 
         public async Task<RequestDecisionResponse> UndoDecisionAsync(int? actorUserId, int requestId, UndoDecisionRequest request, CancellationToken cancellationToken = default)
@@ -445,7 +454,25 @@ namespace Service.Services
                 .GetByIdAsync(new RequestByIdSpec(requestId), cancellationToken)
                 ?? throw new NotFoundException("Request not found.");
 
-            await _accessControl.EnsurePermissionForGymAsync(actor.Id, "requests.approve", entity.Employee.GymId, cancellationToken);
+            var gymId = entity.Employee.GymId;
+            var canFinalize = await _accessControl.HasPermissionForGymAsync(actor.Id, "requests.approve", gymId, cancellationToken);
+            if (!canFinalize)
+            {
+                // The desk (team leader / branch manager of the gym) may pull a decision
+                // back while the month is still open — payroll owns the months before it.
+                var deskRoles = await _userAccess.GetGymRoleNamesAsync(actor.Id, gymId, cancellationToken);
+                if (!deskRoles.Any(DeskRoleNames.Contains))
+                {
+                    throw new UnAuthorizedException("You do not have permission to perform this action.");
+                }
+
+                var today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, attendanceTimeZone));
+                if (entity.RequestDate.Year * 12 + entity.RequestDate.Month < today.Year * 12 + today.Month)
+                {
+                    throw new BadRequestException(
+                        $"Only decisions from the current month can be undone at the desk — this request belongs to {entity.RequestDate.ToString("MMM yyyy", CultureInfo.InvariantCulture)}. HR can still undo it.");
+                }
+            }
 
             if (entity.Status is not (RequestStatus.Approved or RequestStatus.Rejected))
             {
@@ -455,7 +482,6 @@ namespace Service.Services
             // No time limit: a decision can be reverted whenever the desk files the
             // correction, however late — the leave days move back to reserved and the
             // absence/deduction for the day returns on the next sweep.
-
             // Undo restores what the decision moved: the days go back to reserved and a
             // paid approval gives its consumed days back.
             var reservedDays = entity.Decisions.Any(d => d.Stage == ApprovalStage.BranchManager);
@@ -799,8 +825,7 @@ namespace Service.Services
                 return;
             }
 
-            var ledTeamId = await _teamScope.GetLedTeamIdAsync(actorUserId, employee.GymId, cancellationToken);
-            if (ledTeamId is null || employee.TeamId != ledTeamId.Value)
+            if (!await _teamScope.LeadsTeamAsync(actorUserId, employee.GymId, employee.TeamId ?? 0, cancellationToken))
             {
                 throw new NotFoundException("Employee not found.");
             }
@@ -1043,6 +1068,9 @@ namespace Service.Services
                 LeaveBalance = BalanceSnapshot(entity),
                 AwaitingManager = entity.Status == RequestStatus.Pending,
                 SubmittedDate = DateOnly.FromDateTime(entity.CreatedAt),
+                SubmittedAt = entity.SubmittedAt,
+                LatestDecision = RequestDecisionTrail.Latest(entity)?.Decision.ToString(),
+                LatestDecisionAt = RequestDecisionTrail.Latest(entity)?.DecidedAt,
                 RequestedDate = entity.RequestDate,
                 EndDate = NormalizeDisplayRange(entity),
                 RequestTime = requestTimeFallback ?? entity.TargetTime,

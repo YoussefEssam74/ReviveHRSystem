@@ -94,7 +94,7 @@ namespace Service.Services
 
             if (!activeGymId.HasValue)
             {
-                if (!await userAccess.HasGymAccessAsync(actorUserId, employee.GymId, cancellationToken))
+                if (!await userAccess.CoversGymAsync(actorUserId, employee.GymId, cancellationToken))
                 {
                     throw new NotFoundException("Employee not found.");
                 }
@@ -125,11 +125,10 @@ namespace Service.Services
             }
 
             // Team scope comes from the per-gym role: a team-scoped actor sees only the
-            // team he leads, and one without a matching team is denied - never gym-wide.
+            // teams he leads, and an unassigned Team Leader is denied - never gym-wide.
             if (await teamScopeService.IsTeamScopedAsync(actorUserId, activeGymId, cancellationToken))
             {
-                var ledTeamId = await teamScopeService.GetLedTeamIdAsync(actorUserId, activeGymId, cancellationToken);
-                if (ledTeamId is null || employee.TeamId != ledTeamId.Value)
+                if (!await teamScopeService.LeadsTeamAsync(actorUserId, activeGymId, employee.TeamId ?? 0, cancellationToken))
                 {
                     throw new NotFoundException("Employee not found.");
                 }

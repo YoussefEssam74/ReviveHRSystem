@@ -46,11 +46,17 @@ export interface RequestDetail {
   gym: string
   type: string
   submittedDate: string
+  /** Date + clock time the request was filed (UTC ISO). */
+  submittedAt?: string | null
   requestedDate: string
   /** End of a leave/swap range, null on single-day types. */
   endDate: string | null
   /** Time request "HH:mm:ss" (late/early types); null when the type has no time. */
   requestTime?: string | null
+  /** Outcome of the latest approval decision (Approved / Rejected); null while undecided. */
+  latestDecision?: string | null
+  /** When that latest decision was recorded (UTC ISO); null while undecided. */
+  latestDecisionAt?: string | null
   /** Amount carried by the type (overtime / allowance); null otherwise. */
   amount?: number | null
   status: string
@@ -153,6 +159,10 @@ export interface DeskRequestRow {
   status: string
   reason: string
   payment?: string | null
+  /** Outcome of the latest approval decision (Approved / Rejected); null while undecided. */
+  latestDecision?: string | null
+  /** When that latest decision was recorded (UTC ISO); null while undecided. */
+  latestDecisionAt?: string | null
   /** Cover/extra days when an Unscheduled Attendance request was approved (1 or 2). */
   calculatedDays?: number | null
   timeline: { step: string; date: string | null; done: boolean }[]
@@ -168,10 +178,16 @@ export interface HrRequestItem {
   gym: string
   type: string
   submittedDate: string
+  /** Date + clock time the request was filed (UTC ISO). */
+  submittedAt?: string | null
   requestedDate: string
   endDate: string | null
   /** Time request "HH:mm:ss" (late/early types); null when the type has no time. */
   requestTime?: string | null
+  /** Outcome of the latest approval decision (Approved / Rejected); null while undecided. */
+  latestDecision?: string | null
+  /** When that latest decision was recorded (UTC ISO); null while undecided. */
+  latestDecisionAt?: string | null
   /** Amount carried by the type (overtime / allowance); null otherwise. */
   amount?: number | null
   status: string
@@ -199,6 +215,8 @@ export interface RequestInboxParams {
   type?: string
   dateFrom?: string | null
   dateTo?: string | null
+  /** Employee-name contains (both inboxes filter server-side). */
+  search?: string | null
   page?: number
   pageSize?: number
   signal?: AbortSignal
@@ -224,11 +242,16 @@ export function decideRequest(
 }
 
 /** GET /api/requests — the HR portal inbox (requests.view). Status accepts the
- *  display values ("Pending HR Review", Approved, ...) or the raw enum names. */
+ *  display values ("Pending HR Review", Approved, ...) or the raw enum names.
+ *  The HR list names its date window `from`/`to`; the desk ignores those, so the
+ *  shared params are translated here. */
 export function getHrRequests(
-  { signal, ...params }: RequestInboxParams,
+  { signal, dateFrom, dateTo, ...params }: RequestInboxParams,
 ): Promise<HrRequestListResponse> {
-  return apiRequest<HrRequestListResponse>(withQuery('/api/requests', params), { signal })
+  return apiRequest<HrRequestListResponse>(
+    withQuery('/api/requests', { ...params, from: dateFrom, to: dateTo }),
+    { signal },
+  )
 }
 
 /** POST /api/requests/{id}/decide — HR final stage (Stage must be "HR").

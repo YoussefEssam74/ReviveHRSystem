@@ -19,5 +19,8 @@ namespace Shared.DataTransferObject.QueryParams
 
         /// <summary>Inclusive upper bound on the requested date.</summary>
         public DateOnly? DateTo { get; set; }
+
+        /// <summary>Employee-name search (case-insensitive contains).</summary>
+        public string? Search { get; set; }
     }
 }

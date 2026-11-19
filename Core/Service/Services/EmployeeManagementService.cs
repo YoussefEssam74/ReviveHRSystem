@@ -99,10 +99,8 @@ namespace Service.Services
                 ContractType = "FullTime",
                 ContractStartDate = DateOnly.FromDateTime(DateTime.UtcNow),
                 Status = EmployeeStatus.Active,
-                // Team-scoped leaders create members of their own team.
-                TeamId = await teamScopeService.IsTeamScopedAsync(actorUserId, gymId, cancellationToken)
-                    ? await teamScopeService.GetLedTeamIdAsync(actorUserId, gymId, cancellationToken)
-                    : null
+                // Team assignment is HR's decision: creation never auto-joins a team.
+                TeamId = null
             };
 
             await unitOfWork.GetRepository<Employee, int>().AddAsync(employee, cancellationToken);
@@ -181,13 +179,20 @@ namespace Service.Services
         private async Task<List<Employee>> LoadScopedEmployeesAsync(
             int actorUserId, int gymId, CancellationToken cancellationToken)
         {
-            var ledTeamId = await teamScopeService.GetLedTeamIdAsync(actorUserId, gymId, cancellationToken);
+            List<Employee> employees;
+            if (await teamScopeService.IsTeamScopedAsync(actorUserId, gymId, cancellationToken))
+            {
+                var ledTeamIds = await teamScopeService.GetLedTeamIdsAsync(actorUserId, gymId, cancellationToken);
+                employees = ledTeamIds.Count > 0
+                    ? (await unitOfWork.GetRepository<Employee, int>().GetAllAsync(new EmployeesByTeamsSpec(ledTeamIds), cancellationToken)).ToList()
+                    : [];
+            }
+            else
+            {
+                employees = (await unitOfWork.GetRepository<Employee, int>().GetAllAsync(new EmployeesByGymSpec(gymId), cancellationToken)).ToList();
+            }
 
-            var employees = ledTeamId is not null
-                ? await unitOfWork.GetRepository<Employee, int>().GetAllAsync(new EmployeesByTeamSpec(ledTeamId.Value), cancellationToken)
-                : await unitOfWork.GetRepository<Employee, int>().GetAllAsync(new EmployeesByGymSpec(gymId), cancellationToken);
-
-            return employees.ToList();
+            return employees;
         }
 
         private async Task<Employee> LoadScopedEmployeeAsync(
@@ -204,8 +209,8 @@ namespace Service.Services
                 throw new NotFoundException("Employee not found.");
             }
 
-            var ledTeamId = await teamScopeService.GetLedTeamIdAsync(actorUserId, activeGymId, cancellationToken);
-            if (ledTeamId is not null && employee.TeamId != ledTeamId.Value)
+            if (await teamScopeService.IsTeamScopedAsync(actorUserId, activeGymId, cancellationToken)
+                && !await teamScopeService.LeadsTeamAsync(actorUserId, activeGymId, employee.TeamId ?? 0, cancellationToken))
             {
                 throw new NotFoundException("Employee not found.");
             }

@@ -98,9 +98,9 @@ namespace Service.Services
             {
                 if (gymFilter is { Length: 1 } && await _teamScope.IsTeamScopedAsync(actor.Id, gymFilter[0], cancellationToken))
                 {
-                    var ledTeamId = await _teamScope.GetLedTeamIdAsync(actor.Id, gymFilter[0], cancellationToken);
-                    employees = ledTeamId.HasValue
-                        ? (await employeeRepo.GetAllAsync(new EmployeesByTeamSpec(ledTeamId.Value), cancellationToken)).ToList()
+                    var ledTeamIds = await _teamScope.GetLedTeamIdsAsync(actor.Id, gymFilter[0], cancellationToken);
+                    employees = ledTeamIds.Count > 0
+                        ? (await employeeRepo.GetAllAsync(new EmployeesByTeamsSpec(ledTeamIds), cancellationToken)).ToList()
                         : [];
                 }
                 else
@@ -404,8 +404,7 @@ namespace Service.Services
                 return;
             }
 
-            var ledTeamId = await _teamScope.GetLedTeamIdAsync(actorUserId, employee.GymId, cancellationToken);
-            if (ledTeamId is null || employee.TeamId != ledTeamId.Value)
+            if (!await _teamScope.LeadsTeamAsync(actorUserId, employee.GymId, employee.TeamId ?? 0, cancellationToken))
             {
                 throw new NotFoundException("Employee not found.");
             }

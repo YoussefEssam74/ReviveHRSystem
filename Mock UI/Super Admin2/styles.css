@@ -123,12 +123,15 @@ body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; 
 .data-table tbody tr.is-clickable { cursor: pointer; }
 .data-table-wrap { overflow-x: auto; }
 
-/* -------- Fixed-height page shell: pages fit the window, tables scroll -------- */
+/* -------- Page shell: fill the window when the content fits, scroll when it can't --------
+   `.page-fit` grows to at least the available height so leftover space goes to the
+   `.grow` region; every growing card keeps a usable floor so a table can never be
+   squeezed to zero. If the floors don't fit, #main-content scrolls instead of hiding. */
 .page-fit {
   display: flex;
   flex-direction: column;
-  height: 100%;
-  min-height: 0;
+  min-height: 100%;
+  height: auto;
 }
 .page-fit > * { flex: 0 0 auto; }
 .page-fit > .grow { flex: 1 1 auto; min-height: 0; }
@@ -141,7 +144,7 @@ body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; 
 }
 .card-grow > .data-table-wrap {
   flex: 1 1 auto;
-  min-height: 0;
+  min-height: 170px;
   overflow: auto;
 }
 
@@ -151,12 +154,13 @@ body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; 
   overflow-y: auto;
 }
 
-/* Small screens keep normal scrolling — the fixed shell is a desktop pattern. */
-@media (max-width: 1023px) {
-  #main-content { overflow-y: auto; }
-  .page-fit { height: auto; }
-  .page-fit > .grow { flex: 0 0 auto; }
-  .card-grow > .data-table-wrap { max-height: 65vh; }
+/* Below the 3-column breakpoint the panels stack, so give them their natural height
+   and let the page scroll — a fixed shell would crush the tables. */
+@media (max-width: 1279px) {
+  .page-fit { min-height: 0; }
+  .page-fit > .grow { flex: 0 0 auto; min-height: 0; }
+  .page-fit > .card-grow, .card-grow { flex: 0 0 auto; min-height: 0; }
+  .card-grow > .data-table-wrap { min-height: 0; max-height: 60vh; }
   .scroll-region { overflow-y: visible; }
 }
 

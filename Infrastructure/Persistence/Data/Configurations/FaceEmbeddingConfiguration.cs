@@ -21,7 +21,7 @@ namespace Presistence.Data.Configurations
                    .OnDelete(DeleteBehavior.Cascade);
 
             // One enrolled face per employee; re-enrolling updates the row.
-            builder.HasIndex(f => f.EmployeeId).IsUnique();
+            builder.HasIndex(f => f.EmployeeId).IsUnique().HasFilter("\"IsDeleted\" = FALSE");
         }
     }
 }

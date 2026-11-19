@@ -595,7 +595,7 @@ namespace Service.Services
         {
             if (employeeGymId is null ||
                 (actor.UserType != UserType.TopManagement &&
-                 !await userAccess.HasGymAccessAsync(actor.Id, employeeGymId.Value, cancellationToken)))
+                 !await userAccess.CoversGymAsync(actor.Id, employeeGymId.Value, cancellationToken)))
             {
                 // Out-of-scope items answer exactly like missing ones.
                 throw new NotFoundException("Warning notice not found.");
@@ -756,11 +756,20 @@ namespace Service.Services
 
         private async Task<List<int>> ScopedEmployeeIdsAsync(int actorUserId, int gymId, CancellationToken cancellationToken)
         {
-            var ledTeamId = await teamScopeService.GetLedTeamIdAsync(actorUserId, gymId, cancellationToken);
+            var isTeamScoped = await teamScopeService.IsTeamScopedAsync(actorUserId, gymId, cancellationToken);
 
-            var employees = ledTeamId is not null
-                ? await unitOfWork.GetRepository<Employee, int>().GetAllAsync(new EmployeesByTeamSpec(ledTeamId.Value), cancellationToken)
-                : await unitOfWork.GetRepository<Employee, int>().GetAllAsync(new EmployeesByGymSpec(gymId), cancellationToken);
+            IEnumerable<Employee> employees;
+            if (isTeamScoped)
+            {
+                var ledTeamIds = await teamScopeService.GetLedTeamIdsAsync(actorUserId, gymId, cancellationToken);
+                employees = ledTeamIds.Count > 0
+                    ? await unitOfWork.GetRepository<Employee, int>().GetAllAsync(new EmployeesByTeamsSpec(ledTeamIds), cancellationToken)
+                    : [];
+            }
+            else
+            {
+                employees = await unitOfWork.GetRepository<Employee, int>().GetAllAsync(new EmployeesByGymSpec(gymId), cancellationToken);
+            }
 
             // Resolve the actor's own employee row and exclude them: a BM or TL must
             // not be able to issue or view branch actions against themselves.

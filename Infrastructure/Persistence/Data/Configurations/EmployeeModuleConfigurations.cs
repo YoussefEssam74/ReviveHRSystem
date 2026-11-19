@@ -24,9 +24,9 @@ namespace Presistence.Data.Configurations
             builder.Property(e => e.PhotoPath).HasMaxLength(500);
             builder.Property(e => e.ExcusedHoursCapPerMonth).HasPrecision(4, 2);
 
-            builder.HasIndex(e => e.EmployeeNumber).IsUnique();
+            builder.HasIndex(e => e.EmployeeNumber).IsUnique().HasFilter("\"IsDeleted\" = FALSE");
             builder.HasIndex(e => e.GymId);
-            builder.HasIndex(e => e.UserId).IsUnique();
+            builder.HasIndex(e => e.UserId).IsUnique().HasFilter("\"IsDeleted\" = FALSE");
             // NOTE: the former (Id, TeamId) alternate key was removed — EF Core cannot
             // SaveChanges an employee whose TeamId is null while it exists, which broke
             // every team-less employee insert. TeamLeaders now references EmployeeId only;
@@ -145,7 +145,7 @@ namespace Presistence.Data.Configurations
                    .HasForeignKey(lb => lb.UpdatedBy)
                    .OnDelete(DeleteBehavior.Restrict);
 
-            builder.HasIndex(lb => new { lb.EmployeeId, lb.LeaveType, lb.Year }).IsUnique();
+            builder.HasIndex(lb => new { lb.EmployeeId, lb.LeaveType, lb.Year }).IsUnique().HasFilter("\"IsDeleted\" = FALSE");
         }
     }
 
@@ -161,7 +161,7 @@ namespace Presistence.Data.Configurations
                    .HasForeignKey(i => i.EmployeeId).OnDelete(DeleteBehavior.Cascade);
             builder.HasOne(i => i.CompletedByUser).WithMany().HasForeignKey(i => i.CompletedBy)
                    .OnDelete(DeleteBehavior.SetNull);
-            builder.HasIndex(i => new { i.EmployeeId, i.SortOrder }).IsUnique();
+            builder.HasIndex(i => new { i.EmployeeId, i.SortOrder }).IsUnique().HasFilter("\"IsDeleted\" = FALSE");
         }
     }
 
@@ -201,7 +201,7 @@ namespace Presistence.Data.Configurations
                    .HasForeignKey(i => i.OffboardingCaseId).OnDelete(DeleteBehavior.Cascade);
             builder.HasOne(i => i.CompletedByUser).WithMany().HasForeignKey(i => i.CompletedBy)
                    .OnDelete(DeleteBehavior.SetNull);
-            builder.HasIndex(i => new { i.OffboardingCaseId, i.SortOrder }).IsUnique();
+            builder.HasIndex(i => new { i.OffboardingCaseId, i.SortOrder }).IsUnique().HasFilter("\"IsDeleted\" = FALSE");
         }
     }
 

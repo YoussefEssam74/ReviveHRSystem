@@ -127,7 +127,7 @@ namespace Service.Services
                 return;
             }
 
-            if (!await userAccess.HasGymAccessAsync(actorUserId.Value, gymId, cancellationToken))
+            if (!await userAccess.CoversGymAsync(actorUserId.Value, gymId, cancellationToken))
             {
                 throw new UnAuthorizedException("You do not have access to this gym.");
             }

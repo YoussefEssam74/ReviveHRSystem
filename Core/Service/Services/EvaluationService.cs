@@ -202,15 +202,15 @@ namespace Service.Services
             var gymRaw = HrPortalHelpers.NullIfBlank(query.Gym);
             var position = HrPortalHelpers.NullIfBlank(query.Position);
             var status = HrPortalHelpers.NullIfBlank(query.Status);
-            int[] scope;
+            int[]? scope;
             int? gymFilter = null;
             var unknownGym = false;
 
             if (actorUserId is null)
             {
                 // Public careers view (§5.2): open forms only, no access scope, gym
-                // matched by branch name or id.
-                scope = [];
+                // matched by branch name or id. null = unrestricted.
+                scope = null;
                 status = "Open";
                 if (gymRaw is not null)
                 {
@@ -872,8 +872,7 @@ namespace Service.Services
                 return;
             }
 
-            var ledTeamId = await _teamScope.GetLedTeamIdAsync(actorUserId, employee.GymId, cancellationToken);
-            if (ledTeamId is null || employee.TeamId != ledTeamId.Value)
+            if (!await _teamScope.LeadsTeamAsync(actorUserId, employee.GymId, employee.TeamId ?? 0, cancellationToken))
             {
                 throw new NotFoundException("Employee not found.");
             }

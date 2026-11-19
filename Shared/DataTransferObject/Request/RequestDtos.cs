@@ -93,6 +93,17 @@ namespace Shared.DataTransferObject.Request
         public DateOnly SubmittedDate { get; init; }
         public DateOnly RequestedDate { get; init; }
 
+        /// <summary>Date and clock time the request was filed.</summary>
+        public DateTime SubmittedAt { get; init; }
+
+        /// <summary>Outcome of the latest approval decision (Approved / Rejected) — the
+        /// automatic advance markers count as the transition they record — or null while
+        /// the request still awaits its first decision.</summary>
+        public string? LatestDecision { get; init; }
+
+        /// <summary>When that latest decision was recorded; null while undecided.</summary>
+        public DateTime? LatestDecisionAt { get; init; }
+
         /// <summary>End of a leave/swap range (annual, sick, shift swap), null on single-day types.</summary>
         public DateOnly? EndDate { get; init; }
         public TimeOnly? RequestTime { get; init; }

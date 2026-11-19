@@ -16,7 +16,7 @@ namespace Service.Specifications
         public VacancyListSpec(int[]? gymIds, VacancyStatus? status, string? search, int skip, int take, string? sortBy, bool descending)
         {
             Criteria = v =>
-                (gymIds == null || gymIds.Length == 0 || gymIds.Contains(v.GymId)) &&
+                (gymIds == null || gymIds.Contains(v.GymId)) &&
                 (status == null || v.Status == status) &&
                 (search == null || v.Title.ToLower().Contains(search.ToLower())
                     || v.Position.Title.ToLower().Contains(search.ToLower())
@@ -83,7 +83,7 @@ namespace Service.Specifications
         public OpenVacanciesSpec(int[]? gymIds)
         {
             Criteria = v => v.Status == VacancyStatus.Open
-                && (gymIds == null || gymIds.Length == 0 || gymIds.Contains(v.GymId));
+                && (gymIds == null || gymIds.Contains(v.GymId));
             AddInclude(v => v.Gym);
             AddInclude(v => v.Position);
         }
@@ -95,7 +95,7 @@ namespace Service.Specifications
         public VacancyRequestListSpec(int[]? gymIds, VacancyRequestStatus? status, int skip, int take)
         {
             Criteria = vr =>
-                (gymIds == null || gymIds.Length == 0 || gymIds.Contains(vr.GymId)) &&
+                (gymIds == null || gymIds.Contains(vr.GymId)) &&
                 (status == null || vr.Status == status);
 
             AddInclude(vr => vr.Gym);
@@ -138,7 +138,7 @@ namespace Service.Specifications
             Criteria = a =>
                 (formId == null || a.HiringFormId == formId) &&
                 (cleanStatus == null || a.Status == cleanStatus) &&
-                (scopeIds == null || scopeIds.Length == 0 || a.Gym == null || scopeNames.Contains(a.Gym)) &&
+                (scopeIds == null || a.Gym == null || scopeNames.Contains(a.Gym)) &&
                 (term == null || a.Name.ToLower().Contains(term)
                     || a.Email.ToLower().Contains(term)
                     || a.Phone.ToLower().Contains(term));
@@ -190,7 +190,7 @@ namespace Service.Specifications
             var names = gymNames ?? Array.Empty<string>();
 
             Criteria = a =>
-                (gymIds == null || gymIds.Length == 0 ||
+                (gymIds == null ||
                     gymIds.Contains(a.Vacancy!.GymId) ||
                     (a.VacancyId == null && (a.PreferredGym == null || names.Contains(a.PreferredGym)))) &&
                 (stage == null || a.CurrentStage == stage) &&
@@ -295,7 +295,7 @@ namespace Service.Specifications
             var names = gymNames ?? Array.Empty<string>();
 
             Criteria = a =>
-                (gymIds == null || gymIds.Length == 0 ||
+                (gymIds == null ||
                     gymIds.Contains(a.Vacancy!.GymId) ||
                     (a.VacancyId == null && (a.PreferredGym == null || names.Contains(a.PreferredGym)))) &&
                 a.Status == ApplicationStatus.InProgress &&
@@ -328,7 +328,7 @@ namespace Service.Specifications
 
             Criteria = a =>
                 a.Status == ApplicationStatus.WaitingList &&
-                (gymIds == null || gymIds.Length == 0 ||
+                (gymIds == null ||
                     gymIds.Contains(a.Vacancy!.GymId) ||
                     (a.VacancyId == null && (a.PreferredGym == null || names.Contains(a.PreferredGym)))) &&
                 (positionTerm == null ||
@@ -358,7 +358,7 @@ namespace Service.Specifications
             var names = gymNames ?? Array.Empty<string>();
 
             Criteria = i =>
-                (gymIds == null || gymIds.Length == 0 ||
+                (gymIds == null ||
                     gymIds.Contains(i.Application!.Vacancy!.GymId) ||
                     (i.Application!.VacancyId == null &&
                         (i.Application!.PreferredGym == null || names.Contains(i.Application!.PreferredGym)))) &&
@@ -405,7 +405,7 @@ namespace Service.Specifications
         public NewComersSpec(int[]? gymIds, DateOnly hiredAfter)
         {
             Criteria = e =>
-                (gymIds == null || gymIds.Length == 0 || gymIds.Contains(e.GymId)) &&
+                (gymIds == null || gymIds.Contains(e.GymId)) &&
                 (e.HireDate >= hiredAfter || e.OnboardingChecklistItems.Any(i => !i.IsCompleted));
 
             AddInclude(e => e.Position);

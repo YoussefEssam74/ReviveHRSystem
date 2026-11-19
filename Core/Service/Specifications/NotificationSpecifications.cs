@@ -84,7 +84,7 @@ namespace Service.Specifications
             Criteria = a =>
                 (a.Targets.Any() || (gymIds != null && gymIds.Length > 0)) &&
                 (status == null || a.Status == status) &&
-                (gymIds == null || gymIds.Length == 0
+                (gymIds == null
                     || a.Targets.Any(t => t.GymId == null || (t.GymId != null && gymIds.Contains(t.GymId.Value))));
 
             AddInclude(a => a.Targets);

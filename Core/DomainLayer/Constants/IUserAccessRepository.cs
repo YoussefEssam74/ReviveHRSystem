@@ -26,6 +26,15 @@ namespace DomainLayer.Contracts
         /// <summary>True when the user has UserGymAccess to the gym (ADR-004 check #1).</summary>
         Task<bool> HasGymAccessAsync(int userId, int gymId, CancellationToken cancellationToken = default);
 
+        /// <summary>True when the user is a Top Management account (platform-wide scope).</summary>
+        Task<bool> IsTopManagementAsync(int userId, CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// True when the user may act on the gym: Top Management covers every gym,
+        /// everyone else needs an explicit UserGymAccess row.
+        /// </summary>
+        Task<bool> CoversGymAsync(int userId, int gymId, CancellationToken cancellationToken = default);
+
         /// <summary>Grants UserGymAccess to the gym when it is not already present (no-op otherwise).</summary>
         Task AddGymAccessAsync(int userId, int gymId, CancellationToken cancellationToken = default);
 
@@ -46,6 +55,22 @@ namespace DomainLayer.Contracts
 
         /// <summary>Names of the roles assigned to the user for one gym.</summary>
         Task<IReadOnlyList<string>> GetGymRoleNamesAsync(int userId, int gymId, CancellationToken cancellationToken = default);
+
+        /// <summary>Role ids assigned to the user in one gym (the authoritative per-gym assignment).</summary>
+        Task<IReadOnlyList<int>> GetUserGymRoleIdsAsync(int userId, int gymId, CancellationToken cancellationToken = default);
+
+        /// <summary>Replaces the user's roles in one gym wholesale (no-op when unchanged).</summary>
+        Task ReplaceUserGymRolesAsync(int userId, int gymId, IReadOnlyCollection<int> roleIds, CancellationToken cancellationToken = default);
+
+        /// <summary>Replaces the user's roles in each listed gym wholesale.</summary>
+        Task ReplaceUserGymRolesForGymsAsync(int userId, IReadOnlyCollection<int> gymIds, IReadOnlyCollection<int> roleIds, CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// Rebuilds the global UserRoles union from the user's per-gym roles. Call only
+        /// right after a UserGymRoles write: an empty per-gym set then legitimately
+        /// means "no role at all", so the global rows are cleared.
+        /// </summary>
+        Task SyncGlobalRolesFromGymRolesAsync(int userId, CancellationToken cancellationToken = default);
 
         /// <summary>Role ids assigned to a user.</summary>
         Task<IReadOnlyList<int>> GetUserRoleIdsAsync(int userId, CancellationToken cancellationToken = default);

@@ -28,6 +28,12 @@ export const teamRequests: Record<string, string> = {
   // Pagination
   'Page {{page}} of {{totalPages}} · {{total}} total': 'صفحة {{page}} من {{totalPages}} · {{total}} إجمالاً',
 
+  // Filters
+  'Request type': 'نوع الطلب',
+  'Search by name': 'ابحث بالاسم',
+  'No requests match these filters': 'لا توجد طلبات مطابقة لعوامل التصفية هذه',
+  'Clear a filter to widen the queue.': 'امسح أحد عوامل التصفية لتوسيع القائمة.',
+
   // Row summaries
   '{{type}} · {{range}} · Submitted {{date}}': '{{type}} · {{range}} · قُدِّم {{date}}',
   '{{range}} · Submitted {{date}}': '{{range}} · قُدِّم {{date}}',
@@ -70,6 +76,8 @@ export const teamRequests: Record<string, string> = {
   'Request #{{id}}': 'الطلب #{{id}}',
   'Submitted on': 'تاريخ التقديم',
   'Requested for': 'الفترة المطلوبة',
+  'Approved on': 'تاريخ الاعتماد',
+  'Rejected on': 'تاريخ الرفض',
   'Sick leave limit': 'حد الإجازة المرضية',
   'Annual leave limit': 'حد الإجازة السنوية',
   '{{used}} / {{total}} days used · {{remaining}} left':

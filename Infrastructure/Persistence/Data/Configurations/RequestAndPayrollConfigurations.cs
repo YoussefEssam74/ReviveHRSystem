@@ -128,7 +128,7 @@ namespace Presistence.Data.Configurations
                    .HasForeignKey(pe => pe.EmployeeId)
                    .OnDelete(DeleteBehavior.Restrict);
 
-            builder.HasIndex(pe => new { pe.PayrollPeriodId, pe.EmployeeId }).IsUnique();
+            builder.HasIndex(pe => new { pe.PayrollPeriodId, pe.EmployeeId }).IsUnique().HasFilter("\"IsDeleted\" = FALSE");
         }
     }
 

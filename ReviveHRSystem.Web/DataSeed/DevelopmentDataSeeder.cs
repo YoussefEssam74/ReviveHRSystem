@@ -481,17 +481,18 @@ namespace ReviveHRSystem.Web.DataSeed
                 return;
             }
 
-            var exists = await db.UserGymRoles.AnyAsync(
-                ugr => ugr.UserId == userId && ugr.GymId == gymId && ugr.RoleId == role.Id);
-            if (exists)
+            var current = await db.UserGymRoles
+                .Where(ugr => ugr.UserId == userId && ugr.GymId == gymId)
+                .ToListAsync();
+
+            // A user holds one role per gym and the seeded assignment is authoritative:
+            // extra rows (e.g. a role carried over from another gym) are replaced, so a
+            // re-seed also repairs a user whose per-gym roles drifted.
+            if (current.Count == 1 && current[0].RoleId == role.Id)
             {
                 return;
             }
 
-            // A user holds at most one role per gym: a new assignment replaces the old one.
-            var current = await db.UserGymRoles
-                .Where(ugr => ugr.UserId == userId && ugr.GymId == gymId)
-                .ToListAsync();
             db.UserGymRoles.RemoveRange(current);
 
             db.UserGymRoles.Add(new UserGymRole { UserId = userId, GymId = gymId, RoleId = role.Id });

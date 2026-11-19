@@ -88,7 +88,7 @@ namespace Presistence.Data.Configurations
             builder.Property(bd => bd.DeviceToken).IsRequired().HasMaxLength(256);
             builder.Property(bd => bd.Vendor).HasMaxLength(100);
 
-            builder.HasIndex(bd => bd.DeviceToken).IsUnique();
+            builder.HasIndex(bd => bd.DeviceToken).IsUnique().HasFilter("\"IsDeleted\" = FALSE");
 
             builder.HasOne(bd => bd.Gym)
                    .WithMany()
@@ -131,7 +131,7 @@ namespace Presistence.Data.Configurations
             // HR attendance grid notes (S4, A1): manual-entry / correction reasons.
             builder.Property(ar => ar.Notes).HasMaxLength(500);
 
-            builder.HasIndex(ar => new { ar.EmployeeId, ar.Date }).IsUnique();
+            builder.HasIndex(ar => new { ar.EmployeeId, ar.Date }).IsUnique().HasFilter("\"IsDeleted\" = FALSE");
             builder.HasIndex(ar => ar.GymId);
             builder.HasIndex(ar => ar.StationSessionId);
         }
@@ -174,7 +174,7 @@ namespace Presistence.Data.Configurations
 
             // The 6-digit station enrollment credential replaces BiometricDevices.DeviceToken:
             // it identifies the gym at station login and is never device-bound.
-            builder.HasIndex(sc => sc.Code).IsUnique();
+            builder.HasIndex(sc => sc.Code).IsUnique().HasFilter("\"IsDeleted\" = FALSE");
             builder.HasIndex(sc => sc.GymId)
                    .IsUnique()
                    .HasFilter("\"IsActive\" = TRUE");
@@ -204,7 +204,7 @@ namespace Presistence.Data.Configurations
             builder.Property(ss => ss.CreatedAtUtc).IsRequired();
             builder.Property(ss => ss.ExpiresAtUtc).IsRequired();
 
-            builder.HasIndex(ss => ss.TokenHash).IsUnique();
+            builder.HasIndex(ss => ss.TokenHash).IsUnique().HasFilter("\"IsDeleted\" = FALSE");
             builder.HasIndex(ss => ss.GymId);
             builder.HasIndex(ss => ss.StationCodeId);
 

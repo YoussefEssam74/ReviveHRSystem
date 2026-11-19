@@ -84,7 +84,7 @@ namespace Service.Specifications
     {
         public EmployeeDirectorySpec(
             int[]? gymIds,
-            int? teamId,
+            int[]? teamIds,
             string? search,
             EmployeeStatus? status,
             int skip,
@@ -100,10 +100,18 @@ namespace Service.Specifications
                 predicate = And(predicate, e => scopedGyms.Contains(e.GymId));
             }
 
-            if (teamId.HasValue)
+            if (teamIds is not null)
             {
-                var scopedTeam = teamId.Value;
-                predicate = And(predicate, e => e.TeamId == scopedTeam);
+                if (teamIds.Length == 0)
+                {
+                    // Team-scoped with no team: matches nobody, never the whole gym.
+                    predicate = And(predicate, _ => false);
+                }
+                else
+                {
+                    var scopedTeams = teamIds;
+                    predicate = And(predicate, e => e.TeamId != null && scopedTeams.Contains(e.TeamId.Value));
+                }
             }
 
             if (!string.IsNullOrWhiteSpace(search))

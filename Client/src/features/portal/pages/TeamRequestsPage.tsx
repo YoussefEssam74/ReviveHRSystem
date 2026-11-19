@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState, type Dispatch, type SetStateAction } from 'react'
 import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
 import type { TFunction } from 'i18next'
@@ -12,6 +12,7 @@ import {
   getOwnLeaveBalance,
   getRequestDetail,
   getRequestInbox,
+  getRequestTypes,
   undoDecision,
   undoManagedDecision,
   type DeskRequestRow,
@@ -47,6 +48,14 @@ function isCoverDaysPayment(payment: string | null | undefined): boolean {
   return /^\d+\s*days?\s*$/i.test((payment ?? '').trim())
 }
 
+/** "Nov 18, 2026 · 9:14 AM" — a filing/decision stamp. Date-only payloads print
+ *  without a clock rather than a fake midnight. */
+function timestampLabel(value: string | null | undefined, dateOnly?: string | null): string {
+  if (value) return `${formatDateWithYear(value)} · ${formatTime(value)}`
+  if (dateOnly) return formatDateWithYear(dateOnly)
+  return '—'
+}
+
 /** Detail-drawer fact boxes in reading order — the grid pairs them two per row. */
 function detailFactBoxes(
   t: TFunction,
@@ -57,9 +66,15 @@ function detailFactBoxes(
   const facts = [
     { label: t('Type'), value: detail.type },
     { label: t('Status'), value: detail.status },
-    { label: t('Submitted on'), value: formatDateWithYear(detail.submittedDate) },
+    { label: t('Submitted on'), value: timestampLabel(detail.submittedAt, detail.submittedDate) },
     { label: t('Requested for'), value: rangeLabel(detail.requestedDate, detail.endDate) },
   ]
+  if (detail.latestDecisionAt) {
+    facts.push({
+      label: detail.latestDecision === 'Rejected' ? t('Rejected on') : t('Approved on'),
+      value: timestampLabel(detail.latestDecisionAt),
+    })
+  }
   if (balance) facts.push(balance)
   if (detail.requestTime) facts.push({ label: t('Time'), value: formatTimeOfDay(detail.requestTime) })
   if (detail.calculatedDays != null) {
@@ -119,6 +134,124 @@ const TAB_STYLES: Record<DeskTab, { active: string; badge: string }> = {
 
 const PAGE_SIZE = 10
 
+/** Queue filters shared by the desk and HR lists: requested month, request type, employee name. */
+interface RequestFilters {
+  /** "yyyy-MM"; empty means every month. */
+  month: string
+  /** Request-type label as the API stores it; empty means every type. */
+  type: string
+  /** Employee-name contains; empty means every employee. */
+  name: string
+}
+
+const EMPTY_FILTERS: RequestFilters = { month: '', type: '', name: '' }
+
+function hasActiveFilters(filters: RequestFilters): boolean {
+  return Boolean(filters.month || filters.type || filters.name)
+}
+
+/** "2026-11" → the month's inclusive day bounds ("2026-11-01" … "2026-11-30"). */
+function monthRange(month: string): { from: string; to: string } | null {
+  if (!/^\d{4}-\d{2}$/.test(month)) return null
+  const lastDay = new Date(Number(month.slice(0, 4)), Number(month.slice(5, 7)), 0).getDate()
+  return { from: `${month}-01`, to: `${month}-${String(lastDay).padStart(2, '0')}` }
+}
+
+/** The month both queues open on — always the running one. */
+const THIS_MONTH = (() => {
+  const now = new Date()
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+})()
+
+/** What the latest decision says about a row — the badge its Status cell prints. */
+function decisionLabel(status: string, latestDecision?: string | null): string {
+  if (latestDecision === 'Approved' || latestDecision === 'Rejected') return latestDecision
+  if (status === 'Approved' || status === 'Rejected') return status
+  return 'Pending'
+}
+
+/** Month choices: the running month first, then the eleven before it. */
+function requestMonthOptions(): { value: string; label: string }[] {
+  const names = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
+  const options = [{ value: '', label: translate('All months') }]
+  const cursor = new Date()
+  cursor.setDate(1)
+  for (let index = 0; index < 12; index += 1) {
+    const value = `${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, '0')}`
+    options.push({ value, label: `${names[cursor.getMonth()]} ${cursor.getFullYear()}` })
+    cursor.setMonth(cursor.getMonth() - 1)
+  }
+  return options
+}
+
+/** Month / type / name filters the two queues share — a plain row, like the employee list. */
+function RequestFilterBar({
+  filters,
+  setFilters,
+}: {
+  filters: RequestFilters
+  setFilters: Dispatch<SetStateAction<RequestFilters>>
+}) {
+  const { t } = useTranslation()
+  const [nameDraft, setNameDraft] = useState(filters.name)
+  const nameTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+  const typesQuery = useQuery({
+    queryKey: ['portal', 'request-types'],
+    queryFn: ({ signal }) => getRequestTypes(signal),
+    staleTime: Infinity,
+  })
+  const monthOptions = requestMonthOptions()
+
+  useEffect(() => () => clearTimeout(nameTimer.current), [])
+
+  // The name box filters as it is typed, one request per pause instead of per key.
+  const onNameChange = (value: string) => {
+    setNameDraft(value)
+    clearTimeout(nameTimer.current)
+    nameTimer.current = setTimeout(() => {
+      setFilters((current) => (current.name === value ? current : { ...current, name: value }))
+    }, 300)
+  }
+
+  return (
+    <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+      <input
+        type="search"
+        value={nameDraft}
+        onChange={(event) => onNameChange(event.target.value)}
+        placeholder={t('Search by name')}
+        className="form-input sm:flex-1"
+        aria-label={t('Employee name')}
+      />
+      <select
+        value={filters.type}
+        onChange={(event) => setFilters((current) => ({ ...current, type: event.target.value }))}
+        className="form-select sm:ms-auto sm:w-44"
+        aria-label={t('Request type')}
+      >
+        <option value="">{t('All types')}</option>
+        {(typesQuery.data ?? []).map((type) => (
+          <option key={type.id} value={type.label}>
+            {type.label}
+          </option>
+        ))}
+      </select>
+      <select
+        value={filters.month}
+        onChange={(event) => setFilters((current) => ({ ...current, month: event.target.value }))}
+        className="form-select sm:w-44"
+        aria-label={t('Select month')}
+      >
+        {monthOptions.map((option) => (
+          <option key={option.value} value={option.value}>
+            {option.label}
+          </option>
+        ))}
+      </select>
+    </div>
+  )
+}
+
 export default function TeamRequestsPage() {
   const { t } = useTranslation()
   const { isTeamLeader, isBranchManager, me } = usePortalSession()
@@ -145,10 +278,16 @@ export default function TeamRequestsPage() {
 }
 
 function DeskWorkspace({ tab, onTab }: { tab: DeskTab; onTab: (tab: DeskTab) => void }) {
+  const [filters, setFilters] = useState<RequestFilters>({ ...EMPTY_FILTERS, month: THIS_MONTH })
   return (
     <div className="space-y-3">
       <TabBar tab={tab} onTab={onTab} />
-      <DeskList key={tab} status={tab} />
+      <RequestFilterBar filters={filters} setFilters={setFilters} />
+      <DeskList
+        key={`${tab}|${filters.month}|${filters.type}|${filters.name}`}
+        status={tab}
+        filters={filters}
+      />
     </div>
   )
 }
@@ -164,10 +303,16 @@ const HR_TABS: { key: HrTab; label: string; short: string; hint: string }[] = [
 ]
 
 function HrWorkspace({ tab, onTab }: { tab: HrTab; onTab: (tab: HrTab) => void }) {
+  const [filters, setFilters] = useState<RequestFilters>({ ...EMPTY_FILTERS, month: THIS_MONTH })
   return (
     <div className="space-y-3">
       <HrTabBar tab={tab} onTab={onTab} />
-      <HrList key={tab} status={tab} />
+      <RequestFilterBar filters={filters} setFilters={setFilters} />
+      <HrList
+        key={`${tab}|${filters.month}|${filters.type}|${filters.name}`}
+        status={tab}
+        filters={filters}
+      />
     </div>
   )
 }
@@ -223,13 +368,24 @@ function HrTabBar({ tab, onTab }: { tab: HrTab; onTab: (tab: HrTab) => void }) {
   )
 }
 
-function HrList({ status }: { status: HrTab }) {
+function HrList({ status, filters }: { status: HrTab; filters: RequestFilters }) {
   const { t } = useTranslation()
   const [page, setPage] = useState(1)
+  const range = monthRange(filters.month)
 
   const inboxQuery = useQuery({
-    queryKey: ['portal', 'hr-requests', 'inbox', status, page],
-    queryFn: ({ signal }) => getHrRequests({ status, page, pageSize: PAGE_SIZE, signal }),
+    queryKey: ['portal', 'hr-requests', 'inbox', status, page, filters.month, filters.type, filters.name],
+    queryFn: ({ signal }) =>
+      getHrRequests({
+        status,
+        page,
+        pageSize: PAGE_SIZE,
+        dateFrom: range?.from,
+        dateTo: range?.to,
+        type: filters.type || undefined,
+        search: filters.name || undefined,
+        signal,
+      }),
   })
 
   if (inboxQuery.isLoading) return <LoadingState />
@@ -248,8 +404,9 @@ function HrList({ status }: { status: HrTab }) {
               <tr>
                 <th>{t('Name')}</th>
                 <th>{t('Type')}</th>
-                <th>{t('Date')}</th>
-                <th>{t('Time')}</th>
+                <th>{t('Status')}</th>
+                <th>{t('Submitted on')}</th>
+                <th>{status === 'Rejected' ? t('Rejected on') : t('Approved on')}</th>
                 <th>{t('Reason')}</th>
                 <th>
                   <span className="block text-end">{t('Action')}</span>
@@ -265,8 +422,16 @@ function HrList({ status }: { status: HrTab }) {
         </div>
       ) : (
         <EmptyState
-          title={t(HR_TABS.find((tabDef) => tabDef.key === status)?.hint ?? 'Nothing here')}
-          hint={t('HR rows appear as soon as branch managers approve requests to review.')}
+          title={
+            hasActiveFilters(filters)
+              ? t('No requests match these filters')
+              : t(HR_TABS.find((tabDef) => tabDef.key === status)?.hint ?? 'Nothing here')
+          }
+          hint={
+            hasActiveFilters(filters)
+              ? t('Clear a filter to widen the queue.')
+              : t('HR rows appear as soon as branch managers approve requests to review.')
+          }
         />
       )}
       {envelope && envelope.totalPages > 1 && (
@@ -322,10 +487,13 @@ function HrRow({ row }: { row: HrRequestItem }) {
 
   const decideMutation = useMutation({
     mutationFn: async (input: { decision: 'Approve' | 'Reject'; comment: string | null; calculatedDays?: 1 | 2 }) => {
-      // A rejected request cannot be approved in place: reopen it first, then record
-      // the approval on the request that comes back. This stage speaks the
+      // A decided request cannot be re-decided in place: reopen it first, then record
+      // the new outcome on the request that comes back. This stage speaks the
       // "Approved"/"Rejected" vocabulary.
-      if (input.decision === 'Approve' && state === 'rejected') {
+      if (
+        (input.decision === 'Approve' && state === 'rejected') ||
+        (input.decision === 'Reject' && state === 'approved')
+      ) {
         await undoDecision(row.id)
       }
       return decideRequestHr(
@@ -401,13 +569,10 @@ function HrRow({ row }: { row: HrRequestItem }) {
           )}
         </td>
         <td>
-          <p className="whitespace-nowrap text-xs font-medium text-charcoal-900">
-            {rangeLabel(row.requestedDate, row.endDate)}
-          </p>
+          <StatusBadge status={decisionLabel(row.status, row.latestDecision)} />
         </td>
-        <td className="whitespace-nowrap text-xs text-charcoal-700">
-          {row.requestTime ? formatTimeOfDay(row.requestTime) : '—'}
-        </td>
+        <SubmittedCell submittedAt={row.submittedAt} submittedDate={row.submittedDate} />
+        <DecisionCell decidedAt={row.latestDecisionAt} />
         <td>
           <p className="line-clamp-2 text-xs text-charcoal-700">
             {row.reason ? formatTimeLabel(row.reason) : '—'}
@@ -435,9 +600,14 @@ function HrRow({ row }: { row: HrRequestItem }) {
               <Check className="h-3.5 w-3.5" aria-hidden="true" /> {t('Approve')}
             </Button>
           ) : state === 'approved' ? (
-            <Button size="sm" variant="secondary" loading={undoMutation.isPending} onClick={() => undoMutation.mutate()}>
-              <Undo2 className="h-3.5 w-3.5" aria-hidden="true" /> {t('Undo')}
-            </Button>
+            <>
+              <Button size="sm" variant="dangerOutline" onClick={() => setDecision('Reject')}>
+                <X className="h-3.5 w-3.5" aria-hidden="true" /> {t('Reject')}
+              </Button>
+              <Button size="sm" variant="secondary" loading={undoMutation.isPending} onClick={() => undoMutation.mutate()}>
+                <Undo2 className="h-3.5 w-3.5" aria-hidden="true" /> {t('Undo')}
+              </Button>
+            </>
           ) : null}
           <Button size="sm" variant="secondary" onClick={() => setDetailId(row.id)}>
             {t('View')}
@@ -693,6 +863,31 @@ function rangeLabel(start: string, end: string | null): string {
   return `${formatDate(start)} – ${formatDateWithYear(end)}`
 }
 
+/** Timestamp cell: date on top, clock time beneath — keeps both stamp columns narrow. */
+function StampLines({ date, time }: { date: string; time?: string }) {
+  return (
+    <td className="whitespace-nowrap text-xs">
+      <p className="font-medium text-charcoal-900">{date}</p>
+      {time && <p className="mt-0.5 text-[10px] text-charcoal-500">{time}</p>}
+    </td>
+  )
+}
+
+/** Submitted column: when the request was filed. */
+function SubmittedCell({ submittedAt, submittedDate }: { submittedAt?: string | null; submittedDate: string }) {
+  return submittedAt ? (
+    <StampLines date={formatDateWithYear(submittedAt)} time={formatTime(submittedAt)} />
+  ) : (
+    <StampLines date={formatDateWithYear(submittedDate)} />
+  )
+}
+
+/** Decision column: when the request was approved — or rejected, on that tab. */
+function DecisionCell({ decidedAt }: { decidedAt?: string | null }) {
+  if (!decidedAt) return <td className="whitespace-nowrap text-xs text-charcoal-700">—</td>
+  return <StampLines date={formatDateWithYear(decidedAt)} time={formatTime(decidedAt)} />
+}
+
 /** The uploaded file is a medical certificate on sick leave, a generic file elsewhere. */
 function attachmentLabel(type: string): string {
   return type.toLowerCase() === 'sick leave'
@@ -937,13 +1132,24 @@ function AttachmentViewer({
   )
 }
 
-function DeskList({ status }: { status: DeskTab }) {
+function DeskList({ status, filters }: { status: DeskTab; filters: RequestFilters }) {
   const { t } = useTranslation()
   const [page, setPage] = useState(1)
+  const range = monthRange(filters.month)
 
   const inboxQuery = useQuery({
-    queryKey: ['portal', 'desk', 'inbox', status, page],
-    queryFn: ({ signal }) => getRequestInbox({ status, page, pageSize: PAGE_SIZE, signal }),
+    queryKey: ['portal', 'desk', 'inbox', status, page, filters.month, filters.type, filters.name],
+    queryFn: ({ signal }) =>
+      getRequestInbox({
+        status,
+        page,
+        pageSize: PAGE_SIZE,
+        dateFrom: range?.from,
+        dateTo: range?.to,
+        type: filters.type || undefined,
+        search: filters.name || undefined,
+        signal,
+      }),
   })
 
   // DeskList is remounted per tab (key on <DeskList>), so page state resets naturally.
@@ -964,8 +1170,9 @@ function DeskList({ status }: { status: DeskTab }) {
               <tr>
                 <th>{t('Name')}</th>
                 <th>{t('Type')}</th>
-                <th>{t('Date')}</th>
-                <th>{t('Time')}</th>
+                <th>{t('Status')}</th>
+                <th>{t('Submitted on')}</th>
+                <th>{status === 'Rejected' ? t('Rejected on') : t('Approved on')}</th>
                 <th>{t('Reason')}</th>
                 <th>
                   <span className="block text-end">{t('Action')}</span>
@@ -981,8 +1188,16 @@ function DeskList({ status }: { status: DeskTab }) {
         </div>
       ) : (
         <EmptyState
-          title={t(TABS.find((tabDef) => tabDef.key === status)?.hint ?? 'Nothing here')}
-          hint={t('Desk rows appear as soon as team members submit requests.')}
+          title={
+            hasActiveFilters(filters)
+              ? t('No requests match these filters')
+              : t(TABS.find((tabDef) => tabDef.key === status)?.hint ?? 'Nothing here')
+          }
+          hint={
+            hasActiveFilters(filters)
+              ? t('Clear a filter to widen the queue.')
+              : t('Desk rows appear as soon as team members submit requests.')
+          }
         />
       )}
       {envelope && envelope.totalPages > 1 && (
@@ -1046,7 +1261,7 @@ function DeskRow({ row }: { row: DeskRequestRow }) {
 
   const decideMutation = useMutation({
     mutationFn: async (input: { decision: 'Approve' | 'Reject'; comment: string | null; calculatedDays?: 1 | 2 }) => {
-      // A rejected request cannot be approved in place: reopen the rejection first,
+      // A decided request cannot be re-decided in place: reopen the rejection first,
       // then record the approval on the request that comes back.
       if (input.decision === 'Approve' && state === 'rejected') {
         if (reopenRoute === 'hr') {
@@ -1054,6 +1269,11 @@ function DeskRow({ row }: { row: DeskRequestRow }) {
           return decideRequestHr(row.id, 'Approved', input.comment, input.calculatedDays)
         }
         await undoManagedDecision(row.id)
+      }
+      // Turning an approval down reopens the final decision first.
+      if (input.decision === 'Reject' && state === 'approved') {
+        await undoDecision(row.id)
+        return decideRequest(row.id, 'Reject', input.comment, undefined)
       }
       return decideRequest(row.id, input.decision, input.comment, input.calculatedDays)
     },
@@ -1134,13 +1354,10 @@ function DeskRow({ row }: { row: DeskRequestRow }) {
           )}
         </td>
         <td>
-          <p className="whitespace-nowrap text-xs font-medium text-charcoal-900">
-            {rangeLabel(row.requestDate, row.endDate)}
-          </p>
+          <StatusBadge status={decisionLabel(row.status, row.latestDecision)} />
         </td>
-        <td className="whitespace-nowrap text-xs text-charcoal-700">
-          {row.requestTime ? formatTimeOfDay(row.requestTime) : '—'}
-        </td>
+        <SubmittedCell submittedAt={row.submittedAt} submittedDate={row.submittedDate} />
+        <DecisionCell decidedAt={row.latestDecisionAt} />
         <td>
           <p className="line-clamp-2 text-xs text-charcoal-700">
             {row.reason ? formatTimeLabel(row.reason) : '—'}
@@ -1191,9 +1408,14 @@ function DeskRow({ row }: { row: DeskRequestRow }) {
             </Button>
           )}
           {state === 'approved' && (
-            <Button size="sm" variant="secondary" loading={undoMutation.isPending} onClick={() => undoMutation.mutate()}>
-              <Undo2 className="h-3.5 w-3.5" aria-hidden="true" /> {t('Undo')}
-            </Button>
+            <>
+              <Button size="sm" variant="dangerOutline" onClick={() => setDecision('Reject')}>
+                <X className="h-3.5 w-3.5" aria-hidden="true" /> {t('Reject')}
+              </Button>
+              <Button size="sm" variant="secondary" loading={undoMutation.isPending} onClick={() => undoMutation.mutate()}>
+                <Undo2 className="h-3.5 w-3.5" aria-hidden="true" /> {t('Undo')}
+              </Button>
+            </>
           )}
           <Button size="sm" variant="secondary" onClick={() => setDetailId(row.id)}>
             {t('View')}

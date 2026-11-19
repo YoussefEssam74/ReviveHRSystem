@@ -65,7 +65,7 @@ namespace Presistence.Data.Configurations
             builder.Property(v => v.Source).HasMaxLength(100);
             builder.Property(v => v.CreatedDate).HasDefaultValueSql("CURRENT_TIMESTAMP");
 
-            builder.HasIndex(v => v.PublicLinkToken).IsUnique();
+            builder.HasIndex(v => v.PublicLinkToken).IsUnique().HasFilter("\"IsDeleted\" = FALSE");
 
             builder.HasOne(v => v.Gym)
                    .WithMany()

@@ -183,7 +183,7 @@ namespace Service.Services
             {
                 // in-gym: ok
             }
-            else if (await userAccess.HasGymAccessAsync(actorUserId, employee.GymId, cancellationToken))
+            else if (await userAccess.CoversGymAsync(actorUserId, employee.GymId, cancellationToken))
             {
                 // gym access via other assignments: ok
             }

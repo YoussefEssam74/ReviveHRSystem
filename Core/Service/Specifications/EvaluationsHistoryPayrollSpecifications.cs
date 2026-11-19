@@ -9,6 +9,7 @@ using DomainLayer.Models.NotificationModule.Enums;
 using DomainLayer.Models.PayrollModule;
 using DomainLayer.Models.PayrollModule.Enums;
 using DomainLayer.Models.RequestModule;
+using Service.Services;
 
 namespace Service.Specifications
 {
@@ -167,6 +168,19 @@ namespace Service.Specifications
         }
     }
 
+    /// <summary>Employees of several teams (a leader may lead more than one team).</summary>
+    public class EmployeesByTeamsSpec : BaseSpecification<Employee, int>
+    {
+        public EmployeesByTeamsSpec(IReadOnlyCollection<int> teamIds)
+        {
+            var ids = teamIds.ToList();
+            Criteria = e => e.TeamId != null && ids.Contains(e.TeamId.Value) && e.Status != EmployeeStatus.Terminated;
+            AddInclude(e => e.Position);
+            AddInclude(e => e.Gym);
+            OrderBy = e => e.FullName;
+        }
+    }
+
     /// <summary>Employees of one gym (gym scope).</summary>
     public class EmployeesByGymSpec : BaseSpecification<Employee, int>
     {
@@ -212,7 +226,8 @@ namespace Service.Specifications
             DateOnly? dateFrom = null,
             DateOnly? dateTo = null,
             int skip = 0,
-            int take = 0)
+            int take = 0,
+            string? search = null)
         {
             Expression<Func<DomainLayer.Models.RequestModule.EmployeeRequest, bool>> predicate =
                 r => employeeIds.Contains(r.EmployeeId);
@@ -224,8 +239,10 @@ namespace Service.Specifications
 
             if (!string.IsNullOrWhiteSpace(type))
             {
-                var wantedType = type.Trim();
-                predicate = And(predicate, r => r.Type == wantedType);
+                // One dropdown entry covers the catalog label and the legacy spellings
+                // the older rows carry ("Shift Swap" → "ShiftSwap").
+                var wantedTypes = RequestTypeCatalog.StoredSpellingsFor(type).ToArray();
+                predicate = And(predicate, r => wantedTypes.Contains(r.Type));
             }
 
             if (dateFrom is { } from)
@@ -236,6 +253,12 @@ namespace Service.Specifications
             if (dateTo is { } to)
             {
                 predicate = And(predicate, r => r.RequestDate <= to);
+            }
+
+            if (!string.IsNullOrWhiteSpace(search))
+            {
+                var term = search.Trim().ToLower();
+                predicate = And(predicate, r => r.Employee.FullName.ToLower().Contains(term));
             }
 
             Criteria = predicate;

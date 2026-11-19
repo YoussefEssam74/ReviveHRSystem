@@ -72,9 +72,11 @@ namespace Service.Services
 
             var gymAccess = await userAccess.GetGymAccessAsync(user.Id, cancellationToken);
 
-            if (user.UserType == UserType.Employee && gymAccess.Count == 0)
+            // No active gym means no data scope: letting the account in would turn the
+            // empty scope into an org-wide read on every scoped endpoint.
+            if (user.UserType != UserType.TopManagement && gymAccess.Count == 0)
             {
-                throw new UnAuthorizedException("This employee has no active gym access.");
+                throw new UnAuthorizedException("This account has no active gym access.");
             }
 
             if (user.UserType == UserType.Employee && gymAccess.Count >= 2)

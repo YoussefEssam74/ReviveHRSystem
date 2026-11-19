@@ -16,8 +16,8 @@ namespace Presistence.Data.Configurations
             builder.Property(u => u.PasswordHash).IsRequired();
             builder.Property(u => u.UserType).IsRequired();
 
-            builder.HasIndex(u => u.Email).IsUnique();
-            builder.HasIndex(u => u.UserName).IsUnique();
+            builder.HasIndex(u => u.Email).IsUnique().HasFilter("\"IsDeleted\" = FALSE");
+            builder.HasIndex(u => u.UserName).IsUnique().HasFilter("\"IsDeleted\" = FALSE");
 
             builder.HasOne(u => u.EmployeeProfile)
                    .WithOne(e => e.User)
@@ -36,7 +36,7 @@ namespace Presistence.Data.Configurations
             builder.Property(r => r.Name).IsRequired().HasMaxLength(100);
             builder.Property(r => r.Description).HasMaxLength(500);
 
-            builder.HasIndex(r => r.Name).IsUnique();
+            builder.HasIndex(r => r.Name).IsUnique().HasFilter("\"IsDeleted\" = FALSE");
         }
     }
 
@@ -51,7 +51,7 @@ namespace Presistence.Data.Configurations
             builder.Property(p => p.Area).IsRequired().HasMaxLength(100);
             builder.Property(p => p.Description).HasMaxLength(500);
 
-            builder.HasIndex(p => p.Key).IsUnique();
+            builder.HasIndex(p => p.Key).IsUnique().HasFilter("\"IsDeleted\" = FALSE");
         }
     }
 
@@ -167,7 +167,7 @@ namespace Presistence.Data.Configurations
             builder.HasKey(rt => rt.Id);
 
             builder.Property(rt => rt.TokenHash).IsRequired().HasMaxLength(64);
-            builder.HasIndex(rt => rt.TokenHash).IsUnique();
+            builder.HasIndex(rt => rt.TokenHash).IsUnique().HasFilter("\"IsDeleted\" = FALSE");
             builder.HasIndex(rt => rt.UserId);
 
             builder.HasOne(rt => rt.User)

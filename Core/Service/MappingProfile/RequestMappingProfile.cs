@@ -2,6 +2,7 @@ using AutoMapper;
 using DomainLayer.Models.OrganizationModule;
 using DomainLayer.Models.RequestModule;
 using DomainLayer.Models.RequestModule.Enums;
+using Service.Services;
 using Shared.DataTransferObject.EmployeeProfile;
 
 namespace Service.Mapping;
@@ -20,6 +21,8 @@ public sealed class RequestMappingProfile : Profile
             .ForMember(d => d.EmployeeName, o => o.MapFrom(s => s.Employee != null ? s.Employee.FullName : string.Empty))
             .ForMember(d => d.SubmittedDate, o => o.MapFrom(s => DateOnly.FromDateTime(s.SubmittedAt)))
             .ForMember(d => d.SubmittedAt, o => o.MapFrom(s => s.SubmittedAt))
+            .ForMember(d => d.LatestDecision, o => o.MapFrom(s => LatestDecisionName(s)))
+            .ForMember(d => d.LatestDecisionAt, o => o.MapFrom(s => LatestDecisionMoment(s)))
             .ForMember(d => d.RequestDate, o => o.MapFrom(s => s.RequestDate))
             .ForMember(d => d.EndDate, o => o.MapFrom(s => s.TargetEndDate))
             .ForMember(d => d.TargetDate, o => o.MapFrom(s => s.TargetStartDate))
@@ -43,6 +46,14 @@ public sealed class RequestMappingProfile : Profile
             .ForMember(d => d.GymId, o => o.MapFrom(s => s.Id))
             .ForMember(d => d.GymName, o => o.MapFrom(s => s.Name));
     }
+
+    /// <summary>Latest decision outcome the desk row prints next to its stamp.</summary>
+    private static string? LatestDecisionName(EmployeeRequest request) =>
+        RequestDecisionTrail.Latest(request)?.Decision.ToString();
+
+    /// <summary>Moment of that latest decision.</summary>
+    private static DateTime? LatestDecisionMoment(EmployeeRequest request) =>
+        RequestDecisionTrail.Latest(request)?.DecidedAt;
 
     private static IReadOnlyList<RequestTimelineStepDto> BuildTimeline(EmployeeRequest request)
     {

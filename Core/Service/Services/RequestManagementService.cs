@@ -54,10 +54,10 @@ namespace Service.Services
             // the filters without paging for the envelope total.
             var repository = unitOfWork.GetRepository<EmployeeRequest, int>();
             var total = await repository.CountAsync(
-                new RequestsByEmployeesSpec(employeeIds, status, query.Type, query.DateFrom, query.DateTo),
+                new RequestsByEmployeesSpec(employeeIds, status, query.Type, query.DateFrom, query.DateTo, search: query.Search),
                 cancellationToken);
             var rows = await repository.GetAllAsync(
-                new RequestsByEmployeesSpec(employeeIds, status, query.Type, query.DateFrom, query.DateTo, query.SkipCount, query.PageSize),
+                new RequestsByEmployeesSpec(employeeIds, status, query.Type, query.DateFrom, query.DateTo, query.SkipCount, query.PageSize, query.Search),
                 cancellationToken);
 
             // Unscheduled Attendance rows from before the request carried its own
@@ -341,6 +341,8 @@ namespace Service.Services
             Type = dto.Type,
             SubmittedDate = dto.SubmittedDate,
             SubmittedAt = dto.SubmittedAt,
+            LatestDecision = dto.LatestDecision,
+            LatestDecisionAt = dto.LatestDecisionAt,
             RequestDate = dto.RequestDate,
             EndDate = dto.EndDate,
             TargetDate = dto.TargetDate,
@@ -388,13 +390,22 @@ namespace Service.Services
 
         private async Task<List<int>> ScopedEmployeeIdsAsync(int actorUserId, int gymId, CancellationToken cancellationToken)
         {
-            var ledTeamId = await teamScopeService.GetLedTeamIdAsync(actorUserId, gymId, cancellationToken);
+            var isTeamScoped = await teamScopeService.IsTeamScopedAsync(actorUserId, gymId, cancellationToken);
 
-            var employees = ledTeamId is not null
-                ? await unitOfWork.GetRepository<DomainLayer.Models.EmployeeModule.Employee, int>()
-                    .GetAllAsync(new EmployeesByTeamSpec(ledTeamId.Value), cancellationToken)
-                : await unitOfWork.GetRepository<DomainLayer.Models.EmployeeModule.Employee, int>()
+            IEnumerable<DomainLayer.Models.EmployeeModule.Employee> employees;
+            if (isTeamScoped)
+            {
+                var ledTeamIds = await teamScopeService.GetLedTeamIdsAsync(actorUserId, gymId, cancellationToken);
+                employees = ledTeamIds.Count > 0
+                    ? await unitOfWork.GetRepository<DomainLayer.Models.EmployeeModule.Employee, int>()
+                        .GetAllAsync(new EmployeesByTeamsSpec(ledTeamIds), cancellationToken)
+                    : [];
+            }
+            else
+            {
+                employees = await unitOfWork.GetRepository<DomainLayer.Models.EmployeeModule.Employee, int>()
                     .GetAllAsync(new EmployeesByGymSpec(gymId), cancellationToken);
+            }
 
             // Exclude the actor's own employee record — a BM or TL must not appear
             // in request management lists they oversee.

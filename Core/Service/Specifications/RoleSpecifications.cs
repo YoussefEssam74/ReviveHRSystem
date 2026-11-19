@@ -97,7 +97,7 @@ namespace Service.Specifications
             // One predicate so EF can translate the whole thing to SQL —
             // null locals are captured as parameters (constant conditions).
             Criteria = u =>
-                (gymIds == null || gymIds.Length == 0 || u.UserGymAccesses.Any(ug => gymIds.Contains(ug.GymId))) &&
+                (gymIds == null || u.UserGymAccesses.Any(ug => gymIds.Contains(ug.GymId))) &&
                 (userType == null || u.UserType == userType) &&
                 (!staffOnly || u.UserType != UserType.Employee) &&
                 (term == null

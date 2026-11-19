@@ -16,7 +16,7 @@ namespace Service.Specifications
             var term = string.IsNullOrWhiteSpace(search) ? null : search.Trim().ToLower();
 
             Criteria = p =>
-                (gymIds == null || gymIds.Length == 0 || gymIds.Contains(p.GymId)) &&
+                (gymIds == null || gymIds.Contains(p.GymId)) &&
                 (requestedGym == null || p.GymId == requestedGym) &&
                 (term == null || p.Title.ToLower().Contains(term)) &&
                 (active == null || p.IsActive == active);
@@ -42,7 +42,7 @@ namespace Service.Specifications
                 : actionCategory.Trim().ToLowerInvariant();
 
             Criteria = a =>
-                (a.GymId == null || gymIds == null || gymIds.Length == 0 || gymIds.Contains(a.GymId.Value)) &&
+                (a.GymId == null || gymIds == null || gymIds.Contains(a.GymId.Value)) &&
                 (gym == null || a.GymId == gym) &&
                 (userId == null || a.UserId == userId) &&
                 (from == null || a.Timestamp >= from.Value) &&

@@ -6,6 +6,7 @@ using DomainLayer.Models.EmployeeModule;
 using DomainLayer.Models.EmployeeModule.Enums;
 using DomainLayer.Models.RequestModule;
 using DomainLayer.Models.RequestModule.Enums;
+using Service.Services;
 
 namespace Service.Specifications
 {
@@ -123,8 +124,10 @@ namespace Service.Specifications
 
             if (!string.IsNullOrWhiteSpace(type))
             {
-                var wantedType = type.Trim();
-                predicate = And(predicate, r => r.Type == wantedType);
+                // One dropdown entry covers the catalog label and the legacy spellings
+                // the older rows carry ("Shift Swap" → "ShiftSwap").
+                var wantedTypes = RequestTypeCatalog.StoredSpellingsFor(type).ToArray();
+                predicate = And(predicate, r => wantedTypes.Contains(r.Type));
             }
 
             if (!string.IsNullOrWhiteSpace(search))

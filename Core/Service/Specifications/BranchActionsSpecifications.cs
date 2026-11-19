@@ -95,7 +95,7 @@ namespace Service.Specifications
         public WarningNoticeListSpec(int[]? gymIds, int? gymId, ProposalStatus? status, int skip, int take)
         {
             Criteria = w =>
-                (gymIds == null || gymIds.Length == 0 || gymIds.Contains(w.Employee.GymId)) &&
+                (gymIds == null || gymIds.Contains(w.Employee.GymId)) &&
                 (gymId == null || w.Employee.GymId == gymId) &&
                 (status == null || w.Status == status);
 
@@ -117,7 +117,7 @@ namespace Service.Specifications
         public BonusProposalListSpec(int[]? gymIds, int? gymId, ProposalStatus? status, int skip, int take)
         {
             Criteria = b =>
-                (gymIds == null || gymIds.Length == 0 || gymIds.Contains(b.Employee.GymId)) &&
+                (gymIds == null || gymIds.Contains(b.Employee.GymId)) &&
                 (gymId == null || b.Employee.GymId == gymId) &&
                 (status == null || b.Status == status);
 

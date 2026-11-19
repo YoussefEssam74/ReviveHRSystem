@@ -15,7 +15,7 @@ namespace Service.Specifications
         public PayrollPeriodScopeSpec(int[]? gymIds, int? gym)
         {
             Criteria = p =>
-                (gymIds == null || gymIds.Length == 0 || gymIds.Contains(p.GymId)) &&
+                (gymIds == null || gymIds.Contains(p.GymId)) &&
                 (gym == null || p.GymId == gym);
 
             AddInclude(p => p.Gym);
@@ -135,7 +135,7 @@ namespace Service.Specifications
         {
             Criteria = l =>
                 l.Type == "Deduction" &&
-                (gymIds == null || gymIds.Length == 0 || gymIds.Contains(l.PayrollEntry.PayrollPeriod.GymId)) &&
+                (gymIds == null || gymIds.Contains(l.PayrollEntry.PayrollPeriod.GymId)) &&
                 (gym == null || l.PayrollEntry.PayrollPeriod.GymId == gym) &&
                 (periodId == null || l.PayrollEntry.PayrollPeriodId == periodId) &&
                 (status == null || l.Status == status);

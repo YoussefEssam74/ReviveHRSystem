@@ -288,6 +288,14 @@ namespace Service.Services
             }
 
             await _userAccess.ReplaceUserRolesAsync(userId, roleIds, cancellationToken);
+
+            // The per-gym table is the authoritative assignment used by every guard;
+            // a role chosen here applies to every gym the account can access.
+            var userGyms = (await _userAccess.GetGymAccessAsync(userId, cancellationToken))
+                .Select(g => g.GymId)
+                .ToList();
+            await _userAccess.ReplaceUserGymRolesForGymsAsync(userId, userGyms, roleIds, cancellationToken);
+
             await _unitOfWork.SaveChangesAsync(cancellationToken);
 
             return new UserAssignmentResponse { Data = await BuildUserAssignmentAsync(userId, cancellationToken) };
@@ -341,12 +349,31 @@ namespace Service.Services
             foreach (var staleId in currentIds.Except(desiredIds).OrderBy(id => id))
             {
                 await _userAccess.RemoveGymAccessAsync(userId, staleId, cancellationToken);
+
+                // The per-gym role row is kept: without UserGymAccess it grants nothing
+                // (every guard checks access too), and a later re-grant restores the
+                // account's role instead of silently leaving the gym role-less.
+            }
+
+            var roleIds = await _userAccess.GetUserRoleIdsAsync(userId, cancellationToken);
+            if (roleIds.Count == 0 && current.Count > 0)
+            {
+                roleIds = await _userAccess.GetUserGymRoleIdsAsync(userId, current[0].GymId, cancellationToken);
             }
 
             foreach (var addedId in desiredIds.Except(currentIds).OrderBy(id => id))
             {
                 await _userAccess.AddGymAccessAsync(userId, addedId, cancellationToken);
+
+                // A newly granted gym inherits the account's role so it is usable there.
+                if (roleIds.Count > 0)
+                {
+                    await _userAccess.ReplaceUserGymRolesAsync(userId, addedId, roleIds, cancellationToken);
+                }
             }
+
+            // The role-row edits are tracked only; the access writes above saved themselves.
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
 
             return new UserAssignmentResponse { Data = await BuildUserAssignmentAsync(userId, cancellationToken) };
         }
@@ -569,6 +596,7 @@ namespace Service.Services
             if (roleIds.Count > 0)
             {
                 await _userAccess.ReplaceUserRolesAsync(user.Id, roleIds, cancellationToken);
+                await _userAccess.ReplaceUserGymRolesForGymsAsync(user.Id, gymIds, roleIds, cancellationToken);
             }
 
             if (permissionIds.Count > 0)

@@ -61,7 +61,7 @@ namespace Service.Services
 
             // Unknown gym and no-access gym answer identically: the caller simply
             // cannot switch to it (ADR-002 Amendment 1).
-            if (gym is null || gym.Status != GymStatus.Active || !await userAccess.HasGymAccessAsync(user.Id, gymId, cancellationToken))
+            if (gym is null || gym.Status != GymStatus.Active || !await userAccess.CoversGymAsync(user.Id, gymId, cancellationToken))
             {
                 throw new UnAuthorizedException("You do not have access to the selected gym.");
             }
