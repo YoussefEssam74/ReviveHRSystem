@@ -285,7 +285,7 @@ function kpiTile(label, value, sub, icon, tone) {
     : tone === 'amber'
       ? 'bg-amber-50 text-amber-600'
       : 'bg-charcoal-100 text-charcoal-500';
-  return `<div class="card p-3">
+  return `<div class="card px-3 py-2.5">
     <div class="flex items-start justify-between gap-2">
       <div class="min-w-0">
         <p class="stat-label">${esc(label)}</p>
@@ -307,7 +307,7 @@ function emptyState(text, hint) {  return `<div class="empty-state">
 }
 
 function pageHeader(title, subtitle, actionsHtml) {
-  return `<div class="flex items-start justify-between gap-3 flex-wrap mb-3">
+  return `<div class="flex items-start justify-between gap-3 flex-wrap mb-2">
     <div class="min-w-0">
       <h2 class="font-bold text-charcoal-800" style="font-size:var(--font-page-title)">${title}</h2>
       ${subtitle ? `<p class="text-charcoal-500 mt-0.5" style="font-size:var(--font-2xs)">${subtitle}</p>` : ''}

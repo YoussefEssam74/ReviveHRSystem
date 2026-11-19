@@ -37,7 +37,7 @@ the gym in the wizard.
 | **Users** | Who is on the platform. Gym dropdown doubles as the per-gym count **and** the filter, then narrow by role, status or search. |
 | **User profile** | A full page per person — employment record, permissions from their role, access details and their own audit trail. |
 | **HR managers** | The platform HR accounts: every one of them reaches all gym accounts. Create, suspend or reset.
-| **Billing & quotas** | Platform revenue **and the plans you sell**: MRR/ARR, the plan table (price, cycle, trial, limits), the invoice ledger with issue→paid ranges and aging buckets, seat consumption per gym. |
+| **Billing & quotas** | Platform revenue **and the plans you sell**: MRR/ARR, the plan table (price, cycle, trial, limits), the invoice ledger with issue→paid ranges and aging buckets summarised in the ledger header, seat consumption per gym. |
 | **Roles & permissions** | The role catalog. Create a role, tick its permissions grouped by module, edit or duplicate existing roles. |
 | **Security & audit** | The exceptions first: a review queue of critical and warning events, your own impersonation sessions, then the complete immutable trail. |
 
@@ -46,9 +46,11 @@ the gym in the wizard.
 - **Dashboard:** four KPIs, one gym table, one attention queue. Nothing else.
 - **List views are tables**, not cards: many records compared at once, sortable
   headers, row-level actions, and a footer that states exactly what is shown.
-- **Every page fits the viewport.** The shell never scrolls: each page is a fixed
+- **Every page fits the viewport.** The shell never scrolls: each page is a
   flex column and the only thing that scrolls is the table body inside its card.
-  (Below 1024px the shell falls back to normal page scrolling.)
+  A table always keeps a usable floor, so if the window is genuinely too short
+  the page scrolls a little instead of crushing the table to nothing.
+  (Below 1280px the panels stack, so the page falls back to normal scrolling.)
 - **Toolbars follow one pattern**: filters are labelled dropdowns grouped at the left
   edge of the row and the text search is pinned to the right edge of the same row.
   Counts live inside the option labels (`All gyms (293)`), not in a row of chips.

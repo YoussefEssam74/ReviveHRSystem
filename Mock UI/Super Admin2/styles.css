@@ -144,7 +144,7 @@ body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; 
 }
 .card-grow > .data-table-wrap {
   flex: 1 1 auto;
-  min-height: 170px;
+  min-height: 155px;
   overflow: auto;
 }
 
