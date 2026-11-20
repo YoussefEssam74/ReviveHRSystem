@@ -716,7 +716,7 @@ function gymAuditTab(gym, audit) {
         <p class="bento-label">Audit trail · ${esc(gym.name)} — ${esc(gym.location)}</p>
         <p class="text-[10px] text-charcoal-500 mt-0.5">Every action recorded inside this gym, including your own Super Admin sessions.</p>
       </div>
-      <button onclick="navigateTo('audit')" class="btn btn-sm btn-secondary">Platform audit →</button>
+      <button onclick="setGymTab('overview')" class="btn btn-sm btn-secondary">Gym overview →</button>
     </div>
     ${auditTableHtml(audit, { showGym: false })}
   </div>`;

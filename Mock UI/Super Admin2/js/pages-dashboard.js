@@ -112,8 +112,5 @@ function dashboardAttentionCard() {
       <span class="badge badge-red">${alerts.length}</span>
     </div>
     <div class="flex-1 min-h-0 overflow-y-auto">${rows}</div>
-    <div class="px-3 py-2 border-t border-charcoal-100">
-      <button onclick="navigateTo('audit')" class="btn btn-sm btn-ghost text-brand-700 w-full">Open the audit log →</button>
-    </div>
   </div>`;
 }

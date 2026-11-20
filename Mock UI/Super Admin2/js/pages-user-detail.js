@@ -91,7 +91,6 @@ function renderUserProfile() {
       <div class="card">
         <div class="card-head">
           <p class="bento-label flex-1">Recent activity</p>
-          <button onclick="navigateTo('audit')" class="btn btn-sm btn-ghost text-brand-700">Security &amp; audit →</button>
         </div>
         ${userEvents.length
           ? `<div>${userEvents.map((a) => `<div class="px-3 py-2 border-b border-charcoal-100 last:border-0 flex items-start gap-2">

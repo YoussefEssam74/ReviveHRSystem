@@ -34,6 +34,17 @@ function invoiceDateRange(inv) {
   return `${withYear(issued)} → ${withYear(new Date(inv.paid))}`;
 }
 
+// Short date for dense tables: "5 Nov", plus the year only when it is not this year,
+// or when the caller needs it spelled out every time.
+function shortDate(iso, alwaysYear) {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (isNaN(d)) return null;
+  const base = `${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]}`;
+  const sameYear = d.getUTCFullYear() === Number(PLATFORM.today.slice(0, 4));
+  return sameYear && !alwaysYear ? base : `${base} ${String(d.getUTCFullYear()).slice(-2)}`;
+}
+
 function invoiceDaysOverdue(inv) {
   if (inv.status !== 'Overdue') return 0;
   return Math.max(0, daysBetween(inv.issued, PLATFORM.today.slice(0, 10)));
@@ -52,11 +63,6 @@ function renderBilling() {
   }).sort((a, b) => new Date(b.issued) - new Date(a.issued));
 
   const overdueList = INVOICES.filter((i) => i.status === 'Overdue');
-  const aging = overdueList.reduce((acc, inv) => {
-    const d = invoiceDaysOverdue(inv);
-    if (d <= 30) acc.current30 += inv.amount; else acc.over30 += inv.amount;
-    return acc;
-  }, { current30: 0, over30: 0 });
 
   const statusOptions = ['all', 'Paid', 'Overdue', 'Trial'].map((s) => {
     const count = s === 'all' ? INVOICES.length : INVOICES.filter((i) => i.status === s).length;
@@ -67,22 +73,30 @@ function renderBilling() {
 
   const invoiceRows = visible.map((inv) => {
     const gym = getGym(inv.gymId);
+    const plan = gym ? PLANS.find((p) => p.id === gym.planId) : null;
     const overdueDays = invoiceDaysOverdue(inv);
+    const termStart = gym ? shortDate(gym.subscribedOn, true) : null;
+    const termEnd = gym ? shortDate(gym.renewsOn, true) : null;
     return `<tr>
       <td class="whitespace-nowrap"><span class="text-[11px] font-semibold text-charcoal-800 font-mono">${esc(inv.id)}</span></td>
       <td>
-        <button onclick="navigateTo('gym-detail',{gymId:'${inv.gymId}'})" class="text-left group block max-w-[110px]">
+        <button onclick="navigateTo('gym-detail',{gymId:'${inv.gymId}'})" class="text-left group block max-w-[96px]">
           <span class="block text-[11px] font-medium text-charcoal-700 group-hover:text-brand-700 leading-tight truncate">${esc(gym ? gym.name : inv.gymId)}</span>
           <span class="block text-[9px] text-charcoal-400 leading-tight truncate">${esc(gym ? gym.location : '')}</span>
         </button>
       </td>
       <td class="whitespace-nowrap text-[11px] text-charcoal-600">${esc(inv.period)}</td>
+      <td class="whitespace-nowrap">
+        <p class="text-[11px] text-charcoal-700 leading-tight">${esc(plan ? plan.name : '—')}</p>
+        <p class="text-[9px] text-charcoal-400 leading-tight">${esc(plan ? planCycleName(plan) : '')}</p>
+      </td>
       <td class="text-right whitespace-nowrap"><span class="text-xs font-semibold text-charcoal-800">${inv.amount ? formatMoney(inv.amount) : '—'}</span></td>
-      <td>
+      <td class="whitespace-nowrap">
         <span class="badge ${INVOICE_TONE[inv.status] || 'badge-gray'}">${esc(inv.status)}</span>
         ${overdueDays ? `<p class="text-[9px] text-red-600 font-semibold mt-0.5">${overdueDays}d late</p>` : ''}
       </td>
-      <td class="whitespace-nowrap text-[10px] text-charcoal-500 font-mono">${invoiceDateRange(inv)}</td>
+      <td class="whitespace-nowrap text-[10px] text-charcoal-500 font-mono">${termStart || '—'}</td>
+      <td class="whitespace-nowrap text-[10px] text-charcoal-500 font-mono">${termEnd || '—'}</td>
       <td class="text-right whitespace-nowrap">
         ${inv.status === 'Overdue'
           ? `<button onclick="sendInvoiceReminder('${inv.id}')" class="btn btn-sm btn-ghost">Remind</button>
@@ -97,46 +111,25 @@ function renderBilling() {
   return `
   ${pageHeader(
     'Billing & quotas',
-    `${formatMoney(r.mrr)} monthly recurring · ${formatMoney(r.collected)} collected in November · ${overdueList.length} invoice overdue`,
-    `<button onclick="toast('Statement for November 2026 queued — prototype only','info')" class="btn btn-secondary">
+    `${PLANS.length} subscription plans · ${GYMS.length} gym accounts · invoices, collections and subscription terms`,
+    `<button onclick="navigateTo('revenue')" class="btn btn-secondary btn-sm">Revenue analyzes →</button>
+    <button onclick="toast('Statement for November 2026 queued — prototype only','info')" class="btn btn-secondary btn-sm">
       <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
-      Download statement
+      Statement
     </button>`
   )}
 
-  <div class="grid grid-cols-2 lg:grid-cols-4 gap-2.5 mb-3">
-    ${kpiTile('Monthly recurring', formatMoney(r.mrr), `${GYMS.filter((g) => g.mrr).length} paying gyms`, 'coins')}
-    ${kpiTile('Annual run rate', formatMoney(r.arr), 'MRR × 12', 'chart')}
-    ${kpiTile('Collected · November', formatMoney(r.collected), `of ${formatMoney(r.billed)} billed`, 'check')}
-    ${kpiTile('Overdue', formatMoney(r.overdue), overdueList.length ? `${overdueList.length} invoice past due` : 'nothing outstanding', 'alert', r.overdue ? 'red' : '')}
-  </div>
+  ${billingSummaryStrip(r)}
 
-  ${plansCard()}
-
-  <div class="grid grid-cols-1 xl:grid-cols-3 xl:grid-rows-1 gap-3 grow min-h-0">
-    <div class="xl:col-span-2 min-h-0 flex flex-col">
+  <div class="grid grid-cols-1 xl:grid-cols-4 xl:grid-rows-1 gap-3 grow min-h-0">
+    <div class="xl:col-span-3 min-h-0 flex flex-col">
       <div class="card card-grow">
         <div class="card-head">
           <div class="flex-1 min-w-0">
             <p class="bento-label">Invoices</p>
-            <p class="text-[10px] text-charcoal-500 mt-0.5">${visible.length} shown of ${INVOICES.length} · ${formatMoney(r.billed)} billed in November</p>
+            <p class="text-[10px] text-charcoal-500 mt-0.5 truncate">${visible.length} of ${INVOICES.length} shown · ${formatMoney(r.billed)} billed in November · ${formatMoney(r.overdue)} overdue</p>
           </div>
           ${overdueList.length ? `<button onclick="remindAllOverdue()" class="btn btn-sm btn-secondary">Remind all overdue</button>` : ''}
-        </div>
-
-        <div class="px-3 py-2 border-b border-charcoal-100 grid grid-cols-3 gap-2">
-          <div>
-            <p class="text-[9px] uppercase tracking-wider text-charcoal-400">Current</p>
-            <p class="text-xs font-semibold text-charcoal-800">${formatMoney(Math.max(0, r.billed - r.collected - aging.current30 - aging.over30))}</p>
-          </div>
-          <div>
-            <p class="text-[9px] uppercase tracking-wider text-charcoal-400">1–30 days late</p>
-            <p class="text-xs font-semibold ${aging.current30 ? 'text-amber-600' : 'text-charcoal-800'}">${formatMoney(aging.current30)}</p>
-          </div>
-          <div>
-            <p class="text-[9px] uppercase tracking-wider text-charcoal-400">30+ days late</p>
-            <p class="text-xs font-semibold ${aging.over30 ? 'text-red-600' : 'text-charcoal-800'}">${formatMoney(aging.over30)}</p>
-          </div>
         </div>
 
         <div class="px-3 py-2 flex items-center gap-2 flex-wrap border-b border-charcoal-100">
@@ -155,95 +148,101 @@ function renderBilling() {
         </div>
 
         <div class="data-table-wrap flex-1">
-          <table class="data-table">
+          <table class="data-table" style="--table-cell-px:0.4rem">
             <thead><tr>
-              <th>Invoice</th><th>Gym account</th><th>Period</th><th class="text-right">Amount</th><th>Status</th><th>Issued → paid</th><th></th>
+              <th>Invoice</th><th>Gym account</th><th>Period</th><th>Plan</th><th class="text-right">Amount</th><th>Status</th>
+              <th title="Subscription start">Start</th><th title="Subscription end / renewal">End</th><th></th>
             </tr></thead>
-            <tbody>${invoiceRows || `<tr><td colspan="7">${emptyState('No invoices match these filters')}</td></tr>`}</tbody>
+            <tbody>${invoiceRows || `<tr><td colspan="9">${emptyState('No invoices match these filters')}</td></tr>`}</tbody>
           </table>
-        </div>
-        <div class="px-3 py-2 border-t border-charcoal-100 flex items-center justify-between gap-2 flex-wrap">
-          <p class="text-[10px] text-charcoal-500">Card ${esc(PLATFORM_BILLING.card.brand)} ···· ${esc(PLATFORM_BILLING.card.last4)} · expires ${esc(PLATFORM_BILLING.card.expiry)}</p>
-          <button onclick="toast('Payment method editor is outside this prototype','info')" class="btn btn-sm btn-ghost text-brand-700">Update payment method</button>
         </div>
       </div>
     </div>
 
-    <div class="min-h-0 flex flex-col">${seatQuotasCard()}</div>
+    <div class="min-h-0 flex flex-col">${plansRail()}</div>
   </div>`;
 }
 
 // ==================== PLANS ====================
-function cycleLabel(plan) {
-  const cycle = BILLING_CYCLES.find((c) => c.id === (plan.cycle || 'monthly')) || BILLING_CYCLES[0];
-  return cycle.short;
-}
-
 function trialLabel(plan) {
   if (plan.trial === 'trial') return '<span class="badge badge-blue">Trial plan</span>';
   if (plan.trial === 'days') return `${plan.trialDays || 14}-day free trial`;
   return '<span class="text-charcoal-400">None</span>';
 }
 
-function plansCard() {
+// One quiet strip instead of four competing cards. The revenue analysis lives on its
+// own page — this page only tracks what is billed, collected, owed and consumed.
+function billingSummaryStrip(r) {
+  const openInvoices = INVOICES.filter((i) => i.status !== 'Paid' && i.status !== 'Trial').length;
+
+  const item = (label, value, sub, tone) => `<div class="summary-item">
+    <p class="stat-label">${esc(label)}</p>
+    <p class="stat-value ${tone || ''} mt-0.5">${value}</p>
+    <p class="text-[9px] text-charcoal-400 leading-tight mt-0.5">${sub}</p>
+  </div>`;
+
+  return `<div class="summary-strip mb-3">
+    ${item('Billed · November', formatMoney(r.billed), `${INVOICES.filter((i) => i.period === 'Nov 2026').length} invoices raised`)}
+    ${item('Collected', formatMoney(r.collected), `${r.billed ? Math.round((r.collected / r.billed) * 100) : 100}% cleared`, 'text-brand-700')}
+    ${item('Still owed', formatMoney(r.overdue), openInvoices ? `${openInvoices} invoice open` : 'nothing outstanding', r.overdue ? 'text-red-600' : '')}
+  </div>`;
+}
+
+// The plan catalogue lives beside the ledger rather than on top of it: it is the thing
+// you sell, so it stays visible without pushing the invoices down the page.
+function plansRail() {
+  const total = GYMS.reduce((s, g) => s + g.mrr, 0);
+
+  const trialText = (plan) => plan.trial === 'trial' ? 'trial plan'
+    : plan.trial === 'none' ? 'no trial'
+    : `${plan.trialDays}-day trial`;
+
   const rows = PLANS.map((plan) => {
     const gymsOn = GYMS.filter((g) => g.planId === plan.id);
     const mrr = gymsOn.reduce((s, g) => s + g.mrr, 0);
-    return `<tr>
-      <td>
-        <div class="min-w-0">
-          <div class="flex items-center gap-1.5">
-            <p class="text-xs font-semibold text-charcoal-800 truncate leading-tight">${esc(plan.name)}</p>
-            ${plan.highlighted ? '<span class="badge badge-brand">Popular</span>' : ''}
-          </div>
-          <p class="text-[10px] text-charcoal-500 truncate leading-tight mt-0.5">${esc(plan.tagline)}</p>
-        </div>
-      </td>
-      <td class="text-right whitespace-nowrap">
-        <span class="text-xs font-semibold text-charcoal-800">${formatMoney(plan.price)}</span><span class="text-[9px] text-charcoal-400">${cycleLabel(plan)}</span>
-      </td>
-      <td class="whitespace-nowrap text-[11px] text-charcoal-600">${trialLabel(plan)}</td>
-      <td class="text-center whitespace-nowrap text-[11px] text-charcoal-600">${plan.seatLimit ? plan.seatLimit + ' seats' : 'Unlimited'}</td>
-      <td class="text-center whitespace-nowrap text-[11px] text-charcoal-600">${plan.branchLimit || 'Unlimited'}</td>
-      <td class="text-center whitespace-nowrap"><span class="text-xs font-semibold text-charcoal-700">${gymsOn.length}</span></td>
-      <td class="text-right whitespace-nowrap"><span class="text-xs font-semibold text-charcoal-800">${mrr ? formatMoney(mrr) : '—'}</span></td>
-      <td class="text-right whitespace-nowrap">
-        <button onclick="openPlanEditor('${plan.id}')" class="btn btn-sm btn-secondary">Edit plan</button>
-        <button onclick="openPlanEditor(null,'${plan.id}')" class="btn btn-sm btn-ghost text-charcoal-600">Duplicate</button>
-      </td>
-    </tr>`;
+    const share = total ? Math.round((mrr / total) * 100) : 0;
+    return `<div class="px-3 py-2 border-b border-charcoal-100 last:border-0">
+      <div class="flex items-center gap-1.5">
+        <p class="text-[11px] font-semibold text-charcoal-800 truncate flex-1">${esc(plan.name)}</p>
+        ${plan.highlighted ? '<span class="badge badge-brand">Popular</span>' : ''}
+        <p class="text-[11px] font-semibold text-charcoal-800 tabular-nums">${formatMoney(plan.price)}</p>
+        <button onclick="openPlanEditor('${plan.id}')" class="btn btn-sm btn-ghost text-brand-700 px-1.5">Edit</button>
+      </div>
+      <p class="text-[9px] text-charcoal-400 truncate mt-0.5">${esc(planCycleName(plan))} · ${plan.seatLimit ? plan.seatLimit + ' seats' : 'unlimited'} · ${trialText(plan)}${plan.addons && plan.addons.length ? ` · ${plan.addons.length} add-on${plan.addons.length === 1 ? '' : 's'}` : ''}</p>
+      <div class="flex items-center gap-1.5 mt-1">
+        <span class="text-[9px] text-charcoal-500 flex-shrink-0">${gymsOn.length} gym${gymsOn.length === 1 ? '' : 's'}</span>
+        <div class="meter flex-1"><div class="meter-fill" style="width:${share}%"></div></div>
+        <span class="text-[9px] uppercase tracking-wider text-charcoal-400 flex-shrink-0">MRR</span>
+        <span class="text-[9px] font-semibold text-charcoal-700 tabular-nums whitespace-nowrap text-right">${mrr ? formatMoney(mrr) : '—'}</span>
+      </div>
+    </div>`;
   }).join('');
 
-  return `<div class="card mb-3">
+  return `<div class="card card-grow">
     <div class="card-head">
       <div class="flex-1 min-w-0">
         <p class="bento-label">Subscription plans</p>
-        <p class="text-[10px] text-charcoal-500 mt-0.5">${PLANS.length} plans · ${GYMS.length} gym accounts · ${formatMoney(revenueTotals().mrr)} in MRR</p>
+        <p class="text-[10px] text-charcoal-500 mt-0.5 truncate">${PLANS.length} plans · ${formatMoney(total)} MRR</p>
       </div>
-      <button onclick="openPlanEditor()" class="btn btn-primary btn-sm">
-        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
-        Create plan
-      </button>
+      <button onclick="openPlanEditor()" class="btn btn-primary btn-sm">+ New</button>
     </div>
-    <div class="data-table-wrap">
-      <table class="data-table">
-        <thead><tr>
-          <th>Plan</th><th class="text-right">Price</th><th>Trial</th><th class="text-center">Seats</th><th class="text-center">Branches</th><th class="text-center">Gyms</th><th class="text-right">MRR</th><th class="text-right">Actions</th>
-        </tr></thead>
-        <tbody>${rows}</tbody>
-      </table>
+    <div class="flex-1 min-h-0 overflow-y-auto">${rows}</div>
+    <div class="px-3 py-1.5 border-t border-charcoal-100">
+      <button onclick="navigateTo('revenue')" class="btn btn-sm btn-ghost text-brand-700 w-full">Plan performance →</button>
     </div>
   </div>`;
 }
 
+
 function openPlanEditor(planId, duplicateFromId) {
   const plan = planId ? PLANS.find((p) => p.id === planId) : duplicateFromId ? PLANS.find((p) => p.id === duplicateFromId) : null;
   const isEdit = !!planId;
-  const cycle = plan ? (plan.cycle || 'monthly') : 'monthly';
+  const cycle = planCycleParts(plan);
   const trial = plan ? (plan.trial || 'none') : 'none';
   const features = plan ? plan.features.slice() : [];
+  // A fresh plan already shows one priced extra so the pattern is obvious.
+  const addons = plan && plan.addons ? plan.addons.slice() : [{ name: 'Extra employees', qty: 5, price: 100 }];
 
-  const cycleOptions = BILLING_CYCLES.map((c) => `<option value="${c.id}"${cycle === c.id ? ' selected' : ''}>${esc(c.label)}</option>`).join('');
   const trialOptions = TRIAL_MODES.map((t) => `<option value="${t.id}"${trial === t.id ? ' selected' : ''}>${esc(t.label)}</option>`).join('');
 
   const catalogRow = (label, checked) => `<label class="form-check">
@@ -262,13 +261,19 @@ function openPlanEditor(planId, duplicateFromId) {
       <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
         <div class="sm:col-span-2"><label class="form-label">Plan name <span class="text-red-500">*</span></label>
           <input class="form-input" id="plan-name" placeholder="e.g. Scale" value="${esc(plan ? (isEdit ? plan.name : plan.name + ' copy') : '')}"></div>
-        <div><label class="form-label">Price (EGP <span id="plan-price-unit">${cycleLabel({ cycle })}</span>) <span class="text-red-500">*</span></label>
+        <div><label class="form-label">Price (EGP <span id="plan-price-unit">${cycleLabel(cycle)}</span>) <span class="text-red-500">*</span></label>
           <input class="form-input" id="plan-price" type="number" min="0" value="${plan ? plan.price : ''}" placeholder="0"></div>
       </div>
 
       <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
-        <div><label class="form-label">Billing cycle</label>
-          <select class="form-select" id="plan-cycle" onchange="planUpdatePriceUnit(this.value)">${cycleOptions}</select></div>
+        <div><label class="form-label">Billed every</label>
+          <div class="flex items-center gap-1.5">
+            <input class="form-input w-14" id="plan-cycle-count" type="number" min="1" max="60" value="${cycle.count}" oninput="planUpdatePriceUnit()" aria-label="Billing cycle length">
+            <select class="form-select flex-1" id="plan-cycle-unit" onchange="planUpdatePriceUnit()" aria-label="Billing cycle unit">
+              <option value="months"${cycle.unit === 'months' ? ' selected' : ''}>month(s)</option>
+              <option value="years"${cycle.unit === 'years' ? ' selected' : ''}>year(s)</option>
+            </select>
+          </div></div>
         <div class="sm:col-span-2"><label class="form-label">Trial</label>
           <div class="flex items-center gap-2">
             <select class="form-select" id="plan-trial" onchange="planToggleTrialDays(this.value)">${trialOptions}</select>
@@ -292,7 +297,7 @@ function openPlanEditor(planId, duplicateFromId) {
           <label class="form-label mb-0">Included features</label>
           <span class="text-[10px] text-charcoal-500"><strong id="plan-feature-count" class="text-charcoal-800 font-semibold">${features.length}</strong> selected</span>
         </div>
-        <div id="plan-feature-list" class="border border-charcoal-200 rounded-lg px-2.5 py-2 grid grid-cols-1 sm:grid-cols-2 gap-x-3 gap-y-1 max-h-[26vh] overflow-y-auto">
+        <div id="plan-feature-list" class="border border-charcoal-200 rounded-lg px-2.5 py-2 grid grid-cols-1 sm:grid-cols-2 gap-x-3 gap-y-1 max-h-[22vh] overflow-y-auto">
           ${featureList}
         </div>
         <div class="flex items-center gap-1.5 mt-1.5">
@@ -301,10 +306,22 @@ function openPlanEditor(planId, duplicateFromId) {
         </div>
       </div>
 
+      <div>
+        <div class="flex items-center justify-between mb-1">
+          <label class="form-label mb-0">Add-ons &amp; overage</label>
+          <button type="button" onclick="addPlanAddon()" class="btn btn-sm btn-secondary">+ Add line</button>
+        </div>
+        <div id="plan-addon-list" class="space-y-1.5">
+          ${addons.map((a) => planAddonRow(a)).join('')}
+        </div>
+        <p class="text-[10px] text-charcoal-400 mt-1">Charge for going past the allowance — e.g. <strong class="text-charcoal-600">extra 5 employees for EGP 100</strong>. Leave the list empty for a fixed plan.</p>
+      </div>
+
       <label class="form-check"><input type="checkbox" id="plan-highlighted" ${plan && plan.highlighted ? 'checked' : ''}> Mark as the recommended plan</label>
       <p class="text-[10px] text-charcoal-400">Leave a limit empty for unlimited. Existing gyms are re-seated only when you change their plan.</p>
     </div>`,
     footer: `<button onclick="closeModal()" class="btn btn-sm btn-secondary">Cancel</button>
+      ${isEdit ? `<button onclick="openPlanEditor(null,'${planId}')" class="btn btn-sm btn-secondary">Duplicate</button>` : ''}
       <button onclick="savePlan('${planId || ''}','${duplicateFromId || ''}')" class="btn btn-sm btn-primary">${isEdit ? 'Save plan' : 'Create plan'}</button>`,
   });
 
@@ -325,9 +342,43 @@ function planToggleTrialDays(mode) {
   if (wrap) wrap.style.display = mode === 'days' ? '' : 'none';
 }
 
-function planUpdatePriceUnit(cycleId) {
-  const opt = document.getElementById('plan-price-unit');
-  if (opt) opt.textContent = cycleLabel({ cycle: cycleId });
+// One priced extra: "Extra employees · per 5 · EGP 100".
+function planAddonRow(addon) {
+  const a = addon || { name: '', qty: 1, price: 0 };
+  return `<div class="plan-addon flex items-center gap-1.5">
+    <input class="form-input form-input-sm flex-1 min-w-0" data-addon="name" placeholder="e.g. Extra employees" value="${esc(a.name)}" aria-label="Add-on name">
+    <span class="text-[10px] text-charcoal-400 flex-shrink-0">per</span>
+    <input class="form-input form-input-sm w-14 flex-shrink-0" data-addon="qty" type="number" min="1" value="${a.qty || 1}" aria-label="Add-on size">
+    <span class="text-[10px] text-charcoal-400 flex-shrink-0">EGP</span>
+    <input class="form-input form-input-sm w-20 flex-shrink-0" data-addon="price" type="number" min="0" value="${a.price || 0}" aria-label="Add-on price">
+    <button type="button" onclick="this.closest('.plan-addon').remove()" class="btn btn-sm btn-ghost text-red-600 px-1.5 flex-shrink-0" aria-label="Remove add-on">
+      <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12"/></svg>
+    </button>
+  </div>`;
+}
+
+function addPlanAddon() {
+  const list = document.getElementById('plan-addon-list');
+  if (!list) return;
+  list.insertAdjacentHTML('beforeend', planAddonRow());
+  const inputs = list.querySelectorAll('.plan-addon:last-child input');
+  if (inputs[0]) inputs[0].focus();
+}
+
+function planAddons() {
+  return Array.from(document.querySelectorAll('#plan-addon-list .plan-addon')).map((row) => ({
+    name: (row.querySelector('[data-addon="name"]') || {}).value ? row.querySelector('[data-addon="name"]').value.trim() : '',
+    qty: Number((row.querySelector('[data-addon="qty"]') || {}).value || 1),
+    price: Number((row.querySelector('[data-addon="price"]') || {}).value || 0),
+  })).filter((a) => a.name && a.price > 0);
+}
+
+function planUpdatePriceUnit() {
+  const el = document.getElementById('plan-price-unit');
+  if (!el) return;
+  const count = Number((document.getElementById('plan-cycle-count') || {}).value || 1);
+  const unit = (document.getElementById('plan-cycle-unit') || {}).value || 'months';
+  el.textContent = cycleLabel({ cycleCount: count, cycleUnit: unit });
 }
 
 function addCustomFeature() {
@@ -366,13 +417,15 @@ function savePlan(planId, duplicateFromId) {
   if (PLANS.some((p) => p.name.toLowerCase() === name.toLowerCase() && p.id !== planId)) { toast('A plan with that name already exists', 'error'); return; }
 
   const price = Number((document.getElementById('plan-price') || {}).value || 0);
-  const cycle = (document.getElementById('plan-cycle') || {}).value || 'monthly';
+  const cycleCount = Math.max(1, Number((document.getElementById('plan-cycle-count') || {}).value || 1));
+  const cycleUnit = (document.getElementById('plan-cycle-unit') || {}).value === 'years' ? 'years' : 'months';
   const trial = (document.getElementById('plan-trial') || {}).value || 'none';
   const trialDays = trial === 'days' ? Number((document.getElementById('plan-trial-days') || {}).value || 14) : 0;
   const seatsRaw = (document.getElementById('plan-seats') || {}).value;
   const branchesRaw = (document.getElementById('plan-branches') || {}).value;
   const features = planFeatureBoxes().filter((b) => b.checked).map((b) => b.value);
   const highlighted = !!(document.getElementById('plan-highlighted') || {}).checked;
+  const addons = planAddons();
   const seatLimit = seatsRaw ? Number(seatsRaw) : null;
   const branchLimit = branchesRaw ? Number(branchesRaw) : null;
 
@@ -381,24 +434,28 @@ function savePlan(planId, duplicateFromId) {
 
   if (highlighted) PLANS.forEach((p) => { p.highlighted = false; });
 
-  const cycleName = (BILLING_CYCLES.find((c) => c.id === cycle) || BILLING_CYCLES[0]).label;
+  const cycleName = planCycleName({ cycleCount, cycleUnit });
   const trialName = trial === 'trial' ? 'trial plan, never billed' : trial === 'days' ? `${trialDays}-day free trial` : 'no trial';
+  const addonName = addons.length ? ` · ${addons.length} add-on${addons.length === 1 ? '' : 's'}` : '';
 
   if (planId) {
     const plan = PLANS.find((p) => p.id === planId);
     plan.name = name;
     plan.price = price;
-    plan.cycle = cycle;
+    plan.cycleCount = cycleCount;
+    plan.cycleUnit = cycleUnit;
+    delete plan.cycle;
     plan.trial = trial;
     plan.trialDays = trialDays;
     plan.features = features;
+    plan.addons = addons;
     plan.seatLimit = seatLimit;
     plan.branchLimit = branchLimit;
     plan.highlighted = highlighted;
     logAudit({
       category: 'Settings', severity: 'warning', action: 'Updated subscription plan',
-      target: `${plan.name} · ${formatMoney(plan.price)} ${cycleName.toLowerCase()}`,
-      detail: `Seats ${seatLimit || 'unlimited'} · branches ${branchLimit || 'unlimited'} · ${trialName} · ${features.length} features.`,
+      target: `${plan.name} · ${formatMoney(plan.price)} ${cycleName.toLowerCase()}${addonName}`,
+      detail: `Seats ${seatLimit || 'unlimited'} · branches ${branchLimit || 'unlimited'} · ${trialName} · ${features.length} features · ${addons.length} add-ons.`,
     });
     closeModal();
     renderAll();
@@ -410,11 +467,13 @@ function savePlan(planId, duplicateFromId) {
     id: 'plan-' + (PLANS.length + 1) + '-' + Date.now().toString().slice(-4),
     name,
     price,
-    cycle,
+    cycleCount,
+    cycleUnit,
     trial,
     trialDays,
     tagline: `${cycleName} · ${trialName}`,
     features,
+    addons,
     seatLimit,
     branchLimit,
     highlighted,
@@ -422,46 +481,14 @@ function savePlan(planId, duplicateFromId) {
   PLANS.push(plan);
   logAudit({
     category: 'Settings', severity: 'info', action: 'Created subscription plan',
-    target: `${plan.name} · ${formatMoney(plan.price)} ${cycleName.toLowerCase()}`,
-    detail: `Seats ${seatLimit || 'unlimited'} · branches ${branchLimit || 'unlimited'} · ${trialName}.${duplicateFromId ? ' Duplicated from ' + (PLANS.find((p) => p.id === duplicateFromId) || {}).name + '.' : ''}`,
+    target: `${plan.name} · ${formatMoney(plan.price)} ${cycleName.toLowerCase()}${addonName}`,
+    detail: `Seats ${seatLimit || 'unlimited'} · branches ${branchLimit || 'unlimited'} · ${trialName} · ${addons.length} add-ons.${duplicateFromId ? ' Duplicated from ' + (PLANS.find((p) => p.id === duplicateFromId) || {}).name + '.' : ''}`,
   });
   closeModal();
   renderAll();
   toast(`${plan.name} created`, 'success');
 }
 
-function seatQuotasCard() {
-  const rows = GYMS.map((gym) => {
-    const used = gym.userCounts.total;
-    const pct = gym.seatLimit ? Math.round((used / gym.seatLimit) * 100) : 0;
-    const tone = gym.seatLimit && used >= gym.seatLimit ? 'red' : gym.seatLimit && pct >= 90 ? 'amber' : '';
-    return `<div class="px-3 py-2 border-b border-charcoal-100 last:border-0">
-      <div class="flex items-center gap-2 mb-1">
-        ${gymLogo(gym, 36)}
-        <div class="min-w-0 flex-1">
-          <p class="text-[11px] font-semibold text-charcoal-800 truncate leading-tight">${esc(gym.name)}</p>
-          <p class="text-[10px] text-charcoal-400 truncate leading-tight">${esc(gym.location)} · ${gym.branches} branch${gym.branches === 1 ? '' : 'es'}</p>
-        </div>
-        <div class="text-right flex-shrink-0">
-          <p class="text-[11px] font-semibold text-charcoal-800 leading-tight">${formatNumber(used)}${gym.seatLimit ? ' / ' + gym.seatLimit : ''}</p>
-          <p class="text-[9px] ${tone === 'red' ? 'text-red-600 font-semibold' : tone === 'amber' ? 'text-amber-600 font-semibold' : 'text-charcoal-400'} leading-tight">${gym.seatLimit ? pct + '% used' : ''}</p>
-        </div>
-      </div>
-      ${gym.seatLimit ? meterHtml(used, gym.seatLimit, tone || (gym.status === 'Trial' ? 'blue' : '')) : `<p class="text-[9px] text-purple-600 font-medium">Unlimited plan — no seat quota</p>`}
-    </div>`;
-  }).join('');
-
-  return `<div class="card card-grow">
-    <div class="card-head">
-      <p class="bento-label flex-1">Seat quotas</p>
-      <span class="badge badge-gray">${formatNumber(platformTotals().totalUsers)} in use</span>
-    </div>
-    <div class="flex-1 min-h-0 overflow-y-auto">${rows}</div>
-    <div class="px-3 py-2 border-t border-charcoal-100">
-      <button onclick="navigateTo('gyms')" class="btn btn-sm btn-ghost text-brand-700 w-full">Manage plans &amp; seats →</button>
-    </div>
-  </div>`;
-}
 
 // ==================== BILLING ACTIONS ====================
 function recordPayment(invoiceId) {

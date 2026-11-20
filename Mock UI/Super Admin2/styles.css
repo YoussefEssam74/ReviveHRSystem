@@ -56,8 +56,62 @@ body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; 
 .nav-item:hover { background: #f8f9fa; color: #212529; }
 .nav-item.active { background: #f0fdf4; color: #006c49; font-weight: 600; }
 .nav-item.active svg { color: #006c49; }
+/* Headline numbers that open a breakdown page. */
+.stat-card {
+  display: flex; flex-direction: column; gap: 0.15rem;
+  padding: 0.5rem 0.75rem; text-align: left; width: 100%;
+  background: #fff; border: 1px solid var(--border-color, #e9ecef);
+  border-radius: var(--border-radius, 10px); cursor: pointer;
+  transition: border-color 0.14s ease, box-shadow 0.14s ease, transform 0.14s ease;
+}
+.stat-card:hover { border-color: #a7dfc8; box-shadow: 0 2px 10px -4px rgba(0,108,73,0.28); transform: translateY(-1px); }
+.stat-card:hover .stat-card-chev { color: #006c49; transform: translateX(1px); }
+.stat-card:active { transform: translateY(0); }
+.stat-card:focus-visible { outline: 2px solid #006c49; outline-offset: 1px; }
+.stat-card-head { display: flex; align-items: center; gap: 0.35rem; min-width: 0; }
+.stat-card-icon { width: 13px; height: 13px; flex-shrink: 0; color: #adb5bd; }
+.stat-card:hover .stat-card-icon { color: #006c49; }
+.stat-card-head .stat-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.stat-card-chev { width: 12px; height: 12px; flex-shrink: 0; color: #ced4da; transition: color 0.14s ease, transform 0.14s ease; }
+
+/* Responsive trend chart: geometry stretches, labels never do. */
+.trend { position: relative; padding-left: 34px; }
+.trend-plot { position: relative; }
+.trend-plot > svg { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.trend-ylabel {
+  position: absolute; right: calc(100% + 6px); transform: translateY(-50%);
+  font-size: 9px; line-height: 1; color: #adb5bd; white-space: nowrap;
+}
+.trend-dot {
+  position: absolute; width: 5px; height: 5px; border-radius: 50%;
+  background: #fff; border: 1.5px solid #006c49;
+  transform: translate(var(--dx, -50%), -50%); transition: transform 0.12s ease;
+}
+.trend-dot:hover { transform: translate(var(--dx, -50%), -50%) scale(1.6); }
+.trend-x { position: relative; height: 14px; margin-top: 4px; }
+.trend-xlabel { position: absolute; top: 0; font-size: 9px; line-height: 1; color: #adb5bd; white-space: nowrap; }
+
+/* A quiet summary strip: one card, four figures, no card grid. */
+.summary-strip {
+  display: flex; align-items: stretch; gap: 0;
+  background: #fff; border: 1px solid var(--border-color, #e9ecef);
+  border-radius: var(--border-radius, 10px); padding: 0.375rem 0.25rem;
+}
+.summary-item { flex: 1; min-width: 0; padding: 0 0.75rem; border-right: 1px solid #f1f3f5; }
+.summary-item:last-of-type { border-right: 0; }
+.summary-item .stat-label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.summary-item .stat-value { font-size: 0.8125rem; }
+
 .nav-item svg { width: var(--nav-icon-size); height: var(--nav-icon-size); flex-shrink: 0; }
 .nav-item .nav-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Nested page under a parent entry: same left edge as its siblings. */
+.nav-item.nav-child {
+  padding: 0 0.5rem; height: var(--nav-item-h);
+  font-size: var(--nav-font);
+}
+.nav-item.active-parent { color: #343a40; font-weight: 600; }
+.nav-item.active-parent svg { color: #006c49; }
 
 .nav-section-title {
   font-size: 0.625rem; font-weight: 700; color: #adb5bd;
@@ -123,12 +177,15 @@ body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; 
 .data-table tbody tr.is-clickable { cursor: pointer; }
 .data-table-wrap { overflow-x: auto; }
 
-/* -------- Fixed-height page shell: pages fit the window, tables scroll -------- */
+/* -------- Page shell: fill the window when the content fits, scroll when it can't --------
+   `.page-fit` grows to at least the available height so leftover space goes to the
+   `.grow` region; every growing card keeps a usable floor so a table can never be
+   squeezed to zero. If the floors don't fit, #main-content scrolls instead of hiding. */
 .page-fit {
   display: flex;
   flex-direction: column;
-  height: 100%;
-  min-height: 0;
+  min-height: 100%;
+  height: auto;
 }
 .page-fit > * { flex: 0 0 auto; }
 .page-fit > .grow { flex: 1 1 auto; min-height: 0; }
@@ -141,7 +198,7 @@ body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; 
 }
 .card-grow > .data-table-wrap {
   flex: 1 1 auto;
-  min-height: 0;
+  min-height: 135px;
   overflow: auto;
 }
 
@@ -151,12 +208,13 @@ body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; 
   overflow-y: auto;
 }
 
-/* Small screens keep normal scrolling — the fixed shell is a desktop pattern. */
-@media (max-width: 1023px) {
-  #main-content { overflow-y: auto; }
-  .page-fit { height: auto; }
-  .page-fit > .grow { flex: 0 0 auto; }
-  .card-grow > .data-table-wrap { max-height: 65vh; }
+/* Below the 3-column breakpoint the panels stack, so give them their natural height
+   and let the page scroll — a fixed shell would crush the tables. */
+@media (max-width: 1279px) {
+  .page-fit { min-height: 0; }
+  .page-fit > .grow { flex: 0 0 auto; min-height: 0; }
+  .page-fit > .card-grow, .card-grow { flex: 0 0 auto; min-height: 0; }
+  .card-grow > .data-table-wrap { min-height: 0; max-height: 60vh; }
   .scroll-region { overflow-y: visible; }
 }
 
@@ -280,6 +338,7 @@ body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; 
 .meter-fill.tone-red { background: #dc2626; }
 .meter-fill.tone-blue { background: #2563eb; }
 .meter-fill.tone-gray { background: #adb5bd; }
+.meter-fill.tone-soft { background: #9fd9bf; }
 .bar-row { display: flex; align-items: center; gap: 0.5rem; }
 .bar-row .bar-label { font-size: 0.6875rem; color: #495057; width: 100px; flex-shrink: 0; }
 .bar-row .meter { flex: 1; height: 6px; }
@@ -315,6 +374,7 @@ body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; 
   border-radius: 10px; font-weight: 700; flex-shrink: 0;
   background: #f0fdf4; color: #006c49; border: 1px solid #dcfce7;
 }
+.gym-logo-24 { width: 24px; height: 24px; font-size: 10px; border-radius: 7px; }
 .gym-logo-36 { width: 36px; height: 36px; font-size: 12px; }
 .gym-logo-44 { width: 44px; height: 44px; font-size: 14px; }
 .gym-logo-56 { width: 56px; height: 56px; font-size: 18px; }
