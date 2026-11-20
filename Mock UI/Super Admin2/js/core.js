@@ -5,7 +5,8 @@ const state = {
   gymTab: 'overview',
   userFilters: { gym: 'all', role: 'all', status: 'all', q: '' },
   gymFilters: { status: 'all', plan: 'all', q: '' },
-  auditFilters: { gym: 'all', category: 'all', severity: 'all', q: '' },
+  revenuePeriod: 'Nov 2026',
+  revenueMetric: 'mrr',
   modal: null,
   wizard: null,
   notifOpen: false,
@@ -31,14 +32,15 @@ const NAV = [
   {
     section: 'Revenue',
     items: [
-      { id: 'billing', label: 'Billing & quotas', icon: 'M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z', badge: 'billing' },
+      { id: 'billing', label: 'Billing & quotas', icon: 'M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z', badge: 'billing', children: [
+        { id: 'revenue', label: 'Revenue analyzes', also: ['revenue-detail'], icon: 'M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z' },
+      ] },
     ],
   },
   {
     section: 'Governance',
     items: [
       { id: 'access', label: 'Roles & permissions', icon: 'M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z' },
-      { id: 'audit', label: 'Security & audit', icon: 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01', badge: 'audit' },
     ],
   },
 ];
@@ -51,8 +53,9 @@ const PAGE_TITLES = {
   'user-detail': 'User profile',
   'hr-managers': 'HR managers',
   billing: 'Billing & quotas',
+  revenue: 'Revenue analyzes',
+  'revenue-detail': 'Revenue breakdown',
   access: 'Roles & permissions',
-  audit: 'Security & audit',
 };
 
 // ==================== FORMAT HELPERS ====================
@@ -70,8 +73,44 @@ function formatNumber(n) {
   return Number(n || 0).toLocaleString('en-US');
 }
 
+// Billing cadence is free-form: every N months or every N years.
+function planCycleParts(plan) {
+  if (plan && plan.cycleCount) return { count: Math.max(1, Number(plan.cycleCount) || 1), unit: plan.cycleUnit === 'years' ? 'years' : 'months' };
+  if (plan && plan.cycle === 'yearly') return { count: 1, unit: 'years' };
+  if (plan && plan.cycle === 'quarterly') return { count: 3, unit: 'months' };
+  return { count: 1, unit: 'months' };
+}
+
+// Human billing cycle for a plan ("Monthly", "Every 3 months", "Every 2 years").
+function planCycleName(plan) {
+  const { count, unit } = planCycleParts(plan);
+  if (unit === 'years') return count === 1 ? 'Yearly' : `Every ${count} years`;
+  return count === 1 ? 'Monthly' : `Every ${count} months`;
+}
+
+// Compact suffix next to a price: "/mo", "/3 mo", "/yr", "/2 yr".
+function cycleLabel(plan) {
+  const { count, unit } = planCycleParts(plan);
+  if (unit === 'years') return count === 1 ? '/yr' : `/${count} yr`;
+  return count === 1 ? '/mo' : `/${count} mo`;
+}
+
 function formatMoney(n) {
   return 'EGP ' + Number(n || 0).toLocaleString('en-US');
+}
+
+// Compact axis labels: 95000 -> "95k", 1250000 -> "1.25m".
+function formatMoneyShort(n) {
+  const v = Number(n || 0);
+  if (Math.abs(v) >= 1000000) {
+    const m = v / 1000000;
+    return (Number.isInteger(m) ? m : m.toFixed(2)) + 'm';
+  }
+  if (Math.abs(v) >= 1000) {
+    const k = v / 1000;
+    return (Number.isInteger(k) ? k : k.toFixed(1)) + 'k';
+  }
+  return String(v);
 }
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -278,14 +317,14 @@ const KPI_ICONS = {
   chart: 'M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z',
 };
 
-function kpiTile(label, value, sub, icon, tone) {
+function kpiTile(label, value, sub, icon, tone, subHtml) {
   const toneClass = tone === 'red' ? 'text-red-600' : tone === 'amber' ? 'text-amber-600' : '';
   const iconWrap = tone === 'red'
     ? 'bg-red-50 text-red-600'
     : tone === 'amber'
       ? 'bg-amber-50 text-amber-600'
       : 'bg-charcoal-100 text-charcoal-500';
-  return `<div class="card p-3">
+  return `<div class="card px-3 py-2">
     <div class="flex items-start justify-between gap-2">
       <div class="min-w-0">
         <p class="stat-label">${esc(label)}</p>
@@ -295,7 +334,7 @@ function kpiTile(label, value, sub, icon, tone) {
         <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="${KPI_ICONS[icon] || KPI_ICONS.shield}"/></svg>
       </span>
     </div>
-    <p class="stat-sub mt-1">${esc(sub)}</p>
+    <p class="stat-sub mt-1">${subHtml === undefined ? esc(sub) : subHtml}</p>
   </div>`;
 }
 
@@ -307,7 +346,7 @@ function emptyState(text, hint) {  return `<div class="empty-state">
 }
 
 function pageHeader(title, subtitle, actionsHtml) {
-  return `<div class="flex items-start justify-between gap-3 flex-wrap mb-3">
+  return `<div class="flex items-start justify-between gap-3 flex-wrap mb-2">
     <div class="min-w-0">
       <h2 class="font-bold text-charcoal-800" style="font-size:var(--font-page-title)">${title}</h2>
       ${subtitle ? `<p class="text-charcoal-500 mt-0.5" style="font-size:var(--font-2xs)">${subtitle}</p>` : ''}
@@ -328,45 +367,56 @@ function sparkline(values, tone) {
   return `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" fill="none" aria-hidden="true"><path d="${d}" stroke="${color}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 }
 
+// A trend chart that never distorts. Only the geometry lives in the SVG (it is
+// stretched to whatever width the card has); every label and dot is HTML, so text
+// stays crisp and dots stay round no matter how wide the container gets.
 function areaChart(series, opts) {
   opts = opts || {};
   const key = opts.key || 'users';
   const step = opts.step || 50;
   const h = opts.height || 150;
   const fmt = opts.format || ((v) => String(v));
-  const w = 560;
-  const padL = opts.padLeft || 34;
-  const padR = 8, padT = 10, padB = 20;
+  const color = opts.color || '#006c49';
   const values = series.map((s) => s[key]);
-  const max = Math.ceil(Math.max(...values) / step) * step;
-  const min = 0;
-  const plotW = w - padL - padR;
-  const plotH = h - padT - padB;
-  const x = (i) => padL + (i / (series.length - 1)) * plotW;
-  const y = (v) => padT + plotH - ((v - min) / (max - min)) * plotH;
+  const max = Math.ceil(Math.max(...values) / step) * step || 1;
+  const TOP = 12, BOTTOM = 88;
+  const xPct = (i) => (series.length === 1 ? 0 : (i / (series.length - 1)) * 100);
+  const yPct = (v) => BOTTOM - (v / max) * (BOTTOM - TOP);
+  const pts = series.map((s, i) => [xPct(i), yPct(s[key])]);
+  const line = pts.map(([x, y], i) => `${i ? 'L' : 'M'}${x.toFixed(2)} ${y.toFixed(2)}`).join(' ');
+  const area = `${line} L100 100 L0 100 Z`;
 
-  const line = series.map((s, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)} ${y(s[key]).toFixed(1)}`).join(' ');
-  const area = `${line} L${x(series.length - 1).toFixed(1)} ${(padT + plotH).toFixed(1)} L${padL} ${(padT + plotH).toFixed(1)} Z`;
-  const gridLines = [0, 0.5, 1].map((f) => {
-    const gy = padT + plotH * f;
-    const val = Math.round(max - (max - min) * f);
-    return `<line x1="${padL}" y1="${gy}" x2="${w - padR}" y2="${gy}" stroke="#f1f3f5" stroke-width="1"/>
-      <text x="${padL - 5}" y="${gy + 3}" text-anchor="end" font-size="8" fill="#adb5bd">${fmt(val)}</text>`;
+  const grid = [TOP, (TOP + BOTTOM) / 2, BOTTOM].map((gy) =>
+    `<line x1="0" y1="${gy}" x2="100" y2="${gy}" stroke="#f1f3f5" stroke-width="1" vector-effect="non-scaling-stroke"/>`).join('');
+
+  const yLabels = [max, max / 2, 0].map((v, i) =>
+    `<span class="trend-ylabel" style="top:${[TOP, (TOP + BOTTOM) / 2, BOTTOM][i]}%">${fmt(v)}</span>`).join('');
+
+  const dots = series.map((s, i) => {
+    const dx = i === 0 ? '0' : i === series.length - 1 ? '-100%' : '-50%';
+    return `<span class="trend-dot" style="left:${pts[i][0].toFixed(2)}%;top:${pts[i][1].toFixed(2)}%;--dx:${dx};border-color:${color}" title="${esc(s.label)}: ${fmt(s[key])}"></span>`;
   }).join('');
 
-  const labels = series.map((s, i) => `<text x="${x(i).toFixed(1)}" y="${h - 5}" text-anchor="middle" font-size="8" fill="#adb5bd">${s.label}</text>`).join('');
-  const dots = series.map((s, i) => `<circle cx="${x(i).toFixed(1)}" cy="${y(s[key]).toFixed(1)}" r="2.5" fill="#fff" stroke="${opts.color || '#006c49'}" stroke-width="1.5"><title>${s.label}: ${fmt(s[key])}</title></circle>`).join('');
+  const xLabels = series.map((s, i) => {
+    const shift = i === 0 ? '0' : i === series.length - 1 ? '-100%' : '-50%';
+    return `<span class="trend-xlabel" style="left:${pts[i][0].toFixed(2)}%;transform:translateX(${shift})">${esc(s.label)}</span>`;
+  }).join('');
 
-  return `<svg viewBox="0 0 ${w} ${h}" width="100%" height="${h}" role="img" aria-label="${esc(opts.label || 'Trend')}" preserveAspectRatio="none" style="overflow:visible">
-    <defs><linearGradient id="growthFill" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="${opts.color || '#006c49'}" stop-opacity="0.18"/>
-      <stop offset="100%" stop-color="${opts.color || '#006c49'}" stop-opacity="0"/>
-    </linearGradient></defs>
-    ${gridLines}
-    <path d="${area}" fill="url(#growthFill)"/>
-    <path d="${line}" fill="none" stroke="${opts.color || '#006c49'}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-    ${dots}${labels}
-  </svg>`;
+  return `<div class="trend" role="img" aria-label="${esc(opts.label || 'Trend')}">
+    <div class="trend-plot" style="height:${h}px">
+      <svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+        <defs><linearGradient id="trendFill" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="${color}" stop-opacity="0.16"/>
+          <stop offset="100%" stop-color="${color}" stop-opacity="0"/>
+        </linearGradient></defs>
+        ${grid}
+        <path d="${area}" fill="url(#trendFill)"/>
+        <path d="${line}" fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>
+      </svg>
+      ${yLabels}${dots}
+    </div>
+    <div class="trend-x">${xLabels}</div>
+  </div>`;
 }
 
 // ==================== TOASTS ====================
@@ -470,11 +520,13 @@ function navigateTo(page, opts) {
     if (opts.userId) state.activeUserId = opts.userId;
     if (!state.activeUserId) { page = 'users'; }
   }
+  if (page === 'revenue-detail' && opts.metric) state.revenueMetric = opts.metric;
   if (opts.resetFilters) {
     state.userFilters = { gym: 'all', role: 'all', status: 'all', q: '' };
-    state.auditFilters = { gym: 'all', category: 'all', severity: 'all', q: '' };
+    state.gymFilters = { status: 'all', plan: 'all', q: '' };
   }
   if (opts.userFilter) state.userFilters = Object.assign({}, state.userFilters, opts.userFilter);
+  if (opts.gymFilter) state.gymFilters = Object.assign({}, state.gymFilters, opts.gymFilter);
   state.currentPage = page;
   renderAll();
   closeSidebar();
@@ -544,10 +596,8 @@ function runGlobalSearch(query) {
   const userHit = USERS.find((u) => (u.name + ' ' + u.email).toLowerCase().includes(q.toLowerCase()));
   if (gymHit) { navigateTo('gym-detail', { gymId: gymHit.id }); toast(`Opened ${gymHit.name} — ${gymHit.location}`, 'info'); return; }
   if (userHit) { navigateTo('users', { userFilter: { q } }); toast(`Filtered users by “${q}”`, 'info'); return; }
-  navigateTo('audit', { userFilter: null });
-  state.auditFilters = Object.assign({}, state.auditFilters, { q });
-  renderAll();
-  toast(`No gym or user matched “${q}” — searching the audit trail`, 'info');
+  navigateTo('gyms', { gymFilter: { q } });
+  toast(`No gym or user matched “${q}” — filtered gym accounts instead`, 'info');
 }
 
 // ==================== NAV RENDERING ====================
@@ -556,10 +606,6 @@ function navBadgeHtml(kind) {
     const t = platformTotals();
     const n = t.overdueGyms + t.trialGyms;
     return n ? `<span class="nav-badge nav-badge-amber">${n}</span>` : '';
-  }
-  if (kind === 'audit') {
-    const n = AUDIT.filter((a) => a.severity === 'critical').length;
-    return n ? `<span class="nav-badge nav-badge-red">${n}</span>` : '';
   }
   if (kind === 'billing') {
     const n = INVOICES.filter((i) => i.status === 'Overdue').length;
@@ -571,14 +617,22 @@ function navBadgeHtml(kind) {
 function renderNav() {
   const container = document.getElementById('sidebar-nav');
   if (!container) return;
-  container.innerHTML = NAV.map((group) => {
-    const items = group.items.map((item) => `
-      <button class="nav-item ${state.currentPage === item.id || (state.currentPage === 'gym-detail' && item.id === 'gyms') ? 'active' : ''}"
+  const itemHtml = (item, isChild) => {
+    const kids = item.children || [];
+    const selfActive = state.currentPage === item.id
+      || (state.currentPage === 'gym-detail' && item.id === 'gyms')
+      || (item.also || []).includes(state.currentPage);
+    const activeChild = kids.some((c) => c.id === state.currentPage || (c.also || []).includes(state.currentPage));
+    const childHtml = kids.map((c) => itemHtml(c, true)).join('');
+    return `<button class="nav-item${isChild ? ' nav-child' : ''}${selfActive ? ' active' : ''}${activeChild ? ' active-parent' : ''}"
         onclick="navigateTo('${item.id}')" aria-current="${state.currentPage === item.id ? 'page' : 'false'}">
         <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="${item.icon}"/></svg>
         <span class="nav-label">${esc(item.label)}</span>
         ${item.badge ? navBadgeHtml(item.badge) : ''}
-      </button>`).join('');
+      </button>${childHtml}`;
+  };
+  container.innerHTML = NAV.map((group) => {
+    const items = group.items.map((item) => itemHtml(item, false)).join('');
     return `<p class="nav-section-title">${esc(group.section)}</p>${items}`;
   }).join('');
 }
@@ -632,8 +686,9 @@ const RENDERERS = {
   'user-detail': () => renderUserProfile(),
   'hr-managers': () => renderHRManagers(),
   billing: () => renderBilling(),
+  revenue: () => renderRevenue(),
+  'revenue-detail': () => renderRevenueDetail(),
   access: () => renderRoles(),
-  audit: () => renderSecurityAudit(),
 };
 
 function renderAll() {

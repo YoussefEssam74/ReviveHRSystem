@@ -24,8 +24,11 @@ const CURRENT_ADMIN = {
 const PLANS = [
   {
     id: 'starter', name: 'Starter', price: 8500, seatLimit: 50, branchLimit: 1,
-    cycle: 'monthly', trial: 'none', trialDays: 0,
+    cycleCount: 1, cycleUnit: 'months', trial: 'none', trialDays: 0,
     tagline: 'Single-site gyms finding their footing',
+    addons: [
+      { name: 'Extra employees', qty: 5, price: 100 },
+    ],
     features: [
       'Employee records & document vault',
       'Biometric attendance kiosk',
@@ -36,8 +39,12 @@ const PLANS = [
   },
   {
     id: 'growth', name: 'Growth', price: 18000, seatLimit: 100, branchLimit: 3,
-    cycle: 'monthly', trial: 'days', trialDays: 14,
+    cycleCount: 1, cycleUnit: 'months', trial: 'days', trialDays: 14,
     tagline: 'Multi-branch fitness clubs',
+    addons: [
+      { name: 'Extra employees', qty: 5, price: 75 },
+      { name: 'Extra branch', qty: 1, price: 1500 },
+    ],
     features: [
       'Everything in Starter',
       'Multi-branch scoping & transfers',
@@ -49,7 +56,7 @@ const PLANS = [
   },
   {
     id: 'enterprise', name: 'Enterprise', price: 42000, seatLimit: null, branchLimit: null,
-    cycle: 'yearly', trial: 'none', trialDays: 0,
+    cycleCount: 1, cycleUnit: 'years', trial: 'none', trialDays: 0,
     tagline: 'National gym chains with compliance needs',
     features: [
       'Everything in Growth',
@@ -81,12 +88,7 @@ const FEATURE_CATALOG = [
   '99.9% uptime SLA',
 ];
 
-const BILLING_CYCLES = [
-  { id: 'monthly', label: 'Monthly', short: '/mo', months: 1 },
-  { id: 'quarterly', label: 'Every 3 months', short: '/3 mo', months: 3 },
-  { id: 'yearly', label: 'Yearly', short: '/yr', months: 12 },
-];
-
+// Billing cadence is free-form — a plan can bill every N months or every N years.
 const TRIAL_MODES = [
   { id: 'none', label: 'No trial — paid from day one' },
   { id: 'days', label: 'Free trial before billing starts' },
@@ -357,9 +359,9 @@ const INVOICES = [
   { id: 'INV-2026-0417', gymId: 'gym-4', period: 'Nov 2026', amount: 42000, status: 'Paid', issued: '2026-11-01', paid: '2026-11-02' },
   { id: 'INV-2026-0416', gymId: 'gym-5', period: 'Nov 2026', amount: 0, status: 'Trial', issued: '2026-10-28', paid: null },
   { id: 'INV-2026-0415', gymId: 'gym-1', period: 'Oct 2026', amount: 18000, status: 'Paid', issued: '2026-10-01', paid: '2026-10-02' },
-  { id: 'INV-2026-0414', gymId: 'gym-2', period: 'Oct 2026', amount: 18000, status: 'Paid', issued: '2026-10-01', paid: '2026-10-03' },
+  { id: 'INV-2026-0414', gymId: 'gym-2', period: 'Oct 2026', amount: 16000, status: 'Paid', issued: '2026-10-01', paid: '2026-10-03' },
   { id: 'INV-2026-0413', gymId: 'gym-3', period: 'Oct 2026', amount: 8500, status: 'Paid', issued: '2026-10-01', paid: '2026-10-12' },
-  { id: 'INV-2026-0412', gymId: 'gym-4', period: 'Oct 2026', amount: 42000, status: 'Paid', issued: '2026-10-01', paid: '2026-10-02' },
+  { id: 'INV-2026-0412', gymId: 'gym-4', period: 'Oct 2026', amount: 38500, status: 'Paid', issued: '2026-10-01', paid: '2026-10-02' },
   { id: 'INV-2026-0411', gymId: 'gym-6', period: 'Oct 2026', amount: 8500, status: 'Paid', issued: '2026-10-05', paid: '2026-10-09' },
   { id: 'INV-2026-0410', gymId: 'gym-1', period: 'Sep 2026', amount: 18000, status: 'Paid', issued: '2026-09-01', paid: '2026-09-02' },
   { id: 'INV-2026-0409', gymId: 'gym-2', period: 'Sep 2026', amount: 18000, status: 'Paid', issued: '2026-09-01', paid: '2026-09-05' },
@@ -541,7 +543,7 @@ const ROLES = [
 // ==================== ATTENTION QUEUE ====================
 const ALERTS = [
   { id: 'a1', severity: 'critical', title: 'Flex Factory invoice overdue', detail: 'EGP 8,500 due 12 days ago · payroll blocked', page: 'gym-detail', gymId: 'gym-6', action: 'Review gym' },
-  { id: 'a2', severity: 'critical', title: 'Blocked sign-in attempts', detail: 'dina.fahmy@flexfactory.com · 5 failures from 185.220.101.44', page: 'audit', gymId: null, action: 'Open audit log' },
+  { id: 'a2', severity: 'critical', title: 'Blocked sign-in attempts', detail: 'dina.fahmy@flexfactory.com · 5 failures from 185.220.101.44', page: 'gym-detail', gymId: 'gym-6', action: 'Review gym' },
   { id: 'a3', severity: 'warning', title: 'Peak Performance trial ends in 10 days', detail: 'Growth trial · 31 of 100 seats used', page: 'gym-detail', gymId: 'gym-5', action: 'Review gym' },
   { id: 'a4', severity: 'warning', title: 'Revive Fitness at 78% of its seat quota', detail: '39 of 50 Starter seats used · 11 left', page: 'gym-detail', gymId: 'gym-3', action: 'Review seats' },
   { id: 'a5', severity: 'warning', title: 'Revive Fitness payroll awaiting approval', detail: 'November run · 39 employees · submitted 5 days ago', page: 'gym-detail', gymId: 'gym-3', action: 'Review payroll' },
