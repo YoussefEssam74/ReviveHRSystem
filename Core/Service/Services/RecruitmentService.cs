@@ -795,6 +795,8 @@ namespace Service.Services
                     CandidateId = a.CandidateId,
                     Name = a.Candidate.FullName,
                     Position = candidatePosition,
+                    Gym = a.Vacancy?.Gym?.Name ?? a.PreferredGym,
+                    Rating = a.Candidate.Rating,
                     Skills = ParseJsonStringArray(a.Candidate.SkillsJson),
                     Note = a.Notes,
                     Since = a.AppliedDate,
@@ -1719,6 +1721,11 @@ namespace Service.Services
                         block.By = names.GetValueOrDefault(interviewerId);
                     }
                 }
+
+                if (item.Missed?.Interviewer is string missedBy && int.TryParse(missedBy, out var missedInterviewerId))
+                {
+                    item.Missed.Interviewer = names.GetValueOrDefault(missedInterviewerId);
+                }
             }
         }
 
@@ -1810,6 +1817,7 @@ namespace Service.Services
                 .Where(i => i.Stage == PipelineStageType.SecondInterview)
                 .OrderBy(i => i.Id)
                 .FirstOrDefault();
+            var missed = FindMissedInterview(application);
 
             var item = new CandidateItem
             {
@@ -1818,6 +1826,7 @@ namespace Service.Services
                 Name = candidate.FullName,
                 Initials = BuildInitials(candidate.FullName),
                 Position = application.Vacancy?.Title ?? application.PositionTitle,
+                Gym = application.Vacancy?.Gym?.Name ?? application.PreferredGym,
                 Stage = StageDisplay(application.CurrentStage),
                 AppliedDate = application.AppliedDate,
                 Phone = candidate.Phone,
@@ -1850,6 +1859,14 @@ namespace Service.Services
                 },
                 Iv1 = iv1 is null ? null : BuildStageBlock(iv1),
                 Iv2 = iv2 is null ? null : BuildStageBlock(iv2),
+                Missed = missed is null ? null : new CandidateMissedInterview
+                {
+                    Stage = StageDisplay(missed.Stage),
+                    ScheduledDate = missed.ScheduledDate,
+                    Type = missed.Type,
+                    Room = missed.Room,
+                    Interviewer = missed.InterviewerName ?? missed.ConductedBy?.ToString(),
+                },
             };
 
             if (application.Status == ApplicationStatus.Hired)
@@ -1896,6 +1913,26 @@ namespace Service.Services
             Room = interview.Room,
             Notes = interview.InterviewerNotes,
         };
+
+        /// <summary>
+        /// The round whose slot came and went without an outcome (the no-show state).
+        /// Only the latest interview per round counts, so rebooking clears it.
+        /// </summary>
+        private static Interview? FindMissedInterview(Application application)
+        {
+            var now = DateTime.UtcNow;
+            return application.Interviews?
+                .Where(i => i.Stage is PipelineStageType.FirstInterview or PipelineStageType.SecondInterview)
+                .GroupBy(i => i.Stage)
+                .Select(round => round.OrderByDescending(i => i.Id).First())
+                .Where(i => i.CompletedAt is null
+                    && i.Outcome == InterviewOutcome.Pending
+                    && !string.Equals(i.Status, "Cancelled", StringComparison.OrdinalIgnoreCase)
+                    && !string.Equals(i.Status, "Draft", StringComparison.OrdinalIgnoreCase)
+                    && i.ScheduledDate < now)
+                .OrderBy(i => i.ScheduledDate)
+                .FirstOrDefault();
+        }
 
         private static InterviewItem BuildInterviewItem(Interview interview, IReadOnlyDictionary<int, string>? userNames = null) => new()
         {

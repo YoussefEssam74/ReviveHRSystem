@@ -23,6 +23,79 @@ namespace DomainLayer.Models.EmployeeModule
         public string? Notes { get; set; }
 
         // ------------------------------------------------------------------
+        // HR approval of a termination request (Termination Requests tab).
+        // "Pending" for a Branch-Manager request, "Approved" for HR-initiated
+        // exits and legacy rows, "Rejected" when HR declines the request.
+        // ------------------------------------------------------------------
+
+        public string ApprovalStatus { get; set; } = "Approved";
+
+        public int? ApprovedBy { get; set; }
+
+        public virtual User? ApprovedByUser { get; set; }
+
+        public DateTime? ApprovedAt { get; set; }
+
+        public string? ApprovalNote { get; set; }
+
+        // ------------------------------------------------------------------
+        // Exit interview scheduling + form (Exit Interviews / Exit Interview tabs).
+        // ------------------------------------------------------------------
+
+        /// <summary>"Scheduled" | "Completed" | "No Show" | "Rescheduled" (null = not scheduled).</summary>
+        public string? ExitInterviewStatus { get; set; }
+
+        public DateTime? ExitInterviewScheduledAt { get; set; }
+
+        public DateTime? ExitInterviewCompletedAt { get; set; }
+
+        public string? Interviewer { get; set; }
+
+        public DateOnly? InterviewDate { get; set; }
+
+        public string? ReasonForLeaving { get; set; }
+
+        public string? WhatLikedMost { get; set; }
+
+        public string? WhatToImprove { get; set; }
+
+        /// <summary>1–5 self-reported satisfaction scores captured in the interview.</summary>
+        public int? JobSatisfaction { get; set; }
+
+        public int? ManagementRating { get; set; }
+
+        public int? WorkEnvironmentRating { get; set; }
+
+        public int? CompensationRating { get; set; }
+
+        public bool? WouldRecommend { get; set; }
+
+        public string? InterviewNotes { get; set; }
+
+        // ------------------------------------------------------------------
+        // Clearance / final settlement (the last step before Former Employees).
+        // ------------------------------------------------------------------
+
+        public bool UniformReturned { get; set; }
+
+        public bool AssetsReturned { get; set; }
+
+        public bool AccessRevoked { get; set; }
+
+        public bool FinalSettlementCompleted { get; set; }
+
+        public bool ClearanceCompleted { get; set; }
+
+        public DateTime? ClearanceCompletedAt { get; set; }
+
+        public string? ClearanceNotes { get; set; }
+
+        /// <summary>Hard do-not-rehire flag (kept apart from the rehire verdict).</summary>
+        public bool Blacklisted { get; set; }
+
+        public string? BlacklistReason { get; set; }
+
+        // ------------------------------------------------------------------
         // Exit verdict (api-spec-from-ui.md §5.6 T5) — saved while Under Review,
         // required together with a complete checklist before T6 finalizes.
         // ------------------------------------------------------------------

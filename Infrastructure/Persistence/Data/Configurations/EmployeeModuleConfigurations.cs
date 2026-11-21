@@ -175,6 +175,16 @@ namespace Presistence.Data.Configurations
             builder.Property(c => c.Status).IsRequired().HasMaxLength(50);
             builder.Property(c => c.SeparationType).IsRequired().HasMaxLength(30).HasDefaultValue("Resignation");
             builder.Property(c => c.Notes).HasMaxLength(1000);
+            builder.Property(c => c.ApprovalStatus).IsRequired().HasMaxLength(30).HasDefaultValue("Approved");
+            builder.Property(c => c.ApprovalNote).HasMaxLength(1000);
+            builder.Property(c => c.ExitInterviewStatus).HasMaxLength(30);
+            builder.Property(c => c.Interviewer).HasMaxLength(200);
+            builder.Property(c => c.ReasonForLeaving).HasMaxLength(1000);
+            builder.Property(c => c.WhatLikedMost).HasMaxLength(2000);
+            builder.Property(c => c.WhatToImprove).HasMaxLength(2000);
+            builder.Property(c => c.InterviewNotes).HasMaxLength(2000);
+            builder.Property(c => c.ClearanceNotes).HasMaxLength(1000);
+            builder.Property(c => c.BlacklistReason).HasMaxLength(1000);
             builder.Property(c => c.FinalReason).HasMaxLength(1000);
             builder.Property(c => c.SettlementDirection).HasMaxLength(30);
             builder.Property(c => c.SettlementAmount).HasPrecision(18, 2);
@@ -185,7 +195,10 @@ namespace Presistence.Data.Configurations
                    .HasForeignKey(c => c.EmployeeId).OnDelete(DeleteBehavior.Restrict);
             builder.HasOne(c => c.InitiatedByUser).WithMany().HasForeignKey(c => c.InitiatedBy)
                    .OnDelete(DeleteBehavior.Restrict);
+            builder.HasOne(c => c.ApprovedByUser).WithMany().HasForeignKey(c => c.ApprovedBy)
+                   .OnDelete(DeleteBehavior.Restrict);
             builder.HasIndex(c => new { c.EmployeeId, c.Status });
+            builder.HasIndex(c => c.ApprovalStatus);
         }
     }
 

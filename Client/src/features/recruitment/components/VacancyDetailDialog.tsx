@@ -10,6 +10,7 @@ import { useVacancy } from '../hooks/useRecruitment'
 import { describeApiError } from '../../../lib/api-client'
 import { formatDate, formatMoney } from '../../../lib/format'
 import type { Vacancy } from '../api/recruitment.api'
+import { displayStage } from '../api/recruitment.api'
 
 export interface VacancyDetailDialogProps {
   vacancyId: number
@@ -19,11 +20,26 @@ export interface VacancyDetailDialogProps {
   onEdit: (vacancy: Vacancy) => void
 }
 
+/** The funnel merges the retired Screening bucket into Applied, like the board does. */
+function mergePipelineFunnel(funnel: { stage: string; count: number }[]) {
+  return funnel.reduce<{ stage: string; count: number }[]>((rows, item) => {
+    const stage = displayStage(item.stage)
+    const existing = rows.find((row) => row.stage === stage)
+    if (existing) {
+      existing.count += item.count
+    } else {
+      rows.push({ stage, count: item.count })
+    }
+    return rows
+  }, [])
+}
+
 /** Vacancy detail modal: the funnel, current staff on the position and its candidates. */
 export function VacancyDetailDialog({ vacancyId, canManage, onClose, onEdit }: VacancyDetailDialogProps) {
   const { t } = useTranslation()
   const { data, isLoading, error } = useVacancy(vacancyId)
   const vacancy = data?.data
+  const funnel = data ? mergePipelineFunnel(data.funnel) : []
 
   return (
     <Dialog
@@ -100,10 +116,10 @@ export function VacancyDetailDialog({ vacancyId, canManage, onClose, onEdit }: V
           <div>
             <p className="text-xs font-medium uppercase tracking-wide text-slate-400">{t('Pipeline funnel')}</p>
             <div className="mt-2 flex flex-wrap gap-2">
-              {data.funnel.length === 0 ? (
+              {funnel.length === 0 ? (
                 <p className="text-sm text-slate-500">{t('No funnel data yet.')}</p>
               ) : (
-                data.funnel.map((stage) => (
+                funnel.map((stage) => (
                   <span
                     key={stage.stage}
                     className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700 ring-1 ring-inset ring-slate-200"
@@ -149,7 +165,7 @@ export function VacancyDetailDialog({ vacancyId, canManage, onClose, onEdit }: V
                         <p className="truncate text-xs text-slate-500">{t('Applied {{date}}', { date: formatDate(candidate.appliedDate) })}</p>
                       </div>
                     </div>
-                    <StatusBadge status={candidate.stage} />
+                    <StatusBadge status={displayStage(candidate.stage)} />
                   </li>
                 ))}
               </ul>

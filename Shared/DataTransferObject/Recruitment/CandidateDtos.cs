@@ -9,7 +9,7 @@ namespace Shared.DataTransferObject.Recruitment
         /// <summary>Applied | Screening | First Interview | Second Interview | Accepted | Rejected | Hired.</summary>
         public string? Stage { get; set; }
         public string? Position { get; set; }
-        /// <summary>active (in-process, minus blocked) | rejected.</summary>
+        /// <summary>active (in-process, minus blocked) | rejected | missed (no-showed a scheduled round).</summary>
         public string? View { get; set; }
         public bool? Blocked { get; set; }
         public string? SortBy { get; set; }
@@ -53,6 +53,18 @@ namespace Shared.DataTransferObject.Recruitment
         public string? Note { get; set; }
     }
 
+    /// <summary>The scheduled round the candidate did not attend (slot passed, still no outcome).</summary>
+    public class CandidateMissedInterview
+    {
+        /// <summary>First Interview | Second Interview.</summary>
+        public string Stage { get; set; } = string.Empty;
+        public DateTime ScheduledDate { get; set; }
+        public string? Type { get; set; }
+        public string? Room { get; set; }
+        /// <summary>Interviewer display name (falls back to the user id before names attach).</summary>
+        public string? Interviewer { get; set; }
+    }
+
     /// <summary>One candidate as the kanban card / table row / detail modal renders it.</summary>
     public class CandidateItem
     {
@@ -61,6 +73,8 @@ namespace Shared.DataTransferObject.Recruitment
         public string Name { get; set; } = string.Empty;
         public string Initials { get; set; } = string.Empty;
         public string? Position { get; set; }
+        /// <summary>Vacancy branch, else the candidate's preferred branch.</summary>
+        public string? Gym { get; set; }
         /// <summary>Current pipeline stage display string.</summary>
         public string Stage { get; set; } = string.Empty;
         public DateTime AppliedDate { get; set; }
@@ -76,6 +90,8 @@ namespace Shared.DataTransferObject.Recruitment
         public CandidateStageBlock? Screen { get; set; }
         public CandidateStageBlock? Iv1 { get; set; }
         public CandidateStageBlock? Iv2 { get; set; }
+        /// <summary>Scheduled round that came and went without an outcome; null when none.</summary>
+        public CandidateMissedInterview? Missed { get; set; }
         public CandidateDecisionBlock? Decision { get; set; }
     }
 

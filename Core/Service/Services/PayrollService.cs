@@ -1460,6 +1460,14 @@ namespace Service.Services
                     var adjusted = e.AttendanceAdjustedAt is not null;
                     var annualLeaves = CountOf("AnnualLeave");
                     var sickLeaves = CountOf("SickLeave");
+                    // Paid leave is its own counter: a day approved as unpaid still belongs to
+                    // its leave type above, but never to the paid-leave figure the sheet prints.
+                    var paidLeaves = days.Count(d =>
+                        d.Kind is "AnnualLeave" or "SickLeave"
+                        && !string.Equals(d.Payment, "unpaid", StringComparison.OrdinalIgnoreCase));
+                    // One hand correction covers both leave counters, so the corrected
+                    // "Paid Leave" row never contradicts the approved-leave total.
+                    var correctedLeaves = e.ApprovedLeavesOverride;
 
                     return new PayrollAttendanceItem
                     {
@@ -1473,7 +1481,8 @@ namespace Service.Services
                         WeeklyOffs = e.WeeklyOffsOverride ?? CountOf("WeeklyOff"),
                         AnnualLeaves = annualLeaves,
                         SickLeaves = sickLeaves,
-                        ApprovedLeaves = e.ApprovedLeavesOverride ?? (annualLeaves + sickLeaves),
+                        ApprovedLeaves = correctedLeaves ?? (annualLeaves + sickLeaves),
+                        PaidLeaves = correctedLeaves ?? paidLeaves,
                         CoverDays = CountOf("Cover"),
                         UnapprovedCoverDays = CountOf("CoverRejected"),
                         OvertimeHours = e.OvertimeHours,
@@ -1649,6 +1658,7 @@ namespace Service.Services
                         Kind = leave.Type == "Sick Leave" ? "SickLeave" : "AnnualLeave",
                         Status = leave.Type,
                         Shift = scheduledShift(day),
+                        Payment = leave.Payment,
                         Note = string.IsNullOrWhiteSpace(leave.Details) ? null : leave.Details,
                     });
                 }

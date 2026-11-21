@@ -109,6 +109,8 @@ export interface PayrollAttendanceDay {
   overtimeHours: number
     /** Minutes the check-out ran before the shift end (0 when not early). */
     earlyLeaveMinutes?: number | null
+  /** "paid" | "unpaid" on a leave day; null/absent for every other day. */
+  payment?: string | null
   note: string | null
   /** ATT-{recordId} when the day has a punch. */
   attendanceRef: string | null
@@ -126,6 +128,8 @@ export interface PayrollAttendance {
   sickLeaves: number
   /** Approved leave days in total; a manual correction may override this figure. */
   approvedLeaves: number
+  /** Leave days settled as paid (unpaid leave excluded); the manual correction overrides it. */
+  paidLeaves: number
   /** Days worked on a scheduled weekly off — extra / cover shifts. */
   coverDays: number
   /**
@@ -145,6 +149,7 @@ export interface PayrollAttendance {
 export interface UpdatePayrollAttendanceBody {
   daysAttended: number
   weeklyOffs: number
+  /** The sheet's Paid Leave counter — paid leave days, not the leave total. */
   approvedLeaves: number
   overtimeHours: number
   lateArrivals: number

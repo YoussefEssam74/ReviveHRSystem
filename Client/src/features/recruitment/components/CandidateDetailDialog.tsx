@@ -11,7 +11,7 @@ import { LoadingState, ErrorState } from '../../../components/async-state'
 import { useBlockCandidate, useCandidate, useMoveCandidateStage } from '../hooks/useRecruitment'
 import { describeApiError } from '../../../lib/api-client'
 import { formatDate } from '../../../lib/format'
-import { CANDIDATE_STAGES, type CandidateInterview } from '../api/recruitment.api'
+import { CANDIDATE_STAGES, displayStage, type CandidateInterview } from '../api/recruitment.api'
 
 function InterviewRound({ label, interview }: { label: string; interview: CandidateInterview | null }) {
   const { t } = useTranslation()
@@ -53,7 +53,7 @@ export function CandidateDetailDialog({ candidateId, canManage, onClose }: Candi
   const [actionError, setActionError] = useState<string | null>(null)
 
   const onMoveStage = async () => {
-    if (!candidate?.applicationId || !targetStage || targetStage === candidate.stage || targetStage === 'Hired') return
+    if (!candidate?.applicationId || !targetStage || targetStage === displayStage(candidate.stage) || targetStage === 'Hired') return
     setActionError(null)
     try {
       await moveStage.mutateAsync({ applicationId: candidate.applicationId, stage: targetStage })
@@ -103,7 +103,7 @@ export function CandidateDetailDialog({ candidateId, canManage, onClose }: Candi
           )}
 
           <div className="flex flex-wrap items-center gap-2">
-            <StatusBadge status={candidate.stage} />
+            <StatusBadge status={displayStage(candidate.stage)} />
             {candidate.blocked && <Badge>{t('Banned')}</Badge>}
             {candidate.rating != null && <Badge>{t('Rating {{rating}}', { rating: candidate.rating })}</Badge>}
             <Badge>{t('Applied {{date}}', { date: formatDate(candidate.appliedDate) })}</Badge>
@@ -146,7 +146,6 @@ export function CandidateDetailDialog({ candidateId, canManage, onClose }: Candi
           )}
 
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <InterviewRound label={t('Screening')} interview={candidate.screen} />
             <InterviewRound label={t('First interview')} interview={candidate.iv1} />
             <InterviewRound label={t('Second interview')} interview={candidate.iv2} />
             <div className="rounded-lg border border-slate-200 px-3 py-2">
@@ -171,7 +170,7 @@ export function CandidateDetailDialog({ candidateId, canManage, onClose }: Candi
                   <div className="flex gap-2">
                     <Select
                       id="target-stage"
-                      value={targetStage || candidate.stage}
+                      value={targetStage || displayStage(candidate.stage)}
                       onChange={(e) => setTargetStage(e.target.value)}
                       disabled={candidate.stage === 'Hired' || !candidate.applicationId}
                     >
@@ -189,7 +188,7 @@ export function CandidateDetailDialog({ candidateId, canManage, onClose }: Candi
                         candidate.stage === 'Hired' ||
                         !candidate.applicationId ||
                         !targetStage ||
-                        targetStage === candidate.stage ||
+                        targetStage === displayStage(candidate.stage) ||
                         targetStage === 'Hired'
                       }
                     >

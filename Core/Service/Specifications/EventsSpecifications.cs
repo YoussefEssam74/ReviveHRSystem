@@ -233,6 +233,7 @@ namespace Service.Specifications
             AddInclude(c => c.Employee.Gym);
             AddInclude(c => c.Employee.Position!);
             AddInclude(c => c.InitiatedByUser);
+            AddInclude(c => c.ApprovedByUser!);
             AddInclude(c => c.ChecklistItems);
             OrderByDescending = c => c.InitiatedAt;
 
@@ -251,6 +252,7 @@ namespace Service.Specifications
             AddInclude(c => c.Employee.Gym);
             AddInclude(c => c.Employee.Position!);
             AddInclude(c => c.InitiatedByUser);
+            AddInclude(c => c.ApprovedByUser!);
             AddInclude(c => c.ChecklistItems);
             // Separation actions (verdict save / finalize / checklist updates) mutate the
             // fetched case before SaveChanges without Update() — keeps the flow tracked.

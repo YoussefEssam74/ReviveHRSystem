@@ -294,3 +294,115 @@ export function getEvaluationResponses(
   const qs = query.toString()
   return apiRequest<Paged<EvaluationResponseRow>>(`/api/evaluation-responses${qs ? '?' + qs : ''}`, { signal })
 }
+
+/** GET /api/evaluation-assignments — the signed-in evaluator's inbox. */
+export interface AssignmentListParams {
+  formId?: number
+  status?: string
+  page?: number
+  pageSize?: number
+}
+
+export function getEvaluationAssignments(
+  params: AssignmentListParams = {},
+  signal?: AbortSignal,
+): Promise<Paged<DispatchAssignment>> {
+  const query = new URLSearchParams()
+  if (params.formId != null) query.set('formId', String(params.formId))
+  if (params.status) query.set('status', params.status)
+  if (params.page) query.set('page', String(params.page))
+  if (params.pageSize) query.set('pageSize', String(params.pageSize))
+  const qs = query.toString()
+  return apiRequest<Paged<DispatchAssignment>>(`/api/evaluation-assignments${qs ? '?' + qs : ''}`, { signal })
+}
+
+/** POST /api/evaluation-forms/{id}/responses body (free-run and assigned modes). */
+export interface SubmitEvaluationBody {
+  employee?: string
+  employeeId?: number
+  /** Review window label ("Q3 2026", "Probation Review", …). */
+  period?: string
+  /** Computed percent (totalPoints / (questions × 5) × 100). */
+  score?: number
+  notes?: string
+  answers: { question: string; type: string; answer: string }[]
+  /** Pins the submission to the evaluator's assignment (assigned mode). */
+  assignmentId?: number
+}
+
+/** Assignment progress echoed back when the submission completed a subject. */
+export interface SubmitAssignmentEcho {
+  id: number
+  completedSubjects: string[]
+  status: string
+}
+
+export interface SubmitEvaluationResult {
+  data: EvaluationResponseRow
+  assignment: SubmitAssignmentEcho | null
+}
+
+export function postEvaluationResponse(
+  formId: number,
+  body: SubmitEvaluationBody,
+  signal?: AbortSignal,
+): Promise<SubmitEvaluationResult> {
+  return apiRequest<SubmitEvaluationResult>(`/api/evaluation-forms/${formId}/responses`, {
+    method: 'POST',
+    body,
+    signal,
+  })
+}
+
+/** One performance-cycle chip (GET /api/performance-cycles). */
+export interface PerformanceCycle {
+  id: number
+  name: string
+  /** yyyy-MM-dd. */
+  start: string
+  end: string
+  /** Upcoming | In Progress | Completed. */
+  status: string
+}
+
+export function getPerformanceCycles(signal?: AbortSignal): Promise<{ items: PerformanceCycle[] }> {
+  return apiRequest<{ items: PerformanceCycle[] }>('/api/performance-cycles', { signal })
+}
+
+/** One goal card (GET /api/goals). */
+export interface Goal {
+  id: number
+  employee: string
+  title: string
+  /** On Track | At Risk | Behind. */
+  status: string
+  progress: number
+  /** yyyy-MM-dd. */
+  due: string | null
+  owner: string
+}
+
+export interface GoalListParams {
+  page?: number
+  pageSize?: number
+}
+
+export function getGoals(params: GoalListParams = {}, signal?: AbortSignal): Promise<Paged<Goal>> {
+  const query = new URLSearchParams()
+  if (params.page) query.set('page', String(params.page))
+  if (params.pageSize) query.set('pageSize', String(params.pageSize))
+  const qs = query.toString()
+  return apiRequest<Paged<Goal>>(`/api/goals${qs ? '?' + qs : ''}`, { signal })
+}
+
+export interface CreateGoalBody {
+  employee?: string
+  title?: string
+  /** yyyy-MM-dd. */
+  due?: string
+  owner?: string
+}
+
+export function postGoal(body: CreateGoalBody, signal?: AbortSignal): Promise<Goal> {
+  return apiRequest<Wrapped<Goal>>('/api/goals', { method: 'POST', body, signal }).then((r) => r.data)
+}

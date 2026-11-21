@@ -386,7 +386,7 @@ the HR table above:
 | Manager-Issued Deductions | `DeductionCandidates` not linked to attendance (manual) — shown with reason, date, and amount only; the issuing Branch Manager's name is **not** shown to the employee |
 | Overtime Hours | Approved `EmployeeRequests` of Type = Overtime this period |
 | Annual Leave — Used / Remaining | `LeaveBalances` (LeaveType = Annual) |
-| Paid Leave | ⚠️ open item — pending confirmation whether this is a distinct leave type/balance or just how Annual Leave is labeled on the payslip |
+| Paid Leave | Approved leave days of the period settled as **paid** (annual + sick, excluding those approved as unpaid) — the settlement sheet's own Paid Leave counter |
 
 Gym-level auto-increase: each gym can set an `AnnualIncreasePercent` and
 an anchor (`HireAnniversary` or a fixed calendar date). When an

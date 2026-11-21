@@ -83,13 +83,16 @@ namespace Shared.DataTransferObject.Recruitment
         public int Candidates { get; set; }
     }
 
-    /// <summary>One waiting-list card: name, position, days waiting, skills, note, source, matches.</summary>
+    /// <summary>One waiting-list card: name, branch, position, days waiting, skills, note, source, matches.</summary>
     public class WaitingListItem
     {
         public int Id { get; set; }
         public int? CandidateId { get; set; }
         public string Name { get; set; } = string.Empty;
         public string? Position { get; set; }
+        /// <summary>Vacancy branch, else the candidate's preferred branch.</summary>
+        public string? Gym { get; set; }
+        public decimal? Rating { get; set; }
         public IReadOnlyList<string> Skills { get; set; } = [];
         public string? Note { get; set; }
         public DateTime Since { get; set; }

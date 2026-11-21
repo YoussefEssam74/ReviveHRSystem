@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Check, ChevronLeft, ChevronRight, Plus, Receipt, Undo2, X } from 'lucide-react'
 import { Badge, type BadgeColor } from '../../../components/ui/badge'
@@ -33,8 +33,10 @@ import type { EmployeeRequestRow } from '../../requests/api/requests.api'
 type AttendanceDraft = {
   daysAttended: string
   weeklyOffs: string
-  approvedLeaves: string
+  /** The sheet's Paid Leave counter (sent as the API's approvedLeaves). */
+  paidLeaves: string
   overtimeHours: string
+  /** Not shown in the editor, but still sent so saving never zeroes the counter. */
   lateArrivals: string
   unexcusedAbsences: string
 }
@@ -72,6 +74,11 @@ const SCHEDULE_TONE: Record<string, BadgeColor> = {
   CoverRejected: 'red',
   Scheduled: 'gray',
   Unscheduled: 'gray',
+}
+
+/** A request still waiting on an HR verdict — the sheet's other kind of action item. */
+function isRequestActionable(request: EmployeeRequestRow): boolean {
+  return request.status === 'Pending' || request.status === 'Pending HR Review'
 }
 
 export interface SettlementSheetProps {
@@ -262,7 +269,6 @@ export default function SettlementSheet({
   const entry = period.items.find((item) => item.employeeId === employeeId) ?? period.items[0]
   const locked = period.locked
   const closed = entry ? isEntryClosed(entry) : false
-  const pendingCount = entry ? pendingLinesOf(entry) : 0
 
   const [addingLine, setAddingLine] = useState(false)
   const [source, setSource] = useState<DeductionSource>('manager')
@@ -284,6 +290,15 @@ export default function SettlementSheet({
 
   const queryClient = useQueryClient()
   const [panel, setPanel] = useState<'schedule' | 'requests' | 'deductions'>('schedule')
+  const [deductionsFocus, setDeductionsFocus] = useState(false)
+  const panelRef = useRef<HTMLDivElement | null>(null)
+
+  // The summary's "Deductions" line jumps here; flash the card so the jump is obvious.
+  useEffect(() => {
+    if (!deductionsFocus) return
+    const timer = window.setTimeout(() => setDeductionsFocus(false), 1400)
+    return () => window.clearTimeout(timer)
+  }, [deductionsFocus])
 
   // The whole month's conversation with this employee: everything filed, whatever the
   // stage — the sheet's decisions read against it.
@@ -349,11 +364,29 @@ export default function SettlementSheet({
     return start === periodMonth || end === periodMonth
   })
 
+  // "Actions needed" is everything this sheet still waits on: pending deduction lines
+  // and the month's requests that have no HR verdict yet.
+  const pendingDeductions = pendingLinesOf(entry)
+  const pendingRequests = monthRows.filter(isRequestActionable).length
+  const pendingCount = pendingDeductions + pendingRequests
+  const pendingBreakdown = [
+    pendingDeductions > 0 ? `${pendingDeductions} deduction line${pendingDeductions === 1 ? '' : 's'}` : null,
+    pendingRequests > 0 ? `${pendingRequests} request${pendingRequests === 1 ? '' : 's'}` : null,
+  ]
+    .filter(Boolean)
+    .join(' + ')
+  // Requests already decided are listed but never need action; the badge says so, so
+  // "Requests (2)" next to "1 Action Needed" reads as a decision, not a bug.
+  const decidedRequests = monthRows.length - pendingRequests
+  const decidedNote = decidedRequests > 0
+    ? `${decidedRequests} request${decidedRequests === 1 ? '' : 's'} already decided`
+    : ''
+
   const startAttendanceEdit = () => {
     setAttendanceDraft({
       daysAttended: String(attendance?.daysAttended ?? entry.days),
       weeklyOffs: String(attendance?.weeklyOffs ?? 0),
-      approvedLeaves: String(attendance?.approvedLeaves ?? 0),
+      paidLeaves: String(attendance?.paidLeaves ?? 0),
       overtimeHours: String(attendance?.overtimeHours ?? entry.overtime),
       lateArrivals: String(attendance?.lateArrivals ?? 0),
       unexcusedAbsences: String(attendance?.unexcusedAbsences ?? 0),
@@ -365,7 +398,7 @@ export default function SettlementSheet({
     const parsed = {
       daysAttended: Number(attendanceDraft.daysAttended),
       weeklyOffs: Number(attendanceDraft.weeklyOffs),
-      approvedLeaves: Number(attendanceDraft.approvedLeaves),
+      approvedLeaves: Number(attendanceDraft.paidLeaves),
       overtimeHours: Number(attendanceDraft.overtimeHours),
       lateArrivals: Number(attendanceDraft.lateArrivals),
       unexcusedAbsences: Number(attendanceDraft.unexcusedAbsences),
@@ -460,6 +493,13 @@ export default function SettlementSheet({
     }
   }
 
+  /** Jumps from the summary's deductions total to the lines behind it. */
+  const openDeductions = () => {
+    setPanel('deductions')
+    setDeductionsFocus(true)
+    panelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+  }
+
   /** Opens the deduction form pre-filled from a request, so the sheet can price it. */
   const startDeductionFrom = (row: EmployeeRequestRow) => {
     setDetailRow(null)
@@ -533,9 +573,25 @@ export default function SettlementSheet({
         </div>
         <div className="flex flex-shrink-0 items-center gap-2">
           <span className="text-[10px] font-semibold text-charcoal-500">{period.period}</span>
-          <Badge color={closed ? 'green' : pendingCount > 0 ? 'yellow' : 'blue'} className="text-[9px] font-bold">
-            {closed ? 'Closed & Settled' : pendingCount > 0 ? `${pendingCount} Actions Needed` : 'Ready to Close'}
-          </Badge>
+          <span
+            title={
+              closed
+                ? undefined
+                : pendingCount > 0
+                  ? `${pendingBreakdown} awaiting a decision${decidedNote ? ` · ${decidedNote}` : ''}`
+                  : decidedNote
+                    ? `Nothing awaiting a decision · ${decidedNote}`
+                    : 'Nothing left to review on this sheet'
+            }
+          >
+            <Badge color={closed ? 'green' : pendingCount > 0 ? 'yellow' : 'blue'} className="text-[9px] font-bold">
+              {closed
+                ? 'Closed & Settled'
+                : pendingCount > 0
+                  ? `${pendingCount} Action${pendingCount === 1 ? '' : 's'} Needed`
+                  : 'Ready to Close'}
+            </Badge>
+          </span>
         </div>
       </div>
 
@@ -577,7 +633,7 @@ export default function SettlementSheet({
                     onClick={settle}
                     loading={closeEntry.isPending}
                     disabled={pendingCount > 0}
-                    title={pendingCount > 0 ? 'Approve or waive every pending deduction first' : 'Close and settle this account'}
+                    title={pendingCount > 0 ? `Resolve ${pendingBreakdown} before closing this account` : 'Close and settle this account'}
                   >
                     ✓ Close &amp; Settle
                   </Button>
@@ -591,14 +647,23 @@ export default function SettlementSheet({
                 <span className="font-bold text-charcoal-900">{formatEGP(base)}</span>
               </div>
 
-              <div className="flex items-center justify-between gap-2 py-1">
-                <span className="text-charcoal-500">
+              <button
+                type="button"
+                onClick={openDeductions}
+                title={`Show the ${entry.deductionLines.length} deduction line${entry.deductionLines.length === 1 ? '' : 's'} behind this total`}
+                className="group -mx-1 flex w-[calc(100%+0.5rem)] items-center justify-between gap-2 rounded px-1 py-1 text-left transition-colors hover:bg-charcoal-50 focus-visible:ring-2 focus-visible:ring-brand-300 focus-visible:outline-none"
+              >
+                <span className="flex items-center gap-1 text-charcoal-500 group-hover:text-brand-700">
                   Deductions{entry.deductionLines.length > 0 ? ` (${entry.deductionLines.length})` : ''}
+                  <ChevronRight
+                    className="h-3 w-3 flex-shrink-0 text-charcoal-300 transition-colors group-hover:text-brand-600"
+                    aria-hidden="true"
+                  />
                 </span>
                 <span className={cn('font-bold', approvedDeductions > 0 ? 'text-red-600' : 'text-charcoal-400')}>
                   {approvedDeductions > 0 ? `− ${formatEGP(approvedDeductions)}` : formatEGP(0)}
                 </span>
-              </div>
+              </button>
 
               {otPay > 0 && (
                 <div className="flex items-center justify-between gap-2 py-1">
@@ -651,19 +716,40 @@ export default function SettlementSheet({
         {/* FULL WIDTH — month schedule, requests, deductions. Placed on the second grid
             row so it uses the space under both columns instead of leaving the right one
             half empty. */}
-        <div className="flex min-h-0 flex-col gap-2 lg:col-span-12 lg:row-start-2">
+        <div ref={panelRef} className="flex min-h-0 flex-col gap-2 lg:col-span-12 lg:row-start-2">
           <div className="flex flex-shrink-0 items-center gap-1">
             {(
               [
-                { key: 'schedule' as const, label: 'Month Schedule' },
-                { key: 'requests' as const, label: `Requests (${monthRows.length})` },
-                { key: 'deductions' as const, label: `Deductions (${entry.deductionLines.length})` },
+                {
+                  key: 'schedule' as const,
+                  label: 'Month Schedule',
+                  title: 'Attendance and day log for this month',
+                },
+                {
+                  key: 'requests' as const,
+                  label: `Requests (${monthRows.length})`,
+                  title: pendingRequests > 0
+                    ? `${pendingRequests} of ${monthRows.length} awaiting a decision`
+                    : monthRows.length > 0
+                      ? `All ${monthRows.length} request${monthRows.length === 1 ? '' : 's'} already decided`
+                      : 'No requests filed this month',
+                },
+                {
+                  key: 'deductions' as const,
+                  label: `Deductions (${entry.deductionLines.length})`,
+                  title: pendingDeductions > 0
+                    ? `${pendingDeductions} of ${entry.deductionLines.length} awaiting a decision`
+                    : entry.deductionLines.length > 0
+                      ? `All ${entry.deductionLines.length} deduction line${entry.deductionLines.length === 1 ? '' : 's'} already decided`
+                      : 'No deduction lines on this sheet',
+                },
               ]
             ).map((tab) => (
               <button
                 key={tab.key}
                 type="button"
                 onClick={() => setPanel(tab.key)}
+                title={tab.title}
                 className={cn(
                   'rounded-full px-2.5 py-1 text-[10px] font-bold transition-colors',
                   panel === tab.key
@@ -815,7 +901,7 @@ export default function SettlementSheet({
               ) : (
                 <div className="min-h-0 flex-1 space-y-1.5 overflow-y-auto pr-0.5">
                   {monthRows.map((request) => {
-                    const actionable = request.status === 'Pending' || request.status === 'Pending HR Review'
+                    const actionable = isRequestActionable(request)
                     const decided = request.status === 'Approved' || request.status === 'Rejected'
                     const busy = decideRequest.isPending || undoRequest.isPending
                     return (
@@ -936,7 +1022,12 @@ export default function SettlementSheet({
           )}
 
           {panel === 'deductions' && (
-          <div className="flex min-h-0 flex-1 flex-col rounded-lg border border-charcoal-200 bg-white p-2.5">
+          <div
+            className={cn(
+              'flex min-h-0 flex-1 flex-col rounded-lg border border-charcoal-200 bg-white p-2.5 transition-shadow',
+              deductionsFocus && 'ring-2 ring-brand-300',
+            )}
+          >
             <div className="mb-2 flex items-center justify-between border-b border-charcoal-200 pb-1.5">
               <div className="flex items-center gap-2">
                 <h3 className="text-[11px] font-bold uppercase tracking-wide text-charcoal-900">
@@ -1071,11 +1162,10 @@ export default function SettlementSheet({
                 <div className="grid grid-cols-2 gap-x-3 gap-y-1.5 text-[11px]">
                   {(
                     [
-                      { key: 'daysAttended', label: 'Days Attended' },
+                      { key: 'daysAttended', label: 'Actual Working Days' },
                       { key: 'weeklyOffs', label: 'Weekly Offs' },
-                      { key: 'approvedLeaves', label: 'Approved Leaves' },
+                      { key: 'paidLeaves', label: 'Paid Leave' },
                       { key: 'overtimeHours', label: 'Overtime (hrs)' },
-                      { key: 'lateArrivals', label: 'Late Arrivals' },
                       { key: 'unexcusedAbsences', label: 'Absent' },
                     ] satisfies { key: keyof AttendanceDraft; label: string }[]
                   ).map((field) => (
@@ -1117,7 +1207,7 @@ export default function SettlementSheet({
               </div>
             ) : (
               <div className="grid grid-cols-1 gap-x-5 text-[11px] sm:grid-cols-2">
-                {attendanceRow('daysAttended', 'Days Attended', `${attendance?.daysAttended ?? entry.days} days`)}
+                {attendanceRow('daysAttended', 'Actual Working Days', `${attendance?.daysAttended ?? entry.days} days`)}
                 {attendanceRow('weeklyOffs', 'Weekly Offs', `${attendance?.weeklyOffs ?? 0} days`)}
                 {attendanceRow('annualLeaves', 'Annual Leave', `${attendance?.annualLeaves ?? 0} days`)}
                 {attendanceRow('sickLeaves', 'Sick Leave', `${attendance?.sickLeaves ?? 0} days`)}
@@ -1127,19 +1217,8 @@ export default function SettlementSheet({
                   `${attendance?.coverDays ?? 0} days`,
                   (attendance?.coverDays ?? 0) > 0 ? 'text-violet-600' : undefined,
                 )}
-                {attendanceRow(
-                  'unapprovedCover',
-                  'Unapproved cover',
-                  `${attendance?.unapprovedCoverDays ?? 0} days`,
-                  (attendance?.unapprovedCoverDays ?? 0) > 0 ? 'text-red-600' : undefined,
-                )}
+                {attendanceRow('paidLeave', 'Paid Leave', `${attendance?.paidLeaves ?? 0} days`)}
                 {attendanceRow('overtime', 'Overtime Logged', `${attendance?.overtimeHours ?? entry.overtime} hrs`, 'text-brand-700')}
-                {attendanceRow(
-                  'lateArrivals',
-                  'Late Arrivals',
-                  `${attendance?.lateArrivals ?? 0} incident${(attendance?.lateArrivals ?? 0) === 1 ? '' : 's'}`,
-                  (attendance?.lateArrivals ?? 0) > 0 ? 'text-amber-600' : undefined,
-                )}
                 {attendanceRow('unexcusedAbsences', 'Absent', `${attendance?.unexcusedAbsences ?? 0} days`)}
               </div>
             )}
