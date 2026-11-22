@@ -201,11 +201,11 @@ namespace Service.Services
 
             string[] precedence =
             [
+                RoleNames.SuperAdmin,
                 RoleNames.BranchManager,
                 RoleNames.TeamLeader,
                 RoleNames.HrManager,
                 RoleNames.Hr,
-                RoleNames.SuperAdmin,
                 RoleNames.Employee,
             ];
 

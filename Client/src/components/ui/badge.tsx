@@ -50,6 +50,12 @@ const STATUS_COLORS: Record<string, BadgeColor> = {
   'under review': 'yellow',
   // Branch approval stage on deductions (BM accepted, HR applies next)
   'branch approved': 'yellow',
+  // Platform account lifecycle statuses (mock "Trial: blue", "Payment overdue: amber").
+  trial: 'blue',
+  'payment overdue': 'yellow',
+  paymentoverdue: 'yellow',
+  invited: 'gray',
+  closed: 'gray',
   // Danger
   absent: 'red',
   rejected: 'red',

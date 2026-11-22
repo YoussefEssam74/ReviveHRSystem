@@ -11,8 +11,11 @@ import { GymSwitcher } from './GymSwitcher'
 import { NotificationsBell } from './NotificationsBell'
 import { ConsoleHeaderSlotProvider, useConsoleHeaderInfoValue } from './ConsoleHeaderSlot'
 import { Avatar } from '../../../components/ui/avatar'
+import { Button } from '../../../components/ui/button'
 import { initialsOf } from '../../../lib/format'
 import { cn } from '../../../lib/utils'
+import { readConsoleWorkspace, returnToConsole } from '../../platform/lib/workspace-switch'
+import { postEndWorkspace } from '../../platform/api/platform.api'
 
 function navLinkClass(isActive: boolean) {
   return cn(
@@ -161,8 +164,44 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
   )
 }
 
-/** Header account menu — the employee portal's avatar dropdown, console routes. */
-function AccountMenu() {
+/**
+ * Amber strip shown while the session is a gym workspace entered from the platform
+ * console. "Return to console" restores the token parked before the switch instead of
+ * forcing a re-login.
+ */
+function ConsoleWorkspaceBanner() {
+  const { t } = useTranslation()
+  const [info] = useState(() => readConsoleWorkspace())
+  if (!info) return null
+
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-2 bg-amber-500 px-4 py-2 text-sm font-medium text-amber-950">
+      <span className="min-w-0 truncate">
+        {t('Acting inside {{company}}', { company: info.companyName })}
+        {info.branchName ? ` · ${info.branchName}` : ''}
+        {info.roleName ? ` · ${t('as')} ${info.roleName}` : ''}
+      </span>
+      <Button
+        size="sm"
+        variant="secondary"
+        onClick={async () => {
+          // Close the impersonation session server-side so the ledger shows a real
+          // duration; a failure must not strand the operator, so the restore still runs.
+          try {
+            if (info.sessionId) await postEndWorkspace(info.sessionId)
+          } catch {
+            // Already expired or ended elsewhere — restoring the console token is still right.
+          }
+          if (returnToConsole()) window.location.assign('/platform/dashboard')
+        }}
+      >
+        {t('Return to console')}
+      </Button>
+    </div>
+  )
+}
+
+/** Header account menu — the employee portal's avatar dropdown, console routes. */function AccountMenu() {
   const { t } = useTranslation()
   const { me } = useMe()
   const { signOut } = useAuthSession()
@@ -265,6 +304,7 @@ export function ConsoleLayout() {
 
         {/* Content + header */}
         <div className="lg:ps-64">
+          <ConsoleWorkspaceBanner />
           <header className="sticky top-0 z-10 border-b border-slate-200 bg-white/90 backdrop-blur">
             <div className="flex h-16 items-center justify-between gap-3 px-4 sm:px-6">
               <div className="flex min-w-0 flex-1 items-center gap-2">

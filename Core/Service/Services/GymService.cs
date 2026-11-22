@@ -34,7 +34,9 @@ namespace Service.Services
             }
 
             var gymRepository = unitOfWork.GetRepository<Gym, int>();
-            IReadOnlyList<Gym> gyms = user.UserType == UserType.TopManagement
+            // Top Management and HR Manager both reach every active gym; everybody else
+            // only sees the gyms granted through UserGymAccess.
+            IReadOnlyList<Gym> gyms = user.UserType is UserType.TopManagement or UserType.HRManager
                 ? (await gymRepository.GetAllAsync(new ActiveGymsSpec(), cancellationToken)).ToList()
                 : (await GetAssignedGymsAsync(user.Id, gymRepository, cancellationToken));
 

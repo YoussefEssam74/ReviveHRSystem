@@ -632,6 +632,637 @@
       "notes": [
         "Self-service profile contract used by My Profile and the employee-file Personal tab; access is identical to the directory detail (row 4). The portal reads this route for photoUrl and the emergency-contact/gym shape."
       ]
+    },
+    {
+      "id": 62, "route": "/api/platform/dashboard", "method": "GET", "source": "user-confirmed",
+      "expected": {
+        "anonymous": 401, "employeeSelf": 401, "employeeOther": 401, "teamLeader": 401, "branchManager": 401,
+        "hr": 401, "hrManager": 200, "topManagement": 200, "crossTenantTwin": 401
+      },
+      "notes": [
+        "PLATFORM CONSOLE (Super Admin). HR Manager is the platform HR lead and holds platform.companies.view; every gym-scoped role is refused with 401 by AccessControlService.EnsurePermissionAsync.",
+        "Permission denial surfaces as 401 (not 403) because UnAuthorizedException maps to 401 in CustomExceptionMiddleWare."
+      ]
+    },
+    {
+      "id": 63, "route": "/api/platform/dashboard/alerts", "method": "GET", "source": "user-confirmed",
+      "expected": {
+        "anonymous": 401, "employeeSelf": 401, "employeeOther": 401, "teamLeader": 401, "branchManager": 401,
+        "hr": 401, "hrManager": 200, "topManagement": 200, "crossTenantTwin": 401
+      },
+      "notes": ["Attention queue is derived from company state; same guard as the dashboard (platform.companies.view)."]
+    },
+    {
+      "id": 64, "route": "/api/platform/dashboard/user-growth", "method": "GET", "source": "user-confirmed",
+      "expected": {
+        "anonymous": 401, "employeeSelf": 401, "employeeOther": 401, "teamLeader": 401, "branchManager": 401,
+        "hr": 401, "hrManager": 200, "topManagement": 200, "crossTenantTwin": 401
+      },
+      "notes": ["platform.companies.view."]
+    },
+    {
+      "id": 65, "route": "/api/platform/search", "method": "GET", "source": "user-confirmed",
+      "expected": {
+        "anonymous": 401, "employeeSelf": 401, "employeeOther": 401, "teamLeader": 401, "branchManager": 401,
+        "hr": 401, "hrManager": 200, "topManagement": 200, "crossTenantTwin": 401
+      },
+      "notes": ["Header search across companies, users and invoices (platform.companies.view)."]
+    },
+    {
+      "id": 66, "route": "/api/platform/companies", "method": "GET", "source": "user-confirmed",
+      "expected": {
+        "anonymous": 401, "employeeSelf": 401, "employeeOther": 401, "teamLeader": 401, "branchManager": 401,
+        "hr": 401, "hrManager": 200, "topManagement": 200, "crossTenantTwin": 401
+      },
+      "notes": ["Company account table (platform.companies.view)."]
+    },
+    {
+      "id": 67, "route": "/api/platform/companies", "method": "POST", "source": "user-confirmed",
+      "expected": {
+        "anonymous": 401, "employeeSelf": 401, "employeeOther": 401, "teamLeader": 401, "branchManager": 401,
+        "hr": 401, "hrManager": 401, "topManagement": 201, "crossTenantTwin": 401
+      },
+      "notes": [
+        "Provisioning a tenant is Super-Admin-only (platform.companies.create); HR Manager is refused with 401.",
+        "Payload uses the seeded Growth plan id so the 201 path is reachable."
+      ]
+    },
+    {
+      "id": 68, "route": "/api/platform/companies/{id}", "method": "GET", "source": "user-confirmed",
+      "expected": {
+        "anonymous": 401, "employeeSelf": 401, "employeeOther": 401, "teamLeader": 401, "branchManager": 401,
+        "hr": 401, "hrManager": 200, "topManagement": 200, "crossTenantTwin": 401
+      },
+      "notes": ["Company detail (platform.companies.view). {id} substitutes the first seeded company."]
+    },
+    {
+      "id": 69, "route": "/api/platform/companies/{id}", "method": "PUT", "source": "user-confirmed",
+      "expected": {
+        "anonymous": 401, "employeeSelf": 401, "employeeOther": 401, "teamLeader": 401, "branchManager": 401,
+        "hr": 401, "hrManager": 401, "topManagement": 200, "crossTenantTwin": 401
+      },
+      "notes": ["Editing the tenant profile is Super-Admin-only (platform.companies.edit)."]
+    },
+    {
+      "id": 70, "route": "/api/platform/companies/{id}/status", "method": "PUT", "source": "user-confirmed",
+      "expected": {
+        "anonymous": 401, "employeeSelf": 401, "employeeOther": 401, "teamLeader": 401, "branchManager": 401,
+        "hr": 401, "hrManager": 401, "topManagement": 400, "crossTenantTwin": 401
+      },
+      "notes": [
+        "Suspend/restore/close is Super-Admin-only (platform.companies.status). The payload restores an already-Active company, which is rejected as 400; the permission guard runs before the business rule, so an unauthorized caller still sees 401."
+      ]
+    },
+    {
+      "id": 71, "route": "/api/platform/companies/{id}/overview", "method": "GET", "source": "user-confirmed",
+      "expected": {
+        "anonymous": 401, "employeeSelf": 401, "employeeOther": 401, "teamLeader": 401, "branchManager": 401,
+        "hr": 401, "hrManager": 200, "topManagement": 200, "crossTenantTwin": 401
+      },
+      "notes": ["Overview tab: role breakdown, attendance trend, account facts (platform.companies.view)."]
+    },
+    {
+      "id": 72, "route": "/api/platform/companies/{id}/employees", "method": "GET", "source": "user-confirmed",
+      "expected": {
+        "anonymous": 401, "employeeSelf": 401, "employeeOther": 401, "teamLeader": 401, "branchManager": 401,
+        "hr": 401, "hrManager": 200, "topManagement": 200, "crossTenantTwin": 401
+      },
+      "notes": ["Employees tab (platform.companies.view). HR uses the gym-scoped /api/employees routes instead — it never reaches the console."]
+    },
+    {
+      "id": 73, "route": "/api/platform/companies/{id}/billing", "method": "GET", "source": "user-confirmed",
+      "expected": {
+        "anonymous": 401, "employeeSelf": 401, "employeeOther": 401, "teamLeader": 401, "branchManager": 401,
+        "hr": 401, "hrManager": 401, "topManagement": 200, "crossTenantTwin": 401
+      },
+      "notes": ["Billing is commercial data: platform.billing.view, which HR Manager deliberately does not hold."]
+    },
+    {
+      "id": 74, "route": "/api/platform/companies/{id}/audit", "method": "GET", "source": "user-confirmed",
+      "expected": {
+        "anonymous": 401, "employeeSelf": 401, "employeeOther": 401, "teamLeader": 401, "branchManager": 401,
+        "hr": 401, "hrManager": 401, "topManagement": 200, "crossTenantTwin": 401
+      },
+      "notes": ["Platform audit trail (platform.audit.view) is Super-Admin-only."]
+    },
+    {
+      "id": 75, "route": "/api/platform/companies/{id}", "method": "DELETE", "source": "user-confirmed",
+      "expected": {
+        "anonymous": 401, "employeeSelf": 401, "employeeOther": 401, "teamLeader": 401, "branchManager": 401,
+        "hr": 401, "hrManager": 401, "topManagement": 400, "crossTenantTwin": 401
+      },
+      "notes": [
+        "Soft-close only; the route forwards to the status change with Status=Closed, which requires the company code to confirm. Without it the service answers 400 — the guard still runs first, so unauthorized identities see 401."
+      ]
+    },
+    {
+      "id": 76, "route": "/api/platform/companies/{id}/branches", "method": "GET", "source": "user-confirmed",
+      "expected": {
+        "anonymous": 401, "employeeSelf": 401, "employeeOther": 401, "teamLeader": 401, "branchManager": 401,
+        "hr": 401, "hrManager": 200, "topManagement": 200, "crossTenantTwin": 401
+      },
+      "notes": ["Branches tab (platform.companies.view)."]
+    },
+    {
+      "id": 77, "route": "/api/platform/companies/{id}/branches", "method": "POST", "source": "user-confirmed",
+      "expected": {
+        "anonymous": 401, "employeeSelf": 401, "employeeOther": 401, "teamLeader": 401, "branchManager": 401,
+        "hr": 401, "hrManager": 401, "topManagement": 201, "crossTenantTwin": 401
+      },
+      "notes": ["Adding a branch is Super-Admin-only (platform.branches.manage). The seeded Starter plan caps branches at 1, so the payload targets the Growth company."]
+    },
+    {
+      "id": 78, "route": "/api/platform/companies/{id}/branches/{id}", "method": "PUT", "source": "user-confirmed",
+      "expected": {
+        "anonymous": 401, "employeeSelf": 401, "employeeOther": 401, "teamLeader": 401, "branchManager": 401,
+        "hr": 401, "hrManager": 401, "topManagement": 200, "crossTenantTwin": 401
+      },
+      "notes": ["Renaming a branch (platform.branches.manage)."]
+    },
+    {
+      "id": 79, "route": "/api/platform/companies/{id}/branches/{id}", "method": "DELETE", "source": "user-confirmed",
+      "expected": {
+        "anonymous": 401, "employeeSelf": 401, "employeeOther": 401, "teamLeader": 401, "branchManager": 401,
+        "hr": 401, "hrManager": 401, "topManagement": 400, "crossTenantTwin": 401
+      },
+      "notes": ["Archiving is refused with 400 while the branch still has a roster; the permission guard runs first."]
+    },
+    {
+      "id": 80, "route": "/api/platform/companies/{id}/hr-staff", "method": "GET", "source": "user-confirmed",
+      "expected": {
+        "anonymous": 401, "employeeSelf": 401, "employeeOther": 401, "teamLeader": 401, "branchManager": 401,
+        "hr": 401, "hrManager": 200, "topManagement": 200, "crossTenantTwin": 401
+      },
+      "notes": ["HR staff tab (gym.hr_staff.assign) — the one company capability HR Manager shares with Super Admin."]
+    },
+    {
+      "id": 81, "route": "/api/platform/companies/{id}/hr-staff", "method": "POST", "source": "user-confirmed",
+      "expected": {
+        "anonymous": 401, "employeeSelf": 401, "employeeOther": 401, "teamLeader": 401, "branchManager": 401,
+        "hr": 401, "hrManager": 200, "topManagement": 200, "crossTenantTwin": 401
+      },
+      "notes": ["Idempotent grant; an empty user list is a valid no-op returning 200."]
+    },
+    {
+      "id": 82, "route": "/api/platform/companies/{id}/hr-staff/{id}", "method": "DELETE", "source": "user-confirmed",
+      "expected": {
+        "anonymous": 401, "employeeSelf": 401, "employeeOther": 401, "teamLeader": 401, "branchManager": 401,
+        "hr": 401, "hrManager": [200, 404], "topManagement": [200, 404], "crossTenantTwin": 401
+      },
+      "notes": ["Revoking someone who is not assigned answers 404 (and the seeded HR user may or may not hold a grant on this company); the permission guard still runs first, so everyone else sees 401."]
+    },
+    {
+      "id": 83, "route": "/api/platform/users", "method": "GET", "source": "user-confirmed",
+      "expected": {
+        "anonymous": 401, "employeeSelf": 401, "employeeOther": 401, "teamLeader": 401, "branchManager": 401,
+        "hr": 401, "hrManager": 200, "topManagement": 200, "crossTenantTwin": 401
+      },
+      "notes": ["Platform user directory (platform.users.view) — HR Manager's core console capability."]
+    },
+    {
+      "id": 84, "route": "/api/platform/users", "method": "POST", "source": "user-confirmed",
+      "expected": {
+        "anonymous": 401, "employeeSelf": 401, "employeeOther": 401, "teamLeader": 401, "branchManager": 401,
+        "hr": 401, "hrManager": 201, "topManagement": 201, "crossTenantTwin": 401
+      },
+      "notes": ["Creating an HR account (platform.users.manage); the payload assigns the first seeded branch."]
+    },
+    {
+      "id": 85, "route": "/api/platform/users/hr-managers", "method": "POST", "source": "user-confirmed",
+      "expected": {
+        "anonymous": 401, "employeeSelf": 401, "employeeOther": 401, "teamLeader": 401, "branchManager": 401,
+        "hr": 401, "hrManager": 401, "topManagement": 201, "crossTenantTwin": 401
+      },
+      "notes": ["Minting an HR Manager is exclusive to Super Admin (platform.hr_manager.manage) — the deliberate asymmetry that stops an HR lead promoting itself."]
+    },
+    {
+      "id": 86, "route": "/api/platform/users/{id}", "method": "GET", "source": "user-confirmed",
+      "expected": {
+        "anonymous": 401, "employeeSelf": 401, "employeeOther": 401, "teamLeader": 401, "branchManager": 401,
+        "hr": 401, "hrManager": 200, "topManagement": 200, "crossTenantTwin": 401
+      },
+      "notes": ["User profile (platform.users.view)."]
+    },
+    {
+      "id": 87, "route": "/api/platform/users/{id}/status", "method": "PUT", "source": "user-confirmed",
+      "expected": {
+        "anonymous": 401, "employeeSelf": 401, "employeeOther": 401, "teamLeader": 401, "branchManager": 401,
+        "hr": 401, "hrManager": 200, "topManagement": 200, "crossTenantTwin": 401
+      },
+      "notes": ["Suspend/restore (platform.users.manage). Suspending an HR Manager additionally needs platform.hr_manager.manage, checked after the base guard."]
+    },
+    {
+      "id": 88, "route": "/api/platform/users/{id}/reset-password", "method": "POST", "source": "user-confirmed",
+      "expected": {
+        "anonymous": 401, "employeeSelf": 401, "employeeOther": 401, "teamLeader": 401, "branchManager": 401,
+        "hr": 401, "hrManager": 200, "topManagement": 200, "crossTenantTwin": 401
+      },
+      "notes": ["Admin password reset (platform.users.reset_password). The new password is never echoed or logged."]
+    },
+    {
+      "id": 89, "route": "/api/platform/users/{id}/revoke-sessions", "method": "POST", "source": "user-confirmed",
+      "expected": {
+        "anonymous": 401, "employeeSelf": 401, "employeeOther": 401, "teamLeader": 401, "branchManager": 401,
+        "hr": 401, "hrManager": 200, "topManagement": 200, "crossTenantTwin": 401
+      },
+      "notes": ["Drops every live refresh token for the account (platform.users.manage)."]
+    },
+    {
+      "id": 90, "route": "/api/platform/users/{id}/gym-access", "method": "PUT", "source": "user-confirmed",
+      "expected": {
+        "anonymous": 401, "employeeSelf": 401, "employeeOther": 401, "teamLeader": 401, "branchManager": 401,
+        "hr": 401, "hrManager": 200, "topManagement": 200, "crossTenantTwin": 401
+      },
+      "notes": ["Branch assignments are an HR-only concept; the probe target is the seeded HR user, so the 200 path is reachable."]
+    },
+    {
+      "id": 91, "route": "/api/platform/plans", "method": "GET", "source": "user-confirmed",
+      "expected": {
+        "anonymous": 401, "employeeSelf": 401, "employeeOther": 401, "teamLeader": 401, "branchManager": 401,
+        "hr": 401, "hrManager": 401, "topManagement": 200, "crossTenantTwin": 401
+      },
+      "notes": ["Plans are commercial data (platform.plans.view), which HR Manager deliberately does not hold."]
+    },
+    {
+      "id": 92, "route": "/api/platform/plans", "method": "POST", "source": "user-confirmed",
+      "expected": {
+        "anonymous": 401, "employeeSelf": 401, "employeeOther": 401, "teamLeader": 401, "branchManager": 401,
+        "hr": 401, "hrManager": 401, "topManagement": 201, "crossTenantTwin": 401
+      },
+      "notes": ["Creating a plan (platform.plans.manage). The payload uses a unique name so repeated runs never collide."]
+    },
+    {
+      "id": 93, "route": "/api/platform/plans/{id}", "method": "GET", "source": "user-confirmed",
+      "expected": {
+        "anonymous": 401, "employeeSelf": 401, "employeeOther": 401, "teamLeader": 401, "branchManager": 401,
+        "hr": 401, "hrManager": 401, "topManagement": 200, "crossTenantTwin": 401
+      },
+      "notes": ["{id} substitutes the dedicated plan probe (PlanProbeId)."]
+    },
+    {
+      "id": 94, "route": "/api/platform/plans/{id}", "method": "PUT", "source": "user-confirmed",
+      "expected": {
+        "anonymous": 401, "employeeSelf": 401, "employeeOther": 401, "teamLeader": 401, "branchManager": 401,
+        "hr": 401, "hrManager": 401, "topManagement": 200, "crossTenantTwin": 401
+      },
+      "notes": ["Editing the catalogue (platform.plans.manage); existing companies keep their sold terms."]
+    },
+    {
+      "id": 95, "route": "/api/platform/plans/{id}/duplicate", "method": "POST", "source": "user-confirmed",
+      "expected": {
+        "anonymous": 401, "employeeSelf": 401, "employeeOther": 401, "teamLeader": 401, "branchManager": 401,
+        "hr": 401, "hrManager": 401, "topManagement": 201, "crossTenantTwin": 401
+      },
+      "notes": ["Copies features and add-ons; the copy is never highlighted."]
+    },
+    {
+      "id": 96, "route": "/api/platform/plans/{id}", "method": "DELETE", "source": "user-confirmed",
+      "expected": {
+        "anonymous": 401, "employeeSelf": 401, "employeeOther": 401, "teamLeader": 401, "branchManager": 401,
+        "hr": 401, "hrManager": 401, "topManagement": 204, "crossTenantTwin": 401
+      },
+      "notes": ["Archives a plan with no live subscription (PlanArchiveProbeId), so the 204 path is deterministic. Archiving a plan still in use is refused with 400."]
+    },
+    {
+      "id": 97, "route": "/api/platform/invoices", "method": "GET", "source": "user-confirmed",
+      "expected": {
+        "anonymous": 401, "employeeSelf": 401, "employeeOther": 401, "teamLeader": 401, "branchManager": 401,
+        "hr": 401, "hrManager": 401, "topManagement": 200, "crossTenantTwin": 401
+      },
+      "notes": ["Invoice ledger (platform.billing.view)."]
+    },
+    {
+      "id": 98, "route": "/api/platform/invoices", "method": "POST", "source": "user-confirmed",
+      "expected": {
+        "anonymous": 401, "employeeSelf": 401, "employeeOther": 401, "teamLeader": 401, "branchManager": 401,
+        "hr": 401, "hrManager": 401, "topManagement": 201, "crossTenantTwin": 401
+      },
+      "notes": ["Manual issue (platform.billing.manage). The payload uses a far-future period so it never overlaps a row that already raised an invoice."]
+    },
+    {
+      "id": 99, "route": "/api/platform/invoices/export", "method": "GET", "source": "user-confirmed",
+      "expected": {
+        "anonymous": 401, "employeeSelf": 401, "employeeOther": 401, "teamLeader": 401, "branchManager": 401,
+        "hr": 401, "hrManager": 401, "topManagement": 200, "crossTenantTwin": 401
+      },
+      "notes": ["CSV export of the ledger (platform.billing.view)."]
+    },
+    {
+      "id": 100, "route": "/api/platform/invoices/reminders/bulk", "method": "POST", "source": "user-confirmed",
+      "expected": {
+        "anonymous": 401, "employeeSelf": 401, "employeeOther": 401, "teamLeader": 401, "branchManager": 401,
+        "hr": 401, "hrManager": 401, "topManagement": 200, "crossTenantTwin": 401
+      },
+      "notes": ["Chases every overdue invoice; with none outstanding it returns requested = 0 and still answers 200."]
+    },
+    {
+      "id": 101, "route": "/api/platform/invoices/{id}", "method": "GET", "source": "user-confirmed",
+      "expected": {
+        "anonymous": 401, "employeeSelf": 401, "employeeOther": 401, "teamLeader": 401, "branchManager": 401,
+        "hr": 401, "hrManager": 401, "topManagement": 200, "crossTenantTwin": 401
+      },
+      "notes": ["Invoice detail (InvoiceProbeId)."]
+    },
+    {
+      "id": 102, "route": "/api/platform/invoices/{id}/pdf", "method": "GET", "source": "user-confirmed",
+      "expected": {
+        "anonymous": 401, "employeeSelf": 401, "employeeOther": 401, "teamLeader": 401, "branchManager": 401,
+        "hr": 401, "hrManager": 401, "topManagement": 200, "crossTenantTwin": 401
+      },
+      "notes": ["Streams a dependency-free PDF (see MinimalPdfWriter)."]
+    },
+    {
+      "id": 103, "route": "/api/platform/invoices/{id}/payments", "method": "POST", "source": "user-confirmed",
+      "expected": {
+        "anonymous": 401, "employeeSelf": 401, "employeeOther": 401, "teamLeader": 401, "branchManager": 401,
+        "hr": 401, "hrManager": 401, "topManagement": 200, "crossTenantTwin": 401
+      },
+      "notes": ["Partial payment (InvoicePaymentProbeId) so the invoice stays unsettled and run state is stable."]
+    },
+    {
+      "id": 104, "route": "/api/platform/invoices/{id}/reminders", "method": "POST", "source": "user-confirmed",
+      "expected": {
+        "anonymous": 401, "employeeSelf": 401, "employeeOther": 401, "teamLeader": 401, "branchManager": 401,
+        "hr": 401, "hrManager": 401, "topManagement": 200, "crossTenantTwin": 401
+      },
+      "notes": ["Only an overdue invoice can be chased; the row addresses the dedicated overdue probe. No email transport is configured, so the response reports mailConfigured = false."]
+    },
+    {
+      "id": 105, "route": "/api/platform/invoices/{id}/void", "method": "POST", "source": "user-confirmed",
+      "expected": {
+        "anonymous": 401, "employeeSelf": 401, "employeeOther": 401, "teamLeader": 401, "branchManager": 401,
+        "hr": 401, "hrManager": 401, "topManagement": 200, "crossTenantTwin": 401
+      },
+      "notes": ["Voids an unpaid invoice (InvoiceVoidProbeId); the number is not reused."]
+    },
+    {
+      "id": 106, "route": "/api/platform/revenue/periods", "method": "GET", "source": "user-confirmed",
+      "expected": {
+        "anonymous": 401, "employeeSelf": 401, "employeeOther": 401, "teamLeader": 401, "branchManager": 401,
+        "hr": 401, "hrManager": 401, "topManagement": 200, "crossTenantTwin": 401
+      },
+      "notes": ["Revenue analytics (platform.revenue.view) is Super-Admin-only."]
+    },
+    {
+      "id": 107, "route": "/api/platform/revenue/summary", "method": "GET", "source": "user-confirmed",
+      "expected": {
+        "anonymous": 401, "employeeSelf": 401, "employeeOther": 401, "teamLeader": 401, "branchManager": 401,
+        "hr": 401, "hrManager": 401, "topManagement": 200, "crossTenantTwin": 401
+      },
+      "notes": ["MRR / gross / collected / outstanding with period-on-period deltas."]
+    },
+    {
+      "id": 108, "route": "/api/platform/revenue/trend", "method": "GET", "source": "user-confirmed",
+      "expected": {
+        "anonymous": 401, "employeeSelf": 401, "employeeOther": 401, "teamLeader": 401, "branchManager": 401,
+        "hr": 401, "hrManager": 401, "topManagement": 200, "crossTenantTwin": 401
+      },
+      "notes": ["Monthly billed revenue for the trend line."]
+    },
+    {
+      "id": 109, "route": "/api/platform/revenue/per-company", "method": "GET", "source": "user-confirmed",
+      "expected": {
+        "anonymous": 401, "employeeSelf": 401, "employeeOther": 401, "teamLeader": 401, "branchManager": 401,
+        "hr": 401, "hrManager": 401, "topManagement": 200, "crossTenantTwin": 401
+      },
+      "notes": ["Revenue per gym account for the period."]
+    },
+    {
+      "id": 110, "route": "/api/platform/revenue/mrr-breakdown", "method": "GET", "source": "user-confirmed",
+      "expected": {
+        "anonymous": 401, "employeeSelf": 401, "employeeOther": 401, "teamLeader": 401, "branchManager": 401,
+        "hr": 401, "hrManager": 401, "topManagement": 200, "crossTenantTwin": 401
+      },
+      "notes": ["MRR split by plan and by company, with revenue per seat."]
+    },
+    {
+      "id": 111, "route": "/api/platform/revenue/gross-breakdown", "method": "GET", "source": "user-confirmed",
+      "expected": {
+        "anonymous": 401, "employeeSelf": 401, "employeeOther": 401, "teamLeader": 401, "branchManager": 401,
+        "hr": 401, "hrManager": 401, "topManagement": 200, "crossTenantTwin": 401
+      },
+      "notes": ["Billed per month and per plan, with the month-on-month move."]
+    },
+    {
+      "id": 112, "route": "/api/platform/revenue/collections", "method": "GET", "source": "user-confirmed",
+      "expected": {
+        "anonymous": 401, "employeeSelf": 401, "employeeOther": 401, "teamLeader": 401, "branchManager": 401,
+        "hr": 401, "hrManager": 401, "topManagement": 200, "crossTenantTwin": 401
+      },
+      "notes": ["Cash received with average time to pay."]
+    },
+    {
+      "id": 113, "route": "/api/platform/revenue/outstanding", "method": "GET", "source": "user-confirmed",
+      "expected": {
+        "anonymous": 401, "employeeSelf": 401, "employeeOther": 401, "teamLeader": 401, "branchManager": 401,
+        "hr": 401, "hrManager": 401, "topManagement": 200, "crossTenantTwin": 401
+      },
+      "notes": ["Unpaid money aged into current / 1-30 / 30+ buckets."]
+    },
+    {
+      "id": 114, "route": "/api/platform/revenue/export", "method": "GET", "source": "user-confirmed",
+      "expected": {
+        "anonymous": 401, "employeeSelf": 401, "employeeOther": 401, "teamLeader": 401, "branchManager": 401,
+        "hr": 401, "hrManager": 401, "topManagement": 200, "crossTenantTwin": 401
+      },
+      "notes": ["CSV export per metric (mrr | gross | collected | outstanding)."]
+    },
+    {
+      "id": 115, "route": "/api/platform/audit", "method": "GET", "source": "user-confirmed",
+      "expected": {
+        "anonymous": 401, "employeeSelf": 401, "employeeOther": 401, "teamLeader": 401, "branchManager": 401,
+        "hr": 401, "hrManager": 401, "topManagement": 200, "crossTenantTwin": 401
+      },
+      "notes": ["Platform-wide audit trail (platform.audit.view) is Super-Admin-only."]
+    },
+    {
+      "id": 116, "route": "/api/platform/audit/review-queue", "method": "GET", "source": "user-confirmed",
+      "expected": {
+        "anonymous": 401, "employeeSelf": 401, "employeeOther": 401, "teamLeader": 401, "branchManager": 401,
+        "hr": 401, "hrManager": 401, "topManagement": 200, "crossTenantTwin": 401
+      },
+      "notes": ["Unreviewed critical/warning events, most severe first."]
+    },
+    {
+      "id": 117, "route": "/api/platform/audit/summary", "method": "GET", "source": "user-confirmed",
+      "expected": {
+        "anonymous": 401, "employeeSelf": 401, "employeeOther": 401, "teamLeader": 401, "branchManager": 401,
+        "hr": 401, "hrManager": 401, "topManagement": 200, "crossTenantTwin": 401
+      },
+      "notes": ["KPI strip for the Security & audit page."]
+    },
+    {
+      "id": 118, "route": "/api/platform/audit/impersonations", "method": "GET", "source": "user-confirmed",
+      "expected": {
+        "anonymous": 401, "employeeSelf": 401, "employeeOther": 401, "teamLeader": 401, "branchManager": 401,
+        "hr": 401, "hrManager": 401, "topManagement": 200, "crossTenantTwin": 401
+      },
+      "notes": ["Act-as session ledger (platform.audit.view)."]
+    },
+    {
+      "id": 119, "route": "/api/platform/audit/export", "method": "POST", "source": "user-confirmed",
+      "expected": {
+        "anonymous": 401, "employeeSelf": 401, "employeeOther": 401, "teamLeader": 401, "branchManager": 401,
+        "hr": 401, "hrManager": 401, "topManagement": 202, "crossTenantTwin": 401
+      },
+      "notes": ["Renders a stored snapshot (platform.audit.export). Empty filter is valid, so 202 is deterministic."]
+    },
+    {
+      "id": 120, "route": "/api/platform/audit/exports/{id}", "method": "GET", "source": "user-confirmed",
+      "expected": {
+        "anonymous": 401, "employeeSelf": 401, "employeeOther": 401, "teamLeader": 401, "branchManager": 401,
+        "hr": 401, "hrManager": 401, "topManagement": [200, 404], "crossTenantTwin": 401
+      },
+      "notes": ["Polling endpoint. The probe has no known export id, so an authorized caller legitimately sees 404 while everyone else sees 401 — the permission guard runs first."]
+    },
+    {
+      "id": 121, "route": "/api/platform/audit/exports/{id}/download", "method": "GET", "source": "user-confirmed",
+      "expected": {
+        "anonymous": 401, "employeeSelf": 401, "employeeOther": 401, "teamLeader": 401, "branchManager": 401,
+        "hr": 401, "hrManager": 401, "topManagement": [200, 404], "crossTenantTwin": 401
+      },
+      "notes": ["Stored snapshot download; same 404-when-unknown semantics as row 120."]
+    },
+    {
+      "id": 122, "route": "/api/platform/audit/retention-policy", "method": "GET", "source": "user-confirmed",
+      "expected": {
+        "anonymous": 401, "employeeSelf": 401, "employeeOther": 401, "teamLeader": 401, "branchManager": 401,
+        "hr": 401, "hrManager": 401, "topManagement": 200, "crossTenantTwin": 401
+      },
+      "notes": ["Retention windows are governed by platform.settings.manage, not audit.view."]
+    },
+    {
+      "id": 123, "route": "/api/platform/audit/retention-policy", "method": "PUT", "source": "user-confirmed",
+      "expected": {
+        "anonymous": 401, "employeeSelf": 401, "employeeOther": 401, "teamLeader": 401, "branchManager": 401,
+        "hr": 401, "hrManager": 401, "topManagement": 200, "crossTenantTwin": 401
+      },
+      "notes": ["Changing the windows never makes the trail deletable; `deletable` stays false."]
+    },
+    {
+      "id": 124, "route": "/api/platform/audit/{id}", "method": "GET", "source": "user-confirmed",
+      "expected": {
+        "anonymous": 401, "employeeSelf": 401, "employeeOther": 401, "teamLeader": 401, "branchManager": 401,
+        "hr": 401, "hrManager": 401, "topManagement": [200, 404], "crossTenantTwin": 401
+      },
+      "notes": ["{id} is an audit row id; the probe value may not exist, so 404 is the authorized answer."]
+    },
+    {
+      "id": 125, "route": "/api/platform/audit/{id}/review", "method": "POST", "source": "user-confirmed",
+      "expected": {
+        "anonymous": 401, "employeeSelf": 401, "employeeOther": 401, "teamLeader": 401, "branchManager": 401,
+        "hr": 401, "hrManager": 401, "topManagement": [200, 404], "crossTenantTwin": 401
+      },
+      "notes": ["The only mutation an audit row accepts (platform.audit.review)."]
+    },
+    {
+      "id": 126, "route": "/api/platform/settings", "method": "GET", "source": "user-confirmed",
+      "expected": {
+        "anonymous": 401, "employeeSelf": 401, "employeeOther": 401, "teamLeader": 401, "branchManager": 401,
+        "hr": 401, "hrManager": 401, "topManagement": 200, "crossTenantTwin": 401
+      },
+      "notes": ["Platform settings (platform.settings.manage) are Super-Admin-only."]
+    },
+    {
+      "id": 127, "route": "/api/platform/settings", "method": "PUT", "source": "user-confirmed",
+      "expected": {
+        "anonymous": 401, "employeeSelf": 401, "employeeOther": 401, "teamLeader": 401, "branchManager": 401,
+        "hr": 401, "hrManager": 401, "topManagement": 200, "crossTenantTwin": 401
+      },
+      "notes": ["Partial update; an all-null patch is an idempotent no-op returning 200."]
+    },
+    {
+      "id": 128, "route": "/api/platform/feature-flags", "method": "GET", "source": "user-confirmed",
+      "expected": {
+        "anonymous": 401, "employeeSelf": 401, "employeeOther": 401, "teamLeader": 401, "branchManager": 401,
+        "hr": 401, "hrManager": 401, "topManagement": 200, "crossTenantTwin": 401
+      },
+      "notes": ["Flag catalogue (platform.feature_flags.manage)."]
+    },
+    {
+      "id": 129, "route": "/api/platform/feature-flags", "method": "POST", "source": "user-confirmed",
+      "expected": {
+        "anonymous": 401, "employeeSelf": 401, "employeeOther": 401, "teamLeader": 401, "branchManager": 401,
+        "hr": 401, "hrManager": 401, "topManagement": 201, "crossTenantTwin": 401
+      },
+      "notes": ["Key must be unique and dotted; the payload uses a GUID suffix so repeated runs never collide."]
+    },
+    {
+      "id": 130, "route": "/api/platform/feature-flags/effective", "method": "GET", "source": "user-confirmed",
+      "expected": {
+        "anonymous": 401, "employeeSelf": 200, "employeeOther": 200, "teamLeader": 200, "branchManager": 200,
+        "hr": 200, "hrManager": 200, "topManagement": 200, "crossTenantTwin": 200
+      },
+      "notes": [
+        "DELIBERATE: readable by ANY authenticated caller. The SPA and the in-gym portal gate their own UI on this map, so requiring a permission would contradict its purpose.",
+        "Only anonymous is refused (401)."
+      ]
+    },
+    {
+      "id": 131, "route": "/api/platform/feature-flags/{id}", "method": "PUT", "source": "user-confirmed",
+      "expected": {
+        "anonymous": 401, "employeeSelf": 401, "employeeOther": 401, "teamLeader": 401, "branchManager": 401,
+        "hr": 401, "hrManager": 401, "topManagement": [200, 400], "crossTenantTwin": 401
+      },
+      "notes": ["The flag key is immutable; the probe id does not exist, so an authorized caller legitimately gets 404/400 while everyone else gets 401."]
+    },
+    {
+      "id": 132, "route": "/api/platform/feature-flags/{id}", "method": "DELETE", "source": "user-confirmed",
+      "expected": {
+        "anonymous": 401, "employeeSelf": 401, "employeeOther": 401, "teamLeader": 401, "branchManager": 401,
+        "hr": 401, "hrManager": 401, "topManagement": [204, 404], "crossTenantTwin": 401
+      },
+      "notes": ["Deleting an unknown flag answers 404 after the guard passes."]
+    },
+    {
+      "id": 133, "route": "/api/platform/impersonation/start", "method": "POST", "source": "user-confirmed",
+      "expected": {
+        "anonymous": 401, "employeeSelf": 401, "employeeOther": 401, "teamLeader": 401, "branchManager": 401,
+        "hr": 401, "hrManager": 401, "topManagement": 201, "crossTenantTwin": 401
+      },
+      "notes": [
+        "Entering a workspace is Super-Admin-only (platform.impersonate); the service additionally refuses any non-TopManagement actor, so HR Manager is refused twice over.",
+        "The issued token keeps userType = TopManagement and carries act/actSessionId/actCompanyId/actRoleId."
+      ]
+    },
+    {
+      "id": 134, "route": "/api/platform/impersonation/end", "method": "POST", "source": "user-confirmed",
+      "expected": {
+        "anonymous": 401, "employeeSelf": [200, 400, 404], "employeeOther": [200, 400, 404], "teamLeader": [200, 400, 404],
+        "branchManager": [200, 400, 404], "hr": [200, 400, 404], "hrManager": [200, 400, 404],
+        "topManagement": [200, 400, 404], "crossTenantTwin": [200, 400, 404]
+      },
+      "notes": [
+        "DELIBERATE: any authenticated caller may attempt this; the service only closes the caller's OWN session (403/404 otherwise).",
+        "It is also one of the two endpoints exempt from the act-as guard, so a workspace session can close itself."
+      ]
+    },
+    {
+      "id": 135, "route": "/api/platform/impersonation/current", "method": "GET", "source": "user-confirmed",
+      "expected": {
+        "anonymous": 401, "employeeSelf": 200, "employeeOther": 200, "teamLeader": 200, "branchManager": 200,
+        "hr": 200, "hrManager": 200, "topManagement": 200, "crossTenantTwin": 200
+      },
+      "notes": [
+        "DELIBERATE: readable by any authenticated caller. Returns active=false when the token is not an act-as token, which is exactly how the SPA knows whether to draw the workspace banner.",
+        "Exempt from the act-as guard so a workspace session can ask whether it is still open."
+      ]
+    },
+    {
+      "id": 136, "route": "/api/platform/impersonation/sessions", "method": "GET", "source": "user-confirmed",
+      "expected": {
+        "anonymous": 401, "employeeSelf": 401, "employeeOther": 401, "teamLeader": 401, "branchManager": 401,
+        "hr": 401, "hrManager": 401, "topManagement": 200, "crossTenantTwin": 401
+      },
+      "notes": ["Same payload as the audit page's impersonation ledgers (platform.audit.view)."]
+    },
+    {
+      "id": 137, "route": "/api/platform/impersonation/roles", "method": "GET", "source": "user-confirmed",
+      "expected": {
+        "anonymous": 401, "employeeSelf": 401, "employeeOther": 401, "teamLeader": 401, "branchManager": 401,
+        "hr": 401, "hrManager": 401, "topManagement": 200, "crossTenantTwin": 401
+      },
+      "notes": ["The 'Act as' options (platform.impersonate); Super Admin and platform scopes are excluded from the list."]
     }
   ]
 }

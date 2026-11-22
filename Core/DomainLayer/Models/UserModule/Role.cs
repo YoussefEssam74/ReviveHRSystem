@@ -1,4 +1,4 @@
-﻿namespace DomainLayer.Models.UserModule
+namespace DomainLayer.Models.UserModule
 {
     /// <summary>
     /// Represents a security role or preset bundle of permissions (e.g., HR Manager, HR, Branch Manager, Team Leader).
@@ -12,7 +12,6 @@
 
         public virtual ICollection<UserRole> UserRoles { get; set; } = new List<UserRole>();
         public virtual ICollection<RolePermission> RolePermissions { get; set; } = new List<RolePermission>();
-        public virtual ICollection<UserGymRole> UserGymRoles { get; set; } = new List<UserGymRole>();
     }
 }
 

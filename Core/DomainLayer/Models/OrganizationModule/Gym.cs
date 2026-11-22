@@ -1,4 +1,5 @@
 ﻿using DomainLayer.Models.OrganizationModule.Enums;
+using DomainLayer.Models.PlatformModule;
 using DomainLayer.Models.UserModule;
 
 namespace DomainLayer.Models.OrganizationModule
@@ -6,9 +7,15 @@ namespace DomainLayer.Models.OrganizationModule
     /// <summary>
     /// Represents an individual fitness branch / gym location in the multi-gym platform.
     /// Manages shift cycle duration (default 10 days), annual raise percentage, and branch status.
+    /// A branch always belongs to exactly one <see cref="Company"/> — the subscribing gym
+    /// account that owns the subscription, seat limit and invoices.
     /// </summary>
     public class Gym : BaseEntity<int>
     {
+        /// <summary>The company (tenant) this branch belongs to.</summary>
+        public int CompanyId { get; set; }
+        public virtual Company Company { get; set; } = null!;
+
         public string Name { get; set; } = string.Empty;
         public string Location { get; set; } = string.Empty;
         public string? ContactInfo { get; set; }
@@ -26,7 +33,7 @@ namespace DomainLayer.Models.OrganizationModule
 
         // Navigations
         public virtual ICollection<UserGymAccess> UserGymAccesses { get; set; } = new List<UserGymAccess>();
-        public virtual ICollection<UserGymRole> UserGymRoles { get; set; } = new List<UserGymRole>();
+        public virtual ICollection<UserRole> UserRoles { get; set; } = new List<UserRole>();
         public virtual ICollection<Department> Departments { get; set; } = new List<Department>();
         public virtual ICollection<Position> Positions { get; set; } = new List<Position>();
         public virtual ICollection<Team> Teams { get; set; } = new List<Team>();

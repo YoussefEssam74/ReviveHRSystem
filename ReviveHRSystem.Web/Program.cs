@@ -273,6 +273,7 @@ namespace ReviveHRSystem.Web
             builder.Services.AddAutoMapper(cfg => cfg.AddProfile<MappingProfile>(), typeof(AuthService).Assembly);
             builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
             builder.Services.AddScoped<IUserAccessRepository, UserAccessRepository>();
+            builder.Services.AddScoped<IPlatformReadRepository, PlatformReadRepository>();
             builder.Services.AddScoped<IPasswordHasher, PasswordHasher>();
             builder.Services.AddScoped<ITokenService, TokenService>();
             builder.Services.AddScoped<IUserSessionService, UserSessionService>();
@@ -307,6 +308,20 @@ namespace ReviveHRSystem.Web
             builder.Services.AddScoped<IStationSessionService, StationSessionService>();
             builder.Services.AddScoped<IAccessControlService, AccessControlService>();
             builder.Services.AddScoped<IGymService, GymService>();
+            builder.Services.AddScoped<ICompanyService, CompanyService>();
+            builder.Services.AddScoped<IPlatformUserService, PlatformUserService>();
+            builder.Services.AddScoped<IPlatformDashboardService, PlatformDashboardService>();
+            builder.Services.AddScoped<IPlanService, PlanService>();
+            builder.Services.AddScoped<IInvoiceService, InvoiceService>();
+            builder.Services.AddScoped<IRevenueService, RevenueService>();
+            builder.Services.AddScoped<IPlatformAuditService, PlatformAuditService>();
+            builder.Services.AddScoped<IPlatformSettingsService, PlatformSettingsService>();
+            builder.Services.AddScoped<IImpersonationService, ImpersonationService>();
+
+            // Scheduled billing work. Disabled by default — see PlatformBillingJobOptions.
+            builder.Services.Configure<ReviveHRSystem.Web.BackgroundJobs.PlatformBillingJobOptions>(
+                builder.Configuration.GetSection(ReviveHRSystem.Web.BackgroundJobs.PlatformBillingJobOptions.SectionName));
+            builder.Services.AddHostedService<ReviveHRSystem.Web.BackgroundJobs.PlatformBillingJobs>();
             builder.Services.AddScoped<IEmployeeService, EmployeeService>();
             builder.Services.AddScoped<IRoleService, RoleService>();
             builder.Services.AddScoped<IRequestService, RequestService>();
@@ -401,6 +416,9 @@ namespace ReviveHRSystem.Web
             app.UseRateLimiter();
             app.UseCors();
             app.UseAuthentication();
+            // Must sit between authentication and authorization: it needs the validated
+            // principal's act claims, and it must answer before any controller runs.
+            app.UseMiddleware<ReviveHRSystem.Web.Middleware.ImpersonationGuardMiddleware>();
             app.UseAuthorization();
 
             app.MapControllers();

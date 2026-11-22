@@ -72,7 +72,7 @@ namespace ReviveHRSystem.SecurityTests
         private async Task<(string url, HttpStatusCode status)> ExecuteAsync(MatrixRow row, string identityKey)
         {
             var context = fixture.Context;
-            var url = EndpointPayloads.SubstituteRoute(row.Route, context, identityKey, row.Id);
+            var url = EndpointPayloads.SubstituteRoute(row.Route, context, identityKey, row.Id, row.Method);
 
             var (kind, body, multipart) = EndpointPayloads.Build(row.Method, row.RouteTemplate, context);
             using var request = new HttpRequestMessage(new HttpMethod(row.Method), url);

@@ -328,11 +328,11 @@ namespace ReviveHRSystem.IntegrationTests
             using var scope = _fixture.Services.CreateScope();
             var db = scope.ServiceProvider.GetRequiredService<ReviveHrDbContext>();
             var roleId = await db.Roles.Where(r => r.Name == roleName).Select(r => r.Id).SingleAsync();
-            db.UserGymRoles.Add(new DomainLayer.Models.UserModule.UserGymRole
+            db.UserRoles.Add(new DomainLayer.Models.UserModule.UserRole
             {
                 UserId = userId,
                 GymId = gymId,
-                RoleId = roleId,
+                RoleName = roleName,
             });
             await db.SaveChangesAsync();
         }

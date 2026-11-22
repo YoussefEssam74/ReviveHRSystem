@@ -1,11 +1,15 @@
 ﻿using DomainLayer.Models.AttendanceModule;
 using DomainLayer.Models.AttendanceModule.Enums;
+using DomainLayer.Models.BillingModule;
+using DomainLayer.Models.BillingModule.Enums;
 using DomainLayer.Models.EmployeeModule;
 using DomainLayer.Models.EmployeeModule.Enums;
 using DomainLayer.Models.OrganizationModule;
 using DomainLayer.Models.OrganizationModule.Enums;
 using DomainLayer.Models.PayrollModule;
 using DomainLayer.Models.PayrollModule.Enums;
+using DomainLayer.Models.PlatformModule;
+using DomainLayer.Models.PlatformModule.Enums;
 using DomainLayer.Models.RequestModule;
 using DomainLayer.Models.RequestModule.Enums;
 using DomainLayer.Models.SchedulingModule;
@@ -13,6 +17,7 @@ using DomainLayer.Models.SchedulingModule.Enums;
 using DomainLayer.Models.UserModule;
 using DomainLayer.Models.UserModule.Enums;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using Presistence.Data;
 using ServiceAbstraction.Services;
 using Shared.Authorization;
@@ -51,6 +56,18 @@ namespace ReviveHRSystem.Web.DataSeed
         public const string Gym1Name = "Revive Main Gym";
         public const string Gym2Name = "Revive Second Gym";
 
+        /// <summary>
+        /// Platform HR Manager accounts. They are the console's "HR managers" surface:
+        /// UserType.HRManager reaches every gym, so unlike the gym-scoped HR users they
+        /// carry no UserGymAccess row at all.
+        /// </summary>
+        private static readonly (string Email, string FullName)[] PlatformHrManagers =
+        [
+            ("mona.elsayed@revive.hr", "Mona El-Sayed"),
+            ("hoda.kamel@revive.hr", "Hoda Kamel"),
+            ("rania.adel@revive.hr", "Rania Adel"),
+        ];
+
         /// <summary>Optional lifetime (minutes) for seeded station codes; null keeps them valid forever.</summary>
         private const string StationCodeLifetimeKey = "DevelopmentSeeder:StationCodeLifetimeMinutes";
 
@@ -87,6 +104,17 @@ namespace ReviveHRSystem.Web.DataSeed
             // managers hold no permission keys at all and every key-gated page 403s.
             await EnsurePresetRolePermissionsAsync(db);
 
+            // The commercial catalogue the Super Admin console sells from. Idempotent:
+            // plans are matched by slug so re-running the seed never duplicates them.
+            await EnsureSubscriptionPlansAsync(db);
+
+            // Heals an upgraded development database: the AddPlatformBillingSchema
+            // migration backfilled one company per existing gym, but only companies
+            // created by EnsureCompanyAsync below get a subscription. Without this
+            // sweep those older companies have no plan, and the console's billing tab
+            // answers 400 "no active subscription".
+            await EnsureAllCompanySubscriptionsAsync(db);
+
             var admin = await EnsureUserAsync(db, hasher, AdminEmail, "admin", UserType.TopManagement);
             var gym1 = await EnsureGymAsync(db, Gym1Name, "Cairo");
             var gym2 = await EnsureGymAsync(db, Gym2Name, "Alexandria");
@@ -117,6 +145,29 @@ namespace ReviveHRSystem.Web.DataSeed
             await EnsureUserGymRoleAsync(db, hrManager.Id, gym1.Id, RoleNames.HrManager);
             await EnsureUserGymRoleAsync(db, hrManager.Id, gym2.Id, RoleNames.HrManager);
             await EnsurePermissionGrantsAsync(db, hrManager.Id, AllPortalPermissionKeys);
+
+            // Platform HR Manager accounts (the console's "HR managers" page). They hold
+            // the HR Manager role globally — no gym assignment — because one account
+            // reaches every gym account on the platform.
+            foreach (var (email, fullName) in PlatformHrManagers)
+            {
+                var platformManager = await EnsureUserAsync(db, hasher, email, fullName, UserType.HRManager);
+                // Heal accounts seeded before they carried a display name.
+                if (platformManager.UserName != fullName)
+                {
+                    platformManager.UserName = fullName;
+                    db.Users.Update(platformManager);
+                }
+
+                await EnsureUserRoleAsync(db, platformManager.Id, RoleNames.HrManager);
+                await EnsurePermissionGrantsAsync(db, platformManager.Id, AllPortalPermissionKeys);
+                await db.SaveChangesAsync();
+            }
+
+            // Demo accounts have all signed in at least once: without a stamp the console
+            // shows every row as "Invited" with a "Never" last sign-in, which is what a
+            // freshly created account looks like, not a working platform.
+            await BackfillDemoSignInsAsync(db, logger);
 
             var stationCodeLifetimeMinutes = configuration.GetValue<int?>(StationCodeLifetimeKey);
             var gym1StationCode = await EnsureStationCodeAsync(db, gym1.Id, admin.Id, stationCodeLifetimeMinutes, logger);
@@ -180,6 +231,11 @@ namespace ReviveHRSystem.Web.DataSeed
             // for that gym's active employees.
             await EnsurePayrollSeedAsync(db, gym1.Id, today);
             await EnsurePayrollSeedAsync(db, gym2.Id, today);
+
+            // Four monthly invoices per company — three settled, the newest open or
+            // overdue — so the ledger, the arrears book and the revenue trend have data
+            // in a fresh database instead of rendering empty tables.
+            await EnsureInvoiceSeedAsync(db, logger);
 
             // Rich console-testing scenario layered on top (12 extra employees,
             // months of attendance/payroll history, request/recruitment/evaluation/
@@ -263,6 +319,47 @@ namespace ReviveHRSystem.Web.DataSeed
             ("Teams", "requests.approve.team", "Approve requests from own team members."),
             ("Teams", "evaluations.view.team", "View evaluations of own team members."),
             ("Teams", "evaluations.manage.team", "Manage evaluations of own team members."),
+
+            // Platform administration — Super Admin only. These keys are deliberately
+            // NOT part of AllPortalPermissionKeys, so no gym role (HR, HR Manager,
+            // Branch Manager) can ever inherit them through the portal bundles.
+            ("Platform", "platform.companies.view", "View gym companies, branches and account overview."),
+            ("Platform", "platform.companies.create", "Provision a new gym company."),
+            ("Platform", "platform.companies.edit", "Edit a gym company's profile and billing contact."),
+            ("Platform", "platform.companies.status", "Suspend, restore or close a gym company."),
+            ("Platform", "platform.branches.manage", "Add, edit and archive branches."),
+            ("Platform", "platform.users.view", "View the platform-wide user directory and profiles."),
+            ("Platform", "platform.users.manage", "Create, edit and suspend HR and employee accounts."),
+            ("Platform", "platform.users.reset_password", "Issue an admin password reset for any account."),
+            ("Platform", "platform.hr_manager.manage", "Create and suspend platform HR Manager accounts."),
+            ("Platform", "gym.hr_staff.assign", "Grant or revoke an HR user's access to a company."),
+            ("Platform", "platform.plans.view", "View the subscription plan catalogue."),
+            ("Platform", "platform.plans.manage", "Create, edit, duplicate and archive subscription plans."),
+            ("Platform", "platform.billing.view", "View the invoice ledger and subscription terms."),
+            ("Platform", "platform.billing.manage", "Issue invoices, record payments and send reminders."),
+            ("Platform", "platform.revenue.view", "View revenue analytics and their breakdowns."),
+            ("Platform", "platform.audit.view", "View the platform-wide audit trail."),
+            ("Platform", "platform.audit.review", "Mark a critical or warning audit event as reviewed."),
+            ("Platform", "platform.audit.export", "Export platform audit data."),
+            ("Platform", "platform.settings.manage", "Manage security policy and audit retention."),
+            ("Platform", "platform.feature_flags.manage", "Control feature flags per plan and company."),
+            ("Platform", "platform.impersonate", "Enter any gym workspace as an act-as session."),
+        ];
+
+        /// <summary>
+        /// Platform keys an HR Manager holds on top of the portal bundle. An HR Manager is
+        /// a platform-wide HR lead — it sees every company and administers HR/employee
+        /// accounts, assigning HR staff to companies — but it must never reach company
+        /// lifecycle, plans, billing, revenue, platform audit, settings, feature flags,
+        /// HR Manager accounts or impersonation.
+        /// </summary>
+        private static readonly string[] PlatformHrManagerPermissionKeys =
+        [
+            "platform.companies.view",
+            "platform.users.view",
+            "platform.users.manage",
+            "platform.users.reset_password",
+            "gym.hr_staff.assign",
         ];
 
         /// <summary>
@@ -433,8 +530,78 @@ namespace ReviveHRSystem.Web.DataSeed
             [
                 .. AllPortalPermissionKeys.Where(key => key is not ("team.manage" or "payroll.approve")),
             ],
-            [RoleNames.HrManager] = [.. AllPortalPermissionKeys],
+            // HR Manager adds the platform user directory and HR-staff assignment on top of
+            // the HR bundle. It deliberately does NOT get platform.companies.*,
+            // platform.plans.*, platform.billing.*, platform.revenue.*, platform.audit.*,
+            // platform.settings.manage, platform.feature_flags.manage, platform.impersonate
+            // or platform.hr_manager.manage — those stay Super-Admin-only.
+            [RoleNames.HrManager] =
+            [
+                .. AllPortalPermissionKeys,
+                .. PlatformHrManagerPermissionKeys,
+            ],
         };
+
+        /// <summary>
+        /// The three subscription tiers the console starts with. Mirrors the mock's
+        /// Starter / Growth / Enterprise and is the reference data the create-company
+        /// wizard picks from. Matched by slug so the seed stays idempotent.
+        /// </summary>
+        private static async Task EnsureSubscriptionPlansAsync(ReviveHrDbContext db)
+        {
+            var seeds = new (string Slug, string Name, string Tagline, decimal Price, int CycleCount, PlanCycleUnit CycleUnit, TrialMode Trial, int TrialDays, int? SeatLimit, int? BranchLimit, bool Highlighted, string[] Features)[]
+            {
+                ("starter", "Starter", "Single-site gyms finding their footing",
+                    8500m, 1, PlanCycleUnit.Months, TrialMode.None, 0, 50, 1, false,
+                    ["Employee records & document vault", "Biometric attendance kiosk", "Leave, shift & deduction requests", "Payslip generation", "Employee self-service portal"]),
+                ("growth", "Growth", "Multi-branch fitness clubs",
+                    18000m, 1, PlanCycleUnit.Months, TrialMode.Days, 14, 100, 3, true,
+                    ["Everything in Starter", "Multi-branch scoping & transfers", "Recruitment & hiring pipeline", "Payroll approval and locking", "Performance evaluation cycles", "Reports & analytics"]),
+                ("enterprise", "Enterprise", "National gym chains with compliance needs",
+                    42000m, 1, PlanCycleUnit.Years, TrialMode.None, 0, null, null, false,
+                    ["Everything in Growth", "Unlimited seats & branches", "Platform audit export", "SSO & SCIM provisioning", "Dedicated success manager", "99.9% uptime SLA"]),
+            };
+
+            var existingSlugs = (await db.SubscriptionPlans.Select(p => p.Slug).ToListAsync())
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+            var existingNames = (await db.SubscriptionPlans.Select(p => p.Name).ToListAsync())
+                .ToHashSet(StringComparer.Ordinal);
+
+            var order = 1;
+            foreach (var seed in seeds)
+            {
+                order++;
+                if (existingSlugs.Contains(seed.Slug) || existingNames.Contains(seed.Name))
+                {
+                    continue;
+                }
+
+                db.SubscriptionPlans.Add(new SubscriptionPlan
+                {
+                    Name = seed.Name,
+                    Slug = seed.Slug,
+                    Tagline = seed.Tagline,
+                    Price = seed.Price,
+                    Currency = "EGP",
+                    CycleCount = seed.CycleCount,
+                    CycleUnit = seed.CycleUnit,
+                    TrialMode = seed.Trial,
+                    TrialDays = seed.TrialDays,
+                    SeatLimit = seed.SeatLimit,
+                    BranchLimit = seed.BranchLimit,
+                    IsHighlighted = seed.Highlighted,
+                    SortOrder = order,
+                    Features = seed.Features
+                        .Select((label, index) => new PlanFeature { Label = label, SortOrder = index + 1 })
+                        .ToList(),
+                    AddOns = seed.Slug == "enterprise"
+                        ? []
+                        : [new PlanAddOn { Name = "Extra employees", Quantity = 5, Price = seed.Slug == "starter" ? 100m : 75m, SortOrder = 1 }],
+                });
+            }
+
+            await db.SaveChangesAsync();
+        }
 
         private static async Task EnsurePresetRolePermissionsAsync(ReviveHrDbContext db)
         {
@@ -475,50 +642,190 @@ namespace ReviveHRSystem.Web.DataSeed
         /// <summary>Assigns a preset role to a user for one gym (idempotent).</summary>
         internal static async Task EnsureUserGymRoleAsync(ReviveHrDbContext db, int userId, int gymId, string roleName)
         {
-            var role = await db.Roles.FirstOrDefaultAsync(r => r.Name == roleName);
-            if (role is null)
+            if (!await db.Roles.AnyAsync(r => r.Name == roleName))
             {
                 return;
             }
 
-            var exists = await db.UserGymRoles.AnyAsync(
-                ugr => ugr.UserId == userId && ugr.GymId == gymId && ugr.RoleId == role.Id);
+            var exists = await db.UserRoles.AnyAsync(
+                ur => ur.UserId == userId && ur.GymId == gymId && ur.RoleName == roleName);
             if (exists)
             {
                 return;
             }
 
             // A user holds at most one role per gym: a new assignment replaces the old one.
-            var current = await db.UserGymRoles
-                .Where(ugr => ugr.UserId == userId && ugr.GymId == gymId)
+            var current = await db.UserRoles
+                .Where(ur => ur.UserId == userId && ur.GymId == gymId)
                 .ToListAsync();
-            db.UserGymRoles.RemoveRange(current);
+            db.UserRoles.RemoveRange(current);
 
-            db.UserGymRoles.Add(new UserGymRole { UserId = userId, GymId = gymId, RoleId = role.Id });
+            db.UserRoles.Add(new UserRole { UserId = userId, GymId = gymId, RoleName = roleName });
             await db.SaveChangesAsync();
         }
 
         /// <summary>
-        /// Grants a user a system role (UserRoles — the permission-key carrier,
-        /// distinct from the per-gym role in UserGymRoles which only carries data
-        /// scope). Idempotent.
+        /// Grants a user a platform-wide role (UserRoles with no gym — the permission-key
+        /// carrier, distinct from a per-gym role which also carries data scope). Idempotent.
         /// </summary>
         private static async Task EnsureUserRoleAsync(ReviveHrDbContext db, int userId, string roleName)
         {
-            var role = await db.Roles.FirstOrDefaultAsync(r => r.Name == roleName);
-            if (role is null)
+            if (!await db.Roles.AnyAsync(r => r.Name == roleName))
             {
                 return;
             }
 
-            var exists = await db.UserRoles.AnyAsync(ur => ur.UserId == userId && ur.RoleId == role.Id);
+            var exists = await db.UserRoles.AnyAsync(
+                ur => ur.UserId == userId && ur.GymId == null && ur.RoleName == roleName);
             if (exists)
             {
                 return;
             }
 
-            db.UserRoles.Add(new UserRole { UserId = userId, RoleId = role.Id });
+            db.UserRoles.Add(new UserRole { UserId = userId, RoleName = roleName, GymId = null });
             await db.SaveChangesAsync();
+        }
+
+        /// <summary>
+        /// Twelve monthly invoices per company: the older months settled, the newest one
+        /// open for the first company and overdue for the second. That single scenario lights
+        /// up the invoice ledger, the arrears ageing buckets, the twelve-month revenue trend
+        /// and the dashboard's overdue alert. Idempotent per month: only missing periods are
+        /// added, so an already-seeded database is topped up rather than skipped.
+        /// </summary>
+        private static async Task EnsureInvoiceSeedAsync(ReviveHrDbContext db, ILogger logger)
+        {
+            var subscriptions = await db.CompanySubscriptions
+                .Include(s => s.Plan)
+                .Where(s => s.Status != SubscriptionStatus.Cancelled)
+                .OrderBy(s => s.CompanyId)
+                .ToListAsync();
+
+            if (subscriptions.Count == 0)
+            {
+                return;
+            }
+
+            var existing = await db.Invoices
+                .Select(i => new { i.CompanyId, i.PeriodStart, i.InvoiceNumber })
+                .ToListAsync();
+
+            var now = DateTime.UtcNow;
+            var sequence = existing
+                .Select(i => int.TryParse(i.InvoiceNumber.Length > 4 ? i.InvoiceNumber[^4..] : null, out var n) ? n : 0)
+                .DefaultIfEmpty(0)
+                .Max() + 1;
+            var invoices = new List<Invoice>();
+            var payments = new List<InvoicePayment>();
+
+            foreach (var subscription in subscriptions)
+            {
+                var plan = subscription.Plan;
+                var monthly = plan is null
+                    ? 0m
+                    : plan.CycleUnit == PlanCycleUnit.Years
+                        ? Math.Round(plan.Price / (Math.Max(1, plan.CycleCount) * 12), 2)
+                        : Math.Round(plan.Price / Math.Max(1, plan.CycleCount), 2);
+
+                // Oldest → newest so the ledger opens on the current period.
+                for (var back = 11; back >= 0; back--)
+                {
+                    var anchor = now.AddMonths(-back);
+                    var periodStart = new DateTime(anchor.Year, anchor.Month, 1, 0, 0, 0, DateTimeKind.Utc);
+                    if (existing.Any(i => i.CompanyId == subscription.CompanyId && i.PeriodStart == periodStart))
+                    {
+                        continue;
+                    }
+
+                    var periodEnd = periodStart.AddMonths(1).AddDays(-1);
+                    var issuedOn = periodStart;
+                    var dueOn = issuedOn.AddDays(14);
+
+                    // The newest invoice stays unsettled: open for the first company,
+                    // overdue (11 days late) for the second, so both badge paths show.
+                    var isCurrent = back == 0;
+                    var overdue = isCurrent && subscription.CompanyId % 2 == 0;
+                    var open = isCurrent && !overdue;
+
+                    var invoice = new Invoice
+                    {
+                        InvoiceNumber = $"INV-{issuedOn.Year:D4}-{sequence++:D4}",
+                        CompanyId = subscription.CompanyId,
+                        SubscriptionId = subscription.Id,
+                        PeriodStart = periodStart,
+                        PeriodEnd = periodEnd,
+                        PeriodLabel = periodStart.ToString("MMM yyyy"),
+                        Amount = monthly,
+                        Currency = "EGP",
+                        IssuedOn = issuedOn,
+                        DueOn = overdue ? now.AddDays(-11) : dueOn,
+                        Status = isCurrent ? (open ? InvoiceStatus.Open : InvoiceStatus.Overdue) : InvoiceStatus.Paid,
+                    };
+
+                    // The current invoice is never "paid" through its original due date:
+                    // an overdue one was issued earlier so the ageing bucket is believable.
+                    if (overdue)
+                    {
+                        invoice.IssuedOn = now.AddDays(-25);
+                        invoice.DueOn = now.AddDays(-11);
+                    }
+
+                    if (!isCurrent)
+                    {
+                        invoice.PaidOn = dueOn.AddDays(-2);
+                        invoice.AmountPaid = monthly;
+                        payments.Add(new InvoicePayment
+                        {
+                            Invoice = invoice,
+                            Amount = monthly,
+                            PaidOn = invoice.PaidOn.Value,
+                            Method = PaymentMethod.BankTransfer,
+                            Reference = $"SEED-{invoice.InvoiceNumber}",
+                        });
+                    }
+
+                    invoices.Add(invoice);
+                }
+            }
+
+            if (invoices.Count == 0)
+            {
+                return;
+            }
+
+            db.Invoices.AddRange(invoices);
+            if (payments.Count > 0)
+            {
+                db.InvoicePayments.AddRange(payments);
+            }
+
+            await db.SaveChangesAsync();
+            logger.LogInformation("Seeded {Count} invoices ({Paid} settled).", invoices.Count, payments.Count);
+        }
+
+        /// <summary>
+        /// Gives every seeded account that has never signed in a plausible last-sign-in
+        /// stamp. The console derives "Active" from LastLoginAt, so without this a demo
+        /// database reads as a wall of "Invited" accounts. Idempotent: only fills the gap.
+        /// </summary>
+        private static async Task BackfillDemoSignInsAsync(ReviveHrDbContext db, ILogger logger)
+        {
+            var pending = await db.Users.Where(u => u.LastLoginAt == null && u.IsActive).ToListAsync();
+            if (pending.Count == 0)
+            {
+                return;
+            }
+
+            var now = DateTime.UtcNow;
+            for (var index = 0; index < pending.Count; index++)
+            {
+                // Spread the stamps over the last few days so "last sign-in" reads like a
+                // real week of activity instead of N identical timestamps.
+                pending[index].LastLoginAt = now.AddHours(-(3 + (index * 7) % 72)).AddMinutes(-(index * 13) % 60);
+            }
+
+            await db.SaveChangesAsync();
+            logger.LogInformation("Seeded last sign-in stamps for {Count} demo account(s).", pending.Count);
         }
 
         private static async Task<User> EnsureUserAsync(
@@ -552,8 +859,13 @@ namespace ReviveHRSystem.Web.DataSeed
                 return gym;
             }
 
+            // Every branch belongs to a company. Seeded gyms are single-branch accounts,
+            // so each gets its own company (mirrors the AddPlatformBillingSchema backfill).
+            var company = await EnsureCompanyAsync(db, name, location);
+
             gym = new Gym
             {
+                CompanyId = company.Id,
                 Name = name,
                 Location = location,
                 ShiftCycleLengthDays = 10,
@@ -562,6 +874,145 @@ namespace ReviveHRSystem.Web.DataSeed
             db.Gyms.Add(gym);
             await db.SaveChangesAsync();
             return gym;
+        }
+
+        /// <summary>
+        /// Finds or creates the company that owns a seeded gym. Development seed data only —
+        /// real companies are provisioned from the Super Admin console.
+        /// </summary>
+        private static async Task<Company> EnsureCompanyAsync(ReviveHrDbContext db, string gymName, string location)
+        {
+            var existing = await db.Companies.FirstOrDefaultAsync(c => c.Name == gymName);
+            if (existing is not null)
+            {
+                return existing;
+            }
+
+            var baseCode = new string(gymName.Where(char.IsLetterOrDigit).ToArray()).ToUpperInvariant();
+            if (baseCode.Length > 12)
+            {
+                baseCode = baseCode[..12];
+            }
+            if (baseCode.Length == 0)
+            {
+                baseCode = "GYM";
+            }
+
+            var code = baseCode;
+            var suffix = 2;
+            while (await db.Companies.AnyAsync(c => c.Code == code))
+            {
+                code = $"{baseCode}-{suffix++}";
+            }
+
+            var company = new Company
+            {
+                Name = gymName,
+                Code = code,
+                City = location,
+                Status = CompanyStatus.Active,
+            };
+            db.Companies.Add(company);
+            await db.SaveChangesAsync();
+
+            // Every seeded company carries a live subscription: the console's billing tab,
+            // seat meter and MRR tile all read from it, so a company without one renders
+            // as an empty shell.
+            await EnsureCompanySubscriptionAsync(db, company);
+
+            return company;
+        }
+
+        /// <summary>
+        /// Gives every company that has no live subscription one, so an upgraded development
+        /// database behaves like a freshly seeded one. Development seed data only.
+        /// </summary>
+        private static async Task EnsureAllCompanySubscriptionsAsync(ReviveHrDbContext db)
+        {
+            // Every company, not just the uncovered ones: EnsureCompanySubscriptionAsync
+            // also rolls a stale billing term forward, which a long-lived development
+            // database needs so renewal dates stop pointing at the past.
+            var companies = await db.Companies.ToListAsync();
+
+            foreach (var company in companies)
+            {
+                await EnsureCompanySubscriptionAsync(db, company);
+            }
+        }
+
+        /// <summary>
+        /// Gives a seeded company an Active subscription on the Growth plan (falling back to
+        /// any non-archived plan). Development seed data only — real subscriptions are
+        /// created by the Super Admin console when a company is provisioned.
+        /// </summary>
+        private static async Task EnsureCompanySubscriptionAsync(ReviveHrDbContext db, Company company)
+        {
+            var existing = await db.CompanySubscriptions
+                .Where(s => s.CompanyId == company.Id && s.Status != SubscriptionStatus.Cancelled)
+                .OrderByDescending(s => s.StartedOn)
+                .FirstOrDefaultAsync();
+
+            if (existing is not null)
+            {
+                // A long-lived development database keeps the term it was created with, so
+                // RenewsOn ages into the past and every renewal column reads like a bug.
+                // Roll the current period forward until it covers today.
+                if (existing.RenewsOn is { } renewsOn && renewsOn <= DateTime.UtcNow)
+                {
+                    var planRow = await db.SubscriptionPlans.FirstOrDefaultAsync(p => p.Id == existing.PlanId);
+                    var months = planRow is null
+                        ? 1
+                        : planRow.CycleUnit == PlanCycleUnit.Years
+                            ? Math.Max(1, planRow.CycleCount) * 12
+                            : Math.Max(1, planRow.CycleCount);
+
+                    var start = existing.CurrentPeriodStart;
+                    var end = existing.CurrentPeriodEnd;
+                    for (var guard = 0; end <= DateTime.UtcNow && guard < 240; guard++)
+                    {
+                        start = end;
+                        end = end.AddMonths(months);
+                    }
+
+                    existing.CurrentPeriodStart = start;
+                    existing.CurrentPeriodEnd = end;
+                    existing.RenewsOn = end;
+                    await db.SaveChangesAsync();
+                }
+
+                return;
+            }
+
+            var plan = await db.SubscriptionPlans.FirstOrDefaultAsync(p => p.Slug == "growth" && !p.IsArchived)
+                       ?? await db.SubscriptionPlans.FirstOrDefaultAsync(p => !p.IsArchived);
+
+            if (plan is null)
+            {
+                return;
+            }
+
+            var startedOn = DateTime.UtcNow.AddMonths(-3);
+
+            // The *current* period starts now, not at `startedOn`: the console renders
+            // RenewsOn/CurrentPeriodEnd as the next renewal, so anchoring the end to the
+            // subscription's start date would print a renewal in the past.
+            var periodStart = DateTime.UtcNow;
+            var periodEnd = plan.CycleUnit == PlanCycleUnit.Years
+                ? periodStart.AddYears(Math.Max(1, plan.CycleCount))
+                : periodStart.AddMonths(Math.Max(1, plan.CycleCount));
+
+            db.CompanySubscriptions.Add(new CompanySubscription
+            {
+                CompanyId = company.Id,
+                PlanId = plan.Id,
+                Status = SubscriptionStatus.Active,
+                StartedOn = startedOn,
+                CurrentPeriodStart = periodStart,
+                CurrentPeriodEnd = periodEnd,
+                RenewsOn = periodEnd,
+            });
+
+            await db.SaveChangesAsync();
         }
 
         private static async Task EnsureGymAccessAsync(ReviveHrDbContext db, int userId, int gymId)

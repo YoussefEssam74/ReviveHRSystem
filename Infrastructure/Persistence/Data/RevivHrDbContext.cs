@@ -3,11 +3,13 @@ using System.Linq.Expressions;
 using DomainLayer.Models;
 using DomainLayer.Models.AttendanceModule;
 using DomainLayer.Models.AuditModule;
+using DomainLayer.Models.BillingModule;
 using DomainLayer.Models.EmployeeModule;
 using DomainLayer.Models.EvaluationModule;
 using DomainLayer.Models.NotificationModule;
 using DomainLayer.Models.OrganizationModule;
 using DomainLayer.Models.PayrollModule;
+using DomainLayer.Models.PlatformModule;
 using DomainLayer.Models.RecruitmentModule;
 using DomainLayer.Models.RequestModule;
 using DomainLayer.Models.SchedulingModule;
@@ -32,16 +34,31 @@ namespace Presistence.Data
         public DbSet<RolePermission> RolePermissions => Set<RolePermission>();
         public DbSet<UserPermission> UserPermissions => Set<UserPermission>();
         public DbSet<UserGymAccess> UserGymAccesses => Set<UserGymAccess>();
-        public DbSet<UserGymRole> UserGymRoles => Set<UserGymRole>();
         public DbSet<UserNotificationPreference> UserNotificationPreferences => Set<UserNotificationPreference>();
         public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
 
         // Organization
+        public DbSet<Company> Companies => Set<Company>();
         public DbSet<Gym> Gyms => Set<Gym>();
         public DbSet<Department> Departments => Set<Department>();
         public DbSet<Position> Positions => Set<Position>();
         public DbSet<Team> Teams => Set<Team>();
         public DbSet<TeamLeader> TeamLeaders => Set<TeamLeader>();
+
+        // Billing & subscriptions (platform commercial layer)
+        public DbSet<SubscriptionPlan> SubscriptionPlans => Set<SubscriptionPlan>();
+        public DbSet<PlanFeature> PlanFeatures => Set<PlanFeature>();
+        public DbSet<PlanAddOn> PlanAddOns => Set<PlanAddOn>();
+        public DbSet<CompanySubscription> CompanySubscriptions => Set<CompanySubscription>();
+        public DbSet<Invoice> Invoices => Set<Invoice>();
+        public DbSet<InvoicePayment> InvoicePayments => Set<InvoicePayment>();
+
+        // Platform administration
+        public DbSet<ImpersonationSession> ImpersonationSessions => Set<ImpersonationSession>();
+        public DbSet<PlatformSetting> PlatformSettings => Set<PlatformSetting>();
+        public DbSet<FeatureFlag> FeatureFlags => Set<FeatureFlag>();
+        public DbSet<FeatureFlagTarget> FeatureFlagTargets => Set<FeatureFlagTarget>();
+        public DbSet<AuditExportPackage> AuditExportPackages => Set<AuditExportPackage>();
 
         // Recruitment
         public DbSet<VacancyRequest> VacancyRequests => Set<VacancyRequest>();
@@ -124,7 +141,12 @@ namespace Presistence.Data
         {
             foreach (var entityType in modelBuilder.Model.GetEntityTypes().ToList())
             {
-                if (entityType.FindProperty("Id") is null || entityType.ClrType == typeof(AuditLog))
+                // AuditLog is append-only and UserRole is a relationship table: neither
+                // carries the record-metadata columns (UserRole's surrogate Id exists only
+                // so one table can hold both platform-wide and per-gym grants).
+                if (entityType.FindProperty("Id") is null
+                    || entityType.ClrType == typeof(AuditLog)
+                    || entityType.ClrType == typeof(UserRole))
                     continue;
 
                 var entity = modelBuilder.Entity(entityType.ClrType);
@@ -144,18 +166,22 @@ namespace Presistence.Data
                 entity.HasQueryFilter(Expression.Lambda(Expression.Equal(isDeleted, Expression.Constant(false)), parameter));
             }
 
-            // Relationship tables have composite keys and are intentionally hard-deleted,
-            // but their filtered endpoints must stay hidden from relationship queries.
+            // Relationship tables are intentionally hard-deleted, but their filtered
+            // endpoints must stay hidden from relationship queries.
+            //
+            // UserRole also carries platform-wide grants (GymId IS NULL); a LEFT JOIN
+            // makes `!Gym.IsDeleted` NULL for those rows, so the gym leg is written as
+            // an explicit "no gym, or an un-deleted gym" to keep them visible.
             modelBuilder.Entity<UserRole>().HasQueryFilter(x =>
-                !EF.Property<bool>(x.User, "IsDeleted") && !EF.Property<bool>(x.Role, "IsDeleted"));
+                !EF.Property<bool>(x.User, "IsDeleted")
+                && !EF.Property<bool>(x.Role, "IsDeleted")
+                && (x.GymId == null || !EF.Property<bool>(x.Gym!, "IsDeleted")));
             modelBuilder.Entity<RolePermission>().HasQueryFilter(x =>
                 !EF.Property<bool>(x.Role, "IsDeleted") && !EF.Property<bool>(x.Permission, "IsDeleted"));
             modelBuilder.Entity<UserPermission>().HasQueryFilter(x =>
                 !EF.Property<bool>(x.User, "IsDeleted") && !EF.Property<bool>(x.Permission, "IsDeleted"));
             modelBuilder.Entity<UserGymAccess>().HasQueryFilter(x =>
                 !EF.Property<bool>(x.User, "IsDeleted") && !EF.Property<bool>(x.Gym, "IsDeleted"));
-            modelBuilder.Entity<UserGymRole>().HasQueryFilter(x =>
-                !EF.Property<bool>(x.User, "IsDeleted") && !EF.Property<bool>(x.Gym, "IsDeleted") && !EF.Property<bool>(x.Role, "IsDeleted"));
         }
 
         public override Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)

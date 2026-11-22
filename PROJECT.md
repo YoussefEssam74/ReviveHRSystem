@@ -65,6 +65,7 @@ See:
 - [docs/architecture/backend.md](docs/architecture/backend.md)
 - [docs/architecture/frontend.md](docs/architecture/frontend.md)
 - [docs/architecture/api.md](docs/architecture/api.md)
+- [docs/architecture/super-admin-api.md](docs/architecture/super-admin-api.md)
 - [docs/architecture/database.md](docs/architecture/database.md)
 
 ## Product Documentation

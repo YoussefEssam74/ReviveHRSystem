@@ -2,6 +2,8 @@
 
 This document describes the endpoints currently implemented by the backend. The UI endpoint inventory in [api-spec-from-ui.md](./api-spec-from-ui.md) is a product roadmap; entries there are not live unless they also appear below and in generated OpenAPI.
 
+The platform-owner console (companies, subscriptions, invoices, platform audit, impersonation) is specified separately in [super-admin-api.md](./super-admin-api.md). Its endpoints are **not** implemented yet; once they are, they move here.
+
 ## Conventions
 
 - Base path: /api; requests and responses use JSON.

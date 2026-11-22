@@ -440,16 +440,21 @@ namespace Service.Specifications
         }
     }
 
-    /// <summary>Finds active Branch Managers and HR users who have access to this gym.</summary>
+    /// <summary>
+    /// Finds active Branch Managers, HR users who have access to this gym, and the
+    /// platform-wide roles (Top Management, HR Manager) that reach every gym.
+    /// </summary>
     public class BranchManagersAndHrForGymSpec : BaseSpecification<User, int>
     {
         public BranchManagersAndHrForGymSpec(int gymId)
         {
             Criteria = u => u.IsActive && (
-                u.UserGymRoles.Any(ugr => ugr.GymId == gymId && ugr.Role.Name.Contains("Branch Manager"))
+                u.UserRoles.Any(ur => ur.GymId == gymId && ur.RoleName.Contains("Branch Manager"))
                 || (u.UserType == UserType.HR && u.UserGymAccesses.Any(uga => uga.GymId == gymId))
-                || u.UserType == UserType.TopManagement);
-            AddInclude(u => u.UserGymRoles);
+                // Expression trees cannot use pattern matching, so compare explicitly.
+                || u.UserType == UserType.TopManagement
+                || u.UserType == UserType.HRManager);
+            AddInclude(u => u.UserRoles);
             AddInclude(u => u.UserGymAccesses);
         }
     }

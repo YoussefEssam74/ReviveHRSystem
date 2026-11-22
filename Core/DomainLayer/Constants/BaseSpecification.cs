@@ -12,6 +12,10 @@ namespace DomainLayer.Contracts
     {
         public Expression<Func<TEntity, bool>>? Criteria { get; protected set; }
         public List<Expression<Func<TEntity, object>>> IncludeExpressions { get; } = new();
+
+        /// <summary>Dotted eager-load paths for second-level includes ("Subscriptions.Plan").</summary>
+        public List<string> IncludePaths { get; } = new();
+
         public Expression<Func<TEntity, object>>? OrderBy { get; protected set; }
         public Expression<Func<TEntity, object>>? OrderByDescending { get; protected set; }
         public Expression<Func<TEntity, object>>? ThenByDescending { get; protected set; }
@@ -28,8 +32,18 @@ namespace DomainLayer.Contracts
         /// </summary>
         public bool AsNoTracking { get; protected set; } = true;
 
+        /// <summary>
+        /// Bypasses the global query filters (soft-delete in particular). Off by default;
+        /// only uniqueness/existence checks that must see archived rows turn it on.
+        /// </summary>
+        public bool IgnoreQueryFilters { get; protected set; }
+
         protected void AddInclude(Expression<Func<TEntity, object>> includeExpression) =>
             IncludeExpressions.Add(includeExpression);
+
+        /// <summary>Adds a dotted eager-load path for a second-level navigation.</summary>
+        protected void AddIncludePath(string navigationPath) =>
+            IncludePaths.Add(navigationPath);
 
         protected void ApplyPaging(int skip, int take)
         {
@@ -46,6 +60,12 @@ namespace DomainLayer.Contracts
         public void ApplyTracking()
         {
             AsNoTracking = false;
+        }
+
+        /// <summary>Includes rows hidden by the global (soft-delete) query filters.</summary>
+        protected void ApplyIgnoreQueryFilters()
+        {
+            IgnoreQueryFilters = true;
         }
     }
 }

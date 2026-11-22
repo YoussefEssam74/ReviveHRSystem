@@ -5,8 +5,27 @@ namespace ServiceAbstraction.Services
     /// <summary>Issues and validates the JWT tokens used by the web login flow.</summary>
     public interface ITokenService
     {
-        /// <summary>Creates the short-lived access token (ADR-002 claims: userId, userType, email; scoped to one gym for employees).</summary>
+        /// <summary>
+        /// Creates the short-lived access token (ADR-002 claims: userId, userType, email; scoped
+        /// to one gym for employees).
+        /// </summary>
         string CreateAccessToken(User user, IEnumerable<string> permissionKeys, int? scopedGymId);
+
+        /// <summary>
+        /// Creates an act-as access token for a Super Admin impersonation session.
+        ///
+        /// The token deliberately keeps <c>userType</c> = the actor's real type (TopManagement) so
+        /// nothing downstream can mistake the actor for the role being assumed; the assumed scope
+        /// travels in the <c>act*</c> claims and is enforced by the impersonation guard. Lifetime is
+        /// the session's remaining time, never longer than the session itself.
+        /// </summary>
+        string CreateImpersonationToken(
+            User actor,
+            int? scopedGymId,
+            int sessionId,
+            int companyId,
+            int? effectiveRoleId,
+            DateTime expiresUtc);
 
         /// <summary>Creates the short-lived temp session token used between login and gym selection.</summary>
         string CreateGymSelectionToken(int userId);

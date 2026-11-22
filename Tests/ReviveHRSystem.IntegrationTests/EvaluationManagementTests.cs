@@ -458,14 +458,15 @@ namespace ReviveHRSystem.IntegrationTests
                 await db.SaveChangesAsync();
             }
 
-            var roleId = await db.Roles.Where(r => r.Name == "Team Leader").Select(r => r.Id).SingleAsync();
-            if (!await db.UserGymRoles.AnyAsync(ugr => ugr.UserId == user.Id && ugr.GymId == gymId))
+            var roleName = "Team Leader";
+            var roleExists = await db.Roles.AnyAsync(r => r.Name == roleName);
+            if (roleExists && !await db.UserRoles.AnyAsync(ur => ur.UserId == user.Id && ur.GymId == gymId))
             {
-                db.UserGymRoles.Add(new DomainLayer.Models.UserModule.UserGymRole
+                db.UserRoles.Add(new DomainLayer.Models.UserModule.UserRole
                 {
                     UserId = user.Id,
                     GymId = gymId,
-                    RoleId = roleId
+                    RoleName = roleName
                 });
                 await db.SaveChangesAsync();
             }
