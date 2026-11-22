@@ -2,25 +2,36 @@ import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tansta
 import {
   deleteEvaluationForm,
   deleteHiringForm,
+  getEvaluationAssignments,
   getEvaluationForm,
   getEvaluationForms,
   getEvaluationResponses,
+  getGoals,
   getHiringForm,
   getHiringForms,
+  getPerformanceCycles,
   postEvaluationDispatch,
   postEvaluationForm,
+  postEvaluationLaunchCycle,
+  postEvaluationResponse,
+  postGoal,
   postHiringForm,
   putEvaluationForm,
   putHiringForm,
+  type AssignmentListParams,
+  type CreateGoalBody,
   type EvaluationFormListParams,
   type EvaluationResponseListParams,
+  type GoalListParams,
   type HiringFormListParams,
+  type SubmitEvaluationBody,
   type UpsertEvaluationFormBody,
   type UpsertHiringFormBody,
 } from '../api/evaluations.api'
 
 function invalidateEvaluations(queryClient: QueryClient) {
   queryClient.invalidateQueries({ queryKey: ['evaluations'] })
+  queryClient.invalidateQueries({ queryKey: ['evaluation-assignments'] })
 }
 
 /** Paged evaluation-template list. */
@@ -112,5 +123,64 @@ export function useEvaluationResponses(params: EvaluationResponseListParams, ena
     queryKey: ['evaluations', 'responses', params],
     queryFn: ({ signal }) => getEvaluationResponses(params, signal),
     enabled,
+  })
+}
+
+/** The signed-in evaluator's assigned evaluations (My Evaluations inbox). */
+export function useEvaluationAssignments(params: AssignmentListParams = {}, enabled = true) {
+  return useQuery({
+    queryKey: ['evaluation-assignments', params],
+    queryFn: ({ signal }) => getEvaluationAssignments(params, signal),
+    enabled,
+    // A viewer without evaluator keys gets a 403 — that means "no inbox", not a
+    // transient failure, so retrying only burns requests.
+    retry: false,
+  })
+}
+
+/** POST /api/evaluation-forms/{id}/responses — submit a scored evaluation. */
+export function useSubmitEvaluation() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ formId, body }: { formId: number; body: SubmitEvaluationBody }) =>
+      postEvaluationResponse(formId, body),
+    onSuccess: () => invalidateEvaluations(queryClient),
+  })
+}
+
+/** POST /api/evaluation-forms/{id}/launch-cycle — seed In Progress rows. */
+export function useLaunchEvaluationCycle() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ formId, period }: { formId: number; period: string }) =>
+      postEvaluationLaunchCycle(formId, { period }),
+    onSuccess: () => invalidateEvaluations(queryClient),
+  })
+}
+
+/** Performance-cycle chips for History & Trends. */
+export function usePerformanceCycles(enabled = true) {
+  return useQuery({
+    queryKey: ['evaluations', 'performance-cycles'],
+    queryFn: ({ signal }) => getPerformanceCycles(signal),
+    enabled,
+  })
+}
+
+/** Goals & OKRs cards for History & Trends. */
+export function useGoals(params: GoalListParams = {}, enabled = true) {
+  return useQuery({
+    queryKey: ['evaluations', 'goals', params],
+    queryFn: ({ signal }) => getGoals(params, signal),
+    enabled,
+  })
+}
+
+/** POST /api/goals — the "+ Add" goal form. */
+export function useCreateGoal() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (body: CreateGoalBody) => postGoal(body),
+    onSuccess: () => invalidateEvaluations(queryClient),
   })
 }

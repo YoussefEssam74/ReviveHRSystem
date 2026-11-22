@@ -149,11 +149,40 @@ namespace ReviveHRSystem.IntegrationTests
             Assert.Equal(18, attendance.GetProperty("daysAttended").GetInt32());
             Assert.Equal(4, attendance.GetProperty("weeklyOffs").GetInt32());
             Assert.Equal(1, attendance.GetProperty("approvedLeaves").GetInt32());
+            Assert.Equal(1, attendance.GetProperty("paidLeaves").GetInt32());
             Assert.Equal(3, attendance.GetProperty("lateArrivals").GetInt32());
             Assert.Equal(1, attendance.GetProperty("unexcusedAbsences").GetInt32());
             Assert.Equal(2m, attendance.GetProperty("overtimeHours").GetDecimal());
             Assert.NotEqual(JsonValueKind.Null, attendance.GetProperty("adjustedAt").ValueKind);
             Assert.Equal(2m, entry.GetProperty("overtime").GetDecimal());
+        }
+
+        [Fact]
+        public async Task GetPeriod_PaidLeaveCountsOnlyTheDaysSettledAsPaid()
+        {
+            var (gym, employee, periodId, _) = await SetupSheetAsync();
+            var builder = NewBuilder();
+            var start = new DateOnly(2031, 8, 1);
+
+            // Two annual-leave days settled as paid and one approved as unpaid.
+            await builder.CreateApprovedDayOffAsync(employee.EmployeeId, start.AddDays(3), start.AddDays(4), payment: "paid");
+            await builder.CreateApprovedDayOffAsync(employee.EmployeeId, start.AddDays(5), start.AddDays(5), payment: "unpaid");
+            var token = await _fixture.GetAdminTokenAsync();
+
+            var detail = await GetJsonAsync($"/api/payroll-periods/{periodId}?gym={gym.GymId}", token);
+            var attendance = detail.GetProperty("data").GetProperty("items").EnumerateArray()
+                .Single(e => e.GetProperty("employeeId").GetInt32() == employee.EmployeeId)
+                .GetProperty("attendance");
+
+            // The leave type still counts every day; the paid counter drops the unpaid one.
+            Assert.Equal(3, attendance.GetProperty("annualLeaves").GetInt32());
+            Assert.Equal(2, attendance.GetProperty("paidLeaves").GetInt32());
+
+            var unpaid = attendance.GetProperty("days").EnumerateArray()
+                .Where(d => d.GetProperty("payment").ValueKind == JsonValueKind.String
+                    && d.GetProperty("payment").GetString() == "unpaid")
+                .ToList();
+            Assert.Single(unpaid);
         }
 
         [Fact]

@@ -11,7 +11,7 @@ namespace Presentation.Controllers
     [Authorize]
     public class CandidatesController(IRecruitmentService _service) : ApiControllerBase
     {
-        /// <summary>GET /api/candidates — paged pipeline; filters stage/position/view(=active|rejected)/blocked/searchTerm (recruitment.view).</summary>
+        /// <summary>GET /api/candidates — paged pipeline; filters stage/position/view(=active|rejected|missed)/blocked/searchTerm (recruitment.view).</summary>
         [HttpGet]
         public async Task<ActionResult<CandidateListResponse>> GetCandidates([FromQuery] CandidateListQuery query, CancellationToken ct)
             => Ok(await _service.GetCandidatesAsync(GetActorUserId(), query, ct));

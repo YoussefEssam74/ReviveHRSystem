@@ -13,6 +13,7 @@ export type AttendanceBucket =
   | 'weeklyOffs'
   | 'annualLeaves'
   | 'sickLeaves'
+  | 'paidLeave'
   | 'coverDays'
   | 'unapprovedCover'
   | 'overtime'
@@ -20,10 +21,11 @@ export type AttendanceBucket =
   | 'unexcusedAbsences'
 
 const BUCKETS: { value: AttendanceBucket; label: string }[] = [
-  { value: 'daysAttended', label: 'Days Attended' },
+  { value: 'daysAttended', label: 'Actual Working Days' },
   { value: 'weeklyOffs', label: 'Weekly Offs' },
   { value: 'annualLeaves', label: 'Annual Leave' },
   { value: 'sickLeaves', label: 'Sick Leave' },
+  { value: 'paidLeave', label: 'Paid Leave' },
   { value: 'coverDays', label: 'Cover Days' },
   { value: 'unapprovedCover', label: 'Unapproved cover' },
   { value: 'overtime', label: 'Overtime' },
@@ -37,6 +39,7 @@ const BUCKET_KINDS: Record<AttendanceBucket, string[]> = {
   weeklyOffs: ['WeeklyOff'],
   annualLeaves: ['AnnualLeave', 'ApprovedLeave'],
   sickLeaves: ['SickLeave'],
+  paidLeave: ['AnnualLeave', 'SickLeave', 'ApprovedLeave'],
   coverDays: ['Cover'],
   unapprovedCover: ['CoverRejected'],
   overtime: [],
@@ -45,7 +48,10 @@ const BUCKET_KINDS: Record<AttendanceBucket, string[]> = {
 }
 
 function matches(bucket: AttendanceBucket, day: PayrollAttendanceDay): boolean {
-  return bucket === 'overtime' ? day.overtimeHours > 0 : BUCKET_KINDS[bucket].includes(day.kind)
+  if (bucket === 'overtime') return day.overtimeHours > 0
+  // Unpaid leave keeps its leave type above but is never paid leave.
+  if (bucket === 'paidLeave') return BUCKET_KINDS.paidLeave.includes(day.kind) && day.payment !== 'unpaid'
+  return BUCKET_KINDS[bucket].includes(day.kind)
 }
 
 const KIND_TONE: Record<string, BadgeColor> = {
@@ -72,6 +78,8 @@ function bucketDaysInSheet(attendance: PayrollAttendance, bucket: AttendanceBuck
       return attendance.annualLeaves
     case 'sickLeaves':
       return attendance.sickLeaves
+    case 'paidLeave':
+      return attendance.paidLeaves ?? 0
     case 'coverDays':
       return attendance.coverDays
     case 'unapprovedCover':
@@ -97,6 +105,8 @@ function bucketValue(attendance: PayrollAttendance, bucket: AttendanceBucket): s
       return `${attendance.annualLeaves} day${attendance.annualLeaves === 1 ? '' : 's'}`
     case 'sickLeaves':
       return `${attendance.sickLeaves} day${attendance.sickLeaves === 1 ? '' : 's'}`
+    case 'paidLeave':
+      return `${attendance.paidLeaves ?? 0} day${attendance.paidLeaves === 1 ? '' : 's'}`
     case 'coverDays':
       return `${attendance.coverDays} day${attendance.coverDays === 1 ? '' : 's'}`
     case 'unapprovedCover':
@@ -124,7 +134,7 @@ export interface AttendanceDaysDialogProps {
 /**
  * Click-through log behind the Work Days & Attendance Log counters: every day of
  * the period with its shift, punches, worked/OT hours and status. Opens on the
- * counter that was clicked; the chips switch between the six attributes.
+ * counter that was clicked; the chips switch between the counters.
  */
 export default function AttendanceDaysDialog({
   employeeName,
@@ -164,7 +174,7 @@ export default function AttendanceDaysDialog({
         }
       >
         <div className="space-y-3">
-          {/* The six attributes, always visible: clicking one filters the day log. */}
+          {/* Every counter, always visible: clicking one filters the day log. */}
           <div className="flex flex-wrap items-center gap-x-1 gap-y-1.5 rounded-lg border border-charcoal-200 bg-charcoal-50 px-2 py-1.5">
             {BUCKETS.map((entry) => {
               const active = entry.value === bucket
@@ -297,7 +307,7 @@ export default function AttendanceDaysDialog({
                         </td>
                         <td className="whitespace-nowrap px-2.5 py-1.5">
                           <Badge color={KIND_TONE[day.kind] ?? 'gray'} className="text-[9px]">
-                            {day.status}
+                            {day.payment === 'unpaid' ? `${day.status} · unpaid` : day.status}
                           </Badge>
                         </td>
                         <td className="whitespace-nowrap px-2.5 py-1.5 text-right font-semibold">

@@ -49,5 +49,30 @@ namespace Presentation.Controllers
         [HttpPost("{id:int}/finalize")]
         public async Task<ActionResult<Shared.DataTransferObject.Employee.MessageResponse>> Finalize(int id, CancellationToken cancellationToken)
             => Ok(await _service.FinalizeAsync(GetActorUserId(), id, cancellationToken));
+
+        /// <summary>HR decision on a termination request (Approved → Notice Period, Rejected → cancelled).</summary>
+        [HttpPut("{id:int}/approval")]
+        public async Task<ActionResult<Shared.DataTransferObject.Employee.MessageResponse>> Decide(int id, [FromBody] SeparationApprovalRequest request, CancellationToken cancellationToken)
+            => Ok(await _service.DecideTerminationRequestAsync(GetActorUserId(), id, request, cancellationToken));
+
+        /// <summary>Schedules (or re-books) the exit interview.</summary>
+        [HttpPut("{id:int}/exit-interview/schedule")]
+        public async Task<ActionResult<Shared.DataTransferObject.Employee.MessageResponse>> ScheduleExitInterview(int id, [FromBody] ExitInterviewScheduleRequest request, CancellationToken cancellationToken)
+            => Ok(await _service.ScheduleExitInterviewAsync(GetActorUserId(), id, request, cancellationToken));
+
+        /// <summary>Records the interview outcome: Completed | No Show | Rescheduled.</summary>
+        [HttpPut("{id:int}/exit-interview/status")]
+        public async Task<ActionResult<Shared.DataTransferObject.Employee.MessageResponse>> UpdateExitInterviewStatus(int id, [FromBody] ExitInterviewStatusRequest request, CancellationToken cancellationToken)
+            => Ok(await _service.UpdateExitInterviewStatusAsync(GetActorUserId(), id, request, cancellationToken));
+
+        /// <summary>Saves the professional exit interview form (optionally completes the interview).</summary>
+        [HttpPut("{id:int}/exit-interview")]
+        public async Task<ActionResult<Shared.DataTransferObject.Employee.MessageResponse>> SaveExitInterview(int id, [FromBody] ExitInterviewFormRequest request, CancellationToken cancellationToken)
+            => Ok(await _service.SaveExitInterviewAsync(GetActorUserId(), id, request, cancellationToken));
+
+        /// <summary>Saves clearance; completing it after the interview moves the employee to Former Employees.</summary>
+        [HttpPut("{id:int}/clearance")]
+        public async Task<ActionResult<Shared.DataTransferObject.Employee.MessageResponse>> SaveClearance(int id, [FromBody] SeparationClearanceRequest request, CancellationToken cancellationToken)
+            => Ok(await _service.SaveClearanceAsync(GetActorUserId(), id, request, cancellationToken));
     }
 }

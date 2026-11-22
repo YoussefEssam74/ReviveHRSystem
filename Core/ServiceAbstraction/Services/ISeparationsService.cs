@@ -36,6 +36,27 @@ namespace ServiceAbstraction.Services
         Task<MessageResponse> FinalizeAsync(int? actorUserId, int separationId, CancellationToken cancellationToken = default);
 
         /// <summary>
+        /// HR decision on a Branch-Manager termination request (Termination Requests tab).
+        /// Approve → Notice Period + employee parked; Reject → case cancelled, employee untouched.
+        /// </summary>
+        Task<MessageResponse> DecideTerminationRequestAsync(int? actorUserId, int separationId, SeparationApprovalRequest request, CancellationToken cancellationToken = default);
+
+        /// <summary>Books (or re-books) the exit interview slot — status Scheduled / Rescheduled.</summary>
+        Task<MessageResponse> ScheduleExitInterviewAsync(int? actorUserId, int separationId, ExitInterviewScheduleRequest request, CancellationToken cancellationToken = default);
+
+        /// <summary>Records the interview outcome: Completed | No Show | Rescheduled.</summary>
+        Task<MessageResponse> UpdateExitInterviewStatusAsync(int? actorUserId, int separationId, ExitInterviewStatusRequest request, CancellationToken cancellationToken = default);
+
+        /// <summary>Saves the professional exit interview form (optionally marks the interview Completed).</summary>
+        Task<MessageResponse> SaveExitInterviewAsync(int? actorUserId, int separationId, ExitInterviewFormRequest request, CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// Saves clearance / final settlement. Completing it after a completed
+        /// interview archives the employee (the Former Employees tab) automatically.
+        /// </summary>
+        Task<MessageResponse> SaveClearanceAsync(int? actorUserId, int separationId, SeparationClearanceRequest request, CancellationToken cancellationToken = default);
+
+        /// <summary>
         /// Shared case-creation core (T2/E19 and approving an Offboard action request all
         /// land here): employees.offboard on the employee's gym, one open case per employee,
         /// the five exit tasks pre-seeded. Returns the new separation id.

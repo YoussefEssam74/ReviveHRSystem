@@ -1,4 +1,4 @@
-﻿using DomainLayer.Models.OrganizationModule;
+using DomainLayer.Models.OrganizationModule;
 using DomainLayer.Models.RecruitmentModule.Enums;
 
 namespace DomainLayer.Models.RecruitmentModule

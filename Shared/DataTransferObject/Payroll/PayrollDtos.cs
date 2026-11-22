@@ -134,6 +134,12 @@ namespace Shared.DataTransferObject.Payroll
         /// <summary>Minutes the check-out ran before the shift end (0 when not early).</summary>
         public int EarlyLeaveMinutes { get; set; }
 
+        /// <summary>
+        /// "paid" | "unpaid" on an approved leave day; null for every other day. An unpaid
+        /// leave day still counts under its leave type but not under the paid-leave counter.
+        /// </summary>
+        public string? Payment { get; set; }
+
         /// <summary>Leave reason / manual-entry note, when there is one.</summary>
         public string? Note { get; set; }
 
@@ -150,6 +156,7 @@ namespace Shared.DataTransferObject.Payroll
     {
         public int DaysAttended { get; set; }
         public int WeeklyOffs { get; set; }
+        /// <summary>Printed as the sheet's "Paid Leave" counter — paid leave days, not the leave total.</summary>
         public int ApprovedLeaves { get; set; }
         public decimal OvertimeHours { get; set; }
         public int LateArrivals { get; set; }
@@ -174,6 +181,11 @@ namespace Shared.DataTransferObject.Payroll
         public int SickLeaves { get; set; }
         /// <summary>Approved leave days in the period; the manual correction may override this total.</summary>
         public int ApprovedLeaves { get; set; }
+        /// <summary>
+        /// Leave days settled as paid in the period (unpaid leave excluded). The sheet's
+        /// hand correction overrides it together with <see cref="ApprovedLeaves"/>.
+        /// </summary>
+        public int PaidLeaves { get; set; }
         /// <summary>Days worked on a scheduled weekly off — i.e. extra / cover shifts.</summary>
         public int CoverDays { get; set; }
         /// <summary>

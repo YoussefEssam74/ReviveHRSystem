@@ -276,6 +276,241 @@ namespace ReviveHRSystem.IntegrationTests
         }
 
         // ------------------------------------------------------------------
+        // Termination workflow — HR approval → exit interview → clearance
+        // ------------------------------------------------------------------
+
+        private async Task<int> RequestPendingTerminationAsync(Scene scene)
+        {
+            var employee = await scene.Builder.CreateEmployeeAsync(scene.Gym);
+            var id = await RequestTerminationAsync(scene, employee, new
+            {
+                employeeId = employee.EmployeeId,
+                lastDay = Iso(Days(20)),
+                reason = "Attendance violations",
+                notes = "Three unexcused absences.",
+            });
+            return id;
+        }
+
+        private async Task<JsonElement> DetailAsync(Scene scene, int id) =>
+            (await GetAsync($"/api/separations/{id}", scene.Token)).GetProperty("data");
+
+        [Fact]
+        public async Task TerminationRequest_StartsPendingApproval_EmployeeUntouched()
+        {
+            var scene = await CreateSceneAsync("employees.view", "employees.offboard");
+            var separationId = await RequestPendingTerminationAsync(scene);
+
+            var detail = await DetailAsync(scene, separationId);
+            Assert.Equal("Pending", detail.GetProperty("approvalStatus").GetString());
+            Assert.Equal("Requested", detail.GetProperty("status").GetString());
+            Assert.Equal(JsonValueKind.Null, detail.GetProperty("exitInterviewStatus").ValueKind);
+
+            var employeeId = detail.GetProperty("employeeId").GetInt32();
+            var employee = await Db.Employees.AsNoTracking().SingleAsync(e => e.Id == employeeId);
+            Assert.Equal(EmployeeStatus.Active, employee.Status);
+        }
+
+        [Fact]
+        public async Task Approval_Approve_MovesToNoticePeriod_AndParksEmployee()
+        {
+            var scene = await CreateSceneAsync("employees.view", "employees.offboard");
+            var separationId = await RequestPendingTerminationAsync(scene);
+            var employeeId = (await DetailAsync(scene, separationId)).GetProperty("employeeId").GetInt32();
+
+            var response = await SendAsync(HttpMethod.Put, $"/api/separations/{separationId}/approval",
+                new { decision = "Approved", note = "Evidence reviewed." }, scene.Token);
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+            var detail = await DetailAsync(scene, separationId);
+            Assert.Equal("Approved", detail.GetProperty("approvalStatus").GetString());
+            Assert.Equal("Notice Period", detail.GetProperty("status").GetString());
+            Assert.Equal("Evidence reviewed.", detail.GetProperty("approvalNote").GetString());
+
+            var employee = await Db.Employees.AsNoTracking().SingleAsync(e => e.Id == employeeId);
+            Assert.Equal(EmployeeStatus.NoticePeriod, employee.Status);
+            Assert.True(await Db.AuditLogs.AnyAsync(a =>
+                a.Action == "Termination Request Approved" && a.EntityId == employeeId));
+        }
+
+        [Fact]
+        public async Task Approval_Reject_CancelsCase_AndKeepsEmployeeActive()
+        {
+            var scene = await CreateSceneAsync("employees.view", "employees.offboard");
+            var separationId = await RequestPendingTerminationAsync(scene);
+            var employeeId = (await DetailAsync(scene, separationId)).GetProperty("employeeId").GetInt32();
+
+            var response = await SendAsync(HttpMethod.Put, $"/api/separations/{separationId}/approval",
+                new { decision = "Rejected", note = "Insufficient evidence." }, scene.Token);
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+            var detail = await DetailAsync(scene, separationId);
+            Assert.Equal("Rejected", detail.GetProperty("approvalStatus").GetString());
+            Assert.Equal("Cancelled", detail.GetProperty("status").GetString());
+
+            var employee = await Db.Employees.AsNoTracking().SingleAsync(e => e.Id == employeeId);
+            Assert.Equal(EmployeeStatus.Active, employee.Status);
+
+            // A cancelled case cannot be scheduled.
+            var schedule = await SendAsync(HttpMethod.Put, $"/api/separations/{separationId}/exit-interview/schedule",
+                new { scheduledAt = "2026-12-01T09:00:00Z" }, scene.Token);
+            var message = await AssertErrorAsync(schedule, HttpStatusCode.BadRequest);
+            Assert.Contains("cancelled", message);
+        }
+
+        [Fact]
+        public async Task Interview_ScheduleThenNoShowThenReschedule_TracksStatus()
+        {
+            var scene = await CreateSceneAsync("employees.view", "employees.offboard");
+            var separationId = await RequestPendingTerminationAsync(scene);
+            await SendAsync(HttpMethod.Put, $"/api/separations/{separationId}/approval",
+                new { decision = "Approved" }, scene.Token);
+
+            var scheduled = await SendAsync(HttpMethod.Put, $"/api/separations/{separationId}/exit-interview/schedule",
+                new { scheduledAt = "2026-12-01T14:30:00Z" }, scene.Token);
+            Assert.Equal(HttpStatusCode.OK, scheduled.StatusCode);
+            var afterSchedule = await DetailAsync(scene, separationId);
+            Assert.Equal("Scheduled", afterSchedule.GetProperty("exitInterviewStatus").GetString());
+            Assert.Equal("Exit In Progress", afterSchedule.GetProperty("status").GetString());
+            Assert.StartsWith("2026-12-01", afterSchedule.GetProperty("exitInterviewScheduledAt").GetString());
+
+            var noShow = await SendAsync(HttpMethod.Put, $"/api/separations/{separationId}/exit-interview/status",
+                new { status = "No Show" }, scene.Token);
+            Assert.Equal(HttpStatusCode.OK, noShow.StatusCode);
+            Assert.Equal("No Show", (await DetailAsync(scene, separationId)).GetProperty("exitInterviewStatus").GetString());
+
+            var rescheduled = await SendAsync(HttpMethod.Put, $"/api/separations/{separationId}/exit-interview/status",
+                new { status = "Rescheduled", rescheduledAt = "2026-12-05T10:00:00Z" }, scene.Token);
+            Assert.Equal(HttpStatusCode.OK, rescheduled.StatusCode);
+            var afterReschedule = await DetailAsync(scene, separationId);
+            Assert.Equal("Rescheduled", afterReschedule.GetProperty("exitInterviewStatus").GetString());
+            Assert.StartsWith("2026-12-05", afterReschedule.GetProperty("exitInterviewScheduledAt").GetString());
+        }
+
+        [Fact]
+        public async Task Clearance_CompleteBeforeInterview_Returns400()
+        {
+            var scene = await CreateSceneAsync("employees.view", "employees.offboard");
+            var separationId = await RequestPendingTerminationAsync(scene);
+            await SendAsync(HttpMethod.Put, $"/api/separations/{separationId}/approval",
+                new { decision = "Approved" }, scene.Token);
+
+            var response = await SendAsync(HttpMethod.Put, $"/api/separations/{separationId}/clearance",
+                new
+                {
+                    uniformReturned = true,
+                    assetsReturned = true,
+                    accessRevoked = true,
+                    finalSettlementCompleted = true,
+                    complete = true,
+                }, scene.Token);
+            var message = await AssertErrorAsync(response, HttpStatusCode.BadRequest);
+            Assert.Contains("exit interview", message);
+        }
+
+        [Fact]
+        public async Task ExitInterview_FormRequiresInterviewerAndRehireDecision()
+        {
+            var scene = await CreateSceneAsync("employees.view", "employees.offboard");
+            var separationId = await RequestPendingTerminationAsync(scene);
+            await SendAsync(HttpMethod.Put, $"/api/separations/{separationId}/approval",
+                new { decision = "Approved" }, scene.Token);
+
+            var incomplete = await SendAsync(HttpMethod.Put, $"/api/separations/{separationId}/exit-interview",
+                new { reasonForLeaving = "Attendance", complete = true }, scene.Token);
+            var message = await AssertErrorAsync(incomplete, HttpStatusCode.BadRequest);
+            Assert.Contains("Interviewer", message);
+        }
+
+        [Fact]
+        public async Task Workflow_InterviewAndClearance_ArchivesEmployeeAsFormerEmployee()
+        {
+            var scene = await CreateSceneAsync("employees.view", "employees.offboard");
+            var separationId = await RequestPendingTerminationAsync(scene);
+            var employeeId = (await DetailAsync(scene, separationId)).GetProperty("employeeId").GetInt32();
+
+            await SendAsync(HttpMethod.Put, $"/api/separations/{separationId}/approval",
+                new { decision = "Approved" }, scene.Token);
+            await SendAsync(HttpMethod.Put, $"/api/separations/{separationId}/exit-interview/schedule",
+                new { scheduledAt = "2026-12-01T14:30:00Z" }, scene.Token);
+
+            var interview = await SendAsync(HttpMethod.Put, $"/api/separations/{separationId}/exit-interview",
+                new
+                {
+                    interviewer = "Mona Adel",
+                    interviewDate = "2026-12-01",
+                    reasonForLeaving = "Attendance violations",
+                    whatLikedMost = "Team culture",
+                    whatToImprove = "Clearer expectations",
+                    jobSatisfaction = 2,
+                    managementRating = 2,
+                    workEnvironmentRating = 3,
+                    compensationRating = 2,
+                    wouldRecommend = false,
+                    notes = "Employee acknowledged the absences.",
+                    rehireEligible = false,
+                    rehireNote = "Two written warnings on file.",
+                    blacklisted = true,
+                    blacklistReason = "Documented HR hold.",
+                    complete = true,
+                }, scene.Token);
+            Assert.Equal(HttpStatusCode.OK, interview.StatusCode);
+
+            var afterInterview = await DetailAsync(scene, separationId);
+            Assert.Equal("Completed", afterInterview.GetProperty("exitInterviewStatus").GetString());
+            var form = afterInterview.GetProperty("exitInterview");
+            Assert.Equal("Mona Adel", form.GetProperty("interviewer").GetString());
+            Assert.Equal(2, form.GetProperty("jobSatisfaction").GetInt32());
+            Assert.False(form.GetProperty("rehireEligible").GetBoolean());
+            Assert.True(afterInterview.GetProperty("blacklisted").GetBoolean());
+            Assert.Equal("Documented HR hold.", afterInterview.GetProperty("blacklistReason").GetString());
+
+            var clearance = await SendAsync(HttpMethod.Put, $"/api/separations/{separationId}/clearance",
+                new
+                {
+                    uniformReturned = true,
+                    assetsReturned = true,
+                    accessRevoked = true,
+                    finalSettlementCompleted = true,
+                    settlementDirection = "employeeOwes",
+                    settlementAmount = 500,
+                    notes = "Laptop returned.",
+                    complete = true,
+                }, scene.Token);
+            Assert.Equal(HttpStatusCode.OK, clearance.StatusCode);
+
+            var detail = await DetailAsync(scene, separationId);
+            Assert.Equal("Completed", detail.GetProperty("status").GetString());
+            Assert.True(detail.GetProperty("clearance").GetProperty("completed").GetBoolean());
+            Assert.Equal(100, detail.GetProperty("progress").GetInt32());
+            Assert.NotEqual(JsonValueKind.Null, detail.GetProperty("terminationDate").ValueKind);
+
+            // Archived automatically: the employee leaves the roster.
+            var employee = await Db.Employees.AsNoTracking().SingleAsync(e => e.Id == employeeId);
+            Assert.Equal(EmployeeStatus.Terminated, employee.Status);
+
+            // And lands on the Former Employees tab (Completed + clearance).
+            var list = await GetAsync("/api/separations?pageSize=100", scene.Token);
+            var former = Assert.Single(ItemsOf(list), i =>
+                i.GetProperty("id").GetInt32() == separationId);
+            Assert.Equal("Completed", former.GetProperty("status").GetString());
+            Assert.True(former.GetProperty("blacklisted").GetBoolean());
+
+            // Completing again is refused.
+            var again = await SendAsync(HttpMethod.Put, $"/api/separations/{separationId}/clearance",
+                new
+                {
+                    uniformReturned = true,
+                    assetsReturned = true,
+                    accessRevoked = true,
+                    finalSettlementCompleted = true,
+                    complete = true,
+                }, scene.Token);
+            var message = await AssertErrorAsync(again, HttpStatusCode.BadRequest);
+            Assert.Contains("already complete", message);
+        }
+
+        // ------------------------------------------------------------------
         // T1 — list filters + pagination
         // ------------------------------------------------------------------
 

@@ -521,6 +521,45 @@ namespace ReviveHRSystem.IntegrationTests
         }
 
         [Fact]
+        public async Task GetCandidates_MissedView_ReturnsOnlyPassedSlotsWithoutOutcome()
+        {
+            var builder = NewBuilder();
+            var gym = await builder.CreateGymWithStationAsync();
+            var vacancy = await builder.CreateVacancyAsync(gym, $"Missed Coach {UniqueSuffix()}");
+
+            // Slot passed, still no outcome → the candidate missed the round.
+            var missed = await builder.CreateApplicationAsync(vacancy, stage: PipelineStageType.FirstInterview);
+            await builder.CreateInterviewAsync(
+                missed.ApplicationId, PipelineStageType.FirstInterview, DateTime.UtcNow.AddDays(-3));
+
+            // Slot still ahead → scheduled, not missed.
+            var upcoming = await builder.CreateApplicationAsync(vacancy, stage: PipelineStageType.FirstInterview);
+            await builder.CreateInterviewAsync(
+                upcoming.ApplicationId, PipelineStageType.FirstInterview, DateTime.UtcNow.AddDays(2));
+
+            // A later booking supersedes the past slot → no longer missed.
+            var rebooked = await builder.CreateApplicationAsync(vacancy, stage: PipelineStageType.FirstInterview);
+            await builder.CreateInterviewAsync(
+                rebooked.ApplicationId, PipelineStageType.FirstInterview, DateTime.UtcNow.AddDays(-4));
+            await builder.CreateInterviewAsync(
+                rebooked.ApplicationId, PipelineStageType.FirstInterview, DateTime.UtcNow.AddDays(3));
+
+            var token = await _fixture.GetAdminTokenAsync();
+            var response = await _fixture.Client.SendAsync(_fixture.AuthorizedRequest(
+                HttpMethod.Get, "/api/candidates?view=missed&pageSize=100", null, token));
+            var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+            var items = body.GetProperty("items").EnumerateArray().ToList();
+
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            var card = Assert.Single(items, i => i.GetProperty("id").GetInt32() == missed.CandidateId);
+            var missedRound = card.GetProperty("missed");
+            Assert.Equal("First Interview", missedRound.GetProperty("stage").GetString());
+            Assert.Equal("Room 1", missedRound.GetProperty("room").GetString());
+            Assert.DoesNotContain(items, i => i.GetProperty("id").GetInt32() == upcoming.CandidateId);
+            Assert.DoesNotContain(items, i => i.GetProperty("id").GetInt32() == rebooked.CandidateId);
+        }
+
+        [Fact]
         public async Task GetCandidate_ReturnsDetailWithFormBlocks()
         {
             var builder = NewBuilder();

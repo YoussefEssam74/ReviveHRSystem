@@ -12,6 +12,14 @@ export interface Paged<T> {
 /** Closed status vocabulary of the separation lifecycle (GET /api/separations). */
 export const SEPARATION_STATUSES = ['Requested', 'Notice Period', 'Exit In Progress', 'Under Review', 'Completed'] as const
 
+/** HR decision on a Branch-Manager termination request. */
+export const APPROVAL_STATUSES = ['Pending', 'Approved', 'Rejected'] as const
+export type ApprovalStatus = (typeof APPROVAL_STATUSES)[number]
+
+/** Exit interview lifecycle vocabulary. */
+export const EXIT_INTERVIEW_STATUSES = ['Scheduled', 'Completed', 'No Show', 'Rescheduled'] as const
+export type ExitInterviewStatus = (typeof EXIT_INTERVIEW_STATUSES)[number]
+
 /** Closed reason vocabulary for a Termination case (POST /api/separations). */
 export const TERMINATION_REASONS = [
   'Performance issues',
@@ -19,6 +27,15 @@ export const TERMINATION_REASONS = [
   'Misconduct / policy breach',
   'Contract expiry — not renewing',
   'Restructuring / redundancy',
+] as const
+
+/** Reason vocabulary offered by the HR-initiated offboarding dialog (E19). */
+export const OFFBOARDING_REASONS = [
+  'Resignation',
+  'End of Contract',
+  'Mutual Agreement',
+  'Performance Termination',
+  'Relocation / Personal',
 ] as const
 
 /** The T5 verdict shape carried on a separation case. */
@@ -40,10 +57,14 @@ export interface Separation {
   id: number
   employee: string
   employeeId: number
+  employeeNumber: string | null
   position: string
   gym: string
   lastDay: string | null
+  hireDate: string | null
+  terminationDate: string | null
   reason: string | null
+  notes: string | null
   /** Role label: HR Manager | Branch Manager | Top Management. */
   requestedBy: string | null
   /** Display name of the requesting user. */
@@ -57,6 +78,49 @@ export interface Separation {
   checklist: [string, boolean][]
   verdict: SeparationVerdict | null
   leaveTaken: number | null
+  /** HR decision on a termination request: Pending | Approved | Rejected. */
+  approvalStatus: string
+  approvedBy: string | null
+  approvedAt: string | null
+  approvalNote: string | null
+  /** Scheduled | Completed | No Show | Rescheduled (null = not scheduled). */
+  exitInterviewStatus: string | null
+  exitInterviewScheduledAt: string | null
+  exitInterviewCompletedAt: string | null
+  exitInterview: ExitInterviewDetails | null
+  clearance: SeparationClearance | null
+  blacklisted: boolean
+  blacklistReason: string | null
+}
+
+/** The professional exit interview form saved by HR. */
+export interface ExitInterviewDetails {
+  interviewer: string | null
+  interviewDate: string | null
+  reasonForLeaving: string | null
+  whatLikedMost: string | null
+  whatToImprove: string | null
+  jobSatisfaction: number | null
+  managementRating: number | null
+  workEnvironmentRating: number | null
+  compensationRating: number | null
+  wouldRecommend: boolean | null
+  notes: string | null
+  rehireEligible: boolean | null
+  rehireNote: string | null
+}
+
+/** Clearance / final-settlement state of the exit. */
+export interface SeparationClearance {
+  uniformReturned: boolean
+  assetsReturned: boolean
+  accessRevoked: boolean
+  finalSettlementCompleted: boolean
+  completed: boolean
+  completedAt: string | null
+  notes: string | null
+  settlementDirection: string | null
+  settlementAmount: number | null
 }
 
 export interface SeparationListParams {
@@ -105,6 +169,15 @@ export interface ChecklistState {
   checklist: [string, boolean][]
 }
 
+/** PUT /api/separations/{id}/stage — T4, move the case along the five exit stages. */
+export function putStage(id: number, status: string, signal?: AbortSignal): Promise<string> {
+  return apiRequest<{ message: string }>(`/api/separations/${id}/stage`, {
+    method: 'PUT',
+    body: { status },
+    signal,
+  }).then((r) => r.message)
+}
+
 /** PUT /api/separations/{id}/checklist — T3, tick/untick one exit task by index. */
 export function putChecklist(id: number, index: number, done: boolean, signal?: AbortSignal): Promise<ChecklistState> {
   return apiRequest<{ data: ChecklistState }>(`/api/separations/${id}/checklist`, {
@@ -143,10 +216,137 @@ export interface EmployeeOption {
   gym: string
 }
 
+export interface OffboardEmployeeBody {
+  /** yyyy-MM-dd. */
+  lastDay: string
+  reason: string
+  notes?: string
+  /** Defaults server-side from the reason (Termination when it says so). */
+  separationType?: 'Resignation' | 'Termination'
+}
+
+/** POST /api/employees/{id}/offboard — E19, HR-initiated offboarding (starts in Notice Period). */
+export function postOffboardEmployee(
+  employeeId: number,
+  body: OffboardEmployeeBody,
+  signal?: AbortSignal,
+): Promise<number> {
+  return apiRequest<{ data: { separationId: number } }>(`/api/employees/${employeeId}/offboard`, {
+    method: 'POST',
+    body,
+    signal,
+  }).then((r) => r.data.separationId)
+}
+
 /** Employee directory search feeding the "new separation" employee picker. */
 export function getEmployeeOptions(search: string, signal?: AbortSignal): Promise<Paged<EmployeeOption>> {
   const query = new URLSearchParams()
   query.set('search', search)
   query.set('pageSize', '8')
   return apiRequest<Paged<EmployeeOption>>(`/api/employees?${query.toString()}`, { signal })
+}
+
+// ---------------------------------------------------------------------------
+// Termination workflow — HR approval → exit interview → clearance
+// ---------------------------------------------------------------------------
+
+export interface ApprovalBody {
+  decision: 'Approved' | 'Rejected'
+  note?: string
+}
+
+/** PUT /api/separations/{id}/approval — HR approves or rejects a termination request. */
+export function putApproval(id: number, body: ApprovalBody, signal?: AbortSignal): Promise<string> {
+  return apiRequest<{ message: string }>(`/api/separations/${id}/approval`, {
+    method: 'PUT',
+    body,
+    signal,
+  }).then((r) => r.message)
+}
+
+/** PUT /api/separations/{id}/exit-interview/schedule — books the interview slot. */
+export function putExitInterviewSchedule(
+  id: number,
+  scheduledAt: string,
+  signal?: AbortSignal,
+): Promise<string> {
+  return apiRequest<{ message: string }>(`/api/separations/${id}/exit-interview/schedule`, {
+    method: 'PUT',
+    body: { scheduledAt },
+    signal,
+  }).then((r) => r.message)
+}
+
+export interface ExitInterviewStatusBody {
+  status: ExitInterviewStatus
+  rescheduledAt?: string
+  note?: string
+}
+
+/** PUT /api/separations/{id}/exit-interview/status — Completed | No Show | Rescheduled. */
+export function putExitInterviewStatus(
+  id: number,
+  body: ExitInterviewStatusBody,
+  signal?: AbortSignal,
+): Promise<string> {
+  return apiRequest<{ message: string }>(`/api/separations/${id}/exit-interview/status`, {
+    method: 'PUT',
+    body,
+    signal,
+  }).then((r) => r.message)
+}
+
+export interface ExitInterviewFormBody {
+  interviewer?: string
+  /** yyyy-MM-dd. */
+  interviewDate?: string
+  reasonForLeaving?: string
+  whatLikedMost?: string
+  whatToImprove?: string
+  jobSatisfaction?: number
+  managementRating?: number
+  workEnvironmentRating?: number
+  compensationRating?: number
+  wouldRecommend?: boolean
+  notes?: string
+  rehireEligible?: boolean
+  rehireNote?: string
+  blacklisted: boolean
+  blacklistReason?: string
+  /** Marks the interview Completed when true. */
+  complete: boolean
+}
+
+/** PUT /api/separations/{id}/exit-interview — saves the professional exit interview form. */
+export function putExitInterview(
+  id: number,
+  body: ExitInterviewFormBody,
+  signal?: AbortSignal,
+): Promise<string> {
+  return apiRequest<{ message: string }>(`/api/separations/${id}/exit-interview`, {
+    method: 'PUT',
+    body,
+    signal,
+  }).then((r) => r.message)
+}
+
+export interface ClearanceBody {
+  uniformReturned: boolean
+  assetsReturned: boolean
+  accessRevoked: boolean
+  finalSettlementCompleted: boolean
+  settlementDirection?: SettlementDirection
+  settlementAmount?: number
+  notes?: string
+  /** Completes clearance; the employee moves to Former Employees when the interview is done. */
+  complete: boolean
+}
+
+/** PUT /api/separations/{id}/clearance — saves clearance and final settlement. */
+export function putClearance(id: number, body: ClearanceBody, signal?: AbortSignal): Promise<string> {
+  return apiRequest<{ message: string }>(`/api/separations/${id}/clearance`, {
+    method: 'PUT',
+    body,
+    signal,
+  }).then((r) => r.message)
 }

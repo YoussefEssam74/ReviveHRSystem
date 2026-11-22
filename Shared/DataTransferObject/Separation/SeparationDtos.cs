@@ -36,10 +36,14 @@ namespace Shared.DataTransferObject.Separation
         public int Id { get; set; }
         public string? Employee { get; set; }
         public int? EmployeeId { get; set; }
+        public string? EmployeeNumber { get; set; }
         public string? Position { get; set; }
         public string? Gym { get; set; }
         public DateOnly LastDay { get; set; }
+        public DateOnly? HireDate { get; set; }
+        public DateOnly? TerminationDate { get; set; }
         public string? Reason { get; set; }
+        public string? Notes { get; set; }
         public string? RequestedBy { get; set; }
         public string? RequestedByUser { get; set; }
         public DateTime SubmittedDate { get; set; }
@@ -52,6 +56,59 @@ namespace Shared.DataTransferObject.Separation
         public IReadOnlyList<ChecklistEntry> Checklist { get; set; } = [];
         public SeparationVerdict? Verdict { get; set; }
         public decimal? LeaveTaken { get; set; }
+
+        // ------------------------------------------------------------------
+        // Termination workflow: HR approval → exit interview → clearance.
+        // ------------------------------------------------------------------
+
+        /// <summary>"Pending" | "Approved" | "Rejected".</summary>
+        public string ApprovalStatus { get; set; } = "Approved";
+
+        public string? ApprovedBy { get; set; }
+        public DateTime? ApprovedAt { get; set; }
+        public string? ApprovalNote { get; set; }
+
+        /// <summary>"Scheduled" | "Completed" | "No Show" | "Rescheduled" (null = not scheduled).</summary>
+        public string? ExitInterviewStatus { get; set; }
+
+        public DateTime? ExitInterviewScheduledAt { get; set; }
+        public DateTime? ExitInterviewCompletedAt { get; set; }
+        public ExitInterviewDetails? ExitInterview { get; set; }
+        public SeparationClearance? Clearance { get; set; }
+        public bool Blacklisted { get; set; }
+        public string? BlacklistReason { get; set; }
+    }
+
+    /// <summary>The professional exit interview form saved by HR.</summary>
+    public class ExitInterviewDetails
+    {
+        public string? Interviewer { get; set; }
+        public DateOnly? InterviewDate { get; set; }
+        public string? ReasonForLeaving { get; set; }
+        public string? WhatLikedMost { get; set; }
+        public string? WhatToImprove { get; set; }
+        public int? JobSatisfaction { get; set; }
+        public int? ManagementRating { get; set; }
+        public int? WorkEnvironmentRating { get; set; }
+        public int? CompensationRating { get; set; }
+        public bool? WouldRecommend { get; set; }
+        public string? Notes { get; set; }
+        public bool? RehireEligible { get; set; }
+        public string? RehireNote { get; set; }
+    }
+
+    /// <summary>Clearance / final-settlement state of the exit.</summary>
+    public class SeparationClearance
+    {
+        public bool UniformReturned { get; set; }
+        public bool AssetsReturned { get; set; }
+        public bool AccessRevoked { get; set; }
+        public bool FinalSettlementCompleted { get; set; }
+        public bool Completed { get; set; }
+        public DateTime? CompletedAt { get; set; }
+        public string? Notes { get; set; }
+        public string? SettlementDirection { get; set; }
+        public decimal? SettlementAmount { get; set; }
     }
 
     public class SeparationListQuery
@@ -190,5 +247,118 @@ namespace Shared.DataTransferObject.Separation
 
         [StringLength(1000)]
         public string? Note { get; init; }
+    }
+
+    // =====================================================================
+    // Termination workflow — HR approval → exit interview → clearance
+    // =====================================================================
+
+    /// <summary>PUT /api/separations/{id}/approval — HR decision on a termination request.</summary>
+    public class SeparationApprovalRequest
+    {
+        /// <summary>Approved | Rejected.</summary>
+        [Required, StringLength(30)]
+        public string Decision { get; init; } = string.Empty;
+
+        [StringLength(1000)]
+        public string? Note { get; init; }
+    }
+
+    /// <summary>PUT /api/separations/{id}/exit-interview/schedule — HR books the interview slot.</summary>
+    public class ExitInterviewScheduleRequest
+    {
+        public DateTime ScheduledAt { get; init; }
+
+        [StringLength(1000)]
+        public string? Note { get; init; }
+    }
+
+    /// <summary>PUT /api/separations/{id}/exit-interview/status — Completed | No Show | Rescheduled.</summary>
+    public class ExitInterviewStatusRequest
+    {
+        [Required, StringLength(30)]
+        public string Status { get; init; } = string.Empty;
+
+        /// <summary>Required when the status is Rescheduled.</summary>
+        public DateTime? RescheduledAt { get; init; }
+
+        [StringLength(1000)]
+        public string? Note { get; init; }
+    }
+
+    /// <summary>PUT /api/separations/{id}/exit-interview — the professional exit interview form.</summary>
+    public class ExitInterviewFormRequest
+    {
+        [StringLength(200)]
+        public string? Interviewer { get; init; }
+
+        public DateOnly? InterviewDate { get; init; }
+
+        [StringLength(1000)]
+        public string? ReasonForLeaving { get; init; }
+
+        [StringLength(2000)]
+        public string? WhatLikedMost { get; init; }
+
+        [StringLength(2000)]
+        public string? WhatToImprove { get; init; }
+
+        [Range(1, 5)]
+        public int? JobSatisfaction { get; init; }
+
+        [Range(1, 5)]
+        public int? ManagementRating { get; init; }
+
+        [Range(1, 5)]
+        public int? WorkEnvironmentRating { get; init; }
+
+        [Range(1, 5)]
+        public int? CompensationRating { get; init; }
+
+        public bool? WouldRecommend { get; init; }
+
+        [StringLength(2000)]
+        public string? Notes { get; init; }
+
+        public bool? RehireEligible { get; init; }
+
+        [StringLength(1000)]
+        public string? RehireNote { get; init; }
+
+        public bool Blacklisted { get; init; }
+
+        [StringLength(1000)]
+        public string? BlacklistReason { get; init; }
+
+        /// <summary>Marks the exit interview Completed when true.</summary>
+        public bool Complete { get; init; }
+    }
+
+    /// <summary>PUT /api/separations/{id}/clearance — asset/uniform returns and final settlement.</summary>
+    public class SeparationClearanceRequest
+    {
+        public bool UniformReturned { get; init; }
+
+        public bool AssetsReturned { get; init; }
+
+        public bool AccessRevoked { get; init; }
+
+        public bool FinalSettlementCompleted { get; init; }
+
+        /// <summary>none | owedToEmployee | employeeOwes.</summary>
+        [StringLength(30)]
+        public string? SettlementDirection { get; init; }
+
+        [Range(typeof(decimal), "0", "100000000")]
+        public decimal? SettlementAmount { get; init; }
+
+        [StringLength(1000)]
+        public string? Notes { get; init; }
+
+        /// <summary>
+        /// Completes clearance. When the exit interview is already completed the
+        /// employee is archived automatically and moves to Former Employees.
+        /// </summary>
+        public bool Complete { get; init; }
     }
 }

@@ -376,8 +376,12 @@ namespace ReviveHRSystem.IntegrationTests.Support
             return record.Id;
         }
 
-        /// <summary>Inserts an approved Day Off request covering [start, end] (inclusive).</summary>
-        public async Task<int> CreateApprovedDayOffAsync(int employeeId, DateOnly start, DateOnly end)
+        /// <summary>
+        /// Inserts an approved Day Off request covering [start, end] (inclusive);
+        /// <paramref name="payment"/> is "paid" / "unpaid" (null when not set).
+        /// </summary>
+        public async Task<int> CreateApprovedDayOffAsync(
+            int employeeId, DateOnly start, DateOnly end, string? payment = null)
         {
             var request = new DomainLayer.Models.RequestModule.EmployeeRequest
             {
@@ -387,7 +391,8 @@ namespace ReviveHRSystem.IntegrationTests.Support
                 TargetStartDate = start,
                 TargetEndDate = end,
                 Details = "Integration-test day off",
-                Status = DomainLayer.Models.RequestModule.Enums.RequestStatus.Approved
+                Status = DomainLayer.Models.RequestModule.Enums.RequestStatus.Approved,
+                Payment = payment
             };
             _db.EmployeeRequests.Add(request);
             await _db.SaveChangesAsync();
@@ -557,6 +562,35 @@ namespace ReviveHRSystem.IntegrationTests.Support
             var application = await _db.Applications.FirstAsync(a => a.Id == applicationId);
             application.LastActivityAt = DateTime.UtcNow.AddDays(-days);
             await _db.SaveChangesAsync();
+        }
+
+        /// <summary>
+        /// Adds an interview round to an application. Defaults describe a slot that
+        /// already passed with no outcome — the missed-interview state.
+        /// </summary>
+        public async Task<int> CreateInterviewAsync(
+            int applicationId,
+            PipelineStageType stage = PipelineStageType.FirstInterview,
+            DateTime? scheduledDate = null,
+            InterviewOutcome outcome = InterviewOutcome.Pending,
+            string status = "Scheduled",
+            DateTime? completedAt = null)
+        {
+            var interview = new Interview
+            {
+                ApplicationId = applicationId,
+                Stage = stage,
+                ScheduledDate = scheduledDate ?? DateTime.UtcNow.AddDays(-2),
+                Outcome = outcome,
+                Status = status,
+                Verdict = status == "Scheduled" ? "Scheduled" : null,
+                Type = "On-site",
+                Room = "Room 1",
+                CompletedAt = completedAt,
+            };
+            _db.Interviews.Add(interview);
+            await _db.SaveChangesAsync();
+            return interview.Id;
         }
 
         // ------------------------------------------------------------------

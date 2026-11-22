@@ -1,40 +1,21 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Check, X } from 'lucide-react'
-import { Button } from '../../../components/ui/button'
 import { Badge, StatusBadge } from '../../../components/ui/badge'
+import { Button } from '../../../components/ui/button'
 import { Dialog } from '../../../components/ui/dialog'
+import { Tabs, type TabItem } from '../../../components/ui/tabs'
 import { LoadingState, ErrorState } from '../../../components/async-state'
 import { useFinalizeSeparation, useSeparation, useToggleChecklist } from '../hooks/useTerminations'
 import { VerdictDialog } from './VerdictDialog'
+import { SeparationEmployeeData } from './SeparationEmployeeData'
+import { GymPill, VerdictChips } from './separation-ui'
+import { noticeDaysLeft } from './separation-utils'
 import { describeApiError } from '../../../lib/api-client'
-import { formatDate, formatMoney } from '../../../lib/format'
-import { translate } from '../../../i18n'
+import { formatDate } from '../../../lib/format'
+import { cn } from '../../../lib/utils'
 import type { Separation } from '../api/terminations.api'
 
-function Detail({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="min-w-0">
-      <p className="text-xs font-medium uppercase tracking-wide text-slate-400">{label}</p>
-      <p className="truncate text-sm text-slate-900">{value}</p>
-    </div>
-  )
-}
-
-function verdictSummary(separation: Separation): string {
-  const verdict = separation.verdict
-  if (!verdict) return '—'
-  const parts = [verdict.finalReason ?? '—']
-  if (verdict.settlement && verdict.settlement.direction !== 'none') {
-    const direction =
-      verdict.settlement.direction === 'owedToEmployee'
-        ? translate('Owed to employee')
-        : translate('Employee owes')
-    parts.push(`${direction} ${formatMoney(verdict.settlement.amount)}`)
-  }
-  if (verdict.rehire) parts.push(translate('Rehire: {{status}}', { status: translate(verdict.rehire.status) }))
-  return parts.join(' · ')
-}
+type DetailTab = 'workflow' | 'employee'
 
 export interface SeparationDetailDialogProps {
   separationId: number
@@ -43,17 +24,20 @@ export interface SeparationDetailDialogProps {
   onClose: () => void
 }
 
-/** The separation case drawer: checklist, verdict and finalize in one place. */
+/** The leaving case (mock openSeparation): Exit Workflow and Employee Data tabs. */
 export function SeparationDetailDialog({ separationId, canManage, onClose }: SeparationDetailDialogProps) {
   const { t } = useTranslation()
   const { data: separation, isLoading, error } = useSeparation(separationId)
   const toggle = useToggleChecklist(separationId)
   const finalize = useFinalizeSeparation(separationId)
+  const [tab, setTab] = useState<DetailTab>('workflow')
   const [verdictOpen, setVerdictOpen] = useState(false)
   const [confirming, setConfirming] = useState(false)
   const [actionError, setActionError] = useState<string | null>(null)
 
   const checklistComplete = (separation?.checklist ?? []).every(([, done]) => done)
+  const editable = canManage && separation != null && separation.status !== 'Completed'
+  const canFinalize = checklistComplete && separation?.verdict != null
 
   const onToggle = async (index: number, done: boolean) => {
     setActionError(null)
@@ -79,33 +63,13 @@ export function SeparationDetailDialog({ separationId, canManage, onClose }: Sep
     <Dialog
       open
       onClose={onClose}
-      title={separation ? separation.employee : t('Separation')}
+      title={separation ? t('Leaving — {{name}}', { name: separation.employee }) : t('Separation')}
       description={separation ? `${separation.position} · ${separation.gym}` : undefined}
-      className="sm:max-w-2xl"
+      className="sm:max-w-3xl"
       footer={
-        <>
-          <Button variant="outline" onClick={onClose}>
-            {t('Close')}
-          </Button>
-          {canManage && separation && separation.status !== 'Completed' && (
-            <>
-              <Button variant="secondary" onClick={() => setVerdictOpen(true)}>
-                {t('Save verdict')}
-              </Button>
-              <Button
-                onClick={() => setConfirming(true)}
-                disabled={!checklistComplete || !separation.verdict}
-                title={
-                  checklistComplete && separation.verdict
-                    ? undefined
-                    : t('The whole checklist must be done and a verdict saved before finalizing.')
-                }
-              >
-                {t('Finalize')}
-              </Button>
-            </>
-          )}
-        </>
+        <Button variant="outline" onClick={onClose}>
+          {t('Close')}
+        </Button>
       }
     >
       {isLoading ? (
@@ -113,113 +77,297 @@ export function SeparationDetailDialog({ separationId, canManage, onClose }: Sep
       ) : error ? (
         <ErrorState message={describeApiError(error)} />
       ) : separation ? (
-        <div className="space-y-5">
-          {actionError && (
-            <p role="alert" className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-              {actionError}
-            </p>
-          )}
+        <>
+          <Tabs
+            items={
+              [
+                { value: 'workflow', label: t('Exit Workflow') },
+                { value: 'employee', label: t('Employee Data') },
+              ] satisfies TabItem<DetailTab>[]
+            }
+            value={tab}
+            onChange={setTab}
+            className="w-full"
+          />
 
-          <div className="flex flex-wrap items-center gap-2">
-            <StatusBadge status={separation.status} />
-            <Badge>{separation.separationType}</Badge>
-            {separation.verdict && <Badge>{t('Verdict saved')}</Badge>}
-          </div>
-
-          <div>
-            <div className="flex items-center justify-between text-sm">
-              <p className="font-medium text-slate-700">{t('Exit checklist')}</p>
-              <p className="text-slate-500">{t('{{percent}}% complete', { percent: separation.progress })}</p>
-            </div>
-            <div className="mt-1.5 h-2 w-full rounded-full bg-slate-100">
-              <div
-                className="h-2 rounded-full bg-emerald-500 transition-all"
-                style={{ width: `${Math.max(0, Math.min(100, separation.progress))}%` }}
+          <div className="mt-3">
+            {tab === 'workflow' ? (
+              <WorkflowTab
+                separation={separation}
+                canManage={canManage}
+                editable={editable}
+                checklistComplete={checklistComplete}
+                canFinalize={canFinalize}
+                confirming={confirming}
+                actionError={actionError}
+                togglePending={toggle.isPending}
+                toggleIndex={toggle.variables?.index}
+                finalizePending={finalize.isPending}
+                onToggle={onToggle}
+                onRecordVerdict={() => setVerdictOpen(true)}
+                onAskFinalize={() => setConfirming(true)}
+                onCancelFinalize={() => setConfirming(false)}
+                onFinalize={onFinalize}
               />
-            </div>
-            <ul className="mt-3 space-y-2">
-              {separation.checklist.map(([label, done], index) => (
-                <li
-                  key={label}
-                  className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 px-3 py-2"
-                >
-                  <span className="flex min-w-0 items-center gap-2 text-sm text-slate-700">
-                    <span
-                      className={
-                        done
-                          ? 'flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-700'
-                          : 'flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-400'
-                      }
-                      aria-hidden="true"
-                    >
-                      {done ? <Check className="h-3 w-3" /> : <X className="h-3 w-3" />}
-                    </span>
-                    <span className={done ? 'text-slate-400 line-through' : undefined}>{label}</span>
-                  </span>
-                  {canManage && separation.status !== 'Completed' && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => onToggle(index, !done)}
-                      loading={toggle.isPending && toggle.variables?.index === index}
-                    >
-                      {done ? t('Undo') : t('Mark done')}
-                    </Button>
-                  )}
-                </li>
-              ))}
-            </ul>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
-            <Detail label={t('Last day')} value={formatDate(separation.lastDay)} />
-            <Detail label={t('Type')} value={separation.separationType} />
-            <Detail label={t('Leave taken')} value={separation.leaveTaken != null ? String(separation.leaveTaken) : '—'} />
-            <Detail label={t('Reason')} value={separation.reason ?? '—'} />
-            <Detail label={t('Requested by')} value={separation.requestedBy ?? '—'} />
-            <Detail label={t('Requested by user')} value={separation.requestedByUser ?? '—'} />
-            <Detail label={t('Submitted')} value={formatDate(separation.submittedDate)} />
-          </div>
-
-          <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
-            <p className="text-xs font-medium uppercase tracking-wide text-slate-400">{t('Exit verdict')}</p>
-            {separation.verdict ? (
-              <>
-                <p className="mt-1 text-sm text-slate-900">{verdictSummary(separation)}</p>
-                {(separation.verdict.settlement?.note || separation.verdict.rehire?.note) && (
-                  <p className="mt-1 text-sm italic text-slate-500">
-                    {separation.verdict.settlement?.note || separation.verdict.rehire?.note}
-                  </p>
-                )}
-              </>
             ) : (
-              <p className="mt-1 text-sm text-slate-500">{t('No verdict has been recorded yet.')}</p>
+              <SeparationEmployeeData separation={separation} />
             )}
           </div>
-
-          {canManage && confirming && (
-            <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
-              <p className="text-sm text-amber-800">
-                {t('Finalizing sets {{name}} to Terminated and deactivates their login. This cannot be undone.', {
-                  name: separation.employee,
-                })}
-              </p>
-              <div className="mt-2 flex gap-2">
-                <Button variant="danger" size="sm" onClick={onFinalize} loading={finalize.isPending}>
-                  {t('Confirm finalize')}
-                </Button>
-                <Button variant="outline" size="sm" onClick={() => setConfirming(false)}>
-                  {t('Cancel')}
-                </Button>
-              </div>
-            </div>
-          )}
-        </div>
+        </>
       ) : null}
 
       {verdictOpen && separation && (
-        <VerdictDialog separationId={separation.id} employeeName={separation.employee} onClose={() => setVerdictOpen(false)} />
+        <VerdictDialog
+          separationId={separation.id}
+          employeeName={separation.employee}
+          onClose={() => setVerdictOpen(false)}
+        />
       )}
     </Dialog>
+  )
+}
+
+function WorkflowTab({
+  separation,
+  canManage,
+  editable,
+  checklistComplete,
+  canFinalize,
+  confirming,
+  actionError,
+  togglePending,
+  toggleIndex,
+  finalizePending,
+  onToggle,
+  onRecordVerdict,
+  onAskFinalize,
+  onCancelFinalize,
+  onFinalize,
+}: {
+  separation: Separation
+  canManage: boolean
+  editable: boolean
+  checklistComplete: boolean
+  canFinalize: boolean
+  confirming: boolean
+  actionError: string | null
+  togglePending: boolean
+  toggleIndex: number | undefined
+  finalizePending: boolean
+  onToggle: (index: number, done: boolean) => void
+  onRecordVerdict: () => void
+  onAskFinalize: () => void
+  onCancelFinalize: () => void
+  onFinalize: () => void
+}) {
+  const { t } = useTranslation()
+  const doneCount = separation.checklist.filter(([, done]) => done).length
+  const daysLeft = noticeDaysLeft(separation.lastDay)
+  const percent = Math.max(0, Math.min(100, separation.progress))
+  const requesterVerb =
+    separation.requestedBy === 'Branch Manager'
+      ? t('Requested by')
+      : separation.requestedBy === 'HR Manager'
+        ? t('Initiated by')
+        : t('Requested via')
+
+  return (
+    <div className="space-y-3">
+      {actionError && (
+        <p role="alert" className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+          {actionError}
+        </p>
+      )}
+
+      <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-charcoal-50 px-3 py-2">
+        <p className="min-w-0 text-[11px] text-charcoal-500">
+          {requesterVerb}{' '}
+          <b className="text-charcoal-800">{separation.requestedByUser ?? separation.requestedBy ?? '—'}</b>
+        </p>
+        <div className="flex flex-wrap items-center gap-1.5">
+          <StatusBadge status={separation.status} />
+          <Badge>{t(separation.separationType)}</Badge>
+          {separation.submittedDate && (
+            <span className="text-[10px] font-medium text-charcoal-500">
+              {formatDate(separation.submittedDate)}
+            </span>
+          )}
+        </div>
+      </div>
+
+      <div className="rounded-lg border border-charcoal-200 p-2.5">
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-charcoal-400">
+            {t('Notice period · {{gym}}', { gym: separation.gym })}
+          </p>
+          <GymPill gym={separation.gym} />
+        </div>
+        <div className="mt-1.5 grid grid-cols-3 gap-2 text-[11px]">
+          <div>
+            <p className="text-[10px] uppercase text-charcoal-400">{t('Last working day')}</p>
+            <p className="font-semibold text-charcoal-800">
+              {formatDate(separation.lastDay, { withYear: 'always' })}
+            </p>
+          </div>
+          <div>
+            <p className="text-[10px] uppercase text-charcoal-400">{t('Days left')}</p>
+            <p className="font-semibold text-charcoal-800">{daysLeft ?? '—'}</p>
+          </div>
+          <div className="min-w-0">
+            <p className="text-[10px] uppercase text-charcoal-400">{t('Reason')}</p>
+            <p className="truncate font-semibold text-charcoal-800" title={separation.reason ?? undefined}>
+              {separation.reason ?? '—'}
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <div className="flex items-center justify-between gap-2 px-1 text-xs font-semibold">
+          <span className="text-charcoal-700">{t('Exit steps')}</span>
+          <span className={checklistComplete ? 'text-green-600' : 'text-brand-600'}>
+            {doneCount}/{separation.checklist.length} ({percent}%)
+          </span>
+        </div>
+        <div className="mt-1 h-2 w-full overflow-hidden rounded-full bg-charcoal-100">
+          <div
+            className={cn('h-full rounded-full transition-all', separation.status === 'Completed' ? 'bg-green-500' : 'bg-brand-500')}
+            style={{ width: `${percent}%` }}
+          />
+        </div>
+
+        {separation.checklist.length === 0 ? (
+          <p className="mt-2 text-[11px] text-charcoal-400">{t('This case has no exit steps on file.')}</p>
+        ) : (
+          <div className="mt-2 grid grid-cols-1 gap-1.5 sm:grid-cols-2">
+            {separation.checklist.map(([label, done], index) => (
+              <label
+                key={label}
+                className={cn(
+                  'flex items-center justify-between gap-2 rounded-lg bg-charcoal-50 p-2.5 transition-colors',
+                  editable ? 'cursor-pointer hover:bg-charcoal-100' : 'cursor-default',
+                )}
+              >
+                <span className="flex min-w-0 items-center gap-2">
+                  <span
+                    className={cn('h-2 w-2 shrink-0 rounded-full', done ? 'bg-green-500' : 'bg-charcoal-300')}
+                    aria-hidden="true"
+                  />
+                  <span
+                    className={cn(
+                      'text-xs',
+                      done ? 'text-charcoal-400 line-through' : 'font-medium text-charcoal-800',
+                    )}
+                  >
+                    {label}
+                  </span>
+                </span>
+                <input
+                  type="checkbox"
+                  checked={done}
+                  disabled={!editable || (togglePending && toggleIndex === index)}
+                  onChange={(event) => onToggle(index, event.target.checked)}
+                  className="h-4 w-4 shrink-0 cursor-pointer rounded border-charcoal-300 accent-brand-600 disabled:cursor-not-allowed"
+                />
+              </label>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {separation.status === 'Completed' ? (
+        separation.verdict ? (
+          <div className="rounded-lg border border-green-200 bg-green-50 p-2.5">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-green-800">{t('Exit verdict')}</p>
+              <VerdictChips verdict={separation.verdict} />
+            </div>
+            <p className="mt-1 text-[11px] text-green-800">{separation.verdict.finalReason}</p>
+            {separation.verdict.settlement?.note && (
+              <p className="mt-0.5 text-[11px] text-green-700">{t('Settlement: {{note}}', { note: separation.verdict.settlement.note })}</p>
+            )}
+            {separation.verdict.rehire?.note && (
+              <p className="mt-0.5 text-[11px] text-green-700">{t('Rehire: {{note}}', { note: separation.verdict.rehire.note })}</p>
+            )}
+          </div>
+        ) : (
+          <div className="rounded-lg border border-green-200 bg-green-50 p-2.5 text-center text-xs font-semibold text-green-800">
+            {t('Separation finalized — employee records archived.')}
+          </div>
+        )
+      ) : (
+        <div className="rounded-lg border border-charcoal-200 p-2.5">
+          <p className="text-xs font-semibold uppercase tracking-wide text-charcoal-900">{t('Exit verdict — HR record')}</p>
+          <p className="mt-0.5 text-[11px] text-charcoal-500">
+            {t('Why the employee left, the final settlement and rehire eligibility.')}
+          </p>
+          {separation.verdict ? (
+            <>
+              <p className="mt-1.5 text-[11px] text-charcoal-800">{separation.verdict.finalReason}</p>
+              {separation.verdict.settlement?.note && (
+                <p className="mt-0.5 text-[11px] text-charcoal-600">{separation.verdict.settlement.note}</p>
+              )}
+              {separation.verdict.rehire?.note && (
+                <p className="mt-0.5 text-[11px] text-charcoal-600">{separation.verdict.rehire.note}</p>
+              )}
+              <VerdictChips verdict={separation.verdict} className="mt-1.5" />
+              {canManage && (
+                <div className="mt-2 flex justify-end">
+                  <Button variant="secondary" size="sm" onClick={onRecordVerdict}>
+                    {t('Update exit verdict')}
+                  </Button>
+                </div>
+              )}
+            </>
+          ) : canManage ? (
+            <div className="mt-2 flex justify-end">
+              <Button size="sm" onClick={onRecordVerdict}>
+                {t('Record exit verdict')}
+              </Button>
+            </div>
+          ) : (
+            <p className="mt-1.5 text-[11px] text-charcoal-400">{t('No verdict has been recorded yet.')}</p>
+          )}
+        </div>
+      )}
+
+      {editable && (
+        <div className="flex flex-col gap-2 border-t border-charcoal-100 pt-2 sm:flex-row sm:items-center sm:justify-between">
+          <span className="text-[11px] text-charcoal-500">
+            {!checklistComplete
+              ? t('Complete remaining exit steps to finalize.')
+              : !separation.verdict
+                ? t('Record the exit verdict to finalize.')
+                : t('All exit steps verified — finalize to archive the employee record.')}
+          </span>
+          <Button
+            variant={canFinalize ? 'danger' : 'secondary'}
+            size="sm"
+            disabled={!canFinalize}
+            onClick={onAskFinalize}
+          >
+            {t('Finalize Separation')}
+          </Button>
+        </div>
+      )}
+
+      {editable && confirming && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
+          <p className="text-xs text-amber-800">
+            {t('Finalizing sets {{name}} to Terminated and deactivates their login. This cannot be undone.', {
+              name: separation.employee,
+            })}
+          </p>
+          <div className="mt-2 flex gap-2">
+            <Button variant="danger" size="sm" onClick={onFinalize} loading={finalizePending}>
+              {t('Confirm finalize')}
+            </Button>
+            <Button variant="outline" size="sm" onClick={onCancelFinalize}>
+              {t('Cancel')}
+            </Button>
+          </div>
+        </div>
+      )}
+    </div>
   )
 }

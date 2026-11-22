@@ -188,6 +188,8 @@ namespace Service.Specifications
             var term = string.IsNullOrWhiteSpace(search) ? null : search.Trim().ToLower();
             var positionTerm = string.IsNullOrWhiteSpace(position) ? null : position.Trim().ToLower();
             var names = gymNames ?? Array.Empty<string>();
+            // Captured (not translated) so the no-show cutoff is one stable value per query.
+            var now = DateTime.UtcNow;
 
             Criteria = a =>
                 (gymIds == null || gymIds.Length == 0 ||
@@ -199,6 +201,18 @@ namespace Service.Specifications
                     (a.PositionTitle != null && a.PositionTitle.ToLower().Contains(positionTerm))) &&
                 (view != "rejected" || a.Status == ApplicationStatus.Rejected) &&
                 (view != "active" || (a.Status == ApplicationStatus.InProgress && !a.Candidate.Blocked)) &&
+                (view != "missed" || (
+                    a.Status == ApplicationStatus.InProgress &&
+                    !a.Candidate.Blocked &&
+                    a.Interviews.Any(i =>
+                        (i.Stage == PipelineStageType.FirstInterview || i.Stage == PipelineStageType.SecondInterview) &&
+                        i.CompletedAt == null &&
+                        i.Outcome == InterviewOutcome.Pending &&
+                        i.Status != "Cancelled" &&
+                        i.Status != "Draft" &&
+                        i.ScheduledDate < now &&
+                        // A rebooked slot supersedes the old one, so only the latest round counts.
+                        !a.Interviews.Any(later => later.Stage == i.Stage && later.Id > i.Id)))) &&
                 (blocked == null || a.Candidate.Blocked == blocked) &&
                 (term == null || a.Candidate.FullName.ToLower().Contains(term)
                     || a.Candidate.Email.ToLower().Contains(term)

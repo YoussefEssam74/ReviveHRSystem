@@ -1363,6 +1363,49 @@ namespace Persistence.Data.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
+                    b.Property<bool>("AccessRevoked")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("ApprovalNote")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<string>("ApprovalStatus")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)")
+                        .HasDefaultValue("Approved");
+
+                    b.Property<DateTime?>("ApprovedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int?>("ApprovedBy")
+                        .HasColumnType("integer");
+
+                    b.Property<bool>("AssetsReturned")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("BlacklistReason")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<bool>("Blacklisted")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("ClearanceCompleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTime?>("ClearanceCompletedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("ClearanceNotes")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<int?>("CompensationRating")
+                        .HasColumnType("integer");
+
                     b.Property<DateTime?>("CompletedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -1377,9 +1420,22 @@ namespace Persistence.Data.Migrations
                     b.Property<int>("EmployeeId")
                         .HasColumnType("integer");
 
+                    b.Property<DateTime?>("ExitInterviewCompletedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("ExitInterviewScheduledAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("ExitInterviewStatus")
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
                     b.Property<string>("FinalReason")
                         .HasMaxLength(1000)
                         .HasColumnType("character varying(1000)");
+
+                    b.Property<bool>("FinalSettlementCompleted")
+                        .HasColumnType("boolean");
 
                     b.Property<DateTime>("InitiatedAt")
                         .HasColumnType("timestamp with time zone");
@@ -1387,13 +1443,30 @@ namespace Persistence.Data.Migrations
                     b.Property<int>("InitiatedBy")
                         .HasColumnType("integer");
 
+                    b.Property<DateOnly?>("InterviewDate")
+                        .HasColumnType("date");
+
+                    b.Property<string>("InterviewNotes")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<string>("Interviewer")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
                     b.Property<bool>("IsDeleted")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("boolean")
                         .HasDefaultValue(false);
 
+                    b.Property<int?>("JobSatisfaction")
+                        .HasColumnType("integer");
+
                     b.Property<DateOnly>("LastWorkingDate")
                         .HasColumnType("date");
+
+                    b.Property<int?>("ManagementRating")
+                        .HasColumnType("integer");
 
                     b.Property<string>("Notes")
                         .HasMaxLength(1000)
@@ -1401,6 +1474,10 @@ namespace Persistence.Data.Migrations
 
                     b.Property<string>("Reason")
                         .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<string>("ReasonForLeaving")
                         .HasMaxLength(1000)
                         .HasColumnType("character varying(1000)");
 
@@ -1436,13 +1513,34 @@ namespace Persistence.Data.Migrations
                         .HasMaxLength(50)
                         .HasColumnType("character varying(50)");
 
+                    b.Property<bool>("UniformReturned")
+                        .HasColumnType("boolean");
+
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<int?>("UpdatedBy")
                         .HasColumnType("integer");
 
+                    b.Property<string>("WhatLikedMost")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<string>("WhatToImprove")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<int?>("WorkEnvironmentRating")
+                        .HasColumnType("integer");
+
+                    b.Property<bool?>("WouldRecommend")
+                        .HasColumnType("boolean");
+
                     b.HasKey("Id");
+
+                    b.HasIndex("ApprovalStatus");
+
+                    b.HasIndex("ApprovedBy");
 
                     b.HasIndex("InitiatedBy");
 
@@ -5248,6 +5346,11 @@ namespace Persistence.Data.Migrations
 
             modelBuilder.Entity("DomainLayer.Models.EmployeeModule.OffboardingCase", b =>
                 {
+                    b.HasOne("DomainLayer.Models.UserModule.User", "ApprovedByUser")
+                        .WithMany()
+                        .HasForeignKey("ApprovedBy")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("DomainLayer.Models.EmployeeModule.Employee", "Employee")
                         .WithMany("OffboardingCases")
                         .HasForeignKey("EmployeeId")
@@ -5259,6 +5362,8 @@ namespace Persistence.Data.Migrations
                         .HasForeignKey("InitiatedBy")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+
+                    b.Navigation("ApprovedByUser");
 
                     b.Navigation("Employee");
 
