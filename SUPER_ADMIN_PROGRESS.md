@@ -615,7 +615,8 @@ Data and layout corrections from the same pass:
 | Workspace launcher | `/platform/users/:id` | Removed from the HR-managers page; it lives on a user's profile, where the reason is pre-filled so the primary action is never silently disabled. |
 | Ledger actions | `/platform/billing` | Every row button is wired (PDF, reminder, record payment, void) and the void dialog explains what voiding does — it retires the number, keeps the row on the ledger and stops it counting towards outstanding revenue. |
 | Revenue Analytics | nav + `/platform/revenue` | The sidebar entry, page title and breadcrumb read "Revenue Analytics", and the gross metric is now "Revenue growth" (change vs last month in the sub-line, "Revenue growth" as its breakdown title). |
-| Month chart | `components/MonthChart.tsx` | Both revenue charts (recurring revenue on the overview, billed per month on the growth breakdown) share one column chart with a value axis, gridlines, per-month figures and a total/average footer — a flat ledger used to render as an empty block. |
+| Trend chart | `components/TrendChart.tsx` | Both revenue charts (recurring revenue on the overview, billed per month on the growth breakdown) are the mock's `areaChart`: geometry only in a stretched SVG, labels and dots in HTML so text stays crisp and dots stay round, with a 0 / 25k / 50k axis, gridlines and hover values. A flat ledger still reads as data instead of an empty block. |
+| Branch management | `/platform/companies/:id` → Branches | The tab was read-only; it now adds, edits and archives branches against `POST`/`PUT`/`DELETE /companies/{id}/branches`, gated by the plan's branch cap. |
 
 ### 3.6 Endpoint tracker
 

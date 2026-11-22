@@ -1,13 +1,17 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, useParams } from 'react-router-dom'
-import { AlertTriangle, Mail, Phone, User } from 'lucide-react'
+import { AlertTriangle, Mail, Phone, Plus, User } from 'lucide-react'
 import { Badge, StatusBadge } from '../../../components/ui/badge'
+import { Button } from '../../../components/ui/button'
+import { Modal } from '../../../components/ui/modal'
+import { useToast } from '../../../components/ui/toast'
 import { describeApiError } from '../../../lib/api-client'
 import { formatDate, formatMoney, formatNumber, timeAgo } from '../../../lib/format'
 import { cn } from '../../../lib/utils'
 import type { CompanyDetail } from '../api/platform.api'
 import {
+  useArchiveBranch,
   useChangeCompanyStatus,
   useCompany,
   useCompanyAudit,
@@ -16,6 +20,8 @@ import {
   useCompanyEmployees,
   useCompanyHrStaff,
   useCompanyOverview,
+  useCreateBranch,
+  useUpdateBranch,
 } from '../hooks/usePlatform'
 import {
   PTbody,
@@ -408,32 +414,93 @@ function EmployeesTab({ companyId }: { companyId: number }) {
   )
 }
 
+type BranchDraftState = {
+  id: number | null
+  name: string
+  area: string
+  address: string
+  phone: string
+}
+
+const emptyBranch = (): BranchDraftState => ({ id: null, name: '', area: '', address: '', phone: '' })
+
 function BranchesTab({ companyId }: { companyId: number }) {
   const { t } = useTranslation()
+  const { toast } = useToast()
   const branches = useCompanyBranches(companyId)
+  const createBranch = useCreateBranch()
+  const updateBranch = useUpdateBranch()
+  const archiveBranch = useArchiveBranch()
+  const [draft, setDraft] = useState<BranchDraftState | null>(null)
 
   if (branches.isPending) return <PanelLoading />
   if (branches.isError)
-    return <PanelError
-      title={t('Could not load the branches')}
-      message={describeApiError(branches.error)}
-      onRetry={() => void branches.refetch()}
-    />
+    return (
+      <PanelError
+        title={t('Could not load the branches')}
+        message={describeApiError(branches.error)}
+        onRetry={() => void branches.refetch()}
+      />
+    )
+
+  const limitReached = branches.data.branchLimitReached
+  const busy = createBranch.isPending || updateBranch.isPending
+
+  const submit = () => {
+    if (!draft) return
+    const body = {
+      name: draft.name.trim(),
+      area: draft.area.trim() || null,
+      address: draft.address.trim() || null,
+      phone: draft.phone.trim() || null,
+    }
+    const onSuccess = () => {
+      toast(draft.id === null ? t('Branch added.') : t('Branch updated.'), 'success')
+      setDraft(null)
+    }
+    const onError = () => toast(t('Could not save the branch.'), 'error')
+
+    if (draft.id === null) createBranch.mutate({ companyId, body }, { onSuccess, onError })
+    else updateBranch.mutate({ companyId, branchId: draft.id, body }, { onSuccess, onError })
+  }
+
+  const archive = (branchId: number, name: string) => {
+    if (!window.confirm(t('Archive {{name}}? Its history stays, but it stops taking new work.', { name }))) return
+    archiveBranch.mutate(
+      { companyId, branchId },
+      {
+        onSuccess: () => toast(t('{{name}} was archived.', { name }), 'success'),
+        onError: () => toast(t('Could not archive the branch.'), 'error'),
+      },
+    )
+  }
 
   return (
     <>
-      {branches.data.branchLimit !== null && (
-        <p className="flex items-center gap-1.5 border-b border-charcoal-100 px-3 py-1.5 text-[10px] text-charcoal-500">
-          {t('{{used}} of {{limit}} branches on this plan', {
-            used: branches.data.items.length,
-            limit: branches.data.branchLimit,
-          })}
-          {branches.data.branchLimitReached && <Badge color="yellow">{t('Limit reached')}</Badge>}
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-charcoal-100 px-3 py-1.5">
+        <p className="flex items-center gap-1.5 text-[10px] text-charcoal-500">
+          {branches.data.branchLimit !== null
+            ? t('{{used}} of {{limit}} branches on this plan', {
+                used: branches.data.items.length,
+                limit: branches.data.branchLimit,
+              })
+            : t('{{count}} branches · unlimited on this plan', { count: branches.data.items.length })}
+          {limitReached && <Badge color="yellow">{t('Limit reached')}</Badge>}
         </p>
-      )}
+        <button
+          type="button"
+          className="btn btn-primary btn-sm disabled:opacity-40"
+          disabled={limitReached}
+          title={limitReached ? t('The plan caps branches — upgrade the plan to add more.') : undefined}
+          onClick={() => setDraft(emptyBranch())}
+        >
+          <Plus className="h-3.5 w-3.5" aria-hidden="true" />
+          {t('Add branch')}
+        </button>
+      </div>
 
       {branches.data.items.length === 0 ? (
-        <PanelEmpty title={t('No branches yet')} />
+        <PanelEmpty title={t('No branches yet')} hint={t('A gym needs at least one branch to operate.')} />
       ) : (
         <TableWrap>
           <PTable className="pc-table-sticky">
@@ -441,9 +508,11 @@ function BranchesTab({ companyId }: { companyId: number }) {
               <tr>
                 <PTh>{t('Branch')}</PTh>
                 <PTh>{t('Area')}</PTh>
+                <PTh>{t('Address')}</PTh>
                 <PTh>{t('Phone')}</PTh>
                 <PTh className="pc-end">{t('Staff')}</PTh>
                 <PTh>{t('Status')}</PTh>
+                <PTh className="pc-end">{t('Actions')}</PTh>
               </tr>
             </PThead>
             <PTbody>
@@ -454,10 +523,38 @@ function BranchesTab({ companyId }: { companyId: number }) {
                     <span className="block text-[10px] leading-tight text-charcoal-400">{branch.code}</span>
                   </PTd>
                   <PTd className="text-[11px] text-charcoal-600">{branch.area ?? '—'}</PTd>
+                  <PTd className="max-w-[220px] truncate text-[11px] text-charcoal-600">{branch.address ?? '—'}</PTd>
                   <PTd className="whitespace-nowrap text-[11px] text-charcoal-600">{branch.phone ?? '—'}</PTd>
                   <PTd className="pc-end text-[11px] text-charcoal-600">{formatNumber(branch.staffCount)}</PTd>
                   <PTd>
                     <StatusBadge status={branch.status} />
+                  </PTd>
+                  <PTd>
+                    <div className="flex items-center justify-end gap-1">
+                      <button
+                        type="button"
+                        className="btn btn-ghost btn-sm text-charcoal-600"
+                        onClick={() =>
+                          setDraft({
+                            id: branch.id,
+                            name: branch.name,
+                            area: branch.area ?? '',
+                            address: branch.address ?? '',
+                            phone: branch.phone ?? '',
+                          })
+                        }
+                      >
+                        {t('Edit')}
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-ghost btn-sm text-red-600 disabled:opacity-40"
+                        disabled={branch.status !== 'Active' || archiveBranch.isPending}
+                        onClick={() => archive(branch.id, branch.name)}
+                      >
+                        {t('Archive')}
+                      </button>
+                    </div>
                   </PTd>
                 </PTr>
               ))}
@@ -465,6 +562,63 @@ function BranchesTab({ companyId }: { companyId: number }) {
           </PTable>
         </TableWrap>
       )}
+
+      <Modal
+        open={draft !== null}
+        title={draft?.id === null ? t('Add branch') : t('Edit branch')}
+        subtitle={t('Every branch gets its own code and staff scope')}
+        onClose={() => setDraft(null)}
+        footer={
+          <>
+            <Button variant="outline" size="sm" onClick={() => setDraft(null)}>
+              {t('Cancel')}
+            </Button>
+            <Button size="sm" onClick={submit} loading={busy} disabled={!draft?.name.trim()}>
+              {draft?.id === null ? t('Add branch') : t('Save branch')}
+            </Button>
+          </>
+        }
+      >
+        {draft && (
+          <div className="space-y-2.5">
+            <label className="block">
+              <span className="pc-label">{t('Branch name')}</span>
+              <input
+                className="pc-control w-full"
+                value={draft.name}
+                onChange={(event) => setDraft({ ...draft, name: event.target.value })}
+              />
+            </label>
+            <div className="grid gap-2.5 sm:grid-cols-2">
+              <label className="block">
+                <span className="pc-label">{t('Area')}</span>
+                <input
+                  className="pc-control w-full"
+                  placeholder={t('e.g. Smouha')}
+                  value={draft.area}
+                  onChange={(event) => setDraft({ ...draft, area: event.target.value })}
+                />
+              </label>
+              <label className="block">
+                <span className="pc-label">{t('Phone')}</span>
+                <input
+                  className="pc-control w-full"
+                  value={draft.phone}
+                  onChange={(event) => setDraft({ ...draft, phone: event.target.value })}
+                />
+              </label>
+            </div>
+            <label className="block">
+              <span className="pc-label">{t('Address')}</span>
+              <input
+                className="pc-control w-full"
+                value={draft.address}
+                onChange={(event) => setDraft({ ...draft, address: event.target.value })}
+              />
+            </label>
+          </div>
+        )}
+      </Modal>
     </>
   )
 }

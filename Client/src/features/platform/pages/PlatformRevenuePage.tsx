@@ -28,7 +28,7 @@ import {
   GymMark,
 } from '../components/platform-ui'
 import { AttentionStrip } from '../components/AttentionStrip'
-import { MonthChart } from '../components/MonthChart'
+import { TrendChart } from '../components/TrendChart'
 import { saveBlob } from '../lib/download'
 
 /** Revenue Analytics landing page: four headline figures, the trend and the per-gym ledger. */
@@ -169,11 +169,17 @@ export default function PlatformRevenuePage() {
                   hint={t('Monthly recurring revenue appears once billing starts.')}
                 />
               ) : (
-                <MonthChart
-                  rows={trend.data.series.map((point) => ({ label: point.label, value: point.mrr }))}
-                  currentLabel={trend.data.series[trend.data.series.length - 1]?.label}
-                  ariaLabel={t('MRR by month')}
-                />
+                <div className="px-3 pb-1 pt-1">
+                  <TrendChart
+                    rows={trend.data.series.map((point) => ({
+                      label: point.label.split(' ')[0],
+                      title: point.label,
+                      value: point.mrr,
+                    }))}
+                    currentLabel={trend.data.series[trend.data.series.length - 1]?.label.split(' ')[0]}
+                    ariaLabel={t('Monthly recurring revenue trend')}
+                  />
+                </div>
               )}
             </div>
           </Panel>

@@ -36,7 +36,7 @@ import {
   GymMark,
 } from '../components/platform-ui'
 import { AttentionStrip } from '../components/AttentionStrip'
-import { MonthChart } from '../components/MonthChart'
+import { TrendChart } from '../components/TrendChart'
 import { saveBlob } from '../lib/download'
 
 type Metric = 'mrr' | 'gross' | 'collected' | 'outstanding'
@@ -384,9 +384,9 @@ export default function PlatformRevenueDetailPage() {
               <div className="min-w-0 flex-1">
                 <p className="pc-card-label">{t('Billed per month')}</p>
                 <p className="mt-0.5 text-[10px] text-charcoal-500">
-                  {t('{{count}} billing months · peak {{peak}}', {
+                  {t('{{count}} billing months · {{total}} billed', {
                     count: monthRows.length,
-                    peak: formatMoney(Math.max(...monthRows.map((row) => row.value), 0)),
+                    total: formatMoney(monthRows.reduce((sum, row) => sum + row.value, 0)),
                   })}
                 </p>
               </div>
@@ -396,12 +396,17 @@ export default function PlatformRevenueDetailPage() {
             ) : monthRows.length === 0 ? (
               <PanelEmpty title={t('No invoices yet')} />
             ) : (
-              <MonthChart
-                rows={monthRows}
-                currentLabel={periodLabel}
-                ariaLabel={t('Billed per month')}
-                footer={<span className="text-charcoal-400">{' · '}{t('billed across the ledger')}</span>}
-              />
+              <div className="px-3 pb-1 pt-1">
+                <TrendChart
+                  rows={monthRows.map((row) => ({
+                    label: row.label.split(' ')[0],
+                    title: row.label,
+                    value: row.value,
+                  }))}
+                  currentLabel={periodLabel.split(' ')[0]}
+                  ariaLabel={t('Billed per month')}
+                />
+              </div>
             )}
           </Panel>
 
@@ -673,7 +678,7 @@ function PlanRevenueTable({
       <PTable className="pc-table-sticky">
         <PThead>
           <tr>
-            <PTh className="w-full">{t('Plan')}</PTh>
+            <PTh>{t('Plan')}</PTh>
             <PTh>{t('Gyms billed')}</PTh>
             <PTh className="pc-end">{t('Invoiced')}</PTh>
             <PTh>{t('Growth vs last month')}</PTh>

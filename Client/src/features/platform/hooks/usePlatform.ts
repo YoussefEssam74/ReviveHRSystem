@@ -25,6 +25,7 @@ import {
   getRevenueSummary,
   getRevenueTrend,
   getSettings,
+  deleteBranch,
   postBranch,
   postCompany,
   postCreateHrManager,
@@ -38,6 +39,7 @@ import {
   postSendReminder,
   postStartWorkspace,
   postVoidInvoice,
+  putBranch,
   putFeatureFlag,
   putPlan,
   putPlatformUserStatus,
@@ -240,6 +242,24 @@ export function useCreateBranch() {
   const invalidate = useInvalidatePlatform()
   return useMutation({
     mutationFn: ({ companyId, body }: { companyId: number; body: CreateBranchBody }) => postBranch(companyId, body),
+    onSuccess: invalidate,
+  })
+}
+
+export function useUpdateBranch() {
+  const invalidate = useInvalidatePlatform()
+  return useMutation({
+    mutationFn: ({ companyId, branchId, body }: { companyId: number; branchId: number; body: CreateBranchBody }) =>
+      putBranch(companyId, branchId, body),
+    onSuccess: invalidate,
+  })
+}
+
+export function useArchiveBranch() {
+  const invalidate = useInvalidatePlatform()
+  return useMutation({
+    mutationFn: ({ companyId, branchId }: { companyId: number; branchId: number }) =>
+      deleteBranch(companyId, branchId),
     onSuccess: invalidate,
   })
 }

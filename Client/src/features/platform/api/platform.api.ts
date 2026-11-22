@@ -341,6 +341,20 @@ export function postBranch(companyId: number, body: CreateBranchBody): Promise<{
   return apiRequest(`/api/platform/companies/${companyId}/branches`, { method: 'POST', body })
 }
 
+/** Edits a branch name/area/address/phone/manager; the code never changes. */
+export function putBranch(
+  companyId: number,
+  branchId: number,
+  body: CreateBranchBody,
+): Promise<{ id: number; code: string; name: string }> {
+  return apiRequest(`/api/platform/companies/${companyId}/branches/${branchId}`, { method: 'PUT', body })
+}
+
+/** Archives a branch: it stays on the ledger but stops accepting new work. */
+export function deleteBranch(companyId: number, branchId: number): Promise<void> {
+  return apiRequest(`/api/platform/companies/${companyId}/branches/${branchId}`, { method: 'DELETE' })
+}
+
 // ------------------------------------------------------------------
 // Platform users
 // ------------------------------------------------------------------
