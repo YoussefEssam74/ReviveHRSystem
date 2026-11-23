@@ -1,7 +1,19 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { Bell, ChevronDown, LogOut, Menu, Search, ShieldCheck, X, Zap, Languages, Moon, Sun } from 'lucide-react'
+import {
+  Bell,
+  ChevronDown,
+  LogOut,
+  Menu,
+  Settings,
+  ShieldCheck,
+  X,
+  Zap,
+  Languages,
+  Moon,
+  Sun,
+} from 'lucide-react'
 import { useAuthSession } from '../../../contexts/AuthSessionContext'
 import { useMe } from '../../../contexts/MeContext'
 import { useTheme } from '../../../contexts/ThemeContext'
@@ -78,6 +90,71 @@ function useDismiss(open: boolean, setOpen: (open: boolean) => void) {
   return ref
 }
 
+/**
+ * Count pill on a sidebar item — the mock's `.nav-item > span` badge: quiet, one line,
+ * tinted by severity, with the meaning in the tooltip.
+ */
+const NAV_BADGE_TONES = {
+  urgent: 'bg-red-50 text-red-600 ring-1 ring-inset ring-red-200',
+  action: 'bg-amber-50 text-amber-600 ring-1 ring-inset ring-amber-200',
+  info: 'bg-blue-50 text-blue-600 ring-1 ring-inset ring-blue-200',
+} as const
+
+type NavBadgeTone = keyof typeof NAV_BADGE_TONES
+
+interface NavBadge {
+  count: number
+  tone: NavBadgeTone
+  label: string
+}
+
+function NavBadgePill({ count, tone, label }: NavBadge) {
+  if (count < 1) return null
+  return (
+    <span
+      className={cn(
+        'ms-auto inline-flex flex-shrink-0 items-center rounded-md px-1.5 py-0.5 text-[10px] font-semibold leading-none',
+        NAV_BADGE_TONES[tone],
+      )}
+      title={label}
+    >
+      {count > 99 ? '99+' : count}
+    </span>
+  )
+}
+
+/**
+ * Badges for the sidebar, keyed by the route they belong to: each slice of the
+ * attention queue lands on the page that can resolve it.
+ */
+function useNavBadges(): Record<string, NavBadge> {
+  const { t } = useTranslation()
+  const alerts = usePlatformAlerts(undefined)
+  const badges: Record<string, NavBadge> = {}
+
+  const items = alerts.data?.items ?? []
+  const put = (route: string, matching: typeof items, label: string) => {
+    if (matching.length === 0) return
+    badges[route] = {
+      count: matching.length,
+      tone: matching.some((alert) => alert.severity === 'critical') ? 'urgent' : 'action',
+      label,
+    }
+  }
+
+  const companyAlerts = items.filter((alert) => alert.actionTarget === 'company-detail')
+  const userAlerts = items.filter((alert) => alert.actionTarget === 'user-detail')
+  const otherAlerts = items.filter(
+    (alert) => alert.actionTarget !== 'company-detail' && alert.actionTarget !== 'user-detail',
+  )
+
+  put('/platform/dashboard', otherAlerts, t('platform alerts need attention'))
+  put('/platform/companies', companyAlerts, t('gym accounts need attention'))
+  put('/platform/users', userAlerts, t('user accounts need attention'))
+
+  return badges
+}
+
 function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   const { t } = useTranslation()
   const { me } = useMe()
@@ -88,6 +165,7 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   const isSuperAdmin = me?.userType === 'TopManagement'
   const [menuOpen, setMenuOpen] = useState(false)
   const menuRef = useDismiss(menuOpen, setMenuOpen)
+  const badges = useNavBadges()
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -125,6 +203,7 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
                   >
                     <item.icon aria-hidden="true" />
                     <span className="min-w-0 flex-1 truncate">{t(item.label)}</span>
+                    {badges[item.to] && <NavBadgePill {...badges[item.to]} />}
                   </NavLink>
                 ))}
               </div>
@@ -205,6 +284,16 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
                 />
               </span>
             </button>
+            <div className="my-1 border-t border-charcoal-100" />
+            <Link
+              to="/platform/settings"
+              role="menuitem"
+              onClick={() => setMenuOpen(false)}
+              className="flex w-full items-center gap-2 px-3 py-1.5 text-[11px] text-charcoal-700 hover:bg-charcoal-50"
+            >
+              <Settings className="h-3.5 w-3.5 text-charcoal-400" aria-hidden="true" />
+              {t('Platform settings')}
+            </Link>
             <div className="my-1 border-t border-charcoal-100" />
             <button
               type="button"
@@ -334,6 +423,16 @@ function AccountMenu() {
             <p className="truncate text-xs font-medium text-charcoal-900">{me?.userName ?? t('Signed in')}</p>
             <p className="truncate text-[10px] text-charcoal-500">{me?.userType ?? ''}</p>
           </div>
+          {me?.userType === 'TopManagement' && (
+            <Link
+              to="/platform/settings"
+              onClick={() => setOpen(false)}
+              className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-charcoal-700 hover:bg-charcoal-50"
+            >
+              <Settings className="h-3.5 w-3.5 text-charcoal-400" aria-hidden="true" />
+              {t('Platform settings')}
+            </Link>
+          )}
           <button
             type="button"
             onClick={() => {
@@ -349,37 +448,6 @@ function AccountMenu() {
         </div>
       )}
     </div>
-  )
-}
-
-/** Header search: hands the term to the user directory, which owns the query. */
-function GlobalSearch() {
-  const { t } = useTranslation()
-  const navigate = useNavigate()
-  const [term, setTerm] = useState('')
-
-  return (
-    <form
-      className="relative hidden max-w-xs flex-1 md:block"
-      onSubmit={(event) => {
-        event.preventDefault()
-        const value = term.trim()
-        navigate(value ? `/platform/users?q=${encodeURIComponent(value)}` : '/platform/users')
-      }}
-    >
-      <Search
-        className="pointer-events-none absolute start-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-charcoal-400"
-        aria-hidden="true"
-      />
-      <input
-        type="search"
-        value={term}
-        onChange={(event) => setTerm(event.target.value)}
-        placeholder={t('Search users and gyms…')}
-        aria-label={t('Search the platform')}
-        className="pc-control w-full ps-7"
-      />
-    </form>
   )
 }
 
@@ -439,8 +507,6 @@ export function PlatformLayout() {
               >
                 <Menu className="h-4 w-4 text-charcoal-600" aria-hidden="true" />
               </button>
-
-              <GlobalSearch />
 
               <div className="ms-auto flex flex-shrink-0 items-center gap-1.5">
                 <AlertsBell />

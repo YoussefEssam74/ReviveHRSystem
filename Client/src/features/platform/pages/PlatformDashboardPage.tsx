@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { AlertTriangle, Building2, CreditCard, Users, UserPlus, Wallet } from 'lucide-react'
+import { AlertTriangle, Building2, Users, UserCog, UserPlus, Wallet } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { CreateGymModal } from '../components/CreateGymModal'
 import { Badge, StatusBadge } from '../../../components/ui/badge'
@@ -141,17 +141,10 @@ export default function PlatformDashboardPage() {
               />
             )}
             <KpiTile
-              label={t('Seat utilisation')}
-              value={data.seats.capacity > 0 ? `${data.seats.utilisationPercent}%` : formatNumber(data.seats.used)}
-              sub={
-                data.seats.capacity > 0
-                  ? t('{{used}} of {{capacity}} capped seats', {
-                      used: formatNumber(data.seats.used),
-                      capacity: formatNumber(data.seats.capacity),
-                    })
-                  : t('No capped plans')
-              }
-              icon={CreditCard}
+              label={t('HR managers')}
+              value={formatNumber(data.users.hrManagers)}
+              sub={t('Each reaches every gym account')}
+              icon={UserCog}
             />
           </div>
 

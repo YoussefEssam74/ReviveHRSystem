@@ -47,6 +47,8 @@ export interface PlatformAlert {
   detail: string
   companyId: number | null
   companyName: string | null
+  /** Set when the alert is about one account (failed sign-in bursts). */
+  userId: number | null
   actionLabel: string
   actionTarget: string
   raisedAt: string | null
@@ -148,6 +150,18 @@ export interface CompanyDetail {
 
 export function getCompany(id: number, signal?: AbortSignal): Promise<CompanyDetail> {
   return apiRequest<CompanyDetail>(`/api/platform/companies/${id}`, { signal })
+}
+
+export interface UpdateCompanyBody {
+  name: string
+  city?: string | null
+  logoUrl?: string | null
+  contact: { name?: string | null; email?: string | null; phone?: string | null }
+}
+
+/** Profile and billing contact. The account code is immutable and is not part of the body. */
+export function putCompany(id: number, body: UpdateCompanyBody): Promise<CompanyDetail> {
+  return apiRequest<CompanyDetail>(`/api/platform/companies/${id}`, { method: 'PUT', body })
 }
 
 export interface CompanyOverview {
@@ -303,7 +317,8 @@ export function getCompanyAudit(
 
 export interface CreateCompanyBody {
   name: string
-  code: string
+  /** Omitted → the API derives a unique code from the name. */
+  code?: string | null
   city?: string | null
   logoUrl?: string | null
   primaryBranch: { name: string; area?: string | null; address?: string | null; phone?: string | null }
@@ -364,6 +379,7 @@ export interface PlatformUser {
   name: string
   email: string
   initials: string
+  photoUrl: string | null
   userType: string
   role: string
   roleId: number | null
@@ -421,6 +437,11 @@ export interface PlatformUserDetail {
   email: string
   phone: string | null
   initials: string
+  photoUrl: string | null
+  dateOfBirth: string | null
+  gender: string | null
+  nationalId: string | null
+  hireDate: string | null
   userType: string
   role: string
   roleId: number | null
@@ -461,6 +482,14 @@ export function postCreateHrManager(body: {
   email: string
   phone?: string | null
   presetRoleId?: number | null
+  /** Initial sign-in password; omitted keeps the platform's temporary password. */
+  password?: string | null
+  dateOfBirth?: string | null
+  gender?: string | null
+  nationalId?: string | null
+  hireDate?: string | null
+  /** Downscaled avatar as a data URL. */
+  photoUrl?: string | null
   sendInvite?: boolean
 }) {
   return apiRequest<{
@@ -768,6 +797,55 @@ export function downloadRevenueCsv(metric: string, period?: string): Promise<{ b
   const query = new URLSearchParams({ metric })
   if (period) query.set('period', period)
   return apiDownload(`/api/platform/revenue/export?${query}`)
+}
+
+// ------------------------------------------------------------------
+// Attendance stations
+// ------------------------------------------------------------------
+
+export interface StationCodeSummary {
+  gymId: number
+  gymName: string
+  code: string
+  generatedAt: string
+  expiresAtUtc: string | null
+  generatedBy: number | null
+}
+
+export interface StationSessionSummary {
+  id: number
+  createdAtUtc: string
+  expiresAtUtc: string
+  ipAddress: string | null
+  deviceInfo: string | null
+  latitude: number | null
+  longitude: number | null
+  locationAccuracyMeters: number | null
+}
+
+export interface StationGymSummary {
+  gymId: number
+  gymName: string
+  companyId: number
+  companyName: string
+  city: string | null
+  lastConnectedAt: string | null
+  sessions: StationSessionSummary[]
+}
+
+/** Every gym with the sessions that are live right now (codes never travel here). */
+export function getStationOverview(signal?: AbortSignal): Promise<{ items: StationGymSummary[] }> {
+  return apiRequest('/api/platform/stations', { signal })
+}
+
+/** Rotates the gym's 6-digit enrollment code; the previous code stops working immediately. */
+export function rotateGymStationCode(gymId: number): Promise<StationCodeSummary> {
+  return apiRequest(`/api/gyms/${gymId}/station-codes`, { method: 'POST' })
+}
+
+/** Disconnects every kiosk enrolled at the gym; they must redeem a fresh code. */
+export function revokeGymStationSessions(gymId: number): Promise<{ revokedCount: number }> {
+  return apiRequest(`/api/gyms/${gymId}/station-sessions`, { method: 'DELETE' })
 }
 
 // ------------------------------------------------------------------

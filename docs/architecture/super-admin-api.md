@@ -534,7 +534,7 @@ Provisions a company, its first branch, its subscription and (optionally) HR ass
   "assignHrLater": false
 }
 ```
-Rules: `name` + `code` + `contact.email` required; `code` unique (case-insensitive); `startTrial` only allowed when the plan's `TrialMode != None`; `hrStaffIds` and `assignHrLater = true` are mutually exclusive.
+Rules: `name` + `contact.email` required; `code` is optional — omit it and the API derives a unique code from the name (initials, plus a numeric suffix when taken), so the console never asks the operator for one; `code` unique (case-insensitive) when supplied; `logoUrl` accepts an absolute URL or a data URL (the console uploads a downscaled data URL); `startTrial` only allowed when the plan's `TrialMode != None`; `hrStaffIds` and `assignHrLater = true` are mutually exclusive.
 
 **Response 201**
 ```json
@@ -1366,6 +1366,39 @@ KPI strip for the Security & audit page.
 ---
 
 ### 6.11 Platform settings & feature flags
+
+#### `GET /api/platform/stations`
+**Access:** `SA` only
+Every gym with the station sessions that are live right now. Enrollment codes are **never returned here**: a code is a one-time secret shown only to the operator who generated it, valid for five minutes and retired the first time a station redeems it. The per-gym rotate/revoke routes (`POST /api/gyms/{gymId}/station-codes`, `DELETE /api/gyms/{gymId}/station-sessions`) already accept Top Management and are what the console's Settings page calls.
+
+**Response 200**
+```json
+{
+  "items": [
+    {
+      "gymId": 4,
+      "gymName": "Revive Nasr City",
+      "companyId": 1,
+      "companyName": "Revive Main Gym",
+      "city": "Cairo",
+      "lastConnectedAt": "2026-11-23T09:14:02Z",
+      "sessions": [
+        {
+          "id": 31,
+          "createdAtUtc": "2026-11-23T09:14:02Z",
+          "expiresAtUtc": "2026-11-30T09:14:02Z",
+          "ipAddress": "192.168.1.24",
+          "deviceInfo": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) …",
+          "latitude": 30.04442,
+          "longitude": 31.23571,
+          "locationAccuracyMeters": 25
+        }
+      ]
+    }
+  ]
+}
+```
+**Errors:** 401 (not a Super Admin).
 
 #### `GET /api/platform/settings`
 **Access:** `SA` · `platform.settings.manage`

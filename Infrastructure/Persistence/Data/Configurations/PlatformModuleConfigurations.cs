@@ -15,7 +15,7 @@ namespace Presistence.Data.Configurations
             builder.Property(c => c.Name).IsRequired().HasMaxLength(200);
             builder.Property(c => c.Code).IsRequired().HasMaxLength(50);
             builder.Property(c => c.City).HasMaxLength(100);
-            builder.Property(c => c.LogoUrl).HasMaxLength(500);
+            builder.Property(c => c.LogoUrl).HasMaxLength(100_000);
             builder.Property(c => c.ContactName).HasMaxLength(200);
             builder.Property(c => c.ContactEmail).HasMaxLength(256);
             builder.Property(c => c.ContactPhone).HasMaxLength(50);

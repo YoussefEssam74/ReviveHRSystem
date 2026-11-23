@@ -33,7 +33,11 @@ namespace Presentation.Controllers
         [EnableRateLimiting("station-login")]
         public async Task<ActionResult<StationLoginResponse>> Login([FromBody] StationLoginRequest request, CancellationToken cancellationToken)
         {
-            var response = await _attendanceService.StationLoginAsync(request, cancellationToken);
+            var response = await _attendanceService.StationLoginAsync(
+                request,
+                HttpContext.Connection.RemoteIpAddress?.ToString(),
+                Request.Headers.UserAgent.ToString(),
+                cancellationToken);
 
             if (!string.IsNullOrEmpty(response.Token))
             {

@@ -45,7 +45,6 @@ import {
   SummaryStrip,
   TableWrap,
 } from '../components/platform-ui'
-import { AttentionStrip } from '../components/AttentionStrip'
 import { saveBlob } from '../lib/download'
 
 type Action = { kind: 'pay' | 'void'; invoice: InvoiceListItem }
@@ -194,8 +193,6 @@ export default function PlatformBillingPage() {
           </button>
         }
       />
-
-      <AttentionStrip types={['InvoiceOverdue']} />
 
       {summary && (
         <SummaryStrip>

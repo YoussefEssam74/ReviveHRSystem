@@ -179,12 +179,14 @@ namespace Service.Specifications
 
             var companyIdList = companyIds?.ToList();
 
+            // Platform owners are not manageable accounts: the directory lists what the
+            // console administers, so the Super Admin never sees their own row here.
             Criteria = u =>
-                (term == null || u.UserName.ToLower().Contains(term) || u.Email.ToLower().Contains(term))
+                u.UserType != UserType.TopManagement
+                && (term == null || u.UserName.ToLower().Contains(term) || u.Email.ToLower().Contains(term))
                 && (parsedType == null || u.UserType == parsedType)
                 && (activeFilter == null || u.IsActive == activeFilter)
                 && (companyIdList == null
-                    || u.UserType == UserType.TopManagement
                     || u.UserType == UserType.HRManager
                     || u.UserGymAccesses.Any(a => companyIdList.Contains(a.Gym.CompanyId))
                     || (u.EmployeeProfile != null && companyIdList.Contains(u.EmployeeProfile.Gym.CompanyId)));
@@ -226,11 +228,11 @@ namespace Service.Specifications
             var companyIdList = companyIds?.ToList();
 
             Criteria = u =>
-                (term == null || u.UserName.ToLower().Contains(term) || u.Email.ToLower().Contains(term))
+                u.UserType != UserType.TopManagement
+                && (term == null || u.UserName.ToLower().Contains(term) || u.Email.ToLower().Contains(term))
                 && (parsedType == null || u.UserType == parsedType)
                 && (activeFilter == null || u.IsActive == activeFilter)
                 && (companyIdList == null
-                    || u.UserType == UserType.TopManagement
                     || u.UserType == UserType.HRManager
                     || u.UserGymAccesses.Any(a => companyIdList.Contains(a.Gym.CompanyId))
                     || (u.EmployeeProfile != null && companyIdList.Contains(u.EmployeeProfile.Gym.CompanyId)));

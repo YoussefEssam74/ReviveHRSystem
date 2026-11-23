@@ -81,7 +81,9 @@ namespace Service.Services
             await _accessControl.EnsurePermissionAsync(actor.Id, "platform.companies.create", cancellationToken);
 
             var name = RequireText(request.Name, "Company name");
-            var code = RequireText(request.Code, "Company code").ToUpperInvariant();
+            var code = string.IsNullOrWhiteSpace(request.Code)
+                ? await GenerateUniqueCodeAsync(name, cancellationToken)
+                : RequireText(request.Code, "Company code").ToUpperInvariant();
             var email = RequireText(request.Contact.Email, "Billing contact email");
             var branchName = RequireText(request.PrimaryBranch.Name, "Primary branch name");
 
@@ -185,7 +187,7 @@ namespace Service.Services
                     target: $"{created.Name} — {created.City}".TrimEnd(' ', '—'),
                     detail: $"Provisioned on {plan.Name}{(request.Subscription.StartTrial ? $" ({plan.TrialDays}-day trial)" : $"{PlatformHelpers.CycleLabel(plan.CycleCount, plan.CycleUnit)}")}. "
                             + $"Seat limit {plan.SeatLimit?.ToString() ?? "unlimited"}. {hrUsers.Count} HR staff assigned.",
-                    values: new { request.Name, request.Code, PlanId = plan.Id, request.Subscription.StartTrial, HrStaff = hrUsers.Count },
+                    values: new { request.Name, Code = code, PlanId = plan.Id, request.Subscription.StartTrial, HrStaff = hrUsers.Count },
                     cancellationToken);
 
                 foreach (var hrUser in hrUsers)
@@ -1334,6 +1336,33 @@ namespace Service.Services
             return unit == PlanCycleUnit.Years
                 ? start.AddYears(count)
                 : start.AddMonths(count);
+        }
+
+        /// <summary>
+        /// "Revive North Coast" → "RNC". A taken base gets a numeric suffix, so the
+        /// console never asks the operator for a code and two gyms can still share initials.
+        /// </summary>
+        private async Task<string> GenerateUniqueCodeAsync(string name, CancellationToken cancellationToken)
+        {
+            var letters = new string(name
+                .Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries)
+                .Select(word => word[0])
+                .Where(character => character is >= 'A' and <= 'Z' or >= 'a' and <= 'z')
+                .Take(6)
+                .ToArray());
+            var basis = letters.Length >= 2 ? letters.ToUpperInvariant() : "GYM";
+
+            var companies = _unitOfWork.GetRepository<Company, int>();
+            for (var suffix = 0; suffix < 100; suffix++)
+            {
+                var candidate = suffix == 0 ? basis : $"{basis}{suffix}";
+                if (await companies.GetByIdAsync(new CompanyByCodeSpec(candidate), cancellationToken) is null)
+                {
+                    return candidate;
+                }
+            }
+
+            return $"{basis}{DateTime.UtcNow.Ticks % 1000:000}";
         }
 
         private static string RequireText(string? value, string label) =>

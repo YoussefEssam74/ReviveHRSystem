@@ -1263,6 +1263,14 @@
         "hr": 401, "hrManager": 401, "topManagement": 200, "crossTenantTwin": 401
       },
       "notes": ["The 'Act as' options (platform.impersonate); Super Admin and platform scopes are excluded from the list."]
+    },
+    {
+      "id": 138, "route": "/api/platform/stations", "method": "GET", "source": "user-confirmed",
+      "expected": {
+        "anonymous": 401, "employeeSelf": 401, "employeeOther": 401, "teamLeader": 401, "branchManager": 401,
+        "hr": 401, "hrManager": 401, "topManagement": 200, "crossTenantTwin": 401
+      },
+      "notes": ["Platform-wide attendance-station view for the console's Settings page: every gym with its live enrollment code and connected kiosks. Top Management only — the per-gym rotate/revoke routes already accept it."]
     }
   ]
 }

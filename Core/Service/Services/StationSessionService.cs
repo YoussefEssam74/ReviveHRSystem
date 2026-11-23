@@ -26,7 +26,11 @@ namespace Service.Services
 
         public TimeSpan SessionLifetime => TimeSpan.FromHours(options.LifetimeHours);
 
-        public async Task<string> CreateSessionAsync(int gymId, int? stationCodeId, CancellationToken cancellationToken = default)
+        public async Task<string> CreateSessionAsync(
+            int gymId,
+            int? stationCodeId,
+            StationClientInfo client,
+            CancellationToken cancellationToken = default)
         {
             var token = GenerateToken();
             var nowUtc = DateTime.UtcNow;
@@ -37,11 +41,28 @@ namespace Service.Services
                 StationCodeId = stationCodeId,
                 TokenHash = HashToken(token),
                 CreatedAtUtc = nowUtc,
-                ExpiresAtUtc = nowUtc.Add(SessionLifetime)
+                ExpiresAtUtc = nowUtc.Add(SessionLifetime),
+                IpAddress = Trim(client.IpAddress, 64),
+                DeviceInfo = Trim(client.DeviceInfo, 300),
+                Latitude = client.Latitude,
+                Longitude = client.Longitude,
+                LocationAccuracyMeters = client.AccuracyMeters
             }, cancellationToken);
 
             await unitOfWork.SaveChangesAsync(cancellationToken);
             return token;
+        }
+
+        /// <summary>Keeps stored device metadata inside its column instead of failing the login.</summary>
+        private static string? Trim(string? value, int maxLength)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                return null;
+            }
+
+            var trimmed = value.Trim();
+            return trimmed.Length <= maxLength ? trimmed : trimmed[..maxLength];
         }
 
         public async Task<StationSession?> ValidateSessionAsync(string sessionToken, CancellationToken cancellationToken = default)

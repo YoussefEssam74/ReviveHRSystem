@@ -105,6 +105,14 @@ namespace Service.Services
             var name = RequireText(request.FullName, "Full name");
             var email = RequireEmail(request.Email);
 
+            var password = string.IsNullOrWhiteSpace(request.Password)
+                ? DefaultNewAccountPassword
+                : request.Password.Trim();
+            if (password.Length < 8)
+            {
+                throw new BadRequestException("Password must be at least 8 characters.");
+            }
+
             await EnsureEmailAvailableAsync(email, cancellationToken);
 
             var roleRepository = _unitOfWork.GetRepository<Role, int>();
@@ -122,9 +130,15 @@ namespace Service.Services
             {
                 Email = email,
                 UserName = name,
-                PasswordHash = _passwordHasher.Hash(DefaultNewAccountPassword),
+                PasswordHash = _passwordHasher.Hash(password),
                 UserType = UserType.HRManager,
                 IsActive = true,
+                Phone = OptionalText(request.Phone, 32),
+                DateOfBirth = AsUtcDate(request.DateOfBirth),
+                Gender = OptionalText(request.Gender, 16),
+                NationalId = OptionalText(request.NationalId, 32),
+                HireDate = AsUtcDate(request.HireDate),
+                PhotoUrl = OptionalText(request.PhotoUrl, 100_000),
             };
 
             await _unitOfWork.GetRepository<User, int>().AddAsync(user, cancellationToken);
@@ -144,7 +158,7 @@ namespace Service.Services
                 target: $"{name} · all gym accounts",
                 detail: $"Preset {presetRole.Name}. {(request.SendInvite ? "Activation invite queued." : "Invite withheld.")} "
                         + "Scope covers every company.",
-                values: new { Email = email, Preset = presetRole.Name, request.SendInvite },
+                values: new { Email = email, Preset = presetRole.Name, request.SendInvite, CustomPassword = !string.IsNullOrWhiteSpace(request.Password) },
                 cancellationToken);
 
             await _unitOfWork.SaveChangesAsync(cancellationToken);
@@ -536,7 +550,12 @@ namespace Service.Services
                 Id = user.Id,
                 Name = user.UserName,
                 Email = user.Email,
-                Phone = null,
+                Phone = user.Phone ?? user.EmployeeProfile?.Phone,
+                PhotoUrl = user.PhotoUrl,
+                DateOfBirth = user.DateOfBirth,
+                Gender = user.Gender,
+                NationalId = user.NationalId,
+                HireDate = user.HireDate,
                 Initials = PlatformHelpers.InitialsOf(user.UserName),
                 UserType = user.UserType.ToString(),
                 Role = role?.Name ?? PlatformHelpers.RoleLabel(user, null),
@@ -591,6 +610,7 @@ namespace Service.Services
                 Id = user.Id,
                 Name = user.UserName,
                 Email = user.Email,
+                PhotoUrl = user.PhotoUrl,
                 Initials = PlatformHelpers.InitialsOf(user.UserName),
                 UserType = user.UserType.ToString(),
                 Role = platformRoleName ?? PlatformHelpers.RoleLabel(user, null),
@@ -707,6 +727,25 @@ namespace Service.Services
             string.IsNullOrWhiteSpace(value)
                 ? throw new BadRequestException($"{label} is required.")
                 : value.Trim();
+
+        /// <summary>Trims an optional field and keeps it inside its column.</summary>
+        private static string? OptionalText(string? value, int maxLength)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                return null;
+            }
+
+            var trimmed = value.Trim();
+            return trimmed.Length <= maxLength ? trimmed : trimmed[..maxLength];
+        }
+
+        /// <summary>
+        /// A wizard picks a calendar date, not an instant: keep the date as entered and
+        /// label it UTC so Npgsql accepts it in the timestamptz column.
+        /// </summary>
+        private static DateTime? AsUtcDate(DateTime? value) =>
+            value is null ? null : DateTime.SpecifyKind(value.Value.Date, DateTimeKind.Utc);
 
         private static string RequireEmail(string? value)
         {

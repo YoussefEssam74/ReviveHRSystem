@@ -81,4 +81,22 @@ namespace Presentation.Controllers
 
         #endregion
     }
+
+    /// <summary>
+    /// Platform-wide station view for the Super Admin console: every gym with the
+    /// enrollment code a kiosk could use right now and the sessions that are live.
+    /// The per-gym rotate/revoke endpoints above already authorize Top Management.
+    /// </summary>
+    [Route("api/platform/stations")]
+    [Authorize]
+    public class PlatformStationsController(IStationCodeService _stationCodeService) : ApiControllerBase
+    {
+        /// <summary>GET — every gym with its active code and live station sessions.</summary>
+        [HttpGet]
+        public async Task<ActionResult<StationOverviewResponse>> Get(CancellationToken cancellationToken)
+        {
+            var response = await _stationCodeService.GetOverviewAsync(GetActorUserId(), cancellationToken);
+            return Ok(response);
+        }
+    }
 }

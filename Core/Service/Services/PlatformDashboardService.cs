@@ -267,6 +267,7 @@ namespace Service.Services
                     Detail = $"{burst.Email} · {burst.Attempts} failures from {burst.IpAddress ?? "an unknown address"}",
                     CompanyId = null,
                     CompanyName = null,
+                    UserId = burst.UserId,
                     ActionLabel = "Review user",
                     ActionTarget = "user-detail",
                     RaisedAt = burst.LastAttemptAt,

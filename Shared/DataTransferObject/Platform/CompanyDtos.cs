@@ -170,9 +170,18 @@ public class CompanySubscriptionRequest
 public class CreateCompanyRequest
 {
     public required string Name { get; init; }
-    public required string Code { get; init; }
+
+    /// <summary>
+    /// Short unique handle used as the branch-code prefix. Omit it and the API derives
+    /// one from the name (with a numeric suffix when it is already taken).
+    /// </summary>
+    public string? Code { get; init; }
+
     public string? City { get; init; }
+
+    /// <summary>Data URL or absolute URL of the gym's logo.</summary>
     public string? LogoUrl { get; init; }
+
     public required CompanyPrimaryBranchRequest PrimaryBranch { get; init; }
     public required CompanyContactDto Contact { get; init; }
     public required CompanySubscriptionRequest Subscription { get; init; }

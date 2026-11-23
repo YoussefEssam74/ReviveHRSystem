@@ -50,7 +50,12 @@ namespace Presistence.Repository
 
         public async Task<PlatformUserTotals> GetUserTotalsAsync(CancellationToken cancellationToken = default)
         {
-            var byType = await _db.Users
+            // Platform owners are not managed accounts; the console's counters describe
+            // the HR managers, HR staff and employees below them, exactly like the
+            // user directory does.
+            var managedUsers = _db.Users.Where(u => u.UserType != UserType.TopManagement);
+
+            var byType = await managedUsers
                 .GroupBy(u => u.UserType)
                 .Select(g => new { Type = g.Key, Count = g.Count() })
                 .ToListAsync(cancellationToken);
@@ -58,7 +63,7 @@ namespace Presistence.Repository
             var gymMembers = await _db.Users
                 .CountAsync(u => u.UserGymAccesses.Any(), cancellationToken);
 
-            var activeCount = await _db.Users.CountAsync(u => u.IsActive, cancellationToken);
+            var activeCount = await managedUsers.CountAsync(u => u.IsActive, cancellationToken);
 
             var thisMonth = MonthStart(DateTime.UtcNow);
             var addedThisMonth = await _db.Users

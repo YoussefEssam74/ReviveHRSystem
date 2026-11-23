@@ -17,6 +17,20 @@ namespace DomainLayer.Models.UserModule
         public bool IsActive { get; set; } = true;
         public DateTime? LastLoginAt { get; set; }
 
+        /// <summary>Contact number recorded when the account was provisioned (platform accounts).</summary>
+        public string? Phone { get; set; }
+
+        /// <summary>Personal details captured by the create-account wizard.</summary>
+        public DateTime? DateOfBirth { get; set; }
+        public string? Gender { get; set; }
+        public string? NationalId { get; set; }
+
+        /// <summary>First day with the company, as entered in the create-account wizard.</summary>
+        public DateTime? HireDate { get; set; }
+
+        /// <summary>Avatar as a data URL or absolute URL; null falls back to initials.</summary>
+        public string? PhotoUrl { get; set; }
+
         /// <summary>
         /// Consecutive failed sign-in attempts (brute-force lockout, enforced in
         /// AuthService). Reset on a successful login; once the counter reaches the

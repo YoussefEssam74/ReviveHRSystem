@@ -31,6 +31,9 @@ public class PlatformUserListItem
     public required string Email { get; init; }
     public required string Initials { get; init; }
 
+    /// <summary>Avatar as a data URL or absolute URL; null falls back to the initials tile.</summary>
+    public string? PhotoUrl { get; init; }
+
     /// <summary>TopManagement | HRManager | HR | Employee.</summary>
     public required string UserType { get; init; }
 
@@ -119,6 +122,15 @@ public class PlatformUserDetailResponse
     public required string Email { get; init; }
     public string? Phone { get; init; }
     public required string Initials { get; init; }
+
+    /// <summary>Avatar as a data URL or absolute URL; null falls back to the initials tile.</summary>
+    public string? PhotoUrl { get; init; }
+
+    /// <summary>Personal details captured by the create-account wizard.</summary>
+    public DateTime? DateOfBirth { get; init; }
+    public string? Gender { get; init; }
+    public string? NationalId { get; init; }
+    public DateTime? HireDate { get; init; }
     public required string UserType { get; init; }
     public required string Role { get; init; }
     public int? RoleId { get; init; }
@@ -148,6 +160,21 @@ public class CreateHrManagerRequest
 
     /// <summary>Preset role to bind (defaults to the HR Manager preset).</summary>
     public int? PresetRoleId { get; init; }
+
+    /// <summary>
+    /// Initial sign-in password chosen by the operator; omitted keeps the platform's
+    /// temporary password. The account is always expected to change it later.
+    /// </summary>
+    public string? Password { get; init; }
+
+    // Personal details — the same fields the HR console's create-account wizard collects.
+    public DateTime? DateOfBirth { get; init; }
+    public string? Gender { get; init; }
+    public string? NationalId { get; init; }
+    public DateTime? HireDate { get; init; }
+
+    /// <summary>Downscaled avatar as a data URL.</summary>
+    public string? PhotoUrl { get; init; }
 
     public bool SendInvite { get; init; } = true;
 }

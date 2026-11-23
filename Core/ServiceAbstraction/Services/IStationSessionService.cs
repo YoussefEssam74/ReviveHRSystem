@@ -2,6 +2,17 @@ using DomainLayer.Models.AttendanceModule;
 
 namespace ServiceAbstraction.Services
 {
+    /// <summary>What the enrolling station reported about itself (IP, browser, position).</summary>
+    public sealed record StationClientInfo(
+        string? IpAddress,
+        string? DeviceInfo,
+        double? Latitude,
+        double? Longitude,
+        double? AccuracyMeters)
+    {
+        public static StationClientInfo Empty { get; } = new(null, null, null, null, null);
+    }
+
     /// <summary>
     /// Lifecycle of station (kiosk) sessions: an enrollment code is redeemed once at
     /// kiosk login and exchanged for an opaque, DB-backed session token. The token
@@ -17,8 +28,14 @@ namespace ServiceAbstraction.Services
         /// <summary>
         /// Creates a live session for the gym and returns the plaintext token
         /// (shown to the station exactly once — it is never stored or recoverable).
+        /// The client details are kept as session metadata so the console can show
+        /// which machine connected and from where.
         /// </summary>
-        Task<string> CreateSessionAsync(int gymId, int? stationCodeId, CancellationToken cancellationToken = default);
+        Task<string> CreateSessionAsync(
+            int gymId,
+            int? stationCodeId,
+            StationClientInfo client,
+            CancellationToken cancellationToken = default);
 
         /// <summary>
         /// Resolves a live session from a plaintext token. Returns null when the token

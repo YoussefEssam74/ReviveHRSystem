@@ -1,7 +1,7 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, useParams } from 'react-router-dom'
-import { AlertTriangle, Mail, Phone, Plus, User } from 'lucide-react'
+import { AlertTriangle, Camera, Loader2, Mail, Pencil, Phone, Plus, Trash2, User } from 'lucide-react'
 import { Badge, StatusBadge } from '../../../components/ui/badge'
 import { Button } from '../../../components/ui/button'
 import { Modal } from '../../../components/ui/modal'
@@ -22,7 +22,9 @@ import {
   useCompanyOverview,
   useCreateBranch,
   useUpdateBranch,
+  useUpdateCompany,
 } from '../hooks/usePlatform'
+import { fileToImageDataUrl, MAX_IMAGE_SOURCE_BYTES } from '../../../lib/image-data-url'
 import {
   PTbody,
   PTd,
@@ -40,7 +42,6 @@ import {
   TableWrap,
   GymMark,
 } from '../components/platform-ui'
-import { AttentionStrip } from '../components/AttentionStrip'
 
 type CompanyTab = 'overview' | 'employees' | 'branches' | 'hr' | 'billing'
 
@@ -778,6 +779,18 @@ export default function PlatformCompanyDetailPage() {
 
   const company = useCompany(companyId)
   const changeStatus = useChangeCompanyStatus()
+  const updateCompany = useUpdateCompany()
+  const { toast } = useToast()
+  const [profile, setProfile] = useState<{
+    name: string
+    city: string
+    logoUrl: string | null
+    contactName: string
+    contactEmail: string
+    contactPhone: string
+  } | null>(null)
+  const [logoBusy, setLogoBusy] = useState(false)
+  const logoInputRef = useRef<HTMLInputElement>(null)
 
   if (!Number.isFinite(companyId) || companyId <= 0) {
     return (
@@ -815,6 +828,64 @@ export default function PlatformCompanyDetailPage() {
 
   const detail = company.data
   const suspended = detail.status === 'Suspended'
+
+  const openProfile = () =>
+    setProfile({
+      name: detail.name,
+      city: detail.city ?? '',
+      logoUrl: detail.logoUrl,
+      contactName: detail.contact.name ?? '',
+      contactEmail: detail.contact.email ?? '',
+      contactPhone: detail.contact.phone ?? '',
+    })
+
+  const onLogoPicked = async (file: File | undefined) => {
+    if (!file || !profile) return
+    if (!file.type.startsWith('image/')) {
+      toast(t('Choose an image file for the gym logo.'), 'error')
+      return
+    }
+    if (file.size > MAX_IMAGE_SOURCE_BYTES) {
+      toast(t('The logo must be smaller than 10 MB.'), 'error')
+      return
+    }
+
+    setLogoBusy(true)
+    try {
+      const logoUrl = await fileToImageDataUrl(file, 192)
+      setProfile((current) => (current ? { ...current, logoUrl } : current))
+    } catch {
+      toast(t('That image could not be read. Try a PNG or JPG.'), 'error')
+    } finally {
+      setLogoBusy(false)
+    }
+  }
+
+  const saveProfile = () => {
+    if (!profile || !profile.name.trim() || !profile.contactEmail.includes('@')) return
+    updateCompany.mutate(
+      {
+        id: detail.id,
+        body: {
+          name: profile.name.trim(),
+          city: profile.city.trim() || null,
+          logoUrl: profile.logoUrl,
+          contact: {
+            name: profile.contactName.trim() || null,
+            email: profile.contactEmail.trim(),
+            phone: profile.contactPhone.trim() || null,
+          },
+        },
+      },
+      {
+        onSuccess: () => {
+          setProfile(null)
+          toast(t('Gym profile saved.'), 'success')
+        },
+        onError: (error) => toast(describeApiError(error), 'error'),
+      },
+    )
+  }
 
   const suspend = () => {
     const reason = window.prompt(t('Why is this account being suspended?'))
@@ -864,31 +935,37 @@ export default function PlatformCompanyDetailPage() {
                 .filter(Boolean)
                 .join(' · ')}
             </p>
-            {(detail.contact.email || detail.contact.phone || detail.contact.name) && (
+            {detail.contact.email || detail.contact.phone || detail.contact.name ? (
               <div className="mt-1.5 flex flex-wrap items-center gap-3 text-[10px] text-charcoal-500">
-                {detail.contact.email && (
-                  <span className="flex items-center gap-1">
-                    <Mail className="h-3 w-3 text-charcoal-400" aria-hidden="true" />
-                    {detail.contact.email}
-                  </span>
-                )}
-                {detail.contact.phone && (
-                  <span className="flex items-center gap-1">
-                    <Phone className="h-3 w-3 text-charcoal-400" aria-hidden="true" />
-                    {detail.contact.phone}
-                  </span>
-                )}
-                {detail.contact.name && (
-                  <span className="flex items-center gap-1">
-                    <User className="h-3 w-3 text-charcoal-400" aria-hidden="true" />
-                    {detail.contact.name}
-                  </span>
-                )}
+                <span className="flex items-center gap-1">
+                  <User className="h-3 w-3 text-charcoal-400" aria-hidden="true" />
+                  {detail.contact.name ?? '—'}
+                </span>
+                <span className="flex items-center gap-1">
+                  <Mail className="h-3 w-3 text-charcoal-400" aria-hidden="true" />
+                  {detail.contact.email ?? '—'}
+                </span>
+                <span className="flex items-center gap-1">
+                  <Phone className="h-3 w-3 text-charcoal-400" aria-hidden="true" />
+                  {detail.contact.phone ?? '—'}
+                </span>
               </div>
+            ) : (
+              <button
+                type="button"
+                className="mt-1.5 text-[10px] font-semibold text-brand-700 hover:underline"
+                onClick={openProfile}
+              >
+                {t('No owner or contact recorded yet — add the gym data')}
+              </button>
             )}
           </div>
 
           <div className="flex flex-wrap items-center gap-1.5">
+            <button type="button" className="btn btn-secondary btn-sm" onClick={openProfile}>
+              <Pencil className="h-3 w-3" aria-hidden="true" />
+              {t('Edit profile')}
+            </button>
             <button type="button" className="btn btn-secondary btn-sm" onClick={() => setTab('hr')}>
               {t('Assign HR staff')}
             </button>
@@ -927,8 +1004,6 @@ export default function PlatformCompanyDetailPage() {
         )}
       </Panel>
 
-      <AttentionStrip companyId={detail.id} />
-
       <div className="flex flex-shrink-0 items-center gap-1 overflow-x-auto border-b border-charcoal-200">
         {tabs.map((item) => (
           <button
@@ -952,6 +1027,127 @@ export default function PlatformCompanyDetailPage() {
         {tab === 'hr' && <HrStaffTab companyId={companyId} />}
         {tab === 'billing' && <BillingTab companyId={companyId} />}
       </div>
+
+      <Modal
+        open={profile !== null}
+        title={t('Edit gym profile')}
+        subtitle={t('Logo, location and the person we contact about this account')}
+        onClose={() => setProfile(null)}
+        footer={
+          <>
+            <Button variant="outline" size="sm" onClick={() => setProfile(null)}>
+              {t('Cancel')}
+            </Button>
+            <Button
+              size="sm"
+              onClick={saveProfile}
+              loading={updateCompany.isPending}
+              disabled={!profile || !profile.name.trim() || !profile.contactEmail.includes('@')}
+            >
+              {t('Save profile')}
+            </Button>
+          </>
+        }
+      >
+        {profile && (
+          <div className="space-y-2.5">
+            <div className="flex items-center gap-2.5 rounded-xl border border-charcoal-200 bg-charcoal-50 p-2.5">
+              <div className="flex h-14 w-14 flex-shrink-0 items-center justify-center overflow-hidden rounded-[10px] border border-charcoal-200 bg-white">
+                {profile.logoUrl ? (
+                  <img src={profile.logoUrl} alt={t('Gym logo preview')} className="h-full w-full object-cover" />
+                ) : logoBusy ? (
+                  <Loader2 className="h-4 w-4 animate-spin text-charcoal-300" aria-hidden="true" />
+                ) : (
+                  <Camera className="h-5 w-5 text-charcoal-300" aria-hidden="true" />
+                )}
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-[11px] font-bold uppercase tracking-wide text-charcoal-700">{t('Gym logo')}</p>
+                <div className="mt-1 flex flex-wrap gap-2">
+                  <input
+                    ref={logoInputRef}
+                    type="file"
+                    accept="image/png,image/jpeg,image/webp,image/gif"
+                    className="sr-only"
+                    onChange={(event) => {
+                      void onLogoPicked(event.target.files?.[0])
+                      event.target.value = ''
+                    }}
+                  />
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-sm"
+                    onClick={() => logoInputRef.current?.click()}
+                    disabled={logoBusy}
+                  >
+                    {profile.logoUrl ? t('Change logo') : t('Upload logo')}
+                  </button>
+                  {profile.logoUrl && (
+                    <button
+                      type="button"
+                      className="btn btn-ghost btn-sm text-red-600"
+                      onClick={() => setProfile({ ...profile, logoUrl: null })}
+                    >
+                      <Trash2 className="h-3 w-3" aria-hidden="true" />
+                      {t('Remove')}
+                    </button>
+                  )}
+                </div>
+                <p className="mt-1 text-[10px] leading-relaxed text-charcoal-500">
+                  {t('PNG, JPG, WEBP or GIF up to 10 MB.')}
+                </p>
+              </div>
+            </div>
+
+            <div className="grid gap-2.5 sm:grid-cols-2">
+              <label className="block">
+                <span className="pc-label">{t('Gym name')}</span>
+                <input
+                  className="pc-control w-full"
+                  value={profile.name}
+                  onChange={(event) => setProfile({ ...profile, name: event.target.value })}
+                />
+              </label>
+              <label className="block">
+                <span className="pc-label">{t('City')}</span>
+                <input
+                  className="pc-control w-full"
+                  value={profile.city}
+                  onChange={(event) => setProfile({ ...profile, city: event.target.value })}
+                />
+              </label>
+            </div>
+
+            <div className="grid gap-2.5 sm:grid-cols-3">
+              <label className="block">
+                <span className="pc-label">{t('Owner / billing contact')}</span>
+                <input
+                  className="pc-control w-full"
+                  value={profile.contactName}
+                  onChange={(event) => setProfile({ ...profile, contactName: event.target.value })}
+                />
+              </label>
+              <label className="block">
+                <span className="pc-label">{t('Contact email')}</span>
+                <input
+                  type="email"
+                  className="pc-control w-full"
+                  value={profile.contactEmail}
+                  onChange={(event) => setProfile({ ...profile, contactEmail: event.target.value })}
+                />
+              </label>
+              <label className="block">
+                <span className="pc-label">{t('Contact phone')}</span>
+                <input
+                  className="pc-control w-full"
+                  value={profile.contactPhone}
+                  onChange={(event) => setProfile({ ...profile, contactPhone: event.target.value })}
+                />
+              </label>
+            </div>
+          </div>
+        )}
+      </Modal>
     </PlatformPage>
   )
 }

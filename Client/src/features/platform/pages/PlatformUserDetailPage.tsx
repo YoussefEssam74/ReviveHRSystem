@@ -430,6 +430,23 @@ export default function PlatformUserDetailPage() {
               <Fact label={t('User type')}>{detail.userType}</Fact>
             </dl>
           </Panel>
+
+          <Panel>
+            <PanelHead>
+              <PanelLabel>{t('Personal details')}</PanelLabel>
+            </PanelHead>
+            <dl className="space-y-1.5 px-3 py-2.5 text-[10px]">
+              <Fact label={t('Phone')}>{detail.phone ?? '—'}</Fact>
+              <Fact label={t('Hire date')}>
+                {detail.hireDate ? formatDate(detail.hireDate) : '—'}
+              </Fact>
+              <Fact label={t('Date of birth')}>
+                {detail.dateOfBirth ? formatDate(detail.dateOfBirth) : '—'}
+              </Fact>
+              <Fact label={t('Gender')}>{detail.gender ?? '—'}</Fact>
+              <Fact label={t('National ID')}>{detail.nationalId ?? '—'}</Fact>
+            </dl>
+          </Panel>
         </div>
       </div>
 

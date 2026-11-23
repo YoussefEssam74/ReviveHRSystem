@@ -1,32 +1,23 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Building2, Plus, Trash2 } from 'lucide-react'
+import { Building2, Camera, Loader2, Plus, Trash2 } from 'lucide-react'
 import { Button } from '../../../components/ui/button'
 import { Modal } from '../../../components/ui/modal'
 import { useToast } from '../../../components/ui/toast'
 import { describeApiError } from '../../../lib/api-client'
 import { formatMoney } from '../../../lib/format'
 import { useCreateBranch, useCreateCompany, usePlans } from '../hooks/usePlatform'
+import { fileToImageDataUrl, MAX_IMAGE_SOURCE_BYTES } from '../../../lib/image-data-url'
 
 type BranchDraft = { name: string; area: string }
 
 const blankBranch = (): BranchDraft => ({ name: '', area: '' })
 
-/** Derive a short account code from the gym name: "Revive North Coast" → "RNC". */
-function suggestCode(name: string) {
-  const letters = name
-    .split(/\s+/)
-    .filter(Boolean)
-    .map((word) => word[0])
-    .join('')
-    .toUpperCase()
-  return letters.slice(0, 5) || 'GYM'
-}
-
 /**
  * Create a gym account: company, its plan subscription and every branch in one
  * pass. The API creates the company plus its primary branch in one transaction,
- * so any extra branch is created straight after against the new id.
+ * so any extra branch is created straight after against the new id. The account
+ * code is derived server-side from the gym name.
  */
 export function CreateGymModal({
   open,
@@ -44,7 +35,6 @@ export function CreateGymModal({
   const createBranch = useCreateBranch()
 
   const [name, setName] = useState('')
-  const [code, setCode] = useState('')
   const [city, setCity] = useState('')
   const [planId, setPlanId] = useState('')
   const [startTrial, setStartTrial] = useState(false)
@@ -52,10 +42,12 @@ export function CreateGymModal({
   const [contactEmail, setContactEmail] = useState('')
   const [contactPhone, setContactPhone] = useState('')
   const [branches, setBranches] = useState<BranchDraft[]>([blankBranch(), blankBranch()])
+  const [logoDataUrl, setLogoDataUrl] = useState<string | null>(null)
+  const [logoBusy, setLogoBusy] = useState(false)
+  const logoInputRef = useRef<HTMLInputElement>(null)
 
   const reset = () => {
     setName('')
-    setCode('')
     setCity('')
     setPlanId('')
     setStartTrial(false)
@@ -63,6 +55,8 @@ export function CreateGymModal({
     setContactEmail('')
     setContactPhone('')
     setBranches([blankBranch(), blankBranch()])
+    setLogoDataUrl(null)
+    setLogoBusy(false)
   }
 
   const close = () => {
@@ -73,13 +67,29 @@ export function CreateGymModal({
   const namedBranches = branches.filter((branch) => branch.name.trim())
   const selectedPlan = plans.data?.items.find((plan) => String(plan.id) === planId)
   const trialOffered = Boolean(selectedPlan && selectedPlan.trialMode !== 'None')
-  const ready =
-    name.trim().length > 1 &&
-    code.trim().length > 0 &&
-    planId !== '' &&
-    contactEmail.includes('@') &&
-    Boolean(namedBranches[0])
+  const ready = name.trim().length > 1 && planId !== '' && contactEmail.includes('@') && Boolean(namedBranches[0])
   const busy = createCompany.isPending || createBranch.isPending
+
+  const onLogoPicked = async (file: File | undefined) => {
+    if (!file) return
+    if (!file.type.startsWith('image/')) {
+      toast(t('Choose an image file for the gym logo.'), 'error')
+      return
+    }
+    if (file.size > MAX_IMAGE_SOURCE_BYTES) {
+      toast(t('The logo must be smaller than 10 MB.'), 'error')
+      return
+    }
+
+    setLogoBusy(true)
+    try {
+      setLogoDataUrl(await fileToImageDataUrl(file, 192))
+    } catch {
+      toast(t('That image could not be read. Try a PNG or JPG.'), 'error')
+    } finally {
+      setLogoBusy(false)
+    }
+  }
 
   const updateBranch = (index: number, patch: Partial<BranchDraft>) =>
     setBranches((current) => current.map((branch, i) => (i === index ? { ...branch, ...patch } : branch)))
@@ -91,8 +101,8 @@ export function CreateGymModal({
     createCompany.mutate(
       {
         name: name.trim(),
-        code: code.trim().toUpperCase(),
         city: city.trim() || null,
+        logoUrl: logoDataUrl,
         primaryBranch: { name: trimmed[0].name, area: trimmed[0].area },
         contact: {
           name: contactName.trim() || null,
@@ -144,32 +154,64 @@ export function CreateGymModal({
       }
     >
       <div className="space-y-2.5">
-        <div className="grid gap-2.5 sm:grid-cols-3">
-          <label className="block sm:col-span-2">
+        <div className="flex items-center gap-2.5 rounded-xl border border-charcoal-200 bg-charcoal-50 p-2.5">
+          <div className="flex h-14 w-14 flex-shrink-0 items-center justify-center overflow-hidden rounded-[10px] border border-charcoal-200 bg-white">
+            {logoDataUrl ? (
+              <img src={logoDataUrl} alt={t('Gym logo preview')} className="h-full w-full object-cover" />
+            ) : logoBusy ? (
+              <Loader2 className="h-4 w-4 animate-spin text-charcoal-300" aria-hidden="true" />
+            ) : (
+              <Camera className="h-5 w-5 text-charcoal-300" aria-hidden="true" />
+            )}
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="text-[11px] font-bold uppercase tracking-wide text-charcoal-700">{t('Gym logo')}</p>
+            <div className="mt-1 flex flex-wrap gap-2">
+              <input
+                ref={logoInputRef}
+                type="file"
+                accept="image/png,image/jpeg,image/webp,image/gif"
+                className="sr-only"
+                onChange={(event) => {
+                  void onLogoPicked(event.target.files?.[0])
+                  event.target.value = ''
+                }}
+              />
+              <button
+                type="button"
+                className="btn btn-secondary btn-sm"
+                onClick={() => logoInputRef.current?.click()}
+                disabled={logoBusy}
+              >
+                {logoDataUrl ? t('Change logo') : t('Upload logo')}
+              </button>
+              {logoDataUrl && (
+                <button
+                  type="button"
+                  className="btn btn-ghost btn-sm text-red-600"
+                  onClick={() => setLogoDataUrl(null)}
+                >
+                  <Trash2 className="h-3 w-3" aria-hidden="true" />
+                  {t('Remove')}
+                </button>
+              )}
+            </div>
+            <p className="mt-1 text-[10px] leading-relaxed text-charcoal-500">
+              {t('PNG, JPG, WEBP or GIF up to 10 MB. The logo appears on the account list and the gym record.')}
+            </p>
+          </div>
+        </div>
+
+        <div className="grid gap-2.5 sm:grid-cols-2">
+          <label className="block">
             <span className="pc-label">{t('Gym name')}</span>
             <input
               className="pc-control w-full"
               placeholder={t('Revive North Coast')}
               value={name}
-              onChange={(event) => {
-                setName(event.target.value)
-                if (!code) setCode(suggestCode(event.target.value))
-              }}
+              onChange={(event) => setName(event.target.value)}
             />
           </label>
-          <label className="block">
-            <span className="pc-label">{t('Account code')}</span>
-            <input
-              className="pc-control w-full font-mono uppercase"
-              placeholder="RNC"
-              maxLength={8}
-              value={code}
-              onChange={(event) => setCode(event.target.value.toUpperCase())}
-            />
-          </label>
-        </div>
-
-        <div className="grid gap-2.5 sm:grid-cols-2">
           <label className="block">
             <span className="pc-label">{t('City')}</span>
             <input
@@ -179,6 +221,9 @@ export function CreateGymModal({
               onChange={(event) => setCity(event.target.value)}
             />
           </label>
+        </div>
+
+        <div className="grid gap-2.5 sm:grid-cols-2">
           <label className="block">
             <span className="pc-label">{t('Subscription plan')}</span>
             <select className="pc-control w-full" value={planId} onChange={(event) => setPlanId(event.target.value)}>
@@ -192,6 +237,11 @@ export function CreateGymModal({
                 ))}
             </select>
           </label>
+          <div className="flex items-end">
+            <p className="text-[10px] leading-relaxed text-charcoal-400">
+              {t('The account code is generated from the gym name; branches add their own codes.')}
+            </p>
+          </div>
         </div>
 
         {trialOffered && (
@@ -281,7 +331,7 @@ export function CreateGymModal({
             ))}
           </div>
           <p className="mt-1 text-[10px] text-charcoal-400">
-            {t('The first branch is the account head office. Branch codes are generated from the account code.')}
+            {t('The first branch is the account head office. Every branch gets its own generated code.')}
           </p>
         </div>
       </div>

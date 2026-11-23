@@ -47,7 +47,7 @@ export const PLATFORM_NAV: { title?: string; items: PlatformNavItem[] }[] = [
       { to: '/platform/roles', label: 'Roles & permissions', icon: ShieldAlert },
       // The mock has no standalone audit page; the security defaults that used to
       // live beside it are the only part of the settings surface with real teeth.
-      { to: '/platform/settings', label: 'Security', icon: ShieldCheck, superAdminOnly: true },
+      { to: '/platform/settings', label: 'Settings', icon: ShieldCheck, superAdminOnly: true },
     ],
   },
 ]

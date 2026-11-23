@@ -76,6 +76,10 @@ public class PlatformAlertItem
     public required string Detail { get; init; }
     public int? CompanyId { get; init; }
     public string? CompanyName { get; init; }
+
+    /// <summary>The account the alert is about, when it points at a single user.</summary>
+    public int? UserId { get; init; }
+
     public required string ActionLabel { get; init; }
     public required string ActionTarget { get; init; }
     public DateTime? RaisedAt { get; init; }

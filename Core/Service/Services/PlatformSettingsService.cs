@@ -51,13 +51,19 @@ namespace Service.Services
             {
                 if (security.PasswordRotationDays is int rotation)
                 {
-                    RequireRange(rotation, 30, 365, "Password rotation must be between 30 and 365 days.");
+                    // 0 means "never rotate" — the console's Never option.
+                    if (rotation != 0)
+                    {
+                        RequireRange(rotation, 30, 365, "Password rotation must be 0 (never) or between 30 and 365 days.");
+                    }
+
                     updates[PlatformSettingsKeys.SecurityPasswordRotationDays] = rotation.ToString(CultureInfo.InvariantCulture);
                 }
 
                 if (security.SessionLifetimeMinutes is int lifetime)
                 {
-                    RequireRange(lifetime, 30, 1440, "Session lifetime must be between 30 and 1440 minutes.");
+                    // Expressed in days by the console (up to a year).
+                    RequireRange(lifetime, 60, 525_600, "Session lifetime must be between 1 hour and 365 days.");
                     updates[PlatformSettingsKeys.SecuritySessionLifetimeMinutes] = lifetime.ToString(CultureInfo.InvariantCulture);
                 }
 
@@ -69,7 +75,12 @@ namespace Service.Services
 
                 if (security.LockoutMinutes is int lockout)
                 {
-                    RequireRange(lockout, 1, 1440, "Lockout duration must be between 1 and 1440 minutes.");
+                    // 0 means "never lock" — the console's Never option.
+                    if (lockout != 0)
+                    {
+                        RequireRange(lockout, 1, 1440, "Lockout duration must be 0 (never) or between 1 and 1440 minutes.");
+                    }
+
                     updates[PlatformSettingsKeys.SecurityLockoutMinutes] = lockout.ToString(CultureInfo.InvariantCulture);
                 }
 

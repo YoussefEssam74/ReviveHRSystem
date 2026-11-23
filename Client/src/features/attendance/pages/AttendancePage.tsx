@@ -5,7 +5,13 @@ import { Fingerprint, Link2 } from 'lucide-react'
 import { Button } from '../../../components/ui/button'
 import { GymLogo } from '../../../components/ui/gym-logo'
 import { describeApiError } from '../../../lib/api-client'
-import { postStationLogin, getStationSession, getStationSummary, postStationLogout } from '../api/attendance.api'
+import {
+  postStationLogin,
+  getStationSession,
+  getStationSummary,
+  postStationLogout,
+  type StationLocationFix,
+} from '../api/attendance.api'
 import { useKioskScanner } from '../hooks/useKioskScanner'
 import { useSoundEffects } from '../hooks/useSoundEffects'
 import { FeedRow, useClock } from '../components/KioskPanels'
@@ -47,7 +53,7 @@ export default function AttendancePage() {
   useEffect(() => sound.dispose, [sound])
 
   const connectMutation = useMutation({
-    mutationFn: (enteredCode: string) => postStationLogin(enteredCode),
+    mutationFn: async (enteredCode: string) => postStationLogin(enteredCode, await readStationLocation()),
   })
 
   // Re-enroll from the HttpOnly station cookie after a reload or machine reboot.
@@ -527,4 +533,28 @@ function KioskCameraPanel({
       onCancelCheckout={scanner.cancelCheckout}
     />
   )
+}
+
+/**
+ * Asks the browser for the kiosk's position before it enrols, so the console can show
+ * where the station connected from. A refused or unavailable prompt is not an error —
+ * the station still enrols, just without a location.
+ */
+function readStationLocation(): Promise<StationLocationFix | null> {
+  if (typeof navigator === 'undefined' || !('geolocation' in navigator)) {
+    return Promise.resolve(null)
+  }
+
+  return new Promise((resolve) => {
+    navigator.geolocation.getCurrentPosition(
+      (position) =>
+        resolve({
+          latitude: position.coords.latitude,
+          longitude: position.coords.longitude,
+          accuracyMeters: position.coords.accuracy,
+        }),
+      () => resolve(null),
+      { enableHighAccuracy: false, timeout: 5000, maximumAge: 60_000 },
+    )
+  })
 }

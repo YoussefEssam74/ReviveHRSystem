@@ -34,5 +34,23 @@ namespace DomainLayer.Models.AttendanceModule
 
         /// <summary>When HR revoked the session (UTC); null while live.</summary>
         public DateTime? RevokedAtUtc { get; set; }
+
+        /// <summary>
+        /// Address the kiosk enrolled from (UTC request IP). Together with
+        /// <see cref="DeviceInfo"/> it is what lets an operator tell "the branch PC"
+        /// from "someone else redeemed the code".
+        /// </summary>
+        public string? IpAddress { get; set; }
+
+        /// <summary>Browser/OS string the enrolling device reported (trimmed User-Agent).</summary>
+        public string? DeviceInfo { get; set; }
+
+        /// <summary>
+        /// Where the enrolling device said it was (browser geolocation). Null when the
+        /// station refused or could not provide a position.
+        /// </summary>
+        public double? Latitude { get; set; }
+        public double? Longitude { get; set; }
+        public double? LocationAccuracyMeters { get; set; }
     }
 }

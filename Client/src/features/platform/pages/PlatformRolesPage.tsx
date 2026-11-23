@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useQuery } from '@tanstack/react-query'
-import { Link } from 'react-router-dom'
 import { Search, ShieldCheck } from 'lucide-react'
 import { Badge } from '../../../components/ui/badge'
 import { describeApiError } from '../../../lib/api-client'
@@ -47,11 +46,6 @@ export default function PlatformRolesPage() {
       <PlatformPageHeader
         title={t('Roles & permissions')}
         subtitle={t('Every role defined on the platform and the reach of each one')}
-        actions={
-          <Link to="/console/hr-team" className="btn btn-secondary btn-sm">
-            {t('Manage in HR console')}
-          </Link>
-        }
       />
 
       <Panel grow>

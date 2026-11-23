@@ -5,6 +5,7 @@ using DomainLayer.Exceptions;
 using DomainLayer.Models.AttendanceModule;
 using DomainLayer.Models.OrganizationModule;
 using DomainLayer.Models.OrganizationModule.Enums;
+using DomainLayer.Models.PlatformModule;
 using DomainLayer.Models.UserModule;
 using DomainLayer.Models.UserModule.Enums;
 using Service.Specifications;
@@ -104,6 +105,85 @@ namespace Service.Services
                 ?? throw new NotFoundException("Gym not found.");
 
             return await stationSessions.RevokeGymSessionsAsync(gym.Id, cancellationToken);
+        }
+
+        /// <summary>
+        /// Platform-wide station view: every gym with the code a kiosk can currently
+        /// enroll with and the sessions that are live right now. Deliberately Top
+        /// Management only — it spans tenants.
+        /// </summary>
+        public async Task<StationOverviewResponse> GetOverviewAsync(int? actorUserId, CancellationToken cancellationToken = default)
+        {
+            if (actorUserId is null)
+            {
+                throw new UnAuthorizedException("Your session is invalid. Please sign in again.");
+            }
+
+            var actor = await unitOfWork.GetRepository<User, int>()
+                .GetByIdAsync(new UserByIdSpec(actorUserId.Value), cancellationToken)
+                ?? throw new UnAuthorizedException("Your session is invalid. Please sign in again.");
+
+            if (!actor.IsActive || actor.UserType != UserType.TopManagement)
+            {
+                throw new UnAuthorizedException("Only a Super Admin can view every gym's stations.");
+            }
+
+            var now = DateTime.UtcNow;
+            var companies = (await unitOfWork.GetRepository<Company, int>().GetAllAsync(cancellationToken))
+                .ToDictionary(company => company.Id);
+            var gyms = await unitOfWork.GetRepository<Gym, int>().GetAllAsync(cancellationToken);
+
+            // Enrollment codes never travel to the console: they are shown once, to the
+            // operator who generated them, and are single-use. This view only reports
+            // who is connected and from where.
+            var allSessions = await unitOfWork.GetRepository<StationSession, int>().GetAllAsync(cancellationToken);
+
+            var lastConnected = allSessions
+                .GroupBy(session => session.GymId)
+                .ToDictionary(group => group.Key, group => (DateTime?)group.Max(session => session.CreatedAtUtc));
+
+            var liveSessions = allSessions
+                .Where(session => session.RevokedAtUtc is null && session.ExpiresAtUtc > now)
+                .GroupBy(session => session.GymId)
+                .ToDictionary(
+                    group => group.Key,
+                    group => (IReadOnlyList<StationSessionSummaryDto>)group
+                        .OrderByDescending(session => session.CreatedAtUtc)
+                        .Select(session => new StationSessionSummaryDto
+                        {
+                            Id = session.Id,
+                            CreatedAtUtc = session.CreatedAtUtc,
+                            ExpiresAtUtc = session.ExpiresAtUtc,
+                            IpAddress = session.IpAddress,
+                            DeviceInfo = session.DeviceInfo,
+                            Latitude = session.Latitude,
+                            Longitude = session.Longitude,
+                            LocationAccuracyMeters = session.LocationAccuracyMeters,
+                        })
+                        .ToList());
+
+            var items = gyms
+                .OrderBy(gym => companies.TryGetValue(gym.CompanyId, out var company) ? company.Name : string.Empty)
+                .ThenBy(gym => gym.Name)
+                .Select(gym =>
+                {
+                    companies.TryGetValue(gym.CompanyId, out var company);
+                    return new StationGymSummaryDto
+                    {
+                        GymId = gym.Id,
+                        GymName = gym.Name,
+                        CompanyId = gym.CompanyId,
+                        CompanyName = company?.Name ?? string.Empty,
+                        City = company?.City,
+                        LastConnectedAt = lastConnected.TryGetValue(gym.Id, out var connectedAt) ? connectedAt : null,
+                        Sessions = liveSessions.TryGetValue(gym.Id, out var sessions)
+                            ? sessions
+                            : Array.Empty<StationSessionSummaryDto>(),
+                    };
+                })
+                .ToList();
+
+            return new StationOverviewResponse { Items = items };
         }
 
         private async Task EnsureCanManageStationCodesAsync(int gymId, int? actorUserId, CancellationToken cancellationToken)

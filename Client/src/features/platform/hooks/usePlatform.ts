@@ -44,10 +44,15 @@ import {
   putPlan,
   putPlatformUserStatus,
   putSettings,
+  putCompany,
+  getStationOverview,
+  rotateGymStationCode,
+  revokeGymStationSessions,
   type CompanyListParams,
   type CreateBranchBody,
   type InvoiceListParams,
   type PlatformUserListParams,
+  type UpdateCompanyBody,
 } from '../api/platform.api'
 
 /**
@@ -193,6 +198,13 @@ export const useRevenueOutstanding = (period?: string, enabled = true) =>
 export const usePlatformSettings = (enabled = true) =>
   useQuery({ queryKey: KEYS.settings, queryFn: ({ signal }) => getSettings(signal), enabled })
 
+export const useStationOverview = (enabled = true) =>
+  useQuery({
+    queryKey: ['platform', 'stations'] as const,
+    queryFn: ({ signal }) => getStationOverview(signal),
+    enabled,
+  })
+
 export const useFeatureFlags = (enabled = true) =>
   useQuery({ queryKey: KEYS.flags, queryFn: ({ signal }) => getFeatureFlags(signal), enabled })
 
@@ -238,6 +250,14 @@ export function useCreateCompany() {
   return useMutation({ mutationFn: postCompany, onSuccess: invalidate })
 }
 
+export function useUpdateCompany() {
+  const invalidate = useInvalidatePlatform()
+  return useMutation({
+    mutationFn: ({ id, body }: { id: number; body: UpdateCompanyBody }) => putCompany(id, body),
+    onSuccess: invalidate,
+  })
+}
+
 export function useCreateBranch() {
   const invalidate = useInvalidatePlatform()
   return useMutation({
@@ -262,6 +282,18 @@ export function useArchiveBranch() {
       deleteBranch(companyId, branchId),
     onSuccess: invalidate,
   })
+}
+
+/** Rotates a gym's kiosk enrollment code and refreshes the station overview. */
+export function useRotateStationCode() {
+  const invalidate = useInvalidatePlatform()
+  return useMutation({ mutationFn: rotateGymStationCode, onSuccess: invalidate })
+}
+
+/** Disconnects every kiosk enrolled at a gym. */
+export function useRevokeStationSessions() {
+  const invalidate = useInvalidatePlatform()
+  return useMutation({ mutationFn: revokeGymStationSessions, onSuccess: invalidate })
 }
 
 export function useCreateUser() {

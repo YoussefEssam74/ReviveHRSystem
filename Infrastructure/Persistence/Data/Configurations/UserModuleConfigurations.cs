@@ -16,6 +16,13 @@ namespace Presistence.Data.Configurations
             builder.Property(u => u.PasswordHash).IsRequired();
             builder.Property(u => u.UserType).IsRequired();
 
+            // Personal details captured by the create-account wizards. The photo is a
+            // downscaled data URL, like the gym logo.
+            builder.Property(u => u.Phone).HasMaxLength(32);
+            builder.Property(u => u.Gender).HasMaxLength(16);
+            builder.Property(u => u.NationalId).HasMaxLength(32);
+            builder.Property(u => u.PhotoUrl).HasMaxLength(100_000);
+
             builder.HasIndex(u => u.Email).IsUnique();
             builder.HasIndex(u => u.UserName).IsUnique();
 

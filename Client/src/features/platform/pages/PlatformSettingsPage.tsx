@@ -5,14 +5,26 @@ import { Button } from '../../../components/ui/button'
 import { describeApiError } from '../../../lib/api-client'
 import { useToast } from '../../../components/ui/toast'
 import type { PlatformSettings } from '../api/platform.api'
-import { Panel, PanelError, PanelHead, PanelLabel, PanelLoading, PlatformPage, PlatformPageHeader } from '../components/platform-ui'
-import { AttentionStrip } from '../components/AttentionStrip'
+import {
+  Panel,
+  PanelError,
+  PanelHead,
+  PanelLabel,
+  PanelLoading,
+  PlatformPage,
+  PlatformPageHeader,
+} from '../components/platform-ui'
+import { StationsPanel } from '../components/StationsPanel'
 import { usePlatformSettings, useSaveSettings } from '../hooks/usePlatform'
 
-/** Only the security section is surfaced: the other settings groups are not actionable. */
+/**
+ * The security section is the only settings group that changes behaviour, so it is
+ * the only one surfaced. 0 means "never" for the two switches that allow it, which
+ * is exactly how the API stores them.
+ */
 type SecurityDraft = {
   passwordRotationDays: number
-  sessionLifetimeMinutes: number
+  sessionLifetimeDays: number
   maxFailedSignIns: number
   lockoutMinutes: number
   requireMfa: boolean
@@ -21,7 +33,8 @@ type SecurityDraft = {
 function draftFrom(settings: PlatformSettings): SecurityDraft {
   return {
     passwordRotationDays: settings.security.passwordRotationDays,
-    sessionLifetimeMinutes: settings.security.sessionLifetimeMinutes,
+    // Stored in minutes; the console works in whole days.
+    sessionLifetimeDays: Math.max(1, Math.ceil(settings.security.sessionLifetimeMinutes / 1440)),
     maxFailedSignIns: settings.security.maxFailedSignIns,
     lockoutMinutes: settings.security.lockoutMinutes,
     requireMfa: settings.security.requireMfa,
@@ -33,17 +46,35 @@ function Field({ label, hint, children }: { label: string; hint?: string; childr
     <label className="block min-w-0">
       <span className="pc-label">{label}</span>
       {children}
-      {hint && <span className="mt-0.5 block text-[9px] text-charcoal-400">{hint}</span>}
+      {hint && <span className="mt-0.5 block text-[9px] leading-relaxed text-charcoal-400">{hint}</span>}
     </label>
   )
 }
 
-/**
- * Platform security defaults.
- *
- * The mock has no settings screen; of the settings the API stores, only these five
- * change how the platform actually behaves, so this page surfaces just them.
- */
+/** Small inline "Never" switch that pins its field to 0. */
+function NeverToggle({
+  checked,
+  fallback,
+  onChange,
+}: {
+  checked: boolean
+  fallback: number
+  onChange: (value: number) => void
+}) {
+  const { t } = useTranslation()
+  return (
+    <label className="mt-1 flex items-center gap-1.5 text-[10px] font-medium text-charcoal-500">
+      <input
+        type="checkbox"
+        className="h-3 w-3 rounded border-charcoal-300 accent-brand-600"
+        checked={checked}
+        onChange={(event) => onChange(event.target.checked ? 0 : fallback)}
+      />
+      {t('Never')}
+    </label>
+  )
+}
+
 export default function PlatformSettingsPage() {
   const { t } = useTranslation()
   const { toast } = useToast()
@@ -65,14 +96,17 @@ export default function PlatformSettingsPage() {
   const onSave = () => {
     if (!draft || changes.length === 0) return
     const patch: Record<string, unknown> = {}
-    for (const key of changes) patch[key] = draft[key]
+    for (const key of changes) {
+      patch[key] = key === 'sessionLifetimeDays' ? draft.sessionLifetimeDays * 1440 : draft[key]
+    }
+    if (changes.includes('sessionLifetimeDays')) delete patch.sessionLifetimeDays
     save.mutate({ security: patch }, {
       onSuccess: () => {
         setEdited(null)
         void settings.refetch()
         toast(t('Security settings saved.'), 'success')
       },
-      onError: () => toast(t('Could not save the settings.'), 'error'),
+      onError: (error) => toast(describeApiError(error), 'error'),
     })
   }
 
@@ -103,7 +137,7 @@ export default function PlatformSettingsPage() {
   return (
     <PlatformPage>
       <PlatformPageHeader
-        title={t('Security')}
+        title={t('Platform settings')}
         subtitle={t('Sign-in policy that applies to every platform and HR account')}
         actions={
           <Button size="sm" onClick={onSave} loading={save.isPending} disabled={changes.length === 0}>
@@ -113,8 +147,6 @@ export default function PlatformSettingsPage() {
         }
       />
 
-      <AttentionStrip types={['FailedSignInBurst']} />
-
       <div className="grid gap-2.5 lg:grid-cols-2">
         <Panel>
           <PanelHead>
@@ -122,20 +154,39 @@ export default function PlatformSettingsPage() {
             <ShieldCheck className="h-3.5 w-3.5 text-charcoal-400" aria-hidden="true" />
           </PanelHead>
           <div className="grid gap-2.5 px-3 py-2.5 sm:grid-cols-2">
-            <Field label={t('Password rotation (days)')}>
+            <Field
+              label={t('Require a password change every (days)')}
+              hint={
+                draft.passwordRotationDays === 0
+                  ? t('Never — passwords stay valid until the user changes them.')
+                  : t('The user is asked to set a new password after this many days (30–365).')
+              }
+            >
               <input
                 type="number"
+                min={0}
+                max={365}
                 className="pc-control w-full"
                 value={draft.passwordRotationDays}
                 onChange={(event) => set('passwordRotationDays', Number(event.target.value))}
               />
+              <NeverToggle
+                checked={draft.passwordRotationDays === 0}
+                fallback={90}
+                onChange={(value) => set('passwordRotationDays', value)}
+              />
             </Field>
-            <Field label={t('Session lifetime (minutes)')}>
+            <Field
+              label={t('Session lifetime (days)')}
+              hint={t('How long a sign-in lasts before the user must sign in again. 1–365 days.')}
+            >
               <input
                 type="number"
+                min={1}
+                max={365}
                 className="pc-control w-full"
-                value={draft.sessionLifetimeMinutes}
-                onChange={(event) => set('sessionLifetimeMinutes', Number(event.target.value))}
+                value={draft.sessionLifetimeDays}
+                onChange={(event) => set('sessionLifetimeDays', Number(event.target.value))}
               />
             </Field>
           </div>
@@ -146,20 +197,39 @@ export default function PlatformSettingsPage() {
             <PanelLabel>{t('Lockout policy')}</PanelLabel>
           </PanelHead>
           <div className="grid gap-2.5 px-3 py-2.5 sm:grid-cols-2">
-            <Field label={t('Max failed sign-ins')}>
+            <Field
+              label={t('Max failed sign-ins')}
+              hint={t('Wrong passwords allowed before the account locks (3–10).')}
+            >
               <input
                 type="number"
+                min={3}
+                max={10}
                 className="pc-control w-full"
                 value={draft.maxFailedSignIns}
                 onChange={(event) => set('maxFailedSignIns', Number(event.target.value))}
               />
             </Field>
-            <Field label={t('Lockout duration (minutes)')}>
+            <Field
+              label={t('Lockout duration (minutes)')}
+              hint={
+                draft.lockoutMinutes === 0
+                  ? t('Never — attempts are only recorded, the account never locks.')
+                  : t('How long the account stays locked after the limit is reached.')
+              }
+            >
               <input
                 type="number"
+                min={0}
+                max={1440}
                 className="pc-control w-full"
                 value={draft.lockoutMinutes}
                 onChange={(event) => set('lockoutMinutes', Number(event.target.value))}
+              />
+              <NeverToggle
+                checked={draft.lockoutMinutes === 0}
+                fallback={20}
+                onChange={(value) => set('lockoutMinutes', value)}
               />
             </Field>
             <div className="sm:col-span-2">
@@ -182,16 +252,7 @@ export default function PlatformSettingsPage() {
         </Panel>
       </div>
 
-      <Panel>
-        <PanelHead>
-          <PanelLabel>{t('How this applies')}</PanelLabel>
-        </PanelHead>
-        <ul className="space-y-1 px-3 py-2.5 text-[11px] text-charcoal-600">
-          <li>{t('Lockout is enforced on the next sign-in attempt; sessions already issued keep working until they expire.')}</li>
-          <li>{t('Password rotation pushes a change prompt on the next sign-in after the configured number of days.')}</li>
-          <li>{t('Session lifetime caps the access token; refresh tokens keep the browser signed in without a prompt.')}</li>
-        </ul>
-      </Panel>
+      <StationsPanel />
     </PlatformPage>
   )
 }

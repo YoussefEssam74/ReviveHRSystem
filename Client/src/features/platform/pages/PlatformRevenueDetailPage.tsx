@@ -35,7 +35,6 @@ import {
   TableWrap,
   GymMark,
 } from '../components/platform-ui'
-import { AttentionStrip } from '../components/AttentionStrip'
 import { TrendChart } from '../components/TrendChart'
 import { saveBlob } from '../lib/download'
 
@@ -210,8 +209,6 @@ export default function PlatformRevenueDetailPage() {
           </>
         }
       />
-
-      <AttentionStrip types={['InvoiceOverdue']} />
 
       {summary.isPending ? (
         <Panel>

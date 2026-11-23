@@ -6,7 +6,6 @@ import { Badge, StatusBadge } from '../../../components/ui/badge'
 import { describeApiError } from '../../../lib/api-client'
 import { formatDate, formatMoney, formatNumber } from '../../../lib/format'
 import { useMe } from '../../../contexts/MeContext'
-import { AttentionStrip } from '../components/AttentionStrip'
 import { CreateGymModal } from '../components/CreateGymModal'
 import {
   PTbody,
@@ -27,7 +26,8 @@ import {
   TableWrap,
   GymMark,
 } from '../components/platform-ui'
-import { useCompanies, usePlans } from '../hooks/usePlatform'
+import { useCompanies, usePlans, usePlatformAlerts } from '../hooks/usePlatform'
+import type { PlatformAlert } from '../api/platform.api'
 
 const STATUS_OPTIONS = ['', 'Trial', 'Active', 'PaymentOverdue', 'Suspended', 'Closed']
 
@@ -54,6 +54,13 @@ export default function PlatformCompaniesPage() {
   const [createOpen, setCreateOpen] = useState(false)
 
   const plans = usePlans(me?.userType === 'TopManagement')
+  // The sidebar badge points here; these markers say which account each alert is about.
+  const alerts = usePlatformAlerts()
+  const alertsByCompany = new Map<number, PlatformAlert[]>()
+  for (const alert of alerts.data?.items ?? []) {
+    if (alert.companyId === null) continue
+    alertsByCompany.set(alert.companyId, [...(alertsByCompany.get(alert.companyId) ?? []), alert])
+  }
   const companies = useCompanies({
     search: search.trim() || undefined,
     status: status || undefined,
@@ -89,8 +96,6 @@ export default function PlatformCompaniesPage() {
           </button>
         }
       />
-
-      <AttentionStrip />
 
       <CreateGymModal
         open={createOpen}
@@ -190,16 +195,50 @@ export default function PlatformCompaniesPage() {
                           <div className="flex min-w-0 items-center gap-2">
                             <GymMark name={company.name} logoUrl={company.logoUrl} />
                             <div className="min-w-0">
-                              <Link
-                                to={`/platform/companies/${company.id}`}
-                                className="block truncate text-xs font-semibold leading-tight text-charcoal-800 hover:text-brand-700"
-                                onClick={(event) => event.stopPropagation()}
-                              >
-                                {company.name}
-                              </Link>
+                              <div className="flex items-center gap-1.5">
+                                <Link
+                                  to={`/platform/companies/${company.id}`}
+                                  className="block truncate text-xs font-semibold leading-tight text-charcoal-800 hover:text-brand-700"
+                                  onClick={(event) => event.stopPropagation()}
+                                >
+                                  {company.name}
+                                </Link>
+                                {(() => {
+                                  const companyAlerts = alertsByCompany.get(company.id) ?? []
+                                  if (companyAlerts.length === 0) return null
+                                  const critical = companyAlerts.some((alert) => alert.severity === 'critical')
+                                  return (
+                                    <span
+                                      className={
+                                        critical
+                                          ? 'inline-flex flex-shrink-0 items-center rounded-md bg-red-50 px-1.5 py-0.5 text-[10px] font-semibold leading-none text-red-600 ring-1 ring-inset ring-red-200'
+                                          : 'inline-flex flex-shrink-0 items-center rounded-md bg-amber-50 px-1.5 py-0.5 text-[10px] font-semibold leading-none text-amber-600 ring-1 ring-inset ring-amber-200'
+                                      }
+                                      title={companyAlerts.map((alert) => alert.title).join('\n')}
+                                    >
+                                      {companyAlerts.length}
+                                    </span>
+                                  )
+                                })()}
+                              </div>
                               <p className="truncate text-[10px] leading-tight text-charcoal-500">
                                 {[company.city, company.code].filter(Boolean).join(' · ')}
                               </p>
+                              {(() => {
+                                const first = (alertsByCompany.get(company.id) ?? [])[0]
+                                if (!first) return null
+                                return (
+                                  <p
+                                    className={
+                                      first.severity === 'critical'
+                                        ? 'truncate text-[10px] leading-tight text-red-600'
+                                        : 'truncate text-[10px] leading-tight text-amber-600'
+                                    }
+                                  >
+                                    {first.title}
+                                  </p>
+                                )
+                              })()}
                             </div>
                           </div>
                         </PTd>

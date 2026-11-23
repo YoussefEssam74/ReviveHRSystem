@@ -1,14 +1,13 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { KeyRound, Search, UserPlus, UserX, UserCheck } from 'lucide-react'
+import { KeyRound, LogIn, Search, UserPlus, UserX, UserCheck } from 'lucide-react'
 import { Badge, StatusBadge } from '../../../components/ui/badge'
 import { Button } from '../../../components/ui/button'
-import { Modal } from '../../../components/ui/modal'
 import { describeApiError } from '../../../lib/api-client'
 import { useToast } from '../../../components/ui/toast'
+import { useMe } from '../../../contexts/MeContext'
 import { formatDate, formatNumber, initialsOf } from '../../../lib/format'
-import { AttentionStrip } from '../components/AttentionStrip'
 import {
   PTbody,
   PTd,
@@ -28,7 +27,17 @@ import {
   PlatformPageHeader,
   TableWrap,
 } from '../components/platform-ui'
-import { useChangeUserStatus, useCompanies, useCreateHrManager, usePlatformUsers, useResetPassword } from '../hooks/usePlatform'
+import { CreateHrManagerModal } from '../components/CreateHrManagerModal'
+import {
+  useChangeUserStatus,
+  useCompanies,
+  useLauncherRoles,
+  usePlatformUsers,
+  useResetPassword,
+  useStartWorkspace,
+} from '../hooks/usePlatform'
+import { enterGymWorkspace } from '../lib/workspace-switch'
+
 
 /**
  * Platform HR manager accounts.
@@ -40,17 +49,21 @@ import { useChangeUserStatus, useCompanies, useCreateHrManager, usePlatformUsers
 export default function PlatformHrManagersPage() {
   const { t } = useTranslation()
   const { toast } = useToast()
+  const { me } = useMe()
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
+
+  // Impersonation is a Super Admin capability; an HR Manager never sees the panel.
+  const isSuperAdmin = me?.userType === 'TopManagement'
 
   const [search, setSearch] = useState('')
   const [status, setStatus] = useState('')
   const [page, setPage] = useState(1)
   const [createModalOpen, setCreateModalOpen] = useState(false)
-  const [fullName, setFullName] = useState('')
-  const [email, setEmail] = useState('')
-  const [phone, setPhone] = useState('')
-  const [sendInvite, setSendInvite] = useState(true)
+
+  // "Enter a gym workspace" panel.
+  const [workspaceCompanyId, setWorkspaceCompanyId] = useState('')
+  const [workspaceRoleId, setWorkspaceRoleId] = useState('')
 
   const managers = usePlatformUsers({
     role: 'HRManager',
@@ -63,10 +76,11 @@ export default function PlatformHrManagersPage() {
   const companies = useCompanies({ pageSize: 200 })
   // The mock's footer counts the gym-scoped HR staff that hold more than one gym.
   const hrStaff = usePlatformUsers({ role: 'HR', pageSize: 100 })
+  const launcherRoles = useLauncherRoles(isSuperAdmin)
 
-  const createManager = useCreateHrManager()
   const resetPassword = useResetPassword()
   const changeStatus = useChangeUserStatus()
+  const startWorkspace = useStartWorkspace()
 
   const gymCount = companies.data?.totalCount ?? 0
   const multiGymStaff = (hrStaff.data?.items ?? []).filter((user) => user.companies.length > 1).length
@@ -79,24 +93,24 @@ export default function PlatformHrManagersPage() {
     if (searchParams.has('new')) setSearchParams({}, { replace: true })
   }
 
-  const onCreate = () => {
-    createManager.mutate(
-      { fullName: fullName.trim(), email: email.trim(), phone: phone.trim() || null, sendInvite },
+  const onOpenWorkspace = () => {
+    if (!workspaceCompanyId) return
+    const company = companies.data?.items.find((item) => String(item.id) === workspaceCompanyId)
+    startWorkspace.mutate(
       {
-        onSuccess: () => {
-          toast(
-            sendInvite
-              ? t('{{email}} can now reach every gym account.', { email: email.trim() })
-              : t('{{email}} was created without an activation invite.', { email: email.trim() }),
-            'success',
-          )
-          setCreateModalOpen(false)
-          setFullName('')
-          setEmail('')
-          setPhone('')
-          setSendInvite(true)
+        companyId: Number(workspaceCompanyId),
+        effectiveRoleId: workspaceRoleId ? Number(workspaceRoleId) : null,
+        // The API requires a reason for the audit trail; the console states how it was entered.
+        reason: t('Entered {{gym}} from the platform console', {
+          gym: company?.name ?? t('a gym account'),
+        }),
+      },
+      {
+        onSuccess: (result) => {
+          enterGymWorkspace(result)
+          window.location.assign('/console/dashboard')
         },
-        onError: () => toast(t('Could not create the HR manager account.'), 'error'),
+        onError: () => toast(t('Could not enter the workspace.'), 'error'),
       },
     )
   }
@@ -166,7 +180,6 @@ export default function PlatformHrManagersPage() {
         }
       />
 
-      <AttentionStrip types={['FailedSignInBurst']} />
 
       <Panel grow>
         <PanelHead className="border-b-0">
@@ -238,9 +251,17 @@ export default function PlatformHrManagersPage() {
                     <PTr key={manager.id} onClick={() => navigate(`/platform/users/${manager.id}`)}>
                       <PTd>
                         <div className="flex min-w-0 items-center gap-2">
-                          <span className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full bg-brand-100 text-[9px] font-semibold text-brand-700">
-                            {initialsOf(manager.name) || '?'}
-                          </span>
+                          {manager.photoUrl ? (
+                            <img
+                              src={manager.photoUrl}
+                              alt=""
+                              className="h-7 w-7 flex-shrink-0 rounded-full border border-charcoal-200 object-cover"
+                            />
+                          ) : (
+                            <span className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full bg-brand-100 text-[9px] font-semibold text-brand-700">
+                              {initialsOf(manager.name) || '?'}
+                            </span>
+                          )}
                           <div className="min-w-0">
                             <p className="block truncate text-xs font-semibold leading-tight text-charcoal-800">
                               {manager.name}
@@ -329,60 +350,61 @@ export default function PlatformHrManagersPage() {
         </PanelFooter>
       </Panel>
 
-      <Modal
-        open={createOpen}
-        title={t('Create HR manager account')}
-        onClose={closeCreate}
-        footer={
-          <>
-            <Button variant="outline" size="sm" onClick={closeCreate}>
-              {t('Cancel')}
-            </Button>
-            <Button
-              size="sm"
-              onClick={onCreate}
-              loading={createManager.isPending}
-              disabled={!fullName.trim() || !email.trim()}
-            >
-              {t('Create account')}
-            </Button>
-          </>
-        }
-      >
-        <div className="space-y-2.5">
-          <label className="block">
-            <span className="pc-label">{t('Full name')}</span>
-            <input className="pc-control w-full" value={fullName} onChange={(event) => setFullName(event.target.value)} />
-          </label>
-          <label className="block">
-            <span className="pc-label">{t('Email')}</span>
-            <input
-              type="email"
-              className="pc-control w-full"
-              value={email}
-              onChange={(event) => setEmail(event.target.value)}
-            />
-          </label>
-          <label className="block">
-            <span className="pc-label">{t('Phone (optional)')}</span>
-            <input className="pc-control w-full" value={phone} onChange={(event) => setPhone(event.target.value)} />
-          </label>
-          <label className="flex items-start gap-2">
-            <input
-              type="checkbox"
-              className="mt-0.5 h-3.5 w-3.5 rounded border-charcoal-300 accent-brand-600"
-              checked={sendInvite}
-              onChange={(event) => setSendInvite(event.target.checked)}
-            />
-            <span className="min-w-0">
-              <span className="block text-[11px] text-charcoal-700">{t('Send an activation invite')}</span>
-              <span className="block text-[9px] text-charcoal-400">
-                {t('The account reaches every gym account as soon as it is activated.')}
-              </span>
-            </span>
-          </label>
-        </div>
-      </Modal>
+      {isSuperAdmin && (
+        <Panel>
+          <div className="px-3 py-2.5">
+            <div className="flex flex-wrap items-end gap-2">
+              <label className="min-w-[190px] flex-1">
+                <span className="pc-label">{t('Enter a gym workspace')}</span>
+                <select
+                  className="pc-control w-full"
+                  value={workspaceCompanyId}
+                  onChange={(event) => setWorkspaceCompanyId(event.target.value)}
+                  aria-label={t('Enter a gym workspace')}
+                >
+                  <option value="">{t('Choose a gym account')}</option>
+                  {companies.data?.items.map((gym) => (
+                    <option key={gym.id} value={String(gym.id)}>
+                      {gym.name}
+                      {gym.city ? ` — ${gym.city}` : ''}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="w-[150px]">
+                <span className="pc-label">{t('Act as')}</span>
+                <select
+                  className="pc-control w-full"
+                  value={workspaceRoleId}
+                  onChange={(event) => setWorkspaceRoleId(event.target.value)}
+                  aria-label={t('Act as')}
+                >
+                  <option value="">{t("The gym's own scope")}</option>
+                  {launcherRoles.data?.items.map((role) => (
+                    <option key={role.roleId} value={String(role.roleId)}>
+                      {role.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <button
+                type="button"
+                className="btn btn-primary btn-sm flex-shrink-0"
+                onClick={onOpenWorkspace}
+                disabled={!workspaceCompanyId || startWorkspace.isPending}
+              >
+                <LogIn className="h-3.5 w-3.5" aria-hidden="true" />
+                {t('Open workspace')}
+              </button>
+            </div>
+            <p className="mt-1.5 text-[10px] leading-snug text-charcoal-500">
+              {t('Opens the selected gym in a new session with the visibility you pick. Every action is attributed to you on the audit trail.')}
+            </p>
+          </div>
+        </Panel>
+      )}
+
+      <CreateHrManagerModal open={createOpen} onClose={closeCreate} />
     </PlatformPage>
   )
 }

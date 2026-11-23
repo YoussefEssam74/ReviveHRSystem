@@ -67,13 +67,35 @@ namespace Service.Services
         // Minutes a check-out may run before the shift end without being an early leave.
         private readonly int _earlyLeaveGraceMinutes = (attendanceOptions ?? new AttendanceOptions()).EarlyLeaveGraceMinutes;
 
-        public async Task<StationLoginResponse> StationLoginAsync(StationLoginRequest request, CancellationToken cancellationToken = default)
+        public async Task<StationLoginResponse> StationLoginAsync(
+            StationLoginRequest request,
+            string? ipAddress = null,
+            string? deviceInfo = null,
+            CancellationToken cancellationToken = default)
         {
             var stationCode = await ResolveStationCodeAsync(request.Code, cancellationToken)
                 ?? throw new UnAuthorizedException("Invalid or expired station code.");
 
             var token = await stationSessions.CreateSessionAsync(
-                stationCode.GymId, stationCode.Id, cancellationToken);
+                stationCode.GymId,
+                stationCode.Id,
+                new StationClientInfo(
+                    ipAddress,
+                    deviceInfo,
+                    request.Latitude,
+                    request.Longitude,
+                    request.AccuracyMeters),
+                cancellationToken);
+
+            // An operator-issued code is single-use: redeeming it retires it at once, so
+            // the same code can never bind a second device. Codes without an expiry are
+            // development seeds and stay reusable for local fixtures.
+            if (stationCode.ExpiresAtUtc is not null)
+            {
+                stationCode.IsActive = false;
+                unitOfWork.GetRepository<StationCode, int>().Update(stationCode);
+                await unitOfWork.SaveChangesAsync(cancellationToken);
+            }
 
             return new StationLoginResponse
             {

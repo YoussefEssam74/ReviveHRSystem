@@ -57,6 +57,53 @@ namespace ReviveHRSystem.IntegrationTests
         }
 
         [Fact]
+        public async Task StationLogin_PersistsTheEnrollingDeviceInfo()
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Post, "/api/kiosk/login")
+            {
+                Content = JsonContent.Create(new { code = _fixture.Gym1StationCode }),
+            };
+            request.Headers.TryAddWithoutValidation("User-Agent", "ReviveTestKiosk/1.0 (Windows NT 10.0)");
+
+            var response = await _fixture.Client.SendAsync(request);
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+            using var scope = _fixture.Services.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<ReviveHrDbContext>();
+            var session = await db.StationSessions.OrderByDescending(s => s.Id).FirstAsync();
+
+            // The console lists this next to the session, so an unexpected enrolment is visible.
+            Assert.Equal("ReviveTestKiosk/1.0 (Windows NT 10.0)", session.DeviceInfo);
+            if (session.IpAddress is not null)
+            {
+                Assert.NotEqual(string.Empty, session.IpAddress);
+            }
+        }
+
+        [Fact]
+        public async Task StationLogin_ASingleUseCode_IsRejectedTheSecondTime()
+        {
+            // An operator-issued code carries the short expiry and is redeemable once.
+            var builder = new TestDataBuilder(_fixture.Services);
+            var gym = await builder.CreateGymWithStationAsync();
+            var admin = await _fixture.GetAdminTokenAsync();
+
+            var rotateRequest = _fixture.AuthorizedRequest(HttpMethod.Post, $"/api/gyms/{gym.GymId}/station-codes", null, admin);
+            var rotateResponse = await _fixture.Client.SendAsync(rotateRequest);
+            Assert.Equal(HttpStatusCode.OK, rotateResponse.StatusCode);
+            var issued = await rotateResponse.Content.ReadFromJsonAsync<JsonElement>();
+            var code = issued.GetProperty("code").GetString()!;
+            Assert.NotNull(issued.GetProperty("expiresAtUtc").GetDateTime());
+
+            var first = await _fixture.Client.PostAsJsonAsync("/api/kiosk/login", new { code });
+            Assert.Equal(HttpStatusCode.OK, first.StatusCode);
+
+            // The same code can never bind a second device.
+            var second = await _fixture.Client.PostAsJsonAsync("/api/kiosk/login", new { code });
+            Assert.Equal(HttpStatusCode.Unauthorized, second.StatusCode);
+        }
+
+        [Fact]
         public async Task StationLogin_WrongCode_Returns401()
         {
             var response = await _fixture.Client.PostAsJsonAsync("/api/kiosk/login", new { code = "000000" });
