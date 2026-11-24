@@ -2632,6 +2632,10 @@ namespace Persistence.Data.Migrations
                         .HasMaxLength(300)
                         .HasColumnType("character varying(300)");
 
+                    b.Property<string>("LogoPath")
+                        .HasMaxLength(400)
+                        .HasColumnType("character varying(400)");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(200)

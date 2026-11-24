@@ -19,6 +19,13 @@ namespace DomainLayer.Models.OrganizationModule
         public string Name { get; set; } = string.Empty;
         public string Location { get; set; } = string.Empty;
         public string? ContactInfo { get; set; }
+
+        /// <summary>
+        /// Storage-relative path of the branch logo (see IFileStorage), never a public
+        /// URL. Null until one is uploaded — the portal then falls back to its bundled
+        /// brand asset or a monogram tile.
+        /// </summary>
+        public string? LogoPath { get; set; }
         public int ShiftCycleLengthDays { get; set; } = 10;
         public GymStatus Status { get; set; } = GymStatus.Active;
 
