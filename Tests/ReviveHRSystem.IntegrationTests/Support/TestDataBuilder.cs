@@ -358,7 +358,8 @@ namespace ReviveHRSystem.IntegrationTests.Support
             DateOnly date,
             DateTime? checkInUtc = null,
             DateTime? checkOutUtc = null,
-            AttendanceStatus status = AttendanceStatus.OnTime)
+            AttendanceStatus status = AttendanceStatus.OnTime,
+            int? scheduledShiftTemplateId = null)
         {
             var record = new AttendanceRecord
             {
@@ -369,7 +370,8 @@ namespace ReviveHRSystem.IntegrationTests.Support
                 CheckOutTime = checkOutUtc,
                 CheckInMethod = checkInUtc.HasValue ? AttendanceMethod.Biometric : null,
                 CheckOutMethod = checkOutUtc.HasValue ? AttendanceMethod.Biometric : null,
-                Status = status
+                Status = status,
+                ScheduledShiftTemplateId = scheduledShiftTemplateId
             };
             _db.AttendanceRecords.Add(record);
             await _db.SaveChangesAsync();

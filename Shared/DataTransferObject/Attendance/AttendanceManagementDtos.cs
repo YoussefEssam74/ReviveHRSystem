@@ -59,6 +59,16 @@ namespace Shared.DataTransferObject.Attendance
         public bool IsCoverDay { get; init; }
 
         /// <summary>
+        /// Minutes the check-in ran past the shift start (0 when on time, not in yet, or
+        /// no shift). Independent of <see cref="Status"/>: lateness outranks an early
+        /// check-out in the stored status, so the board can still show both.
+        /// </summary>
+        public int LateMinutes { get; init; }
+
+        /// <summary>Minutes the check-out ran before the shift end (0 when not early or still in).</summary>
+        public int EarlyLeaveMinutes { get; init; }
+
+        /// <summary>
         /// The deduction the attendance rule raises for a late arrival or an unexcused
         /// absence on this day, priced by the same sweep payroll settles from. Null when
         /// the day carries no deduction; attached after the grid is composed.
@@ -152,6 +162,12 @@ namespace Shared.DataTransferObject.Attendance
 
         /// <summary>True when the approved cover/extra day was worked without a scheduled shift.</summary>
         public bool IsCoverDay { get; init; }
+
+        /// <summary>Minutes the check-in ran past the shift start (0 when on time or not in yet).</summary>
+        public int LateMinutes { get; init; }
+
+        /// <summary>Minutes the check-out ran before the shift end — shown beside the status badge.</summary>
+        public int EarlyLeaveMinutes { get; init; }
     }
 
     /// <summary>

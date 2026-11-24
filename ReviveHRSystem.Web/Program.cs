@@ -267,6 +267,9 @@ namespace ReviveHRSystem.Web
                 LateGraceMinutes = GraceMinutes(builder.Configuration, "Attendance:LateGraceMinutes", AttendanceOptions.DefaultLateGraceMinutes),
                 EarlyLeaveGraceMinutes = GraceMinutes(builder.Configuration, "Attendance:EarlyLeaveGraceMinutes", AttendanceOptions.DefaultEarlyLeaveGraceMinutes),
             });
+            // Wall-clock reads that decide "shift started / still running" (kiosk roster,
+            // attendance board) go through this, so tests can pin the moment.
+            builder.Services.AddSingleton(TimeProvider.System);
 
             // --- Application services ---
             // AutoMapper scans the service assembly for MappingProfile.

@@ -183,6 +183,44 @@ function dayDisplayStatus(item: EmployeeAttendanceItem, deductions: EmployeeDedu
   return live.some((row) => /late/i.test(row.description)) ? 'Late' : 'Absent'
 }
 
+/**
+ * The day's status plus what the single stored status cannot say at the same time:
+ * lateness outranks an early check-out there, so a Late day that ended 25 minutes
+ * early still has to show its early departure.
+ */
+function DayStatusBadges({
+  status,
+  lateMinutes,
+  earlyLeaveMinutes,
+}: {
+  status: string
+  lateMinutes?: number | null
+  earlyLeaveMinutes?: number | null
+}) {
+  const { t } = useTranslation()
+  const late = lateMinutes ?? 0
+  const early = earlyLeaveMinutes ?? 0
+  // The status badge already says "Late": show its minutes in place of the bare word
+  // instead of stacking a second late flag next to it.
+  const statusIsLate = status.trim().toLowerCase() === 'late'
+  const lateChip = (
+    <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-800">
+      {t('Late {{minutes}}m', { minutes: late })}
+    </span>
+  )
+  return (
+    <>
+      {late > 0 && statusIsLate ? lateChip : <StatusBadge status={status} />}
+      {late > 0 && !statusIsLate && lateChip}
+      {early > 0 && (
+        <span className="rounded-full bg-orange-100 px-2 py-0.5 text-[10px] font-semibold text-orange-800">
+          {t('Left early {{minutes}}m', { minutes: early })}
+        </span>
+      )}
+    </>
+  )
+}
+
 export default function MyAttendancePage() {
   const { t } = useTranslation()
   const { me } = usePortalSession()
@@ -464,7 +502,15 @@ export default function MyAttendancePage() {
                       <td className="px-4 py-2.5">{time12(item.checkOut)}</td>
                       <td className="px-4 py-2.5">
                         <div className="flex flex-wrap items-center gap-1.5">
-                          {leave ? <StatusBadge status={leave.status} /> : <StatusBadge status={dayDisplayStatus(item, dayDeductions)} />}
+                          {leave ? (
+                            <StatusBadge status={leave.status} />
+                          ) : (
+                            <DayStatusBadges
+                              status={dayDisplayStatus(item, dayDeductions)}
+                              lateMinutes={item.lateMinutes}
+                              earlyLeaveMinutes={item.earlyLeaveMinutes}
+                            />
+                          )}
                           {item.coverDays != null && (
                             <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
                               Cover: {item.coverDays}
@@ -515,7 +561,15 @@ export default function MyAttendancePage() {
                       Cover: {item.coverDays}
                     </span>
                   )}
-                  {leave ? <StatusBadge status={leave.status} /> : <StatusBadge status={dayDisplayStatus(item, dayDeductions)} />}
+                  {leave ? (
+                    <StatusBadge status={leave.status} />
+                  ) : (
+                    <DayStatusBadges
+                      status={dayDisplayStatus(item, dayDeductions)}
+                      lateMinutes={item.lateMinutes}
+                      earlyLeaveMinutes={item.earlyLeaveMinutes}
+                    />
+                  )}
                 </div>
               </div>
               <div className="mt-1.5">
@@ -642,8 +696,12 @@ function AttendanceDetailDrawer({
         <div className="space-y-4">
           <div className="border-b border-charcoal-100 py-2 text-center">
             <p className="text-sm font-bold text-charcoal-900">{formatDateWithYear(detail.date)}</p>
-            <div className="mt-1">
-              <StatusBadge status={detail.status} />
+            <div className="mt-1 flex flex-wrap items-center justify-center gap-1.5">
+              <DayStatusBadges
+                status={detail.status}
+                lateMinutes={detail.lateMinutes}
+                earlyLeaveMinutes={detail.earlyLeaveMinutes}
+              />
             </div>
           </div>
 
