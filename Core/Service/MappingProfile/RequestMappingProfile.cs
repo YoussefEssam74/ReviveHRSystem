@@ -2,14 +2,15 @@ using AutoMapper;
 using DomainLayer.Models.OrganizationModule;
 using DomainLayer.Models.RequestModule;
 using DomainLayer.Models.RequestModule.Enums;
+using Service.Services;
 using Shared.DataTransferObject.EmployeeProfile;
 
 namespace Service.Mapping;
 
 /// <summary>
 /// Employee request mappings (mock §10 / §17). The timeline is the "Submitted"
-/// step followed by every decision ("Team Leader Approved", "HR Rejected", ...)
-/// — the same shape for the self-service list and the management inbox.
+/// step followed by every decision ("BM Approved", "HR Rejected", ...) — built by
+/// the same helper the management drawer uses, so both surfaces agree.
 /// </summary>
 public sealed class RequestMappingProfile : Profile
 {
@@ -33,7 +34,24 @@ public sealed class RequestMappingProfile : Profile
             .ForMember(d => d.Reason, o => o.MapFrom(s => s.Details))
             .ForMember(d => d.Payment, o => o.MapFrom(s => s.Payment))
             .ForMember(d => d.CalculatedDays, o => o.MapFrom(s => s.OvertimeHoursRequested.HasValue ? (int?)s.OvertimeHoursRequested.Value : (s.Payment != null && s.Payment.Contains("2") ? (int?)2 : (s.Payment != null && s.Payment.Contains("1") ? (int?)1 : null))))
-            .ForMember(d => d.Timeline, o => o.MapFrom(s => BuildTimeline(s)));
+            .ForMember(d => d.BmDecidedAt, o => o.MapFrom(s => s.Decisions
+                .Where(decision => decision.Stage == ApprovalStage.BranchManager)
+                .OrderByDescending(decision => decision.DecidedAt)
+                .Select(decision => (DateTime?)decision.DecidedAt)
+                .FirstOrDefault()))
+            .ForMember(d => d.HrDecidedAt, o => o.MapFrom(s => s.Decisions
+                .Where(decision => decision.Stage == ApprovalStage.HR)
+                .OrderByDescending(decision => decision.DecidedAt)
+                .Select(decision => (DateTime?)decision.DecidedAt)
+                .FirstOrDefault()))
+            .ForMember(d => d.BmComment, o => o.MapFrom(s => s.Decisions
+                .Where(decision => decision.Stage == ApprovalStage.BranchManager)
+                .OrderByDescending(decision => decision.DecidedAt)
+                .Select(decision => decision.Comment)
+                .FirstOrDefault()))
+            // One timeline builder for every surface: the drawer and the employee's own
+            // list must show identical steps and identical clocks.
+            .ForMember(d => d.Timeline, o => o.MapFrom(s => RequestService.BuildSharedTimeline(s)));
 
         CreateMap<RequestComment, RequestCommentDto>()
             .ForMember(d => d.Author, o => o.MapFrom(s => s.AuthorUser != null ? s.AuthorUser.UserName : string.Empty))
@@ -42,30 +60,5 @@ public sealed class RequestMappingProfile : Profile
         CreateMap<Gym, AttendancePolicyDto>()
             .ForMember(d => d.GymId, o => o.MapFrom(s => s.Id))
             .ForMember(d => d.GymName, o => o.MapFrom(s => s.Name));
-    }
-
-    private static IReadOnlyList<RequestTimelineStepDto> BuildTimeline(EmployeeRequest request)
-    {
-        var steps = new List<RequestTimelineStepDto>
-        {
-            new() { Step = "Submitted", Done = true }
-        };
-
-        foreach (var decision in request.Decisions.OrderBy(d => d.DecidedAt))
-        {
-            steps.Add(new RequestTimelineStepDto
-            {
-                Step = decision.Stage switch
-                {
-                    ApprovalStage.BranchManager => $"Team Leader {decision.Decision}",
-                    ApprovalStage.HR => $"HR {decision.Decision}",
-                    _ => $"{decision.Stage} {decision.Decision}"
-                },
-                Date = decision.DecidedAt.ToString("yyyy-MM-dd HH:mm"),
-                Done = true
-            });
-        }
-
-        return steps;
     }
 }

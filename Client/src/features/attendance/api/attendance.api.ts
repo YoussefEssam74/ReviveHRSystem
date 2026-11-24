@@ -60,6 +60,8 @@ export interface FaceScanBody {
   image: string
   /** True only after the employee confirmed "check out now" on the kiosk. */
   confirmCheckout?: boolean
+  /** Employee number the prompt named — the confirmation may not punch anyone else. */
+  confirmEmployeeId?: string
 }
 
 /**
@@ -129,6 +131,8 @@ export interface StationSummaryRecord {
   /** Minutes between the check-out and the shift end (0 = not early / still in). */
   earlyLeaveMinutes?: number | null
   method?: string | null
+  /** True for yesterday's overnight shift, still running past midnight. */
+  carriedOver?: boolean
 }
 
 /** Today's counters + scheduled roster for the station's gym. */

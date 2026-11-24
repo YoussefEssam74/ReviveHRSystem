@@ -47,6 +47,26 @@ function isCoverDaysPayment(payment: string | null | undefined): boolean {
   return /^\d+\s*days?\s*$/i.test((payment ?? '').trim())
 }
 
+/** Date over clock time, stacked — the request tables' timestamp columns. */
+function DateWithTime({ value }: { value?: string | null }) {
+  if (!value) return <span className="text-xs text-charcoal-400">—</span>
+  return (
+    <>
+      <p className="whitespace-nowrap text-xs font-medium text-charcoal-900">{formatDateWithYear(value)}</p>
+      <p className="whitespace-nowrap text-[10px] text-charcoal-500">{formatTime(value)}</p>
+    </>
+  )
+}
+
+/**
+ * A timeline chip's stamp. The exact instant wins so the drawer and the tables always
+ * print the same clock; the server-rendered string is only a fallback.
+ */
+function timelineStamp(step: { date: string | null; occurredAt?: string | null }): string | null {
+  if (step.occurredAt) return `${formatDateWithYear(step.occurredAt)} · ${formatTime(step.occurredAt)}`
+  return step.date ? formatTimeLabel(step.date) : null
+}
+
 /** Detail-drawer fact boxes in reading order — the grid pairs them two per row. */
 function detailFactBoxes(
   t: TFunction,
@@ -58,7 +78,13 @@ function detailFactBoxes(
     { label: t('Type'), value: detail.type },
     { label: t('Status'), value: detail.status },
     { label: t('Submitted on'), value: formatDateWithYear(detail.submittedDate) },
-    { label: t('Requested for'), value: rangeLabel(detail.requestedDate, detail.endDate) },
+    // The branch manager's decision is the approval that matters here.
+    {
+      label: t('Approved date'),
+      value: detail.bmDecidedAt
+        ? `${formatDateWithYear(detail.bmDecidedAt)} · ${formatTime(detail.bmDecidedAt)}`
+        : '—',
+    },
   ]
   if (balance) facts.push(balance)
   if (detail.requestTime) facts.push({ label: t('Time'), value: formatTimeOfDay(detail.requestTime) })
@@ -248,8 +274,8 @@ function HrList({ status }: { status: HrTab }) {
               <tr>
                 <th>{t('Name')}</th>
                 <th>{t('Type')}</th>
-                <th>{t('Date')}</th>
-                <th>{t('Time')}</th>
+                <th>{t('Submitted date')}</th>
+                <th>{t('Approved date')}</th>
                 <th>{t('Reason')}</th>
                 <th>
                   <span className="block text-end">{t('Action')}</span>
@@ -399,14 +425,15 @@ function HrRow({ row }: { row: HrRequestItem }) {
           {row.payment && !(row.type === 'Unscheduled Attendance' && isCoverDaysPayment(row.payment)) && (
             <p className="mt-0.5 text-[10px] text-charcoal-500">{t('Payment: {{payment}}', { payment: row.payment })}</p>
           )}
-        </td>
-        <td>
-          <p className="whitespace-nowrap text-xs font-medium text-charcoal-900">
-            {rangeLabel(row.requestedDate, row.endDate)}
+          <p className="mt-0.5 text-[10px] text-charcoal-500">
+            {t('Requested for')}: {rangeLabel(row.requestedDate, row.endDate)}
           </p>
         </td>
-        <td className="whitespace-nowrap text-xs text-charcoal-700">
-          {row.requestTime ? formatTimeOfDay(row.requestTime) : '—'}
+        <td>
+          <DateWithTime value={row.submittedAt ?? row.submittedDate} />
+        </td>
+        <td>
+          <DateWithTime value={row.bmDecidedAt} />
         </td>
         <td>
           <p className="line-clamp-2 text-xs text-charcoal-700">
@@ -624,7 +651,9 @@ function HrDetailDrawer({ requestId, onClose }: { requestId: number; onClose: ()
               <li key={index} className="flex items-center gap-2 text-xs">
                 <span className={`h-1.5 w-1.5 rounded-full ${step.done ? 'bg-brand-500' : 'bg-charcoal-300'}`} />
                 <span className={step.done ? 'font-medium text-charcoal-900' : 'text-charcoal-500'}>{step.step}</span>
-                {step.date && <span className="text-[10px] text-charcoal-400">{formatTimeLabel(step.date)}</span>}
+                {step.date && (
+                  <span className="text-[10px] text-charcoal-400">{timelineStamp(step) ?? formatTimeLabel(step.date)}</span>
+                )}
               </li>
             ))}
           </ol>
@@ -964,8 +993,8 @@ function DeskList({ status }: { status: DeskTab }) {
               <tr>
                 <th>{t('Name')}</th>
                 <th>{t('Type')}</th>
-                <th>{t('Date')}</th>
-                <th>{t('Time')}</th>
+                <th>{t('Submitted date')}</th>
+                <th>{t('Approved date')}</th>
                 <th>{t('Reason')}</th>
                 <th>
                   <span className="block text-end">{t('Action')}</span>
@@ -1132,14 +1161,15 @@ function DeskRow({ row }: { row: DeskRequestRow }) {
           {row.amount != null && (
             <p className="mt-0.5 text-[10px] text-charcoal-500">{formatMoney(row.amount)}</p>
           )}
-        </td>
-        <td>
-          <p className="whitespace-nowrap text-xs font-medium text-charcoal-900">
-            {rangeLabel(row.requestDate, row.endDate)}
+          <p className="mt-0.5 text-[10px] text-charcoal-500">
+            {t('Requested for')}: {rangeLabel(row.requestDate, row.endDate)}
           </p>
         </td>
-        <td className="whitespace-nowrap text-xs text-charcoal-700">
-          {row.requestTime ? formatTimeOfDay(row.requestTime) : '—'}
+        <td>
+          <DateWithTime value={row.submittedAt ?? row.submittedDate} />
+        </td>
+        <td>
+          <DateWithTime value={row.bmDecidedAt} />
         </td>
         <td>
           <p className="line-clamp-2 text-xs text-charcoal-700">
@@ -1604,7 +1634,9 @@ function RequestDetailDrawer({
               <li key={index} className="flex items-center gap-2 text-xs">
                 <span className={`h-1.5 w-1.5 rounded-full ${step.done ? 'bg-brand-500' : 'bg-charcoal-300'}`} />
                 <span className={step.done ? 'font-medium text-charcoal-900' : 'text-charcoal-500'}>{step.step}</span>
-                {step.date && <span className="text-[10px] text-charcoal-400">{formatTimeLabel(step.date)}</span>}
+                {step.date && (
+                  <span className="text-[10px] text-charcoal-400">{timelineStamp(step) ?? formatTimeLabel(step.date)}</span>
+                )}
               </li>
             ))}
           </ol>

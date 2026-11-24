@@ -261,6 +261,7 @@ export function KioskViewfinder({
             <CheckoutConfirmCard
               employeeId={checkoutPrompt.employeeId}
               employeeName={checkoutPrompt.employeeName}
+              message={checkoutPrompt.message}
               onConfirm={onConfirmCheckout}
               onCancel={onCancelCheckout}
             />

@@ -45,7 +45,16 @@ namespace Shared.DataTransferObject.Request
     public class RequestTimelineStep
     {
         public required string Step { get; init; }
+
+        /// <summary>Server-rendered stamp, kept for consumers that display it verbatim.</summary>
         public required string Date { get; init; }
+
+        /// <summary>
+        /// The exact instant the step happened (UTC). Clients that need the same clock in
+        /// several places format this instead of <see cref="Date"/>.
+        /// </summary>
+        public DateTime? OccurredAt { get; init; }
+
         public bool Done { get; init; }
     }
 
@@ -91,6 +100,10 @@ namespace Shared.DataTransferObject.Request
         /// </summary>
         public bool AwaitingManager { get; init; }
         public DateOnly SubmittedDate { get; init; }
+
+        /// <summary>Exact instant the request was filed (UTC) — drives the table's date + time.</summary>
+        public DateTime SubmittedAt { get; init; }
+
         public DateOnly RequestedDate { get; init; }
 
         /// <summary>End of a leave/swap range (annual, sick, shift swap), null on single-day types.</summary>
@@ -99,8 +112,16 @@ namespace Shared.DataTransferObject.Request
         public decimal? Amount { get; init; }
         public required string Status { get; init; }
         public string? BmDecision { get; init; }
+
+        /// <summary>When the branch manager recorded that decision (UTC); null while pending.</summary>
+        public DateTime? BmDecidedAt { get; init; }
+
         public string? BmComment { get; init; }
         public string? HrDecision { get; init; }
+
+        /// <summary>When HR recorded its final decision (UTC); null while pending.</summary>
+        public DateTime? HrDecidedAt { get; init; }
+
         public string? HrComment { get; init; }
         public string? Payment { get; init; }
         public int? CalculatedDays { get; init; }

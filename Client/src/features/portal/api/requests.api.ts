@@ -36,6 +36,8 @@ export interface EmployeeRequestItem {
 export interface RequestTimelineStep {
   step: string
   date: string
+  /** Exact instant the step happened (UTC ISO); format this so every surface agrees. */
+  occurredAt?: string | null
   done: boolean
 }
 
@@ -46,6 +48,8 @@ export interface RequestDetail {
   gym: string
   type: string
   submittedDate: string
+  /** Exact instant the request was filed (UTC ISO). */
+  submittedAt?: string | null
   requestedDate: string
   /** End of a leave/swap range, null on single-day types. */
   endDate: string | null
@@ -55,8 +59,12 @@ export interface RequestDetail {
   amount?: number | null
   status: string
   bmDecision: string | null
+  /** When the branch manager decided (UTC ISO); null while pending. */
+  bmDecidedAt?: string | null
   bmComment: string | null
   hrDecision: string | null
+  /** When HR decided (UTC ISO); null while pending. */
+  hrDecidedAt?: string | null
   hrComment: string | null
   payment: string | null
   /** Cover/extra days when an Unscheduled Attendance request was approved (1 or 2). */
@@ -155,7 +163,12 @@ export interface DeskRequestRow {
   payment?: string | null
   /** Cover/extra days when an Unscheduled Attendance request was approved (1 or 2). */
   calculatedDays?: number | null
-  timeline: { step: string; date: string | null; done: boolean }[]
+  /** When the branch manager decided (UTC ISO); null while pending. */
+  bmDecidedAt?: string | null
+  /** When HR decided (UTC ISO); null while pending. */
+  hrDecidedAt?: string | null
+  bmComment?: string | null
+  timeline: { step: string; date: string | null; occurredAt?: string | null; done: boolean }[]
 }
 
 /** One card of the HR requests inbox (GET /api/requests items). */
@@ -168,6 +181,8 @@ export interface HrRequestItem {
   gym: string
   type: string
   submittedDate: string
+  /** Exact instant the request was filed (UTC ISO). */
+  submittedAt?: string | null
   requestedDate: string
   endDate: string | null
   /** Time request "HH:mm:ss" (late/early types); null when the type has no time. */
@@ -176,8 +191,12 @@ export interface HrRequestItem {
   amount?: number | null
   status: string
   bmDecision: string | null
+  /** When the branch manager decided (UTC ISO); null while pending. */
+  bmDecidedAt?: string | null
   bmComment: string | null
   hrDecision: string | null
+  /** When HR decided (UTC ISO); null while pending. */
+  hrDecidedAt?: string | null
   hrComment: string | null
   payment: string | null
   calculatedDays?: number | null

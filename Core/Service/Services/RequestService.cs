@@ -13,7 +13,9 @@ using DomainLayer.Models.UserModule;
 using DomainLayer.Models.UserModule.Enums;
 using Service.Specifications;
 using ServiceAbstraction.Services;
+using Shared.Authorization;
 using Shared.DataTransferObject.Employee;
+using Shared.DataTransferObject.EmployeeProfile;
 using Shared.DataTransferObject.Request;
 
 namespace Service.Services
@@ -240,12 +242,79 @@ namespace Service.Services
                 TargetStartDate = requestedDate,
                 TargetEndDate = endDate,
                 Details = (request.Reason ?? string.Empty).Trim(),
-                Status = RequestStatus.PendingHRReview,
+                SubmittedAt = DateTime.UtcNow,
                 CreatedAt = DateTime.UtcNow,
+                // Room to move below: the filer's own stage is satisfied by filing.
+                Status = RequestStatus.PendingHRReview,
             };
 
             await _unitOfWork.GetRepository<EmployeeRequest, int>().AddAsync(entity, cancellationToken);
             await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+            // Who files the request decides how far it is already approved:
+            //   • the branch desk (BM / Team Leader / Super Admin) files it → the manager
+            //     stage is approved by that filing, HR still signs off;
+            //   • an HR-side account files it → HR owns the final stage as well, so the
+            //     request is approved outright;
+            //   • anyone else → it waits for the desk like a self-service submission.
+            var filedByHr = actor.UserType is UserType.HR or UserType.HRManager or UserType.TopManagement;
+            var gymRoles = await _userAccess.GetGymRoleNamesAsync(actor.Id, employee.GymId, cancellationToken);
+            var filedByDesk = gymRoles.Contains(RoleNames.BranchManager, StringComparer.Ordinal)
+                || gymRoles.Contains(RoleNames.TeamLeader, StringComparer.Ordinal)
+                || gymRoles.Contains(RoleNames.SuperAdmin, StringComparer.Ordinal);
+
+            if (filedByHr || filedByDesk)
+            {
+                var filedAt = DateTime.UtcNow;
+                entity.Decisions.Add(new RequestDecision
+                {
+                    RequestId = entity.Id,
+                    Stage = ApprovalStage.BranchManager,
+                    Decision = DecisionOutcome.Approved,
+                    Comment = FiledOnBehalfComment,
+                    DecidedBy = actor.Id,
+                    DecidedAt = filedAt,
+                });
+
+                if (filedByHr)
+                {
+                    entity.Status = RequestStatus.Approved;
+                    // A balance type consumes its days exactly once here, because filing
+                    // never reserved them (the reservation belongs to self-service).
+                    var payment = IsBalanceType(entity.Type)
+                        ? await ResolvePaymentAsync(entity, null, cancellationToken)
+                        : null;
+                    entity.Payment = payment;
+                    entity.Decisions.Add(new RequestDecision
+                    {
+                        RequestId = entity.Id,
+                        Stage = ApprovalStage.HR,
+                        Decision = DecisionOutcome.Approved,
+                        Comment = FiledOnBehalfComment,
+                        DecidedBy = actor.Id,
+                        DecidedAt = filedAt,
+                    });
+
+                    if (IsBalanceType(entity.Type))
+                    {
+                        await MoveBalanceDaysAsync(
+                            entity,
+                            pendingDelta: 0,
+                            usedDelta: payment == "paid" ? DaysOf(entity) : 0,
+                            cancellationToken);
+                    }
+
+                    await ApplyDeductionCorrectionAsync(entity, actor.Id, cancellationToken);
+
+                    if (entity.Type == "Resignation")
+                    {
+                        entity.Employee.Status = EmployeeStatus.NoticePeriod;
+                    }
+                }
+
+                _unitOfWork.GetRepository<EmployeeRequest, int>().Update(entity);
+                await _unitOfWork.SaveChangesAsync(cancellationToken);
+            }
 
             var item = MapItem(entity);
             return new CreateRequestResponse
@@ -749,8 +818,8 @@ namespace Service.Services
                     Type = r.Type,
                     RequestedDate = r.RequestDate,
                     EndDate = r.TargetEndDate is { } end && end != r.RequestDate ? end : null,
-                    SubmittedDate = DateOnly.FromDateTime(r.CreatedAt),
-                    SubmittedAt = r.CreatedAt,
+                    SubmittedDate = DateOnly.FromDateTime(r.SubmittedAt),
+                    SubmittedAt = r.SubmittedAt,
                     Status = StatusDisplay(r.Status),
                     Reason = r.Details,
                     Payment = r.Payment,
@@ -1042,15 +1111,18 @@ namespace Service.Services
                 HireDate = entity.Employee?.HireDate,
                 LeaveBalance = BalanceSnapshot(entity),
                 AwaitingManager = entity.Status == RequestStatus.Pending,
-                SubmittedDate = DateOnly.FromDateTime(entity.CreatedAt),
+                SubmittedDate = DateOnly.FromDateTime(entity.SubmittedAt),
+                SubmittedAt = entity.SubmittedAt,
                 RequestedDate = entity.RequestDate,
                 EndDate = NormalizeDisplayRange(entity),
                 RequestTime = requestTimeFallback ?? entity.TargetTime,
                 Amount = entity.RequestedAmount,
                 Status = StatusDisplay(entity.Status),
                 BmDecision = bm?.Decision.ToString(),
+                BmDecidedAt = bm?.DecidedAt,
                 BmComment = bm?.Comment,
                 HrDecision = hr?.Decision.ToString(),
+                HrDecidedAt = hr?.DecidedAt,
                 HrComment = hr?.Comment,
                 Payment = entity.Payment,
                 CalculatedDays = entity.OvertimeHoursRequested.HasValue
@@ -1111,7 +1183,13 @@ namespace Service.Services
         {
             var steps = new List<RequestTimelineStep>
             {
-                new() { Step = "Submitted", Date = FormatStamp(entity.CreatedAt), Done = true },
+                new()
+                {
+                    Step = "Submitted",
+                    Date = FormatStamp(entity.SubmittedAt),
+                    OccurredAt = entity.SubmittedAt,
+                    Done = true,
+                },
             };
 
             if (bm is not null)
@@ -1120,6 +1198,7 @@ namespace Service.Services
                 {
                     Step = $"BM {bm.Decision}",
                     Date = FormatStamp(bm.DecidedAt),
+                    OccurredAt = bm.DecidedAt,
                     Done = true,
                 });
             }
@@ -1134,6 +1213,7 @@ namespace Service.Services
                 {
                     Step = marker.Comment == AutoAdvanceComment ? "Auto-advanced to HR" : "Manager stage skipped",
                     Date = FormatStamp(marker.DecidedAt),
+                    OccurredAt = marker.DecidedAt,
                     Done = true,
                 });
             }
@@ -1144,6 +1224,7 @@ namespace Service.Services
                 {
                     Step = $"HR {hr.Decision}",
                     Date = FormatStamp(hr.DecidedAt),
+                    OccurredAt = hr.DecidedAt,
                     Done = true,
                 });
             }
@@ -1156,6 +1237,27 @@ namespace Service.Services
         }
 
         /// <summary>
+        /// The same timeline for the employee-facing card type. One builder keeps both
+        /// surfaces telling the same story with the same clocks — the drawer and the
+        /// portal's own request list must never disagree about when something happened.
+        /// </summary>
+        internal static List<RequestTimelineStepDto> BuildSharedTimeline(EmployeeRequest entity)
+        {
+            var bm = LastDecision(entity, ApprovalStage.BranchManager);
+            var hr = LastDecision(entity, ApprovalStage.HR);
+
+            return BuildTimeline(entity, bm, hr)
+                .Select(step => new RequestTimelineStepDto
+                {
+                    Step = step.Step,
+                    Date = step.Date,
+                    OccurredAt = step.OccurredAt,
+                    Done = step.Done,
+                })
+                .ToList();
+        }
+
+        /// <summary>
         /// A manager-stage row recorded without a real branch-manager decision: either
         /// the submission advanced automatically (no manager assigned) or HR decided
         /// the stage-1 request itself. Both mark the reserved-days bookkeeping and
@@ -1164,6 +1266,13 @@ namespace Service.Services
         internal const string AutoAdvanceComment = "Auto-advanced to HR — no branch manager assigned to this gym.";
 
         internal const string ManagerSkippedComment = "Manager stage skipped — advanced by HR.";
+
+        /// <summary>
+        /// Stamped on the decision rows a filed-on-behalf request records for its own
+        /// filer: filing is the approval, so the timeline names that rather than
+        /// pretending a desk or HR sat and reviewed their own entry.
+        /// </summary>
+        internal const string FiledOnBehalfComment = "Approved at submission — filed on the employee's behalf.";
 
         private static bool IsSyntheticManagerDecision(RequestDecision decision) =>
             decision.Stage == ApprovalStage.BranchManager &&

@@ -7,10 +7,13 @@ namespace Shared.DataTransferObject.Attendance;
 /// </summary>
 public sealed class StationSummaryResponse
 {
-    /// <summary>Employees with a check-in recorded today at this gym.</summary>
+    /// <summary>Employees with a check-in recorded and no check-out yet — on site now.</summary>
     public int PresentCount { get; init; }
 
-    /// <summary>Employees scheduled with a real shift at this gym today.</summary>
+    /// <summary>
+    /// Employees on the kiosk roster — today's scheduled shifts plus a still-running
+    /// overnight shift from yesterday.
+    /// </summary>
     public int ScheduledTodayCount { get; init; }
 
     /// <summary>
@@ -48,4 +51,11 @@ public sealed class StationSummaryRecord
     public int EarlyLeaveMinutes { get; init; }
 
     public string? Method { get; init; }
+
+    /// <summary>
+    /// True when the row belongs to the previous day's overnight shift that is still
+    /// running (20:00 → 04:00 closes on the following calendar day), so the kiosk can
+    /// label it instead of showing two identical-looking rows for the same person.
+    /// </summary>
+    public bool CarriedOver { get; init; }
 }

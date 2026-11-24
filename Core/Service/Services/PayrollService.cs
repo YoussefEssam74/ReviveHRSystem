@@ -980,17 +980,21 @@ namespace Service.Services
             var gross = GrossOf(entry);
             var approved = ApprovedDeductionsOf(entry);
             var coverDays = summary?.CoverDays ?? 0;
-            // Mock §8's "Annual Increase (10%)" card — the gym policy's raise slice
-            // displayed alongside base salary (display info; net stays gross − lines).
+            // Mock §8's "Annual Increase (10%)" row — the raise is folded into the base
+            // salary once a year, on the hiring anniversary, so the slice is only
+            // reported for the period that contains that anniversary.
             var annualPercent = entry.PayrollPeriod.Gym.AnnualIncreasePercent;
+            var raiseThisPeriod = annualPercent is > 0
+                && entry.BaseSalary > 0
+                && AnniversaryFallsInPeriod(entry.Employee.HireDate, entry.PayrollPeriod.StartDate, entry.PayrollPeriod.EndDate);
 
             return new PayslipData
             {
                 Period = PeriodLabel(entry.PayrollPeriod),
                 Gym = entry.PayrollPeriod.Gym.Name,
                 AnnualIncreasePercent = annualPercent,
-                AnnualIncrease = annualPercent is > 0 && entry.BaseSalary > 0
-                    ? Math.Round(entry.BaseSalary * annualPercent.Value / 100m, 2)
+                AnnualIncrease = raiseThisPeriod
+                    ? Math.Round(entry.BaseSalary * annualPercent!.Value / 100m, 2)
                     : 0m,
                 Employee = new PayslipEmployeeData
                 {
@@ -1005,6 +1009,7 @@ namespace Service.Services
                 Gross = gross,
                 Deductions = entry.LineItems
                     .Where(l => l.Type.Equals("Deduction", StringComparison.OrdinalIgnoreCase)
+                        && !IsSalaryAdvanceLine(l)
                         && (!onlyApproved || l.Status is "Accepted" or "Approved"))
                     .OrderBy(l => l.EffectiveDate)
                     .ThenBy(l => l.Id)
@@ -1924,6 +1929,29 @@ namespace Service.Services
             entry.BaseSalary + entry.TotalBonuses + OvertimePay(entry);
 
         /// <summary>
+        /// True when the payroll period contains a work anniversary. The raise is a
+        /// once-a-year event anchored on the hire date — not the start of the calendar
+        /// year — so only that period reports it.
+        /// </summary>
+        internal static bool AnniversaryFallsInPeriod(DateOnly hireDate, DateOnly periodStart, DateOnly periodEnd)
+        {
+            if (hireDate <= DateOnly.MinValue || periodEnd < hireDate)
+            {
+                return false;
+            }
+
+            for (var anniversary = hireDate.AddYears(1); anniversary <= periodEnd; anniversary = anniversary.AddYears(1))
+            {
+                if (anniversary >= periodStart)
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        /// <summary>
         /// The base salary in force for a period: the compensation amount grown by one
         /// policy raise per completed year of service, compounding on itself.
         /// </summary>
@@ -1945,10 +1973,20 @@ namespace Service.Services
                 : Math.Round(compensation * (decimal)Math.Pow((double)(1 + percent.Value / 100m), years), 2);
         }
 
-        private static decimal ApprovedDeductionsOf(PayrollEntry entry) =>
+        /// <summary>
+        /// Salary-advance lines are informational: the sheet reports the advance so the
+        /// employee can be told about it, but the money is neither added to nor withheld
+        /// from the period's pay.
+        /// </summary>
+        internal static bool IsSalaryAdvanceLine(PayrollEntryLineItem line) =>
+            line.Type.Equals("Deduction", StringComparison.OrdinalIgnoreCase)
+            && line.Label.Contains("advance", StringComparison.OrdinalIgnoreCase);
+
+        internal static decimal ApprovedDeductionsOf(PayrollEntry entry) =>
             entry.LineItems
                 .Where(l => l.Type.Equals("Deduction", StringComparison.OrdinalIgnoreCase)
-                    && l.Status is "Accepted" or "Approved")
+                    && l.Status is "Accepted" or "Approved"
+                    && !IsSalaryAdvanceLine(l))
                 .Sum(l => l.Amount);
 
         private static int PendingCountOf(PayrollEntry entry) =>

@@ -69,6 +69,8 @@ export const teamRequests: Record<string, string> = {
   // Detail drawers
   'Request #{{id}}': 'الطلب #{{id}}',
   'Submitted on': 'تاريخ التقديم',
+  'Submitted date': 'تاريخ التقديم',
+  'Approved date': 'تاريخ الموافقة',
   'Requested for': 'الفترة المطلوبة',
   'Sick leave limit': 'حد الإجازة المرضية',
   'Annual leave limit': 'حد الإجازة السنوية',

@@ -190,6 +190,15 @@ at that specific gym does.
 
 ## 4. Employee Submit Request (Two-Stage: Branch Manager → HR)
 
+**Filing satisfies the filer's own stage** — the flow below is the employee's
+self-service path; the desk and HR start further along:
+
+| Filer | At creation | Remaining stage |
+|---|---|---|
+| Employee (self-service) | Pending — desk review first | BM, then HR |
+| Branch desk (BM / Team Leader / Super Admin gym role), filing on someone's behalf | PendingHRReview — the manager stage is approved by the filing | HR final sign-off |
+| HR-side account (HR / HR Manager / Top Management), filing on someone's behalf | Approved outright — BM **and** HR decisions are recorded by the filing | none |
+
 ```
 Employee → My Requests
     ↓

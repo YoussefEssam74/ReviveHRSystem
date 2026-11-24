@@ -208,9 +208,16 @@ export const shellUi: Record<string, string> = {
   'Not yet': 'ليس الآن',
   'Check in': 'تسجيل الحضور',
   'Check out': 'تسجيل الانصراف',
+  'Camera is not ready — hold still and press Check out again.':
+    'الكاميرا غير جاهزة — ابقَ أمامها واضغط تسجيل الانصراف مرة أخرى.',
+  'Not recognized — look at the camera and press Check out again.':
+    'لم يتم التعرف عليك — انظر إلى الكاميرا واضغط تسجيل الانصراف مرة أخرى.',
+  'Connection problem — press Check out again.': 'مشكلة في الاتصال — اضغط تسجيل الانصراف مرة أخرى.',
 
   // Kiosk roster
   manual: 'يدوي',
+  'From yesterday': 'من أمس',
+  "Last night's shift — still running past midnight": 'وردية الليلة الماضية — ما زالت مستمرة بعد منتصف الليل',
   Shift: 'الوردية',
   In: 'دخول',
   Out: 'خروج',

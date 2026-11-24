@@ -114,6 +114,14 @@ Create is **multipart/form-data** because a file can ride with it (the sick-leav
 
 400 for an unknown type, a missing reason, a missing date (advances default to today), an end date before the start, a non-positive amount, or any violated rule above; 404 when posting for another employee. Returns 201 with the request.
 
+**Who files it decides how far it is already approved** (the filer's own stage is satisfied by filing):
+
+| Filer | Result |
+|---|---|
+| an HR-side account (HR / HR Manager / Top Management) | `Approved` outright — a BranchManager **and** an HR decision are recorded in the filer's name ("Approved at submission — filed on the employee's behalf."), balance days are consumed once, the deduction correction runs, and a resignation puts the employee on `NoticePeriod` |
+| the branch desk (Branch Manager / Team Leader / Super Admin gym role) | `PendingHRReview` — the manager stage is recorded for the filer, HR still gives the final sign-off |
+| anyone else (self-service, e.g. the employee portal) | `PendingHRReview` with no decision rows, exactly as before |
+
 ### GET /api/employees/{id}/excused-hours
 
 Monthly excused-hours budget of one employee: { capHours, usedHours, remainingHours, month }. `capHours` is the gym's HR-set cap (default 4); `usedHours` counts this calendar month's pending + approved late-attendance and early-leave hours. Self or employee-scoped access (404 cross-scope).
@@ -459,7 +467,7 @@ Permission: `requests.view` on the request's gym. Returns 200 `{ data: { …list
 
 ### POST /api/requests
 
-Permission: `requests.view` on the resolved employee's gym (creation is a directory action). Request: { employee (exact full name, resolved within the actor's gym scope; 0 or >1 matches → 400), type (Day Off | Sick Leave | Emergency Leave | Unpaid Leave | Resignation | Immediate Termination; invalid → 400), requestedDate (yyyy-MM-dd, required), endDate?, reason? }. Creates the request at Pending HR Review (the HR-created path — no BM stage) and returns 201 `{ data: { id, status, timeline } }`. Errors: 400 (unknown/ambiguous employee, bad type/date), 401.
+Permission: `requests.view` on the resolved employee's gym (creation is a directory action). Request: { employee (exact full name, resolved within the actor's gym scope; 0 or >1 matches → 400), type (Day Off | Sick Leave | Emergency Leave | Unpaid Leave | Resignation | Immediate Termination; invalid → 400), requestedDate (yyyy-MM-dd, required), endDate?, reason? }. Returns 201 `{ data: { id, status, timeline } }`. **Who files decides the starting status** — see the filer table under `POST /api/employees/{id}/requests`: an HR-side filer creates an `Approved` request (both stages recorded), the branch desk creates `Pending HR Review` with its own stage approved, anyone else creates `Pending HR Review` with no decisions. Errors: 400 (unknown/ambiguous employee, bad type/date), 401.
 
 ### POST /api/requests/{id}/decide
 
@@ -503,13 +511,33 @@ Authenticated with `X-Station-Token` (station session) or a gym-scoped Bearer to
 
 Returns 201 with { recordId, employeeId, employeeName, gymId, gymName, type, method, timestamp, attendanceStatus, shiftComparison }; timestamp is UTC. attendanceStatus reports the persisted status (ONTIME, LATE, or EARLYCHECKOUT). Common errors: 400 validation, type, liveness, future timestamp, or duplicate/invalid attendance transition; 401 expired/revoked/missing station session or gym binding, or gym/schedule mismatch; 404 employee or shift not found; and 429 rate limited.
 
+**Punch constraints** (one record per employee per shift date):
+
+| Check | Rule | Failure |
+|---|---|---|
+| Timestamp | default now; at most **10 min** in the future and **24 h** in the past; an offset-less timestamp is treated as **UTC** | 400 |
+| Liveness | `livenessScore >= 0.70` | 400 |
+| Gym access | employee must have `UserGymAccess` to the station's gym | 401 "You are not assigned to this gym." |
+| Schedule | a shift assignment **on the event date** at that gym, or **yesterday's** assignment for an overnight carry-over; a day off / no assignment records **unscheduled attendance** (raises a pending approval request + notification) | 401 "This employee is scheduled at a different branch today." |
+| Other gym | an existing record for the same shift date at **another** gym | 401 "already has an attendance record at another gym" |
+| IN | if the record is already open (in, no out) | 400 "This employee is already checked in today." |
+| IN (closed day) | a record already checked out is **re-opened**: check-out is cleared, the day continues as a second session | — |
+| OUT | no check-in on the record | 400 "No check-in found for today. Check in first." |
+| OUT | check-out at or before the stored check-out | 400 "This employee is already checked out today." |
+| OUT | check-out at or before the check-in | 400 "Checkout time must be after check-in time." |
+| AUTO | direction from the employee's own state: an open record today, or yesterday's **overnight** shift (end time before start time) whose record is open and the scan is within **6 h** of the shift end → OUT; anything else → IN | — |
+| Early leave | check-out more than `Attendance:EarlyLeaveGraceMinutes` (10) before the shift end → status `EarlyCheckout`; an approved Early Leave request covers it, otherwise a Branch-Manager/HR warning is raised. Lateness outranks early checkout | 201 (status on the record) |
+| Rate limit | `station-attendance` policy: 120 requests/minute per client IP | 429 |
+
 ### POST /api/attendance/manual
 
 Authenticated with `X-Station-Token` (or a gym-scoped Bearer token). Same event fields except no liveness score and with a required reason (3-500 characters); the reason is audited with the attendance change in one database transaction, together with the issuing StationSessionId. The HR-portal day-write form shares this route — a payload carrying `date`/`status`/`checkIn`/`checkOut` is treated as the HR form instead (see **Attendance management (HR)** below).
 
 ### GET /api/attendance/station-summary
 
-Authenticated with `X-Station-Token` (station session) or a gym-scoped Bearer token. Today's counters and the staff roster for the station's gym — the kiosk dashboard data. The roster lists every employee scheduled with a real shift today, sorted by shift start, so the kiosk always shows who is expected even before they punch. Returns 200 { presentCount, scheduledTodayCount, records: [{ recordId?, employeeId, employeeName, status (SCHEDULED/PRESENT/LEFT/ABSENT), shiftName, shiftStart (HH:mm), shiftEnd (HH:mm), checkIn (HH:mm/null), checkOut (HH:mm/null), lateMinutes, earlyLeaveMinutes, method }] }, with times in the attendance timezone. `lateMinutes` counts from the shift start to the check-in; `earlyLeaveMinutes` counts from the check-out to the shift end. 401 without a valid, gym-bound credential.
+Authenticated with `X-Station-Token` (station session) or a gym-scoped Bearer token. The station's counters and staff roster — the kiosk dashboard data. The roster lists every employee scheduled with a real shift today, sorted by shift start, so the kiosk always shows who is expected even before they punch. Returns 200 { presentCount, scheduledTodayCount, records: [{ recordId?, employeeId, employeeName, status (SCHEDULED/PRESENT/LEFT/ABSENT), shiftName, shiftStart (HH:mm), shiftEnd (HH:mm), checkIn (HH:mm/null), checkOut (HH:mm/null), lateMinutes, earlyLeaveMinutes, method, carriedOver }] }, with times in the attendance timezone. `lateMinutes` counts from the shift start to the check-in; `earlyLeaveMinutes` counts from the check-out to the shift end. 401 without a valid, gym-bound credential.
+
+**Overnight carry-over:** a shift dated yesterday that runs past midnight (20:00 → 04:00) is still in progress after 00:00, and its punches live on **yesterday's** record. Those rows are therefore added to the roster — `carriedOver: true` — for up to 6 hours after the shift ends, so a check-out made after midnight stays visible instead of disappearing with the date rollover. While such a row is shown it replaces today's not-yet-started row for that employee (one row per person); it drops out once the employee punches in today or the window closes. `presentCount` counts the displayed rows with an open record and `scheduledTodayCount` counts the displayed roster, so the night shift still on site after midnight counts as present and the "x of y" counter stays consistent.
 
 ### DELETE /api/gyms/{gymId}/station-sessions
 
@@ -533,7 +561,7 @@ Recognition runs in-process inside the API (YuNet detection → Silent-Face anti
 
 ### POST /api/attendance/face-scan
 
-Station-authenticated (`X-Station-Token`, or a gym-scoped Bearer token with the same gym binding as `/events`). Request: { type (IN/OUT/AUTO), image (base64 or data URL), optional timestamp, optional confirmCheckout } - no station code in the body. The frame is detected, liveness-checked and matched against employees with access to the station's gym only; a recognized face is then recorded through the exact `/events` pipeline, so every ADR-004 check applies.
+Station-authenticated (`X-Station-Token`, or a gym-scoped Bearer token with the same gym binding as `/events`). Request: { type (IN/OUT/AUTO), image (base64 or data URL), optional timestamp, optional confirmCheckout, optional confirmEmployeeId } - no station code in the body. The frame is detected, liveness-checked and matched against employees with access to the station's gym only; a recognized face is then recorded through the exact `/events` pipeline, so every ADR-004 check applies.
 
 **Every frame-level state is a 200 with an `outcome` discriminator** - 400 is reserved for a frame that cannot be decoded as an image, and 401 for a missing/invalid station session. This lets the station drive a live HUD (liveness percentage, matched name and ID) and tell a silent outcome from one that deserves a card:
 
@@ -549,7 +577,7 @@ Station-authenticated (`X-Station-Token`, or a gym-scoped Bearer token with the 
 
 `employeeId`/`employeeName` are set whenever a face was recognized; `livenessScore` and `similarity` are set on every frame where they were measured. Errors: 400 (undecodable image only), 401 (missing/invalid station session), 429.
 
-**AUTO check-out confirmation**: an AUTO scan that would close the employee's open record returns `pending_checkout` (nothing recorded) unless the request carries `confirmCheckout: true`. The kiosk asks the employee ("check out now?") and re-sends the same frame with the flag; only then is the check-out written. Explicit IN/OUT types and the `/events` integration endpoint (which always passes confirmCheckout=true internally) are never gated.
+**AUTO check-out confirmation**: an AUTO scan that would close the employee's open record returns `pending_checkout` (nothing recorded) unless the request carries `confirmCheckout: true`. The kiosk asks the employee ("check out now?") and re-sends a **fresh** frame with the flag plus `confirmEmployeeId` — the employee number the prompt named. A confirmation whose frame matches a **different** employee is refused (`rejected`, nothing recorded), so a check-out can never land on whoever else steps in front of the camera. Explicit IN/OUT types and the `/events` integration endpoint (which always passes confirmCheckout=true internally) are never gated. The kiosk keeps the prompt open (30 s) and shows why a confirmation did not record instead of silently resuming the scan.
 
 The liveness score reported here is measured server-side by the anti-spoofing ensemble — unlike `/events`, where a caller-supplied score is trusted only as far as the 0.70 minimum (see the note on that endpoint).
 
@@ -567,7 +595,9 @@ The HR pages (directory grid, manual entry, corrections, employee file attendanc
 
 ### GET /api/attendance
 
-Permission: `attendance.view` (A1 — the directory grid). Query: `date` **or** `from`/`to` (`yyyy-MM-dd`; defaults to today; at most 62 days), `gym`/`gymId` (TopManagement may omit → all gyms; every other role is auto-scoped to its assigned gyms and may request only those), `employeeId`, `status` (display string filter), `page`/`pageSize` (default 20, max 200). Returns 200 `{ items, page, pageSize, total, totalPages }`; each item: `{ id (null for synthesized Off/Scheduled/Absent days), employeeId, name, gym, date, shift, checkIn, checkOut, status, source, notes, correctedBy, correctedAt }` — `correctedBy`/`correctedAt` reflect the record's latest audit correction, `source` is `Manual`/`Biometric` for stored records. Errors: 400 (bad dates, `to` before `from`, range over 62 days), 401 (missing token, no permission, gym outside scope), 404 (`employeeId` unknown).
+Permission: `attendance.view` (A1 — the directory grid). Query: `date` **or** `from`/`to` (`yyyy-MM-dd`; defaults to today; at most 62 days), `gym`/`gymId` (TopManagement may omit → all gyms; every other role is auto-scoped to its assigned gyms and may request only those), `employeeId`, `status` (display string filter), `page`/`pageSize` (default 20, max 200). Returns 200 `{ items, page, pageSize, total, totalPages }`; each item: `{ id (null for synthesized Off/Scheduled/Absent days), employeeId, name, gym, date, shift, checkIn, checkOut, status, source, notes, correctedBy, correctedAt, lateMinutes, earlyLeaveMinutes }` — `correctedBy`/`correctedAt` reflect the record's latest audit correction, `source` is `Manual`/`Biometric` for stored records, and `lateMinutes`/`earlyLeaveMinutes` measure the punches against the shift window (lateness outranks an early check-out in `status`, so the pair is reported separately).
+
+A day with no stored record is derived: `Scheduled` when the day is still ahead **or today's shift has not started yet**, `Off` for a scheduled off / approved day off, the leave label for approved Sick/Annual leave, otherwise `Absent` (a no-show). A live **`date=today`** board also carries last night's overnight shift: when the employee's previous-day shift runs past midnight (`20:00 → 04:00`) and its record is still within 6 hours of the shift end, that record's row is returned instead of an empty today row — dated yesterday, with its own punches/status and a `Night shift from yesterday` note. Errors: 400 (bad dates, `to` before `from`, range over 62 days), 401 (missing token, no permission, gym outside scope), 404 (`employeeId` unknown).
 
 ### POST /api/attendance/manual (HR day-write form)
 
@@ -583,7 +613,7 @@ Permission: `payroll.view` **or** `attendance.view` (§5.5 — the punch audit b
 
 ### GET /api/employees/{id}/attendance
 
-Permission: `attendance.view` on the employee's gym (A7 — the employee file's Attendance tab). Query: `month` (`yyyy-MM`, defaults to the current month), `page`/`pageSize` (default 31). Only elapsed days are returned (future days are omitted, not shown as Scheduled). Returns 200 `{ items: [{ date, shift, checkIn, checkOut, status, notes }], totals: { total, present, late, absent, off, hours, expected }, page, pageSize, total, totalPages }` — `present` counts On Time + Late + Early Checkout + Missing Checkout; `hours` is summed worked time and `expected` summed scheduled shift duration (both to 2 decimals; overnight spans roll past midnight). Errors: 401, 404 (unknown employee).
+Permission: `attendance.view` on the employee's gym (A7 — the employee file's Attendance tab). Query: `month` (`yyyy-MM`, defaults to the current month), `page`/`pageSize` (default 31). Only elapsed days are returned (future days are omitted, not shown as Scheduled). Returns 200 `{ items: [{ date, shift, checkIn, checkOut, status, notes, coverDays, isCoverDay, lateMinutes, earlyLeaveMinutes }], totals: { total, present, late, absent, off, hours, expected }, page, pageSize, total, totalPages }` — `present` counts On Time + Late + Early Checkout + Missing Checkout; `hours` is summed worked time and `expected` summed scheduled shift duration (both to 2 decimals; overnight spans roll past midnight). `lateMinutes`/`earlyLeaveMinutes` are reported independently of `status` (which can only hold one of them — lateness outranks an early check-out), so the day can show "Late" and the early departure side by side. Errors: 401, 404 (unknown employee).
 
 ### POST /api/gyms/{gymId}/biometric-devices/pairing-codes
 

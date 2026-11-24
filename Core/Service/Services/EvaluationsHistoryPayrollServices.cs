@@ -721,9 +721,14 @@ namespace Service.Services
                     WorkingDays = Math.Max(dto.DaysWorked + absent + unpaid, dto.DaysWorked),
                     ScheduledWeeklyDays = PayrollService.WeeklyWorkDays,
                     AnnualIncreasePercent = annualIncreasePercent,
-                    // The raise is folded into the base salary once a year instead of being
-                    // reported as a monthly slice, so there is no separate amount to show.
-                    AnnualIncrease = 0m,
+                    // The raise is a once-a-year event on the hiring anniversary: 0 for
+                    // every other period, base × percent for the period that contains it.
+                    AnnualIncrease =
+                        annualIncreasePercent is > 0
+                        && employee.HireDate > DateOnly.MinValue
+                        && PayrollService.AnniversaryFallsInPeriod(employee.HireDate, start, end)
+                            ? Math.Round(dto.BaseSalary * annualIncreasePercent.Value / 100m, 2)
+                            : 0m,
                     OvertimePay = PayrollService.OvertimePay(e),
                     PaidLeaveDays = annual + sick,
                     AnnualLeaveDays = annual,

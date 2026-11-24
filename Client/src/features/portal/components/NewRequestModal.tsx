@@ -14,6 +14,7 @@ import { Modal } from '../../../components/ui/modal'
 import { Button } from '../../../components/ui/button'
 import { Skeleton } from '../../../components/ui/skeleton'
 import { useToast } from '../../../components/ui/toast'
+import { usePortalSession } from '../../../contexts/PortalSessionContext'
 import { describeApiError } from '../../../lib/api-client'
 import { formatBytes } from '../../../lib/format'
 import {
@@ -82,6 +83,7 @@ export function NewRequestModal({
 }) {
   const { t } = useTranslation()
   const { toast } = useToast()
+  const { me, isBranchManager, isTeamLeader } = usePortalSession()
   const queryClient = useQueryClient()
   const [form, setForm] = useState<NewRequestFormState>({
     ...EMPTY_FORM,
@@ -126,6 +128,17 @@ export function NewRequestModal({
   const balance = balanceQuery.data ?? null
   const annualRemaining = balance ? balance.dayOff.total - balance.dayOff.used : null
 
+  // Filing is itself an approval for desk and HR accounts (RequestService.CreateRequestAsync),
+  // so the modal says who still has to sign instead of implying a desk review always follows.
+  const isDeskFiler = isBranchManager || isTeamLeader
+  const isHrFiler =
+    !isDeskFiler && (me?.userType === 'HR' || me?.userType === 'HRManager' || me?.userType === 'TopManagement')
+  const signOffNote = isHrFiler
+    ? t('Filed by HR — the branch-manager and HR stages are approved automatically.')
+    : isDeskFiler
+      ? t('Filed by the branch desk — approved at the manager stage, then it goes to HR for the final sign-off.')
+      : null
+
   const submitMutation = useMutation({
     mutationFn: () => {
       const fields: Record<string, string> = {
@@ -140,8 +153,19 @@ export function NewRequestModal({
       if (form.amount) fields.amount = form.amount
       return createRequest(employeeId, fields, form.attachment)
     },
-    onSuccess: async () => {
-      toast(t('{{type}} submitted — pending review', { type: selectedType?.label ?? t('Request') }))
+    onSuccess: async (created) => {
+      // The stage a request lands in depends on who filed it, so the toast reports
+      // what the server actually decided instead of always promising a review.
+      const label = selectedType?.label ?? t('Request')
+      const status = (created?.status ?? '').toLowerCase()
+      const filedByApprover = isHrFiler || isDeskFiler
+      toast(
+        status === 'approved'
+          ? t('{{type}} submitted — approved automatically', { type: label })
+          : status === 'pendinghrreview' && filedByApprover
+            ? t('{{type}} submitted — awaiting HR sign-off', { type: label })
+            : t('{{type}} submitted — pending review', { type: label }),
+      )
       await queryClient.invalidateQueries({ queryKey: ['portal', 'requests'] })
       await queryClient.invalidateQueries({ queryKey: ['portal', 'leave-balance'] })
       await queryClient.invalidateQueries({ queryKey: ['portal', 'excused-hours'] })
@@ -419,6 +443,10 @@ export function NewRequestModal({
           <p role="alert" className="rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700">
             {formError}
           </p>
+        )}
+
+        {signOffNote && (
+          <p className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] text-slate-600">{signOffNote}</p>
         )}
       </div>
     </Modal>

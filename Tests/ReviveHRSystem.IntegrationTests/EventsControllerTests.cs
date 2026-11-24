@@ -160,16 +160,28 @@ namespace ReviveHRSystem.IntegrationTests
         public async Task PendingRequest_SurfacesAsRequestEvent()
         {
             var scene = await CreateSceneAsync("events.view", "requests.view", "requests.approve");
-            var create = await SendAsync(HttpMethod.Post, "/api/requests", new
+
+            // HR filing a request now approves it outright (the filer owns both stages),
+            // so the pending-HR event is exercised with a request the desk already
+            // forwarded — the state the event feed reports on.
+            var target = Days(7);
+            var requestId = await scene.Builder.CreateLeaveRequestAsync(
+                scene.Employee.EmployeeId, "Resignation", target, target,
+                DomainLayer.Models.RequestModule.Enums.RequestStatus.PendingHRReview);
+            using (var scope = _fixture.Services.CreateScope())
             {
-                employee = scene.Employee.FullName,
-                type = "Resignation",
-                requestedDate = Days(7).ToString("yyyy-MM-dd"),
-                reason = "Relocating abroad",
-            }, scene.Token);
-            Assert.True(create.StatusCode is HttpStatusCode.OK or HttpStatusCode.Created,
-                $"Create request failed: {(int)create.StatusCode}: {await create.Content.ReadAsStringAsync()}");
-            var requestId = (await ReadAsync(create)).GetProperty("data").GetProperty("id").GetInt32();
+                var db = scope.ServiceProvider.GetRequiredService<Presistence.Data.ReviveHrDbContext>();
+                db.RequestDecisions.Add(new DomainLayer.Models.RequestModule.RequestDecision
+                {
+                    RequestId = requestId,
+                    Stage = DomainLayer.Models.RequestModule.Enums.ApprovalStage.BranchManager,
+                    Decision = DomainLayer.Models.RequestModule.Enums.DecisionOutcome.Approved,
+                    Comment = "Integration-test desk approval.",
+                    DecidedBy = scene.Hr.UserId,
+                    DecidedAt = DateTime.UtcNow,
+                });
+                await db.SaveChangesAsync();
+            }
 
             var items = await GetEventsAsync(scene, "?gym=" + scene.Gym.GymId);
             var card = Assert.Single(items, i => i.GetProperty("type").GetString() == "PendingHRReview");

@@ -45,6 +45,14 @@ export function FeedRow({ row }: { row: StationSummaryRecord }) {
           <p className="truncate font-mono text-[10px] leading-tight text-charcoal-500">{row.employeeId}</p>
         </div>
         <div className="flex shrink-0 items-center gap-1.5">
+          {row.carriedOver && (
+            <span
+              className="rounded bg-indigo-100 px-1.5 py-0.5 text-[10px] font-semibold text-indigo-800"
+              title={t("Last night's shift — still running past midnight")}
+            >
+              {t('From yesterday')}
+            </span>
+          )}
           {isManual && (
             <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-800">{t('manual')}</span>
           )}
@@ -244,11 +252,14 @@ export function ResultOverlay({
 export function CheckoutConfirmCard({
   employeeId,
   employeeName,
+  message,
   onConfirm,
   onCancel,
 }: {
   employeeId: string | null
   employeeName: string | null
+  /** Why the previous confirmation attempt did not record, if it didn't. */
+  message: string | null
   onConfirm: () => void
   onCancel: () => void
 }) {
@@ -269,6 +280,11 @@ export function CheckoutConfirmCard({
         <p className="mt-1 text-sm text-[#fde68a]">
           {t('You are checked in for today. Confirming records your check-out with the current time.')}
         </p>
+        {message && (
+          <p role="alert" className="mt-3 rounded-lg bg-red-500/20 px-3 py-2 text-xs font-semibold text-red-100">
+            {message}
+          </p>
+        )}
         <div className="mt-5 flex gap-2">
           <Button size="sm" className="flex-1" onClick={onConfirm}>
             {t('Check out now')}
