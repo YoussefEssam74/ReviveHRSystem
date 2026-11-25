@@ -11,7 +11,7 @@ import {
   type TeamFollowUp,
   type TeamMemberDay,
 } from '../api/team.api'
-import { getEmployeeDirectory } from '../api/branch.api'
+import { getEmployeeDirectory, previewDeduction } from '../api/branch.api'
 import { EmptyState } from '../../../components/ui/primitives'
 import { ErrorState, LoadingState } from '../../../components/async-state'
 import { Modal } from '../../../components/ui/modal'
@@ -380,7 +380,6 @@ export function CreateFollowUpModal({
   const { t } = useTranslation()
   const { toast } = useToast()
   const queryClient = useQueryClient()
-  const { can } = usePortalSession()
   const [employeeId, setEmployeeId] = useState<number | null>(null)
   const [action, setAction] = useState<ActionKind>('Deduction')
   const [severity, setSeverity] = useState<Severity>('Medium')
@@ -393,16 +392,6 @@ export function CreateFollowUpModal({
   )
   const [deductionUnit, setDeductionUnit] = useState<(typeof DEDUCTION_UNITS)[number]>('Days')
   const [note, setNote] = useState('')
-
-  // A deduction is priced from the employee's latest salary — the same source the
-  // server divides by 30 — so the manager sees the money before saving. Salary is
-  // HR/BM-controlled, so a Team Leader simply gets no preview.
-  const salaryQuery = useQuery({
-    queryKey: ['portal', 'employees', 'follow-up-picker'],
-    queryFn: ({ signal }) => getEmployeeDirectory({ page: 1, pageSize: 200, signal }),
-    enabled: action === 'Deduction' && can('employees.view'),
-    staleTime: 60_000,
-  })
 
   // Deductions take a free-form duration (hours or days) instead of a description —
   // the backend still requires a description, so the duration fills it in.
@@ -443,17 +432,27 @@ export function CreateFollowUpModal({
       : members
   const effectiveEmployeeId = employeeId ?? defaultMember?.employeeId ?? null
 
-  // Mirrors DeductionPricing on the server: salary / 30 is the day rate, and an hour
-  // costs an eighth of a day (the same 0.125-day rate the late penalty uses).
-  const salary = salaryQuery.data?.items.find((row) => row.id === effectiveEmployeeId)?.salary ?? null
-  const deductionDays = deductionValid
-    ? deductionUnit === 'Hours'
-      ? Number(deductionDuration) / 8
-      : Number(deductionDuration)
-    : 0
-  const dailyRate = salary != null && salary > 0 ? Math.round((salary / 30) * 100) / 100 : null
-  const deductionMoney =
-    dailyRate != null && deductionDays > 0 ? Math.round(dailyRate * deductionDays * 100) / 100 : null
+  // The money comes from the server's own pricing path (the same rates the saved
+  // deduction uses), so the preview can never disagree with what gets charged — and an
+  // hours-based size honestly reports "no amount yet" until the month is rostered.
+  const deductionPreview = useQuery({
+    queryKey: ['portal', 'deduction-preview', effectiveEmployeeId, deductionDate, deductionUnit, deductionDuration],
+    queryFn: ({ signal }) =>
+      previewDeduction(
+        {
+          employeeId: effectiveEmployeeId as number,
+          date: deductionDate,
+          unit: deductionUnit === 'Hours' ? 'hours' : 'days',
+          value: Number(deductionDuration),
+        },
+        signal,
+      ),
+    enabled: action === 'Deduction' && effectiveEmployeeId != null && deductionValid,
+    staleTime: 30_000,
+    retry: false,
+  })
+  const deductionMoney = deductionPreview.data?.amount ?? null
+  const deductionPendingReason = deductionPreview.data?.pendingReason ?? null
 
   return (
     <Modal
@@ -624,14 +623,23 @@ export function CreateFollowUpModal({
             </div>
           )}
           {action === 'Deduction' && (
-            <div className="flex items-center justify-between gap-2 rounded-lg border border-charcoal-200 bg-charcoal-50 px-3 py-2">
-              <span className="text-[11px] font-semibold text-charcoal-600">{t('Deduction amount')}</span>
-              {deductionMoney != null ? (
-                <span className="text-sm font-bold text-charcoal-900">{formatMoney(deductionMoney)}</span>
-              ) : (
-                <span className="text-[10px] text-charcoal-400">
-                  {salaryQuery.isFetching ? t('Calculating…') : t('No salary on file')}
-                </span>
+            <div className="rounded-lg border border-charcoal-200 bg-charcoal-50 px-3 py-2">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-[11px] font-semibold text-charcoal-600">{t('Deduction amount')}</span>
+                {deductionMoney != null && deductionMoney > 0 ? (
+                  <span className="text-sm font-bold text-charcoal-900">{formatMoney(deductionMoney)}</span>
+                ) : (
+                  <span className="text-[11px] font-semibold text-charcoal-400">
+                    {!deductionValid
+                      ? '—'
+                      : deductionPreview.isFetching
+                        ? t('Calculating…')
+                        : t('Not priced yet')}
+                  </span>
+                )}
+              </div>
+              {deductionPendingReason && (deductionMoney == null || deductionMoney <= 0) && (
+                <p className="mt-1 text-[10px] leading-relaxed text-amber-700">{t(deductionPendingReason)}</p>
               )}
             </div>
           )}

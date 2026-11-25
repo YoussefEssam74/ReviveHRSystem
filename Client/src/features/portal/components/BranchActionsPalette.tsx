@@ -327,7 +327,8 @@ function IssueDeductionModal({ onClose }: { onClose: () => void }) {
 
   const [employeeId, setEmployeeId] = useState('')
   const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10))
-  const [amount, setAmount] = useState('')
+  const [unit, setUnit] = useState<'hours' | 'days'>('days')
+  const [size, setSize] = useState('')
   const [reason, setReason] = useState(DEDUCTION_REASONS[0])
   const [note, setNote] = useState('')
 
@@ -337,23 +338,31 @@ function IssueDeductionModal({ onClose }: { onClose: () => void }) {
     enabled: !!employeeId,
   })
   const latestSheet = (salaryQuery.data ?? []).find((sheet) => sheet.visible) ?? null
-  const suggestedDaily = latestSheet ? Math.round((latestSheet.baseSalary / 30) * 100) / 100 : null
+  // Same rate the server prices with: base ÷ the punished month's calendar days.
+  const suggestedDaily = latestSheet
+    ? Math.round((latestSheet.baseSalary / new Date(Number(date.slice(0, 4)), Number(date.slice(5, 7)), 0).getDate()) * 100) / 100
+    : null
 
   const save = useMutation({
     mutationFn: () =>
       issueDeduction({
         employeeId: Number(employeeId),
         date,
-        amount: Number(amount),
+        unit,
+        value: Number(size),
         reason,
         note: note.trim() || null,
       }),
     onSuccess: (created) => {
       toast(
-        t('Deduction of {{amount}} for {{employee}} sent to HR for approval', {
-          amount: formatMoney(created.amount),
-          employee: created.employee,
-        }),
+        created.amount > 0
+          ? t('Deduction of {{amount}} for {{employee}} sent to HR for approval', {
+              amount: formatMoney(created.amount),
+              employee: created.employee,
+            })
+          : t('Deduction for {{employee}} sent to HR — the amount follows the month\'s rates.', {
+              employee: created.employee,
+            }),
       )
       void queryClient.invalidateQueries({ queryKey: ['portal', 'branch-actions', 'pending-hr'] })
       void queryClient.invalidateQueries({ queryKey: ['portal', 'branch', 'deductions'] })
@@ -368,8 +377,8 @@ function IssueDeductionModal({ onClose }: { onClose: () => void }) {
         onSubmit={(e) => {
           e.preventDefault()
           if (!employeeId) return toast(t('Select an employee'), 'error')
-          if (!Number.isFinite(Number(amount)) || Number(amount) <= 0)
-            return toast(t('Enter a valid amount'), 'error')
+          if (!Number.isFinite(Number(size)) || Number(size) <= 0)
+            return toast(t('Enter the deduction in hours or days.'), 'error')
           save.mutate()
         }}
         className="space-y-3"
@@ -415,34 +424,45 @@ function IssueDeductionModal({ onClose }: { onClose: () => void }) {
         </div>
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className="form-label" htmlFor="ded-amount">
-              {t('Amount (EGP)')}
+            <label className="form-label" htmlFor="ded-value">
+              {t('Deduct hours / days')}
             </label>
-            <input
-              id="ded-amount"
-              type="number"
-              min={1}
-              step="0.01"
-              value={amount}
-              onChange={(e) => setAmount(e.target.value)}
-              className="form-input"
-              placeholder={t('e.g. 150')}
-              required
-            />
-            {suggestedDaily != null && (
-              <p className="mt-1 text-[10px] text-charcoal-500">
-                {t('Suggested: 1 day ≈ {{amount}} (based on basic salary).', {
-                  amount: formatMoney(suggestedDaily),
-                })}{' '}
-                <button
-                  type="button"
-                  className="font-semibold text-brand-600 hover:underline"
-                  onClick={() => setAmount(String(suggestedDaily))}
-                >
-                  {t('Use suggested')}
-                </button>
-              </p>
-            )}
+            <div className="flex items-center gap-1.5">
+              <div className="inline-flex overflow-hidden rounded-md border border-charcoal-200">
+                {(['hours', 'days'] as const).map((option) => (
+                  <button
+                    key={option}
+                    type="button"
+                    onClick={() => setUnit(option)}
+                    className={
+                      'px-2 py-1.5 text-[11px] font-semibold transition-colors ' +
+                      (unit === option ? 'bg-brand-600 text-white' : 'bg-white text-charcoal-600 hover:bg-charcoal-50')
+                    }
+                  >
+                    {option === 'hours' ? t('Hours') : t('Days')}
+                  </button>
+                ))}
+              </div>
+              <input
+                id="ded-value"
+                type="number"
+                min={0.25}
+                max={unit === 'hours' ? 24 : 30}
+                step="0.25"
+                value={size}
+                onChange={(e) => setSize(e.target.value)}
+                className="form-input"
+                placeholder={unit === 'hours' ? t('e.g. 1.5') : t('e.g. 0.5')}
+                required
+              />
+            </div>
+            <p className="mt-1 text-[10px] text-charcoal-500">
+              {suggestedDaily != null
+                ? t('A day is {{amount}} this month; the hour follows the roster.', {
+                    amount: formatMoney(suggestedDaily),
+                  })
+                : t("The amount follows the month's daily or hourly rate.")}
+            </p>
           </div>
           <div>
             <label className="form-label" htmlFor="ded-reason">

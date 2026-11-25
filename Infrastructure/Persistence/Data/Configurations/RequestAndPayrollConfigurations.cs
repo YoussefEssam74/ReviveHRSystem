@@ -1,4 +1,5 @@
 using DomainLayer.Models.PayrollModule;
+using DomainLayer.Models.PayrollModule.Enums;
 using DomainLayer.Models.RequestModule;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
@@ -167,7 +168,9 @@ namespace Presistence.Data.Configurations
             builder.HasKey(dc => dc.Id);
 
             builder.Property(dc => dc.Amount).HasPrecision(18, 2);
-            builder.Property(dc => dc.DeductionDays).HasPrecision(9, 2).HasDefaultValue(1m);
+            builder.Property(dc => dc.DeductionValue).HasPrecision(9, 2).HasDefaultValue(0m);
+            builder.Property(dc => dc.DeductionUnit).HasConversion<int>();
+            builder.Property(dc => dc.DeductionDays).HasPrecision(9, 2).HasDefaultValue(0m);
             builder.Property(dc => dc.Reason).IsRequired().HasMaxLength(500);
             builder.Property(dc => dc.Note).HasMaxLength(1000);
             builder.Property(dc => dc.DeductionDate).IsRequired();

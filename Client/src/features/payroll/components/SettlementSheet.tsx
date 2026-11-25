@@ -341,8 +341,16 @@ export default function SettlementSheet({
   const approvedDeductions = entry.deductions
   const net = entry.net
   const attendance = entry.attendance
-  // The bonus is entered in days like a deduction, on the same daily rate (base ÷ 30).
-  const dailyRate = base > 0 ? base / 30 : 0
+  // The bonus is entered in days like a deduction, on the same daily rate: base ÷ the
+  // period's own calendar days (not a fixed 30).
+  const periodMonthDate = (() => {
+    const parsed = new Date(`${period.period} 1`)
+    return Number.isNaN(parsed.getTime()) ? null : parsed
+  })()
+  const daysInPeriod = periodMonthDate
+    ? new Date(periodMonthDate.getFullYear(), periodMonthDate.getMonth() + 1, 0).getDate()
+    : 30
+  const dailyRate = base > 0 ? base / daysInPeriod : 0
   const bonusDays = dailyRate > 0 ? Math.round((entry.bonus / dailyRate) * 100) / 100 : 0
   const bonusValue = bonusDraft ?? String(bonusDays)
   const bonusAmount = bonusDraft != null

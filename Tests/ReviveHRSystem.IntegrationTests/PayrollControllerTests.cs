@@ -616,13 +616,37 @@ namespace ReviveHRSystem.IntegrationTests
                 status: AttendanceStatus.Absent);
             var admin = await _fixture.GetAdminTokenAsync();
 
+            // The board flags the two days; the branch manager still sizes them, so the
+            // money follows the calendar-day rate (base ÷ the month's own days).
+            await GetJsonAsync(
+                $"/api/attendance?from={previousMonth:yyyy-MM-dd}&to={previousMonth.AddMonths(1).AddDays(-1):yyyy-MM-dd}&gymId={gym.GymId}",
+                admin);
+            using (var sizing = _fixture.Services.CreateScope())
+            {
+                var sizingDb = sizing.ServiceProvider.GetRequiredService<ReviveHrDbContext>();
+                var raised = await sizingDb.DeductionCandidates
+                    .Where(c => c.EmployeeId == employee.EmployeeId)
+                    .ToListAsync();
+                Assert.Equal(2, raised.Count);
+                Assert.All(raised, c => Assert.Equal(0m, c.DeductionValue));
+                foreach (var candidate in raised)
+                {
+                    candidate.DeductionUnit = DomainLayer.Models.PayrollModule.Enums.DeductionUnit.Days;
+                    candidate.DeductionValue = candidate.Reason == "Late arrival" ? 0.25m : 1m;
+                }
+
+                await sizingDb.SaveChangesAsync();
+            }
+
             var closeRequest = _fixture.AuthorizedRequest(HttpMethod.Post,
                 $"/api/payroll-periods/{periodId}/entries/{employee.EmployeeId}/close", null, admin);
             var closeResponse = await _fixture.Client.SendAsync(closeRequest);
             Assert.Equal(HttpStatusCode.OK, closeResponse.StatusCode);
 
-            // daily = 17600 ÷ 30 = 586.67; a late arrival is a quarter day (146.67)
-            // and an unapproved absence one day (586.67).
+            // daily = 17600 ÷ the month's calendar days; a late arrival is a quarter day
+            // and an unapproved absence one day.
+            var daily = Math.Round(17600m / DateTime.DaysInMonth(previousMonth.Year, previousMonth.Month), 2);
+            var lateAmount = Math.Round(daily * 0.25m, 2);
             var closed = (await closeResponse.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("data");
             Assert.Equal(0m, closed.GetProperty("deductions").GetDecimal());
             Assert.Equal(17600m, closed.GetProperty("net").GetDecimal());
@@ -633,8 +657,8 @@ namespace ReviveHRSystem.IntegrationTests
                 .Where(l => l.PayrollEntryId == entryId && l.Type == "Deduction")
                 .ToListAsync();
             Assert.Equal(2, lines.Count);
-            Assert.Contains(lines, l => l.Amount == 146.67m && l.Status == "Pending");
-            Assert.Contains(lines, l => l.Amount == 586.67m && l.Status == "Pending");
+            Assert.Contains(lines, l => l.Amount == lateAmount && l.Status == "Pending");
+            Assert.Contains(lines, l => l.Amount == daily && l.Status == "Pending");
             Assert.All(lines, l => Assert.NotNull(l.AttendanceRecordId));
 
             var candidates = await db.DeductionCandidates
@@ -654,8 +678,8 @@ namespace ReviveHRSystem.IntegrationTests
             var detail = await GetJsonAsync($"/api/payroll-periods/{periodId}", admin);
             var item = detail.GetProperty("data").GetProperty("items").EnumerateArray()
                 .Single(i => i.GetProperty("employeeId").GetInt32() == employee.EmployeeId);
-            Assert.Equal(733.34m, item.GetProperty("deductions").GetDecimal());
-            Assert.Equal(16866.66m, item.GetProperty("net").GetDecimal());
+            Assert.Equal(Math.Round(daily + lateAmount, 2), item.GetProperty("deductions").GetDecimal());
+            Assert.Equal(Math.Round(17600m - daily - lateAmount, 2), item.GetProperty("net").GetDecimal());
 
             var afterReview = await db.DeductionCandidates
                 .AsNoTracking()

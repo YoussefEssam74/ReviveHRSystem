@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace Shared.DataTransferObject.Platform;
 
 // ------------------------------------------------------------------
@@ -52,7 +54,8 @@ public class ImpersonationActorRef
 public class StartImpersonationResponse
 {
     public int SessionId { get; init; }
-    public required string AccessToken { get; init; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? AccessToken { get; init; }
     public int ExpiresInSeconds { get; init; }
     public required ImpersonationCompanyRef Company { get; init; }
     public ImpersonationBranchRef? Branch { get; init; }

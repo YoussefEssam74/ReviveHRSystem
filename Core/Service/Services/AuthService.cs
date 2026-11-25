@@ -405,7 +405,7 @@ namespace Service.Services
             };
         }
 
-        public async Task LogoutAsync(int userId, string? refreshToken = null, CancellationToken cancellationToken = default)
+        public async Task LogoutAsync(int? userId, string? refreshToken = null, CancellationToken cancellationToken = default)
         {
             // Access-token-only auth (no refresh tokens, ADR-002) means there is no
             // server-side session to revoke: the client discards the token and its own
@@ -421,6 +421,7 @@ namespace Service.Services
                 var stored = await repo.GetByIdAsync(new Service.Specifications.RefreshTokenByHashSpec(hash), cancellationToken);
                 if (stored is not null && stored.RevokedAtUtc is null)
                 {
+                    userId ??= stored.UserId;
                     stored.RevokedAtUtc = DateTime.UtcNow;
                     repo.Update(stored);
                 }
@@ -428,14 +429,17 @@ namespace Service.Services
 
             try
             {
-                await unitOfWork.GetRepository<DomainLayer.Models.AuditModule.AuditLog, int>().AddAsync(
-                    new DomainLayer.Models.AuditModule.AuditLog
-                    {
-                        UserId = userId,
-                        Action = "Logout",
-                        EntityType = "User",
-                        EntityId = userId
-                    }, cancellationToken);
+                if (userId is int actorId)
+                {
+                    await unitOfWork.GetRepository<DomainLayer.Models.AuditModule.AuditLog, int>().AddAsync(
+                        new DomainLayer.Models.AuditModule.AuditLog
+                        {
+                            UserId = actorId,
+                            Action = "Logout",
+                            EntityType = "User",
+                            EntityId = actorId
+                        }, cancellationToken);
+                }
 
                 await unitOfWork.SaveChangesAsync(cancellationToken);
             }

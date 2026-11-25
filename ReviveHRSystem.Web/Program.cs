@@ -17,6 +17,7 @@ using Microsoft.IdentityModel.Tokens;
 using Presistence.Data;
 using Presistence.Repository;
 using ReviveHRSystem.Web.Authentication;
+using Shared.Configuration;
 using ReviveHRSystem.Web.CustomMiddleWares;
 using ReviveHRSystem.Web.DataSeed;
 using ReviveHRSystem.Web.Factories;
@@ -24,7 +25,6 @@ using ReviveHRSystem.Web.Middleware;
 using Service.Mapping;
 using Service.Services;
 using ServiceAbstraction.Services;
-using Shared.Configuration;
 using Swashbuckle.AspNetCore.SwaggerGen;
 
 namespace ReviveHRSystem.Web
@@ -41,6 +41,23 @@ namespace ReviveHRSystem.Web
                 // converter rejects (it wants "HH:mm:ss") — shift-template creation
                 // answered 400 validation errors for valid times until this shipped.
                 options.JsonSerializerOptions.Converters.Add(new Shared.Serialization.TimeOnlyFlexibleJsonConverter());
+            });
+
+            builder.Services.AddAntiforgery(options =>
+            {
+                options.HeaderName = AuthCookieOptions.CsrfHeader;
+                options.Cookie.Name = "ReviveCsrf";
+                options.Cookie.HttpOnly = true;
+                // Local HTTP development cannot issue Secure cookies. The dev SPA
+                // runs on localhost (same-site across ports), so Lax works there;
+                // deployments use cross-site cookies over HTTPS.
+                options.Cookie.SameSite = builder.Environment.IsDevelopment()
+                    ? SameSiteMode.Lax
+                    : SameSiteMode.None;
+                options.Cookie.SecurePolicy = builder.Environment.IsDevelopment()
+                    ? CookieSecurePolicy.SameAsRequest
+                    : CookieSecurePolicy.Always;
+                options.Cookie.Path = "/";
             });
 
             // Configure DbContext with PostgreSQL
@@ -104,6 +121,20 @@ namespace ReviveHRSystem.Web
                     // lifetime to expire.
                     options.Events = new JwtBearerEvents
                     {
+                        OnMessageReceived = context =>
+                        {
+                            // Browser sessions use an HttpOnly cookie. Keep bearer
+                            // support for native clients and existing integrations.
+                            if (string.IsNullOrWhiteSpace(context.Request.Headers.Authorization)
+                                && context.Request.Cookies.TryGetValue(
+                                    AuthCookieOptions.AccessTokenCookie,
+                                    out var cookieToken))
+                            {
+                                context.Token = cookieToken;
+                            }
+
+                            return Task.CompletedTask;
+                        },
                         OnTokenValidated = async context =>
                         {
                             if (context.Principal?.HasClaim("purpose", "gym-selection") == true)
@@ -405,6 +436,7 @@ namespace ReviveHRSystem.Web
 
             app.UseMiddleware<CustomExceptionMiddleWare>();
             app.UseMiddleware<SecurityHeadersMiddleware>();
+            app.UseMiddleware<ReviveHRSystem.Web.Middleware.BrowserCsrfMiddleware>();
 
             if (app.Environment.IsDevelopment())
             {

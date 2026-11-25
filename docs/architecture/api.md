@@ -240,7 +240,21 @@ HR-editable attendance policy: { gymId, gymName, excusedLateHoursCapPerMonth }. 
 
 ### POST /api/deduction-candidates
 
-Body: { employeeId (in-scope), amount > 0, reason (Unapproved absence | Late arrival (30+ min) | Early checkout without approval | Damaged equipment / property | Policy violation | Other (see note)), note? }. Created with status Pending for HR review; 404 for an out-of-scope employee. Feature: attendance Edit. **Known backend gap:** these raised `DeductionCandidate` records currently have no HR-facing list or review endpoint — the GET/review pair on this same route path operates on `PayrollEntryLineItem` deduction lines instead (see §Payroll), so a raised candidate is only visible via `GET /api/branch-actions/pending-hr`. Needs a follow-up (auto-convert to a payroll line on raise, or an HR list+review for the entity).
+Body: { employeeId (in-scope), unit? (hours | days), value? (the size), amount (explicit money — only when no size is given), reason (Unapproved absence | Late arrival (30+ min) | Early checkout without approval | Damaged equipment / property | Policy violation | Other (see note)), note? }. Created with status Pending, scoped to the caller's management scope (404 for an out-of-scope employee), one deduction per employee/day. With `unit` + `value` the server prices it: **hours × the month's hourly rate** (base ÷ assigned hours; needs a complete roster) or **days × the month's daily rate** (base ÷ that month's calendar days, 28/29/30/31). 400 for a non-positive size/amount or an unknown reason. Feature: attendance Edit.
+
+**Pricing model (shared by every deduction surface).** A deduction is *not* auto-priced from a fixed 30-day month any more. The attendance sweep only **flags** a punished day (amount 0, note "Awaiting the branch manager"); the branch manager chooses hours or days, and the amount follows the rates above. An hours-based size keeps its size but stays at 0 until the month's roster is complete, then fills in by itself (`DeductionCandidate.DeductionValue` + `DeductionUnit` store the size; `DeductionDays` is the derived days-equivalent payroll counts).
+
+### GET /api/deduction-candidates/{id}/pricing
+
+Query: `unit` (`hours` | `days`) and `value`. Returns both rates of the punished month plus the money that size costs: `{ candidateId, dailyRate, hourlyRate, hourlyRateReady, assignedHours, monthDays, deductionUnit, deductionValue, amount, days, pendingReason }`. `amount` is 0 with a `pendingReason` while the needed rate is unknown (no salary on file, or the hourly rate before the roster is complete). Feature: attendance Edit.
+
+### GET /api/deduction-candidates/review · POST /api/deduction-candidates/{id}/review
+
+The HR side of the deduction flow, surfaced as the **Deductions** tab of the HR Requests page. GET takes `status` (`review` [default], `approved`, `rejected`, `all`) and follows the caller's gym scope; requires `payroll.view` or `payroll.edit`. Returns the candidate rows with their size and both rates. POST body: { decision (`approve` | `reject`), unit?, value?, amount? } — HR may re-size through the same rates, then approve (the payroll sheet carries it as an accepted line) or waive it (final).
+
+### POST /api/deduction-candidates/{id}/branch-review
+
+The branch's own decision before HR: body { decision (approve | reject | edit), unit? (hours | days), value?, amount?, days? }. `approve` moves the row to BranchApproved (it then awaits HR), `reject` is final, `edit` re-sizes it. The size is priced exactly like the issue path above.
 
 ### POST /api/warning-notices
 

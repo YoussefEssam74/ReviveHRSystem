@@ -165,6 +165,17 @@ export interface DeductionCandidateRow {
   employee: string
   amount: number
   deductionDays: number
+  /** The size the manager chose — priced at the hourly (hours) or daily (days) rate. */
+  deductionValue: number
+  /** "Hours" | "Days". */
+  deductionUnit: string
+  /** Salary ÷ the month's calendar days (0 when no salary is on file). */
+  dailyRate: number
+  /** Salary ÷ the month's assigned hours (0 until the roster is complete). */
+  hourlyRate: number
+  hourlyRateReady: boolean
+  assignedHours: number
+  monthDays: number
   reason: string
   note: string | null
   /** Raw DeductionStatus: Pending | BranchApproved | Approved | Rejected. */
@@ -174,6 +185,28 @@ export interface DeductionCandidateRow {
   /** UTC ISO timestamp. */
   issuedAt: string
   issuedBy: string
+}
+
+/** How a deduction is sized: hours of pay or salary days. */
+export type DeductionUnit = 'hours' | 'days'
+
+/** The live pricing of one deduction while the manager picks a size. */
+export interface DeductionPricing {
+  candidateId: number
+  dailyRate: number
+  hourlyRate: number
+  hourlyRateReady: boolean
+  assignedHours: number
+  monthDays: number
+  deductionUnit: string
+  deductionValue: number
+  /** Money for the requested size; 0 while the rate is unknown. */
+  amount: number
+  days: number
+  /** Why the amount is still missing (no salary, roster incomplete…), else null. */
+  pendingReason: string | null
+  /** The arithmetic behind the amount, or the same reason in one line. */
+  note: string | null
 }
 
 /** One branch-raised warning notice (employees feature). */
@@ -207,7 +240,11 @@ export function issueDeduction(fields: {
   employeeId: number
   /** DateOnly "yyyy-MM-dd" — the day the deduction punishes (defaults to today server-side). */
   date?: string
-  amount: number
+  /** The size the manager chose; the server prices it from the month's rates. */
+  unit?: DeductionUnit
+  value?: number
+  /** Explicit money override when no size is given. */
+  amount?: number
   reason: string
   note: string | null
 }): Promise<DeductionCandidateRow> {
@@ -263,14 +300,63 @@ export function listBranchDeductions(employeeId?: number, signal?: AbortSignal):
 /**
  * POST /api/deduction-candidates/{id}/branch-review — the branch's own decision on
  * one of its deductions: approve (`BranchApproved` — goes to HR), reject (final) or
- * change the deducted salary days (status untouched). The server recalculates the
- * amount as salary / 30 × days.
+ * re-size it. The size is hours or days and the server prices it from the month's
+ * rates (salary ÷ calendar days, or ÷ assigned hours once the roster is complete).
  */
 export function branchReviewDeduction(
   id: number,
-  fields: { decision: 'approve' | 'reject' | 'edit'; amount?: number; days?: number },
+  fields: { decision: 'approve' | 'reject' | 'edit'; unit?: DeductionUnit; value?: number; amount?: number; days?: number },
 ): Promise<DeductionCandidateRow> {
   return apiRequest<DeductionCandidateRow>(`/api/deduction-candidates/${id}/branch-review`, {
+    method: 'POST',
+    body: fields,
+  })
+}
+
+/** GET /api/deduction-candidates/{id}/pricing?unit=&value= — rates + the money a size costs. */
+export function getDeductionPricing(
+  id: number,
+  unit?: DeductionUnit,
+  value?: number,
+  signal?: AbortSignal,
+): Promise<DeductionPricing> {
+  const path = withQuery(`/api/deduction-candidates/${id}/pricing`, {
+    ...(unit ? { unit } : {}),
+    ...(value != null ? { value: String(value) } : {}),
+  })
+  return apiRequest<DeductionPricing>(path, { signal })
+}
+
+/** GET /api/deduction-candidates/preview — prices a deduction that does not exist yet. */
+export function previewDeduction(
+  fields: { employeeId: number; date: string; unit: DeductionUnit; value: number },
+  signal?: AbortSignal,
+): Promise<DeductionPricing> {
+  return apiRequest<DeductionPricing>(
+    withQuery('/api/deduction-candidates/preview', {
+      employeeId: String(fields.employeeId),
+      date: fields.date,
+      unit: fields.unit,
+      value: String(fields.value),
+    }),
+    { signal },
+  )
+}
+
+/** GET /api/deduction-candidates/review?status= — the deductions waiting for HR. */
+export function listDeductionReviewQueue(
+  status: 'review' | 'approved' | 'rejected',
+  signal?: AbortSignal,
+): Promise<DeductionCandidateRow[]> {
+  return apiRequest<DeductionCandidateRow[]>(withQuery('/api/deduction-candidates/review', { status }), { signal })
+}
+
+/** POST /api/deduction-candidates/{id}/review — HR approves/waives (optionally re-sizing). */
+export function reviewDeductionCandidate(
+  id: number,
+  fields: { decision: 'approve' | 'reject'; unit?: DeductionUnit; value?: number },
+): Promise<DeductionCandidateRow> {
+  return apiRequest<DeductionCandidateRow>(`/api/deduction-candidates/${id}/review`, {
     method: 'POST',
     body: fields,
   })

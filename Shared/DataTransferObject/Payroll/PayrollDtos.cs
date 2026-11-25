@@ -477,8 +477,17 @@ namespace Shared.DataTransferObject.Payroll
         public int CoverDays { get; set; }
         /// <summary>Days actually worked outside the schedule (cover / extra shifts).</summary>
         public int ExtraShiftDays { get; set; }
-        /// <summary>Cover pay: base salary ÷ 30 × approved cover days.</summary>
+        /// <summary>Cover pay: the period's daily rate (base ÷ its calendar days) × approved cover days.</summary>
         public decimal CoverPay { get; set; }
+
+        /// <summary>
+        /// The period's daily rate (base ÷ its own calendar days) — what a salary day is
+        /// worth, and what attendance deductions are priced from.
+        /// </summary>
+        public decimal DailyRate { get; set; }
+
+        /// <summary>Salary ÷ the period's assigned hours; 0 until the roster is complete.</summary>
+        public decimal HourlyRate { get; set; }
         public string Status { get; set; } = "Draft";
     }
 

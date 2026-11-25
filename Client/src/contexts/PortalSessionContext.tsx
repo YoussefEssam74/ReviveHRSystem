@@ -35,7 +35,7 @@ export function PortalSessionProvider({ children }: { children: ReactNode }) {
   // Keys carry the access token so a new login (new token) can never be served
   // the previous account's cached context — belt and braces behind the cache
   // purge in AuthSessionProvider. 'anon' = signed out (queries are disabled).
-  const tokenScope = session?.accessToken ?? 'anon'
+  const tokenScope = session?.sessionKey ?? 'anon'
 
   const meQuery = useQuery({
     queryKey: ['portal', 'me', tokenScope],
@@ -66,10 +66,9 @@ export function PortalSessionProvider({ children }: { children: ReactNode }) {
       // after the seed below and repaint the previous gym — the switch would
       // look like it never happened.
       await queryClient.cancelQueries({ queryKey: ['portal'] })
-      // Persist the fresh token + session user snapshot before any refetch —
-      // subsequent /api calls must carry the newly-scoped token.
+      // Persist a non-secret user snapshot before refetching the new gym context.
       const next: StoredSession = {
-        accessToken: response.accessToken,
+        sessionKey: `${session.sessionKey}:${response.me.activeGym?.gymId ?? 'all'}:${Date.now()}`,
         // The switch rotated the refresh credential to the new gym's scope
         // (SwitchGymAsync). Store the replacement — the pre-switch chain no
         // longer matches the session's gym, so it is never carried over:
@@ -77,10 +76,9 @@ export function PortalSessionProvider({ children }: { children: ReactNode }) {
         // undo the switch. A response without a refresh token (older backend)
         // degrades to a mandatory re-login at access-token expiry, which is
         // the same recovery the pre-rotation design already required.
-        refreshToken: response.refreshToken,
-        refreshExpiresAt: response.refreshExpiresInSeconds
+        sessionExpiresAt: response.refreshExpiresInSeconds
           ? Date.now() + response.refreshExpiresInSeconds * 1000
-          : undefined,
+          : session.sessionExpiresAt,
         expiresAt: Date.now() + response.expiresInSeconds * 1000,
         user: {
           ...session.user,
@@ -96,7 +94,7 @@ export function PortalSessionProvider({ children }: { children: ReactNode }) {
       // invalidate everything so all active portal queries refetch per gym.
       // Await it: the caller navigates right after, and it must land on a page
       // that already sees the new gym's role and permissions.
-      queryClient.setQueryData(['portal', 'me', next.accessToken], response.me, { updatedAt: Date.now() })
+      queryClient.setQueryData(['portal', 'me', next.sessionKey], response.me, { updatedAt: Date.now() })
       await queryClient.invalidateQueries({ queryKey: ['portal'] })
     },
   })

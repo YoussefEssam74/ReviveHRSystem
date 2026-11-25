@@ -19,8 +19,20 @@ namespace DomainLayer.Models.PayrollModule
 
         public decimal Amount { get; set; }
 
-        /// <summary>Number of salary days deducted; money is calculated from salary / 30.</summary>
-        public decimal DeductionDays { get; set; } = 1m;
+        /// <summary>
+        /// The size the manager chose, in <see cref="DeductionUnit"/> (hours or days).
+        /// Zero means nobody has sized the row yet — the sweep raises the day, the branch
+        /// manager prices it.
+        /// </summary>
+        public decimal DeductionValue { get; set; }
+
+        public DeductionUnit DeductionUnit { get; set; } = DeductionUnit.Days;
+
+        /// <summary>
+        /// The same size expressed in salary days (hours are converted through the two
+        /// rates), so payroll and the review screens can keep counting in days.
+        /// </summary>
+        public decimal DeductionDays { get; set; }
 
         /// <summary>
         /// The day this deduction punishes. One employee can carry at most one

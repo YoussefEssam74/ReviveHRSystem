@@ -913,7 +913,6 @@ export function postFeatureFlag(body: {
 
 export interface StartWorkspaceResponse {
   sessionId: number
-  accessToken: string
   expiresInSeconds: number
   company: CompanyRef
   branch: { id: number; name: string } | null

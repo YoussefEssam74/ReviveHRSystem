@@ -38,6 +38,34 @@ namespace ServiceAbstraction.Services
         Task<IReadOnlyList<DeductionCandidateDto>> GetDeductionsAsync(
             int actorUserId, int? employeeId, int? activeGymId, CancellationToken cancellationToken = default);
 
+        /// <summary>
+        /// Both rates of one deduction's month plus the money a size costs — what the
+        /// branch manager sees while choosing hours or days.
+        /// </summary>
+        Task<DeductionPricingDto> GetDeductionPricingAsync(
+            int actorUserId, int candidateId, string? unit, decimal? value, int? activeGymId, CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// Prices a deduction that does not exist yet (the follow-up form's live preview)
+        /// with exactly the rates the saved row will use.
+        /// </summary>
+        Task<DeductionPricingDto> PreviewDeductionAsync(
+            int actorUserId, int employeeId, DateOnly? date, string? unit, decimal? value, int? activeGymId, CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// The deductions awaiting the HR sign-off (branch-sized and approved), scoped to
+        /// the caller's gyms — the HR Requests page's Deductions tab.
+        /// </summary>
+        Task<IReadOnlyList<DeductionCandidateDto>> GetDeductionReviewQueueAsync(
+            int actorUserId, string? status, CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// The HR sign-off on a branch-sized deduction: approve (payroll applies it) or
+        /// waive it, optionally re-sized through the same hourly/daily rates.
+        /// </summary>
+        Task<DeductionCandidateDto> ReviewDeductionCandidateAsync(
+            int actorUserId, int candidateId, BranchDeductionReviewRequest request, CancellationToken cancellationToken = default);
+
         /// <summary>Warning notices in the caller's management scope, newest first (<see cref="GetDeductionsAsync"/> semantics).</summary>
         Task<IReadOnlyList<WarningNoticeDto>> GetWarningsAsync(
             int actorUserId, int? employeeId, int? activeGymId, CancellationToken cancellationToken = default);

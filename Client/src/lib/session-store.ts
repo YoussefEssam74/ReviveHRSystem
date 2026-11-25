@@ -9,67 +9,56 @@ export interface SessionUser {
   userName: string
   userType: string
   gymName: string | null
-  /** Gym the token is scoped to, when the login produced a single-gym session. */
   gymId?: number | null
-  /** Every gym this user may manage (HR/TopManagement) — drives the station-code picker. */
   gymAccess?: SessionGymOption[]
 }
 
+/** Non-secret UI snapshot. Authentication credentials stay in HttpOnly cookies. */
 export interface StoredSession {
-  accessToken: string
-  refreshToken?: string
+  sessionKey: string
+  /** Access-token expiry; the cookie refreshes through /api/auth/refresh after this. */
   expiresAt: number
-  /**
-   * When the refresh credential itself expires (epoch ms, when known). The
-   * session survives an expired ACCESS token until this passes so the client
-   * can still silently refresh after a reload or inactivity.
-   */
-  refreshExpiresAt?: number
+  /** Refresh-cookie expiry, used only to decide whether the cached UI session is stale. */
+  sessionExpiresAt: number
   user: SessionUser
 }
 
 const STORAGE_KEY = 'revive.session'
+const SESSION_SCHEMA_VERSION = 3
 
-/**
- * Schema version of the persisted session. Bump whenever the StoredSession
- * shape or its auth contract changes in a way that must NOT be interpreted by
- * an older client bundle (e.g. refresh-token rotation on gym switches). A
- * version mismatch from a previous deployment forces one transparent re-login
- * instead of resuming a session the current code can no longer reason about.
- */
-const SESSION_SCHEMA_VERSION = 2
-
-/** Fired (on window) whenever the persisted session changes, from any source. */
 export const SESSION_CHANGED_EVENT = 'revive:session-changed'
 
 function isStoredSession(value: unknown): value is StoredSession {
   if (typeof value !== 'object' || value === null) return false
   const session = value as StoredSession & { version?: number }
   return session.version === SESSION_SCHEMA_VERSION
-    && typeof session.accessToken === 'string' && typeof session.expiresAt === 'number' && typeof session.user === 'object'
-    && (session.refreshExpiresAt === undefined || typeof session.refreshExpiresAt === 'number')
+    && typeof session.sessionKey === 'string'
+    && typeof session.expiresAt === 'number'
+    && typeof session.sessionExpiresAt === 'number'
+    && typeof session.user === 'object'
 }
 
 export function loadStoredSession(): StoredSession | null {
   try {
+    // Earlier bundles parked bearer credentials in these workspace keys. Remove
+    // those legacy snapshots even when the primary session key is already empty.
+    for (const key of ['revive.console-session', 'revive.console-workspace-session']) {
+      const legacy = window.localStorage.getItem(key)
+      if (legacy && /"(?:accessToken|refreshToken)"\s*:/.test(legacy)) window.localStorage.removeItem(key)
+    }
     const raw = window.localStorage.getItem(STORAGE_KEY)
     if (!raw) return null
     const parsed: unknown = JSON.parse(raw)
     if (!isStoredSession(parsed)) {
-      // Old-schema blob (previous deployment): discard it so the next sign-in
-      // persists a session the current code fully understands.
+      // Remove old schemas, which included browser-readable access/refresh tokens.
       window.localStorage.removeItem(STORAGE_KEY)
+      window.localStorage.removeItem('revive.console-session')
+      window.localStorage.removeItem('revive.console-workspace-session')
       return null
     }
-    if (parsed.expiresAt > Date.now()) return parsed
-    // An expired access token is not the end of the session while the refresh
-    // credential is still alive — the 401 refresh flow needs it to renew the
-    // session silently after a reload or inactivity.
-    const refreshAlive =
-      typeof parsed.refreshToken === 'string' && parsed.refreshToken !== '' &&
-      (parsed.refreshExpiresAt === undefined || parsed.refreshExpiresAt > Date.now())
-    if (!refreshAlive) window.localStorage.removeItem(STORAGE_KEY)
-    return refreshAlive ? parsed : null
+    if (parsed.sessionExpiresAt > Date.now()) return parsed
+    window.localStorage.removeItem(STORAGE_KEY)
+    return null
   } catch {
     return null
   }
@@ -79,7 +68,7 @@ export function saveSession(session: StoredSession) {
   try {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify({ version: SESSION_SCHEMA_VERSION, ...session }))
   } catch {
-    // Storage may be unavailable (private mode); the in-memory session still works.
+    // Storage may be unavailable; the current tab can still keep its UI session in memory.
   }
   window.dispatchEvent(new Event(SESSION_CHANGED_EVENT))
 }

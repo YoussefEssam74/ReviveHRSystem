@@ -28,7 +28,7 @@ import { useToast } from '../../../components/ui/toast'
 import { usePortalSession } from '../../../contexts/PortalSessionContext'
 import { ApiError, describeApiError } from '../../../lib/api-client'
 import { formatDate, formatDateWithYear, formatMoney, formatNumber, formatTime, formatTimeLabel, formatTimeOfDay } from '../../../lib/format'
-import { getEmployeeDirectory } from '../api/branch.api'
+import { getEmployeeDirectory, listDeductionReviewQueue, reviewDeductionCandidate } from '../api/branch.api'
 import { translate } from '../../../i18n'
 
 import { cn } from '../../../lib/utils'
@@ -136,11 +136,12 @@ const TABS: { key: DeskTab; label: string; short: string; hint: string }[] = [
   { key: 'Rejected', label: 'REJECTED', short: 'Rejected', hint: 'Rejected at the desk or by HR' },
 ]
 
-const TAB_STYLES: Record<DeskTab, { active: string; badge: string }> = {
+const TAB_STYLES: Record<DeskTab | HrTab, { active: string; badge: string }> = {
   Pending: { active: 'bg-yellow-100 text-yellow-800', badge: 'text-yellow-600' },
   PendingHRReview: { active: 'bg-purple-100 text-purple-800', badge: 'text-purple-600' },
   Approved: { active: 'bg-green-100 text-green-800', badge: 'text-green-600' },
   Rejected: { active: 'bg-red-100 text-red-800', badge: 'text-red-600' },
+  Deductions: { active: 'bg-orange-100 text-orange-800', badge: 'text-orange-600' },
 }
 
 const PAGE_SIZE = 10
@@ -149,7 +150,7 @@ export default function TeamRequestsPage() {
   const { t } = useTranslation()
   const { isTeamLeader, isBranchManager, me } = usePortalSession()
   const [tab, setTab] = useState<DeskTab>('Pending')
-  const [hrTab, setHrTab] = useState<'PendingHRReview' | 'Approved' | 'Rejected'>('PendingHRReview')
+  const [hrTab, setHrTab] = useState<'PendingHRReview' | 'Approved' | 'Rejected' | 'Deductions'>('PendingHRReview')
 
   const isManager = isTeamLeader || isBranchManager
   const isHr = (me?.userType === 'HR' || me?.userType === 'TopManagement') && !isManager
@@ -181,10 +182,11 @@ function DeskWorkspace({ tab, onTab }: { tab: DeskTab; onTab: (tab: DeskTab) => 
 
 /* ==================== HR final stage (GET /api/requests + POST .../decide) ==================== */
 
-type HrTab = 'PendingHRReview' | 'Approved' | 'Rejected'
+type HrTab = 'PendingHRReview' | 'Approved' | 'Rejected' | 'Deductions'
 
 const HR_TABS: { key: HrTab; label: string; short: string; hint: string }[] = [
   { key: 'PendingHRReview', label: 'NEED ACTION', short: 'Action', hint: 'Waiting for HR sign-off' },
+  { key: 'Deductions', label: 'DEDUCTIONS', short: 'Deduct', hint: 'Attendance deductions the branch sized' },
   { key: 'Approved', label: 'APPROVED', short: 'Approved', hint: 'Signed off end-to-end' },
   { key: 'Rejected', label: 'REJECTED', short: 'Rejected', hint: 'Rejected by HR' },
 ]
@@ -193,7 +195,7 @@ function HrWorkspace({ tab, onTab }: { tab: HrTab; onTab: (tab: HrTab) => void }
   return (
     <div className="space-y-3">
       <HrTabBar tab={tab} onTab={onTab} />
-      <HrList key={tab} status={tab} />
+      {tab === 'Deductions' ? <HrDeductionsQueue /> : <HrList key={tab} status={tab} />}
     </div>
   )
 }
@@ -203,11 +205,18 @@ function HrTabBar({ tab, onTab }: { tab: HrTab; onTab: (tab: HrTab) => void }) {
   const counts = useQuery({
     queryKey: ['portal', 'hr-requests', 'counts'],
     queryFn: async ({ signal }) => {
-      const statuses: HrTab[] = ['PendingHRReview', 'Approved', 'Rejected']
+      const statuses: Exclude<HrTab, 'Deductions'>[] = ['PendingHRReview', 'Approved', 'Rejected']
       const results = await Promise.all(
         statuses.map((status) => getHrRequests({ status, page: 1, pageSize: 1, signal }).then((page) => page.total)),
       )
-      return Object.fromEntries(statuses.map((status, index) => [status, results[index]])) as Record<HrTab, number>
+      const deductions = await listDeductionReviewQueue('review', signal).then((rows) => rows.length)
+      return {
+        ...(Object.fromEntries(statuses.map((status, index) => [status, results[index]])) as Record<
+          Exclude<HrTab, 'Deductions'>,
+          number
+        >),
+        Deductions: deductions,
+      } as Record<HrTab, number>
     },
   })
 
@@ -249,7 +258,134 @@ function HrTabBar({ tab, onTab }: { tab: HrTab; onTab: (tab: HrTab) => void }) {
   )
 }
 
-function HrList({ status }: { status: HrTab }) {
+/**
+ * The deductions tab of the HR Requests page: the days the branch already sized (hours
+ * or days) and approved. HR signs them off — or waives them — using the same rates the
+ * branch saw, so the money on the payroll sheet is never a surprise.
+ */
+function HrDeductionsQueue() {
+  const { t } = useTranslation()
+  const { toast } = useToast()
+  const queryClient = useQueryClient()
+  const [view, setView] = useState<'review' | 'approved' | 'rejected'>('review')
+
+  const queue = useQuery({
+    queryKey: ['portal', 'hr-deductions', view],
+    queryFn: ({ signal }) => listDeductionReviewQueue(view, signal),
+  })
+
+  const decide = useMutation({
+    mutationFn: ({ id, decision }: { id: number; decision: 'approve' | 'reject' }) =>
+      reviewDeductionCandidate(id, { decision }),
+    onSuccess: (_row, variables) => {
+      toast(
+        variables.decision === 'approve'
+          ? t('Deduction approved — the payroll sheet applies it.')
+          : t('Deduction waived.'),
+      )
+      void queryClient.invalidateQueries({ queryKey: ['portal', 'hr-deductions'] })
+      void queryClient.invalidateQueries({ queryKey: ['portal', 'hr-requests', 'counts'] })
+    },
+    onError: (error) => toast(describeApiError(error), 'error'),
+  })
+
+  const rows = queue.data ?? []
+  const views = [
+    { key: 'review' as const, label: 'NEED ACTION' },
+    { key: 'approved' as const, label: 'APPROVED' },
+    { key: 'rejected' as const, label: 'WAIVED' },
+  ]
+
+  return (
+    <div className="space-y-3">
+      <div className="flex gap-1.5 rounded-xl border border-charcoal-200 bg-white p-1.5">
+        {views.map((option) => (
+          <button
+            key={option.key}
+            type="button"
+            onClick={() => setView(option.key)}
+            className={cn(
+              'min-w-0 flex-1 rounded-lg px-2 py-1.5 text-[11px] font-semibold transition-colors',
+              view === option.key ? 'bg-orange-100 text-orange-800' : 'text-charcoal-500 hover:bg-charcoal-50',
+            )}
+          >
+            {t(option.label)}
+          </button>
+        ))}
+      </div>
+
+      <div className="overflow-hidden rounded-xl border border-charcoal-200 bg-white">
+        <div className="hidden border-b border-charcoal-100 bg-charcoal-50/50 px-3.5 py-2 text-[10px] font-bold uppercase tracking-wide text-charcoal-500 lg:grid lg:grid-cols-[1.4fr_0.8fr_1.2fr_0.8fr_1.2fr]">
+          <span>{t('Employee')}</span>
+          <span>{t('Day')}</span>
+          <span>{t('Why')}</span>
+          <span>{t('Size')}</span>
+          <span className="text-end">{t('Amount')}</span>
+        </div>
+
+        {queue.isLoading && <p className="px-3.5 py-6 text-xs text-charcoal-500">{t('Loading deductions…')}</p>}
+        {queue.isError && <p className="px-3.5 py-6 text-xs text-red-600">{describeApiError(queue.error)}</p>}
+        {!queue.isLoading && !queue.isError && rows.length === 0 && (
+          <p className="px-3.5 py-6 text-xs text-charcoal-500">
+            {view === 'review'
+              ? t('No deductions are waiting for HR. The branch sizes them from the attendance board.')
+              : t('Nothing here yet.')}
+          </p>
+        )}
+
+        {rows.map((row) => (
+          <div
+            key={row.id}
+            className="grid grid-cols-1 gap-1.5 border-b border-charcoal-50 px-3.5 py-2.5 text-xs last:border-0 lg:grid-cols-[1.4fr_0.8fr_1.2fr_0.8fr_1.2fr] lg:items-center"
+          >
+            <span className="font-semibold text-charcoal-900">{row.employee}</span>
+            <span className="tabular-nums text-charcoal-600">{formatDate(row.date)}</span>
+            <span className="text-charcoal-600">{row.reason}</span>
+            <span className="tabular-nums text-charcoal-700">
+              {row.deductionValue > 0
+                ? `${row.deductionValue}${row.deductionUnit === 'Hours' ? ' h' : ' d'}`
+                : t('not sized')}
+              <span className="ms-1 text-[10px] text-charcoal-400">
+                {row.deductionUnit === 'Hours'
+                  ? row.hourlyRateReady
+                    ? `× ${formatMoney(row.hourlyRate)}`
+                    : t('(hourly rate pending)')
+                  : `× ${formatMoney(row.dailyRate)}`}
+              </span>
+            </span>
+            <span className="flex items-center justify-between gap-2 lg:justify-end">
+              <span className={cn('font-bold tabular-nums', row.amount > 0 ? 'text-red-600' : 'text-charcoal-400')}>
+                {row.amount > 0 ? formatMoney(row.amount) : t('pending')}
+              </span>
+              {view === 'review' && (
+                <span className="flex gap-1.5">
+                  <button
+                    type="button"
+                    disabled={decide.isPending}
+                    onClick={() => decide.mutate({ id: row.id, decision: 'approve' })}
+                    className="rounded-md border border-green-200 px-2 py-1 text-[10px] font-semibold text-green-700 transition-colors hover:bg-green-50 disabled:opacity-50"
+                  >
+                    {t('Approve')}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={decide.isPending}
+                    onClick={() => decide.mutate({ id: row.id, decision: 'reject' })}
+                    className="rounded-md border border-red-200 px-2 py-1 text-[10px] font-semibold text-red-600 transition-colors hover:bg-red-50 disabled:opacity-50"
+                  >
+                    {t('Waive')}
+                  </button>
+                </span>
+              )}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function HrList({ status }: { status: Exclude<HrTab, 'Deductions'> }) {
   const { t } = useTranslation()
   const [page, setPage] = useState(1)
 

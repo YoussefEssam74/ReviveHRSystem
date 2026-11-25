@@ -47,8 +47,8 @@ export default function PayslipDialog({ periodId, employeeId, employeeName, onCl
           <dl className="divide-y divide-slate-100 rounded-xl border border-slate-200 text-sm">
             <PayslipRow label={t('Days worked')} value={String(data.days)} />
             <PayslipRow label={t('Base salary')} value={formatMoney(data.baseSalary)} />
-            {/* Base ÷ 30 — the daily rate every deduction line and cover day is priced from. */}
-            <PayslipRow label={t('Daily rate')} value={formatMoney(data.baseSalary / 30)} />
+            {/* Base ÷ the period's own calendar days — the rate deductions are priced from. */}
+            <PayslipRow label={t('Daily rate')} value={formatMoney(data.dailyRate)} />
             <PayslipRow label={t('Overtime')} value={`${data.overtime} h · ${formatMoney(data.overtimePay)}`} />
             <PayslipRow
               label={t('Cover / extra shifts')}

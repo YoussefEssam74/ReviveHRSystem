@@ -14,10 +14,12 @@ import {
   branchReviewDeduction,
   getEmployeeDirectory,
   getOffboardingCases,
+  getDeductionPricing,
   listBonusProposals,
   listBranchDeductions,
   listWarningNotices,
   type DeductionCandidateRow,
+  type DeductionUnit,
   type EmployeeDirectoryRow,
 } from "../api/branch.api";
 import {
@@ -1204,7 +1206,8 @@ function DrillDeductions({
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [editingId, setEditingId] = useState<number | null>(null);
-  const [days, setDays] = useState("");
+  const [unit, setUnit] = useState<DeductionUnit>("days");
+  const [value, setValue] = useState("");
   const [view, setView] = useState<DeductionViewId>("pending");
 
   const deductionsQuery = useQuery({
@@ -1217,19 +1220,26 @@ function DrillDeductions({
     mutationFn: ({
       id,
       decision,
-      days: revisedDays,
+      unit: sizedUnit,
+      value: sizedValue,
     }: {
       id: number;
       decision: "approve" | "reject" | "edit";
-      days?: number;
-    }) => branchReviewDeduction(id, { decision, days: revisedDays }),
+      unit?: DeductionUnit;
+      value?: number;
+    }) =>
+      branchReviewDeduction(id, {
+        decision,
+        ...(sizedUnit ? { unit: sizedUnit } : {}),
+        ...(sizedValue != null ? { value: sizedValue } : {}),
+      }),
     onSuccess: (_data, variables) => {
       toast(
         variables.decision === "approve"
           ? t("Deduction approved — it goes to HR for the payroll run.")
           : variables.decision === "reject"
             ? t("Deduction rejected.")
-            : t("Deduction days updated and amount recalculated."),
+            : t("Deduction size updated — the amount follows the month's rates."),
       );
       setEditingId(null);
       void queryClient.invalidateQueries({
@@ -1266,16 +1276,34 @@ function DrillDeductions({
     DEDUCTION_VIEWS.find((option) => option.id === view) ?? DEDUCTION_VIEWS[0];
   const visible = rows.filter((item) => deductionViewOf(item.status) === view);
   const pending = reviewMutation.isPending;
+  /** The size currently typed, or the row's own size when the field is empty. */
+  const sizeOf = (item: DeductionCandidateRow) => {
+    const parsed = Number(value);
+    const typed = value.trim() !== "" && Number.isFinite(parsed) && parsed > 0;
+    return {
+      unit: typed ? unit : (item.deductionUnit.toLowerCase() as DeductionUnit),
+      value: typed ? parsed : item.deductionValue,
+      typed,
+    };
+  };
+
   const submitReprice = (item: DeductionCandidateRow) => {
-    const value = Number(days);
-    if (days === "" || !Number.isInteger(value) || value < 1 || value > 30) {
-      toast(
-        t("Enter a whole number of deduction days between 1 and 30."),
-        "error",
-      );
+    const size = sizeOf(item);
+    if (size.value <= 0) {
+      toast(t("Enter the deduction in hours or days."), "error");
       return;
     }
-    reviewMutation.mutate({ id: item.id, decision: "edit", days: value });
+    reviewMutation.mutate({ id: item.id, decision: "edit", unit: size.unit, value: size.value });
+  };
+
+  /** Approving carries the size too — the day the branch signs it off it is priced. */
+  const approve = (item: DeductionCandidateRow) => {
+    const size = sizeOf(item);
+    reviewMutation.mutate({
+      id: item.id,
+      decision: "approve",
+      ...(size.value > 0 ? { unit: size.unit, value: size.value } : {}),
+    });
   };
 
   return (
@@ -1401,12 +1429,7 @@ function DrillDeductions({
                       <button
                         type="button"
                         disabled={pending}
-                        onClick={() =>
-                          reviewMutation.mutate({
-                            id: item.id,
-                            decision: "approve",
-                          })
-                        }
+                        onClick={() => approve(item)}
                         className="rounded-md border border-green-200 px-2 py-1 text-[10px] font-semibold text-green-700 transition-colors hover:bg-green-50 disabled:opacity-50"
                       >
                         Approve
@@ -1417,13 +1440,12 @@ function DrillDeductions({
                       disabled={pending}
                       onClick={() => {
                         setEditingId(editingId === item.id ? null : item.id);
-                        setDays(
-                          String(Math.max(1, Math.round(item.deductionDays))),
-                        );
+                        setUnit(item.deductionUnit.toLowerCase() as DeductionUnit);
+                        setValue(item.deductionValue > 0 ? String(item.deductionValue) : "");
                       }}
                       className="rounded-md border border-charcoal-200 px-2 py-1 text-[10px] font-semibold text-charcoal-600 transition-colors hover:bg-charcoal-50 disabled:opacity-50"
                     >
-                      Edit deduction days
+                      {t("Deduct hours / days")}
                     </button>
                     {!isRejected && (
                       <button
@@ -1443,53 +1465,73 @@ function DrillDeductions({
                   </div>
                 )}
                 {editingId === item.id && (
-                  <div className="mt-1.5 flex items-center gap-1.5">
-                    <input
-                      type="number"
-                      min="1"
-                      max="30"
-                      step="1"
-                      value={days}
-                      onChange={(event) => setDays(event.target.value)}
-                      placeholder={t("Deduction days")}
-                      className="w-28 rounded-md border border-charcoal-200 px-2 py-1 text-[11px] text-charcoal-800 focus:border-brand-400 focus:outline-none"
-                    />
-                    <p className="text-[10px] text-charcoal-500">
-                      New amount:{" "}
-                      {item.deductionDays > 0
-                        ? formatMoney(
-                            (item.amount / item.deductionDays) *
-                              Number(days || item.deductionDays),
-                          )
-                        : "calculated after saving"}
-                    </p>
-                    <button
-                      type="button"
-                      disabled={pending}
-                      onClick={() => submitReprice(item)}
-                      className="rounded-md bg-brand-600 px-2 py-1 text-[10px] font-semibold text-white transition-colors hover:bg-brand-700 disabled:opacity-50"
-                    >
-                      Save
-                    </button>
-                    <button
-                      type="button"
-                      disabled={pending}
-                      onClick={() => setEditingId(null)}
-                      className="rounded-md border border-charcoal-200 px-2 py-1 text-[10px] font-semibold text-charcoal-600 transition-colors hover:bg-charcoal-50 disabled:opacity-50"
-                    >
-                      Cancel
-                    </button>
+                  <div className="mt-1.5 space-y-1.5">
+                    <div className="flex items-center gap-1.5">
+                      <div className="inline-flex overflow-hidden rounded-md border border-charcoal-200">
+                        {(["hours", "days"] as DeductionUnit[]).map((option) => (
+                          <button
+                            key={option}
+                            type="button"
+                            onClick={() => setUnit(option)}
+                            className={cn(
+                              "px-2 py-1 text-[10px] font-semibold transition-colors",
+                              unit === option
+                                ? "bg-brand-600 text-white"
+                                : "bg-white text-charcoal-600 hover:bg-charcoal-50",
+                            )}
+                          >
+                            {option === "hours" ? t("Hours") : t("Days")}
+                          </button>
+                        ))}
+                      </div>
+                      <input
+                        type="number"
+                        min="0.25"
+                        max={unit === "hours" ? "24" : "30"}
+                        step="0.25"
+                        value={value}
+                        onChange={(event) => setValue(event.target.value)}
+                        placeholder={unit === "hours" ? t("e.g. 1.5") : t("e.g. 0.5")}
+                        className="w-20 rounded-md border border-charcoal-200 px-2 py-1 text-[11px] text-charcoal-800 focus:border-brand-400 focus:outline-none"
+                      />
+                      <button
+                        type="button"
+                        disabled={pending}
+                        onClick={() => submitReprice(item)}
+                        className="rounded-md bg-brand-600 px-2 py-1 text-[10px] font-semibold text-white transition-colors hover:bg-brand-700 disabled:opacity-50"
+                      >
+                        Save
+                      </button>
+                      <button
+                        type="button"
+                        disabled={pending}
+                        onClick={() => setEditingId(null)}
+                        className="rounded-md border border-charcoal-200 px-2 py-1 text-[10px] font-semibold text-charcoal-600 transition-colors hover:bg-charcoal-50 disabled:opacity-50"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                    <DeductionPricingHint item={item} unit={unit} value={value} />
                   </div>
                 )}
               </>
             ),
             right: (
               <div className="flex flex-col items-end gap-1">
-                <span className="text-xs font-bold text-red-600">
-                  {item.amount > 0
-                    ? formatMoney(item.amount)
-                    : "Price manually"}
+                <span className={cn("text-xs font-bold", item.amount > 0 ? "text-red-600" : "text-charcoal-400")}>
+                  {item.amount > 0 ? formatMoney(item.amount) : t("Set hours or days")}
                 </span>
+                {item.deductionValue > 0 && (
+                  <span className="text-[10px] text-charcoal-500">
+                    {item.deductionValue}
+                    {item.deductionUnit === "Hours" ? " h" : " d"}
+                    {item.deductionUnit === "Hours"
+                      ? item.hourlyRateReady
+                        ? ` × ${formatMoney(item.hourlyRate)}`
+                        : " · waiting for the roster"
+                      : ` × ${formatMoney(item.dailyRate)}`}
+                  </span>
+                )}
                 <StatusBadge
                   status={
                     item.status === "BranchApproved"
@@ -1550,14 +1592,76 @@ function DrillEvaluations({ employeeId }: { employeeId: number }) {
   );
 }
 
+/**
+ * Live pricing of the size being typed: both rates of the punished month plus the money
+ * they produce. An hours-based size stays blank until the roster is complete, which is
+ * exactly when the hourly rate becomes real.
+ */
+function DeductionPricingHint({
+  item,
+  unit,
+  value,
+}: {
+  item: DeductionCandidateRow
+  unit: DeductionUnit
+  value: string
+}) {
+  const { t } = useTranslation()
+  const parsed = Number(value)
+  const size = value.trim() !== "" && Number.isFinite(parsed) && parsed > 0 ? parsed : null
+  const pricingQuery = useQuery({
+    queryKey: ["portal", "deduction-pricing", item.id, unit, size],
+    queryFn: ({ signal }) => getDeductionPricing(item.id, unit, size ?? undefined, signal),
+    enabled: size != null,
+    staleTime: 30_000,
+  })
+
+  const pricing = pricingQuery.data ?? null
+  const rate = unit === "hours" ? (pricing?.hourlyRate ?? item.hourlyRate) : (pricing?.dailyRate ?? item.dailyRate)
+  const rateReady = unit === "hours" ? (pricing?.hourlyRateReady ?? item.hourlyRateReady) : true
+
+  if (size == null) {
+    return (
+      <p className="text-[10px] text-charcoal-500">
+        {t("Daily rate {{daily}}, hourly rate {{hourly}}.", {
+          daily: formatMoney(item.dailyRate),
+          hourly: item.hourlyRateReady ? formatMoney(item.hourlyRate) : t("pending the roster"),
+        })}
+      </p>
+    )
+  }
+
+  if (!rateReady) {
+    return (
+      <p className="text-[10px] text-amber-700">
+        {t("Amount appears once the month's roster is complete — {{hours}} h assigned so far.", {
+          hours: pricing?.assignedHours ?? item.assignedHours,
+        })}
+      </p>
+    )
+  }
+
+  return (
+    <p className="text-[10px] text-charcoal-600">
+      {pricing?.amount != null && pricing.amount > 0
+        ? t("{{size}} × {{rate}} = {{amount}}", {
+            size: unit === "hours" ? `${size} h` : `${size} d`,
+            rate: formatMoney(rate),
+            amount: formatMoney(pricing.amount),
+          })
+        : t("Amount appears once the month's roster is complete.")}
+    </p>
+  )
+}
+
 function DrillBonuses({
   employeeId,
   inMonth,
 }: {
-  employeeId: number;
-  inMonth: (value: string | null | undefined) => boolean;
+  employeeId: number
+  inMonth: (value: string | null | undefined) => boolean
 }) {
-  const { t } = useTranslation();
+  const { t } = useTranslation()
   const bonusesQuery = useQuery({
     queryKey: ["portal", "perf", "bonuses"],
     queryFn: ({ signal }) => listBonusProposals(undefined, signal),

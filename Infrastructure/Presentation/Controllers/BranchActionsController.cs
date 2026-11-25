@@ -46,6 +46,52 @@ namespace Presentation.Controllers
             [FromQuery] int? employeeId, CancellationToken cancellationToken)
             => Ok(await branchActionsService.GetDeductionsAsync(
                 GetActorUserId(), employeeId, GetGymIdFromToken(), cancellationToken));
+
+        /// <summary>
+        /// GET /api/deduction-candidates/preview?employeeId=&amp;date=&amp;unit=&amp;value= - prices a
+        /// deduction that does not exist yet with the same rates the saved row will use.
+        /// </summary>
+        [HttpGet("preview")]
+        public async Task<ActionResult<DeductionPricingDto>> Preview(
+            [FromQuery] int employeeId,
+            [FromQuery] DateOnly? date,
+            [FromQuery] string? unit,
+            [FromQuery] decimal? value,
+            CancellationToken cancellationToken)
+            => Ok(await branchActionsService.PreviewDeductionAsync(
+                GetActorUserId(), employeeId, date, unit, value, GetGymIdFromToken(), cancellationToken));
+
+        /// <summary>
+        /// GET /api/deduction-candidates/{id}/pricing?unit=hours&amp;value=2 - both rates of
+        /// the deduction's month plus the money that size costs. The amount is 0 with a
+        /// reason until the needed rate exists (the hourly rate needs a complete roster).
+        /// </summary>
+        [HttpGet("{id}/pricing")]
+        public async Task<ActionResult<DeductionPricingDto>> Pricing(
+            int id, [FromQuery] string? unit, [FromQuery] decimal? value, CancellationToken cancellationToken)
+            => Ok(await branchActionsService.GetDeductionPricingAsync(
+                GetActorUserId(), id, unit, value, GetGymIdFromToken(), cancellationToken));
+
+        /// <summary>
+        /// GET /api/deduction-candidates/review?status= - the deductions awaiting the HR
+        /// sign-off (the stream the branch sized in hours or days), for the HR Requests
+        /// page. Requires payroll.view / payroll.edit and follows the caller's gym scope.
+        /// </summary>
+        [HttpGet("review")]
+        public async Task<ActionResult<IReadOnlyList<DeductionCandidateDto>>> ReviewQueue(
+            [FromQuery] string? status, CancellationToken cancellationToken)
+            => Ok(await branchActionsService.GetDeductionReviewQueueAsync(
+                GetActorUserId(), status, cancellationToken));
+
+        /// <summary>
+        /// POST /api/deduction-candidates/{id}/review - the HR sign-off on a branch-sized
+        /// deduction: approve (payroll applies it), waive it, or re-size it in hours/days.
+        /// </summary>
+        [HttpPost("{id}/review")]
+        public async Task<ActionResult<DeductionCandidateDto>> Review(
+            int id, BranchDeductionReviewRequest request, CancellationToken cancellationToken)
+            => Ok(await branchActionsService.ReviewDeductionCandidateAsync(
+                GetActorUserId(), id, request, cancellationToken));
     }
 
     /// <summary>Warning notices raised for HR to file.</summary>

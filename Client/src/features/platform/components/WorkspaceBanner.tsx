@@ -12,8 +12,8 @@ export const CONSOLE_SESSION_KEY = 'revive.console-session'
  * It exists for two reasons: the operator must never forget which company they are
  * writing into, and the session must be closable without remembering how.
  *
- * The console token is parked in localStorage while the workspace token is active, so
- * "Return to console" can restore it without a re-login.
+ * The server parks both credentials in HttpOnly cookies; localStorage holds only
+ * the non-secret UI snapshot needed to restore the console layout.
  */
 export function WorkspaceBanner({ workspace, onLeave }: { workspace: CurrentWorkspace; onLeave: () => void }) {
   const { t } = useTranslation()

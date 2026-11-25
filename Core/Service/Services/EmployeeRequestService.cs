@@ -258,8 +258,10 @@ namespace Service.Services
                 && e.PayrollPeriod.StartDate <= date.Value && date.Value <= e.PayrollPeriod.EndDate);
 
             var baseSalary = entry is { BaseSalary: > 0 } ? entry.BaseSalary : fallbackSalary;
+            // Same pricing as the deduction itself: the salary divided by the punished
+            // month's own calendar days.
             var daily = baseSalary > 0
-                ? Math.Round(baseSalary / DeductionPricing.StandardDays, 2)
+                ? Math.Round(baseSalary / DateTime.DaysInMonth(date.Value.Year, date.Value.Month), 2)
                 : 0m;
             return daily > 0 ? Math.Round(daily * days.Value, 2) : null;
         }

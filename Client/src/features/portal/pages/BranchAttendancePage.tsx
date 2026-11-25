@@ -922,7 +922,12 @@ function CoverReviewDialog({ row, onClose }: { row: AttendanceGridRow; onClose: 
     (item) => item.type === 'Unscheduled Attendance' && item.requestedDate === row.date,
   )
   const salary = salaryQuery.data?.items.find((item) => item.id === row.employeeId)?.salary ?? null
-  const dailyRate = salary && salary > 0 ? salary / 30 : null
+  // Cover pay is one day at the same rate a deduction uses: the day's own month.
+  const [coverYear, coverMonth] = row.date.split('-').map(Number)
+  const coverMonthDays = Number.isFinite(coverYear) && Number.isFinite(coverMonth)
+    ? new Date(coverYear, coverMonth, 0).getDate()
+    : 30
+  const dailyRate = salary && salary > 0 ? salary / coverMonthDays : null
   const coverPay = dailyRate == null ? null : Math.round(dailyRate * days * 100) / 100
   const approvedDays = request?.calculatedDays ?? null
   const approvedPay = dailyRate == null || !approvedDays ? null : Math.round(dailyRate * approvedDays * 100) / 100

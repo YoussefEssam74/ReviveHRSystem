@@ -28,6 +28,8 @@ namespace Service.Specifications
         {
             Criteria = d => employeeIds.Contains(d.EmployeeId);
             AddInclude(d => d.Employee);
+            // Pricing a deduction reads the employee's compensation fallback.
+            AddInclude(d => d.Employee.Compensations);
             AddInclude(d => d.IssuedByUser);
             // Payroll close finalizes the loaded candidates (status → Approved, reviewed
             // stamps) before SaveChanges without Update() — keeps the flow tracked.

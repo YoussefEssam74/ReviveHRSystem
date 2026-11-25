@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using ServiceAbstraction.Services;
 using Shared.DataTransferObject.Platform;
+using Shared.Configuration;
 
 namespace Presentation.Controllers
 {
@@ -214,6 +215,36 @@ namespace Presentation.Controllers
             var result = await _service.StartAsync(
                 GetActorUserId(), request, HttpContext.Connection.RemoteIpAddress?.ToString(), cancellationToken);
 
+            if (IsBrowserRequest())
+            {
+                var consoleAccess = Request.Cookies.TryGetValue(AuthCookieOptions.AccessTokenCookie, out var cookieAccess)
+                    ? cookieAccess
+                    : Request.Headers.Authorization.ToString().Replace("Bearer ", "", StringComparison.OrdinalIgnoreCase);
+                if (!string.IsNullOrWhiteSpace(consoleAccess))
+                {
+                    Response.Cookies.Append(AuthCookieOptions.ConsoleAccessTokenCookie, consoleAccess, CookieOptions(result.ExpiresAt));
+                }
+                if (Request.Cookies.TryGetValue(AuthCookieOptions.RefreshTokenCookie, out var consoleRefresh))
+                {
+                    Response.Cookies.Append(AuthCookieOptions.ConsoleRefreshTokenCookie, consoleRefresh, CookieOptions(DateTime.UtcNow.AddDays(30)));
+                    Response.Cookies.Delete(AuthCookieOptions.RefreshTokenCookie, new CookieOptions { Path = "/" });
+                }
+
+                Response.Cookies.Append(AuthCookieOptions.AccessTokenCookie, result.AccessToken!, CookieOptions(result.ExpiresAt));
+                Response.Cookies.Delete(AuthCookieOptions.RefreshTokenCookie, new CookieOptions { Path = "/" });
+                return StatusCode(StatusCodes.Status201Created, new StartImpersonationResponse
+                {
+                    SessionId = result.SessionId,
+                    ExpiresInSeconds = result.ExpiresInSeconds,
+                    Company = result.Company,
+                    Branch = result.Branch,
+                    EffectiveRole = result.EffectiveRole,
+                    Actor = result.Actor,
+                    StartedAt = result.StartedAt,
+                    ExpiresAt = result.ExpiresAt,
+                });
+            }
+
             return StatusCode(StatusCodes.Status201Created, result);
         }
 
@@ -224,8 +255,37 @@ namespace Presentation.Controllers
             CancellationToken cancellationToken)
         {
             var result = await _service.EndAsync(GetActorUserId(), request.SessionId, cancellationToken);
+            if (IsBrowserRequest())
+            {
+                if (Request.Cookies.TryGetValue(AuthCookieOptions.ConsoleAccessTokenCookie, out var consoleAccess))
+                {
+                    Response.Cookies.Append(AuthCookieOptions.AccessTokenCookie, consoleAccess, CookieOptions(DateTime.UtcNow.AddDays(30)));
+                }
+                if (Request.Cookies.TryGetValue(AuthCookieOptions.ConsoleRefreshTokenCookie, out var consoleRefresh))
+                {
+                    Response.Cookies.Append(AuthCookieOptions.RefreshTokenCookie, consoleRefresh, CookieOptions(DateTime.UtcNow.AddDays(30)));
+                }
+                Response.Cookies.Delete(AuthCookieOptions.ConsoleAccessTokenCookie, new CookieOptions { Path = "/" });
+                Response.Cookies.Delete(AuthCookieOptions.ConsoleRefreshTokenCookie, new CookieOptions { Path = "/" });
+            }
             return Ok(result);
         }
+
+        private bool IsBrowserRequest() => Request.Headers.ContainsKey("Origin");
+
+        private CookieOptions CookieOptions(DateTime expiresAt) => new()
+        {
+            HttpOnly = true,
+            Secure = Request.IsHttps
+                || Request.Host.Host.Equals("localhost", StringComparison.OrdinalIgnoreCase)
+                || Request.Host.Host.Equals("127.0.0.1", StringComparison.OrdinalIgnoreCase),
+            SameSite = Uri.TryCreate(Request.Headers.Origin.ToString(), UriKind.Absolute, out var origin)
+                && !origin.Host.Equals(Request.Host.Host, StringComparison.OrdinalIgnoreCase)
+                    ? SameSiteMode.None
+                    : SameSiteMode.Lax,
+            Path = "/",
+            Expires = new DateTimeOffset(DateTime.SpecifyKind(expiresAt, DateTimeKind.Utc)),
+        };
 
         /// <summary>
         /// GET /current — the session the caller's token is acting under.

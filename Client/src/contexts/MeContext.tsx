@@ -22,8 +22,6 @@ interface MeContextValue {
 
 const MeContext = createContext<MeContextValue | null>(null)
 
-const DEFAULT_EXPIRES_IN_SECONDS = 3600
-
 export function MeProvider({ children }: { children: ReactNode }) {
   const { session, signIn } = useAuthSession()
   const queryClient = useQueryClient()
@@ -75,12 +73,11 @@ export function MeProvider({ children }: { children: ReactNode }) {
         // rotated refresh credential. Dropping the refresh token here left the
         // session unable to renew and signed the user out at access-token expiry.
         signIn({
-          accessToken: response.accessToken,
-          refreshToken: response.refreshToken ?? session.refreshToken,
-          refreshExpiresAt: response.refreshExpiresInSeconds
+          sessionKey: `${session.sessionKey}:${gymId}:${Date.now()}`,
+          sessionExpiresAt: response.refreshExpiresInSeconds
             ? Date.now() + response.refreshExpiresInSeconds * 1000
-            : session.refreshExpiresAt,
-          expiresAt: Date.now() + (response.expiresInSeconds ?? DEFAULT_EXPIRES_IN_SECONDS) * 1000,
+            : session.sessionExpiresAt,
+          expiresAt: Date.now() + response.expiresInSeconds * 1000,
           user: {
             ...session.user,
             gymId: response.me.activeGym?.gymId ?? null,

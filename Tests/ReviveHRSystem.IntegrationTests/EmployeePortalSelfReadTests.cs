@@ -670,9 +670,9 @@ namespace ReviveHRSystem.IntegrationTests
         }
 
         /// <summary>
-        /// A "Deduction — 3 Days" absence follow-up prices at the sheet's daily rate
-        /// (base ÷ 30) for the period covering the absence day, so the day drawer can
-        /// answer "how much will be deducted".
+        /// A "Deduction — 3 Days" absence follow-up prices at the sheet's daily rate —
+        /// base ÷ the period's own calendar days — for the period covering the absence
+        /// day, so the day drawer can answer "how much will be deducted".
         /// </summary>
         [Fact]
         public async Task EmployeeDeductions_AbsenceFollowUp_CarriesPricedAmount()
@@ -707,8 +707,8 @@ namespace ReviveHRSystem.IntegrationTests
                 r.GetProperty("id").GetString()!.StartsWith("followup-")
                 && r.GetProperty("date").GetString() == "2026-03-04");
 
-            // 3 days × daily (9000 ÷ 30 = 300) = 900.
-            Assert.Equal(900m, followUp.GetProperty("amount").GetDecimal());
+            // 3 days × the March daily rate (9000 ÷ 31) = 870.96.
+            Assert.Equal(870.96m, followUp.GetProperty("amount").GetDecimal());
         }
 
         [Fact]

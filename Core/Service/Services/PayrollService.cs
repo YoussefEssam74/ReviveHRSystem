@@ -574,7 +574,9 @@ namespace Service.Services
                     Source = candidate.IsSystemGenerated ? "biometric" : "manager",
                     AttendanceRecordId = candidate.AttendanceRecordId,
                     DeductionCandidateId = candidate.Id,
-                    Status = "Pending",
+                    // HR may already have signed the deduction off in the Requests page —
+                    // the sheet then carries it as an accepted line instead of a new ask.
+                    Status = candidate.Status == DeductionStatus.Approved ? "Accepted" : "Pending",
                 };
 
                 await _unitOfWork.GetRepository<PayrollEntryLineItem, int>().AddAsync(line, cancellationToken);
@@ -1027,6 +1029,8 @@ namespace Service.Services
                 CoverDays = coverDays,
                 ExtraShiftDays = summary?.ExtraShiftDays ?? 0,
                 CoverPay = CoverPay(entry, coverDays),
+                DailyRate = DeductionPricing.PeriodDailyRate(
+                    entry.BaseSalary, entry.PayrollPeriod.StartDate, entry.PayrollPeriod.EndDate),
                 Status = entry.Status,
             };
         }
@@ -1135,10 +1139,13 @@ namespace Service.Services
         /// <summary>Attendance facts for one employee over a payroll period.</summary>
         internal sealed record PayrollAttendanceSummary(int DaysWorked, int ExtraShiftDays, int CoverDays);
 
-        /// <summary>Cover pay at the daily rate (base ÷ 30) for the approved cover days.</summary>
+        /// <summary>Cover pay at the period's daily rate (base ÷ the period's own days).</summary>
         private static decimal CoverPay(PayrollEntry entry, int coverDays) =>
-            coverDays > 0 && entry.BaseSalary > 0
-                ? Math.Round(entry.BaseSalary / DeductionPricing.StandardDays * coverDays, 2)
+            coverDays > 0 && entry.BaseSalary > 0 && entry.PayrollPeriod is not null
+                ? Math.Round(
+                    DeductionPricing.PeriodDailyRate(
+                        entry.BaseSalary, entry.PayrollPeriod.StartDate, entry.PayrollPeriod.EndDate) * coverDays,
+                    2)
                 : 0m;
 
         /// <summary>

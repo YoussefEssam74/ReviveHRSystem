@@ -218,8 +218,8 @@ namespace Service.Services
             ("Day", 1m, "Day"),
         ];
 
-        /// <summary>Hours in one priced day — the payroll convention (a late hour costs 0.125 day).</summary>
-        private const decimal HoursPerDay = 8m;
+        /// <summary>Most hours one follow-up may deduct (one full day).</summary>
+        private const decimal MaxDeductionHours = 24m;
 
         /// <summary>Most days one follow-up may deduct — guards a mistyped amount.</summary>
         private const decimal MaxDeductionDays = 30m;
@@ -237,7 +237,7 @@ namespace Service.Services
             CancellationToken cancellationToken)
         {
             var date = request.Date ?? DateOnly.FromDateTime(DateTime.UtcNow);
-            var (multiplier, label) = ParseDeductionSize(request.DeductionSize, request.Description);
+            var (unit, size, label) = ParseDeductionSize(request.DeductionSize, request.Description);
 
             var existing = await unitOfWork.GetRepository<DeductionCandidate, int>()
                 .GetAllAsync(new DeductionCandidatesByEmployeesSpec([employee.Id]), cancellationToken);
@@ -258,8 +258,10 @@ namespace Service.Services
                         cancellationToken))
                 .ToList();
 
-            var (daily, _) = DeductionPricing.DailyRate(employee, date, sheets, assignments);
-            if (daily <= 0)
+            // The manager picks the size in hours or days; the money follows the month's
+            // rates (base ÷ calendar days, or ÷ assigned hours once the roster is complete).
+            var rates = DeductionPricing.Rates(employee, date, sheets, assignments);
+            if (!rates.Salaried)
             {
                 throw new BadRequestException(
                     "No salary is on file for this employee yet — add a salary or compensation before issuing a deduction.");
@@ -270,8 +272,10 @@ namespace Service.Services
                 EmployeeId = employee.Id,
                 DeductionDate = date,
                 IsSystemGenerated = false,
-                Amount = Math.Round(daily * multiplier, 2),
-                DeductionDays = multiplier,
+                Amount = rates.AmountFor(unit, size),
+                DeductionUnit = unit,
+                DeductionValue = size,
+                DeductionDays = rates.DaysFor(unit, size),
                 Reason = $"Deduction — {label}",
                 Note = OptionalText(request.Note, 1000, "note"),
                 IssuedBy = actorUserId,
@@ -280,7 +284,8 @@ namespace Service.Services
             }, cancellationToken);
         }
 
-        private static (decimal Multiplier, string Label) ParseDeductionSize(string? size, string? description)
+        private static (DeductionUnit Unit, decimal Value, string Label) ParseDeductionSize(
+            string? size, string? description)
         {
             var term = (size ?? string.Empty).Trim();
             var match = DeductionSizes.FirstOrDefault(s =>
@@ -295,7 +300,7 @@ namespace Service.Services
 
             if (match.Term is not null)
             {
-                return (match.Multiplier, match.Label);
+                return (DeductionUnit.Days, match.Multiplier, match.Label);
             }
 
             // Current clients send a free-form duration: "4 Hours", "2.5 Days".
@@ -306,10 +311,11 @@ namespace Service.Services
         }
 
         /// <summary>
-        /// Reads a free-form duration as a fraction of one paid day. Hours divide by the
-        /// eight-hour payroll day, so one hour costs 0.125 day — the late-penalty rate.
+        /// Reads a free-form duration ("4 Hours", "2.5 Days") as the unit and the size the
+        /// manager chose. The size is kept as typed — hours are priced at the hourly rate,
+        /// not converted into a fraction of a day.
         /// </summary>
-        private static (decimal Multiplier, string Label)? ParseDuration(string term)
+        private static (DeductionUnit Unit, decimal Value, string Label)? ParseDuration(string term)
         {
             var parts = term.Split(' ', StringSplitOptions.RemoveEmptyEntries);
             if (parts.Length != 2
@@ -320,18 +326,20 @@ namespace Service.Services
                 return null;
             }
 
-            var unit = parts[1];
-            var multiplier = unit.StartsWith("hour", StringComparison.OrdinalIgnoreCase)
-                ? amount / HoursPerDay
-                : unit.StartsWith("day", StringComparison.OrdinalIgnoreCase)
-                    ? amount
-                    : -1m;
-            if (multiplier <= 0 || multiplier > MaxDeductionDays)
+            var isHour = parts[1].StartsWith("hour", StringComparison.OrdinalIgnoreCase);
+            var isDay = parts[1].StartsWith("day", StringComparison.OrdinalIgnoreCase);
+            if (!isHour && !isDay)
             {
                 return null;
             }
 
-            var isHour = unit.StartsWith("hour", StringComparison.OrdinalIgnoreCase);
+            var unit = isHour ? DeductionUnit.Hours : DeductionUnit.Days;
+            var limit = isHour ? MaxDeductionHours : MaxDeductionDays;
+            if (amount > limit)
+            {
+                return null;
+            }
+
             var noun = (isHour, amount == 1m) switch
             {
                 (true, true) => "Hour",
@@ -339,7 +347,7 @@ namespace Service.Services
                 (false, true) => "Day",
                 (false, false) => "Days",
             };
-            return (multiplier, $"{amount.ToString("0.##", CultureInfo.InvariantCulture)} {noun}");
+            return (unit, amount, $"{amount.ToString("0.##", CultureInfo.InvariantCulture)} {noun}");
         }
 
         private async Task NotifyAsync(Employee employee, string title, string body, CancellationToken cancellationToken)

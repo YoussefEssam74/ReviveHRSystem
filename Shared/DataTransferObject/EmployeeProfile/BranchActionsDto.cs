@@ -8,6 +8,20 @@ public sealed class DeductionCandidateDto
     public string Employee { get; init; } = string.Empty;
     public decimal Amount { get; init; }
     public decimal DeductionDays { get; init; }
+
+    /// <summary>The size the manager chose — priced at the hourly (hours) or daily (days) rate.</summary>
+    public decimal DeductionValue { get; init; }
+    /// <summary>"Hours" | "Days".</summary>
+    public string DeductionUnit { get; init; } = "Days";
+
+    /// <summary>Salary ÷ the month's calendar days; 0 when no salary is on file.</summary>
+    public decimal DailyRate { get; init; }
+    /// <summary>Salary ÷ the month's assigned hours; 0 until the roster is complete.</summary>
+    public decimal HourlyRate { get; init; }
+    public bool HourlyRateReady { get; init; }
+    public decimal AssignedHours { get; init; }
+    public int MonthDays { get; init; }
+
     public string Reason { get; init; } = string.Empty;
     public string? Note { get; init; }
     public string Status { get; init; } = string.Empty;
@@ -17,6 +31,31 @@ public sealed class DeductionCandidateDto
     public string IssuedBy { get; init; } = string.Empty;
 }
 
+/// <summary>
+/// The live pricing of one deduction: both rates of the punished month plus the money
+/// a candidate size costs. The amount is 0 with a reason until the needed rate exists —
+/// the hourly rate only appears once the month's roster is fully assigned.
+/// </summary>
+public sealed class DeductionPricingDto
+{
+    public int CandidateId { get; init; }
+    public decimal DailyRate { get; init; }
+    public decimal HourlyRate { get; init; }
+    public bool HourlyRateReady { get; init; }
+    public decimal AssignedHours { get; init; }
+    public int MonthDays { get; init; }
+    public string DeductionUnit { get; init; } = "Days";
+    public decimal DeductionValue { get; init; }
+    /// <summary>Money for the requested size; 0 while the rate is unknown.</summary>
+    public decimal Amount { get; init; }
+    /// <summary>The same size in salary days, so payroll can keep counting days.</summary>
+    public decimal Days { get; init; }
+    /// <summary>Why the amount is still missing (null once it is priced).</summary>
+    public string? PendingReason { get; init; }
+    /// <summary>The arithmetic behind the amount — or the same pending reason in one line.</summary>
+    public string? Note { get; init; }
+}
+
 public sealed class CreateDeductionCandidateDto
 {
     public int EmployeeId { get; init; }
@@ -24,18 +63,34 @@ public sealed class CreateDeductionCandidateDto
     /// <summary>The day the deduction punishes (defaults to today when omitted).</summary>
     public DateOnly? Date { get; init; }
 
+    /// <summary>Explicit money override; use <see cref="Unit"/> + <see cref="Value"/> instead.</summary>
     public decimal Amount { get; init; }
+
+    /// <summary><c>hours</c> or <c>days</c> — how the manager sizes the deduction.</summary>
+    public string? Unit { get; init; }
+
+    /// <summary>The size itself; priced at the month's hourly (hours) or daily (days) rate.</summary>
+    public decimal? Value { get; init; }
+
     public string Reason { get; init; } = string.Empty;
     public string? Note { get; init; }
 }
 
 /// <summary>The branch's own decision on a deduction before HR applies it to payroll (mock §20).</summary>
-/// <param name="Decision"><c>approve</c> (branch approves), <c>reject</c> (final) or <c>edit</c> (amount re-price).</param>
+/// <param name="Decision"><c>approve</c> (branch approves), <c>reject</c> (final) or <c>edit</c> (re-price).</param>
 /// <param name="Amount">
 /// Optional revised amount — applied with the decision (approve/edit). Required for
 /// <c>edit</c>; must be positive.
 /// </param>
-public sealed record BranchDeductionReviewRequest(string Decision, decimal? Amount = null, decimal? Days = null);
+/// <param name="Days">Legacy day-based size (whole days); prefer <paramref name="Unit"/> + <paramref name="Value"/>.</param>
+/// <param name="Unit"><c>hours</c> or <c>days</c> — how the manager sized the deduction.</param>
+/// <param name="Value">The size itself, priced through the month's hourly (hours) or daily (days) rate.</param>
+public sealed record BranchDeductionReviewRequest(
+    string Decision,
+    decimal? Amount = null,
+    decimal? Days = null,
+    string? Unit = null,
+    decimal? Value = null);
 
 /// <summary>A warning notice awaiting HR filing (mock §20 Issue Warning Notice).</summary>
 public sealed class WarningNoticeDto

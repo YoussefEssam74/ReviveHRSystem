@@ -2925,7 +2925,16 @@ namespace Persistence.Data.Migrations
                         .ValueGeneratedOnAdd()
                         .HasPrecision(9, 2)
                         .HasColumnType("numeric(9,2)")
-                        .HasDefaultValue(1m);
+                        .HasDefaultValue(0m);
+
+                    b.Property<int>("DeductionUnit")
+                        .HasColumnType("integer");
+
+                    b.Property<decimal>("DeductionValue")
+                        .ValueGeneratedOnAdd()
+                        .HasPrecision(9, 2)
+                        .HasColumnType("numeric(9,2)")
+                        .HasDefaultValue(0m);
 
                     b.Property<int>("EmployeeId")
                         .HasColumnType("integer");
