@@ -8,14 +8,13 @@ const DEFAULT_EXPIRES_IN_SECONDS = 3600
 
 function toStoredSession(response: LoginResponse): StoredSession | null {
   const user = response.user
-  if (!response.accessToken || !user) return null
+  if (!user) return null
   return {
-    accessToken: response.accessToken,
-    refreshToken: response.refreshToken ?? undefined,
+    sessionKey: `${user.id}:${user.gymId ?? 'all'}:${Date.now()}`,
     expiresAt: Date.now() + (response.expiresInSeconds ?? DEFAULT_EXPIRES_IN_SECONDS) * 1000,
-    refreshExpiresAt: response.refreshExpiresInSeconds
+    sessionExpiresAt: response.refreshExpiresInSeconds
       ? Date.now() + response.refreshExpiresInSeconds * 1000
-      : undefined,
+      : Date.now() + 30 * 24 * 60 * 60 * 1000,
     user: {
       id: user.id ?? 0,
       email: user.email ?? '',

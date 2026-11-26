@@ -57,7 +57,7 @@ namespace ReviveHRSystem.IntegrationTests
             var gym = await builder.CreateGymWithStationAsync();
             var employee = await builder.CreateEmployeeAsync(gym);
             var token = await _fixture.GetAdminTokenAsync();
-            var created = await CreateRequestAsync(token, employee.FullName, "Day Off", FutureDate(3));
+            var created = await SeedPendingRequestAsync(token, employee.FullName, "Day Off", FutureDate(3));
 
             var request = _fixture.AuthorizedRequest(HttpMethod.Get, "/api/requests", null, token);
             var response = await _fixture.Client.SendAsync(request);
@@ -86,8 +86,8 @@ namespace ReviveHRSystem.IntegrationTests
             var employee = await builder.CreateEmployeeAsync(gym);
             var token = await _fixture.GetAdminTokenAsync();
 
-            var pending = await CreateRequestAsync(token, employee.FullName, "Day Off", FutureDate(5));
-            var approved = await CreateRequestAsync(token, employee.FullName, "Late Arrival", FutureDate(6));
+            var pending = await SeedPendingRequestAsync(token, employee.FullName, "Day Off", FutureDate(5));
+            var approved = await SeedPendingRequestAsync(token, employee.FullName, "Late Arrival", FutureDate(6));
             var approvedId = approved.GetProperty("data").GetProperty("id").GetInt32();
             await _fixture.Client.SendAsync(_fixture.AuthorizedRequest(
                 HttpMethod.Post, $"/api/requests/{approvedId}/decide",
@@ -111,8 +111,8 @@ namespace ReviveHRSystem.IntegrationTests
             var employee = await builder.CreateEmployeeAsync(gym);
             var token = await _fixture.GetAdminTokenAsync();
 
-            var dayOff = await CreateRequestAsync(token, employee.FullName, "Day Off", FutureDate(7));
-            await CreateRequestAsync(token, employee.FullName, "Sick Leave", FutureDate(8));
+            var dayOff = await SeedPendingRequestAsync(token, employee.FullName, "Day Off", FutureDate(7));
+            await SeedPendingRequestAsync(token, employee.FullName, "Sick Leave", FutureDate(8));
 
             var request = _fixture.AuthorizedRequest(HttpMethod.Get, "/api/requests?type=Day%20Off", null, token);
             var response = await _fixture.Client.SendAsync(request);
@@ -135,8 +135,8 @@ namespace ReviveHRSystem.IntegrationTests
 
             var spanStart = FutureDate(10);
             var spanEnd = FutureDate(12);
-            var spanning = await CreateRequestAsync(token, employee.FullName, "Day Off", spanStart, spanEnd);
-            var outside = await CreateRequestAsync(token, employee.FullName, "Day Off", FutureDate(20));
+            var spanning = await SeedPendingRequestAsync(token, employee.FullName, "Day Off", spanStart, spanEnd);
+            var outside = await SeedPendingRequestAsync(token, employee.FullName, "Day Off", FutureDate(20));
 
             // A day inside the [spanStart, spanEnd] window should match the range
             // request but not the one scheduled later.
@@ -162,8 +162,8 @@ namespace ReviveHRSystem.IntegrationTests
             var token = await _fixture.GetAdminTokenAsync();
 
             // Span [10, 12] overlaps the [8, 11] window; the 20th does not.
-            var overlapping = await CreateRequestAsync(token, employee.FullName, "Day Off", FutureDate(10), FutureDate(12));
-            var outside = await CreateRequestAsync(token, employee.FullName, "Day Off", FutureDate(20));
+            var overlapping = await SeedPendingRequestAsync(token, employee.FullName, "Day Off", FutureDate(10), FutureDate(12));
+            var outside = await SeedPendingRequestAsync(token, employee.FullName, "Day Off", FutureDate(20));
 
             var request = _fixture.AuthorizedRequest(
                 HttpMethod.Get, $"/api/requests?from={FutureDate(8)}&to={FutureDate(11)}", null, token);
@@ -199,8 +199,8 @@ namespace ReviveHRSystem.IntegrationTests
             var other = await builder.CreateEmployeeAsync(gym);
             var token = await _fixture.GetAdminTokenAsync();
 
-            var karimRequest = await CreateRequestAsync(token, karim.FullName, "Day Off", FutureDate(6));
-            var otherRequest = await CreateRequestAsync(token, other.FullName, "Day Off", FutureDate(7));
+            var karimRequest = await SeedPendingRequestAsync(token, karim.FullName, "Day Off", FutureDate(6));
+            var otherRequest = await SeedPendingRequestAsync(token, other.FullName, "Day Off", FutureDate(7));
 
             // The helper names employees "IT Employee {unique 8-char suffix}", so a
             // suffix search must hit only the first employee (and must be case-insensitive).
@@ -225,8 +225,8 @@ namespace ReviveHRSystem.IntegrationTests
             var employee = await builder.CreateEmployeeAsync(gym);
             var token = await _fixture.GetAdminTokenAsync();
 
-            var urgent = await CreateRequestAsync(token, employee.FullName, "Sick Leave", FutureDate(4));
-            await CreateRequestAsync(token, employee.FullName, "Day Off", FutureDate(9));
+            var urgent = await SeedPendingRequestAsync(token, employee.FullName, "Sick Leave", FutureDate(4));
+            await SeedPendingRequestAsync(token, employee.FullName, "Day Off", FutureDate(9));
 
             var request = _fixture.AuthorizedRequest(HttpMethod.Get, "/api/requests?quick=urgent", null, token);
             var response = await _fixture.Client.SendAsync(request);
@@ -263,7 +263,7 @@ namespace ReviveHRSystem.IntegrationTests
             var gym = await builder.CreateGymWithStationAsync();
             var employee = await builder.CreateEmployeeAsync(gym);
             var token = await _fixture.GetAdminTokenAsync();
-            var created = await CreateRequestAsync(token, employee.FullName, "Day Off", FutureDate(3));
+            var created = await SeedPendingRequestAsync(token, employee.FullName, "Day Off", FutureDate(3));
             var id = created.GetProperty("data").GetProperty("id").GetInt32();
 
             var request = _fixture.AuthorizedRequest(HttpMethod.Get, $"/api/requests/{id}", null, token);
@@ -287,7 +287,7 @@ namespace ReviveHRSystem.IntegrationTests
         // ------------------------------------------------------------------
 
         [Fact]
-        public async Task CreateRequest_ByName_Returns201PendingHRReview()
+        public async Task CreateRequest_ByHr_IsApprovedOutright()
         {
             var builder = new TestDataBuilder(_fixture.Services);
             var gym = await builder.CreateGymWithStationAsync();
@@ -301,11 +301,52 @@ namespace ReviveHRSystem.IntegrationTests
             Assert.Equal(HttpStatusCode.Created, response.StatusCode);
             var data = body.GetProperty("data");
             Assert.True(data.GetProperty("id").GetInt32() > 0);
+            // HR filing the request satisfies both stages — nobody approves their own entry.
+            Assert.Equal("Approved", data.GetProperty("status").GetString());
+
+            var steps = data.GetProperty("timeline").EnumerateArray()
+                .Select(step => step.GetProperty("step").GetString())
+                .ToList();
+            Assert.Equal(["Submitted", "BM Approved", "HR Approved"], steps);
+        }
+
+        [Fact]
+        public async Task CreateRequest_ByBranchManager_LeavesOnlyHrToSign()
+        {
+            var builder = new TestDataBuilder(_fixture.Services);
+            var gym = await builder.CreateGymWithStationAsync();
+            var employee = await builder.CreateEmployeeAsync(gym);
+
+            // The desk files on the employee's behalf: its own stage is approved by the
+            // filing, HR still signs off. The filer is a gym-scoped Employee account
+            // holding the Branch Manager role — an HR-side account would approve outright.
+            var manager = await builder.CreateUserAsync(UserType.Employee, [gym]);
+            await builder.GrantPermissionAsync(manager.UserId, "requests.view");
+            using (var scope = _fixture.Services.CreateScope())
+            {
+                var db = scope.ServiceProvider.GetRequiredService<Presistence.Data.ReviveHrDbContext>();
+                db.UserRoles.Add(new DomainLayer.Models.UserModule.UserRole
+                {
+                    UserId = manager.UserId,
+                    GymId = gym.GymId,
+                    RoleName = Shared.Authorization.RoleNames.BranchManager,
+                });
+                await db.SaveChangesAsync();
+            }
+            var token = await LoginAsync(manager.Email, manager.Password, gym.GymId);
+
+            var response = await _fixture.Client.SendAsync(_fixture.AuthorizedRequest(
+                HttpMethod.Post, "/api/requests", new { employee = employee.FullName, type = "Day Off", requestedDate = FutureDate(4), reason = "Branch cover" }, token));
+            var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+
+            Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+            var data = body.GetProperty("data");
             Assert.Equal("Pending HR Review", data.GetProperty("status").GetString());
 
-            var timeline = data.GetProperty("timeline").EnumerateArray().ToList();
-            Assert.Equal("Submitted", timeline[0].GetProperty("step").GetString());
-            Assert.Equal("HR Review", timeline[^1].GetProperty("step").GetString());
+            var steps = data.GetProperty("timeline").EnumerateArray()
+                .Select(step => step.GetProperty("step").GetString())
+                .ToList();
+            Assert.Equal(["Submitted", "BM Approved", "HR Review"], steps);
         }
 
         [Fact]
@@ -345,7 +386,7 @@ namespace ReviveHRSystem.IntegrationTests
             var employee = await builder.CreateEmployeeAsync(gym);
             await builder.SetLeaveBalanceAsync(employee.EmployeeId, total: 10, used: 2);
             var token = await _fixture.GetAdminTokenAsync();
-            var created = await CreateRequestAsync(token, employee.FullName, "Day Off", FutureDate(3));
+            var created = await SeedPendingRequestAsync(token, employee.FullName, "Day Off", FutureDate(3));
             var id = created.GetProperty("data").GetProperty("id").GetInt32();
 
             var response = await _fixture.Client.SendAsync(_fixture.AuthorizedRequest(
@@ -368,7 +409,7 @@ namespace ReviveHRSystem.IntegrationTests
             var employee = await builder.CreateEmployeeAsync(gym);
             await builder.SetLeaveBalanceAsync(employee.EmployeeId, total: 10, used: 2);
             var token = await _fixture.GetAdminTokenAsync();
-            var created = await CreateRequestAsync(token, employee.FullName, "Day Off", FutureDate(3));
+            var created = await SeedPendingRequestAsync(token, employee.FullName, "Day Off", FutureDate(3));
             var id = created.GetProperty("data").GetProperty("id").GetInt32();
 
             var response = await _fixture.Client.SendAsync(_fixture.AuthorizedRequest(
@@ -389,7 +430,7 @@ namespace ReviveHRSystem.IntegrationTests
             var gym = await builder.CreateGymWithStationAsync();
             var employee = await builder.CreateEmployeeAsync(gym);
             var token = await _fixture.GetAdminTokenAsync();
-            var created = await CreateRequestAsync(token, employee.FullName, "Day Off", FutureDate(3));
+            var created = await SeedPendingRequestAsync(token, employee.FullName, "Day Off", FutureDate(3));
             var id = created.GetProperty("data").GetProperty("id").GetInt32();
 
             var response = await _fixture.Client.SendAsync(_fixture.AuthorizedRequest(
@@ -405,7 +446,7 @@ namespace ReviveHRSystem.IntegrationTests
             var gym = await builder.CreateGymWithStationAsync();
             var employee = await builder.CreateEmployeeAsync(gym);
             var token = await _fixture.GetAdminTokenAsync();
-            var created = await CreateRequestAsync(token, employee.FullName, "Resignation", FutureDate(3));
+            var created = await SeedPendingRequestAsync(token, employee.FullName, "Resignation", FutureDate(3));
             var id = created.GetProperty("data").GetProperty("id").GetInt32();
 
             var response = await _fixture.Client.SendAsync(_fixture.AuthorizedRequest(
@@ -424,7 +465,7 @@ namespace ReviveHRSystem.IntegrationTests
             var gym = await builder.CreateGymWithStationAsync();
             var employee = await builder.CreateEmployeeAsync(gym);
             var token = await _fixture.GetAdminTokenAsync();
-            var created = await CreateRequestAsync(token, employee.FullName, "Day Off", FutureDate(3));
+            var created = await SeedPendingRequestAsync(token, employee.FullName, "Day Off", FutureDate(3));
             var id = created.GetProperty("data").GetProperty("id").GetInt32();
 
             await _fixture.Client.SendAsync(_fixture.AuthorizedRequest(
@@ -447,7 +488,7 @@ namespace ReviveHRSystem.IntegrationTests
             var employee = await builder.CreateEmployeeAsync(gym);
             await builder.SetLeaveBalanceAsync(employee.EmployeeId, total: 10, used: 2);
             var token = await _fixture.GetAdminTokenAsync();
-            var created = await CreateRequestAsync(token, employee.FullName, "Day Off", FutureDate(3));
+            var created = await SeedPendingRequestAsync(token, employee.FullName, "Day Off", FutureDate(3));
             var id = created.GetProperty("data").GetProperty("id").GetInt32();
 
             await _fixture.Client.SendAsync(_fixture.AuthorizedRequest(
@@ -470,7 +511,7 @@ namespace ReviveHRSystem.IntegrationTests
             var gym = await builder.CreateGymWithStationAsync();
             var employee = await builder.CreateEmployeeAsync(gym);
             var token = await _fixture.GetAdminTokenAsync();
-            var created = await CreateRequestAsync(token, employee.FullName, "Day Off", PastDate(3));
+            var created = await SeedPendingRequestAsync(token, employee.FullName, "Day Off", PastDate(3));
             var id = created.GetProperty("data").GetProperty("id").GetInt32();
 
             await _fixture.Client.SendAsync(_fixture.AuthorizedRequest(
@@ -496,8 +537,8 @@ namespace ReviveHRSystem.IntegrationTests
             await builder.SetLeaveBalanceAsync(employee.EmployeeId, total: 10, used: 10); // exhausted → unpaid
             var token = await _fixture.GetAdminTokenAsync();
 
-            var first = await CreateRequestAsync(token, employee.FullName, "Day Off", FutureDate(3));
-            var second = await CreateRequestAsync(token, employee.FullName, "Day Off", FutureDate(4));
+            var first = await SeedPendingRequestAsync(token, employee.FullName, "Day Off", FutureDate(3));
+            var second = await SeedPendingRequestAsync(token, employee.FullName, "Day Off", FutureDate(4));
             var ids = new[]
             {
                 first.GetProperty("data").GetProperty("id").GetInt32(),
@@ -525,7 +566,7 @@ namespace ReviveHRSystem.IntegrationTests
             var gym = await builder.CreateGymWithStationAsync();
             var employee = await builder.CreateEmployeeAsync(gym);
             var token = await _fixture.GetAdminTokenAsync();
-            var created = await CreateRequestAsync(token, employee.FullName, "Day Off", FutureDate(3));
+            var created = await SeedPendingRequestAsync(token, employee.FullName, "Day Off", FutureDate(3));
             var id = created.GetProperty("data").GetProperty("id").GetInt32();
 
             var archived = await _fixture.Client.SendAsync(_fixture.AuthorizedRequest(
@@ -536,11 +577,12 @@ namespace ReviveHRSystem.IntegrationTests
                 HttpMethod.Post, $"/api/requests/{id}/restore", null, token));
             Assert.Equal(HttpStatusCode.OK, restored.StatusCode);
 
-            // No decisions recorded → restore lands back at the BM-pending stage.
+            // The seed carries a desk approval, so restore lands back in HR review —
+            // the status the request held before it was archived.
             var detail = await _fixture.Client.SendAsync(_fixture.AuthorizedRequest(
                 HttpMethod.Get, $"/api/requests/{id}", null, token));
             var body = await detail.Content.ReadFromJsonAsync<JsonElement>();
-            Assert.Equal("Pending", body.GetProperty("data").GetProperty("status").GetString());
+            Assert.Equal("Pending HR Review", body.GetProperty("data").GetProperty("status").GetString());
         }
 
         // ------------------------------------------------------------------
@@ -554,7 +596,7 @@ namespace ReviveHRSystem.IntegrationTests
             var gym = await builder.CreateGymWithStationAsync();
             var employee = await builder.CreateEmployeeAsync(gym);
             var token = await _fixture.GetAdminTokenAsync();
-            await CreateRequestAsync(token, employee.FullName, "Day Off", FutureDate(3));
+            await SeedPendingRequestAsync(token, employee.FullName, "Day Off", FutureDate(3));
 
             var request = _fixture.AuthorizedRequest(
                 HttpMethod.Get, $"/api/employees/{employee.EmployeeId}/requests", null, token);
@@ -710,17 +752,72 @@ namespace ReviveHRSystem.IntegrationTests
         // Helpers
         // ------------------------------------------------------------------
 
-        private async Task<JsonElement> CreateRequestAsync(string token, string employeeName, string type, string requestedDate, string? endDate = null)
+        /// <summary>
+        /// Seeds a request the desk already approved into HR review — the state the
+        /// listing and HR-decision tests exercise. It deliberately bypasses the create
+        /// endpoint: filing through the API satisfies the filer's own stage (HR approves
+        /// outright, the desk approves the manager stage), so it never leaves a row waiting.
+        /// </summary>
+        private async Task<JsonElement> SeedPendingRequestAsync(string _, string employeeName, string type, string requestedDate, string? endDate = null)
         {
-            var response = await _fixture.Client.SendAsync(_fixture.AuthorizedRequest(
-                HttpMethod.Post, "/api/requests", new { employee = employeeName, type, requestedDate, endDate = endDate ?? (string?)null }, token));
-            Assert.Equal(HttpStatusCode.Created, response.StatusCode);
-            return await response.Content.ReadFromJsonAsync<JsonElement>();
+            using var scope = _fixture.Services.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<Presistence.Data.ReviveHrDbContext>();
+            var employeeId = await db.Employees.Where(e => e.FullName == employeeName).Select(e => e.Id).FirstAsync();
+            var start = DateOnly.Parse(requestedDate);
+            var request = new DomainLayer.Models.RequestModule.EmployeeRequest
+            {
+                EmployeeId = employeeId,
+                Type = type,
+                RequestDate = start,
+                TargetStartDate = start,
+                TargetEndDate = string.IsNullOrWhiteSpace(endDate) ? null : DateOnly.Parse(endDate),
+                Details = $"Integration-test {type}",
+                Status = DomainLayer.Models.RequestModule.Enums.RequestStatus.PendingHRReview,
+                SubmittedAt = DateTime.UtcNow,
+            };
+            db.EmployeeRequests.Add(request);
+            await db.SaveChangesAsync();
+
+            // A decision row needs a real actor; the seeded admin stands in for the desk.
+            var decidedBy = await db.Users.Where(u => u.Email == "admin@revive.hr").Select(u => u.Id).FirstAsync();
+            db.RequestDecisions.Add(new DomainLayer.Models.RequestModule.RequestDecision
+            {
+                RequestId = request.Id,
+                Stage = DomainLayer.Models.RequestModule.Enums.ApprovalStage.BranchManager,
+                Decision = DomainLayer.Models.RequestModule.Enums.DecisionOutcome.Approved,
+                Comment = "Integration-test desk approval.",
+                DecidedBy = decidedBy,
+                DecidedAt = DateTime.UtcNow,
+            });
+            await db.SaveChangesAsync();
+
+            return JsonSerializer.SerializeToElement(new { data = new { id = request.Id, status = "Pending HR Review" } });
+        }
+
+        /// <summary>Signs in as a seeded user, selecting the given gym when the login asks.</summary>
+        private async Task<string> LoginAsync(string email, string password, int gymId)
+        {
+            var login = await _fixture.Client.PostAsJsonAsync("/api/auth/login", new { email, password });
+            login.EnsureSuccessStatusCode();
+            var body = await login.Content.ReadFromJsonAsync<JsonElement>();
+
+            if (body.TryGetProperty("accessToken", out var direct) && direct.ValueKind == JsonValueKind.String)
+            {
+                return direct.GetString()!;
+            }
+
+            var select = await _fixture.Client.PostAsJsonAsync("/api/auth/login/select-gym", new
+            {
+                gymId,
+                tempSessionToken = body.GetProperty("tempSessionToken").GetString()!,
+            });
+            select.EnsureSuccessStatusCode();
+            var selected = await select.Content.ReadFromJsonAsync<JsonElement>();
+            return selected.GetProperty("accessToken").GetString()!;
         }
 
         private async Task<decimal> GetLeaveBalanceAsync(int employeeId)
-        {
-            var token = await _fixture.GetAdminTokenAsync();
+        {            var token = await _fixture.GetAdminTokenAsync();
             var request = _fixture.AuthorizedRequest(
                 HttpMethod.Get, $"/api/employees/{employeeId}/leave-balance", null, token);
             var response = await _fixture.Client.SendAsync(request);

@@ -922,6 +922,7 @@ namespace Service.Services
         internal static string RequesterRoleLabel(UserType type) => type switch
         {
             UserType.TopManagement => "Top Management",
+            UserType.HRManager => "HR Manager",
             UserType.HR => "HR Manager",
             _ => "Employee",
         };

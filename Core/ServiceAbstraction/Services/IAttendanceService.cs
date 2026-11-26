@@ -15,7 +15,11 @@ namespace ServiceAbstraction.Services
         /// Station login: validates the 6-digit enrollment code (active and unexpired)
         /// and returns the gym context plus an opaque station session token.
         /// </summary>
-        Task<StationLoginResponse> StationLoginAsync(StationLoginRequest request, CancellationToken cancellationToken = default);
+        Task<StationLoginResponse> StationLoginAsync(
+            StationLoginRequest request,
+            string? ipAddress = null,
+            string? deviceInfo = null,
+            CancellationToken cancellationToken = default);
 
         /// <summary>
         /// Records a biometric check-in/check-out event after ADR-004 cross-gym validation.

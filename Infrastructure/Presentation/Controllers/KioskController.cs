@@ -33,7 +33,11 @@ namespace Presentation.Controllers
         [EnableRateLimiting("station-login")]
         public async Task<ActionResult<StationLoginResponse>> Login([FromBody] StationLoginRequest request, CancellationToken cancellationToken)
         {
-            var response = await _attendanceService.StationLoginAsync(request, cancellationToken);
+            var response = await _attendanceService.StationLoginAsync(
+                request,
+                HttpContext.Connection.RemoteIpAddress?.ToString(),
+                Request.Headers.UserAgent.ToString(),
+                cancellationToken);
 
             if (!string.IsNullOrEmpty(response.Token))
             {
@@ -45,14 +49,26 @@ namespace Presentation.Controllers
                     new CookieOptions
                     {
                         HttpOnly = true,
-                        Secure = Request.IsHttps,
-                        SameSite = SameSiteMode.Lax,
+                        Secure = Request.IsHttps
+                            || Request.Host.Host.Equals("localhost", StringComparison.OrdinalIgnoreCase)
+                            || Request.Host.Host.Equals("127.0.0.1", StringComparison.OrdinalIgnoreCase),
+                        SameSite = Uri.TryCreate(Request.Headers.Origin.ToString(), UriKind.Absolute, out var origin)
+                            && !origin.Host.Equals(Request.Host.Host, StringComparison.OrdinalIgnoreCase)
+                                ? SameSiteMode.None
+                                : SameSiteMode.Lax,
                         Path = "/",
                         Expires = response.SessionExpiresAtUtc
                     });
             }
 
-            return Ok(response);
+            return Ok(Request.Headers.ContainsKey("Origin")
+                ? new StationLoginResponse
+                {
+                    GymId = response.GymId,
+                    GymName = response.GymName,
+                    SessionExpiresAtUtc = response.SessionExpiresAtUtc,
+                }
+                : response);
         }
 
         #endregion

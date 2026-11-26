@@ -31,6 +31,22 @@ const EventsPage = lazy(() => import('../features/events/pages/EventsPage'))
 const HrTeamPage = lazy(() => import('../features/hr-team/pages/HrTeamPage'))
 const SubscriptionsPage = lazy(() => import('../features/subscriptions/pages/SubscriptionsPage'))
 
+// Super Admin console (platform owner) — docs/architecture/super-admin-api.md.
+const PlatformLayout = lazy(() =>
+  import('../features/platform/components/PlatformLayout').then((m) => ({ default: m.PlatformLayout })),
+)
+const PlatformDashboardPage = lazy(() => import('../features/platform/pages/PlatformDashboardPage'))
+const PlatformCompaniesPage = lazy(() => import('../features/platform/pages/PlatformCompaniesPage'))
+const PlatformCompanyDetailPage = lazy(() => import('../features/platform/pages/PlatformCompanyDetailPage'))
+const PlatformUsersPage = lazy(() => import('../features/platform/pages/PlatformUsersPage'))
+const PlatformUserDetailPage = lazy(() => import('../features/platform/pages/PlatformUserDetailPage'))
+const PlatformHrManagersPage = lazy(() => import('../features/platform/pages/PlatformHrManagersPage'))
+const PlatformBillingPage = lazy(() => import('../features/platform/pages/PlatformBillingPage'))
+const PlatformRevenuePage = lazy(() => import('../features/platform/pages/PlatformRevenuePage'))
+const PlatformRevenueDetailPage = lazy(() => import('../features/platform/pages/PlatformRevenueDetailPage'))
+const PlatformRolesPage = lazy(() => import('../features/platform/pages/PlatformRolesPage'))
+const PlatformSettingsPage = lazy(() => import('../features/platform/pages/PlatformSettingsPage'))
+
 // Employee portal pages (Mock UI/Employee) — built per phase.
 const EmployeeDashboardPage = lazy(() => import('../features/portal/pages/EmployeeDashboardPage'))
 const MyRequestsPage = lazy(() => import('../features/portal/pages/MyRequestsPage'))
@@ -138,6 +154,38 @@ export const router = createBrowserRouter([
       { path: 'settings', element: <Page><SettingsPage /></Page> },
       // Fallback for any unknown console sub-path.
       { path: '*', element: <ConsolePlaceholder /> },
+    ],
+  },
+  {
+    // Super Admin console: the platform owner's surface, above every company.
+    // PlatformLayout carries its own guard (Top Management / HR Manager) and
+    // its own shell, so no RequireAuth/ConsoleLayout wrapper is needed.
+    path: '/platform',
+    element: (
+      <RequireAuth>
+        <Page>
+          <PlatformLayout />
+        </Page>
+      </RequireAuth>
+    ),
+    children: [
+      { index: true, element: <Navigate to="/platform/dashboard" replace /> },
+      { path: 'dashboard', element: <Page><PlatformDashboardPage /></Page> },
+      { path: 'companies', element: <Page><PlatformCompaniesPage /></Page> },
+      { path: 'companies/:id', element: <Page><PlatformCompanyDetailPage /></Page> },
+      { path: 'users', element: <Page><PlatformUsersPage /></Page> },
+      { path: 'users/:id', element: <Page><PlatformUserDetailPage /></Page> },
+      { path: 'hr-managers', element: <Page><PlatformHrManagersPage /></Page> },
+      { path: 'billing', element: <Page><PlatformBillingPage /></Page> },
+      { path: 'revenue', element: <Page><PlatformRevenuePage /></Page> },
+      // Each headline revenue figure opens its own breakdown (mock parity).
+      { path: 'revenue/:metric', element: <Page><PlatformRevenueDetailPage /></Page> },
+      // Plans are the side rail of Billing & quotas (mock parity) — the old route
+      // stays as a deep-link so bookmarks keep working.
+      { path: 'plans', element: <Navigate to="/platform/billing" replace /> },
+      { path: 'roles', element: <Page><PlatformRolesPage /></Page> },
+      { path: 'settings', element: <Page><PlatformSettingsPage /></Page> },
+      { path: '*', element: <Navigate to="/platform/dashboard" replace /> },
     ],
   },
   {

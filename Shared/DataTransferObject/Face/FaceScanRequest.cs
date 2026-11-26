@@ -27,4 +27,12 @@ public sealed class FaceScanRequest
     /// silently.
     /// </summary>
     public bool ConfirmCheckout { get; init; }
+
+    /// <summary>
+    /// Employee number shown in the "check out now?" prompt, sent back with the
+    /// confirmation so the retried scan can be a fresh frame without risking a punch on
+    /// whoever else happens to be in front of the camera.
+    /// </summary>
+    [StringLength(32)]
+    public string? ConfirmEmployeeId { get; init; }
 }

@@ -1,8 +1,8 @@
 /**
- * Seeded gym branding. The API has no logo field yet, so the client maps the
- * known development gyms onto the files under Client/public/gym-logos/. Real
- * logos can replace those files without touching the components; an unknown gym
- * falls back to a monogram of its name.
+ * Gym branding, in fallback order: the logo uploaded for the gym (streamed by
+ * GET /api/gyms/{id}/logo), then the bundled development assets under
+ * Client/public/gym-logos/, then a monogram of the gym name. A gym created
+ * through the UI therefore gets its own logo without a frontend redeploy.
  */
 const LOGO_BY_NAME: Record<string, string> = {
   'revive main gym': '/gym-logos/revive-main-gym.svg',
@@ -32,6 +32,15 @@ export function gymLogoUrl(gym: GymBrandInput | null | undefined): string | null
 
   const id = gym.id ?? gym.gymId
   return id != null ? LOGO_BY_ID[id] ?? null : null
+}
+
+/**
+ * Authenticated endpoint that streams the gym's uploaded logo, or null when the
+ * gym is not identified yet. Answers 404 when nothing has been uploaded.
+ */
+export function gymLogoApiPath(gym: GymBrandInput | null | undefined): string | null {
+  const id = gym?.id ?? gym?.gymId
+  return id != null ? `/api/gyms/${id}/logo` : null
 }
 
 /** 1–2 letters for the logo fallback (the first two words of the gym name). */

@@ -23,7 +23,7 @@ import {
   type PayrollSheet,
   type PayrollDeductionDetail,
 } from '../api/payroll.api'
-import { getOwnAttendance, getOwnSchedule, type LeaveBalanceResponse } from '../api/attendance.api'
+import { getOwnAttendance, getOwnSchedule, type LeaveBalanceResponse, type ScheduleDay } from '../api/attendance.api'
 import { EmptyState, ProgressBar } from '../../../components/ui/primitives'
 import { ErrorState, LoadingState } from '../../../components/async-state'
 import { Skeleton } from '../../../components/ui/skeleton'
@@ -42,9 +42,21 @@ import {
 } from '../../../lib/format'
 import { cn } from '../../../lib/utils'
 
-/** Gross of a period: base + bonuses + overtime pay + the gym's raise slice (mock §8). */
+/** Gross of a period: base + bonuses + overtime — the raise already sits inside base. */
 function grossPay(sheet: PayrollSheet): number {
-  return sheet.baseSalary + sheet.totalBonuses + (sheet.overtimePay ?? 0) + (sheet.annualIncrease ?? 0)
+  return sheet.baseSalary + sheet.totalBonuses + (sheet.overtimePay ?? 0)
+}
+
+const round2 = (value: number) => Math.round(value * 100) / 100
+
+/** Hours a scheduled day lasts; an overnight shift wraps past midnight. */
+function shiftHoursOf(day: ScheduleDay): number {
+  if (!day.start || !day.end) return 0
+  const [startHour, startMinute = 0] = day.start.split(':').map(Number)
+  const [endHour, endMinute = 0] = day.end.split(':').map(Number)
+  let minutes = endHour * 60 + endMinute - (startHour * 60 + startMinute)
+  if (minutes <= 0) minutes += 24 * 60
+  return minutes / 60
 }
 
 /** Dot colour per status tone (the breakdown table's status marker). */
@@ -145,12 +157,12 @@ export default function MyPayrollPage() {
 
 function PayrollSnapshotCard({ sheet, employeeId }: { sheet: PayrollSheet; employeeId: number }) {
   const { t } = useTranslation()
-  // The card reads top-down as net pay − deductions = total payout: "Net Pay" is the
-  // period's pay before deductions (gross earnings), and the closing row is the amount
-  // actually left to pay out.
+  // Reading order: earnings − deductions = the payout. The donut's green arc is what
+  // is actually paid out, the red arc is what the period withheld, and its centre shows
+  // the payout — the net figure the employee receives, not the gross earnings.
+  const earnings = grossPay(sheet)
   const deductions = sheet.totalDeductions
-  const netPay = grossPay(sheet) || sheet.netSalary + deductions
-  const totalPayout = sheet.netSalary
+  const totalPayout = sheet.netSalary || Math.max(0, earnings - deductions)
 
   return (
     <section className="card p-2.5 sm:p-3">
@@ -164,12 +176,12 @@ function PayrollSnapshotCard({ sheet, employeeId }: { sheet: PayrollSheet; emplo
         {/* Left half: the money of this period */}
         <div className="flex items-center gap-3 lg:pe-4">
           <DonutChart
-            netPay={netPay}
+            netPay={totalPayout}
             deductions={deductions}
-            netPayLabel={t('Net Pay')}
-            netPayValue={formatEGP(netPay)}
-            ariaLabel={t('Payroll split: net pay {{net}}, deductions {{deductions}}', {
-              net: formatEGP(netPay),
+            netPayLabel={t('Total Payout')}
+            netPayValue={formatEGP(totalPayout)}
+            ariaLabel={t('Payroll split: total payout {{net}}, deductions {{deductions}}', {
+              net: formatEGP(totalPayout),
               deductions: formatEGP(deductions),
             })}
           />
@@ -178,11 +190,11 @@ function PayrollSnapshotCard({ sheet, employeeId }: { sheet: PayrollSheet; emplo
             <div className="flex items-center justify-between gap-2">
               <dt className="flex min-w-0 items-center gap-1.5 text-charcoal-600">
                 <span className="h-2 w-2 flex-shrink-0 rounded-full bg-brand-500" aria-hidden="true" />
-                <span className="truncate">{t('Net Pay')}</span>
+                <span className="truncate">{t('Gross earnings')}</span>
               </dt>
-              <dd className="flex-shrink-0 font-semibold text-charcoal-900">{formatEGP(netPay)}</dd>
+              <dd className="flex-shrink-0 font-semibold text-charcoal-900">{formatEGP(earnings)}</dd>
             </div>
-            {/* Bonus rides inside the net figure — same row rhythm as the other
+            {/* Bonus rides inside the earnings figure — same row rhythm as the other
                 legend entries, marked by its purple dot. */}
             <div className="flex items-center justify-between gap-2">
               <dt className="flex min-w-0 items-center gap-1.5 text-charcoal-600">
@@ -243,11 +255,6 @@ function annualLeaveOpensOn(hireDate: string | null | undefined): { opensOn: Dat
  * carries anything taken ahead of the accrual as an unpaid deficit that only costs
  * money if the employee leaves before the accrual catches up.
  */
-/** The raise is applied when January's account is closed — i.e. from the year's first month. */
-function nextRaiseMonthYear(today: Date): number {
-  return today.getMonth() === 0 ? today.getFullYear() : today.getFullYear() + 1
-}
-
 /** "November 2026" → "2026-11"; falls back to the current month when unparsable. */
 function periodMonthKey(period: string, today: Date): string {
   const parsed = new Date(`${period} 1`)
@@ -287,33 +294,36 @@ function MonthAndRaiseBlock({ sheet, employeeId }: { sheet: PayrollSheet; employ
   const totals = attendanceQuery.data?.totals ?? null
   const attended = totals?.present ?? null
 
-  // Priced on the server's fixed 30-day month (DeductionPricing.StandardDays), so the
-  // day the employee sees is the day a deduction charges.
-  const dailyRate = sheet.baseSalary > 0 ? Math.round((sheet.baseSalary / 30) * 100) / 100 : 0
+  // Pricing the month needs the whole roster: a partially assigned month would price
+  // days the BM has not chosen yet, so both rates stay blank until every day is set.
+  const fullyAssigned = scheduleReady && scheduleDays.length >= daysInMonth
+
+  // Assigned hours of the month: each scheduled shift's own length (3h one day, 6h the
+  // next), because a fixed daily figure cannot express a varying roster.
+  const assignedHours = round2(
+    scheduleDays.reduce((total, day) => total + (day.isOff ? 0 : shiftHoursOf(day)), 0),
+  )
+
+  const dailyRate = fullyAssigned && sheet.baseSalary > 0 ? round2(sheet.baseSalary / daysInMonth) : null
+  const hourlyRate =
+    fullyAssigned && assignedHours > 0 && sheet.baseSalary > 0 ? round2(sheet.baseSalary / assignedHours) : null
 
   const percent = sheet.annualIncreasePercent ?? null
-  // The snapshot's own slice is still 0 while the period is open — price the policy
-  // against the base salary instead so the raise is never shown as zero.
-  const raise =
-    sheet.annualIncrease != null && sheet.annualIncrease > 0
-      ? sheet.annualIncrease
-      : percent != null && sheet.baseSalary > 0
-        ? Math.round((sheet.baseSalary * percent) / 100)
-        : null
+  // The API reports the raise only for the period that contains the work anniversary;
+  // every other month is 0 rather than a projection.
+  const raise = sheet.annualIncrease ?? 0
 
   const rows: { label: string; value: string; tone?: string }[] = [
     { label: t('Shift Days This Month'), value: scheduleReady ? String(shiftDays) : '—' },
     { label: t('Actual Days This Month'), value: attended != null ? String(attended) : t('Loading…') },
     { label: t('Weekly Off'), value: scheduleReady ? String(weeklyOff) : '—' },
-    { label: t('Daily Rate'), value: sheet.baseSalary > 0 ? formatEGP(dailyRate) : '—' },
+    { label: t('Assigned Hours This Month'), value: fullyAssigned ? `${formatNumber(assignedHours)} h` : '—' },
+    { label: t('Daily Rate'), value: dailyRate != null ? formatEGP(dailyRate) : '—' },
+    { label: t('Hourly Rate'), value: hourlyRate != null ? formatEGP(hourlyRate) : '—' },
     {
       label: t('Annual Increase'),
-      value: raise != null ? `${formatEGP(raise)}${percent != null ? ` · ${percent}%` : ''}` : '—',
-      tone: 'text-brand-600',
-    },
-    {
-      label: t('Applied With January Payroll'),
-      value: t('January {{year}}', { year: nextRaiseMonthYear(ACCRUAL_TODAY).toString() }),
+      value: `${formatEGP(raise)}${raise > 0 && percent != null ? ` · ${percent}%` : ''}`,
+      tone: raise > 0 ? 'text-brand-600' : undefined,
     },
   ]
 
@@ -681,15 +691,8 @@ function SheetDetail({ sheet, onSlip }: { sheet: PayrollSheet; onSlip: () => voi
             <span className="text-[10px] text-red-600">{t('{{count}} unpaid', { count: sheet.unpaidLeaveDays ?? 0 })}</span>
           )}
         </div>
-        <div className="mt-2 grid grid-cols-3 gap-1.5 sm:grid-cols-7">
+        <div className="mt-2 grid grid-cols-2 gap-1.5 sm:grid-cols-4">
           <StatTile label={t('Actual Attended')} value={String(sheet.daysWorked ?? 0)} bg="bg-brand-50" text="text-brand-600" />
-          <StatTile label={t('Late')} value={String(sheet.lateCount ?? 0)} bg="bg-amber-50" text="text-amber-600" />
-          <StatTile
-            label={t('Early Leave')}
-            value={String(sheet.earlyLeaveCount ?? 0)}
-            bg="bg-purple-50"
-            text="text-purple-600"
-          />
           <StatTile label={t('Sick Leave')} value={String(sheet.sickLeaveDays ?? 0)} bg="bg-blue-50" text="text-blue-600" />
           <StatTile label={t('Annual Leave')} value={String(sheet.annualLeaveDays ?? 0)} bg="bg-blue-50" text="text-blue-600" />
           <StatTile
@@ -697,14 +700,6 @@ function SheetDetail({ sheet, onSlip }: { sheet: PayrollSheet; onSlip: () => voi
             value={String(sheet.paidHolidayDays ?? 0)}
             bg="bg-purple-50"
             text="text-purple-600"
-          />
-          <StatTile
-            label={t('Salary Advance')}
-            value={(sheet.salaryAdvance ?? 0) > 0 ? formatMoney(sheet.salaryAdvance ?? 0) : '—'}
-            bg={(sheet.salaryAdvance ?? 0) > 0 ? 'bg-red-50 dark:bg-red-500/10' : 'bg-indigo-50 dark:bg-indigo-400/10'}
-            text={
-              (sheet.salaryAdvance ?? 0) > 0 ? 'text-red-600 dark:text-red-400' : 'text-indigo-600 dark:text-indigo-300'
-            }
           />
         </div>
         {(sheet.leaveDeduction ?? 0) > 0 && (
@@ -714,6 +709,23 @@ function SheetDetail({ sheet, onSlip }: { sheet: PayrollSheet; onSlip: () => voi
           </div>
         )}
       </div>
+
+      {/* Salary advance: an informational notice — the money is never added to or
+          withheld from this period's pay, so it lives outside the money sections. */}
+      {(sheet.salaryAdvance ?? 0) > 0 && (
+        <div className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 dark:border-amber-500/30 dark:bg-amber-500/10">
+          <PiggyBank className="mt-0.5 h-4 w-4 flex-shrink-0 text-amber-600 dark:text-amber-400" aria-hidden="true" />
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-baseline justify-between gap-x-2">
+              <p className="text-xs font-bold text-amber-700 dark:text-amber-300">{t('Salary advance')}</p>
+              <p className="text-xs font-bold text-amber-700 dark:text-amber-300">{formatMoney(sheet.salaryAdvance ?? 0)}</p>
+            </div>
+            <p className="mt-0.5 text-[11px] leading-snug text-amber-700/80 dark:text-amber-300/80">
+              {t('For your information only — it is not added to or deducted from your salary.')}
+            </p>
+          </div>
+        </div>
+      )}
 
       <ItemSection
         tone="earnings"
@@ -905,7 +917,8 @@ function buildEarningsRows(sheet: PayrollSheet): EarningRow[] {
  * per-day trail (shift, minutes late, check-in, pricing note, review status) merged
  * into its own day row via the attendance link. A closed sheet has every day applied,
  * so the section is one flat list — days whose row has no backing line (a rejected
- * day, a purely informational row) keep their place at the end.
+ * day, a purely informational row) keep their place at the end. Salary advances are
+ * filtered out: they get their own informational notice and never price the period.
  */
 function buildDeductionRows(sheet: PayrollSheet): DeductionDisplayRow[] {
   const details = sheet.deductionDetails ?? []
@@ -923,6 +936,8 @@ function buildDeductionRows(sheet: PayrollSheet): DeductionDisplayRow[] {
 
   const rows: DeductionDisplayRow[] = sheet.items
     .filter((item) => item.kind === 'deduction')
+    // The salary advance is an informational notice of its own, never a withheld amount.
+    .filter((item) => !isSalaryAdvanceLine(item.label))
     .map((item) => {
       const index = matchDetail(item)
       const detail = index >= 0 ? details[index] : undefined
@@ -970,11 +985,6 @@ function buildDeductionRows(sheet: PayrollSheet): DeductionDisplayRow[] {
  * indented underneath. Branch/manager raises keep their own line.
  */
 function groupDeductionRows(rows: DeductionDisplayRow[]): DeductionDisplayRow[] {
-  // The salary advance rides in as an ordinary deduction line, so it is grouped by
-  // its label rather than by an attendance rule.
-  const advanceRows = rows.filter((row) => row.label.toLowerCase().includes('advance'))
-  const attendanceRows = rows.filter((row) => !advanceRows.includes(row))
-
   const groups = [
     { kind: 'late', label: translate('Late arrivals') },
     { kind: 'absent', label: translate('Absent days') },
@@ -982,7 +992,7 @@ function groupDeductionRows(rows: DeductionDisplayRow[]): DeductionDisplayRow[] 
 
   const parents = groups
     .map((group) => {
-      const days = attendanceRows.filter((row) => row.kind === group.kind)
+      const days = rows.filter((row) => row.kind === group.kind)
       return {
         label: group.label,
         amount: days.reduce((sum, row) => sum + (row.amount ?? 0), 0),
@@ -991,18 +1001,13 @@ function groupDeductionRows(rows: DeductionDisplayRow[]): DeductionDisplayRow[] 
     })
     .filter((group) => (group.children?.length ?? 0) > 0)
 
-  const advance = advanceRows.length
-    ? [
-        {
-          label: translate('Salary advance'),
-          amount: advanceRows.reduce((sum, row) => sum + (row.amount ?? 0), 0),
-          children: advanceRows,
-        } satisfies DeductionDisplayRow,
-      ]
-    : []
+  const others = rows.filter((row) => !groups.some((group) => group.kind === row.kind))
+  return [...parents, ...others]
+}
 
-  const others = attendanceRows.filter((row) => !groups.some((group) => group.kind === row.kind))
-  return [...parents, ...advance, ...others]
+/** Salary-advance lines are informational: the sheet reports the advance but never prices it. */
+function isSalaryAdvanceLine(label: string): boolean {
+  return label.toLowerCase().includes('advance')
 }
 
 /** Mock §8's per-line item glyph, keyed off the label. */

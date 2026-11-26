@@ -1,6 +1,4 @@
-import { ApiError, apiRequest } from '../../../lib/api-client'
-import { loadStoredSession } from '../../../lib/session-store'
-import { translate } from '../../../i18n'
+import { apiDownload, apiRequest } from '../../../lib/api-client'
 
 /** The paged envelope every list endpoint returns. */
 export interface Paged<T> {
@@ -374,8 +372,10 @@ export interface Payslip {
   coverDays: number
   /** Days actually worked outside the schedule (cover / extra shifts). */
   extraShiftDays: number
-  /** Base salary ÷ 30 × approved cover days. */
+  /** Base salary ÷ the period's calendar days × approved cover days. */
   coverPay: number
+  /** The period's daily rate: base ÷ its own calendar days — the rate deductions use. */
+  dailyRate: number
   status: string
 }
 
@@ -474,30 +474,13 @@ export function postCandidateReview(
  * The Bearer token is attached from the same session store the client uses.
  */
 export async function downloadPeriodCsv(periodId: number, gymId?: number): Promise<void> {
-  const baseUrl = (import.meta.env.VITE_API_URL as string | undefined) ?? ''
   const query = new URLSearchParams()
   query.set('format', 'csv')
   if (gymId != null) query.set('gym', String(gymId))
-  const session = loadStoredSession()
-  const response = await fetch(`${baseUrl}/api/payroll-periods/${periodId}/export?${query.toString()}`, {
-    method: 'GET',
-    headers: {
-      Accept: 'text/csv',
-      ...(session ? { Authorization: 'Bearer ' + session.accessToken } : {}),
-    },
-  })
-  if (!response.ok) {
-    throw new ApiError(
-      response.status,
-      'HTTP_' + response.status,
-      response.status === 401
-        ? translate('You are not signed in, or your session has expired.')
-        : translate('The payroll export failed. Please try again.'),
-    )
-  }
-  const blob = await response.blob()
-  const disposition = response.headers.get('content-disposition') ?? ''
-  const fileName = /filename="?([^";]+)"?/i.exec(disposition)?.[1] ?? `payroll-${periodId}.csv`
+  const { blob, fileName: serverFileName } = await apiDownload(
+    `/api/payroll-periods/${periodId}/export?${query.toString()}`,
+  )
+  const fileName = serverFileName ?? `payroll-${periodId}.csv`
   const url = URL.createObjectURL(blob)
   const anchor = document.createElement('a')
   anchor.href = url

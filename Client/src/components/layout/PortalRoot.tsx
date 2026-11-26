@@ -10,5 +10,5 @@ import { useAuthSession } from '../../contexts/AuthSessionContext'
  */
 export function PortalRoot() {
   const { session } = useAuthSession()
-  return <PortalLayout key={session?.accessToken ?? 'anon'} />
+  return <PortalLayout key={session?.sessionKey ?? 'anon'} />
 }

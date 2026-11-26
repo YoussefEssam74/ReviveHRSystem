@@ -21,5 +21,11 @@ namespace ServiceAbstraction.Services
         /// Returns how many sessions were revoked.
         /// </summary>
         Task<int> RevokeStationSessionsAsync(int gymId, int? actorUserId, CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// Every gym with its active enrollment code and live station sessions — the
+        /// Super Admin console's platform-wide station view. Top Management only.
+        /// </summary>
+        Task<StationOverviewResponse> GetOverviewAsync(int? actorUserId, CancellationToken cancellationToken = default);
     }
 }

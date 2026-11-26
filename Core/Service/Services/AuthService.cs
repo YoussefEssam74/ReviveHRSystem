@@ -402,6 +402,16 @@ namespace Service.Services
                 refreshRepo.Update(zombie);
             }
 
+            // Every issued session is a successful sign-in. This is the single path
+            // that both login and gym selection pass through, so the audit stamp and
+            // the lockout reset belong here — otherwise platform accounts (no gym) and
+            // single-gym users never record a sign-in and every console row reads
+            // "Invited" / "Never" even after a hundred logins.
+            user.LastLoginAt = DateTime.UtcNow;
+            user.FailedLoginAttempts = 0;
+            user.LockoutEnd = null;
+            unitOfWork.GetRepository<User, int>().Update(user);
+
             // A concurrent refresh may have claimed one of the fetched chains between
             // the read and this save (xmin concurrency): that update is rejected, but
             // the login/selection itself must not fail — reload the rejected rows
@@ -441,7 +451,7 @@ namespace Service.Services
             };
         }
 
-        public async Task LogoutAsync(int userId, string? refreshToken = null, CancellationToken cancellationToken = default)
+        public async Task LogoutAsync(int? userId, string? refreshToken = null, CancellationToken cancellationToken = default)
         {
             // Access-token-only auth (no refresh tokens, ADR-002) means there is no
             // server-side session to revoke: the client discards the token and its own
@@ -457,6 +467,7 @@ namespace Service.Services
                 var stored = await repo.GetByIdAsync(new Service.Specifications.RefreshTokenByHashSpec(hash), cancellationToken);
                 if (stored is not null && stored.RevokedAtUtc is null)
                 {
+                    userId ??= stored.UserId;
                     stored.RevokedAtUtc = DateTime.UtcNow;
                     repo.Update(stored);
                 }
@@ -464,14 +475,17 @@ namespace Service.Services
 
             try
             {
-                await unitOfWork.GetRepository<DomainLayer.Models.AuditModule.AuditLog, int>().AddAsync(
-                    new DomainLayer.Models.AuditModule.AuditLog
-                    {
-                        UserId = userId,
-                        Action = "Logout",
-                        EntityType = "User",
-                        EntityId = userId
-                    }, cancellationToken);
+                if (userId is int actorId)
+                {
+                    await unitOfWork.GetRepository<DomainLayer.Models.AuditModule.AuditLog, int>().AddAsync(
+                        new DomainLayer.Models.AuditModule.AuditLog
+                        {
+                            UserId = actorId,
+                            Action = "Logout",
+                            EntityType = "User",
+                            EntityId = actorId
+                        }, cancellationToken);
+                }
 
                 await unitOfWork.SaveChangesAsync(cancellationToken);
             }

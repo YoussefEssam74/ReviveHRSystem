@@ -39,6 +39,12 @@ namespace Service.Services
         private const int MaxRangeDays = 62;
 
         /// <summary>
+        /// How long after an overnight shift ends its record stays on the live board —
+        /// the same window the kiosk roster uses (AttendanceService.GetStationSummaryAsync).
+        /// </summary>
+        private static readonly TimeSpan OvernightCarryOverWindow = TimeSpan.FromHours(6);
+
+        /// <summary>
         /// Display status for a day worked with no scheduled shift (cover / extra
         /// shift). The stored record keeps its own status; this is the label every
         /// attendance surface shows so HR never reads a cover day as a normal one.
@@ -51,6 +57,9 @@ namespace Service.Services
         private readonly ITeamScopeService _teamScope;
         private readonly TimeZoneInfo _attendanceTimeZone;
         private readonly IAttendanceDeductionSweepService _deductionSweep;
+        // "Today" drives the live board (overnight carry-over, shift-not-started); the
+        // clock is injectable so the midnight rollover can be tested.
+        private readonly TimeProvider _timeProvider;
 
         public AttendanceManagementService(
             IUnitOfWork unitOfWork,
@@ -58,7 +67,8 @@ namespace Service.Services
             IUserAccessRepository userAccess,
             ITeamScopeService teamScope,
             TimeZoneInfo attendanceTimeZone,
-            IAttendanceDeductionSweepService deductionSweep)
+            IAttendanceDeductionSweepService deductionSweep,
+            TimeProvider? timeProvider = null)
         {
             _unitOfWork = unitOfWork;
             _accessControl = accessControl;
@@ -66,6 +76,7 @@ namespace Service.Services
             _teamScope = teamScope;
             _attendanceTimeZone = attendanceTimeZone;
             _deductionSweep = deductionSweep;
+            _timeProvider = timeProvider ?? TimeProvider.System;
         }
 
         // ------------------------------------------------------------------
@@ -153,7 +164,18 @@ namespace Service.Services
             }
 
             var employeeIds = rows.Select(r => r.EmployeeId).Distinct().ToArray();
-            await _deductionSweep.SweepAsync(employeeIds, from, to, cancellationToken);
+            // A carried-over night shift lives on yesterday's date, which can sit just
+            // outside the requested range — price every day the board actually shows.
+            var sweepFrom = rows
+                .Select(r => DateOnly.TryParseExact(r.Date, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var day) ? day : to)
+                .DefaultIfEmpty(from)
+                .Min();
+            if (sweepFrom > from)
+            {
+                sweepFrom = from;
+            }
+
+            await _deductionSweep.SweepAsync(employeeIds, sweepFrom, to, cancellationToken);
 
             var candidates = await _unitOfWork.GetRepository<DeductionCandidate, int>()
                 .GetAllAsync(new DeductionCandidatesByEmployeesSpec(employeeIds), cancellationToken);
@@ -371,6 +393,8 @@ namespace Service.Services
                     Notes = r.Notes,
                     CoverDays = r.CoverDays,
                     IsCoverDay = r.IsCoverDay,
+                    LateMinutes = r.LateMinutes,
+                    EarlyLeaveMinutes = r.EarlyLeaveMinutes,
                 })
                 .ToList();
 
@@ -435,8 +459,15 @@ namespace Service.Services
 
             var employeeIds = employees.Select(e => e.Id).ToArray();
 
+            var today = Today();
+            var localNow = LocalNow();
+            // The live board (a single "today" column) also opens last night's overnight
+            // shift, whose punches are stored on yesterday's record — see the carry-over
+            // branch below. Range queries keep strictly to their own dates.
+            var carryFrom = from == today ? from.AddDays(-1) : from;
+
             var records = (await _unitOfWork.GetRepository<AttendanceRecord, int>()
-                .GetAllAsync(new AttendanceRecordsByEmployeeIdsRangeSpec(employeeIds, from, to), cancellationToken))
+                .GetAllAsync(new AttendanceRecordsByEmployeeIdsRangeSpec(employeeIds, carryFrom, to), cancellationToken))
                 .ToList();
             var recordIndex = records.ToDictionary(r => (r.EmployeeId, r.Date));
 
@@ -445,13 +476,12 @@ namespace Service.Services
             var correctionsByRecordId = await LoadLatestCorrectionsAsync(records.Select(r => r.Id).ToArray(), cancellationToken);
 
             var assignments = await _unitOfWork.GetRepository<ShiftAssignment, int>()
-                .GetAllAsync(new ShiftAssignmentsByEmployeeIdsRangeSpec(employeeIds, from, to), cancellationToken);
+                .GetAllAsync(new ShiftAssignmentsByEmployeeIdsRangeSpec(employeeIds, carryFrom, to), cancellationToken);
             var assignmentIndex = assignments.ToDictionary(a => (a.EmployeeId, a.Date));
 
-            var leaveByDate = await LoadApprovedLeaveByDateAsync(employeeIds, from, to, cancellationToken);
-            var coverByEmployeeDate = await LoadCoverDaysByEmployeeDateAsync(employeeIds, from, to, cancellationToken);
+            var leaveByDate = await LoadApprovedLeaveByDateAsync(employeeIds, carryFrom, to, cancellationToken);
+            var coverByEmployeeDate = await LoadCoverDaysByEmployeeDateAsync(employeeIds, carryFrom, to, cancellationToken);
 
-            var today = Today();
             var rows = new List<AttendanceListItem>((to.DayNumber - from.DayNumber + 1) * employees.Count);
 
             foreach (var employee in employees)
@@ -515,7 +545,36 @@ namespace Service.Services
                         continue;
                     }
 
-                    rows.Add(DeriveRow(employee, date, shiftLabel, leaveByDate, today));
+                    // Last night's overnight shift is still this person's row on the live
+                    // board: the punches are real, but they belong to yesterday's record.
+                    // Without it the board shows an empty row (and "Absent") for someone
+                    // whose shift only ends this morning.
+                    if (carryFrom < from
+                        && date == today
+                        && recordIndex.TryGetValue((employee.Id, date.AddDays(-1)), out var overnight)
+                        && overnight.CheckInTime is not null
+                        && assignmentIndex.TryGetValue((employee.Id, date.AddDays(-1)), out var overnightAssignment)
+                        && IsOvernightShift(overnightAssignment.ShiftTemplate)
+                        && localNow <= ShiftWindowEndsAt(date.AddDays(-1), overnightAssignment.ShiftTemplate!)
+                            .Add(OvernightCarryOverWindow))
+                    {
+                        correctionsByRecordId.TryGetValue(overnight.Id, out var overnightCorrection);
+                        coverByEmployeeDate.TryGetValue((employee.Id, date.AddDays(-1)), out var overnightCoverDays);
+
+                        rows.Add(MapRow(
+                            overnight,
+                            employee,
+                            employee.Gym?.Name ?? string.Empty,
+                            overnightCorrection,
+                            BuildShiftLabel(overnightAssignment),
+                            coverDays: overnightCoverDays > 0 ? overnightCoverDays : null,
+                            notesOverride: overnight.CheckOutTime is null
+                                ? "Night shift from yesterday — still running"
+                                : "Night shift from yesterday"));
+                        continue;
+                    }
+
+                    rows.Add(DeriveRow(employee, date, shiftLabel, assignment?.ShiftTemplate, leaveByDate, today, localNow));
                 }
             }
 
@@ -531,7 +590,13 @@ namespace Service.Services
         /// (scheduled off / approved day off / on leave), Scheduled (future), or Absent.
         /// </summary>
         private static AttendanceListItem DeriveRow(
-            Employee employee, DateOnly date, string shiftLabel, Dictionary<int, Dictionary<DateOnly, string>> leaveByDate, DateOnly today)
+            Employee employee,
+            DateOnly date,
+            string shiftLabel,
+            ShiftTemplate? template,
+            Dictionary<int, Dictionary<DateOnly, string>> leaveByDate,
+            DateOnly today,
+            DateTime localNow)
         {
             string status;
             string? notes;
@@ -560,6 +625,13 @@ namespace Service.Services
             {
                 status = "Off";
                 notes = "On leave";
+            }
+            else if (date == today && template is not null && localNow < date.ToDateTime(template.StartTime))
+            {
+                // A shift nobody has reached yet is not an absence: at 03:00 the 20:00
+                // shift is still ahead, and counting it Absent hides who is coming in.
+                status = "Scheduled";
+                notes = "Shift has not started yet";
             }
             else
             {
@@ -808,6 +880,8 @@ namespace Service.Services
                     : latestCorrection.CorrectedAt.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
                 CoverDays = coverDays,
                 IsCoverDay = isCoverDay,
+                LateMinutes = LateMinutesOf(record),
+                EarlyLeaveMinutes = EarlyLeaveMinutesOf(record),
             };
         }
 
@@ -873,7 +947,40 @@ namespace Service.Services
         }
 
         private DateOnly Today() =>
-            DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, _attendanceTimeZone));
+            DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(_timeProvider.GetUtcNow().UtcDateTime, _attendanceTimeZone));
+
+        private DateTime LocalNow() =>
+            TimeZoneInfo.ConvertTimeFromUtc(_timeProvider.GetUtcNow().UtcDateTime, _attendanceTimeZone);
+
+        /// <summary>A shift whose end clock time is before its start runs past midnight.</summary>
+        private static bool IsOvernightShift(ShiftTemplate? template) =>
+            template is not null && template.EndTime < template.StartTime;
+
+        /// <summary>
+        /// The full wall-clock end of a shift on its scheduled date: an overnight template
+        /// (20:00 → 04:00) ends on the following calendar day.
+        /// </summary>
+        private static DateTime ShiftWindowEndsAt(DateOnly date, ShiftTemplate template) =>
+            template.EndTime > template.StartTime
+                ? date.ToDateTime(template.EndTime)
+                : date.AddDays(1).ToDateTime(template.EndTime);
+
+        /// <summary>Minutes between the shift start and the check-in (0 when on time or not in).</summary>
+        private int LateMinutesOf(AttendanceRecord record) =>
+            record.ScheduledShiftTemplate is not { } template || record.CheckInTime is null
+                ? 0
+                : Math.Max(0, (int)Math.Ceiling(
+                    (ToLocal(record.CheckInTime.Value) - record.Date.ToDateTime(template.StartTime)).TotalMinutes));
+
+        /// <summary>Minutes between the check-out and the shift end (0 when not early or still in).</summary>
+        private int EarlyLeaveMinutesOf(AttendanceRecord record) =>
+            record.ScheduledShiftTemplate is not { } template || record.CheckOutTime is null
+                ? 0
+                : Math.Max(0, (int)Math.Ceiling(
+                    (ShiftWindowEndsAt(record.Date, template) - ToLocal(record.CheckOutTime.Value)).TotalMinutes));
+
+        private DateTime ToLocal(DateTime utc) =>
+            TimeZoneInfo.ConvertTimeFromUtc(DateTime.SpecifyKind(utc, DateTimeKind.Utc), _attendanceTimeZone);
 
         // ------------------------------------------------------------------
         // Parsing / validation

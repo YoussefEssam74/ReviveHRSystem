@@ -11,7 +11,7 @@ export type ScannerPhase = 'starting' | 'scanning' | 'recognized' | 'idle'
 const FRAME_INTERVAL_MS = 1_300
 
 /** How long the "check out now?" prompt waits for the employee before resuming. */
-const CHECKOUT_PROMPT_TIMEOUT_MS = 5_000
+const CHECKOUT_PROMPT_TIMEOUT_MS = 30_000
 
 /** After a punch is recorded, scanning holds for this long so the same face is
  * not immediately re-recorded as the opposite direction before walking away. */
@@ -38,6 +38,8 @@ export interface FrameState {
 export interface CheckoutPrompt {
   employeeId: string | null
   employeeName: string | null
+  /** Why the last confirmation attempt did not record (shown on the same card). */
+  message: string | null
 }
 
 export interface KioskScannerOptions {
@@ -85,9 +87,12 @@ export function useKioskScanner({ autoScan = true, onResult, onSessionExpired }:
   const inFlightRef = useRef(false)
   const stoppedRef = useRef(false)
   const pausedRef = useRef(false)
-  // The frame that triggered the check-out question - re-sent on confirmation so the
-  // server re-identifies the same person instead of trusting a client-supplied ID.
+  // The frame that triggered the check-out question - re-sent when the camera cannot
+  // produce a fresh one, so the confirmation always carries a frame.
   const pendingImageRef = useRef<string | null>(null)
+  // Employee number the check-out prompt belongs to: the confirmation is bound to them,
+  // so the fresh frame cannot punch whoever else is standing there.
+  const pendingEmployeeRef = useRef<string | null>(null)
   // Post-record cooldown: employeeId -> recorded timestamp. While an entry is
   // fresh, frames are not sent at all (the person is still in front of the
   // camera), so the same face can't flip IN→OUT→IN in one linger.
@@ -136,10 +141,12 @@ export function useKioskScanner({ autoScan = true, onResult, onSessionExpired }:
         case 'pending_checkout': {
           // AUTO resolved to check-out: nothing was recorded - ask the employee first.
           pendingImageRef.current = image
+          pendingEmployeeRef.current = result.employeeId ?? null
           pausedRef.current = true
           setCheckoutPrompt({
             employeeId: result.employeeId ?? null,
             employeeName: result.employeeName ?? null,
+            message: null,
           })
           setStatusText('')
           return
@@ -210,6 +217,7 @@ export function useKioskScanner({ autoScan = true, onResult, onSessionExpired }:
     stoppedRef.current = false
     pausedRef.current = false
     pendingImageRef.current = null
+    pendingEmployeeRef.current = null
     setCheckoutPrompt(null)
     setRejection(null)
     setFrame(null)
@@ -239,6 +247,7 @@ export function useKioskScanner({ autoScan = true, onResult, onSessionExpired }:
     stoppedRef.current = true
     pausedRef.current = false
     pendingImageRef.current = null
+    pendingEmployeeRef.current = null
     setCheckoutPrompt(null)
     setFrame(null)
     clearTimer()
@@ -256,23 +265,37 @@ export function useKioskScanner({ autoScan = true, onResult, onSessionExpired }:
     setStatusText(translate('Looking for a face'))
   }, [])
 
-  /** The employee confirmed "check out now": re-send the same frame with confirmation. */
+  /**
+   * The employee confirmed "check out now". A fresh frame is captured and sent back with
+   * the employee the prompt named, so a person who stepped away (or a frame the engine
+   * scored low) can still confirm without the punch landing on whoever else is in front
+   * of the camera. A failed attempt keeps the card up with the reason — a silent resume
+   * here is exactly how a check-out goes missing.
+   */
   const confirmCheckout = useCallback(async () => {
-    const image = pendingImageRef.current
-    if (!image || inFlightRef.current) return
+    if (inFlightRef.current) return
+    const image = capture() ?? pendingImageRef.current
+    if (!image) {
+      setCheckoutPrompt((current) =>
+        current ? { ...current, message: translate('Camera is not ready — hold still and press Check out again.') } : current,
+      )
+      return
+    }
 
     inFlightRef.current = true
     try {
-      const result = await postFaceScan({ type: 'AUTO', image, confirmCheckout: true })
-      setCheckoutPrompt(null)
-      pendingImageRef.current = null
-      if (result.outcome === 'pending_checkout') {
-        // Defensive: the state changed between the two frames - just keep scanning.
-        resumeScanningAfterPrompt()
-        return
-      }
+      const result = await postFaceScan({
+        type: 'AUTO',
+        image,
+        confirmCheckout: true,
+        confirmEmployeeId: pendingEmployeeRef.current ?? undefined,
+      })
       setFrame(toFrameState(result))
+
       if (result.outcome === 'recorded') {
+        setCheckoutPrompt(null)
+        pendingImageRef.current = null
+        pendingEmployeeRef.current = null
         const recordedId = result.employeeId ?? result.attendance?.employeeId ?? null
         if (recordedId) {
           cooldownRef.current.set(String(recordedId), Date.now())
@@ -284,19 +307,39 @@ export function useKioskScanner({ autoScan = true, onResult, onSessionExpired }:
         onResultRef.current(result)
         return
       }
-      // Anything else (rejected, already complete, ...) keeps scanning; the rejection
-      // card is only shown for an explicit rejection.
+
       if (result.outcome === 'rejected') {
         pausedRef.current = true
+        setCheckoutPrompt(null)
+        pendingImageRef.current = null
+        pendingEmployeeRef.current = null
         setStatusText('')
         setRejection(result.message || translate('Attendance rejected.'))
         return
       }
-      resumeScanningAfterPrompt()
+
+      if (result.outcome === 'pending_checkout') {
+        // Still the same open record: nothing was recorded, so keep asking.
+        pendingImageRef.current = image
+        setCheckoutPrompt((current) => (current ? { ...current, message: null } : current))
+        return
+      }
+
+      // no_face / low_liveness / unrecognized: keep the card and say why.
+      setCheckoutPrompt((current) =>
+        current
+          ? {
+              ...current,
+              message:
+                result.message ?? translate('Not recognized — look at the camera and press Check out again.'),
+            }
+          : current,
+      )
     } catch (error) {
-      setCheckoutPrompt(null)
-      pendingImageRef.current = null
       if (error instanceof ApiError && error.status === 401) {
+        setCheckoutPrompt(null)
+        pendingImageRef.current = null
+        pendingEmployeeRef.current = null
         stoppedRef.current = true
         clearTimer()
         stopCamera()
@@ -305,17 +348,25 @@ export function useKioskScanner({ autoScan = true, onResult, onSessionExpired }:
         onSessionExpiredRef.current()
         return
       }
-      setStatusText(error instanceof ApiError ? error.message : translate('Connection problem - retrying'))
-      resumeScanningAfterPrompt()
+      setCheckoutPrompt((current) =>
+        current
+          ? {
+              ...current,
+              message:
+                error instanceof ApiError ? error.message : translate('Connection problem — press Check out again.'),
+            }
+          : current,
+      )
     } finally {
       inFlightRef.current = false
     }
-  }, [clearTimer, resumeScanningAfterPrompt, stopCamera])
+  }, [capture, clearTimer, stopCamera])
 
   /** The employee declined (or the prompt timed out): keep the day open and scan on. */
   const cancelCheckout = useCallback(() => {
     setCheckoutPrompt(null)
     pendingImageRef.current = null
+    pendingEmployeeRef.current = null
     resumeScanningAfterPrompt()
   }, [resumeScanningAfterPrompt])
 

@@ -17,11 +17,32 @@ export interface AttendanceEventBody {
   livenessScore: number
 }
 
+/** Where the station says it is, captured by the browser's geolocation prompt. */
+export interface StationLocationFix {
+  latitude: number
+  longitude: number
+  accuracyMeters: number
+}
+
 /** POST /api/kiosk/login - public: redeems a station's 6-digit enrollment code for a gym session. */
-export function postStationLogin(code: string, signal?: AbortSignal): Promise<StationLoginResponse> {
+export function postStationLogin(
+  code: string,
+  location?: StationLocationFix | null,
+  signal?: AbortSignal,
+): Promise<StationLoginResponse> {
   // stationAuth: include cookies (the API stores the session in an HttpOnly cookie)
   // and keep any HR bearer token out of this public-kiosk request.
-  return apiRequest<StationLoginResponse>('/api/kiosk/login', { method: 'POST', body: { code }, stationAuth: true, signal })
+  return apiRequest<StationLoginResponse>('/api/kiosk/login', {
+    method: 'POST',
+    body: {
+      code,
+      latitude: location?.latitude ?? null,
+      longitude: location?.longitude ?? null,
+      accuracyMeters: location?.accuracyMeters ?? null,
+    },
+    stationAuth: true,
+    signal,
+  })
 }
 
 /**
@@ -39,6 +60,8 @@ export interface FaceScanBody {
   image: string
   /** True only after the employee confirmed "check out now" on the kiosk. */
   confirmCheckout?: boolean
+  /** Employee number the prompt named — the confirmation may not punch anyone else. */
+  confirmEmployeeId?: string
 }
 
 /**
@@ -108,6 +131,8 @@ export interface StationSummaryRecord {
   /** Minutes between the check-out and the shift end (0 = not early / still in). */
   earlyLeaveMinutes?: number | null
   method?: string | null
+  /** True for yesterday's overnight shift, still running past midnight. */
+  carriedOver?: boolean
 }
 
 /** Today's counters + scheduled roster for the station's gym. */

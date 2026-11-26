@@ -1034,8 +1034,9 @@ function executeActionRequest(a) {
       id: 'sep-' + Date.now(), employee: emp.name, position: `${emp.position} — ${emp.level}`, gym: emp.gym,
       lastDay: d.lastDay || '2026-09-30', reason: d.reason || 'Resignation',
       requestedBy: a.requestedBy, requestedByUser: a.requestedBy,
-      submittedDate: 'Sep 9, 2026', status: 'Notice Period', progress: 0,
+      submittedDate: 'Sep 9, 2026', status: 'Exit Interview', progress: 0,
       checklist: [['Exit interview scheduled', false], ['Handover completed', false], ['Uniform returned', false], ['Access cards revoked', false], ['Final settlement', false]],
+      exitInterview: { decision: 'Pending', scheduledFor: '', time: '', interviewer: '', note: '', conductedOn: '', rating: null, performanceRating: null, feedback: '' },
       verdict: null
     });
     audit('Offboarding Initiated', `Approved escalation (Last Day: ${d.lastDay}, Reason: ${d.reason}). Requested by ${a.requestedBy}.`);

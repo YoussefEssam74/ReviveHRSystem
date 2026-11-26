@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
@@ -533,27 +534,51 @@ namespace ReviveHRSystem.IntegrationTests
 
             using var scope = _fixture.Services.CreateScope();
             var db = scope.ServiceProvider.GetRequiredService<ReviveHrDbContext>();
-            var gymId = await db.Employees.Where(e => e.Id == employeeId).Select(e => e.GymId).SingleAsync();
+            var employee = await db.Employees.Where(e => e.Id == employeeId)
+                .Select(e => new { e.GymId, e.HireDate })
+                .SingleAsync();
 
             // The mock's 10% annual-increase policy, set explicitly so the row has data.
-            var gym = await db.Gyms.SingleAsync(g => g.Id == gymId);
+            var gym = await db.Gyms.SingleAsync(g => g.Id == employee.GymId);
             gym.AnnualIncreasePercent = 10m;
             await db.SaveChangesAsync();
 
+            // The raise lands on the hiring anniversary, so price a later anniversary month
+            // (a different month from the payslip test's, which shares this database) and
+            // its neighbour, which must report 0.
+            var anniversary = employee.HireDate.AddYears(2);
+            var anniversaryStart = new DateOnly(anniversary.Year, anniversary.Month, 1);
+            var neighbourStart = anniversaryStart.AddMonths(-1);
+
             var builder = new TestDataBuilder(_fixture.Services);
-            var periodId = await builder.CreatePayrollPeriodAsync(
-                gymId, new DateOnly(2027, 2, 1), new DateOnly(2027, 2, 28),
-                DomainLayer.Models.PayrollModule.Enums.PayrollPeriodStatus.Locked, new DateOnly(2027, 3, 5));
-            await builder.CreatePayrollEntryAsync(periodId, employeeId, 7000m, overtimeHours: 4);
+            var anniversaryPeriod = await builder.CreatePayrollPeriodAsync(
+                employee.GymId, anniversaryStart, anniversaryStart.AddMonths(1).AddDays(-1),
+                DomainLayer.Models.PayrollModule.Enums.PayrollPeriodStatus.Locked,
+                anniversaryStart.AddMonths(1).AddDays(4));
+            await builder.CreatePayrollEntryAsync(anniversaryPeriod, employeeId, 7000m, overtimeHours: 4);
+
+            var neighbourPeriod = await builder.CreatePayrollPeriodAsync(
+                employee.GymId, neighbourStart, anniversaryStart.AddDays(-1),
+                DomainLayer.Models.PayrollModule.Enums.PayrollPeriodStatus.Locked,
+                anniversaryStart.AddDays(3));
+            await builder.CreatePayrollEntryAsync(neighbourPeriod, employeeId, 7000m);
 
             var sheets = await GetJsonAsync($"/api/employees/{employeeId}/payroll-sheets", token);
-            var february = sheets.EnumerateArray()
-                .First(s => s.GetProperty("period").GetString()!.StartsWith("February 2027"));
 
-            Assert.Equal(10m, february.GetProperty("annualIncreasePercent").GetDecimal());
-            Assert.Equal(700m, february.GetProperty("annualIncrease").GetDecimal());
+            // Repeats of this test add another entry to the same months, so match the
+            // first row of each period rather than demanding a single row.
+            var raiseMonth = sheets.EnumerateArray()
+                .First(s => s.GetProperty("period").GetString()
+                    == anniversaryStart.ToString("MMMM yyyy", CultureInfo.InvariantCulture));
+            Assert.Equal(10m, raiseMonth.GetProperty("annualIncreasePercent").GetDecimal());
+            Assert.Equal(700m, raiseMonth.GetProperty("annualIncrease").GetDecimal());
             // OT pay = (base/176)×1.5×hours = 7000/176×1.5×4.
-            Assert.Equal(238.64m, february.GetProperty("overtimePay").GetDecimal());
+            Assert.Equal(238.64m, raiseMonth.GetProperty("overtimePay").GetDecimal());
+
+            var otherMonth = sheets.EnumerateArray()
+                .First(s => s.GetProperty("period").GetString()
+                    == neighbourStart.ToString("MMMM yyyy", CultureInfo.InvariantCulture));
+            Assert.Equal(0m, otherMonth.GetProperty("annualIncrease").GetDecimal());
         }
 
         [Fact]
@@ -645,9 +670,9 @@ namespace ReviveHRSystem.IntegrationTests
         }
 
         /// <summary>
-        /// A "Deduction — 3 Days" absence follow-up prices at the sheet's daily rate
-        /// (base ÷ 30) for the period covering the absence day, so the day drawer can
-        /// answer "how much will be deducted".
+        /// A "Deduction — 3 Days" absence follow-up prices at the sheet's daily rate —
+        /// base ÷ the period's own calendar days — for the period covering the absence
+        /// day, so the day drawer can answer "how much will be deducted".
         /// </summary>
         [Fact]
         public async Task EmployeeDeductions_AbsenceFollowUp_CarriesPricedAmount()
@@ -682,8 +707,8 @@ namespace ReviveHRSystem.IntegrationTests
                 r.GetProperty("id").GetString()!.StartsWith("followup-")
                 && r.GetProperty("date").GetString() == "2026-03-04");
 
-            // 3 days × daily (9000 ÷ 30 = 300) = 900.
-            Assert.Equal(900m, followUp.GetProperty("amount").GetDecimal());
+            // 3 days × the March daily rate (9000 ÷ 31) = 870.96.
+            Assert.Equal(870.96m, followUp.GetProperty("amount").GetDecimal());
         }
 
         [Fact]
@@ -694,29 +719,35 @@ namespace ReviveHRSystem.IntegrationTests
 
             using var scope = _fixture.Services.CreateScope();
             var db = scope.ServiceProvider.GetRequiredService<ReviveHrDbContext>();
-            var gymId = await db.Employees.Where(e => e.Id == employeeId).Select(e => e.GymId).SingleAsync();
+            var employee = await db.Employees.Where(e => e.Id == employeeId)
+                .Select(e => new { e.GymId, e.HireDate })
+                .SingleAsync();
 
-            // Mock §8's "Annual Increase (10%)" card rides the payslip too.
-            var gym = await db.Gyms.SingleAsync(g => g.Id == gymId);
+            // Mock §8's "Annual Increase (10%)" card rides the payslip too — in the
+            // period that contains the hiring anniversary.
+            var gym = await db.Gyms.SingleAsync(g => g.Id == employee.GymId);
             gym.AnnualIncreasePercent = 10m;
             await db.SaveChangesAsync();
 
+            var anniversary = employee.HireDate.AddYears(1);
+            var periodStart = new DateOnly(anniversary.Year, anniversary.Month, 1);
+
             var builder = new TestDataBuilder(_fixture.Services);
             var periodId = await builder.CreatePayrollPeriodAsync(
-                gymId, new DateOnly(2026, 9, 1), new DateOnly(2026, 9, 30),
+                employee.GymId, periodStart, periodStart.AddMonths(1).AddDays(-1),
                 DomainLayer.Models.PayrollModule.Enums.PayrollPeriodStatus.Locked);
             var entryId = await builder.CreatePayrollEntryAsync(periodId, employeeId, 9000, bonus: 250, overtimeHours: 4);
             await builder.AddPayrollLineAsync(entryId, 120, "Approved");
 
             var slip = await GetJsonAsync($"/api/employees/{employeeId}/payroll/{entryId}/payslip", token);
             var data = slip.GetProperty("data");
-            Assert.Equal("September 2026", data.GetProperty("period").GetString());
-            Assert.Equal(9000m, data.GetProperty("baseSalary").GetDecimal());
+            Assert.Equal(periodStart.ToString("MMMM yyyy", CultureInfo.InvariantCulture), data.GetProperty("period").GetString());            Assert.Equal(9000m, data.GetProperty("baseSalary").GetDecimal());
             Assert.Equal(10m, data.GetProperty("annualIncreasePercent").GetDecimal());
             Assert.Equal(900m, data.GetProperty("annualIncrease").GetDecimal());
-            // net = base 9000 + raise 900 + bonus 250 + OT pay (9000/176×1.5×4 = 306.82) − accepted deduction 120
-            Assert.Equal(10336.82m, data.GetProperty("net").GetDecimal());
-            Assert.Equal(10456.82m, data.GetProperty("gross").GetDecimal());
+            // The raise already sits inside the base salary: gross = base + bonus + OT
+            // (9000/176×1.5×4 = 306.82), and net subtracts the accepted deduction.
+            Assert.Equal(9556.82m, data.GetProperty("gross").GetDecimal());
+            Assert.Equal(9436.82m, data.GetProperty("net").GetDecimal());
         }
 
         /// <summary>

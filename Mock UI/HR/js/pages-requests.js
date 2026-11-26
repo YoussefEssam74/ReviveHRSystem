@@ -429,7 +429,7 @@ function triggerOffboardingFromRequest(empName, gym, lastDay, reason) {
       requestedBy: 'Resignation — BM approved',
       requestedByUser: MOCK.currentUser.fullName,
       submittedDate: 'Sep 9, 2026',
-      status: 'Notice Period',
+      status: 'Exit Interview',
       progress: 0,
       checklist: [
         ['Exit interview scheduled', false],
@@ -438,6 +438,7 @@ function triggerOffboardingFromRequest(empName, gym, lastDay, reason) {
         ['Access cards revoked', false],
         ['Final settlement', false]
       ],
+      exitInterview: { decision: 'Pending', scheduledFor: '', time: '', interviewer: '', note: '', conductedOn: '', rating: null, performanceRating: null, feedback: '' },
       verdict: null
     };
     MOCK.separations.unshift(sep);

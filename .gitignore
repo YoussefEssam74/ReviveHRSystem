@@ -71,3 +71,5 @@ Tests/Performance/
 ReviveHRSystem.Web/App_Data/
 .deslop/
 .github/
+.agents/
+skills-lock.json

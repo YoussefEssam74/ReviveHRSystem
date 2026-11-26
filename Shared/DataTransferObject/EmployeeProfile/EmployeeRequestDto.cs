@@ -39,5 +39,15 @@ public sealed class EmployeeRequestDto
     public string Reason { get; init; } = string.Empty;
     public string? Payment { get; init; }
     public int? CalculatedDays { get; init; }
+
+    /// <summary>When the branch manager decided (UTC); null until that decision exists.</summary>
+    public DateTime? BmDecidedAt { get; init; }
+
+    /// <summary>When HR decided (UTC); null until that decision exists.</summary>
+    public DateTime? HrDecidedAt { get; init; }
+
+    /// <summary>Reason the stage-1 decision carries, shown as the rejection note.</summary>
+    public string? BmComment { get; init; }
+
     public IReadOnlyList<RequestTimelineStepDto> Timeline { get; init; } = Array.Empty<RequestTimelineStepDto>();
 }

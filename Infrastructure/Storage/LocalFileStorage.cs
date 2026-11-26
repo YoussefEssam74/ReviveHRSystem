@@ -19,6 +19,7 @@ namespace Storage
         {
             "avatars",
             "documents",
+            "gym-logos",
             "hr-documents",
             "request-attachments"
         };

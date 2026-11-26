@@ -15,6 +15,11 @@ namespace Presistence
                 query = query.AsNoTracking();
             }
 
+            if (specification.IgnoreQueryFilters)
+            {
+                query = query.IgnoreQueryFilters();
+            }
+
             if (specification.Criteria is not null)
             {
                 query = query.Where(specification.Criteria);
@@ -38,6 +43,13 @@ namespace Presistence
             if (specification.IncludeExpressions is not null && specification.IncludeExpressions.Count > 0)
             {
                 query = specification.IncludeExpressions.Aggregate(query, (current, include) => current.Include(include));
+            }
+
+            // Second-level includes are carried as dotted paths because a typed
+            // ThenInclude cannot be expressed on the non-generic expression list.
+            if (specification.IncludePaths is not null)
+            {
+                query = specification.IncludePaths.Aggregate(query, (current, path) => current.Include(path));
             }
 
             if (specification.IsPaginated)

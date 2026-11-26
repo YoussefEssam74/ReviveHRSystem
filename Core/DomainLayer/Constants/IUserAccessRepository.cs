@@ -14,7 +14,7 @@ namespace DomainLayer.Contracts
 
     /// <summary>
     /// Read model over the identity join tables (UserGymAccess, UserPermissions,
-    /// UserRoles/RolePermissions, UserGymRoles). These join entities are not
+    /// UserRoles/RolePermissions). These join entities are not
     /// BaseEntity-derived, so they are exposed through this purpose-built contract
     /// instead of the generic repository. Implemented in Infrastructure/Persistence.
     /// </summary>
@@ -37,7 +37,7 @@ namespace DomainLayer.Contracts
 
         /// <summary>
         /// Permission keys effective in ONE gym: direct user grants plus the keys of
-        /// the roles the user holds IN THAT GYM (UserGymRoles). When the user holds
+        /// the roles the user holds IN THAT GYM (UserRoles with a GymId). When the user holds
         /// no gym role there, the global role keys apply instead (HR/TopManagement
         /// style accounts without per-gym assignments). A null gym reports the
         /// global role keys (the pre-gym-selection / no-gym case).
@@ -61,6 +61,12 @@ namespace DomainLayer.Contracts
 
         /// <summary>Number of users assigned to a role (archived users and roles excluded by the join filters).</summary>
         Task<int> CountUsersWithRoleAsync(int roleId, CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// Renames a role. RoleName is the foreign key of every assignment, so this must
+        /// also rewrite them — the implementation relies on the FK's ON UPDATE CASCADE.
+        /// </summary>
+        Task RenameRoleAsync(int roleId, string newName, CancellationToken cancellationToken = default);
 
         /// <summary>
         /// True when the gym has at least one active user holding a desk role

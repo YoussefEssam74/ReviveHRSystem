@@ -16,6 +16,13 @@ namespace Presistence.Data.Configurations
             builder.Property(u => u.PasswordHash).IsRequired();
             builder.Property(u => u.UserType).IsRequired();
 
+            // Personal details captured by the create-account wizards. The photo is a
+            // downscaled data URL, like the gym logo.
+            builder.Property(u => u.Phone).HasMaxLength(32);
+            builder.Property(u => u.Gender).HasMaxLength(16);
+            builder.Property(u => u.NationalId).HasMaxLength(32);
+            builder.Property(u => u.PhotoUrl).HasMaxLength(100_000);
+
             builder.HasIndex(u => u.Email).IsUnique();
             builder.HasIndex(u => u.UserName).IsUnique();
 
@@ -33,10 +40,13 @@ namespace Presistence.Data.Configurations
             builder.ToTable("Roles");
             builder.HasKey(r => r.Id);
 
+            // Name is the natural key: UserRole.RoleName points at it, so a role
+            // assignment reads without a join. The principal key created by
+            // HasPrincipalKey (AK_Roles_Name) is the uniqueness rule — it is deliberately
+            // unfiltered, so an archived role keeps its name reserved and the FK can never
+            // dangle. RoleService.UpdateRoleAsync carries the assignments along on a rename.
             builder.Property(r => r.Name).IsRequired().HasMaxLength(100);
             builder.Property(r => r.Description).HasMaxLength(500);
-
-            builder.HasIndex(r => r.Name).IsUnique();
         }
     }
 
@@ -60,17 +70,41 @@ namespace Presistence.Data.Configurations
         public void Configure(EntityTypeBuilder<UserRole> builder)
         {
             builder.ToTable("UserRoles");
-            builder.HasKey(ur => new { ur.UserId, ur.RoleId });
+            builder.HasKey(ur => ur.Id);
+
+            builder.Property(ur => ur.RoleName).IsRequired().HasMaxLength(100);
 
             builder.HasOne(ur => ur.User)
                    .WithMany(u => u.UserRoles)
                    .HasForeignKey(ur => ur.UserId)
                    .OnDelete(DeleteBehavior.Cascade);
 
+            builder.HasOne(ur => ur.Gym)
+                   .WithMany(g => g.UserRoles)
+                   .HasForeignKey(ur => ur.GymId)
+                   .OnDelete(DeleteBehavior.Cascade);
+
             builder.HasOne(ur => ur.Role)
                    .WithMany(r => r.UserRoles)
-                   .HasForeignKey(ur => ur.RoleId)
+                   .HasForeignKey(ur => ur.RoleName)
+                   .HasPrincipalKey(r => r.Name)
                    .OnDelete(DeleteBehavior.Cascade);
+
+            // A user holds one row per role per reach. GymId is nullable, and PostgreSQL
+            // treats NULLs as distinct in a unique index, so the two cases need separate
+            // partial indexes or a global grant could be inserted twice.
+            builder.HasIndex(ur => new { ur.UserId, ur.RoleName })
+                   .IsUnique()
+                   .HasFilter("\"GymId\" IS NULL")
+                   .HasDatabaseName("UX_UserRoles_PlatformWide");
+
+            builder.HasIndex(ur => new { ur.UserId, ur.GymId, ur.RoleName })
+                   .IsUnique()
+                   .HasFilter("\"GymId\" IS NOT NULL")
+                   .HasDatabaseName("UX_UserRoles_PerGym");
+
+            builder.HasIndex(ur => ur.GymId);
+            builder.HasIndex(ur => ur.RoleName);
         }
     }
 
@@ -109,32 +143,6 @@ namespace Presistence.Data.Configurations
                    .WithMany(p => p.UserPermissions)
                    .HasForeignKey(up => up.PermissionId)
                    .OnDelete(DeleteBehavior.Cascade);
-        }
-    }
-
-    public class UserGymRoleConfiguration : IEntityTypeConfiguration<UserGymRole>
-    {
-        public void Configure(EntityTypeBuilder<UserGymRole> builder)
-        {
-            builder.ToTable("UserGymRoles");
-            builder.HasKey(ugr => new { ugr.UserId, ugr.GymId, ugr.RoleId });
-
-            builder.HasOne(ugr => ugr.User)
-                   .WithMany(u => u.UserGymRoles)
-                   .HasForeignKey(ugr => ugr.UserId)
-                   .OnDelete(DeleteBehavior.Cascade);
-
-            builder.HasOne(ugr => ugr.Gym)
-                   .WithMany(g => g.UserGymRoles)
-                   .HasForeignKey(ugr => ugr.GymId)
-                   .OnDelete(DeleteBehavior.Cascade);
-
-            builder.HasOne(ugr => ugr.Role)
-                   .WithMany(r => r.UserGymRoles)
-                   .HasForeignKey(ugr => ugr.RoleId)
-                   .OnDelete(DeleteBehavior.Cascade);
-
-            builder.HasIndex(ugr => new { ugr.UserId, ugr.GymId });
         }
     }
 

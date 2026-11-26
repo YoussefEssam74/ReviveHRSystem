@@ -298,9 +298,24 @@ namespace ReviveHRSystem.IntegrationTests
             var builder = new TestDataBuilder(_fixture.Services);
             var gym = await builder.CreateGymWithStationAsync();
             var present = await builder.CreateEmployeeAsync(gym);
-            // Scheduled today but no punch: derives as Absent (not Off like unscheduled employees).
-            var absent = await builder.CreateEmployeeAsync(gym, shiftAtGym: gym);
+            // Scheduled today but no punch: derives as Absent (not Off like unscheduled
+            // employees). The shift must have already started — a shift nobody has
+            // reached yet is "Scheduled", not an absence.
+            var absent = await builder.CreateEmployeeAsync(gym);
             var today = builder.AttendanceToday;
+            var tz = _fixture.Services.GetRequiredService<TimeZoneInfo>();
+            var localNow = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, tz);
+            // A window that has already begun and does not cross midnight (an overnight
+            // template would be judged against yesterday's shift instead).
+            var startedAt = localNow.Hour >= 2 ? localNow.AddHours(-2) : localNow.Date;
+            var endsAt = localNow.Hour >= 22 ? localNow.Date.AddHours(23.98) : localNow.AddHours(1);
+            await builder.AssignShiftAsync(
+                absent.EmployeeId,
+                gym.GymId,
+                today,
+                "IT Started",
+                TimeOnly.FromDateTime(startedAt),
+                TimeOnly.FromDateTime(endsAt));
             await builder.CreateAttendanceRecordAsync(
                 present.EmployeeId, gym.GymId, today,
                 checkInUtc: AtHourUtc(today, 8), checkOutUtc: AtHourUtc(today, 16));

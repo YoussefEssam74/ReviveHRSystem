@@ -69,6 +69,8 @@ export const teamRequests: Record<string, string> = {
   // Detail drawers
   'Request #{{id}}': 'الطلب #{{id}}',
   'Submitted on': 'تاريخ التقديم',
+  'Submitted date': 'تاريخ التقديم',
+  'Approved date': 'تاريخ الموافقة',
   'Requested for': 'الفترة المطلوبة',
   'Sick leave limit': 'حد الإجازة المرضية',
   'Annual leave limit': 'حد الإجازة السنوية',
@@ -100,4 +102,24 @@ export const teamRequests: Record<string, string> = {
   '{{message}} Check your connection and try again.': '{{message}} تحقق من اتصالك وحاول مرة أخرى.',
   '{{message}} The server failed to return the file — try again in a moment.':
     '{{message}} فشل الخادم في إرجاع الملف — حاول مرة أخرى بعد قليل.',
+
+  // Deductions — manager-sized in hours or days.
+  "DEDUCTIONS": "الخصومات",
+  "Deduct": "خصم",
+  "WAIVED": "تم الإلغاء",
+  "Employee": "الموظف",
+  "Day": "اليوم",
+  "Why": "السبب",
+  "Size": "الحجم",
+  "Amount": "المبلغ",
+  "Approve": "اعتماد",
+  "Waive": "إلغاء",
+  "not sized": "غير محدد",
+  "(hourly rate pending)": "(أجر الساعة غير متاح)",
+  "pending": "قيد الانتظار",
+  "Loading deductions…": "جارٍ تحميل الخصومات…",
+  "No deductions are waiting for HR. The branch sizes them from the attendance board.": "لا توجد خصومات بانتظار الموارد البشرية. مدير الفرع يحدّد حجمها من شاشة الحضور.",
+  "Nothing here yet.": "لا يوجد شيء هنا بعد.",
+  "Deduction approved — the payroll sheet applies it.": "تم اعتماد الخصم — سيُطبَّق في كشف الرواتب.",
+  "Deduction waived.": "تم إلغاء الخصم.",
 }

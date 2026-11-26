@@ -37,7 +37,7 @@ namespace Service.Services
     /// Failures reject the event without creating any AttendanceRecord. Each record
     /// stores both GymId and the StationSessionId that issued it.
     /// </summary>
-    public class AttendanceService(IUnitOfWork unitOfWork, IUserAccessRepository userAccess, IStationSessionService stationSessions, TimeZoneInfo? attendanceTimeZone = null, AttendanceOptions? attendanceOptions = null) : IAttendanceService
+    public class AttendanceService(IUnitOfWork unitOfWork, IUserAccessRepository userAccess, IStationSessionService stationSessions, TimeZoneInfo? attendanceTimeZone = null, AttendanceOptions? attendanceOptions = null, TimeProvider? timeProvider = null) : IAttendanceService
     {
         private const double MinimumLivenessScore = 0.70;
         private static readonly TimeSpan MaxFutureSkew = TimeSpan.FromMinutes(10);
@@ -56,6 +56,11 @@ namespace Service.Services
         // shift's still-open record instead of opening a new check-in for today.
         private static readonly TimeSpan OvernightAutoCheckoutGrace = TimeSpan.FromHours(6);
 
+        // The kiosk roster keeps yesterday's overnight shift (and its punches) visible
+        // for this long after the shift ends, so a check-out made after midnight shows up
+        // instead of vanishing with the date rollover.
+        private static readonly TimeSpan OvernightCarryOverWindow = TimeSpan.FromHours(6);
+
         // Anonymous station callers may backdate within a bounded window (device clock
         // drift, buffered offline events, same-day manual entry) but never pick an
         // arbitrary past instant.
@@ -67,13 +72,39 @@ namespace Service.Services
         // Minutes a check-out may run before the shift end without being an early leave.
         private readonly int _earlyLeaveGraceMinutes = (attendanceOptions ?? new AttendanceOptions()).EarlyLeaveGraceMinutes;
 
-        public async Task<StationLoginResponse> StationLoginAsync(StationLoginRequest request, CancellationToken cancellationToken = default)
+        // The kiosk dashboard is "what is happening now", so its clock is injectable to
+        // make the midnight rollover (overnight shift carry-over) testable.
+        private readonly TimeProvider _timeProvider = timeProvider ?? TimeProvider.System;
+
+        public async Task<StationLoginResponse> StationLoginAsync(
+            StationLoginRequest request,
+            string? ipAddress = null,
+            string? deviceInfo = null,
+            CancellationToken cancellationToken = default)
         {
             var stationCode = await ResolveStationCodeAsync(request.Code, cancellationToken)
                 ?? throw new UnAuthorizedException("Invalid or expired station code.");
 
             var token = await stationSessions.CreateSessionAsync(
-                stationCode.GymId, stationCode.Id, cancellationToken);
+                stationCode.GymId,
+                stationCode.Id,
+                new StationClientInfo(
+                    ipAddress,
+                    deviceInfo,
+                    request.Latitude,
+                    request.Longitude,
+                    request.AccuracyMeters),
+                cancellationToken);
+
+            // An operator-issued code is single-use: redeeming it retires it at once, so
+            // the same code can never bind a second device. Codes without an expiry are
+            // development seeds and stay reusable for local fixtures.
+            if (stationCode.ExpiresAtUtc is not null)
+            {
+                stationCode.IsActive = false;
+                unitOfWork.GetRepository<StationCode, int>().Update(stationCode);
+                await unitOfWork.SaveChangesAsync(cancellationToken);
+            }
 
             return new StationLoginResponse
             {
@@ -146,8 +177,11 @@ namespace Service.Services
 
         /// <summary>
         /// Today's view of a gym for the kiosk dashboard: present/scheduled counters
-        /// and the full roster of employees scheduled today — shift, punches, and how
-        /// late they checked in / how early they left. Read-only, station-session scoped.
+        /// and the full roster — shift, punches, and how late they checked in / how
+        /// early they left. A shift dated yesterday that runs past midnight (20:00 →
+        /// 04:00) is still in progress after 00:00, so its punches stay on the roster
+        /// until <see cref="OvernightCarryOverWindow"/> after the shift ends. Read-only,
+        /// station-session scoped.
         /// </summary>
         public async Task<StationSummaryResponse> GetStationSummaryAsync(int gymId, CancellationToken cancellationToken = default)
         {
@@ -156,8 +190,9 @@ namespace Service.Services
                 throw new UnAuthorizedException("Attendance requests require a station session token.");
             }
 
-            var localNow = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, _attendanceTimeZone);
+            var localNow = TimeZoneInfo.ConvertTimeFromUtc(_timeProvider.GetUtcNow().UtcDateTime, _attendanceTimeZone);
             var today = DateOnly.FromDateTime(localNow);
+            var yesterday = today.AddDays(-1);
 
             // Sequential: these share one scoped DbContext, and EF Core does not
             // allow concurrent operations on a single context (the previous
@@ -166,101 +201,144 @@ namespace Service.Services
                 .GetAllAsync(new StationRosterByGymDateSpec(gymId, today), cancellationToken);
             var records = await unitOfWork.GetRepository<AttendanceRecord, int>()
                 .GetAllAsync(new AttendanceRecordsByGymDateSpec(gymId, today), cancellationToken);
+            // Yesterday's overnight shift is still running right after midnight — and its
+            // punches live on yesterday's record. Without these rows the roster flips to
+            // the new date at 00:00 and a check-out looks like it never happened.
+            var overnightRoster = await unitOfWork.GetRepository<ShiftAssignment, int>()
+                .GetAllAsync(new StationRosterByGymDateSpec(gymId, yesterday), cancellationToken);
+            var overnightRecords = await unitOfWork.GetRepository<AttendanceRecord, int>()
+                .GetAllAsync(new AttendanceRecordsByGymDateSpec(gymId, yesterday), cancellationToken);
 
             var recordByEmployee = records
+                .GroupBy(r => r.EmployeeId)
+                .ToDictionary(g => g.Key, g => g.OrderByDescending(r => r.CheckInTime ?? DateTime.MinValue).First());
+            var overnightRecordByEmployee = overnightRecords
+                .Where(r => r.CheckInTime is not null)
                 .GroupBy(r => r.EmployeeId)
                 .ToDictionary(g => g.Key, g => g.OrderByDescending(r => r.CheckInTime ?? DateTime.MinValue).First());
 
             var rows = roster
                 .OrderBy(a => a.ShiftTemplate!.StartTime)
                 .ThenBy(a => a.Employee.FullName, StringComparer.OrdinalIgnoreCase)
-                .Select(a =>
-                {
-                    var template = a.ShiftTemplate!;
-                    var shiftStartsAt = ShiftWindowStartsAt(a.Date, template);
-                    var shiftEndsAt = ShiftWindowEndsAt(a.Date, template);
-                    recordByEmployee.TryGetValue(a.EmployeeId, out var record);
-
-                    var checkIn = record?.CheckInTime is { } checkInUtc
-                        ? TimeZoneInfo.ConvertTimeFromUtc(checkInUtc, _attendanceTimeZone)
-                        : (DateTime?)null;
-                    var checkOut = record?.CheckOutTime is { } checkOutUtc
-                        ? TimeZoneInfo.ConvertTimeFromUtc(checkOutUtc, _attendanceTimeZone)
-                        : (DateTime?)null;
-
-                    // No punch yet: still due before the shift ends, absent after it.
-                    var status = record?.CheckInTime is null
-                        ? localNow > shiftEndsAt ? "ABSENT" : "SCHEDULED"
-                        : record.CheckOutTime is null ? "PRESENT" : "LEFT";
-
-                    var method = record is null
-                        ? null
-                        : (record.CheckOutTime is not null ? record.CheckOutMethod : record.CheckInMethod)?.ToString();
-
-                    return new StationSummaryRecord
-                    {
-                        RecordId = record is null ? null : $"ATT-{record.Id}",
-                        EmployeeId = a.Employee.EmployeeNumber,
-                        EmployeeName = a.Employee.FullName,
-                        Status = status,
-                        ShiftName = template.Name,
-                        ShiftStart = template.StartTime.ToString("HH:mm", CultureInfo.InvariantCulture),
-                        ShiftEnd = template.EndTime.ToString("HH:mm", CultureInfo.InvariantCulture),
-                        CheckIn = checkIn?.ToString("HH:mm", CultureInfo.InvariantCulture),
-                        CheckOut = checkOut?.ToString("HH:mm", CultureInfo.InvariantCulture),
-                        LateMinutes = checkIn is { } inAt && inAt > shiftStartsAt
-                            ? (int)Math.Ceiling((inAt - shiftStartsAt).TotalMinutes)
-                            : 0,
-                        EarlyLeaveMinutes = checkOut is { } outAt && outAt < shiftEndsAt
-                            ? (int)Math.Ceiling((shiftEndsAt - outAt).TotalMinutes)
-                            : 0,
-                        Method = method,
-                    };
-                })
+                .Select(a => (a.EmployeeId, Row: BuildScheduledRow(a, recordByEmployee.GetValueOrDefault(a.EmployeeId), localNow, carriedOver: false)))
                 .ToArray();
 
             var rosterEmployeeIds = roster.Select(a => a.EmployeeId).ToHashSet();
+            var punchedTodayEmployeeIds = records.Where(r => r.CheckInTime is not null).Select(r => r.EmployeeId).ToHashSet();
+
+            // Still-running overnight shifts from yesterday, but only where a punch exists:
+            // a no-show on last night's shift is not something the station operator acts on.
+            var overnightRows = overnightRoster
+                .Where(a => overnightRecordByEmployee.ContainsKey(a.EmployeeId))
+                .Where(a => !punchedTodayEmployeeIds.Contains(a.EmployeeId))
+                .Where(a => a.ShiftTemplate!.EndTime < a.ShiftTemplate!.StartTime
+                    && localNow <= ShiftWindowEndsAt(a.Date, a.ShiftTemplate!).Add(OvernightCarryOverWindow))
+                .OrderBy(a => a.ShiftTemplate!.StartTime)
+                .ThenBy(a => a.Employee.FullName, StringComparer.OrdinalIgnoreCase)
+                .Select(a => (a.EmployeeId, Row: BuildScheduledRow(a, overnightRecordByEmployee[a.EmployeeId], localNow, carriedOver: true)))
+                .ToArray();
+
+            // One row per person: while last night's shift is still open it is the row the
+            // operator is looking at, so tonight's not-yet-started row steps aside.
+            var carriedOverEmployeeIds = overnightRows.Select(x => x.EmployeeId).ToHashSet();
+            var todayRows = rows.Where(x => !carriedOverEmployeeIds.Contains(x.EmployeeId)).ToArray();
+
             var extraRows = records
                 .Where(r => !rosterEmployeeIds.Contains(r.EmployeeId) && r.CheckInTime is not null)
                 .OrderBy(r => r.Employee?.FullName ?? string.Empty, StringComparer.OrdinalIgnoreCase)
-                .Select(r =>
-                {
-                    var checkIn = r.CheckInTime is { } inUtc
-                        ? TimeZoneInfo.ConvertTimeFromUtc(inUtc, _attendanceTimeZone)
-                        : (DateTime?)null;
-                    var checkOut = r.CheckOutTime is { } outUtc
-                        ? TimeZoneInfo.ConvertTimeFromUtc(outUtc, _attendanceTimeZone)
-                        : (DateTime?)null;
-                    var status = r.CheckOutTime is null ? "PRESENT" : "LEFT";
-                    var method = (r.CheckOutTime is not null ? r.CheckOutMethod : r.CheckInMethod)?.ToString();
-
-                    return new StationSummaryRecord
-                    {
-                        RecordId = $"ATT-{r.Id}",
-                        EmployeeId = r.Employee?.EmployeeNumber ?? r.EmployeeId.ToString(),
-                        EmployeeName = r.Employee?.FullName ?? $"Employee #{r.EmployeeId}",
-                        Status = status,
-                        ShiftName = AttendanceManagementService.CoverDayStatus,
-                        ShiftStart = "—",
-                        ShiftEnd = "—",
-                        CheckIn = checkIn?.ToString("HH:mm", CultureInfo.InvariantCulture),
-                        CheckOut = checkOut?.ToString("HH:mm", CultureInfo.InvariantCulture),
-                        LateMinutes = 0,
-                        EarlyLeaveMinutes = 0,
-                        Method = method,
-                    };
-                })
+                .Select(BuildPunchRow)
                 .ToArray();
 
-            var allRows = rows.Concat(extraRows).ToArray();
+            var allRows = overnightRows.Select(x => x.Row)
+                .Concat(todayRows.Select(x => x.Row))
+                .Concat(extraRows)
+                .ToArray();
 
             return new StationSummaryResponse
             {
-                PresentCount = records.Count(r => r.CheckInTime is not null && r.CheckOutTime is null),
-                ScheduledTodayCount = rows.Length,
+                // Anyone with an open record is on site — including the night shift that
+                // checked in yesterday and has not checked out yet.
+                PresentCount = allRows.Count(r => string.Equals(r.Status, "PRESENT", StringComparison.Ordinal)),
+                // The scheduled roster being displayed: today's rows plus last night's
+                // still-running shift (never the same person twice).
+                ScheduledTodayCount = overnightRows.Length + todayRows.Length,
                 Records = allRows,
             };
         }
+
+        /// <summary>Composes one roster row from a scheduled assignment and its (optional) record.</summary>
+        private StationSummaryRecord BuildScheduledRow(
+            ShiftAssignment assignment,
+            AttendanceRecord? record,
+            DateTime localNow,
+            bool carriedOver)
+        {
+            var template = assignment.ShiftTemplate!;
+            var shiftStartsAt = ShiftWindowStartsAt(assignment.Date, template);
+            var shiftEndsAt = ShiftWindowEndsAt(assignment.Date, template);
+
+            var checkIn = LocalTimeOf(record?.CheckInTime);
+            var checkOut = LocalTimeOf(record?.CheckOutTime);
+
+            // No punch yet: still due before the shift ends, absent after it.
+            var status = record?.CheckInTime is null
+                ? localNow > shiftEndsAt ? "ABSENT" : "SCHEDULED"
+                : record.CheckOutTime is null ? "PRESENT" : "LEFT";
+
+            var method = record is null
+                ? null
+                : (record.CheckOutTime is not null ? record.CheckOutMethod : record.CheckInMethod)?.ToString();
+
+            return new StationSummaryRecord
+            {
+                RecordId = record is null ? null : $"ATT-{record.Id}",
+                EmployeeId = assignment.Employee.EmployeeNumber,
+                EmployeeName = assignment.Employee.FullName,
+                Status = status,
+                ShiftName = template.Name,
+                ShiftStart = template.StartTime.ToString("HH:mm", CultureInfo.InvariantCulture),
+                ShiftEnd = template.EndTime.ToString("HH:mm", CultureInfo.InvariantCulture),
+                CheckIn = checkIn?.ToString("HH:mm", CultureInfo.InvariantCulture),
+                CheckOut = checkOut?.ToString("HH:mm", CultureInfo.InvariantCulture),
+                LateMinutes = checkIn is { } inAt && inAt > shiftStartsAt
+                    ? (int)Math.Ceiling((inAt - shiftStartsAt).TotalMinutes)
+                    : 0,
+                EarlyLeaveMinutes = checkOut is { } outAt && outAt < shiftEndsAt
+                    ? (int)Math.Ceiling((shiftEndsAt - outAt).TotalMinutes)
+                    : 0,
+                Method = method,
+                CarriedOver = carriedOver,
+            };
+        }
+
+        /// <summary>Composes a punch row for someone with no shift scheduled today (cover day).</summary>
+        private StationSummaryRecord BuildPunchRow(AttendanceRecord record)
+        {
+            var checkIn = LocalTimeOf(record.CheckInTime);
+            var checkOut = LocalTimeOf(record.CheckOutTime);
+            var status = record.CheckOutTime is null ? "PRESENT" : "LEFT";
+            var method = (record.CheckOutTime is not null ? record.CheckOutMethod : record.CheckInMethod)?.ToString();
+
+            return new StationSummaryRecord
+            {
+                RecordId = $"ATT-{record.Id}",
+                EmployeeId = record.Employee?.EmployeeNumber ?? record.EmployeeId.ToString(CultureInfo.InvariantCulture),
+                EmployeeName = record.Employee?.FullName ?? $"Employee #{record.EmployeeId}",
+                Status = status,
+                ShiftName = AttendanceManagementService.CoverDayStatus,
+                ShiftStart = "—",
+                ShiftEnd = "—",
+                CheckIn = checkIn?.ToString("HH:mm", CultureInfo.InvariantCulture),
+                CheckOut = checkOut?.ToString("HH:mm", CultureInfo.InvariantCulture),
+                LateMinutes = 0,
+                EarlyLeaveMinutes = 0,
+                Method = method,
+            };
+        }
+
+        /// <summary>Stored instants are UTC; the kiosk shows attendance-timezone wall clock.</summary>
+        private DateTime? LocalTimeOf(DateTime? utc) =>
+            utc is { } value ? TimeZoneInfo.ConvertTimeFromUtc(value, _attendanceTimeZone) : null;
 
         private async Task<AttendanceResponse?> RecordAsync(
             string employeeReference,

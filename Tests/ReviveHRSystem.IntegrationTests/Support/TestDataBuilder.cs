@@ -4,6 +4,8 @@ using DomainLayer.Models.EmployeeModule;
 using DomainLayer.Models.EmployeeModule.Enums;
 using DomainLayer.Models.OrganizationModule;
 using DomainLayer.Models.OrganizationModule.Enums;
+using DomainLayer.Models.PlatformModule;
+using DomainLayer.Models.PlatformModule.Enums;
 using DomainLayer.Models.RecruitmentModule;
 using DomainLayer.Models.RecruitmentModule.Enums;
 using DomainLayer.Models.SchedulingModule;
@@ -53,8 +55,21 @@ namespace ReviveHRSystem.IntegrationTests.Support
         public async Task<TestGym> CreateGymWithStationAsync()
         {
             var suffix = UniqueSuffix();
+
+            // A branch cannot exist without its company (Gym.CompanyId is required).
+            var company = new Company
+            {
+                Name = $"IT Company {suffix}",
+                Code = $"ITC-{suffix}",
+                City = "Test",
+                Status = CompanyStatus.Active
+            };
+            _db.Companies.Add(company);
+            await _db.SaveChangesAsync();
+
             var gym = new Gym
             {
+                CompanyId = company.Id,
                 Name = $"IT Gym {suffix}",
                 Location = "Test",
                 ShiftCycleLengthDays = 10,
@@ -343,7 +358,8 @@ namespace ReviveHRSystem.IntegrationTests.Support
             DateOnly date,
             DateTime? checkInUtc = null,
             DateTime? checkOutUtc = null,
-            AttendanceStatus status = AttendanceStatus.OnTime)
+            AttendanceStatus status = AttendanceStatus.OnTime,
+            int? scheduledShiftTemplateId = null)
         {
             var record = new AttendanceRecord
             {
@@ -354,7 +370,8 @@ namespace ReviveHRSystem.IntegrationTests.Support
                 CheckOutTime = checkOutUtc,
                 CheckInMethod = checkInUtc.HasValue ? AttendanceMethod.Biometric : null,
                 CheckOutMethod = checkOutUtc.HasValue ? AttendanceMethod.Biometric : null,
-                Status = status
+                Status = status,
+                ScheduledShiftTemplateId = scheduledShiftTemplateId
             };
             _db.AttendanceRecords.Add(record);
             await _db.SaveChangesAsync();

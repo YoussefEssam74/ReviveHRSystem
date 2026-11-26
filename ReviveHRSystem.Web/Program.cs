@@ -18,6 +18,7 @@ using Microsoft.IdentityModel.Tokens;
 using Presistence.Data;
 using Presistence.Repository;
 using ReviveHRSystem.Web.Authentication;
+using Shared.Configuration;
 using ReviveHRSystem.Web.CustomMiddleWares;
 using ReviveHRSystem.Web.DataSeed;
 using ReviveHRSystem.Web.Factories;
@@ -25,7 +26,6 @@ using ReviveHRSystem.Web.Middleware;
 using Service.Mapping;
 using Service.Services;
 using ServiceAbstraction.Services;
-using Shared.Configuration;
 using Swashbuckle.AspNetCore.SwaggerGen;
 
 namespace ReviveHRSystem.Web
@@ -42,6 +42,23 @@ namespace ReviveHRSystem.Web
                 // converter rejects (it wants "HH:mm:ss") — shift-template creation
                 // answered 400 validation errors for valid times until this shipped.
                 options.JsonSerializerOptions.Converters.Add(new Shared.Serialization.TimeOnlyFlexibleJsonConverter());
+            });
+
+            builder.Services.AddAntiforgery(options =>
+            {
+                options.HeaderName = AuthCookieOptions.CsrfHeader;
+                options.Cookie.Name = "ReviveCsrf";
+                options.Cookie.HttpOnly = true;
+                // Local HTTP development cannot issue Secure cookies. The dev SPA
+                // runs on localhost (same-site across ports), so Lax works there;
+                // deployments use cross-site cookies over HTTPS.
+                options.Cookie.SameSite = builder.Environment.IsDevelopment()
+                    ? SameSiteMode.Lax
+                    : SameSiteMode.None;
+                options.Cookie.SecurePolicy = builder.Environment.IsDevelopment()
+                    ? CookieSecurePolicy.SameAsRequest
+                    : CookieSecurePolicy.Always;
+                options.Cookie.Path = "/";
             });
 
             // Configure DbContext with PostgreSQL
@@ -105,6 +122,20 @@ namespace ReviveHRSystem.Web
                     // lifetime to expire.
                     options.Events = new JwtBearerEvents
                     {
+                        OnMessageReceived = context =>
+                        {
+                            // Browser sessions use an HttpOnly cookie. Keep bearer
+                            // support for native clients and existing integrations.
+                            if (string.IsNullOrWhiteSpace(context.Request.Headers.Authorization)
+                                && context.Request.Cookies.TryGetValue(
+                                    AuthCookieOptions.AccessTokenCookie,
+                                    out var cookieToken))
+                            {
+                                context.Token = cookieToken;
+                            }
+
+                            return Task.CompletedTask;
+                        },
                         OnTokenValidated = async context =>
                         {
                             if (context.Principal?.HasClaim("purpose", "gym-selection") == true)
@@ -284,12 +315,16 @@ namespace ReviveHRSystem.Web
                 LateGraceMinutes = GraceMinutes(builder.Configuration, "Attendance:LateGraceMinutes", AttendanceOptions.DefaultLateGraceMinutes),
                 EarlyLeaveGraceMinutes = GraceMinutes(builder.Configuration, "Attendance:EarlyLeaveGraceMinutes", AttendanceOptions.DefaultEarlyLeaveGraceMinutes),
             });
+            // Wall-clock reads that decide "shift started / still running" (kiosk roster,
+            // attendance board) go through this, so tests can pin the moment.
+            builder.Services.AddSingleton(TimeProvider.System);
 
             // --- Application services ---
             // AutoMapper scans the service assembly for MappingProfile.
             builder.Services.AddAutoMapper(cfg => cfg.AddProfile<MappingProfile>(), typeof(AuthService).Assembly);
             builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
             builder.Services.AddScoped<IUserAccessRepository, UserAccessRepository>();
+            builder.Services.AddScoped<IPlatformReadRepository, PlatformReadRepository>();
             builder.Services.AddScoped<IPasswordHasher, PasswordHasher>();
             builder.Services.AddScoped<ITokenService, TokenService>();
             builder.Services.AddScoped<IUserSessionService, UserSessionService>();
@@ -326,6 +361,20 @@ namespace ReviveHRSystem.Web
             builder.Services.AddScoped<IGymService, GymService>();
             builder.Services.AddScoped<ISubscriptionService, SubscriptionService>();
             builder.Services.AddScoped<ISubscriptionPlanService, SubscriptionPlanService>();
+            builder.Services.AddScoped<ICompanyService, CompanyService>();
+            builder.Services.AddScoped<IPlatformUserService, PlatformUserService>();
+            builder.Services.AddScoped<IPlatformDashboardService, PlatformDashboardService>();
+            builder.Services.AddScoped<IPlanService, PlanService>();
+            builder.Services.AddScoped<IInvoiceService, InvoiceService>();
+            builder.Services.AddScoped<IRevenueService, RevenueService>();
+            builder.Services.AddScoped<IPlatformAuditService, PlatformAuditService>();
+            builder.Services.AddScoped<IPlatformSettingsService, PlatformSettingsService>();
+            builder.Services.AddScoped<IImpersonationService, ImpersonationService>();
+
+            // Scheduled billing work. Disabled by default — see PlatformBillingJobOptions.
+            builder.Services.Configure<ReviveHRSystem.Web.BackgroundJobs.PlatformBillingJobOptions>(
+                builder.Configuration.GetSection(ReviveHRSystem.Web.BackgroundJobs.PlatformBillingJobOptions.SectionName));
+            builder.Services.AddHostedService<ReviveHRSystem.Web.BackgroundJobs.PlatformBillingJobs>();
             builder.Services.AddScoped<IEmployeeService, EmployeeService>();
             builder.Services.AddScoped<IRoleService, RoleService>();
             builder.Services.AddScoped<IRequestService, RequestService>();
@@ -411,6 +460,7 @@ namespace ReviveHRSystem.Web
 
             app.UseMiddleware<CustomExceptionMiddleWare>();
             app.UseMiddleware<SecurityHeadersMiddleware>();
+            app.UseMiddleware<ReviveHRSystem.Web.Middleware.BrowserCsrfMiddleware>();
 
             if (app.Environment.IsDevelopment())
             {
@@ -425,6 +475,9 @@ namespace ReviveHRSystem.Web
             app.UseRateLimiter();
             app.UseCors();
             app.UseAuthentication();
+            // Must sit between authentication and authorization: it needs the validated
+            // principal's act claims, and it must answer before any controller runs.
+            app.UseMiddleware<ReviveHRSystem.Web.Middleware.ImpersonationGuardMiddleware>();
             app.UseAuthorization();
 
             app.MapControllers();

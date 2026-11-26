@@ -21,7 +21,7 @@ namespace ServiceAbstraction.Services
         /// <summary>
         /// Records the caller's logout and revokes the supplied refresh token (if any).
         /// </summary>
-        Task LogoutAsync(int userId, string? refreshToken = null, CancellationToken cancellationToken = default);
+        Task LogoutAsync(int? userId, string? refreshToken = null, CancellationToken cancellationToken = default);
 
         /// <summary>Loads the signed-in user's portal profile: name, position, gyms, permissions (GET /api/auth/me).</summary>
         /// <param name="actorUserId">The authenticated user's id (uid claim).</param>

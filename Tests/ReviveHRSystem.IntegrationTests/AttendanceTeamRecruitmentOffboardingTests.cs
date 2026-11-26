@@ -405,13 +405,13 @@ namespace ReviveHRSystem.IntegrationTests
         {
             using var scope = _fixture.Services.CreateScope();
             var db = scope.ServiceProvider.GetRequiredService<ReviveHrDbContext>();
-            if (await db.UserGymRoles.AnyAsync(ugr => ugr.UserId == userId && ugr.GymId == gymId))
+            if (await db.UserRoles.AnyAsync(ur => ur.UserId == userId && ur.GymId == gymId))
             {
                 return;
             }
 
             var roleId = await db.Roles.Where(r => r.Name == roleName).Select(r => r.Id).SingleAsync();
-            db.UserGymRoles.Add(new DomainLayer.Models.UserModule.UserGymRole { UserId = userId, GymId = gymId, RoleId = roleId });
+            db.UserRoles.Add(new DomainLayer.Models.UserModule.UserRole { UserId = userId, GymId = gymId, RoleName = roleName });
             await db.SaveChangesAsync();
         }
 

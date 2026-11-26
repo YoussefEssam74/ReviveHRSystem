@@ -17,6 +17,12 @@
     <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.23.0" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- Lets the test suite exercise internal helpers directly — notably the
+         dependency-free PDF writer, whose byte offsets are worth asserting. -->
+    <InternalsVisibleTo Include="ReviveHRSystem.IntegrationTests" />
+  </ItemGroup>
+
   <!-- Transitive-package security pins: elevate the vulnerable resolved versions (see reports/package-audit log, advisory GHSA-qj66-m88j-hmgj / GHSA-8g4q-xg66-9fp4). -->
   <ItemGroup>
     <PackageReference Include="Microsoft.Extensions.Caching.Memory" Version="8.0.1" /> <!-- transitive security pin (CVE-2024-43483 / CVE-2024-43485) -->

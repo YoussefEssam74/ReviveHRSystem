@@ -3,9 +3,8 @@ using System.Text.Json.Serialization;
 namespace Shared.DataTransferObject.Auth;
 
 /// <summary>
-/// Result of an in-session gym switch (ADR-002 Amendment 1): a fresh access token
-/// scoped to the new gym plus the refreshed session context (feature levels are
-/// per gym, so the SPA must re-gate its navigation on every switch).
+/// Result of an in-session gym switch (ADR-002 Amendment 1): fresh browser cookies
+/// scoped to the new gym plus the refreshed session context.
 /// </summary>
 /// <remarks>
 /// The switch also rotates the refresh credential: the returned refresh token is
@@ -15,7 +14,8 @@ namespace Shared.DataTransferObject.Auth;
 /// </remarks>
 public sealed class SwitchGymResponse
 {
-    public string AccessToken { get; init; } = string.Empty;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? AccessToken { get; init; }
     public int ExpiresInSeconds { get; init; }
 
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

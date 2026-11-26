@@ -396,7 +396,7 @@ namespace ReviveHRSystem.IntegrationTests
                     await db.SaveChangesAsync();
                 }
 
-                // Direct grant only — deliberately no UserGymRoles row.
+                // Direct grant only — deliberately no per-gym UserRoles row.
                 var permissionId = await db.Permissions
                     .Where(p => p.Key == "schedule.manage")
                     .Select(p => p.Id)

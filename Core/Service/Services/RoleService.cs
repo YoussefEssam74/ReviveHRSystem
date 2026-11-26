@@ -121,7 +121,12 @@ namespace Service.Services
             var name = NormalizeRequiredName(request.Name, "Role name");
             await EnsureNameAvailableAsync(name, excludeRoleId: role.Id, cancellationToken);
 
-            role.Name = name;
+            var previousName = role.Name;
+            var renamed = !string.Equals(previousName, name, StringComparison.Ordinal);
+
+            // A key property cannot be mutated on a tracked entity, so the name change is
+            // applied as SQL after the description/permission edits are persisted. The FK's
+            // ON UPDATE CASCADE carries every assignment across in the same statement.
             role.Description = NormalizeDescription(request.Description);
 
             if (request.Permissions is not null)
@@ -133,9 +138,14 @@ namespace Service.Services
             // DbContext, so mutations are tracked — no explicit Update needed.
             await _unitOfWork.SaveChangesAsync(cancellationToken);
 
+            if (renamed)
+            {
+                await _userAccess.RenameRoleAsync(role.Id, name, cancellationToken);
+            }
+
             var keyById = await LoadPermissionKeysAsync(cancellationToken);
             var usersCount = await _userAccess.CountUsersWithRoleAsync(role.Id, cancellationToken);
-            return new RoleDataResponse { Data = BuildItem(role, ResolveKeys(role, keyById), usersCount) };
+            return new RoleDataResponse { Data = BuildItem(role, ResolveKeys(role, keyById), usersCount, name) };
         }
 
         public async Task<RolePermissionsResponse> SetRolePermissionsAsync(int? actorUserId, int roleId, SetRolePermissionsRequest request, CancellationToken cancellationToken = default)
@@ -715,6 +725,16 @@ namespace Service.Services
             {
                 throw new BadRequestException($"A role named '{name}' already exists.");
             }
+
+            // RoleName is the foreign key of every assignment, so the name must stay unique
+            // across ARCHIVED roles too — an archived role keeps its name reserved.
+            var archivedMatch = await _unitOfWork.GetRepository<Role, int>()
+                .GetAllAsync(new ArchivedRoleByNameSpec(name), cancellationToken);
+            if (archivedMatch.Any(r => r.Id != excludeRoleId))
+            {
+                throw new BadRequestException(
+                    $"The name '{name}' belongs to an archived role. Restore that role or choose another name.");
+            }
         }
 
         /// <summary>Id → key map of the tracked catalog (used to hydrate role permission keys).</summary>
@@ -779,10 +799,14 @@ namespace Service.Services
                 .OrderBy(key => key, StringComparer.Ordinal)
                 .ToList();
 
-        private static RoleListItem BuildItem(Role role, List<string> keys, int usersCount) => new()
+        /// <summary>
+        /// <paramref name="nameOverride"/> is passed by the update path, where the rename was
+        /// applied as SQL and the tracked entity still carries the previous name.
+        /// </summary>
+        private static RoleListItem BuildItem(Role role, List<string> keys, int usersCount, string? nameOverride = null) => new()
         {
             Id = role.Id,
-            Name = role.Name,
+            Name = nameOverride ?? role.Name,
             Description = role.Description,
             // Archived roles are filtered out everywhere, so every visible role is active.
             Status = "Active",

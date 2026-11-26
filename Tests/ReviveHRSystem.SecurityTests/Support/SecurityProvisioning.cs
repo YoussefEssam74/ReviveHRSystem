@@ -1,4 +1,4 @@
-using System.Net.Http.Headers;
+﻿using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using DomainLayer.Models.EvaluationModule;
 using DomainLayer.Models.OrganizationModule;
@@ -32,6 +32,58 @@ namespace ReviveHRSystem.SecurityTests.Support
     {
         public int GymAId { get; init; }
         public int GymBId { get; init; }
+
+        /// <summary>Tenant that owns gym A / gym B (seeded one-company-per-gym).</summary>
+        public int CompanyAId { get; init; }
+        public int CompanyBId { get; init; }
+
+        /// <summary>The seeded HR account — the subject of the platform user-administration rows.</summary>
+        public int HrUserId { get; init; }
+
+        /// <summary>
+        /// A dedicated HR account created only for the platform user-administration rows.
+        /// It is never used as a login identity, so suspending / resetting / re-assigning it
+        /// cannot destabilise the the `hr` identity that dozens of other rows depend on.
+        /// </summary>
+        public int PlatformProbeUserId { get; init; }
+
+        /// <summary>The seeded Growth plan (allows a trial) — target for the create-company probe.</summary>
+        public int GrowthPlanId { get; init; }
+
+        /// <summary>A throwaway plan for the plan catalogue's read/update/duplicate rows.</summary>
+        public int PlanProbeId { get; init; }
+
+        /// <summary>A plan with no live subscription, safe for the archive row.</summary>
+        public int PlanArchiveProbeId { get; init; }
+
+        /// <summary>Open invoice with no payments — the detail and PDF rows.</summary>
+        public int InvoiceProbeId { get; init; }
+
+        /// <summary>Open invoice dedicated to the record-payment row.</summary>
+        public int InvoicePaymentProbeId { get; init; }
+
+        /// <summary>Overdue invoice dedicated to the reminder row.</summary>
+        public int InvoiceOverdueProbeId { get; init; }
+
+        /// <summary>Open invoice with no payments, dedicated to the void row.</summary>
+        public int InvoiceVoidProbeId { get; init; }
+
+        /// <summary>A throwaway feature flag for the flag catalogue's update row.</summary>
+        public int FeatureFlagProbeId { get; init; }
+
+        /// <summary>The probe flag's immutable key — the update payload must echo it back.</summary>
+        public string FeatureFlagProbeKey { get; init; } = string.Empty;
+
+        /// <summary>
+        /// A SEPARATE flag for the delete row. Sharing one flag between the update and delete rows
+        /// let the delete run first and turn the update into a 404.
+        /// </summary>
+        public int FeatureFlagDeleteProbeId { get; init; }
+
+        public string FeatureFlagDeleteProbeKey { get; init; } = string.Empty;
+
+        /// <summary>An existing audit row — the detail/review rows address it.</summary>
+        public int AuditProbeId { get; init; }
 
         // Matrix identities. Mains are homed in gym A (single-gym access each);
         // twins hold the same role but only gym B access, so every gym-A target
@@ -104,6 +156,15 @@ namespace ReviveHRSystem.SecurityTests.Support
             .. HrMatrixKeys,
             "employees.transfer", "employees.position.change", "employees.compensation.manage",
             "employees.contract.manage", "employees.role.assign",
+            // Platform-console keys an HR Manager legitimately holds: it is the platform HR
+            // lead, so it sees every company and administers HR/employee accounts. It does
+            // NOT hold platform.companies.create/edit/status, platform.branches.manage,
+            // platform.plans.*, platform.billing.*, platform.revenue.view,
+            // platform.audit.*, platform.settings.manage, platform.feature_flags.manage,
+            // platform.hr_manager.manage or platform.impersonate.
+            "platform.companies.view",
+            "platform.users.view", "platform.users.manage", "platform.users.reset_password",
+            "gym.hr_staff.assign",
         ];
 
         public static async Task<SecurityContext> ProvisionAsync(
@@ -151,6 +212,21 @@ namespace ReviveHRSystem.SecurityTests.Support
 
             // HR main (seeded hr@ is single-gym already) and HR Manager main (gym A only).
             await GrantKeysAsync(builder, hrUser.Id, HrMatrixKeys);
+
+            // Dedicated target for the platform console's user-administration rows (suspend,
+            // reset, revoke, re-assign). It is never used to log in, so mutating it cannot
+            // change the permission surface of any identity other rows rely on.
+            var platformProbe = await builder.CreateUserAsync(UserType.HR, [gymARecord]);
+            await GrantKeysAsync(builder, platformProbe.UserId, HrMatrixKeys);
+
+            // Billing probes. Each mutating row gets its own record so parallel execution can
+            // never make one row's side effect change another row's expected status.
+            var (planProbe, planArchiveProbe, invoiceProbe, invoicePaymentProbe, invoiceOverdueProbe, invoiceVoidProbe) =
+                await ProvisionBillingProbesAsync(db, gymA.CompanyId);
+
+            var featureFlagProbe = await ProvisionFeatureFlagProbeAsync(db, "probe");
+            var featureFlagDeleteProbe = await ProvisionFeatureFlagProbeAsync(db, "delete");
+            var auditProbeId = await ProvisionAuditProbeAsync(db);
             var hrmMainUser = await builder.CreateUserAsync(UserType.HR, [gymARecord]);
             await AssignGymRoleAsync(db, hrmMainUser.UserId, gymA.Id, RoleNames.HrManager);
             await GrantKeysAsync(builder, hrmMainUser.UserId, HrManagerMatrixKeys);
@@ -287,6 +363,25 @@ namespace ReviveHRSystem.SecurityTests.Support
             {
                 GymAId = gymA.Id,
                 GymBId = gymB.Id,
+                CompanyAId = gymA.CompanyId,
+                CompanyBId = gymB.CompanyId,
+                HrUserId = hrUser.Id,
+                PlatformProbeUserId = platformProbe.UserId,
+                PlanProbeId = planProbe.Id,
+                PlanArchiveProbeId = planArchiveProbe.Id,
+                InvoiceProbeId = invoiceProbe.Id,
+                InvoicePaymentProbeId = invoicePaymentProbe.Id,
+                InvoiceOverdueProbeId = invoiceOverdueProbe.Id,
+                InvoiceVoidProbeId = invoiceVoidProbe.Id,
+                FeatureFlagProbeId = featureFlagProbe.Id,
+                FeatureFlagProbeKey = featureFlagProbe.Key,
+                FeatureFlagDeleteProbeId = featureFlagDeleteProbe.Id,
+                FeatureFlagDeleteProbeKey = featureFlagDeleteProbe.Key,
+                AuditProbeId = auditProbeId,
+                GrowthPlanId = await db.SubscriptionPlans
+                    .Where(p => p.Slug == "growth")
+                    .Select(p => p.Id)
+                    .FirstAsync(),
                 EmployeeSelf = Id("employeeSelf", karimEmployee.User!.Email!, gymA.Id),
                 EmployeeOther = Id("employeeOther", outsider.Email, gymA.Id),
                 EmployeeTwin = Id("employeeTwin", saraEmployee.User!.Email!, gymB.Id),
@@ -349,9 +444,119 @@ namespace ReviveHRSystem.SecurityTests.Support
             return Path.Combine(reports, fileName);
         }
 
-        private static async Task GrantKeysAsync(TestDataBuilder builder, int userId, string[] keys)
+        /// <summary>
+        /// Creates the plan and invoice records the billing rows address. Every mutating row
+        /// owns a distinct record, so the matrix theory can run in parallel without one row's
+        /// side effect flipping another's expected status.
+        /// </summary>
+        private static async Task<(
+            DomainLayer.Models.BillingModule.SubscriptionPlan PlanProbe,
+            DomainLayer.Models.BillingModule.SubscriptionPlan PlanArchiveProbe,
+            DomainLayer.Models.BillingModule.Invoice InvoiceProbe,
+            DomainLayer.Models.BillingModule.Invoice InvoicePaymentProbe,
+            DomainLayer.Models.BillingModule.Invoice InvoiceOverdueProbe,
+            DomainLayer.Models.BillingModule.Invoice InvoiceVoidProbe)> ProvisionBillingProbesAsync(
+            ReviveHrDbContext db,
+            int companyId)
         {
-            foreach (var key in keys)
+            var suffix = Guid.NewGuid().ToString("N")[..8];
+
+            DomainLayer.Models.BillingModule.SubscriptionPlan NewPlan(string name) => new()
+            {
+                Name = name,
+                Slug = name.ToLowerInvariant().Replace(' ', '-'),
+                Price = 1000m,
+                Currency = "EGP",
+                CycleCount = 1,
+                CycleUnit = DomainLayer.Models.BillingModule.Enums.PlanCycleUnit.Months,
+                TrialMode = DomainLayer.Models.BillingModule.Enums.TrialMode.None,
+                Features = [new DomainLayer.Models.BillingModule.PlanFeature { Label = "Security matrix probe", SortOrder = 1 }],
+            };
+
+            // The read/update/duplicate rows share one plan; the archive row needs a plan with
+            // no live subscription, so it gets its own.
+            var planProbe = NewPlan($"Matrix Plan {suffix}");
+            var planArchiveProbe = NewPlan($"Matrix Archive {suffix}");
+            db.SubscriptionPlans.AddRange(planProbe, planArchiveProbe);
+            await db.SaveChangesAsync();
+
+            DomainLayer.Models.BillingModule.Invoice NewInvoice(
+                string number,
+                DomainLayer.Models.BillingModule.Enums.InvoiceStatus status,
+                DateTime dueOn,
+                int daysAgo) => new()
+                {
+                    InvoiceNumber = number,
+                    CompanyId = companyId,
+                    PeriodStart = DateTime.SpecifyKind(DateTime.UtcNow.Date.AddDays(-daysAgo), DateTimeKind.Utc),
+                    PeriodEnd = DateTime.SpecifyKind(DateTime.UtcNow.Date.AddDays(-daysAgo).AddMonths(1).AddDays(-1), DateTimeKind.Utc),
+                    PeriodLabel = DateTime.UtcNow.AddDays(-daysAgo).ToString("MMM yyyy"),
+                    Amount = 1000m,
+                    Currency = "EGP",
+                    Status = status,
+                    IssuedOn = DateTime.SpecifyKind(DateTime.UtcNow.Date.AddDays(-daysAgo), DateTimeKind.Utc),
+                    DueOn = DateTime.SpecifyKind(dueOn, DateTimeKind.Utc),
+                };
+
+            var invoiceProbe = NewInvoice($"INV-MX{suffix}-1", DomainLayer.Models.BillingModule.Enums.InvoiceStatus.Open, DateTime.UtcNow.AddDays(30), 1);
+            var invoicePaymentProbe = NewInvoice($"INV-MX{suffix}-2", DomainLayer.Models.BillingModule.Enums.InvoiceStatus.Open, DateTime.UtcNow.AddDays(30), 2);
+            var invoiceOverdueProbe = NewInvoice($"INV-MX{suffix}-3", DomainLayer.Models.BillingModule.Enums.InvoiceStatus.Overdue, DateTime.UtcNow.AddDays(-10), 40);
+            var invoiceVoidProbe = NewInvoice($"INV-MX{suffix}-4", DomainLayer.Models.BillingModule.Enums.InvoiceStatus.Open, DateTime.UtcNow.AddDays(30), 3);
+
+            db.Invoices.AddRange(invoiceProbe, invoicePaymentProbe, invoiceOverdueProbe, invoiceVoidProbe);
+            await db.SaveChangesAsync();
+
+            return (planProbe, planArchiveProbe, invoiceProbe, invoicePaymentProbe, invoiceOverdueProbe, invoiceVoidProbe);
+        }
+
+        /// <summary>
+        /// A throwaway feature flag. Each mutating row gets its own, so the delete row can never
+        /// remove the flag the update row is working on.
+        /// </summary>
+        private static async Task<DomainLayer.Models.PlatformModule.FeatureFlag> ProvisionFeatureFlagProbeAsync(
+            ReviveHrDbContext db,
+            string purpose)
+        {
+            var flag = new DomainLayer.Models.PlatformModule.FeatureFlag
+            {
+                Key = $"matrix.{purpose}.{Guid.NewGuid():N}"[..24].ToLowerInvariant(),
+                Name = $"Security matrix {purpose} probe",
+                Description = "Created by the access-matrix fixture.",
+                IsEnabled = false,
+                Scope = DomainLayer.Models.PlatformModule.Enums.FeatureFlagScope.Global,
+            };
+
+            db.FeatureFlags.Add(flag);
+            await db.SaveChangesAsync();
+            return flag;
+        }
+
+        /// <summary>
+        /// A single unreviewed warning event for the audit detail/review rows. It is created
+        /// explicitly because the trail is empty at provisioning time — there is nothing to
+        /// "pick an existing row" from.
+        /// </summary>
+        private static async Task<int> ProvisionAuditProbeAsync(ReviveHrDbContext db)
+        {
+            var probe = new DomainLayer.Models.AuditModule.AuditLog
+            {
+                Action = "Updated",
+                ActionLabel = "Security matrix probe event",
+                Category = "Settings",
+                Severity = "warning",
+                EntityType = "SecurityTest",
+                EntityId = 0,
+                Target = "Access matrix fixture",
+                Detail = "Synthetic event created so the audit detail and review rows have a stable target.",
+                Timestamp = DateTime.UtcNow.AddMinutes(-1),
+            };
+
+            db.AuditLogs.Add(probe);
+            await db.SaveChangesAsync();
+            return probe.Id;
+        }
+
+        private static async Task GrantKeysAsync(TestDataBuilder builder, int userId, string[] keys)        {            foreach (var key in keys)
             {
                 await builder.GrantPermissionAsync(userId, key, "security-test");
             }
@@ -479,10 +684,10 @@ namespace ReviveHRSystem.SecurityTests.Support
             var role = await db.Roles.FirstOrDefaultAsync(r => r.Name == roleName)
                 ?? throw new InvalidOperationException($"Role '{roleName}' is not seeded.");
 
-            if (!await db.UserGymRoles.AnyAsync(
-                    ugr => ugr.UserId == userId && ugr.GymId == gymId && ugr.RoleId == role.Id))
+            if (!await db.UserRoles.AnyAsync(
+                    ur => ur.UserId == userId && ur.GymId == gymId && ur.RoleName == role.Name))
             {
-                db.UserGymRoles.Add(new UserGymRole { UserId = userId, GymId = gymId, RoleId = role.Id });
+                db.UserRoles.Add(new UserRole { UserId = userId, GymId = gymId, RoleName = role.Name });
             }
 
             if (!await db.UserGymAccesses.AnyAsync(a => a.UserId == userId && a.GymId == gymId))

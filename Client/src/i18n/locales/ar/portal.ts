@@ -316,6 +316,12 @@ export const portal: Record<string, string> = {
   'HR COMMENT': 'تعليق الموارد البشرية',
   'APPROVAL WORKFLOW': 'مسار الموافقة',
   '{{type}} submitted — pending review': 'تم تقديم {{type}} — بانتظار المراجعة',
+  '{{type}} submitted — approved automatically': 'تم تقديم {{type}} — تمت الموافقة تلقائيًا',
+  '{{type}} submitted — awaiting HR sign-off': 'تم تقديم {{type}} — بانتظار اعتماد الموارد البشرية',
+  'Filed by HR — the branch-manager and HR stages are approved automatically.':
+    'مقدّم من الموارد البشرية — يتم اعتماد مرحلتي مدير الفرع والموارد البشرية تلقائيًا.',
+  'Filed by the branch desk — approved at the manager stage, then it goes to HR for the final sign-off.':
+    'مقدّم من مكتب الفرع — تم اعتماده في مرحلة المدير، ثم يذهب إلى الموارد البشرية للاعتماد النهائي.',
   'Please select a request type.': 'يرجى اختيار نوع الطلب.',
   'Please add a reason for your request.': 'يرجى إضافة سبب لطلبك.',
   'No annual leave days remaining — you cannot submit an annual-leave request.':
@@ -455,11 +461,17 @@ export const portal: Record<string, string> = {
   'Late arrivals': 'التأخيرات',
   'Absent days': 'أيام الغياب',
   'Salary advance': 'سلفة الراتب',
+  'For your information only — it is not added to or deducted from your salary.':
+    'للعلم فقط — لا تُضاف إلى راتبك ولا تُخصم منه.',
   'Actual Attended': 'أيام الحضور الفعلية',
   'Scheduled Working Days': 'أيام العمل المجدولة',
   'Actual Days This Month': 'أيام العمل الفعلية هذا الشهر',
   'Weekly Off': 'أيام الراحة الأسبوعية',
+  'Assigned Hours This Month': 'الساعات المخصصة هذا الشهر',
   'Daily Rate': 'الأجر اليومي',
+  'Hourly Rate': 'أجر الساعة',
+  'Gross earnings': 'إجمالي الأرباح',
+  'Total Payout': 'إجمالي المستحق',
   'Annual Increase Percentage': 'نسبة الزيادة السنوية',
   'Applied With January Payroll': 'تُطبَّق مع رواتب يناير',
   'January {{year}}': 'يناير {{year}}',
@@ -937,4 +949,23 @@ export const portal: Record<string, string> = {
   'End date': 'تاريخ الانتهاء',
   'Filed under the requests.view key; because it is raised by a manager it goes straight to HR review (the team-leader stage is skipped).':
     'يُسجَّل بصلاحية requests.view، ولأن المدير هو من يقدّمه فيذهب مباشرة إلى مراجعة الموارد البشرية (تُتخطى مرحلة قائد الفريق).',
+
+  // Deductions — manager-sized in hours or days.
+  "e.g. 1.5": "مثال: 1.5",
+  "e.g. 0.5": "مثال: 0.5",
+  "Deduct hours / days": "خصم بالساعات أو الأيام",
+  "Deduction size updated — the amount follows the month's rates.": "تم تحديث حجم الخصم — المبلغ يتبع أسعار الشهر.",
+  "Enter the deduction in hours or days.": "أدخل الخصم بالساعات أو الأيام.",
+  "Set hours or days": "حدّد الساعات أو الأيام",
+  "Daily rate {{daily}}, hourly rate {{hourly}}.": "الأجر اليومي {{daily}}، الأجر بالساعة {{hourly}}.",
+  "pending the roster": "بانتظار جدول المناوبات",
+  "Amount appears once the month's roster is complete — {{hours}} h assigned so far.": "يظهر المبلغ بعد اكتمال جدول الشهر — تم إسناد {{hours}} ساعة حتى الآن.",
+  "{{size}} × {{rate}} = {{amount}}": "{{size}} × {{rate}} = {{amount}}",
+  "Amount appears once the month's roster is complete.": "يظهر المبلغ بعد اكتمال جدول الشهر.",
+
+  // Deduction sizing — manager picks hours or days.
+  "Not priced yet": "لم يُسعَّر بعد",
+  "Deduction for {{employee}} sent to HR — the amount follows the month's rates.": "أُرسل خصم {{employee}} إلى الموارد البشرية — المبلغ يتبع أسعار الشهر.",
+  "A day is {{amount}} this month; the hour follows the roster.": "قيمة اليوم هذا الشهر {{amount}}؛ وقيمة الساعة تتبع جدول المناوبات.",
+  "The amount follows the month's daily or hourly rate.": "المبلغ يتبع أجر اليوم أو الساعة لهذا الشهر.",
 }

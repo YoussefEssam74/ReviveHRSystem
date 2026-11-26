@@ -884,7 +884,9 @@ function RequestDetailDrawer({
                         step.done ? "text-charcoal-500" : "text-charcoal-400",
                       )}
                     >
-                      {formatTimeLabel(step.date)}
+                      {step.occurredAt
+                        ? `${formatDateWithYear(step.occurredAt)} · ${formatTime(step.occurredAt)}`
+                        : formatTimeLabel(step.date)}
                     </p>
                   </div>
                 </div>

@@ -116,11 +116,11 @@ namespace Presistence.Data.Configurations
         }
     }
 
-    public class SubscriptionPlanConfiguration : IEntityTypeConfiguration<SubscriptionPlan>
+    public class GymSubscriptionPlanConfiguration : IEntityTypeConfiguration<SubscriptionPlan>
     {
         public void Configure(EntityTypeBuilder<SubscriptionPlan> builder)
         {
-            builder.ToTable("SubscriptionPlans");
+            builder.ToTable("GymSubscriptionPlans");
             builder.HasKey(p => p.Id);
 
             builder.Property(p => p.Name).IsRequired().HasMaxLength(120);

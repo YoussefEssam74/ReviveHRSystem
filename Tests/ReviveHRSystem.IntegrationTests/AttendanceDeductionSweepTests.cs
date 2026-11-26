@@ -15,14 +15,13 @@ using Xunit;
 namespace ReviveHRSystem.IntegrationTests
 {
     /// <summary>
-    /// The attendance → deduction bridge behind Employees Performance → Deductions:
-    /// a scheduled-but-unpunched day and a stored late day both land in the branch's
-    /// list as priced, pending deductions (one day / a quarter day of pay at
-    /// salary ÷ 30), reading the list twice never doubles a day up, a day that no
-    /// longer justifies the deduction (corrected to On Time, approved leave of any
-    /// type) takes the auto-raised row with it, a rejected day is final, a row
-    /// raised before any salary was on file is priced for real as soon as one
-    /// exists, and HR can re-price a line at month end.
+    /// The attendance → deduction bridge behind Employees Performance → Deductions.
+    /// The sweep flags a punished day but never invents a size: the branch manager
+    /// chooses hours or days, and the money follows the month's rates (daily = base ÷
+    /// calendar days, hourly = base ÷ assigned hours). A reading twice never doubles a
+    /// day up, a day that no longer justifies the deduction takes the auto row with it,
+    /// a rejected day is final, and an hours-based size stays unpriced until the
+    /// month's roster is complete.
     /// </summary>
     [Collection(ApiTestFixture.CollectionName)]
     public class AttendanceDeductionSweepTests
@@ -36,7 +35,7 @@ namespace ReviveHRSystem.IntegrationTests
         private TestDataBuilder NewBuilder() => new(_fixture.Services);
 
         [Fact]
-        public async Task DerivedAbsence_RaisesPricedDayDeduction_OncePerDay()
+        public async Task DerivedAbsence_IsFlaggedForTheManager_ThenPricedFromTheDaysHeChooses()
         {
             var builder = NewBuilder();
             var (token, employeeId, target, _, _) = await SceneAsync(builder);
@@ -46,9 +45,10 @@ namespace ReviveHRSystem.IntegrationTests
 
             Assert.Equal("Unapproved absence", row.GetProperty("reason").GetString());
             Assert.Equal("Pending", row.GetProperty("status").GetString());
-            // One day of pay: base ÷ 30 × 1.
-            Assert.Equal(Expected(1), row.GetProperty("amount").GetDecimal());
-            Assert.Equal(1m, row.GetProperty("deductionDays").GetDecimal());
+            // No size yet: the day is flagged, the manager prices it.
+            Assert.Equal(0m, row.GetProperty("amount").GetDecimal());
+            Assert.Equal(0m, row.GetProperty("deductionValue").GetDecimal());
+            Assert.Contains("Awaiting the branch manager", row.GetProperty("note").GetString(), StringComparison.Ordinal);
             // The day it punishes rides along, so payroll close and the tab agree
             // on which day the money belongs to.
             Assert.Equal(target.ToString("yyyy-MM-dd"), row.GetProperty("date").GetString());
@@ -58,27 +58,61 @@ namespace ReviveHRSystem.IntegrationTests
             var second = await BranchDeductionsAsync(token, employeeId);
             var again = Assert.Single(second);
             Assert.Equal(row.GetProperty("id").GetInt32(), again.GetProperty("id").GetInt32());
+
+            // The manager sizes it in days and approves: base ÷ the month's calendar
+            // days × the days he chose.
+            var sized = await BranchReviewAsync(token, row.GetProperty("id").GetInt32(), "approve", "days", 3m);
+            Assert.Equal("BranchApproved", sized.GetProperty("status").GetString());
+            Assert.Equal(3m, sized.GetProperty("deductionValue").GetDecimal());
+            Assert.Equal("Days", sized.GetProperty("deductionUnit").GetString());
+            Assert.Equal(ExpectedDays(3m, target), sized.GetProperty("amount").GetDecimal());
+            Assert.Equal(3m, sized.GetProperty("deductionDays").GetDecimal());
         }
 
         [Fact]
-        public async Task LateRecord_RaisesQuarterDayDeduction()
+        public async Task LateRecord_IsSizedInHours_AndPricedFromTheHourlyRate()
         {
             var builder = NewBuilder();
-            var (token, employeeId, target, _, _) = await SceneAsync(builder);
+            var (token, employeeId, target, monthStart, monthEnd) =
+                await SceneAsync(builder, fullDayTargetShift: true);
+            // The hourly rate only exists once the whole month is rostered (8 h a day).
+            await RosterWholeMonthAsync(
+                employeeId, await GymIdOf(employeeId), monthStart, monthEnd, target, builder.AttendanceToday);
             await builder.CreateAttendanceRecordAsync(
                 employeeId, await GymIdOf(employeeId), target,
                 status: AttendanceStatus.Late);
 
-            var rows = await BranchDeductionsAsync(token, employeeId);
-            var row = Assert.Single(rows);
-
+            var row = Assert.Single(await BranchDeductionsAsync(token, employeeId));
             Assert.Equal("Late arrival", row.GetProperty("reason").GetString());
-            Assert.Equal("Pending", row.GetProperty("status").GetString());
-            // A quarter day of pay: base ÷ 30 ÷ 4.
-            Assert.Equal(Expected(0.25m), row.GetProperty("amount").GetDecimal());
-            Assert.Equal(0.25m, row.GetProperty("deductionDays").GetDecimal());
-            Assert.Equal(target.ToString("yyyy-MM-dd"), row.GetProperty("date").GetString());
-            Assert.Contains("quarter day", row.GetProperty("note").GetString(), StringComparison.Ordinal);
+            Assert.Equal(0m, row.GetProperty("amount").GetDecimal());
+            Assert.True(row.GetProperty("hourlyRateReady").GetBoolean());
+
+            // Two hours of pay at base ÷ the month's assigned hours.
+            var sized = await BranchReviewAsync(token, row.GetProperty("id").GetInt32(), "approve", "hours", 2m);
+            Assert.Equal("Hours", sized.GetProperty("deductionUnit").GetString());
+            Assert.Equal(ExpectedHours(2m, monthStart, monthEnd), sized.GetProperty("amount").GetDecimal());
+            // The days column still reconciles: hours ÷ the day they represent.
+            Assert.True(sized.GetProperty("deductionDays").GetDecimal() > 0);
+        }
+
+        [Fact]
+        public async Task HoursSize_StaysUnpriced_UntilTheRosterIsComplete()
+        {
+            var builder = NewBuilder();
+            var (token, employeeId, target, _, _) = await SceneAsync(builder);
+            await builder.CreateAttendanceRecordAsync(
+                employeeId, await GymIdOf(employeeId), target, status: AttendanceStatus.Late);
+
+            var row = Assert.Single(await BranchDeductionsAsync(token, employeeId));
+            Assert.False(row.GetProperty("hourlyRateReady").GetBoolean());
+
+            // The manager sized it in hours, but the month is not rostered: the size is
+            // kept, the money waits (and fills in by itself once the roster is done).
+            var sized = await BranchReviewAsync(token, row.GetProperty("id").GetInt32(), "approve", "hours", 2m);
+            Assert.Equal("BranchApproved", sized.GetProperty("status").GetString());
+            Assert.Equal(2m, sized.GetProperty("deductionValue").GetDecimal());
+            Assert.Equal(0m, sized.GetProperty("amount").GetDecimal());
+            Assert.Contains("roster", sized.GetProperty("note").GetString(), StringComparison.OrdinalIgnoreCase);
         }
 
         [Fact]
@@ -152,7 +186,7 @@ namespace ReviveHRSystem.IntegrationTests
             var after = Assert.Single(await BranchDeductionsAsync(token, employeeId));
             Assert.Equal(candidateId, after.GetProperty("id").GetInt32());
             Assert.Equal("Rejected", after.GetProperty("status").GetString());
-            Assert.Equal(Expected(1), after.GetProperty("amount").GetDecimal());
+            Assert.Equal(0m, after.GetProperty("amount").GetDecimal());
 
             // The next sweep of the same day adds nothing.
             var third = Assert.Single(await BranchDeductionsAsync(token, employeeId));
@@ -160,56 +194,56 @@ namespace ReviveHRSystem.IntegrationTests
         }
 
         [Fact]
-        public async Task SalaryHistory_PricesTheDeduction_WhenNoSheetCoversTheMonth()
+        public async Task SalaryHistory_IsThePricingSource_WhenNoSheetCoversTheMonth()
         {
             // The usual mid-month state: HR has recorded a salary but no payroll
-            // sheet exists yet. The salary history is the pricing source, so the
-            // branch still sees real money rather than a bare 0.
+            // sheet exists yet. The salary history is the pricing source, so a size
+            // the manager picks still turns into real money.
             var builder = NewBuilder();
             var (token, employeeId, target, _, _) =
                 await SceneAsync(builder, withSheet: false);
             await SeedCompensationAsync(employeeId, Salary, target.AddDays(-30));
 
             var row = Assert.Single(await BranchDeductionsAsync(token, employeeId));
+            var sized = await BranchReviewAsync(token, row.GetProperty("id").GetInt32(), "approve", "days", 1m);
 
-            Assert.Equal(Expected(1), row.GetProperty("amount").GetDecimal());
-            Assert.DoesNotContain("No salary on file", row.GetProperty("note").GetString(), StringComparison.Ordinal);
-            Assert.Contains("Auto-priced", row.GetProperty("note").GetString(), StringComparison.Ordinal);
+            Assert.Equal(ExpectedDays(1m, target), sized.GetProperty("amount").GetDecimal());
+            Assert.DoesNotContain("No salary on file", sized.GetProperty("note").GetString(), StringComparison.Ordinal);
         }
 
         [Fact]
-        public async Task NoSalaryOnFile_FallsBackToAPricedManuallyRow()
+        public async Task NoSalaryOnFile_SaysSoWhenTheManagerTriesToPriceIt()
         {
             var builder = NewBuilder();
             var (token, employeeId, _, _, _) = await SceneAsync(builder, withSheet: false);
 
-            // No sheet and no salary history: nothing to charge yet — the row stays
-            // pending at 0 and tells the branch to price it by hand.
+            // No sheet and no salary history: nothing to charge yet — a size the manager
+            // picks stays at 0 and the row says what is missing.
             var row = Assert.Single(await BranchDeductionsAsync(token, employeeId));
+            var sized = await BranchReviewAsync(token, row.GetProperty("id").GetInt32(), "approve", "days", 1m);
 
-            Assert.Equal(0m, row.GetProperty("amount").GetDecimal());
-            Assert.Contains("No salary on file", row.GetProperty("note").GetString(), StringComparison.Ordinal);
+            Assert.Equal(0m, sized.GetProperty("amount").GetDecimal());
+            Assert.Contains("No salary on file", sized.GetProperty("note").GetString(), StringComparison.Ordinal);
         }
 
         [Fact]
-        public async Task SalaryRecordedLater_PricesTheAlreadyRaisedRow()
+        public async Task SalaryRecordedLater_PricesTheAlreadySizedRow()
         {
-            // The row is raised before anyone records a salary (the state your branch
-            // list is in now): it stands at 0. Once HR records a salary, the next read
-            // of the tab prices that same row — no duplicate, no manual entry needed.
+            // The row is raised before anyone records a salary: it stands at 0. Once HR
+            // records a salary, the same row prices itself — no duplicate, no manual entry.
             var builder = NewBuilder();
             var (token, employeeId, target, _, _) =
                 await SceneAsync(builder, withSheet: false);
 
             var before = Assert.Single(await BranchDeductionsAsync(token, employeeId));
             Assert.Equal(0m, before.GetProperty("amount").GetDecimal());
+            await BranchReviewAsync(token, before.GetProperty("id").GetInt32(), "approve", "days", 1m);
 
             await SeedCompensationAsync(employeeId, Salary, target.AddDays(-30));
 
             var after = Assert.Single(await BranchDeductionsAsync(token, employeeId));
             Assert.Equal(before.GetProperty("id").GetInt32(), after.GetProperty("id").GetInt32());
-            Assert.Equal(Expected(1), after.GetProperty("amount").GetDecimal());
-            Assert.Contains("Auto-priced", after.GetProperty("note").GetString(), StringComparison.Ordinal);
+            Assert.Equal(ExpectedDays(1m, target), after.GetProperty("amount").GetDecimal());
         }
 
         // ------------------------------------------------------------------
@@ -224,7 +258,7 @@ namespace ReviveHRSystem.IntegrationTests
         /// has one, else today under a shift that ended a minute after midnight.
         /// </summary>
         private async Task<(string Token, int EmployeeId, DateOnly Target, DateOnly MonthStart, DateOnly MonthEnd)> SceneAsync(
-            TestDataBuilder builder, bool withSheet = true)
+            TestDataBuilder builder, bool withSheet = true, bool fullDayTargetShift = false)
         {
             var gym = await builder.CreateGymWithStationAsync();
             var manager = await builder.CreateUserAsync(UserType.TopManagement, new[] { gym });
@@ -235,10 +269,12 @@ namespace ReviveHRSystem.IntegrationTests
             var today = builder.AttendanceToday;
             var target = today.Day > 1 ? today.AddDays(-1) : today;
             // The shift only has to exist for the day; a 00:00–00:01 end keeps the
-            // "every shift has ended" guard true even when the day is today.
+            // "every shift has ended" guard true even when the day is today. Tests that
+            // need a real 8-hour day ask for it, so the month's hours add up evenly.
             await builder.AssignShiftAsync(
-                employee.EmployeeId, gym.GymId, target, "IT Morning",
-                new TimeOnly(0, 0), new TimeOnly(0, 1));
+                employee.EmployeeId, gym.GymId, target, fullDayTargetShift ? "IT Full Month" : "IT Morning",
+                fullDayTargetShift ? new TimeOnly(8, 0) : new TimeOnly(0, 0),
+                fullDayTargetShift ? new TimeOnly(16, 0) : new TimeOnly(0, 1));
 
             var monthStart = new DateOnly(target.Year, target.Month, 1);
             var monthEnd = monthStart.AddMonths(1).AddDays(-1);
@@ -286,9 +322,115 @@ namespace ReviveHRSystem.IntegrationTests
             await db.SaveChangesAsync();
         }
 
-        /// <summary>base ÷ 30 × <paramref name="days"/> — the pricing rule under test.</summary>
-        private static decimal Expected(decimal days) =>
-            Math.Round(Math.Round(Salary / 30m, 2) * days, 2);
+        [Fact]
+        public async Task Preview_HoursSize_StaysUnpriced_UntilTheRosterIsComplete()
+        {
+            // The follow-up form's live preview must agree with the saved row: an
+            // hours-based size has no money until every day of the month is rostered.
+            var builder = NewBuilder();
+            var (token, employeeId, target, _, _) = await SceneAsync(builder);
+
+            var withoutRoster = await PreviewAsync(token, employeeId, target, "hours", 1m);
+            Assert.False(withoutRoster.GetProperty("hourlyRateReady").GetBoolean());
+            Assert.Equal(0m, withoutRoster.GetProperty("amount").GetDecimal());
+            Assert.Contains("roster", withoutRoster.GetProperty("pendingReason").GetString(), StringComparison.OrdinalIgnoreCase);
+
+            // A day-based size needs no roster: base ÷ that month's calendar days.
+            var days = await PreviewAsync(token, employeeId, target, "days", 1m);
+            Assert.Equal(ExpectedDays(1m, target), days.GetProperty("amount").GetDecimal());
+        }
+
+        [Fact]
+        public async Task Preview_WithAFullRoster_PricesTheHours()
+        {
+            var builder = NewBuilder();
+            var (token, employeeId, target, monthStart, monthEnd) =
+                await SceneAsync(builder, fullDayTargetShift: true);
+            await RosterWholeMonthAsync(
+                employeeId, await GymIdOf(employeeId), monthStart, monthEnd, target, builder.AttendanceToday);
+
+            var preview = await PreviewAsync(token, employeeId, target, "hours", 2m);
+
+            Assert.True(preview.GetProperty("hourlyRateReady").GetBoolean());
+            Assert.Equal(ExpectedHours(2m, monthStart, monthEnd), preview.GetProperty("amount").GetDecimal());
+            Assert.Equal(JsonValueKind.Null, preview.GetProperty("pendingReason").ValueKind);        }
+
+        /// <summary>The live pricing preview the follow-up form uses (no candidate exists yet).</summary>
+        private async Task<JsonElement> PreviewAsync(
+            string token, int employeeId, DateOnly date, string unit, decimal value)
+        {
+            var request = _fixture.AuthorizedRequest(HttpMethod.Get,
+                $"/api/deduction-candidates/preview?employeeId={employeeId}&date={date:yyyy-MM-dd}&unit={unit}&value={value}",
+                null,
+                token);
+            var response = await _fixture.Client.SendAsync(request);
+            var body = await response.Content.ReadAsStringAsync();
+            Assert.True(response.StatusCode == HttpStatusCode.OK,
+                $"Expected 200 from the deduction preview but got {(int)response.StatusCode}: {body}");
+            return JsonSerializer.Deserialize<JsonElement>(body);
+        }
+
+        /// <summary>Sizes and reviews one deduction through the branch endpoint.</summary>
+        private async Task<JsonElement> BranchReviewAsync(
+            string token, int candidateId, string decision, string unit, decimal value)
+        {
+            var request = _fixture.AuthorizedRequest(HttpMethod.Post,
+                $"/api/deduction-candidates/{candidateId}/branch-review",
+                new { decision, unit, value }, token);
+            var response = await _fixture.Client.SendAsync(request);
+            var body = await response.Content.ReadAsStringAsync();
+            Assert.True(response.StatusCode == HttpStatusCode.OK,
+                $"Expected 200 from the branch review but got {(int)response.StatusCode}: {body}");
+            return JsonSerializer.Deserialize<JsonElement>(body);
+        }
+
+        /// <summary>
+        /// Rosters every day of the month with an 8-hour shift (so the hourly rate exists)
+        /// and punches the elapsed days off as worked — only the punished day stays open.
+        /// </summary>
+        private async Task RosterWholeMonthAsync(
+            int employeeId, int gymId, DateOnly monthStart, DateOnly monthEnd, DateOnly target, DateOnly today)
+        {
+            var builder = NewBuilder();
+            for (var date = monthStart; date <= monthEnd; date = date.AddDays(1))
+            {
+                // The punished day already carries its own 8-hour shift from the scene.
+                if (date != target)
+                {
+                    await builder.AssignShiftAsync(
+                        employeeId, gymId, date, "IT Full Month", new TimeOnly(8, 0), new TimeOnly(16, 0));
+                }
+
+                if (date != target && date <= today)
+                {
+                    // Worked, on time: an elapsed rostered day with no punch would be an absence.
+                    await builder.CreateAttendanceRecordAsync(
+                        employeeId, gymId, date,
+                        checkInUtc: LocalAt(date, new TimeOnly(8, 0)),
+                        checkOutUtc: LocalAt(date, new TimeOnly(16, 0)));
+                }
+            }
+        }
+
+        private DateTime LocalAt(DateOnly date, TimeOnly time)
+        {
+            using var scope = _fixture.Services.CreateScope();
+            var tz = scope.ServiceProvider.GetRequiredService<TimeZoneInfo>();
+            return TimeZoneInfo.ConvertTimeToUtc(
+                DateTime.SpecifyKind(date.ToDateTime(time), DateTimeKind.Unspecified), tz);
+        }
+
+        /// <summary>base ÷ the punished month's calendar days × <paramref name="days"/>.</summary>
+        private static decimal ExpectedDays(decimal days, DateOnly date) =>
+            Math.Round(Math.Round(Salary / DateTime.DaysInMonth(date.Year, date.Month), 2) * days, 2);
+
+        /// <summary>hours × (base ÷ the month's assigned hours, 8 h a day).</summary>
+        private static decimal ExpectedHours(decimal hours, DateOnly monthStart, DateOnly monthEnd)
+        {
+            var days = monthEnd.DayNumber - monthStart.DayNumber + 1;
+            var assignedHours = days * 8m;
+            return Math.Round(hours * Math.Round(Salary / assignedHours, 2), 2);
+        }
 
         private async Task<JsonElement[]> BranchDeductionsAsync(string token, int employeeId)
         {
@@ -328,11 +470,11 @@ namespace ReviveHRSystem.IntegrationTests
             using var scope = _fixture.Services.CreateScope();
             var db = scope.ServiceProvider.GetRequiredService<ReviveHrDbContext>();
             var roleId = await db.Roles.Where(r => r.Name == roleName).Select(r => r.Id).SingleAsync();
-            db.UserGymRoles.Add(new DomainLayer.Models.UserModule.UserGymRole
+            db.UserRoles.Add(new DomainLayer.Models.UserModule.UserRole
             {
                 UserId = userId,
                 GymId = gymId,
-                RoleId = roleId,
+                RoleName = roleName,
             });
             await db.SaveChangesAsync();
         }

@@ -30,7 +30,12 @@ export default function RoleDashboardPage({ role }: RoleDashboardPageProps) {
   const sessionRole = ROLE_PATHS[session.user.userType] ?? 'employee'
   if (sessionRole !== role) return <Navigate to="/dashboard" replace />
 
-  if (role !== 'employee') return <Navigate to="/console/dashboard" replace />
+  if (role !== 'employee') {
+    // Top Management owns the Super Admin console; HR (and HR Manager) keep the
+    // HR back office. Both are guarded again inside their own layout.
+    const target = session.user.userType === 'TopManagement' ? '/platform/dashboard' : '/console/dashboard'
+    return <Navigate to={target} replace />
+  }
 
   return (
     <div className="mx-auto max-w-md px-4 py-16">

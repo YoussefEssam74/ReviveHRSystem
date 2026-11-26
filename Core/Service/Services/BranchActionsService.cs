@@ -59,9 +59,14 @@ namespace Service.Services
 
             await EnsureManagementScopeAsync(actorUserId, gymId, cancellationToken);
 
-            if (request.Amount <= 0)
+            if (request.Value is null && request.Amount <= 0)
             {
                 throw new BadRequestException("The deduction amount must be greater than zero.");
+            }
+
+            if (request.Value is { } size && size <= 0)
+            {
+                throw new BadRequestException("The deduction size must be greater than zero.");
             }
 
             if (!DeductionReasons.Contains(request.Reason, StringComparer.OrdinalIgnoreCase))
@@ -87,13 +92,26 @@ namespace Service.Services
                 DeductionDate = deductionDate,
                 IsSystemGenerated = false,
                 Amount = request.Amount,
-                DeductionDays = 1m,
+                DeductionUnit = ParseUnit(request.Unit),
+                DeductionValue = request.Value ?? 0m,
+                DeductionDays = request.Value is null ? 1m : 0m,
                 Reason = request.Reason,
                 Note = request.Note?.Trim(),
                 IssuedBy = actorUserId,
                 IssuedAt = DateTime.UtcNow,
                 Status = DeductionStatus.Pending
             };
+
+            // A sized deduction is priced from the month's rates; with no size the
+            // manager's explicit amount stands as it was entered.
+            candidate.Employee = await unitOfWork.GetRepository<Employee, int>()
+                .GetByIdAsync(new EmployeeByIdSpec(candidate.EmployeeId), cancellationToken)
+                ?? candidate.Employee;
+            if (request.Value is { } value)
+            {
+                (candidate.Amount, candidate.DeductionDays) = await PriceAsync(
+                    candidate, candidate.DeductionUnit, value, cancellationToken);
+            }
 
             await unitOfWork.GetRepository<DeductionCandidate, int>().AddAsync(candidate, cancellationToken);
             await unitOfWork.SaveChangesAsync(cancellationToken);
@@ -139,13 +157,39 @@ namespace Service.Services
                 throw new BadRequestException("Deduction days must be a whole number between 1 and 30.");
             }
 
+            // The manager sizes the deduction in hours or days; the money follows the
+            // month's rates. A size whose rate is not known yet (hourly before the roster
+            // is complete) stays pending at 0 and fills in on its own later.
+            var unit = ParseUnit(request.Unit);
+            if (request.Value is { } chosen)
+            {
+                if (chosen <= 0)
+                {
+                    throw new BadRequestException("The deduction size must be greater than zero.");
+                }
+
+                var limit = unit == DeductionUnit.Hours ? 24m : 30m;
+                if (chosen > limit)
+                {
+                    throw new BadRequestException(
+                        unit == DeductionUnit.Hours
+                            ? "Deduction hours must be at most 24."
+                            : "Deduction days must be at most 30.");
+                }
+
+                candidate.DeductionUnit = unit;
+                candidate.DeductionValue = chosen;
+                (candidate.Amount, candidate.DeductionDays) = await PriceAsync(candidate, unit, chosen, cancellationToken);
+            }
+
             switch (request.Decision?.Trim().ToLowerInvariant())
             {
                 case "approve":
                     if (request.Days is { } approveDays)
                     {
-                        candidate.DeductionDays = approveDays;
-                        candidate.Amount = await CalculateDeductionAmountAsync(candidate, approveDays, cancellationToken);
+                        candidate.DeductionUnit = DeductionUnit.Days;
+                        candidate.DeductionValue = approveDays;
+                        (candidate.Amount, candidate.DeductionDays) = await PriceAsync(candidate, DeductionUnit.Days, approveDays, cancellationToken);
                     }
                     else if (amount is not null)
                     {
@@ -159,8 +203,9 @@ namespace Service.Services
                     break;
 
                 case "edit" when request.Days is { } editDays:
-                    candidate.DeductionDays = editDays;
-                    candidate.Amount = await CalculateDeductionAmountAsync(candidate, editDays, cancellationToken);
+                    candidate.DeductionUnit = DeductionUnit.Days;
+                    candidate.DeductionValue = editDays;
+                    (candidate.Amount, candidate.DeductionDays) = await PriceAsync(candidate, DeductionUnit.Days, editDays, cancellationToken);
                     // Editing a rejected row's days re-opens it: without this
                     // the row would keep the Rejected status while its amount
                     // silently changed, which the UI would read as erased-but-
@@ -175,8 +220,16 @@ namespace Service.Services
                     candidate.Amount = amount.Value;
                     break;
 
+                case "edit" when request.Value is not null:
+                    // Re-priced through the size above; nothing else to change.
+                    if (candidate.Status is DeductionStatus.Rejected)
+                    {
+                        candidate.Status = DeductionStatus.Pending;
+                    }
+                    break;
+
                 case "edit":
-                    throw new BadRequestException("Re-pricing a deduction requires deduction days.");
+                    throw new BadRequestException("Re-pricing a deduction requires hours, days or an amount.");
 
                 default:
                     throw new BadRequestException("The decision must be 'approve', 'reject' or 'edit'.");
@@ -364,23 +417,317 @@ namespace Service.Services
             var candidates = await unitOfWork.GetRepository<DeductionCandidate, int>()
                 .GetAllAsync(new DeductionCandidatesByEmployeesSpec(employeeIds), cancellationToken);
 
-            return candidates
+            var scoped = candidates
                 .Where(d => employeeId is null || d.EmployeeId == employeeId)
-                .Select(d => new DeductionCandidateDto
-                {
-                    Id = d.Id,
-                    EmployeeId = d.EmployeeId,
-                    Employee = d.Employee?.FullName ?? string.Empty,
-                    Amount = d.Amount,
-                    DeductionDays = d.DeductionDays,
-                    Reason = d.Reason,
-                    Note = d.Note,
-                    Status = d.Status.ToString(),
-                    Date = PayrollService.CandidateDayOf(d),
-                    IssuedAt = d.IssuedAt,
-                    IssuedBy = d.IssuedByUser?.UserName ?? string.Empty,
-                })
                 .ToList();
+            var rates = await RatesForAsync(scoped, cancellationToken);
+
+            return scoped
+                .Select(d => ToDto(d, rates))
+                .ToList();
+        }
+
+        /// <summary>
+        /// Prices a deduction before it exists (the manager typing hours or days in a
+        /// follow-up form): the same rates the saved row will use, so the preview can
+        /// never disagree — and an hours-based size honestly reports "no amount yet"
+        /// while the month's roster is incomplete.
+        /// </summary>
+        public async Task<DeductionPricingDto> PreviewDeductionAsync(
+            int actorUserId,
+            int employeeId,
+            DateOnly? date,
+            string? unit,
+            decimal? value,
+            int? activeGymId,
+            CancellationToken cancellationToken = default)
+        {
+            var gymId = RequireGym(activeGymId);
+            await EnsureManagementScopeAsync(actorUserId, gymId, cancellationToken);
+            await EnsureEmployeeInScopeAsync(actorUserId, gymId, employeeId, cancellationToken);
+
+            var employee = await unitOfWork.GetRepository<Employee, int>()
+                .GetByIdAsync(new EmployeeByIdSpec(employeeId), cancellationToken)
+                ?? throw new NotFoundException("Employee not found.");
+
+            var day = date ?? DateOnly.FromDateTime(DateTime.UtcNow);
+            var chosenUnit = ParseUnit(unit);
+            var chosenValue = value ?? 0m;
+
+            var sheets = (await unitOfWork.GetRepository<PayrollEntry, int>()
+                .GetAllAsync(new PayrollEntriesByEmployeeIdsSpec([employeeId]), cancellationToken)).ToList();
+            var monthStart = new DateOnly(day.Year, day.Month, 1);
+            var monthEnd = monthStart.AddMonths(1).AddDays(-1);
+            var assignments = (await unitOfWork.GetRepository<DomainLayer.Models.SchedulingModule.ShiftAssignment, int>()
+                .GetAllAsync(new ShiftAssignmentsByEmployeeIdsRangeSpec([employeeId], monthStart, monthEnd), cancellationToken))
+                .ToList();
+
+            var rates = DeductionPricing.Rates(employee, day, sheets, assignments);
+            return new DeductionPricingDto
+            {
+                CandidateId = 0,
+                DailyRate = rates.Daily,
+                HourlyRate = rates.Hourly,
+                HourlyRateReady = rates.HourlyKnown,
+                AssignedHours = rates.AssignedHours,
+                MonthDays = rates.MonthDays,
+                DeductionUnit = chosenUnit.ToString(),
+                DeductionValue = chosenValue,
+                Amount = rates.AmountFor(chosenUnit, chosenValue),
+                Days = rates.DaysFor(chosenUnit, chosenValue),
+                PendingReason = chosenValue > 0 ? rates.PendingReason(chosenUnit) : null,
+                Note = rates.Note(chosenUnit, chosenValue),
+            };
+        }
+
+        /// <summary>
+        /// The deductions waiting for the HR sign-off, for the HR Requests page: rows the
+        /// branch has already sized (hours or days) and approved, each carrying both rates
+        /// of its month so HR sees exactly how the money was reached.
+        /// </summary>
+        public async Task<IReadOnlyList<DeductionCandidateDto>> GetDeductionReviewQueueAsync(
+            int actorUserId, string? status, CancellationToken cancellationToken = default)
+        {
+            var actor = await HrPortalHelpers.ResolveActorAsync(unitOfWork, actorUserId, cancellationToken);
+            if (actor.UserType != UserType.TopManagement)
+            {
+                var permissions = await userAccess.GetPermissionKeysAsync(actor.Id, cancellationToken);
+                if (!permissions.Contains("payroll.view", StringComparer.Ordinal)
+                    && !permissions.Contains("payroll.edit", StringComparer.Ordinal))
+                {
+                    throw new UnAuthorizedException("You do not have access to payroll deductions.");
+                }
+            }
+
+            var gymIds = await HrPortalHelpers.ResolveGymScopeAsync(unitOfWork, userAccess, actor, null, cancellationToken);
+            var employees = await unitOfWork.GetRepository<Employee, int>()
+                .GetAllAsync(new EmployeesForRosterSpec(gymIds.Length == 0 && actor.UserType == UserType.TopManagement ? null : gymIds), cancellationToken);
+            var employeeIds = employees.Select(e => e.Id).ToHashSet();
+            if (employeeIds.Count == 0)
+            {
+                return [];
+            }
+
+            var statuses = ParseStatuses(status);
+            var candidates = (await unitOfWork.GetRepository<DeductionCandidate, int>()
+                    .GetAllAsync(new DeductionCandidatesByEmployeesSpec(employeeIds.ToArray()), cancellationToken))
+                .Where(c => statuses.Contains(c.Status))
+                .ToList();
+            var rates = await RatesForAsync(candidates, cancellationToken);
+
+            return candidates
+                .OrderByDescending(c => c.IssuedAt)
+                .Select(c => ToDto(c, rates))
+                .ToList();
+        }
+
+        /// <summary>Status filter for the HR queue: default is "waiting for HR".</summary>
+        private static DeductionStatus[] ParseStatuses(string? status)
+        {
+            var value = status?.Trim().ToLowerInvariant();
+            return value switch
+            {
+                null or "" or "pending" or "branchapproved" or "review" => [DeductionStatus.BranchApproved],
+                "approved" or "accepted" => [DeductionStatus.Approved],
+                "rejected" or "waived" => [DeductionStatus.Rejected],
+                "all" => [DeductionStatus.Pending, DeductionStatus.BranchApproved, DeductionStatus.Approved, DeductionStatus.Rejected],
+                _ => throw new BadRequestException(
+                    "status must be Pending, BranchApproved, Approved, Rejected or All."),
+            };
+        }
+
+        /// <summary>One candidate with the rates of its punished month, so the branch sees what an
+        /// hour or a day is worth before choosing the size.
+        /// </summary>
+        public async Task<DeductionPricingDto> GetDeductionPricingAsync(
+            int actorUserId, int candidateId, string? unit, decimal? value, int? activeGymId, CancellationToken cancellationToken = default)
+        {
+            var gymId = RequireGym(activeGymId);
+            await EnsureManagementScopeAsync(actorUserId, gymId, cancellationToken);
+
+            var candidate = await unitOfWork.GetRepository<DeductionCandidate, int>()
+                .GetByIdAsync(new DeductionCandidateByIdSpec(candidateId), cancellationToken)
+                ?? throw new NotFoundException("Deduction candidate not found.");
+            await EnsureEmployeeInScopeAsync(actorUserId, gymId, candidate.EmployeeId, cancellationToken);
+
+            var date = PayrollService.CandidateDayOf(candidate);
+            var chosenUnit = unit is null ? candidate.DeductionUnit : ParseUnit(unit);
+            var chosenValue = value ?? candidate.DeductionValue;
+            var rates = await RatesForCandidateAsync(candidate, cancellationToken);
+
+            return new DeductionPricingDto
+            {
+                CandidateId = candidate.Id,
+                DailyRate = rates.Daily,
+                HourlyRate = rates.Hourly,
+                HourlyRateReady = rates.HourlyKnown,
+                AssignedHours = rates.AssignedHours,
+                MonthDays = rates.MonthDays,
+                DeductionUnit = chosenUnit.ToString(),
+                DeductionValue = chosenValue,
+                Amount = rates.AmountFor(chosenUnit, chosenValue),
+                Days = rates.DaysFor(chosenUnit, chosenValue),
+                PendingReason = chosenValue > 0 ? rates.PendingReason(chosenUnit) : "Choose the deduction in hours or days.",
+                Note = rates.Note(chosenUnit, chosenValue),
+            };
+        }
+
+        /// <summary>
+        /// The HR sign-off on a branch-sized deduction (the Requests page's Deductions
+        /// tab). HR may re-size it (hours or days) or override the money, then approve
+        /// (the payroll sheet picks it up as an accepted line) or waive it for good.
+        /// </summary>
+        public async Task<DeductionCandidateDto> ReviewDeductionCandidateAsync(
+            int actorUserId, int candidateId, BranchDeductionReviewRequest request, CancellationToken cancellationToken = default)
+        {
+            var actor = await HrPortalHelpers.ResolveActorAsync(unitOfWork, actorUserId, cancellationToken);
+            if (actor.UserType != UserType.TopManagement)
+            {
+                var permissions = await userAccess.GetPermissionKeysAsync(actor.Id, cancellationToken);
+                if (!permissions.Contains("payroll.edit", StringComparer.Ordinal)
+                    && !permissions.Contains("payroll.view", StringComparer.Ordinal))
+                {
+                    throw new UnAuthorizedException("You do not have access to payroll deductions.");
+                }
+            }
+
+            var candidate = await unitOfWork.GetRepository<DeductionCandidate, int>()
+                .GetByIdAsync(new DeductionCandidateByIdSpec(candidateId), cancellationToken)
+                ?? throw new NotFoundException("Deduction candidate not found.");
+
+            var gymIds = await HrPortalHelpers.ResolveGymScopeAsync(unitOfWork, userAccess, actor, null, cancellationToken);
+            if (gymIds.Length > 0 && candidate.Employee is not null && !gymIds.Contains(candidate.Employee.GymId))
+            {
+                throw new NotFoundException("Deduction candidate not found.");
+            }
+
+            if (candidate.Status is DeductionStatus.Approved)
+            {
+                throw new BadRequestException("This deduction is already finalized.");
+            }
+
+            // HR re-sizes through the same rates the branch used.
+            if (request.Value is { } value)
+            {
+                if (value <= 0)
+                {
+                    throw new BadRequestException("The deduction size must be greater than zero.");
+                }
+
+                var unit = ParseUnit(request.Unit);
+                candidate.DeductionUnit = unit;
+                candidate.DeductionValue = value;
+                (candidate.Amount, candidate.DeductionDays) = await PriceAsync(candidate, unit, value, cancellationToken);
+            }
+
+            switch (request.Decision?.Trim().ToLowerInvariant())
+            {
+                case "approve":
+                    if (request.Amount is { } approvedAmount)
+                    {
+                        candidate.Amount = approvedAmount;
+                    }
+
+                    candidate.Status = DeductionStatus.Approved;
+                    break;
+
+                case "reject":
+                case "waive":
+                    candidate.Status = DeductionStatus.Rejected;
+                    break;
+
+                case "edit":
+                    break;
+
+                default:
+                    throw new BadRequestException("The decision must be 'approve', 'reject' or 'edit'.");
+            }
+
+            candidate.ReviewedBy = actor.Id;
+            candidate.ReviewedAt = DateTime.UtcNow;
+            unitOfWork.GetRepository<DeductionCandidate, int>().Update(candidate);
+            await unitOfWork.SaveChangesAsync(cancellationToken);
+            return await LoadDeductionAsync(candidate.Id, cancellationToken);
+        }
+
+        /// <summary>Both rates of the month each candidate punishes, keyed by employee-month.</summary>
+        private async Task<Dictionary<(int EmployeeId, int Year, int Month), DeductionRates>> RatesForAsync(
+            IReadOnlyList<DeductionCandidate> candidates, CancellationToken cancellationToken)
+        {
+            var map = new Dictionary<(int, int, int), DeductionRates>();
+            if (candidates.Count == 0)
+            {
+                return map;
+            }
+
+            var employeeIds = candidates.Select(c => c.EmployeeId).Distinct().ToArray();
+            var dates = candidates.Select(PayrollService.CandidateDayOf).ToList();
+            var from = dates.Min();
+            var to = dates.Max();
+            var rangeStart = new DateOnly(from.Year, from.Month, 1);
+            var rangeEnd = new DateOnly(to.Year, to.Month, 1).AddMonths(1).AddDays(-1);
+
+            var sheets = (await unitOfWork.GetRepository<PayrollEntry, int>()
+                .GetAllAsync(new PayrollEntriesByEmployeeIdsSpec(employeeIds), cancellationToken)).ToList();
+            var assignments = (await unitOfWork.GetRepository<DomainLayer.Models.SchedulingModule.ShiftAssignment, int>()
+                .GetAllAsync(new ShiftAssignmentsByEmployeeIdsRangeSpec(employeeIds, rangeStart, rangeEnd), cancellationToken)).ToList();
+
+            foreach (var candidate in candidates)
+            {
+                var date = PayrollService.CandidateDayOf(candidate);
+                var key = (candidate.EmployeeId, date.Year, date.Month);
+                if (map.ContainsKey(key) || candidate.Employee is null)
+                {
+                    continue;
+                }
+
+                map[key] = DeductionPricing.Rates(
+                    candidate.Employee,
+                    date,
+                    sheets.Where(s => s.EmployeeId == candidate.EmployeeId).ToList(),
+                    assignments);
+            }
+
+            return map;
+        }
+
+        private async Task<DeductionRates> RatesForCandidateAsync(
+            DeductionCandidate candidate, CancellationToken cancellationToken)
+        {
+            var map = await RatesForAsync([candidate], cancellationToken);
+            var date = PayrollService.CandidateDayOf(candidate);
+            return map.TryGetValue((candidate.EmployeeId, date.Year, date.Month), out var rates)
+                ? rates
+                : default;
+        }
+
+        private static DeductionCandidateDto ToDto(
+            DeductionCandidate candidate, IReadOnlyDictionary<(int, int, int), DeductionRates> rates)
+        {
+            var date = PayrollService.CandidateDayOf(candidate);
+            rates.TryGetValue((candidate.EmployeeId, date.Year, date.Month), out var monthRates);
+
+            return new DeductionCandidateDto
+            {
+                Id = candidate.Id,
+                EmployeeId = candidate.EmployeeId,
+                Employee = candidate.Employee?.FullName ?? string.Empty,
+                Amount = candidate.Amount,
+                DeductionDays = candidate.DeductionDays,
+                DeductionValue = candidate.DeductionValue,
+                DeductionUnit = candidate.DeductionUnit.ToString(),
+                DailyRate = monthRates.Daily,
+                HourlyRate = monthRates.Hourly,
+                HourlyRateReady = monthRates.HourlyKnown,
+                AssignedHours = monthRates.AssignedHours,
+                MonthDays = monthRates.MonthDays,
+                Reason = candidate.Reason,
+                Note = candidate.Note,
+                Status = candidate.Status.ToString(),
+                Date = date,
+                IssuedAt = candidate.IssuedAt,
+                IssuedBy = candidate.IssuedByUser?.UserName ?? string.Empty,
+            };
         }
 
         public async Task<IReadOnlyList<WarningNoticeDto>> GetWarningsAsync(
@@ -665,42 +1012,51 @@ namespace Service.Services
                 .GetByIdAsync(new DeductionCandidateByIdSpec(id), cancellationToken)
                 ?? throw new NotFoundException("Deduction candidate not found.");
 
-            return new DeductionCandidateDto
+            var date = PayrollService.CandidateDayOf(candidate);
+            var rates = await RatesForCandidateAsync(candidate, cancellationToken);
+
+            return ToDto(candidate, new Dictionary<(int, int, int), DeductionRates>
             {
-                Id = candidate.Id,
-                EmployeeId = candidate.EmployeeId,
-                Employee = candidate.Employee?.FullName ?? string.Empty,
-                Amount = candidate.Amount,
-                DeductionDays = candidate.DeductionDays,
-                Reason = candidate.Reason,
-                Note = candidate.Note,
-                Status = candidate.Status.ToString(),
-                Date = PayrollService.CandidateDayOf(candidate),
-                IssuedAt = candidate.IssuedAt,
-                IssuedBy = candidate.IssuedByUser?.UserName ?? string.Empty
-            };
+                [(candidate.EmployeeId, date.Year, date.Month)] = rates,
+            });
         }
 
-        private async Task<decimal> CalculateDeductionAmountAsync(
+        /// <summary>
+        /// The money a manager-chosen size costs: hours are priced at the month's hourly
+        /// rate (base ÷ assigned hours), days at its daily rate (base ÷ calendar days).
+        /// Zero means the rate is not known yet — the caller keeps the row pending.
+        /// </summary>
+        private async Task<(decimal Amount, decimal Days)> PriceAsync(
             DeductionCandidate candidate,
-            decimal days,
+            DeductionUnit unit,
+            decimal value,
             CancellationToken cancellationToken)
         {
-            var sheets = await unitOfWork.GetRepository<PayrollEntry, int>()
-                .GetAllAsync(new PayrollEntriesByEmployeeSpec(candidate.EmployeeId), cancellationToken);
-            var (daily, _) = DeductionPricing.DailyRate(
-                candidate.Employee,
-                PayrollService.CandidateDayOf(candidate),
-                sheets.ToList(),
-                Array.Empty<DomainLayer.Models.SchedulingModule.ShiftAssignment>());
+            var date = PayrollService.CandidateDayOf(candidate);
+            var sheets = (await unitOfWork.GetRepository<PayrollEntry, int>()
+                .GetAllAsync(new PayrollEntriesByEmployeeSpec(candidate.EmployeeId), cancellationToken)).ToList();
+            var monthStart = new DateOnly(date.Year, date.Month, 1);
+            var monthEnd = monthStart.AddMonths(1).AddDays(-1);
+            var assignments = (await unitOfWork.GetRepository<DomainLayer.Models.SchedulingModule.ShiftAssignment, int>()
+                .GetAllAsync(
+                    new ShiftAssignmentsByEmployeeIdsRangeSpec([candidate.EmployeeId], monthStart, monthEnd),
+                    cancellationToken)).ToList();
 
-            if (daily <= 0)
-            {
-                throw new BadRequestException("The employee has no salary on file to calculate this deduction.");
-            }
+            var rates = DeductionPricing.Rates(candidate.Employee, date, sheets, assignments);
 
-            return Math.Round(daily * days, 2);
+            // The note explains the money (or what is missing) exactly as the sweep writes it.
+            var note = rates.Note(unit, value);
+            candidate.Note = PayrollService.ParseAbsenceMarker(candidate.Note) == date
+                ? $"{PayrollService.AbsenceMarker(date)} · {note}"
+                : note;
+
+            return (rates.AmountFor(unit, value), rates.DaysFor(unit, value));
         }
+
+        private static DeductionUnit ParseUnit(string? unit) =>
+            string.Equals(unit?.Trim(), "hours", StringComparison.OrdinalIgnoreCase)
+                ? DeductionUnit.Hours
+                : DeductionUnit.Days;
 
         private async Task<WarningNoticeDto> LoadWarningAsync(int id, CancellationToken cancellationToken)
         {

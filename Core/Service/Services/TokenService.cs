@@ -61,8 +61,45 @@ namespace Service.Services
             return CreateSignedToken(claims, DateTime.UtcNow.AddMinutes(settings.AccessTokenMinutes));
         }
 
-        public string CreateGymSelectionToken(int userId)
+        public string CreateImpersonationToken(
+            User actor,
+            int? scopedGymId,
+            int sessionId,
+            int companyId,
+            int? effectiveRoleId,
+            DateTime expiresUtc)
         {
+            List<Claim> claims = new()
+            {
+                new(JwtRegisteredClaimNames.Sub, actor.Id.ToString()),
+                new("uid", actor.Id.ToString()),
+                new(JwtRegisteredClaimNames.Email, actor.Email),
+                new(JwtRegisteredClaimNames.Name, actor.UserName),
+
+                // Stays the actor's REAL type. The assumed role lives in actRoleId, so an
+                // act-as token can never be mistaken for a genuine HR Manager account.
+                new("userType", actor.UserType.ToString()),
+
+                new("act", "true"),
+                new("actSessionId", sessionId.ToString()),
+                new("actCompanyId", companyId.ToString()),
+                new(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString())
+            };
+
+            if (effectiveRoleId.HasValue)
+            {
+                claims.Add(new Claim("actRoleId", effectiveRoleId.Value.ToString()));
+            }
+
+            if (scopedGymId.HasValue)
+            {
+                claims.Add(new Claim("gymId", scopedGymId.Value.ToString()));
+            }
+
+            return CreateSignedToken(claims, expiresUtc);
+        }
+
+        public string CreateGymSelectionToken(int userId)        {
             List<Claim> claims = new()
             {
                 new(JwtRegisteredClaimNames.Sub, userId.ToString()),

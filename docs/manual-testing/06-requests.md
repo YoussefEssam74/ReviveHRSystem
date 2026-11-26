@@ -73,7 +73,9 @@ Query: `?gym=&status=&type=&date=&from=&to=&search=&quick=&ids=&page=1&pageSize=
 
 | # | Actor | Input | Expected |
 |---|---|---|---|
-| 6.24 | hrm | happy body (exact unique employee name in scope) | **201** `{ data: { id, status: "Pending HR Review", timeline } }` |
+| 6.24 | hrm | happy body (exact unique employee name in scope) | **201** `{ data: { id, status: "Approved", timeline } }` — HR filing satisfies both stages, so the timeline reads Submitted → BM Approved → HR Approved |
+| 6.24a | bm | happy body | **201** `{ data: { id, status: "Pending HR Review", timeline } }` — the desk's own stage is approved by filing; timeline reads Submitted → BM Approved → HR Review (awaiting the HR verdict, 6.34) |
+| 6.24b | emp | happy body (self or colleague) | **201** `{ data: { id, status: "Pending HR Review" } }` with no decision rows |
 | 6.25 | hrm | `type` lower-case `day off` | 201 (case-insensitive match) |
 | 6.26 | hrm | `"employee": "Nobody Here"` | 400 `No employee named "…" was found in your gyms.` |
 | 6.27 | hrm | ambiguous name (two employees share it) | 400 `Multiple employees are named "…" — open the request from an employee file instead.` |

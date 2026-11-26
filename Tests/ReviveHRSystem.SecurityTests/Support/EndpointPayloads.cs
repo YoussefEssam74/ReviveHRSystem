@@ -136,6 +136,215 @@ namespace ReviveHRSystem.SecurityTests.Support
                 case "POST /api/employees/{p}/requests":
                     return (Kind.Multipart, null, RequestCreateMultipart());
 
+                // ---------------- platform console ----------------
+
+                case "POST /api/platform/companies":
+                    return (Kind.Json, new
+                    {
+                        name = $"Matrix Gym {Guid.NewGuid():N}"[..24],
+                        code = $"MX{Guid.NewGuid():N}"[..10].ToUpperInvariant(),
+                        city = "Matrix City",
+                        primaryBranch = new { name = "Matrix Branch", area = "Matrix Area", address = "1 Matrix St", phone = "01000000000" },
+                        contact = new { name = "Matrix Contact", email = $"matrix-{Guid.NewGuid():N}@test.local".ToLowerInvariant(), phone = "01000000000" },
+                        // Growth is seeded second and allows a trial, so the 201 path is reachable.
+                        subscription = new { planId = c.GrowthPlanId, startTrial = true },
+                        assignHrLater = true,
+                    }, null);
+
+                case "PUT /api/platform/companies/{p}":
+                    return (Kind.Json, new
+                    {
+                        name = "Revive Main Gym",
+                        city = "Matrix City",
+                        contact = new { name = "Matrix Contact", email = "matrix@test.local", phone = "01000000000" },
+                    }, null);
+
+                case "PUT /api/platform/companies/{p}/status":
+                    // Restoring an already-Active company is the deterministic no-op path:
+                    // the 400 proves the guard passed and the business rule fired.
+                    return (Kind.Json, new { status = "Active" }, null);
+
+                case "POST /api/platform/companies/{p}/branches":
+                    return (Kind.Json, new
+                    {
+                        name = $"Matrix Branch {Guid.NewGuid():N}"[..20],
+                        area = "Matrix Area",
+                        address = "2 Matrix St",
+                        phone = "01000000000",
+                    }, null);
+
+                case "PUT /api/platform/companies/{p}/branches/{p}":
+                    return (Kind.Json, new
+                    {
+                        name = "Revive Main Gym",
+                        area = "Matrix Area",
+                        address = "3 Matrix St",
+                        phone = "01000000000",
+                    }, null);
+
+                case "POST /api/platform/companies/{p}/hr-staff":
+                    // Empty list is a valid, idempotent no-op that still exercises the guard.
+                    return (Kind.Json, new { userIds = Array.Empty<int>() }, null);
+
+                case "POST /api/platform/users":
+                    // Employee account: no company binding is required, so the 201 path
+                    // stays reachable without depending on branch resolution.
+                    return (Kind.Json, new
+                    {
+                        fullName = $"Matrix Employee {Guid.NewGuid():N}"[..24],
+                        email = $"matrix-emp-{Guid.NewGuid():N}@test.local".ToLowerInvariant(),
+                        phone = "01000000000",
+                        userType = "Employee",
+                        sendInvite = false,
+                    }, null);
+
+                case "POST /api/platform/users/hr-managers":
+                    return (Kind.Json, new
+                    {
+                        fullName = "Matrix HRM Probe",
+                        email = $"matrix-hrm-{Guid.NewGuid():N}@test.local".ToLowerInvariant(),
+                        phone = "01000000000",
+                        sendInvite = false,
+                    }, null);
+
+                case "PUT /api/platform/users/{p}/status":
+                    return (Kind.Json, new { status = "Active", reason = "Security matrix probe" }, null);
+
+                case "POST /api/platform/users/{p}/reset-password":
+                    return (Kind.Json, new { revokeSessions = false }, null);
+
+                case "POST /api/platform/users/{p}/revoke-sessions":
+                    return (Kind.Json, new { reason = "Security matrix probe" }, null);
+
+                case "PUT /api/platform/users/{p}/gym-access":
+                    // Re-grant the branch the seeded HR user already holds: a no-op that
+                    // keeps run state stable.
+                    return (Kind.Json, new { branchIds = new[] { c.GymAId } }, null);
+
+                // ---------------- platform plans ----------------
+
+                case "POST /api/platform/plans":
+                    return (Kind.Json, new
+                    {
+                        name = $"Matrix Plan {Guid.NewGuid():N}"[..24],
+                        tagline = "Security matrix probe",
+                        price = 1500,
+                        cycleCount = 1,
+                        cycleUnit = "Months",
+                        trialMode = "Days",
+                        trialDays = 14,
+                        seatLimit = 50,
+                        branchLimit = 2,
+                        isHighlighted = false,
+                        features = new[] { "Security matrix probe", "Priority support" },
+                        addOns = new[] { new { name = "Extra employees", quantity = 5, price = 60 } },
+                    }, null);
+
+                case "PUT /api/platform/plans/{p}":
+                    return (Kind.Json, new
+                    {
+                        name = $"Matrix Plan Put {Guid.NewGuid():N}"[..28],
+                        tagline = "Security matrix probe (updated)",
+                        price = 1600,
+                        cycleCount = 1,
+                        cycleUnit = "Months",
+                        trialMode = "None",
+                        trialDays = 0,
+                        seatLimit = 60,
+                        branchLimit = 2,
+                        isHighlighted = false,
+                        features = new[] { "Security matrix probe" },
+                        addOns = Array.Empty<object>(),
+                    }, null);
+
+                case "POST /api/platform/plans/{p}/duplicate":
+                    return (Kind.Json, new { name = $"Matrix Copy {Guid.NewGuid():N}"[..26] }, null);
+
+                // ---------------- platform invoices ----------------
+
+                case "POST /api/platform/invoices":
+                    // A far-future period keeps this clear of every other row's invoices.
+                    return (Kind.Json, new
+                    {
+                        companyId = c.CompanyAId,
+                        periodStart = "2031-01-01",
+                        periodEnd = "2031-01-31",
+                        amount = 1000,
+                        notes = "Security matrix probe",
+                    }, null);
+
+                case "POST /api/platform/invoices/reminders/bulk":
+                    return (Kind.NoBody, null, null);
+
+                case "POST /api/platform/invoices/{p}/payments":
+                    // Partial payment of 1 unit: settles nothing, so run state stays stable.
+                    return (Kind.Json, new { amount = 1, method = "BankTransfer", reference = "MATRIX-PROBE" }, null);
+
+                case "POST /api/platform/invoices/{p}/reminders":
+                    return (Kind.Json, new { channel = "Email" }, null);
+
+                case "POST /api/platform/invoices/{p}/void":
+                    return (Kind.Json, new { reason = "Security matrix probe" }, null);
+
+                // ---------------- platform governance ----------------
+
+                case "PUT /api/platform/settings":
+                    // An all-null patch: the service treats it as an idempotent no-op and returns
+                    // the current settings, which keeps run state untouched.
+                    return (Kind.Json, new { }, null);
+
+                case "PUT /api/platform/audit/retention-policy":
+                    // Re-submits the defaults so the probe never widens or narrows retention.
+                    return (Kind.Json, new
+                    {
+                        platformEventsYears = 7,
+                        companyEventsYears = 3,
+                        impersonationYears = 7,
+                        exportRetentionDays = 90,
+                    }, null);
+
+                case "POST /api/platform/audit/export":
+                    return (Kind.Json, new { format = "Csv", from = "2020-01-01" }, null);
+
+                case "POST /api/platform/audit/{p}/review":
+                    // The probe audit row may already be reviewed from a previous run, which the
+                    // service answers with 400 — both outcomes are accepted by the row.
+                    return (Kind.Json, new { note = "Security matrix probe" }, null);
+
+                case "POST /api/platform/feature-flags":
+                    return (Kind.Json, new
+                    {
+                        key = $"matrix.created.{Guid.NewGuid():N}"[..28].ToLowerInvariant(),
+                        name = "Matrix created flag",
+                        description = "Security matrix probe",
+                        isEnabled = false,
+                        scope = "Global",
+                    }, null);
+
+                case "PUT /api/platform/feature-flags/{p}":
+                    return (Kind.Json, new
+                    {
+                        key = c.FeatureFlagProbeKey,
+                        name = "Matrix probe (updated)",
+                        description = "Security matrix probe",
+                        isEnabled = false,
+                        scope = "Global",
+                    }, null);
+
+                case "POST /api/platform/impersonation/start":
+                    // Entering a workspace is the probe's whole point; the service auto-ends the
+                    // actor's previous session, so repeated runs stay stable.
+                    return (Kind.Json, new
+                    {
+                        companyId = c.CompanyAId,
+                        reason = "Security matrix probe: verify act-as session issuance.",
+                    }, null);
+
+                case "POST /api/platform/impersonation/end":
+                    // The probe has no live session id of its own; ending an unknown one is a 404
+                    // after the guard passes, which the row accepts.
+                    return (Kind.Json, new { sessionId = int.MaxValue }, null);
+
                 default:
                     if (method.StartsWith("GET", StringComparison.OrdinalIgnoreCase)
                         || method.StartsWith("DELETE", StringComparison.OrdinalIgnoreCase))
@@ -154,8 +363,15 @@ namespace ReviveHRSystem.SecurityTests.Support
         /// employee is always karim (the matrix's subject), so a plain employee
         /// (employeeOther) probing another employee's file is a true IDOR probe.
         /// </summary>
-        public static string SubstituteRoute(string routeTemplate, SecurityContext c, string identityKey, int rowId)
+        public static string SubstituteRoute(string routeTemplate, SecurityContext c, string identityKey, int rowId, string method = "")
         {
+            // Platform console routes use their own id space (company / branch / user / plan /
+            // invoice / flag), so they are resolved before the HR-portal substitution below.
+            if (routeTemplate.Contains("/api/platform/", StringComparison.OrdinalIgnoreCase))
+            {
+                return SubstitutePlatformRoute(routeTemplate, c, method);
+            }
+
             // Row 21 (offboard) mutates the target's employment lifecycle — it must
             // never touch karim, on whom ~40 other rows depend inside the same run:
             // the dedicated probe employee absorbs it.
@@ -198,8 +414,99 @@ namespace ReviveHRSystem.SecurityTests.Support
                 : c.KarimEmployeeDocumentId.ToString());
         }
 
-        private static HttpContent BulkImportMultipart(SecurityContext c)
+        /// <summary>
+        /// Platform routes address companies, branches and users, not employees. Each
+        /// template is resolved explicitly so a company id can never be mistaken for an
+        /// employee id (which the HR-portal substitution below would do).
+        /// </summary>
+        private static bool IsDelete(string method) =>
+            method.Equals("DELETE", StringComparison.OrdinalIgnoreCase);
+
+        private static string SubstitutePlatformRoute(string routeTemplate, SecurityContext c, string method)
         {
+            // Invoice and plan routes need their own probe records; resolve those first so a
+            // single {id} segment cannot be mistaken for a company or an employee id.
+            var invoiceRoute = routeTemplate.Replace("{id:int}", "{id}");
+            if (invoiceRoute.Contains("/platform/invoices/{id}", StringComparison.OrdinalIgnoreCase))
+            {
+                var invoiceId = invoiceRoute switch
+                {
+                    var r when r.EndsWith("/payments", StringComparison.OrdinalIgnoreCase) => c.InvoicePaymentProbeId,
+                    var r when r.EndsWith("/reminders", StringComparison.OrdinalIgnoreCase) => c.InvoiceOverdueProbeId,
+                    var r when r.EndsWith("/void", StringComparison.OrdinalIgnoreCase) => c.InvoiceVoidProbeId,
+                    _ => c.InvoiceProbeId,
+                };
+
+                return System.Text.RegularExpressions.Regex.Replace(
+                    routeTemplate, @"\{id(:int)?\}", invoiceId.ToString());
+            }
+
+            if (routeTemplate.Contains("/platform/feature-flags/{id}", StringComparison.OrdinalIgnoreCase))
+            {
+                // The delete row needs its own flag; the update row must not be left pointing at
+                // one the delete already removed.
+                var flagId = IsDelete(method) ? c.FeatureFlagDeleteProbeId : c.FeatureFlagProbeId;
+
+                return System.Text.RegularExpressions.Regex.Replace(
+                    routeTemplate, @"\{id(:int)?\}", flagId.ToString());
+            }
+
+            if (routeTemplate.Contains("/platform/audit/{id}", StringComparison.OrdinalIgnoreCase))
+            {
+                return System.Text.RegularExpressions.Regex.Replace(
+                    routeTemplate, @"\{id(:int)?\}", c.AuditProbeId.ToString());
+            }
+
+            if (routeTemplate.Contains("/platform/audit/exports/{id}", StringComparison.OrdinalIgnoreCase))
+            {
+                // No package is guaranteed to exist, so the id stays a non-existent placeholder
+                // and the row expects 404 for an authorized caller.
+                return System.Text.RegularExpressions.Regex.Replace(
+                    routeTemplate, @"\{id(:int)?\}", "EXP-0000-0000");
+            }
+
+            if (routeTemplate.Contains("/platform/plans/{id}", StringComparison.OrdinalIgnoreCase))            {
+                var planId = routeTemplate.EndsWith("/archive-probe", StringComparison.OrdinalIgnoreCase)
+                    ? c.PlanArchiveProbeId
+                    : c.PlanProbeId;
+
+                // The archive row targets a plan with no live subscription, so archiving it is a
+                // deterministic 204 rather than a "plan in use" refusal.
+                if (routeTemplate.EndsWith("/{id:int}", StringComparison.OrdinalIgnoreCase))
+                {
+                    planId = c.PlanArchiveProbeId;
+                }
+
+                return System.Text.RegularExpressions.Regex.Replace(
+                    routeTemplate, @"\{id(:int)?\}", planId.ToString());
+            }
+
+            var segments = routeTemplate.Split('/');
+
+            for (var i = 0; i < segments.Length; i++)
+            {
+                var current = segments[i];
+                if (current is not ("{id:int}" or "{companyId:int}" or "{branchId:int}" or "{userId:int}" or "{id}" or "{companyId}" or "{branchId}" or "{userId}"))
+                {
+                    continue;
+                }
+
+                var previous = i > 0 ? segments[i - 1] : string.Empty;
+
+                segments[i] = previous switch
+                {
+                    "companies" => c.CompanyAId.ToString(),
+                    "branches" => c.GymAId.ToString(),
+                    // User-administration rows target the throwaway probe account.
+                    "hr-staff" or "users" => c.PlatformProbeUserId.ToString(),
+                    _ => segments[i],
+                };
+            }
+
+            return string.Join('/', segments);
+        }
+
+        private static HttpContent BulkImportMultipart(SecurityContext c)        {
             var csv = "Name,Email,Position,Level,Gym,Salary\n" +
                       $"Bulk Matrix Probe,{Guid.NewGuid():N}.bulk@test.local,Trainer,2,Revive Main Gym,5000\n";
             var content = new MultipartFormDataContent();

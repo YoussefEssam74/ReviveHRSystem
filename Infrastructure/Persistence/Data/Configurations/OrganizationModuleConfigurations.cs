@@ -14,6 +14,7 @@ namespace Presistence.Data.Configurations
             builder.Property(g => g.Name).IsRequired().HasMaxLength(200);
             builder.Property(g => g.Location).IsRequired().HasMaxLength(300);
             builder.Property(g => g.ContactInfo).HasMaxLength(300);
+            builder.Property(g => g.LogoPath).HasMaxLength(400);
             builder.Property(g => g.AnnualIncreasePercent).HasPrecision(5, 2);
             builder.Property(g => g.ExcusedLateHoursCapPerMonth).HasPrecision(4, 2).HasDefaultValue(4m);
 

@@ -354,6 +354,9 @@ namespace Service.Services
             Reason = dto.Reason,
             Payment = dto.Payment,
             CalculatedDays = dto.CalculatedDays,
+            BmDecidedAt = dto.BmDecidedAt,
+            HrDecidedAt = dto.HrDecidedAt,
+            BmComment = dto.BmComment,
             Timeline = dto.Timeline,
         };
 

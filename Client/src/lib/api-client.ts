@@ -35,13 +35,6 @@ export interface RequestOptions {
   body?: unknown
   signal?: AbortSignal
   /**
-   * Explicit bearer token that overrides the stored web session (e.g. the
-   * gym-bound station token issued by POST /api/kiosk/login). Requests sent
-   * with one never touch the session store --- a station 401 must not sign the
-   * HR user out.
-   */
-  accessToken?: string
-  /**
    * Opaque station session token (POST /api/kiosk/login) sent in the
    * X-Station-Token header. When present the stored web-session token is NOT
    * attached: a public kiosk browser must never emit an HR user's token.
@@ -54,6 +47,8 @@ export interface RequestOptions {
    * touch the HR user's session.
    */
   stationAuth?: boolean
+  /** Internal guard against retrying a request more than once after refresh. */
+  retried?: boolean
 }
 
 const STATUS_FALLBACK_MESSAGES: Record<number, string> = {
@@ -189,26 +184,27 @@ function withRefreshLock<T>(task: () => Promise<T>): Promise<T> {
  * an already-rotated token does NOT mean the chain is dead.
  */
 async function refreshOnce(initial: StoredSession, controller: AbortController): Promise<RefreshOutcome> {
-  let session = initial
   const storedAtLock = loadStoredSession()
-  if (storedAtLock) {
-    if (storedAtLock.accessToken !== session.accessToken && storedAtLock.expiresAt > Date.now()) {
-      return { kind: 'refreshed', session: storedAtLock }
-    }
-    if (storedAtLock.refreshToken && storedAtLock.refreshToken !== session.refreshToken) session = storedAtLock
+  if (storedAtLock && storedAtLock.sessionKey !== initial.sessionKey) {
+    return { kind: 'refreshed', session: storedAtLock }
   }
-  if (!session.refreshToken) return { kind: 'rejected' }
+  if (storedAtLock && storedAtLock.expiresAt > initial.expiresAt && storedAtLock.expiresAt > Date.now()) {
+    return { kind: 'refreshed', session: storedAtLock }
+  }
+
+  const csrfToken = await getCsrfToken()
 
   const response = await fetch(BASE_URL + '/api/auth/refresh', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-    body: JSON.stringify({ refreshToken: session.refreshToken }),
+    headers: { Accept: 'application/json', [AuthCsrfHeader]: csrfToken },
+    credentials: 'include',
     signal: controller.signal,
   })
 
   if (response.status === 401 || response.status === 403) {
     const storedNow = loadStoredSession()
-    if (storedNow && storedNow.accessToken !== session.accessToken && storedNow.expiresAt > Date.now()) {
+    if (storedNow && storedNow.sessionExpiresAt > Date.now()
+        && (storedNow.sessionKey !== initial.sessionKey || storedNow.expiresAt > initial.expiresAt)) {
       return { kind: 'refreshed', session: storedNow }
     }
     // Only now does the auth answer prove the stored refresh credential is dead.
@@ -216,30 +212,23 @@ async function refreshOnce(initial: StoredSession, controller: AbortController):
   }
   if (!response.ok) return { kind: 'unavailable' }
   const json = (await response.json()) as {
-    accessToken?: string
     expiresInSeconds?: number
     refreshExpiresInSeconds?: number
-    refreshToken?: string
-    user?: StoredSession['user']
   }
-  if (!json.accessToken) return { kind: 'unavailable' }
   const next: StoredSession = {
-    accessToken: json.accessToken,
-    refreshToken: json.refreshToken ?? session.refreshToken,
+    sessionKey: initial.sessionKey,
     expiresAt: Date.now() + (json.expiresInSeconds ?? 3600) * 1000,
-    refreshExpiresAt: json.refreshExpiresInSeconds
+    sessionExpiresAt: json.refreshExpiresInSeconds
       ? Date.now() + json.refreshExpiresInSeconds * 1000
-      : undefined,
-    user: json.user ?? session.user,
+      : initial.sessionExpiresAt,
+    user: initial.user,
   }
-  // Another tab may have stored a NEWER session while this request was in
-  // flight (a gym switch, a fresh login). Overwriting it would resurrect the
-  // scope this refresh was minted for — adopt the newer session instead.
+  // A login or gym switch in a sibling tab can replace the cookie while this
+  // refresh is in flight; keep the newer UI snapshot rather than overwriting it.
   const storedAfterRefresh = loadStoredSession()
   if (
     storedAfterRefresh &&
-    storedAfterRefresh.accessToken !== session.accessToken &&
-    storedAfterRefresh.accessToken !== next.accessToken
+    storedAfterRefresh.sessionKey !== initial.sessionKey
   ) {
     return { kind: 'refreshed', session: storedAfterRefresh }
   }
@@ -258,7 +247,7 @@ async function refreshOnce(initial: StoredSession, controller: AbortController):
  * report this window removes.
  */
 async function tryRefreshSession(session: StoredSession): Promise<RefreshOutcome> {
-  if (!session.refreshToken) return { kind: 'rejected' }
+  if (session.sessionExpiresAt <= Date.now()) return { kind: 'rejected' }
   if (refreshPromise) return refreshPromise
   // Bound the refresh like every other request: a stalled refresh must settle
   // (releasing the waiters joined on this promise) instead of leaving them and
@@ -279,8 +268,8 @@ async function tryRefreshSession(session: StoredSession): Promise<RefreshOutcome
 }
 
 interface RenewalResult {
-  /** Bearer the caller may replay the failed request with. */
-  retryToken: string | null
+  /** The cookie was refreshed and the original request can be replayed. */
+  retry: boolean
   /** True only when the server refused the refresh credential itself. */
   rejected: boolean
 }
@@ -290,36 +279,52 @@ interface RenewalResult {
  * another tab already rotated — the captured session's refresh token is then
  * stale, and presenting it again trips the server's reuse detection.
  */
-async function renewBearer(session: StoredSession): Promise<RenewalResult> {
+async function renewCookieSession(session: StoredSession): Promise<RenewalResult> {
   const storedNow = loadStoredSession()
-  if (storedNow && storedNow.accessToken !== session.accessToken) {
-    if (storedNow.expiresAt > Date.now()) return { retryToken: storedNow.accessToken, rejected: false }
+  if (storedNow && storedNow.sessionKey !== session.sessionKey) {
+    if (storedNow.sessionExpiresAt > Date.now()) return { retry: true, rejected: false }
     const outcome = await tryRefreshSession(storedNow)
-    if (outcome.kind === 'refreshed') return { retryToken: outcome.session.accessToken, rejected: false }
-    return { retryToken: null, rejected: outcome.kind === 'rejected' }
+    if (outcome.kind === 'refreshed') return { retry: true, rejected: false }
+    return { retry: false, rejected: outcome.kind === 'rejected' }
   }
 
   const outcome = await tryRefreshSession(session)
-  if (outcome.kind === 'refreshed') return { retryToken: outcome.session.accessToken, rejected: false }
-  if (outcome.kind === 'rejected') return { retryToken: null, rejected: true }
+  if (outcome.kind === 'refreshed') return { retry: true, rejected: false }
+  if (outcome.kind === 'rejected') return { retry: false, rejected: true }
 
   // The refresh reached no verdict (timeout / connection drop): a sibling tab may
   // have finished the rotation meanwhile, so take its bearer when it is newer.
   const storedAfter = loadStoredSession()
-  return storedAfter && storedAfter.accessToken !== session.accessToken
-    ? { retryToken: storedAfter.accessToken, rejected: false }
-    : { retryToken: null, rejected: false }
+  return storedAfter && storedAfter.sessionKey !== session.sessionKey
+    ? { retry: true, rejected: false }
+    : { retry: false, rejected: false }
+}
+
+const AuthCsrfHeader = 'X-CSRF-TOKEN'
+let csrfToken: string | null = null
+let csrfPromise: Promise<string> | null = null
+
+async function getCsrfToken(): Promise<string> {
+  if (csrfToken) return csrfToken
+  if (!csrfPromise) {
+    csrfPromise = fetch(BASE_URL + '/api/auth/csrf', {
+      method: 'GET',
+      headers: { Accept: 'application/json' },
+      credentials: 'include',
+    }).then(async (response) => {
+      if (!response.ok) throw new ApiError(response.status, 'CSRF_TOKEN_UNAVAILABLE', fallbackMessage(response.status))
+      const body = (await response.json()) as { requestToken?: string }
+      if (!body.requestToken) throw new ApiError(400, 'CSRF_TOKEN_UNAVAILABLE', t('Could not verify this browser session. Refresh and try again.'))
+      csrfToken = body.requestToken
+      return body.requestToken
+    }).finally(() => { csrfPromise = null })
+  }
+  return csrfPromise
 }
 
 export async function apiRequest<T>(path: string, options: RequestOptions & { form?: FormData } = {}): Promise<T> {
-  const { method = 'GET', body, form, signal, accessToken, stationToken, stationAuth } = options
+  const { method = 'GET', body, form, signal, stationToken, stationAuth, retried } = options
   const session = loadStoredSession()
-  // Station requests authenticate with their own header or session cookie; a kiosk
-  // browser may also hold a stale web session, which must never be sent from a
-  // public terminal.
-  const isStationRequest = Boolean(stationToken || stationAuth)
-  const bearerToken = isStationRequest ? undefined : accessToken ?? session?.accessToken
-
   const controller = new AbortController()
   let timedOut = false
   const timer = setTimeout(() => {
@@ -338,8 +343,10 @@ export async function apiRequest<T>(path: string, options: RequestOptions & { fo
   const headers: Record<string, string> = {
     Accept: 'application/json',
     ...(form === undefined && body !== undefined ? { 'Content-Type': 'application/json' } : {}),
-    ...(bearerToken ? { Authorization: 'Bearer ' + bearerToken } : {}),
     ...(stationToken ? { 'X-Station-Token': stationToken } : {}),
+  }
+  if (!['GET', 'HEAD', 'OPTIONS'].includes(method)) {
+    headers[AuthCsrfHeader] = await getCsrfToken()
   }
   const payload: BodyInit | undefined = form ?? (body === undefined ? undefined : JSON.stringify(body))
 
@@ -349,10 +356,8 @@ export async function apiRequest<T>(path: string, options: RequestOptions & { fo
       method,
       headers,
       body: payload,
-      // Cookie-authenticated station requests must carry the HttpOnly session
-      // cookie (and accept Set-Cookie on login) even when the API is on another
-      // origin; same-origin requests already behave this way by default.
-      ...(isStationRequest ? { credentials: 'include' as const } : {}),
+      // Web and station sessions are HttpOnly cookies, including cross-origin SPAs.
+      credentials: 'include',
       signal: controller.signal,
     })
   } catch (error) {
@@ -373,17 +378,17 @@ export async function apiRequest<T>(path: string, options: RequestOptions & { fo
   if (!response.ok) {
     // Access-token expired? Try a silent refresh once, then retry the original request.
     let renewalRejected = false
-    if (response.status === 401 && !accessToken && !stationToken && !stationAuth
+    if (response.status === 401 && !retried && !stationToken && !stationAuth
         && session && isAuthChallenge(response)
         && path !== '/api/auth/refresh' && path !== '/api/auth/login' && path !== '/api/auth/login/select-gym') {
-      const renewal = await renewBearer(session)
-      if (renewal.retryToken) {
-        return apiRequest<T>(path, { ...options, accessToken: renewal.retryToken })
+      const renewal = await renewCookieSession(session)
+      if (renewal.retry) {
+        return apiRequest<T>(path, { ...options, retried: true })
       }
       renewalRejected = renewal.rejected
     }
 
-    if (response.status === 401 && !accessToken && !stationToken && !stationAuth
+    if (response.status === 401 && !retried && !stationToken && !stationAuth
         && session && isAuthChallenge(response) && renewalRejected) {
       // Clear-session discipline: only a refresh the server actually refused ends
       // the session. A 401 challenge may also be refused because another tab
@@ -393,7 +398,7 @@ export async function apiRequest<T>(path: string, options: RequestOptions & { fo
       // evict the newer session; it caused the "randomly bounced to login right
       // after picking a gym" multi-tab report.
       const storedOnChallenge = loadStoredSession()
-      if (!storedOnChallenge || storedOnChallenge.accessToken === session.accessToken) clearSession()
+      if (!storedOnChallenge || storedOnChallenge.sessionKey === session.sessionKey) clearSession()
     }
     throw toApiError(response.status, json)
   }
@@ -410,10 +415,9 @@ export async function apiRequest<T>(path: string, options: RequestOptions & { fo
 export async function apiDownload(
   path: string,
   signal?: AbortSignal,
-  accessToken?: string,
+  retried = false,
 ): Promise<{ blob: Blob; fileName: string | null }> {
   const session = loadStoredSession()
-  const bearerToken = accessToken ?? session?.accessToken
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS * 4)
   if (signal) {
@@ -424,9 +428,8 @@ export async function apiDownload(
   let response: Response
   try {
     response = await fetch(BASE_URL + path, {
-      headers: {
-        ...(bearerToken ? { Authorization: 'Bearer ' + bearerToken } : {}),
-      },
+      headers: { Accept: '*/*' },
+      credentials: 'include',
       signal: controller.signal,
     })
   } catch (error) {
@@ -441,12 +444,12 @@ export async function apiDownload(
     // Same 401 split as apiRequest (M4): only a bearer-challenge auth failure on an
     // implicit session credential may end the session, and only once the server
     // has actually refused the refresh.
-    if (response.status === 401 && !accessToken && isAuthChallenge(response) && session) {
-      const renewal = await renewBearer(session)
-      if (renewal.retryToken) return apiDownload(path, signal, renewal.retryToken)
+    if (response.status === 401 && !retried && isAuthChallenge(response) && session) {
+      const renewal = await renewCookieSession(session)
+      if (renewal.retry) return apiDownload(path, signal, true)
       if (renewal.rejected) {
         const storedOnChallenge = loadStoredSession()
-        if (!storedOnChallenge || storedOnChallenge.accessToken === session.accessToken) clearSession()
+        if (!storedOnChallenge || storedOnChallenge.sessionKey === session.sessionKey) clearSession()
       }
     }
     let message = fallbackMessage(response.status)

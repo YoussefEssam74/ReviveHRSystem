@@ -203,6 +203,11 @@ namespace Presistence.Data.Configurations
             builder.Property(ss => ss.TokenHash).IsRequired().HasMaxLength(64);
             builder.Property(ss => ss.CreatedAtUtc).IsRequired();
             builder.Property(ss => ss.ExpiresAtUtc).IsRequired();
+            builder.Property(ss => ss.IpAddress).HasMaxLength(64);
+            builder.Property(ss => ss.DeviceInfo).HasMaxLength(300);
+            builder.Property(ss => ss.Latitude);
+            builder.Property(ss => ss.Longitude);
+            builder.Property(ss => ss.LocationAccuracyMeters);
 
             builder.HasIndex(ss => ss.TokenHash).IsUnique();
             builder.HasIndex(ss => ss.GymId);

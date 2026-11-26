@@ -99,6 +99,24 @@ namespace Biometrics
             var similarity = Math.Round(bestScore, 3);
             var liveness = Math.Round(outcome.LivenessScore, 3);
 
+            // A confirmation is bound to the employee the prompt named: the terminal
+            // re-scans a fresh frame, so whoever else steps in front of the camera must
+            // not inherit that check-out.
+            if (request.ConfirmCheckout
+                && !string.IsNullOrWhiteSpace(request.ConfirmEmployeeId)
+                && !string.Equals(request.ConfirmEmployeeId.Trim(), employeeId, StringComparison.OrdinalIgnoreCase))
+            {
+                return new FaceScanResponse
+                {
+                    Outcome = FaceScanOutcome.Rejected,
+                    EmployeeId = employeeId,
+                    EmployeeName = employeeName,
+                    Message = "A different employee is in front of the camera — the check-out was not confirmed.",
+                    Similarity = similarity,
+                    LivenessScore = liveness,
+                };
+            }
+
             // 4) Record atomically through the standard events pipeline — every ADR-004
             //    check (gym access, schedule, duplicates) applies exactly as for /events.
             //    Employee-level refusals become outcomes rather than HTTP errors: a

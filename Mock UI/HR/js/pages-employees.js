@@ -1,20 +1,64 @@
-﻿// ==================== EMPLOYEES DIRECTORY ====================
+// ==================== EMPLOYEES DIRECTORY ====================
 let _empFilter = { gym: 'all', status: 'all', search: '' };
 let _empSelectedId = null;
 
-// Termination pipeline stages (BM submits → HR follows up → HR records verdict)
-const _sepStages = ['Requested', 'Notice Period', 'Exit In Progress', 'Under Review', 'Completed'];
-const _sepStageColors = { Requested: '#7c3aed', 'Notice Period': '#2563eb', 'Exit In Progress': '#d97706', 'Under Review': '#ea580c', Completed: '#16a34a' };
+// Termination flow: BM request → HR approves & schedules the exit interview →
+// HR completes the exit interview form (ratings) → exit steps, verdict and
+// settlement run in progress → completed/archived.
+const _sepStages = ['Requested', 'Exit Interview', 'Exit In Progress', 'Completed'];
+const _sepStageColors = { 'Requested': '#7c3aed', 'Exit Interview': '#2563eb', 'Exit In Progress': '#d97706', 'Completed': '#16a34a' };
 
 // ---- Terminations page state + helpers -------------------------------------
 let _sepGym = 'all';
-let _sepTab = 'workflow';
+let _sepPageTab = 'requests';   // requests | interview | progress | completed
 let _sepModalId = null;
 const _gymColors = { 'Nasr City': '#2563eb', 'Heliopolis': '#7c3aed', '6th October': '#d97706' };
 const _annualEntitlement = 21; // days per year → accrued monthly
 
+const _sepPageTabs = [
+  { id: 'requests', label: 'Requests' },
+  { id: 'interview', label: 'Exit interview' },
+  { id: 'progress', label: 'In progress' },
+  { id: 'completed', label: 'Completed' },
+];
+
 function setSepGym(g) { _sepGym = g; renderAll(); }
-function openSepTab(t) { _sepTab = t; if (_sepModalId) openSeparation(_sepModalId); }
+function setSepPageTab(t) { _sepPageTab = t; renderAll(); }
+
+function _sepStatusKey(s) {
+  // Older records may still carry the previous offboarding statuses.
+  if (s.status === 'Notice Period' || s.status === 'Under Review') return 'Exit In Progress';
+  return s.status;
+}
+function _sepInterview(s) {
+  return s.exitInterview || { decision: 'Pending', scheduledFor: '', time: '', interviewer: '', note: '', conductedOn: '', rating: null, performanceRating: null, feedback: '' };
+}
+function _sepAttr(v) {
+  return String(v == null ? '' : v).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+}
+function _sepInTab(s, tab) {
+  const st = _sepStatusKey(s);
+  if (tab === 'requests') return st === 'Requested';
+  if (tab === 'interview') return st === 'Exit Interview';
+  if (tab === 'progress') return st === 'Exit In Progress';
+  if (tab === 'completed') return st === 'Completed';
+  return true;
+}
+function _sepStatusPill(status) {
+  const c = _sepStageColors[status] || '#94a3b8';
+  return `<span class="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[9px] font-bold whitespace-nowrap" style="background:${c}1a;color:${c};border:1px solid ${c}33"><span class="w-1.5 h-1.5 rounded-full" style="background:${c}"></span>${status}</span>`;
+}
+function _sepStars(n) {
+  if (!n) return '<span class="text-charcoal-300 text-[10px]">—</span>';
+  return `<span class="text-amber-500 text-[11px] tracking-tight">${'★'.repeat(n)}<span class="text-charcoal-200">${'★'.repeat(5 - n)}</span></span> <span class="text-[9px] text-charcoal-400">${n}/5</span>`;
+}
+function _sepRatingInput(name, value) {
+  return `<div class="flex items-center gap-1">${[1, 2, 3, 4, 5].map(n => `
+    <label class="cursor-pointer">
+      <input type="radio" name="${name}" value="${n}" class="peer sr-only" ${Number(value) === n ? 'checked' : ''}>
+      <span class="w-7 h-7 flex items-center justify-center rounded-md border border-charcoal-200 bg-white text-[10px] font-bold text-charcoal-500 peer-checked:bg-amber-50 peer-checked:border-amber-400 peer-checked:text-amber-700 transition-colors">${n}</span>
+    </label>`).join('')}</div>`;
+}
 
 function _gymPill(gym) {
   const c = _gymColors[gym] || '#94a3b8';
@@ -181,136 +225,503 @@ function renderEmployees(page='directory') {
   </div>`;
 }
 
-// ==================== TERMINATIONS (BM → HR PIPELINE) ====================
-// Where it comes from: the Branch Manager submits who needs to leave → HR
-// receives it in the pipeline and follows the exit steps → HR records the
-// final verdict (why he left · money direction · banned or return).
+// ==================== TERMINATIONS (BM → HR EXIT FILE) ====================
 function renderTerminations() {
   const showAll = DEMO.showAll;
   const canOffboard = showAll || hasPermission('employees.offboard');
   const canRequestAction = showAll || hasPermission('employees.request_action');
-  const total = MOCK.separations.length;
-  const shown = _sepGym === 'all' ? total : MOCK.separations.filter(s => s.gym === _sepGym).length;
+  const all = MOCK.separations.filter(s => s.status !== 'Declined');
+  const scoped = _sepGym === 'all' ? all : all.filter(s => s.gym === _sepGym);
+  const counts = {};
+  _sepPageTabs.forEach(t => { counts[t.id] = scoped.filter(s => _sepInTab(s, t.id)).length; });
+  const rows = scoped.filter(s => _sepInTab(s, _sepPageTab))
+    .slice()
+    .sort((a, b) => String(a.lastDay).localeCompare(String(b.lastDay)));
+  const tabLabel = (_sepPageTabs.find(t => t.id === _sepPageTab) || {}).label || 'Requests';
+
   return `<div class="flex flex-col h-full min-h-0 gap-2">
     <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 flex-shrink-0">
       <div>
         <h1 class="text-sm font-bold text-charcoal-900 leading-tight">Terminations</h1>
-        <p class="text-[10px] text-charcoal-500">${_sepGym==='all'?`${total} exits across all gyms`:`${shown} of ${total} exits · ${_sepGym}`} · from the Branch Manager → HR follows up → verdict.</p>
+        <p class="text-[10px] text-charcoal-500">${counts.requests} request${counts.requests === 1 ? '' : 's'} awaiting you · ${counts.interview} exit interview${counts.interview === 1 ? '' : 's'} · ${counts.progress} in progress${_sepGym === 'all' ? '' : ' · ' + _sepGym}</p>
       </div>
       <div class="flex items-center gap-1.5 flex-wrap">
         <button onclick="openRequestTermination()" class="btn btn-sm btn-danger-outline" title="Branch Manager submits who needs to leave">+ Request Termination (BM)</button>
-        ${canOffboard?`<button onclick="openInitiateOffboarding()" class="btn btn-sm btn-primary">+ Initiate Offboarding</button>`
-          :(canRequestAction?`<button onclick="openActionRequest('Offboard')" class="btn btn-sm btn-danger-outline" title="Offboarding is executed by an HR Manager — raise a request instead.">+ Request Offboard</button>`:'')}
+        ${canOffboard ? `<button onclick="openInitiateOffboarding()" class="btn btn-sm btn-primary">+ Initiate Offboarding</button>`
+          : (canRequestAction ? `<button onclick="openActionRequest('Offboard')" class="btn btn-sm btn-danger-outline" title="Offboarding is executed by an HR Manager — raise a request instead.">+ Request Offboard</button>` : '')}
       </div>
     </div>
-    <div class="bg-white rounded-lg border border-charcoal-200 px-2 py-1.5 flex items-center gap-1.5 flex-wrap flex-shrink-0">
-      <span class="text-[9px] uppercase tracking-wide text-charcoal-400 font-semibold mr-1">Gym</span>
-      ${['all','Nasr City','Heliopolis','6th October'].map(g=>`<button onclick="setSepGym('${g}')" class="px-2 py-1 rounded-md text-[10px] font-medium transition-colors ${_sepGym===g?'bg-charcoal-900 text-white':'bg-charcoal-50 text-charcoal-600 hover:bg-charcoal-100'}">${g==='all'?'All Gyms':g}</button>`).join('')}
+
+    <div class="bg-white rounded-lg border border-charcoal-200 px-2 py-1.5 flex items-center justify-between gap-2 flex-wrap flex-shrink-0">
+      <div class="flex items-center gap-1 bg-charcoal-100 rounded-lg p-0.5 flex-wrap">
+        ${_sepPageTabs.map(t => `<button onclick="setSepPageTab('${t.id}')" class="px-2.5 py-1 rounded-md text-[10px] font-medium transition-all ${_sepPageTab === t.id ? 'bg-white shadow-sm text-charcoal-900 font-bold' : 'text-charcoal-500 hover:text-charcoal-700'}">${t.label}${counts[t.id] ? ` <span class="badge ${_sepPageTab === t.id ? 'badge-brand' : 'badge-gray'} text-[9px]">${counts[t.id]}</span>` : ''}</button>`).join('')}
+      </div>
+      <div class="flex items-center gap-1 flex-wrap">
+        ${['all', 'Nasr City', 'Heliopolis', '6th October'].map(g => `<button onclick="setSepGym('${g}')" class="px-2 py-1 rounded-md text-[10px] font-medium transition-colors ${_sepGym === g ? 'bg-charcoal-900 text-white' : 'bg-charcoal-50 text-charcoal-600 hover:bg-charcoal-100'}">${g === 'all' ? 'All gyms' : g}</button>`).join('')}
+      </div>
     </div>
-    ${renderOffboarding()}
+
+    <div class="bg-white rounded-xl border border-charcoal-200 overflow-hidden flex flex-col flex-1 min-h-0">
+      <div class="px-3 py-2 border-b border-charcoal-150 bg-charcoal-50/60 flex items-center justify-between gap-2 flex-shrink-0">
+        <div class="min-w-0">
+          <p class="text-[11px] font-bold text-charcoal-900 uppercase tracking-wide">${tabLabel} <span class="text-charcoal-400 font-semibold">· ${rows.length}</span></p>
+          <p class="text-[10px] text-charcoal-400 truncate">${_sepPageTab === 'requests' ? 'Approve the BM request and schedule the exit interview.'
+            : _sepPageTab === 'interview' ? 'Run the exit interview, complete the form and rate the employee.'
+            : _sepPageTab === 'progress' ? 'Exit steps, verdict, salary data, pending requests and the annual-leave settlement.'
+            : 'Archived exits with the final verdict and settlement.'}</p>
+        </div>
+        <span class="badge badge-gray text-[9px] flex-shrink-0">${_sepGym === 'all' ? 'All branches' : _sepGym}</span>
+      </div>
+      <div class="flex-1 min-h-0 overflow-auto">
+        <table class="data-table" style="min-width:${_sepPageTab === 'progress' ? 1000 : _sepPageTab === 'completed' ? 980 : 880}px">
+          <thead class="sticky top-0 z-10 bg-[#f9f9ff]">${_sepTableHead(_sepPageTab)}</thead>
+          <tbody>
+            ${rows.length ? rows.map(s => _sepRow(s, _sepPageTab, canOffboard)).join('')
+              : `<tr><td colspan="${_sepCols(_sepPageTab)}"><div class="py-10 text-center"><svg class="w-8 h-8 mx-auto mb-2 text-charcoal-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg><p class="text-xs text-charcoal-500">Nothing in ${tabLabel}${_sepGym === 'all' ? '' : ' for ' + _sepGym}.</p></div></td></tr>`}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="bg-white rounded-xl border border-charcoal-200 px-3 py-2 flex-shrink-0">
+      <div class="flex items-center justify-between gap-2 flex-wrap">
+        <div class="flex items-center gap-1.5 flex-wrap">
+          <p class="text-[9px] font-bold uppercase tracking-wide text-charcoal-400 mr-1">Exit process</p>
+          ${['Request approved', 'Exit interview', 'Exit steps & verdict', 'Completed'].map((st, i) => `
+            <span class="inline-flex items-center gap-1.5">
+              <span class="w-4 h-4 rounded-full bg-charcoal-100 text-charcoal-500 text-[8px] font-bold flex items-center justify-center">${i + 1}</span>
+              <span class="text-[10px] text-charcoal-600 font-medium">${st}</span>
+              ${i < 3 ? `<svg class="w-3 h-3 text-charcoal-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>` : ''}
+            </span>`).join('')}
+        </div>
+        <div class="flex items-center gap-2 flex-wrap">
+          <span class="text-[9px] text-charcoal-400">Leave beyond the accrual → <b class="text-red-600">absent</b></span>
+          <span class="text-charcoal-200">|</span>
+          <button onclick="navigateTo('employees')" class="text-[9px] font-semibold text-brand-600 hover:text-brand-800">Employee directory →</button>
+        </div>
+      </div>
+    </div>
   </div>`;
 }
 
-function renderOffboarding() {
-  const showAll = DEMO.showAll;
-  const canOffboard = showAll || hasPermission('employees.offboard');
-  const all = MOCK.separations;
-  const active = _sepGym === 'all' ? all : all.filter(s => s.gym === _sepGym);
-  const exitSteps = 5;
-
-  const strip = [
-    ['Requested', active.filter(s=>s.status==='Requested').length, 'text-purple-600'],
-    ['Notice Period', active.filter(s=>s.status==='Notice Period').length, 'text-blue-600'],
-    ['Exit In Progress', active.filter(s=>s.status==='Exit In Progress').length, 'text-yellow-600'],
-    ['Under Review', active.filter(s=>s.status==='Under Review').length, 'text-orange-600'],
-    ['Completed', active.filter(s=>s.status==='Completed').length, 'text-charcoal-900']
-  ];
-
-  return `<div class="flex flex-col h-full min-h-0 gap-2">
-    <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 flex-shrink-0">
-      ${strip.map((t,i)=>`<div class="stat-tile ${i===0?'border-l-4 border-l-red-500':''}"><p class="stat-value ${t[2]}">${t[1]}</p><p class="stat-label mt-0.5">${t[0]}</p></div>`).join('')}
-    </div>
-
-    <div class="flex gap-3 overflow-x-auto lg:overflow-visible flex-1 min-h-0">
-      ${_sepStages.map(stage=>{
-        const list = active.filter(s=>s.status===stage);
-        return `<div class="w-72 min-w-[260px] flex-shrink-0 lg:flex-1 lg:flex-shrink rounded-xl border border-charcoal-200 bg-charcoal-50/50 flex flex-col min-h-0">
-          <div class="flex items-center justify-between px-3 py-2 border-b border-charcoal-200 flex-shrink-0">
-            <p class="text-[10px] font-semibold uppercase tracking-wide ${stage==='Completed'?'text-green-600':'text-charcoal-500'} flex items-center gap-1.5"><span class="w-2 h-2 rounded-full" style="background:${_sepStageColors[stage]}"></span>${stage}</p>
-            <span class="text-[9px] text-charcoal-500">${list.length}</span>
-          </div>
-          <div class="flex-1 min-h-0 overflow-y-auto p-2 space-y-2">${list.map(s=>_sepCard(s, stage, canOffboard || s.requestedBy === 'Branch Manager')).join('')||`<div class="bg-white rounded-lg border border-dashed border-charcoal-200 p-3 text-center"><p class="text-[10px] text-charcoal-400">No exits here</p></div>`}</div>
-        </div>`;
-      }).join('')}
-    </div>
-
-    <div class="bg-white rounded-xl border border-brand-200 border-l-4 border-l-brand-500 p-3 flex-shrink-0">
-      <p class="text-xs font-semibold text-charcoal-900">EXIT PROCESS</p>
-      <p class="text-[10px] text-charcoal-500">Standard ${exitSteps}-step offboarding: Exit interview → Handover → Uniform/asset return → Access revocation → Final settlement. Annual leave is settled pro-rata (${_annualEntitlement} days/yr, accrued monthly) — days taken beyond the accrual are counted as <b class="text-red-600">absent</b>, not annual leave.</p>
-    </div>
-  </div>`;
+function _sepCols(tab) {
+  return tab === 'progress' || tab === 'completed' ? 7 : 6;
 }
 
-function _sepCard(s, stage, canMove) {
-  const done = s.checklist.filter(c=>c[1]).length;
-  const isLast = stage === 'Completed';
-  const initials = s.employee.split(' ').map(w=>w[0]).join('');
-  const ls = _leaveSettlement(s);
+function _sepTableHead(tab) {
+  const base = '<th>Employee</th><th>Gym</th>';
+  if (tab === 'requests') return `<tr>${base}<th>Requested by</th><th>Reason</th><th>Last day</th><th class="text-right">Actions</th></tr>`;
+  if (tab === 'interview') return `<tr>${base}<th>Interview slot</th><th>Interviewer</th><th>Rating</th><th class="text-right">Actions</th></tr>`;
+  if (tab === 'progress') return `<tr>${base}<th>Exit steps</th><th>Verdict</th><th>Salary · net</th><th>Leave balance</th><th class="text-right">Actions</th></tr>`;
+  return `<tr>${base}<th>Completed</th><th>Verdict</th><th>Settlement</th><th>Rehire</th><th class="text-right">Actions</th></tr>`;
+}
+
+function _sepEmployeeCell(s) {
+  const initials = s.employee.split(' ').map(w => w[0]).join('');
+  return `<td><div class="flex items-center gap-2">
+    <div class="w-7 h-7 rounded-full bg-red-50 border border-red-100 text-red-700 flex items-center justify-center text-[10px] font-bold flex-shrink-0">${initials}</div>
+    <div class="min-w-0">
+      <p class="text-xs font-semibold text-charcoal-900 truncate">${s.employee}</p>
+      <p class="text-[9px] text-charcoal-400 truncate">${s.position}</p>
+    </div>
+  </div></td>`;
+}
+
+function _sepRow(s, tab, canOffboard) {
   const daysLeft = _noticeDaysLeft(s.lastDay);
-  const leaveChip = ls.overage > 0
-    ? `<span class="badge badge-red text-[8px]">Leave over ${ls.overage}d → ABSENT</span>`
-    : `<span class="badge badge-green text-[8px]">Leave +${ls.balance}d payout</span>`;
-  return `<div class="bg-white rounded-lg border border-charcoal-200 p-2.5 shadow-sm hover:shadow-md transition-shadow">
-    <div class="flex items-center gap-2">
-      <div class="w-8 h-8 rounded-full bg-red-100 text-red-700 flex items-center justify-center text-[10px] font-semibold flex-shrink-0">${initials}</div>
-      <div class="min-w-0 flex-1">
-        <p class="text-xs font-semibold text-charcoal-900 truncate">${s.employee}</p>
-        <p class="text-[10px] text-charcoal-500 truncate">${s.position}</p>
+  const ei = _sepInterview(s);
+  const canDecide = canOffboard || s.requestedBy === 'Branch Manager';
+  const open = `openSeparation('${s.id}')`;
+
+  if (tab === 'requests') {
+    return `<tr class="cursor-pointer hover:bg-charcoal-50/60" onclick="${open}">
+      ${_sepEmployeeCell(s)}
+      <td>${_gymPill(s.gym)}</td>
+      <td><p class="text-[10px] font-medium text-charcoal-800 truncate">${s.requestedByUser || 'Branch Manager'}${s.requestedBy === 'Branch Manager' ? ' (BM)' : ''}</p><p class="text-[9px] text-charcoal-400">${s.submittedDate || '—'}</p></td>
+      <td style="max-width:230px"><p class="text-[10px] text-charcoal-700 truncate" title="${_sepAttr(s.reason)}">${s.reason}</p></td>
+      <td><p class="text-[10px] font-semibold text-charcoal-800 whitespace-nowrap">${formatDate(s.lastDay)}</p><p class="text-[9px] whitespace-nowrap ${daysLeft !== null && daysLeft <= 7 ? 'text-red-600 font-semibold' : 'text-charcoal-400'}">${daysLeft === null ? '—' : daysLeft + ' days left'}</p></td>
+      <td class="text-right whitespace-nowrap">
+        ${canDecide ? `<button onclick="event.stopPropagation();${open}" class="btn btn-sm btn-primary text-[10px] h-7 px-2">Approve & schedule</button>
+        <button onclick="event.stopPropagation();declineSeparationRequest('${s.id}')" class="btn btn-sm btn-secondary text-[10px] h-7 px-2 ml-1">Decline</button>` : `<button onclick="event.stopPropagation();${open}" class="btn btn-sm btn-secondary text-[10px] h-7 px-2">Review</button>`}
+      </td>
+    </tr>`;
+  }
+
+  if (tab === 'interview') {
+    return `<tr class="cursor-pointer hover:bg-charcoal-50/60" onclick="${open}">
+      ${_sepEmployeeCell(s)}
+      <td>${_gymPill(s.gym)}</td>
+      <td><p class="text-[10px] font-semibold text-charcoal-800 whitespace-nowrap">${ei.scheduledFor ? formatDate(ei.scheduledFor) : 'Not scheduled'}</p><p class="text-[9px] text-charcoal-400">${ei.time || '—'}</p></td>
+      <td class="text-[10px] text-charcoal-700">${ei.interviewer || '—'}</td>
+      <td>${ei.decision === 'Completed' ? _sepStars(ei.rating) : '<span class="badge badge-yellow text-[9px]">Not rated</span>'}</td>
+      <td class="text-right whitespace-nowrap"><button onclick="event.stopPropagation();${open}" class="btn btn-sm btn-primary text-[10px] h-7 px-2">Open interview form</button></td>
+    </tr>`;
+  }
+
+  if (tab === 'progress') {
+    const done = s.checklist.filter(c => c[1]).length;
+    const pay = (MOCK.payrollItems || []).find(p => p.name === s.employee);
+    const ls = _leaveSettlement(s);
+    return `<tr class="cursor-pointer hover:bg-charcoal-50/60" onclick="${open}">
+      ${_sepEmployeeCell(s)}
+      <td>${_gymPill(s.gym)}</td>
+      <td>
+        <div class="flex items-center gap-1.5 min-w-[92px]">
+          <div class="flex-1 h-1.5 bg-charcoal-100 rounded-full overflow-hidden"><div class="h-full rounded-full bg-amber-500" style="width:${s.progress}%"></div></div>
+          <span class="text-[9px] text-charcoal-500 whitespace-nowrap">${done}/${s.checklist.length}</span>
+        </div>
+      </td>
+      <td>${s.verdict ? '<span class="badge badge-green text-[9px]">Recorded</span>' : '<span class="badge badge-yellow text-[9px]">Required</span>'}</td>
+      <td><p class="text-[10px] font-semibold text-charcoal-800 whitespace-nowrap">${pay ? pay.net.toLocaleString() + ' EGP' : '—'}</p><p class="text-[9px] text-charcoal-400">${pay ? 'net · ' + pay.status : 'no payroll'}</p></td>
+      <td>${ls.balance >= 0 ? `<span class="badge badge-green text-[9px] whitespace-nowrap">+${ls.balance}d payout</span>` : `<span class="badge badge-red text-[9px] whitespace-nowrap">${Math.abs(ls.balance)}d absent</span>`}</td>
+      <td class="text-right whitespace-nowrap"><button onclick="event.stopPropagation();${open}" class="btn btn-sm btn-primary text-[10px] h-7 px-2">Open exit file</button></td>
+    </tr>`;
+  }
+
+  const settle = s.verdict ? (s.verdict.settlement || null) : null;
+  const settleTxt = !settle ? '—' : settle.direction === 'owedToEmployee' ? `Pay ${settle.amount} EGP` : settle.direction === 'employeeOwes' ? `Owes ${settle.amount} EGP` : 'No balance';
+  const rehire = s.verdict && s.verdict.rehire ? s.verdict.rehire.status : '—';
+  return `<tr class="cursor-pointer hover:bg-charcoal-50/60" onclick="${open}">
+    ${_sepEmployeeCell(s)}
+    <td>${_gymPill(s.gym)}</td>
+    <td><p class="text-[10px] font-semibold text-charcoal-800 whitespace-nowrap">${s.completedOn ? formatDate(s.completedOn) : formatDate(s.lastDay)}</p><p class="text-[9px] text-green-600">Archived</p></td>
+    <td><div class="flex flex-wrap gap-1">${_sepVerdictChips(s) || '<span class="text-[10px] text-charcoal-400">—</span>'}</div></td>
+    <td class="text-[10px] text-charcoal-700 whitespace-nowrap">${settleTxt}</td>
+    <td>${rehire === 'Banned' ? '<span class="badge badge-red text-[9px]">Banned</span>' : rehire === 'Eligible' ? '<span class="badge badge-green text-[9px]">Eligible</span>' : '<span class="text-[10px] text-charcoal-400">—</span>'}</td>
+    <td class="text-right whitespace-nowrap"><button onclick="event.stopPropagation();${open}" class="btn btn-sm btn-secondary text-[10px] h-7 px-2">View file</button></td>
+  </tr>`;
+}
+
+// ---- Step 1: approve the BM request and schedule the exit interview --------
+function approveSeparationRequest(id) {
+  const s = MOCK.separations.find(x => x.id === id); if (!s || _sepStatusKey(s) !== 'Requested') return;
+  const date = document.getElementById('sep-sched-date')?.value || '';
+  const time = document.getElementById('sep-sched-time')?.value || '';
+  const interviewer = (document.getElementById('sep-sched-interviewer')?.value || '').trim();
+  if (!date) { showToast('Pick an exit-interview date first', 'error'); return; }
+  s.status = 'Exit Interview';
+  s.exitInterview = { ..._sepInterview(s), decision: 'Scheduled', scheduledFor: date, time, interviewer, note: '' };
+  const emp = MOCK.employees.find(e => e.name === s.employee);
+  if (emp && emp.status === 'Active') emp.status = 'Notice Period';
+  MOCK.auditLog.unshift({ id: 'al-' + Date.now(), action: 'Termination Request Approved', user: MOCK.currentUser.fullName, target: s.employee, detail: `Request approved — exit interview scheduled ${date}${time ? ' ' + time : ''} with ${interviewer || 'HR'}`, timestamp: '2026-09-09', gym: s.gym });
+  showToast(`Exit interview scheduled for ${s.employee}`);
+  openSeparation(id);
+  renderAll();
+}
+
+function declineSeparationRequest(id) {
+  const s = MOCK.separations.find(x => x.id === id); if (!s) return;
+  openModal('Decline termination request', `
+    <div class="space-y-3">
+      <div class="bg-charcoal-50 border border-charcoal-150 rounded-xl p-3">
+        <p class="text-xs font-bold text-charcoal-900">${s.employee} <span class="text-[10px] text-charcoal-400 font-normal">· ${s.position}</span></p>
+        <p class="text-[10px] text-charcoal-500 mt-0.5">${s.gym} · requested by ${s.requestedByUser || 'Branch Manager'} · last day ${formatDate(s.lastDay)}</p>
+        <p class="text-[10px] text-charcoal-600 mt-1">Reason given: ${s.reason}</p>
       </div>
-      ${_gymPill(s.gym)}
-    </div>
-    <div class="mt-2 rounded-lg bg-charcoal-50 p-2 space-y-1">
-      <div class="flex items-center justify-between gap-2">
-        <p class="text-[10px] text-purple-700 font-semibold truncate">${s.requestedBy === 'Branch Manager' ? 'BM ' : ''}${s.requestedByUser || s.requestedBy || '—'}</p>
-        <span class="text-[9px] text-charcoal-400 flex-shrink-0">${s.submittedDate || ''}</span>
+      <div class="bg-red-50 border border-red-100 rounded-lg p-2.5 text-[10px] text-red-700 leading-relaxed">
+        Declining closes this request and returns it to the Branch Manager with your note. The employee record is not changed.
       </div>
-      <p class="text-[10px] text-charcoal-600 truncate" title="${s.reason}">Why: ${s.reason}</p>
+      <div><label class="form-label">Reason for declining *</label>
+        <textarea id="sep-decline-reason" class="form-input" rows="2" placeholder="e.g. not enough evidence, employee agreed a transfer instead..."></textarea>
+      </div>
+    </div>`,
+    { footer: `<button onclick="closeModal()" class="btn btn-sm btn-secondary">Cancel</button><button onclick="confirmDeclineSeparation('${s.id}')" class="btn btn-sm btn-danger">Decline request</button>` });
+}
+
+function confirmDeclineSeparation(id) {
+  const s = MOCK.separations.find(x => x.id === id); if (!s) return;
+  const reason = (document.getElementById('sep-decline-reason')?.value || '').trim();
+  if (!reason) { showToast('Add a reason for the Branch Manager', 'error'); return; }
+  s.status = 'Declined';
+  s.declinedReason = reason;
+  MOCK.auditLog.unshift({ id: 'al-' + Date.now(), action: 'Termination Request Declined', user: MOCK.currentUser.fullName, target: s.employee, detail: `BM termination request declined — ${reason}`, timestamp: '2026-09-09', gym: s.gym });
+  closeModal();
+  showToast(`Request for ${s.employee} declined`);
+  renderAll();
+}
+
+// ---- Step 2: complete the exit interview form + ratings --------------------
+function saveExitInterviewForm(id) {
+  const s = MOCK.separations.find(x => x.id === id); if (!s) return;
+  if (!(DEMO.showAll || hasPermission('employees.offboard') || s.requestedBy === 'Branch Manager')) {
+    showToast('Requires employees.offboard permission', 'error'); return;
+  }
+  const ei = _sepInterview(s);
+  const conductedOn = document.getElementById('sep-ei-date')?.value || '';
+  const interviewer = (document.getElementById('sep-ei-interviewer')?.value || '').trim();
+  const rating = Number(document.querySelector('input[name="sep-ei-rating"]:checked')?.value || 0);
+  const performanceRating = Number(document.querySelector('input[name="sep-ei-perf"]:checked')?.value || 0);
+  const feedback = (document.getElementById('sep-ei-feedback')?.value || '').trim();
+  if (!conductedOn) { showToast('Pick the date the interview was conducted', 'error'); return; }
+  if (!rating) { showToast('Rate the exit interview (1–5)', 'error'); return; }
+  s.exitInterview = { ...ei, decision: 'Completed', conductedOn, interviewer, rating, performanceRating: performanceRating || null, feedback };
+  s.status = 'Exit In Progress';
+  s.checklist[0][1] = true;
+  s.progress = Math.round((s.checklist.filter(c => c[1]).length / s.checklist.length) * 100);
+  MOCK.auditLog.unshift({ id: 'al-' + Date.now(), action: 'Exit Interview Completed', user: MOCK.currentUser.fullName, target: s.employee, detail: `Exit interview rated ${rating}/5 · performance ${performanceRating || '—'}/5${feedback ? ' · ' + feedback : ''}`, timestamp: '2026-09-09', gym: s.gym });
+  showToast(`Exit interview completed for ${s.employee}`);
+  openSeparation(id);
+  renderAll();
+}
+
+// ---- Exit file modal ------------------------------------------------------
+function openSeparation(id) {
+  const s = MOCK.separations.find(x => x.id === id); if (!s) return;
+  _sepModalId = id;
+  // BM→HR handoff cases are NOT gated by employees.offboard — HR completes the
+  // exit file for terminations the Branch Manager initiated.
+  const canOffboard = DEMO.showAll || hasPermission('employees.offboard') || s.requestedBy === 'Branch Manager';
+  const st = _sepStatusKey(s);
+  const daysLeft = _noticeDaysLeft(s.lastDay);
+  const initials = s.employee.split(' ').map(w => w[0]).join('');
+
+  const header = `<div class="flex items-center justify-between gap-3 rounded-xl border border-charcoal-200 bg-gradient-to-r from-charcoal-50 via-white to-white p-3">
+    <div class="flex items-center gap-2.5 min-w-0">
+      <div class="w-10 h-10 rounded-full bg-red-50 border border-red-100 text-red-700 flex items-center justify-center text-[11px] font-bold flex-shrink-0">${initials}</div>
+      <div class="min-w-0">
+        <p class="text-sm font-bold text-charcoal-900 truncate">${s.employee}</p>
+        <p class="text-[10px] text-charcoal-500 truncate">${s.position} · ${s.gym}</p>
+        <div class="flex items-center gap-1 mt-1 flex-wrap">${_sepStatusPill(st)}</div>
+      </div>
     </div>
-    <div class="mt-2 grid grid-cols-2 gap-x-2 gap-y-1 text-[10px]">
-      <div><p class="text-[9px] uppercase text-charcoal-400">Last day</p><p class="font-medium text-charcoal-800">${s.lastDay}</p></div>
-      <div><p class="text-[9px] uppercase text-charcoal-400">Notice</p><p class="font-medium text-charcoal-800">${daysLeft === null ? '—' : daysLeft + ' days left'}</p></div>
+    <div class="text-right flex-shrink-0">
+      <p class="text-[9px] font-semibold uppercase tracking-wide text-charcoal-400">Last working day</p>
+      <p class="text-xs font-bold text-charcoal-900">${formatDate(s.lastDay)}</p>
+      <p class="text-[10px] ${daysLeft !== null && daysLeft <= 7 && st !== 'Completed' ? 'text-red-600 font-semibold' : 'text-charcoal-500'}">${st === 'Completed' ? 'Archived' : daysLeft === null ? '—' : daysLeft === 0 ? 'Last day today' : daysLeft + ' days left'}</p>
     </div>
-    <div class="mt-1.5 flex flex-wrap gap-1">
-      ${stage==='Requested' ? '<span class="badge badge-purple text-[8px]">From BM</span>' : ''}
-      ${stage==='Notice Period' ? '<span class="badge badge-blue text-[8px]">Notice period</span>' : ''}
-      ${leaveChip}
-      ${s.verdict ? _sepVerdictChips(s) : ''}
+  </div>`;
+
+  openModal(`Exit file — ${s.employee}`, `${header}${_sepFileHTML(s, canOffboard)}`, { full: true, footer: '<button onclick="closeModal()" class="btn btn-sm btn-secondary">Close</button>' });
+}
+
+function _sepFileHTML(s, canOffboard) {
+  const st = _sepStatusKey(s);
+  const blocks = [];
+  if (st === 'Requested') blocks.push(_sepRequestDecisionHTML(s, canOffboard));
+  if (st === 'Exit Interview') blocks.push(_sepInterviewFormHTML(s, canOffboard));
+  if (st === 'Exit In Progress' || st === 'Completed') blocks.push(_sepInterviewSummaryHTML(s));
+  if (st === 'Exit In Progress') {
+    blocks.push(_sepChecklistHTML(s, canOffboard));
+    blocks.push(_sepVerdictHTML(s, canOffboard));
+  }
+  if (st === 'Completed') blocks.push(_sepCompletedHTML(s));
+  blocks.push(_sepSalaryHTML(s));
+  blocks.push(_sepRequestsHTML(s));
+  blocks.push(_sepLeaveHTML(s));
+  if (st === 'Exit In Progress' || st === 'Completed') {
+    blocks.push(`<div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">${_sepHistoryHTML(s)}${_sepAttendanceHTML(s)}</div>`);
+  }
+  const finalize = (st === 'Exit In Progress' && canOffboard) ? _sepFinalizeHTML(s) : '';
+  return `<div class="space-y-2.5 mt-2.5">${blocks.join('')}${finalize}</div>`;
+}
+
+function _sepRequestDecisionHTML(s, canOffboard) {
+  const defDate = new Date(MOCK_TODAY.getTime() + 3 * 86400000).toISOString().slice(0, 10);
+  return `<div class="rounded-xl border border-purple-200 bg-purple-50/40 p-3">
+    <div class="flex items-start justify-between gap-2 flex-wrap">
+      <div class="min-w-0">
+        <p class="text-[10px] font-bold uppercase tracking-wide text-purple-700">Step 1 — BM termination request</p>
+        <p class="text-[11px] text-charcoal-700 mt-0.5"><b>${s.requestedByUser || 'Branch Manager'}</b> asked to end the contract on <b>${formatDate(s.lastDay)}</b>.</p>
+        <p class="text-[10px] text-charcoal-500 mt-0.5">Reason: ${s.reason}</p>
+      </div>
+      <span class="badge badge-purple text-[9px] flex-shrink-0">Needs your decision</span>
     </div>
-    <div class="mt-2 flex items-center gap-2">
-      <div class="flex-1 h-1.5 bg-charcoal-100 rounded-full overflow-hidden"><div class="h-full ${isLast?'bg-green-500':stage==='Requested'?'bg-purple-500':stage==='Notice Period'?'bg-blue-500':'bg-yellow-500'} rounded-full" style="width:${s.progress}%"></div></div>
-      <span class="text-[9px] text-charcoal-500">${done}/${s.checklist.length}</span>
+    ${canOffboard ? `
+    <div class="grid grid-cols-1 sm:grid-cols-4 gap-2 mt-3">
+      <div><label class="form-label">Interview date *</label><input id="sep-sched-date" type="date" class="form-input" value="${defDate}"></div>
+      <div><label class="form-label">Time</label><input id="sep-sched-time" type="time" class="form-input" value="11:00"></div>
+      <div class="sm:col-span-2"><label class="form-label">Interviewer</label><input id="sep-sched-interviewer" class="form-input" value="${_sepAttr(MOCK.currentUser.fullName)}"></div>
     </div>
-    <div class="mt-2 flex items-center justify-between gap-1">
-      ${canMove ? `<div class="flex gap-1">
-        ${stage!=='Requested'?`<button onclick="moveSeparation('${s.id}',-1)" class="btn btn-icon btn-ghost" title="Move back"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg></button>`:''}
-        ${isLast?'':`<button onclick="moveSeparation('${s.id}',1)" class="btn btn-icon btn-ghost" title="Move forward"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg></button>`}
-      </div>` : ''}
-      <button onclick="openSeparation('${s.id}')" class="btn btn-sm btn-secondary">Manage · View data</button>
+    <div class="flex items-center justify-between gap-2 mt-2.5 flex-wrap">
+      <button onclick="declineSeparationRequest('${s.id}')" class="btn btn-sm btn-secondary text-charcoal-500 hover:text-red-600">Decline request</button>
+      <button onclick="approveSeparationRequest('${s.id}')" class="btn btn-sm btn-primary">Approve & schedule exit interview</button>
+    </div>` : `<p class="text-[10px] text-charcoal-400 mt-2">Requires <code>employees.offboard</code> to decide this request.</p>`}
+  </div>`;
+}
+
+function _sepInterviewFormHTML(s, canOffboard) {
+  const ei = _sepInterview(s);
+  const conducted = ei.conductedOn || ei.scheduledFor || '';
+  return `<div class="rounded-xl border border-blue-200 bg-blue-50/30 p-3">
+    <div class="flex items-start justify-between gap-2 flex-wrap">
+      <div class="min-w-0">
+        <p class="text-[10px] font-bold uppercase tracking-wide text-blue-700">Step 2 — Exit interview form</p>
+        <p class="text-[10px] text-charcoal-500">${ei.scheduledFor ? `Scheduled ${formatDate(ei.scheduledFor)}${ei.time ? ' · ' + ei.time : ''}` : 'Not scheduled yet'} · interviewer ${ei.interviewer || '—'}</p>
+      </div>
+      <span class="badge badge-blue text-[9px] flex-shrink-0">Awaiting interview</span>
+    </div>
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 mt-2.5">
+      <div><label class="form-label">Conducted on</label><input id="sep-ei-date" type="date" class="form-input" value="${conducted}" ${canOffboard ? '' : 'disabled'}></div>
+      <div class="sm:col-span-2"><label class="form-label">Interviewer</label><input id="sep-ei-interviewer" class="form-input" value="${_sepAttr(ei.interviewer || MOCK.currentUser.fullName)}" ${canOffboard ? '' : 'disabled'}></div>
+      <div><label class="form-label">Interview rating</label>${_sepRatingInput('sep-ei-rating', ei.rating)}</div>
+      <div><label class="form-label">Employee performance rating</label>${_sepRatingInput('sep-ei-perf', ei.performanceRating)}</div>
+    </div>
+    <div class="mt-2"><label class="form-label">Feedback — why they are leaving, what to improve</label>
+      <textarea id="sep-ei-feedback" class="form-input" rows="3" ${canOffboard ? '' : 'disabled'} placeholder="Exit interview notes...">${ei.feedback || ''}</textarea>
+    </div>
+    ${canOffboard ? `<div class="flex justify-end mt-2"><button onclick="saveExitInterviewForm('${s.id}')" class="btn btn-sm btn-primary">Complete exit interview</button></div>` : ''}
+  </div>`;
+}
+
+function _sepInterviewSummaryHTML(s) {
+  const ei = _sepInterview(s);
+  if (ei.decision === 'Waived') {
+    return `<div class="rounded-xl border border-charcoal-200 p-3">
+      <div class="flex items-center justify-between gap-2 flex-wrap">
+        <p class="text-[10px] font-bold uppercase tracking-wide text-charcoal-700">Exit interview — waived</p>
+        <span class="badge badge-gray text-[9px]">No interview</span>
+      </div>
+      <p class="text-[10px] text-charcoal-500 mt-1">${ei.note || 'No exit interview was conducted.'}</p>
+    </div>`;
+  }
+  return `<div class="rounded-xl border border-charcoal-200 p-3">
+    <div class="flex items-center justify-between gap-2 flex-wrap">
+      <p class="text-[10px] font-bold uppercase tracking-wide text-charcoal-700">Exit interview — completed</p>
+      <div class="flex items-center gap-2 text-[10px] flex-wrap">
+        <span class="text-charcoal-500">Interview ${_sepStars(ei.rating)}</span>
+        <span class="text-charcoal-200">|</span>
+        <span class="text-charcoal-500">Performance ${_sepStars(ei.performanceRating)}</span>
+      </div>
+    </div>
+    <p class="text-[10px] text-charcoal-500 mt-1">${ei.conductedOn ? 'Conducted ' + formatDate(ei.conductedOn) : ''}${ei.interviewer ? (ei.conductedOn ? ' · ' : '') + ei.interviewer : ''}</p>
+    ${ei.feedback ? `<p class="text-[11px] text-charcoal-700 mt-1.5">${ei.feedback}</p>` : ''}
+  </div>`;
+}
+
+function _sepChecklistHTML(s, canOffboard) {
+  const doneCount = s.checklist.filter(c => c[1]).length;
+  const allDone = doneCount === s.checklist.length;
+  return `<div class="rounded-xl border border-charcoal-200 p-3">
+    <div class="flex items-center justify-between gap-2">
+      <p class="text-[10px] font-bold uppercase tracking-wide text-charcoal-700">Exit steps</p>
+      <span class="text-[10px] font-bold ${allDone ? 'text-green-600' : 'text-brand-600'}">${doneCount}/${s.checklist.length} · ${s.progress}%</span>
+    </div>
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-1.5 mt-2">
+      ${s.checklist.map((c, i) => `<label class="flex items-center justify-between gap-2 rounded-lg border px-2.5 py-2 cursor-pointer transition-colors ${c[1] ? 'border-green-200 bg-green-50/50' : 'border-charcoal-150 bg-charcoal-50/60 hover:border-brand-300'}">
+        <span class="flex items-center gap-2 min-w-0">
+          <span class="w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-bold flex-shrink-0 ${c[1] ? 'bg-green-500 text-white' : 'bg-white border border-charcoal-300 text-transparent'}">✓</span>
+          <span class="text-[11px] truncate ${c[1] ? 'line-through text-charcoal-400' : 'text-charcoal-800 font-medium'}">${c[0]}</span>
+        </span>
+        <input type="checkbox" ${c[1] ? 'checked' : ''} ${canOffboard ? '' : 'disabled'} class="rounded border-charcoal-300 text-brand-500 w-4 h-4 cursor-pointer" onchange="toggleSepChecklist('${s.id}', ${i}, this.checked)">
+      </label>`).join('')}
     </div>
   </div>`;
 }
 
-function moveSeparation(id, dir) {
-  const s = MOCK.separations.find(x=>x.id===id); if(!s) return;
-  const i = _sepStages.indexOf(s.status); if(i<0) return;
-  const next = _sepStages[Math.min(_sepStages.length-1, Math.max(0, i+dir))];
-  if (next === s.status) return;
-  s.status = next;
-  if (next === 'Completed') {
-    s.progress = 100;
-    s.checklist.forEach(c => c[1] = true);
-  }
-  renderAll();
+function _sepVerdictHTML(s, canOffboard) {
+  const v = s.verdict || null;
+  const firstName = s.employee.split(' ')[0];
+  if (!canOffboard) return v ? `<p class="text-[10px] text-charcoal-400">Exit verdict recorded by HR.</p>` : '';
+  const settle = v ? (v.settlement || { direction: 'none', amount: 0, note: '' }) : { direction: 'none', amount: 0, note: '' };
+  const rehire = v ? (v.rehire || { status: 'Eligible', note: '' }) : { status: 'Eligible', note: '' };
+  return `<div class="rounded-xl border border-charcoal-200 p-3">
+    <div class="flex items-start justify-between gap-2 flex-wrap">
+      <div>
+        <p class="text-[10px] font-bold text-charcoal-900 uppercase tracking-wide">Exit verdict — HR record</p>
+        <p class="text-[10px] text-charcoal-500">Why ${firstName} left, the final settlement direction, and rehire eligibility.</p>
+      </div>
+      ${v ? '<span class="badge badge-green text-[9px]">Recorded</span>' : '<span class="badge badge-yellow text-[9px]">Required before finalize</span>'}
+    </div>
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-2.5">
+      <div class="sm:col-span-2"><label class="form-label">Why ${firstName} left</label><textarea id="sep-v-reason" class="form-input" rows="2">${v ? v.finalReason : ''}</textarea></div>
+      <div><label class="form-label">Final settlement</label>
+        <select id="sep-v-settle" class="form-select">
+          <option value="none" ${settle.direction === 'none' ? 'selected' : ''}>No balance</option>
+          <option value="owedToEmployee" ${settle.direction === 'owedToEmployee' ? 'selected' : ''}>Company owes employee — pay out</option>
+          <option value="employeeOwes" ${settle.direction === 'employeeOwes' ? 'selected' : ''}>Employee owes company — deduct</option>
+        </select>
+      </div>
+      <div><label class="form-label">Amount (EGP)</label><input id="sep-v-amount" type="number" class="form-input" value="${settle.amount}" min="0"></div>
+      <div class="sm:col-span-2"><label class="form-label">Settlement note</label><input id="sep-v-settle-note" class="form-input" value="${_sepAttr(settle.note || '')}" placeholder="e.g. remaining days, deductions, reference..."></div>
+      <div><label class="form-label">Rehire eligibility</label>
+        <select id="sep-v-rehire" class="form-select">
+          <option value="Eligible" ${rehire.status === 'Eligible' ? 'selected' : ''}>Eligible to return</option>
+          <option value="Banned" ${rehire.status === 'Banned' ? 'selected' : ''}>Banned from rehire</option>
+        </select>
+      </div>
+      <div><label class="form-label">Rehire note</label><input id="sep-v-rehire-note" class="form-input" value="${_sepAttr(rehire.note || '')}" placeholder="e.g. contract-role only..."></div>
+    </div>
+    <div class="flex justify-end mt-2.5"><button onclick="saveExitVerdict('${s.id}')" class="btn btn-sm btn-primary">${v ? 'Update' : 'Record'} exit verdict</button></div>
+  </div>`;
+}
+
+function _sepCompletedHTML(s) {
+  const v = s.verdict;
+  if (!v) return `<div class="rounded-xl border border-green-200 bg-green-50/70 p-3 text-center text-xs font-semibold text-green-800">Separation finalized — employee records archived.</div>`;
+  return `<div class="rounded-xl border border-green-200 bg-green-50/70 p-3">
+    <div class="flex items-center justify-between gap-2 flex-wrap">
+      <p class="text-[10px] font-bold uppercase tracking-wide text-green-800">Exit verdict — archived</p>
+      <div class="flex flex-wrap gap-1">${_sepVerdictChips(s)}</div>
+    </div>
+    <p class="text-[11px] text-green-800 mt-1">${v.finalReason}</p>
+    ${v.settlement && v.settlement.note ? `<p class="text-[10px] text-green-700 mt-0.5">Settlement: ${v.settlement.note}</p>` : ''}
+    ${v.rehire && v.rehire.note ? `<p class="text-[10px] text-green-700 mt-0.5">Rehire: ${v.rehire.note}</p>` : ''}
+  </div>`;
+}
+
+function _sepFinalizeHTML(s) {
+  const allDone = s.checklist.every(c => c[1]);
+  return `<div class="flex items-center justify-between gap-2 rounded-xl border border-charcoal-200 bg-charcoal-50/60 px-3 py-2">
+    <span class="text-[10px] text-charcoal-500">${!allDone ? 'Complete the remaining exit steps to finalize.' : !s.verdict ? 'Record the exit verdict to finalize.' : 'All exit steps verified — finalize to archive the employee record.'}</span>
+    <button onclick="finalizeSeparation('${s.id}')" class="btn btn-sm ${(allDone && s.verdict) ? 'btn-danger' : 'btn-disabled'}" ${(allDone && s.verdict) ? '' : 'disabled'}>Finalize separation ✓</button>
+  </div>`;
+}
+
+function _sepSalaryHTML(s) {
+  return `<div class="space-y-1.5">
+    <p class="text-[10px] font-bold uppercase tracking-wide text-charcoal-700 px-0.5">Salary data</p>
+    ${_payStatementHTML(s)}
+  </div>`;
+}
+
+function _sepHistoryHTML(s) {
+  const emp = MOCK.employees.find(e => e.name === s.employee);
+  return `<div class="rounded-xl border border-charcoal-200 p-3">
+    <p class="text-[10px] font-bold uppercase tracking-wide text-charcoal-700">Employment history</p>
+    <div class="mt-2 space-y-1.5">${[
+      { type: 'Joined Revive', date: `${formatDate(emp ? emp.hireDate : '—')}`, detail: `Hired as ${s.position}.` },
+      { type: 'Status → ' + (emp ? emp.status : '—'), date: 'Sep 9, 2026', detail: 'Exit workflow opened through Terminations.' },
+    ].map(h => `<div class="flex items-start gap-2.5 bg-charcoal-50 rounded-lg p-2">
+      <div class="w-7 h-7 rounded-full bg-brand-100 text-brand-700 flex items-center justify-center text-[9px] font-semibold flex-shrink-0">${h.type.split(' ')[0].slice(0, 2).toUpperCase()}</div>
+      <div><p class="text-xs font-medium text-charcoal-900">${h.type}</p><p class="text-[10px] text-charcoal-500">${h.date}</p><p class="text-[10px] text-charcoal-600">${h.detail}</p></div>
+    </div>`).join('')}</div>
+  </div>`;
+}
+
+function _sepAttendanceHTML() {
+  return `<div class="rounded-xl border border-charcoal-200 p-3">
+    <p class="text-[10px] font-bold uppercase tracking-wide text-charcoal-700">Attendance — last 30 days</p>
+    <div class="grid grid-cols-3 gap-2 mt-2">
+      ${[['Present', '21', 'text-green-600'], ['Late', '2', 'text-yellow-600'], ['Absent', '1', 'text-red-600']].map(([k, v, c]) => `<div class="bg-charcoal-50 rounded-lg py-1.5 text-center"><p class="text-base font-bold ${c}">${v}</p><p class="text-[10px] text-charcoal-500">${k}</p></div>`).join('')}
+    </div>
+    <p class="text-[9px] text-charcoal-400 mt-1.5">Any leave days over the annual accrual convert to <b class="text-red-600">absent</b> at exit — affecting attendance-based deductions.</p>
+  </div>`;
+}
+
+function _sepLeaveHTML(s) {
+  const ls = _leaveSettlement(s);
+  const firstName = s.employee.split(' ')[0];
+  const overageBox = ls.overage > 0 ? `<div class="mt-2 rounded-lg bg-red-50 border border-red-200 p-2.5">
+    <p class="text-[10px] font-semibold text-red-700">${firstName} took ${ls.taken} annual-leave days — but only ${ls.accrued} were accrued by ${MOCK_TODAY.getFullYear()}-month ${ls.monthsElapsed}.</p>
+    <p class="text-[10px] text-red-700 mt-1"><b>${ls.overage} day(s) over the accrual are counted as ABSENT</b> (unpaid) and deducted from the final settlement — they do not count as annual leave. Already applied as the payroll deduction above — remove it there if another line already covers it.</p>
+  </div>` : `<div class="mt-2 rounded-lg bg-green-50 border border-green-200 p-2.5">
+    <p class="text-[10px] font-semibold text-green-700">Leave balance at exit: <b>+${ls.payout} days</b> — the company owes ${firstName} this payout with the final settlement.</p>
+  </div>`;
+  return `<div class="rounded-xl border border-charcoal-200 p-3">
+    <div class="flex items-center justify-between gap-2 flex-wrap">
+      <p class="text-[10px] font-bold uppercase tracking-wide text-charcoal-700">Annual leave settlement</p>
+      ${ls.balance >= 0
+        ? `<span class="badge badge-green text-[9px]">Company owes ${firstName} ${ls.balance} day${ls.balance === 1 ? '' : 's'}</span>`
+        : `<span class="badge badge-red text-[9px]">${firstName} owes the company ${Math.abs(ls.balance)} day${Math.abs(ls.balance) === 1 ? '' : 's'}</span>`}
+    </div>
+    <p class="text-[10px] text-charcoal-600 mt-1">Annual leave is <b>${ls.entitlement} days per year</b>, accrued <b>${ls.monthly}</b> days per completed month. As of ${MOCK_TODAY.getFullYear()}-${String(MOCK_TODAY.getMonth() + 1).padStart(2, '0')} (month ${ls.monthsElapsed}):</p>
+    <div class="grid grid-cols-3 gap-2 mt-2 text-center">
+      <div class="bg-charcoal-50 rounded-lg py-1.5"><p class="text-[9px] uppercase text-charcoal-400">Accrued</p><p class="text-xs font-bold text-charcoal-900">${ls.accrued} d</p></div>
+      <div class="bg-charcoal-50 rounded-lg py-1.5"><p class="text-[9px] uppercase text-charcoal-400">Taken</p><p class="text-xs font-bold text-charcoal-900">${ls.taken} d</p></div>
+      <div class="bg-charcoal-50 rounded-lg py-1.5"><p class="text-[9px] uppercase text-charcoal-400">Balance</p><p class="text-xs font-bold ${ls.balance < 0 ? 'text-red-600' : 'text-green-600'}">${ls.balance >= 0 ? '+' : ''}${ls.balance} d</p></div>
+    </div>
+    ${overageBox}
+  </div>`;
 }
 
 function _sepVerdictChips(s) {
@@ -325,167 +736,17 @@ function _sepVerdictChips(s) {
   return out.join(' ');
 }
 
-function _sepVerdictHTML(s, canOffboard) {
-  const v = s.verdict || null;
-  if (s.status === 'Completed') {
-    return v ? `<div class="bg-green-50 border border-green-200 rounded-lg p-2.5">
-      <div class="flex items-center justify-between gap-2"><p class="text-[10px] font-semibold text-green-800 uppercase tracking-wide">Exit Verdict</p><div class="flex flex-wrap gap-1">${_sepVerdictChips(s)}</div></div>
-      <p class="text-[10px] text-green-800 mt-1">${v.finalReason}</p>
-      ${v.settlement && v.settlement.note ? `<p class="text-[10px] text-green-700 mt-0.5">Settlement: ${v.settlement.note}</p>` : ''}
-      ${v.rehire && v.rehire.note ? `<p class="text-[10px] text-green-700 mt-0.5">Rehire: ${v.rehire.note}</p>` : ''}
-    </div>` : `<div class="bg-green-50 border border-green-200 rounded-lg p-2.5 text-center text-xs font-semibold text-green-800">Separation finalized — employee records archived.</div>`;
+function moveSeparation(id, dir) {
+  const s = MOCK.separations.find(x => x.id === id); if (!s) return;
+  const i = _sepStages.indexOf(s.status); if (i < 0) return;
+  const next = _sepStages[Math.min(_sepStages.length - 1, Math.max(0, i + dir))];
+  if (next === s.status) return;
+  s.status = next;
+  if (next === 'Completed') {
+    s.progress = 100;
+    s.checklist.forEach(c => c[1] = true);
   }
-  if (!canOffboard) return v ? `<p class="text-[10px] text-charcoal-400">Exit verdict recorded by HR.</p>` : '';
-  const settle = v ? (v.settlement || { direction: 'none', amount: 0, note: '' }) : { direction: 'none', amount: 0, note: '' };
-  const rehire = v ? (v.rehire || { status: 'Eligible', note: '' }) : { status: 'Eligible', note: '' };
-  return `<div class="border-t border-charcoal-100 pt-2">
-    <p class="text-xs font-semibold text-charcoal-900 uppercase tracking-wide">Exit Verdict — HR Record</p>
-    <p class="text-[10px] text-charcoal-500 mt-0.5">Why the employee left, the final settlement (money owed vs. to pay), and rehire eligibility.</p>
-    <div class="space-y-2 mt-2">
-      <div><label class="form-label">Why ${s.employee.split(' ')[0]} left</label><textarea id="sep-v-reason" class="form-input" rows="2">${v ? v.finalReason : ''}</textarea></div>
-      <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
-        <div><label class="form-label">Final Settlement</label>
-          <select id="sep-v-settle" class="form-select">
-            <option value="none" ${settle.direction==='none'?'selected':''}>No balance</option>
-            <option value="owedToEmployee" ${settle.direction==='owedToEmployee'?'selected':''}>Company owes employee — pay out</option>
-            <option value="employeeOwes" ${settle.direction==='employeeOwes'?'selected':''}>Employee owes company — deduct</option>
-          </select>
-        </div>
-        <div><label class="form-label">Amount (EGP)</label><input id="sep-v-amount" type="number" class="form-input" value="${settle.amount}" min="0"></div>
-      </div>
-      <div><label class="form-label">Settlement Note</label><input id="sep-v-settle-note" class="form-input" value="${settle.note||''}" placeholder="e.g. remaining days, deductions, reference..."></div>
-      <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
-        <div><label class="form-label">Rehire Eligibility</label>
-          <select id="sep-v-rehire" class="form-select">
-            <option value="Eligible" ${rehire.status==='Eligible'?'selected':''}>Eligible to return</option>
-            <option value="Banned" ${rehire.status==='Banned'?'selected':''}>Banned from rehire</option>
-          </select>
-        </div>
-        <div><label class="form-label">Rehire Note</label><input id="sep-v-rehire-note" class="form-input" value="${rehire.note||''}" placeholder="e.g. contract-role only..."></div>
-      </div>
-    </div>
-    <div class="flex justify-end pt-2"><button onclick="saveExitVerdict('${s.id}')" class="btn btn-sm btn-primary">${v?'Update':'Record'} Exit Verdict</button></div>
-  </div>`;
-}
-
-function openSeparation(id) {
-  const s = MOCK.separations.find(x=>x.id===id); if(!s) return;
-  _sepModalId = id;
-  // BM→HR handoff cases are NOT gated by employees.offboard — HR completes the Exit Form
-  // for terminations the Branch Manager initiated. Only HR-initiated offboarding needs it.
-  const canOffboard = DEMO.showAll || hasPermission('employees.offboard') || s.requestedBy === 'Branch Manager';
-  const tabs = `<div class="flex items-center gap-1 bg-charcoal-100 rounded-lg p-0.5 w-full flex-shrink-0">
-    <button onclick="openSepTab('workflow')" class="px-3 py-1.5 rounded-md text-[10px] font-medium transition-colors ${_sepTab==='workflow'?'bg-white shadow-sm text-charcoal-900':'text-charcoal-500 hover:text-charcoal-700'}">Exit Workflow</button>
-    <button onclick="openSepTab('employee')" class="px-3 py-1.5 rounded-md text-[10px] font-medium transition-colors ${_sepTab==='employee'?'bg-white shadow-sm text-charcoal-900':'text-charcoal-500 hover:text-charcoal-700'}">Employee Data</button>
-  </div>`;
-  const body = (_sepTab === 'employee') ? _sepEmployeeDataHTML(s) : _sepWorkflowHTML(s, canOffboard);
-  openModal(`Leaving — ${s.employee}`, `${tabs}${body}`, { wide:true, footer:'<button onclick="closeModal()" class="btn btn-sm btn-secondary">Close</button>' });
-}
-
-function _sepWorkflowHTML(s, canOffboard) {
-  const doneCount = s.checklist.filter(c=>c[1]).length;
-  const allDone = doneCount === s.checklist.length;
-  const daysLeft = _noticeDaysLeft(s.lastDay);
-
-  const items = (label, done, idx) => `<label class="flex items-center justify-between bg-charcoal-50 rounded-lg p-2.5 cursor-pointer hover:bg-charcoal-100 transition-colors">
-    <div class="flex items-center gap-2">
-      <span class="w-2 h-2 rounded-full ${done?'bg-green-500':'bg-charcoal-300'}"></span>
-      <span class="text-xs ${done?'line-through text-charcoal-400':'text-charcoal-800 font-medium'}">${label}</span>
-    </div>
-    <input type="checkbox" ${done?'checked':''} ${canOffboard?'':'disabled'} class="rounded border-charcoal-300 text-brand-500 w-4 h-4 cursor-pointer" onchange="toggleSepChecklist('${s.id}', ${idx}, this.checked)">
-  </label>`;
-
-  const requesterLine = s.requestedBy ? `<div class="flex items-center justify-between bg-charcoal-50 rounded-lg px-3 py-2">
-    <p class="text-[10px] text-charcoal-500">${s.requestedBy==='Branch Manager'?'Requested by':s.requestedBy==='HR Manager'?'Initiated by':'Requested via'} <b class="text-charcoal-800">${s.requestedByUser||s.requestedBy}</b></p>
-    ${s.submittedDate?`<span class="text-[10px] text-charcoal-500 font-medium">${s.submittedDate}</span>`:''}
-  </div>` : '';
-
-  return `<div class="space-y-3 mt-3">
-    ${requesterLine}
-    <div class="rounded-lg border border-charcoal-200 p-2.5">
-      <div class="flex items-center justify-between gap-2"><p class="text-[9px] uppercase tracking-wide text-charcoal-400 font-semibold">Notice period · ${s.gym}</p>${_gymPill(s.gym)}</div>
-      <div class="grid grid-cols-3 gap-2 mt-1.5 text-[10px]">
-        <div><p class="text-[9px] uppercase text-charcoal-400">Last working day</p><p class="font-semibold text-charcoal-800">${s.lastDay}</p></div>
-        <div><p class="text-[9px] uppercase text-charcoal-400">Days left</p><p class="font-semibold text-charcoal-800">${daysLeft === null ? '—' : daysLeft}</p></div>
-        <div><p class="text-[9px] uppercase text-charcoal-400">Reason</p><p class="font-semibold text-charcoal-800 truncate" title="${s.reason}">${s.reason}</p></div>
-      </div>
-    </div>
-    <div class="flex items-center justify-between text-xs font-semibold px-1">
-      <span class="text-charcoal-700">Exit Steps</span>
-      <span class="${allDone?'text-green-600':'text-brand-600'}">${doneCount}/${s.checklist.length} (${s.progress}%)</span>
-    </div>
-    <div class="w-full h-2 bg-charcoal-100 rounded-full overflow-hidden">
-      <div class="h-full ${s.status==='Completed'?'bg-green-500':'bg-brand-500'} rounded-full transition-all" style="width:${s.progress}%"></div>
-    </div>
-    <div class="grid grid-cols-1 sm:grid-cols-2 gap-1.5">${s.checklist.map((c, i)=>items(c[0], c[1], i)).join('')}</div>
-    ${_sepVerdictHTML(s, canOffboard)}
-    ${canOffboard && s.status !== 'Completed' ? `<div class="pt-2 flex justify-between items-center border-t border-charcoal-100">
-      <span class="text-[10px] text-charcoal-500">${!allDone ? 'Complete remaining exit steps to finalize.' : !s.verdict ? 'Record the exit verdict above to finalize.' : 'All exit steps verified — finalize to archive the employee record.'}</span>
-      <button onclick="finalizeSeparation('${s.id}')" class="btn btn-sm ${(allDone && s.verdict) ? 'btn-danger' : 'btn-disabled'}" ${(allDone && s.verdict) ? '' : 'disabled'}>Finalize Separation ✓</button>
-    </div>` : s.status !== 'Completed' ? `<p class="text-[10px] text-charcoal-400">Requires <code>employees.offboard</code> to update checklist.</p>` : ''}
-  </div>`;
-}
-
-function _sepEmployeeDataHTML(s) {
-  const emp = MOCK.employees.find(e => e.name === s.employee);
-  const ls = _leaveSettlement(s);
-  const gross = (emp && emp.salary) || 6000;
-  const firstName = s.employee.split(' ')[0];
-
-  const overageBox = ls.overage > 0 ? `<div class="mt-2 rounded-lg bg-red-50 border border-red-200 p-2.5">
-    <p class="text-[10px] font-semibold text-red-700">${firstName} took ${ls.taken} annual-leave days — but only ${ls.accrued} were accrued by ${MOCK_TODAY.getFullYear()}-month ${ls.monthsElapsed}.</p>
-    <p class="text-[10px] text-red-700 mt-1"><b>${ls.overage} day(s) over the accrual are counted as ABSENT</b> (unpaid) and deducted from the final settlement — they do not count as annual leave. Already applied as the payroll deduction below — remove it there if another line already covers it.</p>
-  </div>` : `<div class="mt-2 rounded-lg bg-green-50 border border-green-200 p-2.5">
-    <p class="text-[10px] font-semibold text-green-700">Leave balance at exit: <b>+${ls.payout} days</b> — to be paid out with the final settlement.</p>
-  </div>`;
-
-  const historyBlock = `<div class="rounded-lg border border-charcoal-200 p-2.5">
-    <p class="text-[9px] uppercase tracking-wide text-charcoal-400 font-semibold">Employment history</p>
-    <div class="mt-1.5 space-y-1.5">${[
-      {type:'Joined Revive',date:`${formatDate(emp?emp.hireDate:'—')}`,detail:`Hired as ${s.position}.`},
-      {type:'Status → '+(emp?emp.status:'—'),date:'Sep 9, 2026',detail:'Exit workflow opened through the Terminations pipeline.'},
-    ].map(h=>`<div class="flex items-start gap-2.5 bg-charcoal-50 rounded-lg p-2">
-      <div class="w-7 h-7 rounded-full bg-brand-100 text-brand-700 flex items-center justify-center text-[9px] font-semibold flex-shrink-0">${h.type.split(' ')[0].slice(0,2).toUpperCase()}</div>
-      <div><p class="text-xs font-medium text-charcoal-900">${h.type}</p><p class="text-[10px] text-charcoal-500">${h.date}</p><p class="text-[10px] text-charcoal-600">${h.detail}</p></div>
-    </div>`).join('')}</div>
-  </div>`;
-
-  const attBlock = `<div class="rounded-lg border border-charcoal-200 p-2.5">
-    <p class="text-[9px] uppercase tracking-wide text-charcoal-400 font-semibold">Attendance — last 30 days</p>
-    <div class="grid grid-cols-3 gap-2 mt-1.5">
-      ${[['Present','21','text-green-600'],['Late','2','text-yellow-600'],['Absent','1','text-red-600']].map(([k,v,c])=>`<div class="bg-charcoal-50 rounded-lg py-1.5 text-center"><p class="text-base font-bold ${c}">${v}</p><p class="text-[10px] text-charcoal-500">${k}</p></div>`).join('')}
-    </div>
-    <p class="text-[9px] text-charcoal-400 mt-1.5">Note: any leave days over the annual accrual convert to <b class="text-red-600">absent</b> at exit — affecting attendance-based deductions.</p>
-  </div>`;
-
-  const leaveBlock = `<div class="rounded-lg border border-charcoal-200 p-2.5">
-    <p class="text-[9px] uppercase tracking-wide text-charcoal-400 font-semibold">Annual leave — settlement at exit</p>
-    <p class="text-[10px] text-charcoal-600 mt-1">Annual leave is <b>${ls.entitlement} days per year</b>, accrued <b>${ls.monthly}</b> days per completed month. As of ${MOCK_TODAY.getFullYear()}-${String(MOCK_TODAY.getMonth()+1).padStart(2,'0')} (month ${ls.monthsElapsed}):</p>
-    <div class="grid grid-cols-3 gap-2 mt-1.5 text-center">
-      <div class="bg-charcoal-50 rounded-lg py-1.5"><p class="text-[9px] uppercase text-charcoal-400">Accrued</p><p class="text-xs font-bold text-charcoal-900">${ls.accrued} d</p></div>
-      <div class="bg-charcoal-50 rounded-lg py-1.5"><p class="text-[9px] uppercase text-charcoal-400">Taken</p><p class="text-xs font-bold text-charcoal-900">${ls.taken} d</p></div>
-      <div class="bg-charcoal-50 rounded-lg py-1.5"><p class="text-[9px] uppercase text-charcoal-400">Balance</p><p class="text-xs font-bold ${ls.balance<0?'text-red-600':'text-green-600'}">${ls.balance>=0?'+':''}${ls.balance} d</p></div>
-    </div>
-    ${overageBox}
-  </div>`;
-
-  return `<div class="space-y-2.5 mt-3">
-    <div class="flex items-center gap-2.5 bg-charcoal-50 rounded-lg p-2.5">
-      <div class="w-9 h-9 rounded-full bg-red-100 text-red-700 flex items-center justify-center text-[11px] font-bold flex-shrink-0">${s.employee.split(' ').map(w=>w[0]).join('')}</div>
-      <div class="min-w-0 flex-1">
-        <p class="text-xs font-semibold text-charcoal-900">${s.employee} <span class="text-[10px] text-charcoal-400 font-normal">${emp?emp.id:'—'}</span></p>
-        <p class="text-[10px] text-charcoal-500">${s.position} · hired ${formatDate(emp?emp.hireDate:'—')} · base <b>${gross.toLocaleString()} EGP</b></p>
-      </div>
-      ${_gymPill(s.gym)}
-      ${statusBadge(emp?emp.status:s.status)}
-    </div>
-    ${_payStatementHTML(s)}
-    ${_sepRequestsHTML(s)}
-    ${historyBlock}
-    ${attBlock}
-    ${leaveBlock}
-    <p class="text-[9px] text-charcoal-400 text-center">All payroll edits here are audit-logged and feed the final settlement when you close the account.</p>
-  </div>`;
+  renderAll();
 }
 
 // ---- Editable payroll ledger for the exit settlement -----------------------
@@ -525,29 +786,33 @@ function _payStatementHTML(s) {
   const pays = _ensureSepPayroll(s);
   const firstName = s.employee.split(' ')[0];
   return pays.map(p => {
-    const rows = (p.deductionLines || []).map(d => `<div class="flex items-center justify-between gap-2 bg-charcoal-50 rounded-lg px-2 py-1 text-[10px]">
+    const rows = (p.deductionLines || []).map(d => `<div class="flex items-center justify-between gap-2 bg-white rounded-lg border border-charcoal-100 px-2 py-1 text-[10px]">
       <div class="min-w-0 flex-1"><p class="text-xs font-medium text-charcoal-900 truncate">${d.label}</p><p class="text-[9px] text-charcoal-500 truncate">${d.reason || ''} · ${d.date}</p></div>
       <span class="flex items-center gap-2 flex-shrink-0"><b class="${d.status==='Pending'?'text-amber-600':'text-red-600'}">${d.amount} EGP</b>${statusBadge(d.status)}<button onclick="removeSepDeduction('${s.id}','${p.employeeId}','${d.id}')" class="btn btn-icon btn-ghost" title="Remove deduction"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg></button></span>
     </div>`).join('');
-    return `<div>
-      <p class="flex items-center justify-between text-[9px] uppercase tracking-wide text-charcoal-400 font-semibold"><span>Payroll · ${p.status} · ${p.position}</span><span class="text-[9px] text-brand-600 normal-case">editable by HR — audit logged</span></p>
-      <div class="rounded-lg border border-charcoal-200 bg-white p-2.5 mt-1">
-        <div class="grid grid-cols-3 gap-2 text-center">
-          <div class="rounded-lg py-1.5">
-            <p class="text-[9px] uppercase text-charcoal-400">Gross</p>
-            <div class="flex items-center justify-center gap-1 mt-0.5"><input id="sep-gross-${p.employeeId}" type="number" class="form-input" value="${p.gross}" style="width:82px;padding:2px 6px;font-size:10px;text-align:center">
-            <button onclick="updateSepGross('${s.id}','${p.employeeId}')" class="text-[9px] text-brand-600 hover:underline flex-shrink-0">apply</button></div>
-          </div>
-          <div class="rounded-lg py-1.5"><p class="text-[9px] uppercase text-charcoal-400">Deductions</p><p class="text-xs font-bold text-red-600 mt-0.5">- ${p.deductions.toLocaleString()}</p></div>
-          <div class="rounded-lg py-1.5"><p class="text-[9px] uppercase text-charcoal-400">Net</p><p class="text-xs font-bold text-brand-600 mt-0.5">${p.net.toLocaleString()}</p></div>
+    return `<div class="rounded-xl border border-charcoal-200 p-3">
+      <div class="flex items-center justify-between gap-2">
+        <div>
+          <p class="text-[10px] font-bold uppercase tracking-wide text-charcoal-700">Final settlement — payroll</p>
+          <p class="text-[10px] text-charcoal-500">${p.position} · gross editable by HR — audit logged</p>
         </div>
-        <p class="text-[9px] uppercase text-charcoal-400 mt-2">Deductions (${(p.deductionLines || []).length}) — remove or add</p>
-        <div class="mt-1 space-y-1">${rows || '<p class="text-[10px] text-charcoal-400 text-center py-1">No deductions</p>'}</div>
-        <div class="mt-1.5 flex items-center gap-1.5">
-          <input id="sep-ded-label-${p.employeeId}" class="form-input" placeholder="New deduction (e.g. ${firstName} absent leave days)" style="flex:1;padding:4px 8px;font-size:10px">
-          <input id="sep-ded-amount-${p.employeeId}" type="number" class="form-input" placeholder="EGP" style="width:78px;padding:4px 8px;font-size:10px">
-          <button onclick="addSepDeduction('${s.id}','${p.employeeId}')" class="btn btn-sm btn-secondary">+ Add</button>
+        ${statusBadge(p.status)}
+      </div>
+      <div class="grid grid-cols-3 gap-2 text-center mt-2.5">
+        <div class="rounded-lg border border-charcoal-150 bg-charcoal-50/60 py-1.5">
+          <p class="text-[9px] uppercase text-charcoal-400">Gross</p>
+          <div class="flex items-center justify-center gap-1 mt-0.5"><input id="sep-gross-${p.employeeId}" type="number" class="form-input" value="${p.gross}" style="width:82px;padding:2px 6px;font-size:10px;text-align:center">
+          <button onclick="updateSepGross('${s.id}','${p.employeeId}')" class="text-[9px] text-brand-600 hover:underline flex-shrink-0">apply</button></div>
         </div>
+        <div class="rounded-lg border border-charcoal-150 bg-charcoal-50/60 py-1.5"><p class="text-[9px] uppercase text-charcoal-400">Deductions</p><p class="text-xs font-bold text-red-600 mt-0.5">- ${p.deductions.toLocaleString()}</p></div>
+        <div class="rounded-lg border border-charcoal-150 bg-charcoal-50/60 py-1.5"><p class="text-[9px] uppercase text-charcoal-400">Net</p><p class="text-xs font-bold text-brand-600 mt-0.5">${p.net.toLocaleString()}</p></div>
+      </div>
+      <p class="text-[9px] font-semibold uppercase tracking-wide text-charcoal-400 mt-2.5">Deductions (${(p.deductionLines || []).length}) — remove or add</p>
+      <div class="mt-1 space-y-1">${rows || '<p class="text-[10px] text-charcoal-400 text-center py-1">No deductions</p>'}</div>
+      <div class="mt-1.5 flex items-center gap-1.5">
+        <input id="sep-ded-label-${p.employeeId}" class="form-input" placeholder="New deduction (e.g. ${firstName} absent leave days)" style="flex:1;padding:4px 8px;font-size:10px">
+        <input id="sep-ded-amount-${p.employeeId}" type="number" class="form-input" placeholder="EGP" style="width:78px;padding:4px 8px;font-size:10px">
+        <button onclick="addSepDeduction('${s.id}','${p.employeeId}')" class="btn btn-sm btn-secondary">+ Add</button>
       </div>
     </div>`;
   }).join('');
@@ -556,16 +821,17 @@ function _payStatementHTML(s) {
 function _sepRequestsHTML(s) {
   const reqs = MOCK.requests.filter(r => r.employee === s.employee);
   const firstName = s.employee.split(' ')[0];
-  return `<div>
-    <p class="flex items-center justify-between text-[9px] uppercase tracking-wide text-charcoal-400 font-semibold"><span>Requests — everything for ${firstName}</span><span class="text-[9px] text-charcoal-400 normal-case">${reqs.length} total</span></p>
-    <div class="rounded-lg border border-charcoal-200 bg-white p-2.5 mt-1">
-      <div class="max-h-44 overflow-y-auto space-y-1">${reqs.map(r=>`<div class="flex items-center justify-between gap-2 bg-charcoal-50 rounded-lg px-2 py-1.5">
-        <div class="min-w-0"><p class="text-xs font-medium text-charcoal-900 truncate">${r.type}${r.period ? ' — ' + r.period : ''}</p><p class="text-[9px] text-charcoal-500 truncate">${r.requestedDate || ''} · ${r.reason || '—'}</p></div>
-        ${statusBadge(r.status)}
-      </div>`).join('') || '<p class="text-[10px] text-charcoal-400 text-center py-2">No requests on file</p>'}
-      </div>
-      <p class="text-[9px] text-charcoal-400 mt-1.5">Resolve any <b class="text-amber-600">Pending HR Review</b> requests before finalizing — every request on file shows here so you can close the account with full context.</p>
+  return `<div class="rounded-xl border border-charcoal-200 p-3">
+    <div class="flex items-center justify-between gap-2">
+      <p class="text-[10px] font-bold uppercase tracking-wide text-charcoal-700">Requests — ${firstName}</p>
+      <span class="badge badge-gray text-[9px]">${reqs.length} total</span>
     </div>
+    <div class="mt-2 max-h-44 overflow-y-auto space-y-1">${reqs.map(r=>`<div class="flex items-center justify-between gap-2 bg-charcoal-50 rounded-lg px-2 py-1.5">
+      <div class="min-w-0"><p class="text-xs font-medium text-charcoal-900 truncate">${r.type}${r.period ? ' — ' + r.period : ''}</p><p class="text-[9px] text-charcoal-500 truncate">${r.requestedDate || ''} · ${r.reason || '—'}</p></div>
+      ${statusBadge(r.status)}
+    </div>`).join('') || '<p class="text-[10px] text-charcoal-400 text-center py-2">No requests on file</p>'}
+    </div>
+    <p class="text-[9px] text-charcoal-400 mt-1.5">Resolve any <b class="text-amber-600">Pending HR Review</b> requests before finalizing — every request on file shows here so you can close the account with full context.</p>
   </div>`;
 }
 
@@ -620,7 +886,6 @@ function saveExitVerdict(id) {
   const rehireStatus = g('sep-v-rehire')?.value || 'Eligible';
   const rNote = (g('sep-v-rehire-note')?.value||'').trim();
   s.verdict = { finalReason, settlement: { direction: dir, amount, note: sNote }, rehire: { status: rehireStatus, note: rNote } };
-  if (['Requested','Notice Period','Exit In Progress'].includes(s.status)) s.status = 'Under Review';
   MOCK.auditLog.unshift({
     id: 'al-' + Date.now(),
     action: 'Exit Verdict Recorded',
@@ -632,6 +897,7 @@ function saveExitVerdict(id) {
   });
   closeModal();
   showToast(`Exit verdict recorded for ${s.employee}`);
+  openSeparation(id);
   renderAll();
 }
 
@@ -640,9 +906,7 @@ function toggleSepChecklist(sepId, idx, checked) {
   s.checklist[idx][1] = checked;
   const done = s.checklist.filter(c=>c[1]).length;
   s.progress = Math.round((done / s.checklist.length) * 100);
-  if (done > 0 && (s.status === 'Requested' || s.status === 'Notice Period')) {
-    s.status = 'Exit In Progress';
-  }
+  if (s.status === 'Notice Period') s.status = 'Exit In Progress'; // legacy records
   openSeparation(sepId);
   renderAll();
 }
@@ -650,6 +914,7 @@ function toggleSepChecklist(sepId, idx, checked) {
 function finalizeSeparation(sepId) {
   const s = MOCK.separations.find(x=>x.id===sepId); if(!s) return;
   s.status = 'Completed';
+  s.completedOn = '2026-09-09';
   s.progress = 100;
   s.checklist.forEach(c => c[1] = true);
   const emp = MOCK.employees.find(e => e.name === s.employee);
@@ -932,6 +1197,7 @@ function submitRequestTermination() {
     status: 'Requested',
     progress: 0,
     checklist: [['Exit interview scheduled', false], ['Handover completed', false], ['Uniform returned', false], ['Access cards revoked', false], ['Final settlement', false]],
+    exitInterview: { decision: 'Pending', scheduledFor: '', time: '', interviewer: '', note: '', conductedOn: '', rating: null, performanceRating: null, feedback: '' },
     verdict: null
   };
   MOCK.separations.unshift(newSep);
@@ -998,7 +1264,7 @@ function submitInitiateOffboarding() {
     requestedBy: 'HR Manager',
     requestedByUser: MOCK.currentUser.fullName,
     submittedDate: 'Sep 9, 2026',
-    status: 'Notice Period',
+    status: 'Exit Interview',
     progress: 0,
     checklist: [
       ['Exit interview scheduled', false],
@@ -1007,6 +1273,7 @@ function submitInitiateOffboarding() {
       ['Access cards revoked', false],
       ['Final settlement', false]
     ],
+    exitInterview: { decision: 'Pending', scheduledFor: '', time: '', interviewer: '', note: '', conductedOn: '', rating: null, performanceRating: null, feedback: '' },
     verdict: null
   };
 

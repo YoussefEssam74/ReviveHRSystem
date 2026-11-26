@@ -56,6 +56,21 @@ namespace Service.Specifications
         }
     }
 
+    /// <summary>
+    /// Archived (soft-deleted) roles whose name matches exactly. RoleName is the foreign
+    /// key of every assignment, so an archived role keeps its name reserved and a new
+    /// role cannot take it.
+    /// </summary>
+    public sealed class ArchivedRoleByNameSpec : BaseSpecification<Role, int>
+    {
+        public ArchivedRoleByNameSpec(string name)
+        {
+            var clean = name.Trim().ToLower();
+            Criteria = r => r.Name.ToLower() == clean;
+            ApplyIgnoreQueryFilters();
+        }
+    }
+
     /// <summary>The full permission catalog ordered by area (key ordering is applied in memory).</summary>
     public sealed class PermissionCatalogSpec : BaseSpecification<Permission, int>
     {
@@ -85,6 +100,7 @@ namespace Service.Specifications
             {
                 null or "" or "staff" or "all" => null,
                 "hr" => UserType.HR,
+                "hrmanager" => UserType.HRManager,
                 "topmanagement" => UserType.TopManagement,
                 "employee" => UserType.Employee,
                 var other => throw new BadRequestException($"Unknown user type '{other}'."),

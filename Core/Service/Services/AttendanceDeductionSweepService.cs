@@ -276,44 +276,27 @@ namespace Service.Services
                     return (0, false);
                 }
 
-                var isLate = record.Status == AttendanceStatus.Late;
-                var recordLateMinutes = isLate ? LateMinutesOf(record, assignments) : null;
-                if (anchored.Status == DeductionStatus.Pending && anchored.Amount <= 0)
+                // Who sizes the deduction and who prices it are two different things:
+                // the day is flagged here, the branch manager chooses hours or days,
+                // and the money follows the month's rates. A pending auto row therefore
+                // tracks the rates (they appear once the roster is complete) but never
+                // invents a size.
+                var reason = record.Status == AttendanceStatus.Late ? "Late arrival" : "Unapproved absence";
+                var changed = false;
+                if (anchored.AttendanceRecordId != record.Id)
                 {
-                    return (0, TryRepriceUnpriced(anchored, employee, date, sheets, assignments, recordLateMinutes));
+                    anchored.AttendanceRecordId = record.Id;
+                    changed = true;
                 }
 
-                // The day was derived as an absence and the punch now proves a late
-                // arrival (or vice versa): keep a pending row honest. Any amount the
-                // branch explicitly re-priced with the same reason stays untouched.
-                if (anchored.Status == DeductionStatus.Pending
-                    && anchored.Reason != (isLate ? "Late arrival" : "Unapproved absence"))
+                changed |= Reprice(anchored, employee, date, sheets, assignments, reason);
+                if (changed)
                 {
-                    var (repriced, repricedNote) = Price(employee, date, sheets, assignments, isLate, recordLateMinutes);
-                    anchored.AttendanceRecordId = record.Id;
-                    anchored.Reason = isLate ? "Late arrival" : "Unapproved absence";
-                    anchored.Amount = repriced;
-                    anchored.DeductionDays = isLate
-                        ? PayrollService.LatePenalty(recordLateMinutes).Days
-                        : PayrollService.AbsenceDayMultiplier;
-                    anchored.Note = PayrollService.ParseAbsenceMarker(anchored.Note) == date
-                        ? $"{PayrollService.AbsenceMarker(date)} · {repricedNote}"
-                        : repricedNote;
                     unitOfWork.GetRepository<DeductionCandidate, int>().Update(anchored);
                     return (0, true);
                 }
 
-                if (anchored.AttendanceRecordId is null)
-                {
-                    anchored.AttendanceRecordId = record.Id;
-                    unitOfWork.GetRepository<DeductionCandidate, int>().Update(anchored);
-                    return (0, true);
-                }
-
-                // Still pending on an unchanged rule? Then it was raised under an older
-                // price list (a flat quarter day, a single day per absence) — bring it
-                // in line with the rule the sheet now shows.
-                return (0, TryRepriceUnpriced(anchored, employee, date, sheets, assignments, recordLateMinutes));
+                return (0, false);
             }
 
             if (systemUserId is null)
@@ -322,8 +305,7 @@ namespace Service.Services
             }
 
             var late = record.Status == AttendanceStatus.Late;
-            var lateMinutes = late ? LateMinutesOf(record, assignments) : null;
-            var (amount, pricedNote) = Price(employee, date, sheets, assignments, late, lateMinutes);
+            var (amount, pricedNote) = Price(employee, date, DeductionUnit.Days, 0m, sheets, assignments);
             var candidate = new DeductionCandidate
             {
                 EmployeeId = employee.Id,
@@ -331,7 +313,10 @@ namespace Service.Services
                 DeductionDate = date,
                 IsSystemGenerated = true,
                 Amount = amount,
-                DeductionDays = late ? PayrollService.LatePenalty(lateMinutes).Days : PayrollService.AbsenceDayMultiplier,
+                // No size yet — the branch manager picks hours or days.
+                DeductionUnit = DeductionUnit.Days,
+                DeductionValue = 0m,
+                DeductionDays = 0m,
                 Reason = late ? "Late arrival" : "Unapproved absence",
                 Note = pricedNote,
                 IssuedBy = systemUserId.Value,
@@ -368,12 +353,18 @@ namespace Service.Services
                     return (0, false);
                 }
 
-                if (existing.Status != DeductionStatus.Pending)
+                if (existing.Status is not (DeductionStatus.Pending or DeductionStatus.BranchApproved))
                 {
                     return (0, false);
                 }
 
-                return (0, TryRepriceUnpriced(existing, employee, date, sheets, assignments));
+                var repriced = Reprice(existing, employee, date, sheets, assignments, "Unapproved absence");
+                if (repriced)
+                {
+                    unitOfWork.GetRepository<DeductionCandidate, int>().Update(existing);
+                }
+
+                return (0, repriced);
             }
 
             if (systemUserId is null)
@@ -381,7 +372,7 @@ namespace Service.Services
                 return (0, false);
             }
 
-            var (amount, note) = Price(employee, date, sheets, assignments, isLate: false);
+            var (amount, note) = Price(employee, date, DeductionUnit.Days, 0m, sheets, assignments);
             var candidate = new DeductionCandidate
             {
                 EmployeeId = employee.Id,
@@ -389,7 +380,10 @@ namespace Service.Services
                 DeductionDate = date,
                 IsSystemGenerated = true,
                 Amount = amount,
-                DeductionDays = PayrollService.AbsenceDayMultiplier,
+                // No size yet — the branch manager picks hours or days.
+                DeductionUnit = DeductionUnit.Days,
+                DeductionValue = 0m,
+                DeductionDays = 0m,
                 Reason = "Unapproved absence",
                 Note = $"{PayrollService.AbsenceMarker(date)} · {note}",
                 IssuedBy = systemUserId.Value,
@@ -404,53 +398,48 @@ namespace Service.Services
         }
 
         /// <summary>
-        /// Re-prices a still-pending auto row: it was raised before any salary was on file
-        /// (amount 0), or under an older price list (a flat quarter day for lateness, one
-        /// day per absence). Anything the branch has already decided is left untouched.
+        /// Re-prices a still-pending auto row against the current rates: the size belongs
+        /// to the branch manager (hours or days) and the money follows it, so a row raised
+        /// before the roster was complete fills its amount in by itself later. Rows the
+        /// branch already reviewed, or manager-issued rows, are never touched.
         /// </summary>
-        private bool TryRepriceUnpriced(
+        private static bool Reprice(
             DeductionCandidate candidate,
             Employee employee,
             DateOnly date,
             IReadOnlyList<PayrollEntry> sheets,
             IReadOnlyList<ShiftAssignment> assignments,
-            int? lateMinutes = null)
+            string reason)
         {
-            if (candidate.Status != DeductionStatus.Pending || !candidate.IsSystemGenerated)
+            if (!candidate.IsSystemGenerated
+                || candidate.Status is not (DeductionStatus.Pending or DeductionStatus.BranchApproved)
+                || candidate.ReviewedAt is not null)
             {
                 return false;
             }
 
-            // The branch already priced this row (day count or amount): leave it alone.
-            if (candidate.ReviewedAt is not null)
+            var (amount, note) = Price(employee, date, candidate.DeductionUnit, candidate.DeductionValue, sheets, assignments);
+            if (PayrollService.ParseAbsenceMarker(candidate.Note) == date)
+            {
+                note = $"{PayrollService.AbsenceMarker(date)} · {note}";
+            }
+
+            var days = DaysFor(employee, date, candidate.DeductionUnit, candidate.DeductionValue, sheets, assignments);
+            if (candidate.Reason == reason
+                && candidate.Amount == amount
+                && candidate.DeductionDays == days
+                && candidate.Note == note
+                && candidate.DeductionDate == date)
             {
                 return false;
             }
 
-            var late = candidate.Reason == "Late arrival";
-            var expectedDays = late
-                ? PayrollService.LatePenalty(lateMinutes).Days
-                : PayrollService.AbsenceDayMultiplier;
-            var unpriced = candidate.Amount <= 0;
-            if (!unpriced && candidate.DeductionDays == expectedDays)
-            {
-                return false;
-            }
-
-            var (amount, note) = Price(employee, date, sheets, assignments, late, lateMinutes);
-            if (amount <= 0)
-            {
-                return false;
-            }
-
+            candidate.Reason = reason;
             candidate.Amount = amount;
-            candidate.DeductionDays = expectedDays;
+            candidate.DeductionDays = days;
             candidate.DeductionDate = date;
             // Keep the row shaped the way it was raised (marker for a derived day).
-            candidate.Note = PayrollService.ParseAbsenceMarker(candidate.Note) == date
-                ? $"{PayrollService.AbsenceMarker(date)} · {note}"
-                : note;
-            unitOfWork.GetRepository<DeductionCandidate, int>().Update(candidate);
+            candidate.Note = note;
             return true;
         }
 
@@ -588,26 +577,24 @@ namespace Service.Services
         private static (decimal Amount, string Note) Price(
             Employee employee,
             DateOnly date,
+            DeductionUnit unit,
+            decimal value,
             IReadOnlyList<PayrollEntry> sheets,
-            IReadOnlyList<ShiftAssignment> assignments,
-            bool isLate,
-            int? lateMinutes = null)
+            IReadOnlyList<ShiftAssignment> assignments)
         {
-            var (daily, divisor) = DeductionPricing.DailyRate(employee, date, sheets, assignments);
-            var (lateDays, lateLabel) = PayrollService.LatePenalty(lateMinutes);
-            var amount = isLate
-                ? Math.Round(daily * lateDays, 2)
-                : Math.Round(daily * PayrollService.AbsenceDayMultiplier, 2);
-            if (amount <= 0)
-            {
-                return (0m, "No salary on file — the branch must price this deduction manually.");
-            }
-
-            var basis = $"{divisor} calendar days";
-            return (amount, isLate
-                ? $"Auto-priced: {lateLabel} (base ÷ {basis} × {lateDays})."
-                : $"Auto-priced: {PayrollService.AbsenceDayMultiplier} days (base ÷ {basis} × {PayrollService.AbsenceDayMultiplier}).");
+            var rates = DeductionPricing.Rates(employee, date, sheets, assignments);
+            return (rates.AmountFor(unit, value), rates.Note(unit, value));
         }
+
+        /// <summary>Days-equivalent of a sized deduction, mirroring <see cref="Price"/>.</summary>
+        private static decimal DaysFor(
+            Employee employee,
+            DateOnly date,
+            DeductionUnit unit,
+            decimal value,
+            IReadOnlyList<PayrollEntry> sheets,
+            IReadOnlyList<ShiftAssignment> assignments) =>
+            DeductionPricing.Rates(employee, date, sheets, assignments).DaysFor(unit, value);
 
         /// <summary>Minutes the punch was late against the day's shift start, when both are known.</summary>
         private static int? LateMinutesOf(AttendanceRecord record, IReadOnlyList<ShiftAssignment> assignments)

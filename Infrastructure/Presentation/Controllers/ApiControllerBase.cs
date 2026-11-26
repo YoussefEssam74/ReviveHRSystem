@@ -54,12 +54,13 @@ namespace Presentation.Controllers
 
         /// <summary>
         /// Ensures the route gym ID matches the active token gym ID (preventing cross-gym IDOR),
-        /// unless the caller is TopManagement.
+        /// unless the caller has platform-wide scope (Top Management, and HR Manager — the
+        /// platform HR lead that reaches every company).
         /// </summary>
         protected void EnsureGymScope(int routeGymId)
         {
             var userType = User.FindFirst("userType")?.Value;
-            if (userType == "TopManagement")
+            if (userType is "TopManagement" or "HRManager")
             {
                 return;
             }

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using Microsoft.EntityFrameworkCore.Migrations;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -7,7 +7,7 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Persistence.Data.Migrations
 {
     /// <inheritdoc />
-    public partial class AddSubscriptionPlansAndRequests : Migration
+    public partial class AddGymSubscriptionPlansAndRequests : Migration
     {
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
@@ -19,7 +19,7 @@ namespace Persistence.Data.Migrations
                 nullable: true);
 
             migrationBuilder.CreateTable(
-                name: "SubscriptionPlans",
+                name: "GymSubscriptionPlans",
                 columns: table => new
                 {
                     Id = table.Column<int>(type: "integer", nullable: false)
@@ -40,7 +40,7 @@ namespace Persistence.Data.Migrations
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("PK_SubscriptionPlans", x => x.Id);
+                    table.PrimaryKey("PK_GymSubscriptionPlans", x => x.Id);
                 });
 
             migrationBuilder.CreateTable(
@@ -76,15 +76,15 @@ namespace Persistence.Data.Migrations
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Restrict);
                     table.ForeignKey(
-                        name: "FK_SubscriptionChangeRequests_SubscriptionPlans_CurrentPlanId",
+                        name: "FK_SubscriptionChangeRequests_GymSubscriptionPlans_CurrentPlanId",
                         column: x => x.CurrentPlanId,
-                        principalTable: "SubscriptionPlans",
+                        principalTable: "GymSubscriptionPlans",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Restrict);
                     table.ForeignKey(
-                        name: "FK_SubscriptionChangeRequests_SubscriptionPlans_RequestedPlanId",
+                        name: "FK_SubscriptionChangeRequests_GymSubscriptionPlans_RequestedPlanId",
                         column: x => x.RequestedPlanId,
-                        principalTable: "SubscriptionPlans",
+                        principalTable: "GymSubscriptionPlans",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Restrict);
                     table.ForeignKey(
@@ -126,22 +126,22 @@ namespace Persistence.Data.Migrations
                 column: "Status");
 
             migrationBuilder.CreateIndex(
-                name: "IX_SubscriptionPlans_IsActive_SortOrder",
-                table: "SubscriptionPlans",
+                name: "IX_GymSubscriptionPlans_IsActive_SortOrder",
+                table: "GymSubscriptionPlans",
                 columns: new[] { "IsActive", "SortOrder" });
 
             migrationBuilder.CreateIndex(
-                name: "IX_SubscriptionPlans_Name",
-                table: "SubscriptionPlans",
+                name: "IX_GymSubscriptionPlans_Name",
+                table: "GymSubscriptionPlans",
                 column: "Name",
                 unique: true,
                 filter: "\"IsDeleted\" = FALSE");
 
             migrationBuilder.AddForeignKey(
-                name: "FK_GymSubscriptions_SubscriptionPlans_PlanId",
+                name: "FK_GymSubscriptions_GymSubscriptionPlans_PlanId",
                 table: "GymSubscriptions",
                 column: "PlanId",
-                principalTable: "SubscriptionPlans",
+                principalTable: "GymSubscriptionPlans",
                 principalColumn: "Id",
                 onDelete: ReferentialAction.Restrict);
         }
@@ -150,14 +150,14 @@ namespace Persistence.Data.Migrations
         protected override void Down(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.DropForeignKey(
-                name: "FK_GymSubscriptions_SubscriptionPlans_PlanId",
+                name: "FK_GymSubscriptions_GymSubscriptionPlans_PlanId",
                 table: "GymSubscriptions");
 
             migrationBuilder.DropTable(
                 name: "SubscriptionChangeRequests");
 
             migrationBuilder.DropTable(
-                name: "SubscriptionPlans");
+                name: "GymSubscriptionPlans");
 
             migrationBuilder.DropIndex(
                 name: "IX_GymSubscriptions_PlanId",

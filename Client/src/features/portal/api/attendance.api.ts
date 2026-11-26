@@ -20,6 +20,10 @@ export interface EmployeeAttendanceItem {
   coverDays: number | null
   /** True when the day was worked without a scheduled shift (cover / extra shift). */
   isCoverDay: boolean
+  /** Minutes the check-in ran past the shift start (0 = on time / not in yet). */
+  lateMinutes: number
+  /** Minutes the check-out ran before the shift end (0 = not early / still in). */
+  earlyLeaveMinutes: number
 }
 
 export interface EmployeeAttendanceTotals {

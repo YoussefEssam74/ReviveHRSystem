@@ -1,5 +1,4 @@
-import { ApiError } from '../../../lib/api-client'
-import { loadStoredSession } from '../../../lib/session-store'
+import { ApiError, apiDownload } from '../../../lib/api-client'
 import { translate } from '../../../i18n'
 
 /** The export window: last 30 days (default), last 90 days, or year to date. */
@@ -10,8 +9,6 @@ export interface ReportExportParams {
   period?: ReportPeriod
   gym?: number | string
 }
-
-const BASE_URL = (import.meta.env.VITE_API_URL as string | undefined) ?? ''
 
 function exportError(status: number): ApiError {
   if (status === 401)
@@ -36,20 +33,17 @@ export async function downloadReportsCsv(params: ReportExportParams = {}): Promi
   query.set('format', 'csv')
   if (params.gym != null && params.gym !== '') query.set('gym', String(params.gym))
 
-  const token = loadStoredSession()?.accessToken
-  let response: Response
+  let blob: Blob
   try {
-    response = await fetch(`${BASE_URL}/api/reports/export?${query.toString()}`, {
-      method: 'GET',
-      headers: { Accept: 'text/csv', ...(token ? { Authorization: 'Bearer ' + token } : {}) },
-    })
-  } catch {
-    throw new ApiError(0, 'NETWORK_ERROR', translate('Could not reach the server. Check your connection and try again.'))
+    ({ blob } = await apiDownload(`/api/reports/export?${query.toString()}`))
+  } catch (error) {
+    if (error instanceof ApiError) {
+      if (error.status === 401) throw exportError(401)
+      if (error.status === 403) throw exportError(403)
+      if (error.status === 400) throw exportError(400)
+    }
+    throw error
   }
-
-  if (!response.ok) throw exportError(response.status)
-
-  const blob = await response.blob()
   const url = URL.createObjectURL(blob)
   const anchor = document.createElement('a')
   anchor.href = url
