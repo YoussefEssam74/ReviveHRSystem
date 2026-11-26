@@ -30,7 +30,7 @@ to real backend APIs. Work proceeds **one page at a time**; a page is only repor
 |---|---|---|---|---|---|---|
 | 1 | HR Dashboard `/console/dashboard` | `HR\js\pages-dashboard.js` | ✅ | ✅ (see notes) | none — all endpoints existed | ✅ build + manual |
 | 2 | Employees + profile `/console/employees` | `HR\js\pages-employees.js` | ✅ | ✅ | none — all endpoints existed | ✅ build + manual |
-| 3 | Terminations `/console/terminations` | `HR\js\pages-employees.js` (renderTerminations/Offboarding) | ⬜ | ⬜ | — | — |
+| 3 | Terminations `/console/terminations` | `HR\js\pages-employees.js` (renderTerminations/Offboarding) | ✅ | ✅ | none — all endpoints existed | ✅ build + manual |
 | 4 | Recruitment `/console/recruitment` | `HR\js\pages-recruitment.js` | ⬜ | ⬜ | — | — |
 | 5 | Attendance `/console/attendance` | `HR\js\pages-attendance.js` | ⬜ | ⬜ | — | — |
 | 6 | Requests `/console/requests` | `HR\js\pages-requests.js` | ✅ | ✅ | `GET /api/requests/summary` + list-item identity/balance fields (added) | ✅ build + type-check |

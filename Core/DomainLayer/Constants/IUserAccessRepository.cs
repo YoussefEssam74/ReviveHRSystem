@@ -72,5 +72,16 @@ namespace DomainLayer.Contracts
 
         /// <summary>Archives a role by flipping the shadow IsDeleted flag (the UI's "Archive role" action).</summary>
         Task ArchiveRoleAsync(int roleId, CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// Active users who should receive an operational notice for one gym:
+        /// holders of a management role in that gym (Branch Manager, HR, HR Manager,
+        /// Super Admin), falling back to every active user with gym access when no
+        /// management role is assigned.
+        /// </summary>
+        Task<IReadOnlyList<int>> GetGymNotificationRecipientUserIdsAsync(int gymId, CancellationToken cancellationToken = default);
+
+        /// <summary>Active Revive Admin (TopManagement) account ids — platform-level notices.</summary>
+        Task<IReadOnlyList<int>> GetTopManagementUserIdsAsync(CancellationToken cancellationToken = default);
     }
 }

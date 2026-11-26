@@ -11,6 +11,7 @@ using DomainLayer.Models.PayrollModule;
 using DomainLayer.Models.RecruitmentModule;
 using DomainLayer.Models.RequestModule;
 using DomainLayer.Models.SchedulingModule;
+using DomainLayer.Models.SubscriptionModule;
 using DomainLayer.Models.UserModule;
 using Microsoft.EntityFrameworkCore;
 
@@ -106,6 +107,14 @@ namespace Presistence.Data
         public DbSet<EvaluationAssignment> EvaluationAssignments => Set<EvaluationAssignment>();
         public DbSet<PerformanceCycle> PerformanceCycles => Set<PerformanceCycle>();
         public DbSet<Goal> Goals => Set<Goal>();
+
+        // Subscription billing
+        public DbSet<GymSubscription> GymSubscriptions => Set<GymSubscription>();
+        public DbSet<SubscriptionInvoice> SubscriptionInvoices => Set<SubscriptionInvoice>();
+        public DbSet<SubscriptionPayment> SubscriptionPayments => Set<SubscriptionPayment>();
+        public DbSet<SubscriptionSettings> SubscriptionSettings => Set<SubscriptionSettings>();
+        public DbSet<SubscriptionPlan> SubscriptionPlans => Set<SubscriptionPlan>();
+        public DbSet<SubscriptionChangeRequest> SubscriptionChangeRequests => Set<SubscriptionChangeRequest>();
 
         // Auditing
         public DbSet<AuditLog> AuditLogs => Set<AuditLog>();

@@ -5,6 +5,7 @@ using System.Threading.RateLimiting;
 using AutoMapper;
 using Biometrics;
 using Storage;
+using DomainLayer.Constants;
 using DomainLayer.Contracts;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -128,6 +129,22 @@ namespace ReviveHRSystem.Web
                                 if (!await sessions.IsSessionAllowedAsync(userId, context.HttpContext.RequestAborted))
                                 {
                                     context.Fail("This account is no longer active.");
+                                    return;
+                                }
+
+                                // Subscription gate: a gym whose HR-service billing is
+                                // suspended loses its already-issued sessions too, not only
+                                // future sign-ins. Revive Admin (TopManagement) keeps access
+                                // so it can resolve the billing.
+                                var userType = context.Principal?.FindFirst("userType")?.Value;
+                                var rawGymId = context.Principal?.FindFirst("gymId")?.Value;
+                                if (userType != "TopManagement" && int.TryParse(rawGymId, out var gymId))
+                                {
+                                    var subscriptions = context.HttpContext.RequestServices.GetRequiredService<ISubscriptionService>();
+                                    if (!await subscriptions.IsGymAccessAllowedAsync(gymId, context.HttpContext.RequestAborted))
+                                    {
+                                        context.Fail(SubscriptionMessages.SuspensionMessage);
+                                    }
                                 }
                             }
                             catch (OperationCanceledException)
@@ -307,6 +324,8 @@ namespace ReviveHRSystem.Web
             builder.Services.AddScoped<IStationSessionService, StationSessionService>();
             builder.Services.AddScoped<IAccessControlService, AccessControlService>();
             builder.Services.AddScoped<IGymService, GymService>();
+            builder.Services.AddScoped<ISubscriptionService, SubscriptionService>();
+            builder.Services.AddScoped<ISubscriptionPlanService, SubscriptionPlanService>();
             builder.Services.AddScoped<IEmployeeService, EmployeeService>();
             builder.Services.AddScoped<IRoleService, RoleService>();
             builder.Services.AddScoped<IRequestService, RequestService>();
@@ -322,6 +341,11 @@ namespace ReviveHRSystem.Web
             builder.Services.AddScoped<IActionRequestService, ActionRequestService>();
             builder.Services.AddFaceBiometrics(builder.Configuration);
             builder.Services.AddLocalFileStorage(builder.Configuration);
+
+            // Automated subscription collection: raises invoices, sends reminders,
+            // suspends past-grace gyms and restores paid ones. Disabled in the
+            // integration-test host so tests control the cycle explicitly.
+            builder.Services.AddHostedService<SubscriptionBillingBackgroundService>();
 
             builder.Services.AddEndpointsApiExplorer();
             builder.Services.AddSwaggerGen(options =>

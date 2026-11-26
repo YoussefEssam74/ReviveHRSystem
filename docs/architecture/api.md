@@ -975,6 +975,48 @@ Permission: the row's own action-type key on its gym. Executes the proposed effe
 
 Permission: same gate as approve. Request `{ comment (required) }` — no comment → 400. Marks the row `Rejected` **without executing anything** and audits `{Label} Request Rejected` (Transfer Gym | Compensation Change | Role Assign | Offboard | Bulk Import) with the summary + comment in the detail. Returns 200 `{ data: { id, status: "Rejected", reviewedBy, reviewedDate, executed: false, reviewComment } }`. Errors: 400 (missing comment, already decided), 401, 404.
 
+## Subscriptions, plans & automated access control
+
+Subscription billing is split into a Revive Admin surface and a gym-side self-service surface. Admin endpoints require a TopManagement session; gym-side endpoints require the active gym's **Branch Manager or Super Admin** role. HR, Team Leader, employee and anonymous callers answer 401.
+
+The lifecycle is anchored on each gym's `billingStartDate`. Each cycle (`billingCycleMonths`, default 1) raises one invoice due on the period start. A reminder is sent `reminderLeadDays` before the due date, an overdue notice once the due date passes, a grace-period notice when grace starts, and access is suspended when the grace window (`gracePeriodDays`) elapses. Access is evaluated from the invoice dates on every request, so enforcement does not wait for the periodic sweep; the sweep persists the status, sends the in-app notices and raises the next invoices. Revive Admin can also set the next due date explicitly on any gym.
+
+### Revive Admin
+
+| Method | Route | Purpose |
+|---|---|---|
+| GET | `/api/subscriptions` | Overview: `{ settings, summary, items[], unconfiguredGyms[] }` — one row per configured gym with effective status, plan, amount, next due, grace, outstanding balance and last payment. |
+| GET | `/api/subscriptions/{gymId}` | One gym: `{ subscription, settings, invoices[], payments[] }`. |
+| PUT | `/api/subscriptions/{gymId}` | Create/update terms: `{ amount, billingCycleMonths, gracePeriodDays?, reminderLeadDays?, autoSuspensionEnabled, billingStartDate?, planId?, nextDueDate? }`. `planId` assigns a catalog plan; `nextDueDate` shifts the outstanding/upcoming invoice. Grace edits also move the grace end of unpaid invoices. |
+| POST | `/api/subscriptions/{gymId}/payments` | Record a confirmed payment `{ amount, method, reference?, notes?, paidAtUtc? }`; allocates oldest invoices first, rejects overpayment, and restores an **automatic** suspension when the balance clears. |
+| POST | `/api/subscriptions/{gymId}/suspend` | Manual suspension `{ reason? }`; blocked accounts see the suspension message at sign-in and on already-issued tokens. |
+| POST | `/api/subscriptions/{gymId}/reactivate` | Manual restore `{ overrideDays? }` — the override is bounded (defaults to the gym's grace window; `0` grants none) so automation resumes when it lapses. |
+| PUT | `/api/subscriptions/settings` | Platform defaults `{ defaultBillingCycleMonths, defaultGracePeriodDays, reminderLeadDays, autoSuspensionEnabled, currency }`. |
+| POST | `/api/subscriptions/run-cycle` | Runs the sweep immediately; returns `{ gymsProcessed, invoicesCreated, remindersSent, overdueNoticesSent, gymsSuspended, gymsReactivated }`. Idempotent. |
+| GET | `/api/subscriptions/requests?status=Pending\|Approved\|Rejected\|Cancelled\|All` | Gym renewal/plan-change requests (Pending by default) with gym, current/requested plan, requester and review details. |
+| POST | `/api/subscriptions/requests/{requestId}/approve` | `{ note? }` — applies the requested plan, ensures the renewal invoice exists and notifies the gym. |
+| POST | `/api/subscriptions/requests/{requestId}/reject` | `{ note? }` — declines the request (note is sent to the gym). |
+
+### Plan catalog
+
+| Method | Route | Purpose |
+|---|---|---|
+| GET | `/api/subscription-plans` | Revive Admin sees every plan with `gymCount`; a gym's Branch Manager/Super Admin sees active plans only. |
+| POST | `/api/subscription-plans` | Creates `{ name, description?, pricePerCycle, billingCycleMonths, gracePeriodDays?, reminderLeadDays?, isActive, sortOrder }` (Revive Admin). |
+| PUT | `/api/subscription-plans/{planId}` | Edits a plan or toggles `isActive` (Revive Admin). Archived plans stay on existing gyms but cannot be newly assigned. |
+| DELETE | `/api/subscription-plans/{planId}` | Archives a plan (Revive Admin). |
+
+### Gym self-service
+
+| Method | Route | Purpose |
+|---|---|---|
+| GET | `/api/subscriptions/mine` | Active gym's `{ subscription, availablePlans[], pendingRequests[] }` — plan, status, due date, invoices and payment history. |
+| POST | `/api/subscriptions/mine/requests` | `{ type: "Renewal" \| "PlanChange", requestedPlanId?, note? }` — submits a request for Revive Admin review. One pending request per gym. |
+
+Notifications: **Subscription expiring soon** (reminder window), **Subscription payment overdue**, **Subscription grace period started**, **HR system access suspended**, **HR system access restored**, plus request submitted/approved/declined notices.
+
+Suspension enforcement covers the gym's web sessions (login, gym selection, `switch-gym`, silent refresh and every authenticated JWT request) and attendance stations. A gym with **no configured subscription is not blocked**, so rollout never locks existing tenants out. In-app notifications are fanned out to the gym's management roles (Branch Manager / HR / HR Manager / Super Admin), falling back to every active user with gym access; gym requests notify the TopManagement accounts. The same sweep runs automatically every `Subscriptions:SweepIntervalHours` (default 6) through the hosted `SubscriptionBillingBackgroundService`.
+
 ## OpenAPI
 
 The generated OpenAPI document is available at /swagger/v1/swagger.json in Development. Controller response metadata lists success and expected error statuses; DTO source files define request validation and response fields.

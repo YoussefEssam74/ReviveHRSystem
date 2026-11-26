@@ -11,17 +11,23 @@ import {
   getEmployeeRequests,
   getEmployeeSchedule,
   getEmployees,
+  postCompensation,
   postCreateEmployee,
   postContractChange,
+  postPositionChange,
   postRoleChange,
   postStatusChange,
+  postTransfer,
   uploadEmployeeDocument,
+  type CompensationBody,
   type ContractChangeBody,
   type CreateEmployeeBody,
   type EmployeeDocumentUploadBody,
   type EmployeeListParams,
+  type PositionChangeBody,
   type RoleChangeBody,
   type StatusChangeBody,
+  type TransferBody,
 } from '../api/employees.api'
 import { ApiError } from '../../../lib/api-client'
 
@@ -95,6 +101,44 @@ export function useRoleChange(id: number) {
     mutationFn: (body: RoleChangeBody) => postRoleChange(id, body),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['employees'] })
+    },
+  })
+}
+
+/** Gym transfer — also refreshes the gym switcher's roster counts. */
+export function useTransfer(id: number) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (body: TransferBody) => postTransfer(id, body),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['employees'] })
+      queryClient.invalidateQueries({ queryKey: ['gyms'] })
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] })
+    },
+  })
+}
+
+/** Position / level change in the current gym. */
+export function usePositionChange(id: number) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (body: PositionChangeBody) => postPositionChange(id, body),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['employees'] })
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] })
+    },
+  })
+}
+
+/** Compensation record (salary + effective date). */
+export function useCompensationChange(id: number) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (body: CompensationBody) => postCompensation(id, body),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['employees'] })
+      queryClient.invalidateQueries({ queryKey: ['payroll'] })
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] })
     },
   })
 }

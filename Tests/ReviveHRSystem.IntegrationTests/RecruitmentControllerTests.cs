@@ -888,6 +888,91 @@ namespace ReviveHRSystem.IntegrationTests
         }
 
         [Fact]
+        public async Task CreateInterview_ExplicitSecondStage_BooksSecondRound()
+        {
+            var builder = NewBuilder();
+            var gym = await builder.CreateGymWithStationAsync();
+            var vacancy = await builder.CreateVacancyAsync(gym, $"Round Two {UniqueSuffix()}");
+            var application = await builder.CreateApplicationAsync(vacancy);
+            var token = await _fixture.GetAdminTokenAsync();
+            var date = DateOnly.FromDateTime(DateTime.UtcNow).AddDays(4).ToString("yyyy-MM-dd");
+
+            var request = _fixture.AuthorizedRequest(HttpMethod.Post, "/api/interviews", new
+            {
+                candidateId = application.CandidateId,
+                stage = "Second Interview",
+                date,
+                time = "11:00"
+            }, token);
+            var response = await _fixture.Client.SendAsync(request);
+            Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+
+            var candidateResponse = await _fixture.Client.SendAsync(
+                _fixture.AuthorizedRequest(HttpMethod.Get, $"/api/candidates/{application.CandidateId}", null, token));
+            var data = (await candidateResponse.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("data");
+
+            Assert.Equal(JsonValueKind.Null, data.GetProperty("iv1").ValueKind);
+            Assert.StartsWith(date, data.GetProperty("iv2").GetProperty("date").GetString());
+        }
+
+        [Fact]
+        public async Task CreateInterview_RebookingFirstRound_SurfacesLatestBooking()
+        {
+            var builder = NewBuilder();
+            var gym = await builder.CreateGymWithStationAsync();
+            var vacancy = await builder.CreateVacancyAsync(gym, $"Rebook Coach {UniqueSuffix()}");
+            var application = await builder.CreateApplicationAsync(vacancy);
+            var token = await _fixture.GetAdminTokenAsync();
+            var rebookedDate = DateOnly.FromDateTime(DateTime.UtcNow).AddDays(6).ToString("yyyy-MM-dd");
+
+            foreach (var date in new[]
+            {
+                DateOnly.FromDateTime(DateTime.UtcNow).AddDays(3).ToString("yyyy-MM-dd"),
+                rebookedDate,
+            })
+            {
+                var request = _fixture.AuthorizedRequest(HttpMethod.Post, "/api/interviews", new
+                {
+                    candidateId = application.CandidateId,
+                    stage = "First Interview",
+                    date,
+                    time = "09:00"
+                }, token);
+                var response = await _fixture.Client.SendAsync(request);
+                Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+            }
+
+            var candidateResponse = await _fixture.Client.SendAsync(
+                _fixture.AuthorizedRequest(HttpMethod.Get, $"/api/candidates/{application.CandidateId}", null, token));
+            var data = (await candidateResponse.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("data");
+
+            Assert.StartsWith(rebookedDate, data.GetProperty("iv1").GetProperty("date").GetString());
+        }
+
+        [Fact]
+        public async Task CreateInterview_UnknownStage_Returns400()
+        {
+            var builder = NewBuilder();
+            var gym = await builder.CreateGymWithStationAsync();
+            var vacancy = await builder.CreateVacancyAsync(gym, $"Bad Round {UniqueSuffix()}");
+            var application = await builder.CreateApplicationAsync(vacancy);
+            var token = await _fixture.GetAdminTokenAsync();
+
+            var request = _fixture.AuthorizedRequest(HttpMethod.Post, "/api/interviews", new
+            {
+                candidateId = application.CandidateId,
+                stage = "Applied",
+                date = "2026-12-01",
+                time = "10:00"
+            }, token);
+            var response = await _fixture.Client.SendAsync(request);
+            var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+
+            Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+            Assert.Contains("First Interview or Second Interview", body.GetProperty("errorMessage").GetString());
+        }
+
+        [Fact]
         public async Task GetInterviews_MonthFilter_ContainsInterview()
         {
             var builder = NewBuilder();

@@ -183,6 +183,7 @@ namespace Presistence.Data.Configurations
             builder.Property(c => c.WhatLikedMost).HasMaxLength(2000);
             builder.Property(c => c.WhatToImprove).HasMaxLength(2000);
             builder.Property(c => c.InterviewNotes).HasMaxLength(2000);
+            builder.Property(c => c.ExitInterviewQuestions).HasColumnType("text");
             builder.Property(c => c.ClearanceNotes).HasMaxLength(1000);
             builder.Property(c => c.BlacklistReason).HasMaxLength(1000);
             builder.Property(c => c.FinalReason).HasMaxLength(1000);

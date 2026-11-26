@@ -10,6 +10,7 @@ import { ErrorState, LoadingState } from '../../../components/async-state'
 import { useMe } from '../../../contexts/MeContext'
 import { useEmployee, useStatusChange } from '../hooks/useEmployees'
 import { EmployeeFile } from '../components/EmployeeFileTabs'
+import { EmployeeLifecycleActions } from '../components/EmployeeLifecycleActions'
 import { describeApiError } from '../../../lib/api-client'
 import { formatDateWithYear, humanize } from '../../../lib/format'
 import { EDIT, VIEW } from '../../../lib/permissions'
@@ -39,7 +40,6 @@ export default function EmployeeProfilePage() {
 
   const canView = can('employees', VIEW)
   const canEdit = can('employees', EDIT)
-  const canOffboard = can('offboarding')
 
   const openDialog = () => {
     setNextStatus(humanize(employee.status))
@@ -71,9 +71,9 @@ export default function EmployeeProfilePage() {
         </button>
 
         <div className="rounded-xl border border-charcoal-200 bg-white p-4">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+          <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
             <Avatar initials={employee.initials} size="lg" className="h-14 w-14 text-base" />
-            <div className="min-w-0 flex-1">
+            <div className="min-w-0 flex-1 sm:basis-64">
               <div className="flex flex-wrap items-center gap-2">
                 <h1 className="text-lg font-bold text-charcoal-900">{employee.name}</h1>
                 <StatusBadge status={humanize(employee.status)} />
@@ -90,17 +90,13 @@ export default function EmployeeProfilePage() {
                   .join(' · ')}
               </p>
             </div>
-            <div className="flex flex-shrink-0 flex-wrap items-center gap-1.5">
+            <div className="flex flex-wrap items-center gap-1.5">
               {canEdit && (
                 <Button size="sm" variant="secondary" onClick={openDialog}>
                   {t('Change status')}
                 </Button>
               )}
-              {canOffboard && (
-                <Button size="sm" variant="danger" onClick={() => navigate('/console/terminations')}>
-                  {t('Offboard')}
-                </Button>
-              )}
+              <EmployeeLifecycleActions employee={employee} />
             </div>
           </div>
         </div>

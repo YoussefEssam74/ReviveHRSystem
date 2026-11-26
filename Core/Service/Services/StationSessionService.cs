@@ -1,6 +1,8 @@
 using System.Security.Cryptography;
 using System.Text;
+using DomainLayer.Constants;
 using DomainLayer.Contracts;
+using DomainLayer.Exceptions;
 using DomainLayer.Models.AttendanceModule;
 using DomainLayer.Models.OrganizationModule.Enums;
 using Service.Specifications;
@@ -20,6 +22,7 @@ namespace Service.Services
     /// </summary>
     public sealed class StationSessionService(
         IUnitOfWork unitOfWork,
+        ISubscriptionService subscriptionService,
         StationSessionOptions options) : IStationSessionService
     {
         private const int TokenBytes = 32; // 256 bits of entropy
@@ -28,6 +31,14 @@ namespace Service.Services
 
         public async Task<string> CreateSessionAsync(int gymId, int? stationCodeId, CancellationToken cancellationToken = default)
         {
+            // A suspended gym cannot enroll an attendance station: the session would
+            // be created but every request from it would be refused, leaving the
+            // kiosk in a broken half-signed-in state.
+            if (!await subscriptionService.IsGymAccessAllowedAsync(gymId, cancellationToken))
+            {
+                throw new UnAuthorizedException(SubscriptionMessages.SuspensionMessage);
+            }
+
             var token = GenerateToken();
             var nowUtc = DateTime.UtcNow;
 

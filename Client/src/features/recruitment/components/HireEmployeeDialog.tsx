@@ -101,7 +101,7 @@ export function HireEmployeeDialog({ candidate, waiting, onClose }: HireEmployee
   }
 
   const validate = (target: 1 | 2 | 3): string | null => {
-    if (target >= 1 && !gymId) return t('Pick the branch the employee will work in.')
+    if (target >= 1 && !gymId) return t('Pick the location the employee will work in.')
     if (target >= 2 && !salary) return t('Enter the monthly salary.')
     if (target >= 2 && !startDate) return t('Pick a start date.')
     if (target >= 3 && !email.trim()) return t('Enter the login email.')
@@ -206,7 +206,7 @@ export function HireEmployeeDialog({ candidate, waiting, onClose }: HireEmployee
               <dd className="font-medium text-charcoal-900">{outcome.position ?? '—'}</dd>
             </div>
             <div className="flex justify-between gap-3 px-3 py-2">
-              <dt className="text-charcoal-500">{t('Branch')}</dt>
+              <dt className="text-charcoal-500">{t('Location')}</dt>
               <dd className="font-medium text-charcoal-900">{outcome.gym ?? '—'}</dd>
             </div>
             <div className="flex justify-between gap-3 px-3 py-2">
@@ -280,9 +280,9 @@ export function HireEmployeeDialog({ candidate, waiting, onClose }: HireEmployee
               {candidate?.form?.email ? ` · ${candidate.form.email}` : ''}
             </p>
             <div>
-              <Label htmlFor="hire-gym">{t('Branch')}</Label>
+              <Label htmlFor="hire-gym">{t('Location')}</Label>
               <Select id="hire-gym" value={gymId} onChange={(event) => setGymId(event.target.value)} required>
-                <option value="">{t('Select a branch')}</option>
+                <option value="">{t('Select a location')}</option>
                 {gyms.map((gym) => (
                   <option key={gym.gymId} value={String(gym.gymId)}>
                     {gym.gymName}

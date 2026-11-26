@@ -10,6 +10,8 @@ using DomainLayer.Models.RequestModule;
 using DomainLayer.Models.RequestModule.Enums;
 using DomainLayer.Models.SchedulingModule;
 using DomainLayer.Models.SchedulingModule.Enums;
+using DomainLayer.Models.SubscriptionModule;
+using DomainLayer.Models.SubscriptionModule.Enums;
 using DomainLayer.Models.UserModule;
 using DomainLayer.Models.UserModule.Enums;
 using Microsoft.EntityFrameworkCore;
@@ -121,6 +123,14 @@ namespace ReviveHRSystem.Web.DataSeed
             var stationCodeLifetimeMinutes = configuration.GetValue<int?>(StationCodeLifetimeKey);
             var gym1StationCode = await EnsureStationCodeAsync(db, gym1.Id, admin.Id, stationCodeLifetimeMinutes, logger);
             var gym2StationCode = await EnsureStationCodeAsync(db, gym2.Id, admin.Id, stationCodeLifetimeMinutes, logger);
+
+            // Billing agreements for the demo gyms. Both start paid for the current
+            // month so the seeded accounts keep working; later cycles demonstrate the
+            // reminder → grace → suspension flow naturally.
+            var todayForBilling = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, attendanceTimeZone));
+            var seededPlans = await EnsureSubscriptionPlansAsync(db);
+            await EnsureSubscriptionAsync(db, gym1.Id, seededPlans.Starter, todayForBilling, admin.Id);
+            await EnsureSubscriptionAsync(db, gym2.Id, seededPlans.Growth, todayForBilling, admin.Id);
 
             var template = await EnsureShiftTemplateAsync(db, gym1.Id);
 
@@ -572,6 +582,116 @@ namespace ReviveHRSystem.Web.DataSeed
             }
 
             db.UserGymAccesses.Add(new UserGymAccess { UserId = userId, GymId = gymId });
+            await db.SaveChangesAsync();
+        }
+
+        /// <summary>
+        /// Seeds the catalog plans used by the demo gyms. Existing (possibly edited)
+        /// rows are left untouched so re-seeding never overwrites admin changes.
+        /// </summary>
+        private static async Task<(SubscriptionPlan Starter, SubscriptionPlan Growth, SubscriptionPlan Enterprise)>
+            EnsureSubscriptionPlansAsync(ReviveHrDbContext db)
+        {
+            var starter = await EnsurePlanAsync(db, "Starter", "Single-gym HR service.", 4500m, 1, 7, 3, 1);
+            var growth = await EnsurePlanAsync(db, "Growth", "Growing gyms with full HR coverage.", 6500m, 1, 7, 3, 2);
+            var enterprise = await EnsurePlanAsync(db, "Enterprise", "Multi-branch gyms with priority support.", 10000m, 1, 14, 5, 3);
+            return (starter, growth, enterprise);
+        }
+
+        private static async Task<SubscriptionPlan> EnsurePlanAsync(
+            ReviveHrDbContext db, string name, string description, decimal price,
+            int cycleMonths, int graceDays, int reminderDays, int sortOrder)
+        {
+            var existing = await db.SubscriptionPlans.FirstOrDefaultAsync(p => p.Name == name);
+            if (existing is not null)
+            {
+                return existing;
+            }
+
+            var plan = new SubscriptionPlan
+            {
+                Name = name,
+                Description = description,
+                PricePerCycle = price,
+                BillingCycleMonths = cycleMonths,
+                GracePeriodDays = graceDays,
+                ReminderLeadDays = reminderDays,
+                IsActive = true,
+                SortOrder = sortOrder,
+            };
+            db.SubscriptionPlans.Add(plan);
+            await db.SaveChangesAsync();
+            return plan;
+        }
+
+        /// <summary>
+        /// Seeds a demo billing agreement: the current period's invoice is already paid,
+        /// so the seeded accounts can sign in, while the next cycle exercises the
+        /// reminder → grace → suspension automation naturally.
+        /// </summary>
+        private static async Task EnsureSubscriptionAsync(
+            ReviveHrDbContext db, int gymId, SubscriptionPlan plan, DateOnly today, int recordedByUserId)
+        {
+            var existing = await db.GymSubscriptions.FirstOrDefaultAsync(s => s.GymId == gymId);
+            if (existing is not null)
+            {
+                // Backfill the plan for agreements seeded before the catalog existed.
+                if (existing.PlanId is null)
+                {
+                    existing.PlanId = plan.Id;
+                    await db.SaveChangesAsync();
+                }
+                return;
+            }
+
+            var settings = await db.SubscriptionSettings.FirstOrDefaultAsync(s => s.Id == 1);
+            if (settings is null)
+            {
+                settings = new SubscriptionSettings { Id = 1 };
+                db.SubscriptionSettings.Add(settings);
+            }
+
+            var periodStart = new DateOnly(today.Year, today.Month, 1);
+            var periodEnd = periodStart.AddMonths(Math.Max(1, plan.BillingCycleMonths));
+            var paidAt = DateTime.UtcNow;
+            var invoice = new SubscriptionInvoice
+            {
+                GymId = gymId,
+                InvoiceNumber = $"INV-{gymId:D4}-{periodStart:yyyyMMdd}",
+                PeriodStart = periodStart,
+                PeriodEnd = periodEnd,
+                DueDate = periodStart,
+                GraceEndsOn = periodStart.AddDays(settings.DefaultGracePeriodDays),
+                Amount = plan.PricePerCycle,
+                AmountPaid = plan.PricePerCycle,
+                Status = SubscriptionInvoiceStatus.Paid,
+                IssuedAtUtc = paidAt,
+                PaidAtUtc = paidAt,
+            };
+            invoice.Payments.Add(new SubscriptionPayment
+            {
+                GymId = gymId,
+                Amount = plan.PricePerCycle,
+                PaidAtUtc = paidAt,
+                Method = "BankTransfer",
+                Reference = "SEED-DEMO",
+                RecordedByUserId = recordedByUserId,
+            });
+
+            db.GymSubscriptions.Add(new GymSubscription
+            {
+                GymId = gymId,
+                PlanId = plan.Id,
+                Amount = plan.PricePerCycle,
+                BillingCycleMonths = Math.Max(1, plan.BillingCycleMonths),
+                GracePeriodDaysOverride = plan.GracePeriodDays,
+                ReminderLeadDaysOverride = plan.ReminderLeadDays,
+                BillingStartDate = periodStart,
+                NextDueDate = periodEnd,
+                Status = SubscriptionStatus.Active,
+                AutoSuspensionEnabled = true,
+                Invoices = { invoice },
+            });
             await db.SaveChangesAsync();
         }
 

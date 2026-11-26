@@ -43,6 +43,7 @@ export function ScheduleInterviewDialog({ candidate, round, onClose }: ScheduleI
       await schedule.mutateAsync({
         candidateId: candidate.id,
         ...(candidate.position ? { position: candidate.position } : {}),
+        stage: round,
         date,
         time,
         ...(type ? { type } : {}),

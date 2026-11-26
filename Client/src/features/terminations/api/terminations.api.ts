@@ -108,6 +108,22 @@ export interface ExitInterviewDetails {
   notes: string | null
   rehireEligible: boolean | null
   rehireNote: string | null
+  /** Editable question set with the recorded answers (defaults when none saved). */
+  questions: ExitInterviewQuestion[]
+}
+
+/** Answer control an exit-interview question renders. */
+export type ExitInterviewQuestionKind = 'text' | 'select' | 'checkbox' | 'multi' | 'rating'
+
+/** One exit-interview question; labels, kinds and options are editable by HR. */
+export interface ExitInterviewQuestion {
+  id: string
+  label: string
+  kind: ExitInterviewQuestionKind
+  /** Answer choices for select/multi. */
+  options: string[]
+  /** text/select/rating/checkbox ("true"|"false")/multi ("A | B"). */
+  answer: string | null
 }
 
 /** Clearance / final-settlement state of the exit. */
@@ -315,6 +331,8 @@ export interface ExitInterviewFormBody {
   blacklistReason?: string
   /** Marks the interview Completed when true. */
   complete: boolean
+  /** Editable question set; answers sync back to the legacy fields on the server. */
+  questions?: ExitInterviewQuestion[]
 }
 
 /** PUT /api/separations/{id}/exit-interview — saves the professional exit interview form. */

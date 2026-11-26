@@ -6,8 +6,6 @@ import {
   ClipboardList,
   Download,
   KeyRound,
-  Megaphone,
-  Star,
   UserPlus,
   Users,
 } from 'lucide-react'
@@ -26,12 +24,9 @@ import { downloadReportsCsv } from '../../reports/api/reports.api'
 import type { HrDashboardAction } from '../api/dashboard.api'
 import CreateEmployeeDialog from '../components/CreateEmployeeDialog'
 import PasswordAccessDialog from '../components/PasswordAccessDialog'
-import CreateHiringFormDialog from '../components/CreateHiringFormDialog'
-import CreateEvaluationFormDialog from '../components/CreateEvaluationFormDialog'
 import GymsOverviewDialog from '../components/GymsOverviewDialog'
 import VacancyRequestDialog from '../components/VacancyRequestDialog'
 import ContractRenewalDialog from '../components/ContractRenewalDialog'
-import AnnouncementDialog from '../components/AnnouncementDialog'
 import ReasonDialog from '../components/ReasonDialog'
 import { DashboardToasts } from '../components/DashboardToasts'
 import { useMockToast } from '../hooks/useMockToast'
@@ -41,10 +36,7 @@ type SectionFilter = 'all' | 'requests' | 'vacancies' | 'branch'
 type DialogState =
   | { kind: 'create-employee' }
   | { kind: 'password' }
-  | { kind: 'hiring-form' }
-  | { kind: 'evaluation-form' }
   | { kind: 'gyms' }
-  | { kind: 'announcement' }
   | { kind: 'vacancy'; action: HrDashboardAction }
   | { kind: 'contract'; action: HrDashboardAction }
   | { kind: 'reject-request'; action: HrDashboardAction }
@@ -223,7 +215,7 @@ export default function HrDashboardPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
         <KpiTile
           icon={Building2}
           value={data.kpis.totalGyms}
@@ -235,12 +227,6 @@ export default function HrDashboardPage() {
           value={data.kpis.totalStaff}
           label="Total Staff"
           onClick={() => navigate('/console/employees')}
-        />
-        <KpiTile
-          icon={ClipboardList}
-          value={data.kpis.totalPendingRequests}
-          label="Pending Requests"
-          onClick={() => navigate('/console/requests')}
         />
         <KpiTile
           icon={AlertTriangle}
@@ -360,15 +346,12 @@ export default function HrDashboardPage() {
             <div className="grid grid-cols-3 gap-2">
               <FastAction icon={UserPlus} label="Create Account" onClick={() => setDialog({ kind: 'create-employee' })} />
               <FastAction icon={KeyRound} label="Change Password" onClick={() => setDialog({ kind: 'password' })} />
-              <FastAction icon={ClipboardList} label="Hiring Form" onClick={() => setDialog({ kind: 'hiring-form' })} />
-              <FastAction icon={Star} label="Evaluation Form" onClick={() => setDialog({ kind: 'evaluation-form' })} />
               <FastAction
                 icon={ClipboardList}
                 label="See Requests"
                 badge={data.kpis.totalPendingRequests}
                 onClick={() => navigate('/console/requests')}
               />
-              <FastAction icon={Megaphone} label="Announcement" onClick={() => setDialog({ kind: 'announcement' })} />
             </div>
           </div>
 
@@ -447,12 +430,7 @@ export default function HrDashboardPage() {
         <CreateEmployeeDialog onClose={() => setDialog(null)} toast={toast} />
       )}
       {dialog?.kind === 'password' && <PasswordAccessDialog onClose={() => setDialog(null)} toast={toast} />}
-      {dialog?.kind === 'hiring-form' && <CreateHiringFormDialog onClose={() => setDialog(null)} toast={toast} />}
-      {dialog?.kind === 'evaluation-form' && (
-        <CreateEvaluationFormDialog onClose={() => setDialog(null)} toast={toast} />
-      )}
       {dialog?.kind === 'gyms' && <GymsOverviewDialog branches={branches} onClose={() => setDialog(null)} />}
-      {dialog?.kind === 'announcement' && <AnnouncementDialog onClose={() => setDialog(null)} toast={toast} />}
       {dialog?.kind === 'vacancy' && (
         <VacancyRequestDialog action={dialog.action} onClose={() => setDialog(null)} toast={toast} />
       )}

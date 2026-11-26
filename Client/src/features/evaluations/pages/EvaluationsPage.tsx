@@ -206,7 +206,7 @@ export default function EvaluationsPage() {
     <div className="space-y-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-base font-bold text-charcoal-900">{t('Evaluations')}</h1>
+          <h1 className="text-base font-bold text-charcoal-900">{t('Create Form')}</h1>
           <p className="mt-0.5 text-xs text-charcoal-500">
             {t('Dispatch forms to evaluators, fill your assigned evaluations, and review every response — all in one place')}
           </p>

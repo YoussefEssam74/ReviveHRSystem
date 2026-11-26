@@ -87,6 +87,13 @@ namespace Service.Services
             var rows = await _unitOfWork.GetRepository<OffboardingCase, int>()
                 .GetAllAsync(new SeparationListSpec(scope, status, type, (page - 1) * pageSize, pageSize), cancellationToken);
 
+            // Legacy rows have no exit steps: backfill before mapping so the board
+            // and the detail dialog report the same progress.
+            foreach (var row in rows.Where(r => r.ChecklistItems.Count == 0))
+            {
+                await EnsureChecklistAsync(row, actor.Id, cancellationToken);
+            }
+
             return new SeparationListResponse
             {
                 Items = await MapItemsAsync(rows, withLeaveTaken: true, cancellationToken),
@@ -104,6 +111,8 @@ namespace Service.Services
                 .GetByIdAsync(new SeparationByIdSpec(separationId), cancellationToken)
                 ?? throw new NotFoundException("Separation not found.");
             await _accessControl.EnsurePermissionForGymAsync(actor.Id, "employees.view", kase.Employee.GymId, cancellationToken);
+
+            await EnsureChecklistAsync(kase, actor.Id, cancellationToken);
 
             var items = await MapItemsAsync([kase], withLeaveTaken: true, cancellationToken);
             return new SeparationDataResponse { Data = items[0] };
@@ -530,7 +539,13 @@ namespace Service.Services
                     throw new BadRequestException("Interviewer and interview date are required to complete the exit interview.");
                 }
 
-                if (HrPortalHelpers.NullIfBlank(request.ReasonForLeaving) is null)
+                // A custom question set may legitimately drop the reason question;
+                // the seeded default keeps the legacy requirement.
+                var reasonQuestion = request.Questions?
+                    .FirstOrDefault(q => string.Equals(q.Id, "reason", StringComparison.OrdinalIgnoreCase));
+                var reasonRequired = request.Questions is null || reasonQuestion is not null;
+                if (reasonRequired &&
+                    HrPortalHelpers.NullIfBlank(reasonQuestion?.Answer ?? request.ReasonForLeaving) is null)
                 {
                     throw new BadRequestException("Reason for leaving is required to complete the exit interview.");
                 }
@@ -554,6 +569,14 @@ namespace Service.Services
             kase.InterviewNotes = HrPortalHelpers.NullIfBlank(request.Notes);
             kase.Blacklisted = request.Blacklisted;
             kase.BlacklistReason = request.Blacklisted ? HrPortalHelpers.NullIfBlank(request.BlacklistReason) : null;
+
+            if (request.Questions is not null)
+            {
+                var questions = NormalizeInterviewQuestions(request.Questions);
+                kase.ExitInterviewQuestions = JsonSerializer.Serialize(questions, InterviewQuestionJson);
+                // Keep the legacy columns in step so reports/detail consumers agree.
+                SyncLegacyInterviewAnswers(kase, questions);
+            }
 
             if (request.RehireEligible is not null)
             {
@@ -726,12 +749,225 @@ namespace Service.Services
                 .GetByIdAsync(new SeparationByIdSpec(separationId), cancellationToken)
                 ?? throw new NotFoundException("Separation not found.");
             await _accessControl.EnsurePermissionForGymAsync(actor.Id, "employees.offboard", kase.Employee.GymId, cancellationToken);
+            await EnsureChecklistAsync(kase, actor.Id, cancellationToken);
             return kase;
         }
 
-        /// <summary>A finished case cannot be re-opened by the interview/clearance steps.</summary>
-        private static void EnsureClearancePending(OffboardingCase kase)
+        /// <summary>
+        /// Legacy cases (seeded before the exit checklist existed) get the
+        /// canonical five steps on first access so HR never sees an empty
+        /// "Exit steps 0/0" — the mock always renders 0/5 … 5/5.
+        /// </summary>
+        private async Task EnsureChecklistAsync(OffboardingCase kase, int actorId, CancellationToken cancellationToken)
         {
+            if (kase.ChecklistItems.Count > 0)
+            {
+                return;
+            }
+
+            var completed = kase.Status == "Completed";
+            var completedAt = completed ? kase.CompletedAt ?? DateTime.UtcNow : (DateTime?)null;
+            var order = 0;
+            foreach (var label in ExitChecklistLabels)
+            {
+                kase.ChecklistItems.Add(new OffboardingChecklistItem
+                {
+                    Title = label,
+                    SortOrder = order++,
+                    IsCompleted = completed,
+                    CompletedAt = completedAt,
+                    CompletedBy = completed ? actorId : (int?)null,
+                });
+            }
+
+            _unitOfWork.GetRepository<OffboardingCase, int>().Update(kase);
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+        }
+
+        // ------------------------------------------------------------------
+        // Exit-interview questions (editable per case)
+        // ------------------------------------------------------------------
+
+        private static readonly JsonSerializerOptions InterviewQuestionJson = new(JsonSerializerDefaults.Web);
+
+        private static readonly string[] InterviewQuestionKinds = ["text", "select", "checkbox", "multi", "rating"];
+
+        /// <summary>
+        /// Seeded question set. The ids are stable so answers keep syncing to the
+        /// legacy columns (reason/liked/improve/ratings/recommend/notes).
+        /// </summary>
+        internal static List<ExitInterviewQuestion> DefaultInterviewQuestions(OffboardingCase kase) =>
+        [
+            new() { Id = "reason", Label = "Reason for leaving", Kind = "text", Answer = kase.ReasonForLeaving ?? kase.Reason },
+            new() { Id = "liked", Label = "What did the employee value most?", Kind = "text", Answer = kase.WhatLikedMost },
+            new() { Id = "improve", Label = "What should the organization improve?", Kind = "text", Answer = kase.WhatToImprove },
+            new() { Id = "job", Label = "Job satisfaction", Kind = "rating", Answer = Number(kase.JobSatisfaction) },
+            new() { Id = "management", Label = "Management", Kind = "rating", Answer = Number(kase.ManagementRating) },
+            new() { Id = "environment", Label = "Work environment", Kind = "rating", Answer = Number(kase.WorkEnvironmentRating) },
+            new() { Id = "compensation", Label = "Compensation", Kind = "rating", Answer = Number(kase.CompensationRating) },
+            new() { Id = "recommend", Label = "Would recommend the company?", Kind = "checkbox", Answer = Flag(kase.WouldRecommend) },
+            new() { Id = "notes", Label = "Additional interview notes", Kind = "text", Answer = kase.InterviewNotes },
+        ];
+
+        private static string? Number(int? value) => value?.ToString(CultureInfo.InvariantCulture);
+
+        private static string? Flag(bool? value) => value is null ? null : value.Value ? "true" : "false";
+
+        /// <summary>The saved custom set when present, otherwise the seeded defaults.</summary>
+        internal static List<ExitInterviewQuestion> BuildInterviewQuestions(OffboardingCase kase)
+        {
+            if (!string.IsNullOrWhiteSpace(kase.ExitInterviewQuestions))
+            {
+                try
+                {
+                    var stored = JsonSerializer.Deserialize<List<ExitInterviewQuestion>>(
+                        kase.ExitInterviewQuestions, InterviewQuestionJson);
+                    if (stored is { Count: > 0 })
+                    {
+                        return stored;
+                    }
+                }
+                catch (JsonException)
+                {
+                    // A corrupt payload must never hide the case; fall back to the defaults.
+                }
+            }
+
+            return DefaultInterviewQuestions(kase);
+        }
+
+        /// <summary>Trim, bound and de-duplicate the posted question set.</summary>
+        private static List<ExitInterviewQuestion> NormalizeInterviewQuestions(IEnumerable<ExitInterviewQuestion> questions)
+        {
+            var normalized = new List<ExitInterviewQuestion>();
+            var usedIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (var question in questions.Take(40))
+            {
+                var label = HrPortalHelpers.NullIfBlank(question.Label);
+                if (label is null)
+                {
+                    continue;
+                }
+
+                var kind = InterviewQuestionKinds.FirstOrDefault(k =>
+                        string.Equals(k, question.Kind?.Trim(), StringComparison.OrdinalIgnoreCase))
+                    ?? "text";
+
+                var options = (question.Options ?? [])
+                    .Select(option => option?.Trim() ?? string.Empty)
+                    .Where(option => option.Length > 0)
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .Take(20)
+                    .Select(option => option.Length > 200 ? option[..200] : option)
+                    .ToList();
+
+                // A choice question without choices degrades to free text.
+                if (kind is "select" or "multi" && options.Count == 0)
+                {
+                    kind = "text";
+                }
+
+                var answer = HrPortalHelpers.NullIfBlank(question.Answer);
+                if (answer is { Length: > 2000 })
+                {
+                    answer = answer[..2000];
+                }
+
+                if (kind == "rating")
+                {
+                    answer = int.TryParse(answer, NumberStyles.Integer, CultureInfo.InvariantCulture, out var rating)
+                        ? Math.Clamp(rating, 1, 5).ToString(CultureInfo.InvariantCulture)
+                        : null;
+                }
+                else if (kind == "checkbox")
+                {
+                    answer = bool.TryParse(answer, out var flag) ? (flag ? "true" : "false") : null;
+                }
+
+                var id = string.IsNullOrWhiteSpace(question.Id) ? Guid.NewGuid().ToString("N") : question.Id.Trim();
+                if (id.Length > 50)
+                {
+                    id = id[..50];
+                }
+
+                if (!usedIds.Add(id))
+                {
+                    id = Guid.NewGuid().ToString("N");
+                    usedIds.Add(id);
+                }
+
+                normalized.Add(new ExitInterviewQuestion
+                {
+                    Id = id,
+                    Label = label.Length > 300 ? label[..300] : label,
+                    Kind = kind,
+                    Options = options,
+                    Answer = answer,
+                });
+            }
+
+            return normalized;
+        }
+
+        /// <summary>Mirror the known default-question answers into the legacy columns.</summary>
+        private static void SyncLegacyInterviewAnswers(OffboardingCase kase, IReadOnlyList<ExitInterviewQuestion> questions)
+        {
+            var byId = questions.ToDictionary(q => q.Id, StringComparer.OrdinalIgnoreCase);
+
+            if (byId.TryGetValue("reason", out var reason))
+            {
+                kase.ReasonForLeaving = HrPortalHelpers.NullIfBlank(reason.Answer);
+            }
+
+            if (byId.TryGetValue("liked", out var liked))
+            {
+                kase.WhatLikedMost = HrPortalHelpers.NullIfBlank(liked.Answer);
+            }
+
+            if (byId.TryGetValue("improve", out var improve))
+            {
+                kase.WhatToImprove = HrPortalHelpers.NullIfBlank(improve.Answer);
+            }
+
+            if (byId.TryGetValue("job", out var job))
+            {
+                kase.JobSatisfaction = ParseRating(job.Answer);
+            }
+
+            if (byId.TryGetValue("management", out var management))
+            {
+                kase.ManagementRating = ParseRating(management.Answer);
+            }
+
+            if (byId.TryGetValue("environment", out var environment))
+            {
+                kase.WorkEnvironmentRating = ParseRating(environment.Answer);
+            }
+
+            if (byId.TryGetValue("compensation", out var compensation))
+            {
+                kase.CompensationRating = ParseRating(compensation.Answer);
+            }
+
+            if (byId.TryGetValue("recommend", out var recommend))
+            {
+                kase.WouldRecommend = bool.TryParse(recommend.Answer, out var flag) ? flag : null;
+            }
+
+            if (byId.TryGetValue("notes", out var notes))
+            {
+                kase.InterviewNotes = HrPortalHelpers.NullIfBlank(notes.Answer);
+            }
+        }
+
+        private static int? ParseRating(string? answer) =>
+            int.TryParse(answer, NumberStyles.Integer, CultureInfo.InvariantCulture, out var rating)
+                ? Math.Clamp(rating, 1, 5)
+                : null;
+
+        /// <summary>A finished case cannot be re-opened by the interview/clearance steps.</summary>
+        private static void EnsureClearancePending(OffboardingCase kase)        {
             if (kase.Status == "Cancelled")
             {
                 throw new BadRequestException("This separation was cancelled.");
@@ -833,6 +1069,7 @@ namespace Service.Services
                     Notes = c.InterviewNotes,
                     RehireEligible = c.RehireStatus is null ? null : c.RehireStatus == "Eligible",
                     RehireNote = c.RehireNote,
+                    Questions = BuildInterviewQuestions(c),
                 },
                 Clearance = new SeparationClearance
                 {

@@ -6,7 +6,7 @@ import { Dialog } from '../../../components/ui/dialog'
 import { Tabs, type TabItem } from '../../../components/ui/tabs'
 import { LoadingState, ErrorState } from '../../../components/async-state'
 import { useFinalizeSeparation, useSeparation, useToggleChecklist } from '../hooks/useTerminations'
-import { VerdictDialog } from './VerdictDialog'
+import { ExitVerdictForm } from './ExitVerdictForm'
 import { SeparationEmployeeData } from './SeparationEmployeeData'
 import { GymPill, VerdictChips } from './separation-ui'
 import { noticeDaysLeft } from './separation-utils'
@@ -31,7 +31,6 @@ export function SeparationDetailDialog({ separationId, canManage, onClose }: Sep
   const toggle = useToggleChecklist(separationId)
   const finalize = useFinalizeSeparation(separationId)
   const [tab, setTab] = useState<DetailTab>('workflow')
-  const [verdictOpen, setVerdictOpen] = useState(false)
   const [confirming, setConfirming] = useState(false)
   const [actionError, setActionError] = useState<string | null>(null)
 
@@ -87,6 +86,7 @@ export function SeparationDetailDialog({ separationId, canManage, onClose }: Sep
             }
             value={tab}
             onChange={setTab}
+            variant="compact"
             className="w-full"
           />
 
@@ -104,7 +104,6 @@ export function SeparationDetailDialog({ separationId, canManage, onClose }: Sep
                 toggleIndex={toggle.variables?.index}
                 finalizePending={finalize.isPending}
                 onToggle={onToggle}
-                onRecordVerdict={() => setVerdictOpen(true)}
                 onAskFinalize={() => setConfirming(true)}
                 onCancelFinalize={() => setConfirming(false)}
                 onFinalize={onFinalize}
@@ -115,14 +114,6 @@ export function SeparationDetailDialog({ separationId, canManage, onClose }: Sep
           </div>
         </>
       ) : null}
-
-      {verdictOpen && separation && (
-        <VerdictDialog
-          separationId={separation.id}
-          employeeName={separation.employee}
-          onClose={() => setVerdictOpen(false)}
-        />
-      )}
     </Dialog>
   )
 }
@@ -139,7 +130,6 @@ function WorkflowTab({
   toggleIndex,
   finalizePending,
   onToggle,
-  onRecordVerdict,
   onAskFinalize,
   onCancelFinalize,
   onFinalize,
@@ -155,7 +145,6 @@ function WorkflowTab({
   toggleIndex: number | undefined
   finalizePending: boolean
   onToggle: (index: number, done: boolean) => void
-  onRecordVerdict: () => void
   onAskFinalize: () => void
   onCancelFinalize: () => void
   onFinalize: () => void
@@ -296,39 +285,7 @@ function WorkflowTab({
           </div>
         )
       ) : (
-        <div className="rounded-lg border border-charcoal-200 p-2.5">
-          <p className="text-xs font-semibold uppercase tracking-wide text-charcoal-900">{t('Exit verdict — HR record')}</p>
-          <p className="mt-0.5 text-[11px] text-charcoal-500">
-            {t('Why the employee left, the final settlement and rehire eligibility.')}
-          </p>
-          {separation.verdict ? (
-            <>
-              <p className="mt-1.5 text-[11px] text-charcoal-800">{separation.verdict.finalReason}</p>
-              {separation.verdict.settlement?.note && (
-                <p className="mt-0.5 text-[11px] text-charcoal-600">{separation.verdict.settlement.note}</p>
-              )}
-              {separation.verdict.rehire?.note && (
-                <p className="mt-0.5 text-[11px] text-charcoal-600">{separation.verdict.rehire.note}</p>
-              )}
-              <VerdictChips verdict={separation.verdict} className="mt-1.5" />
-              {canManage && (
-                <div className="mt-2 flex justify-end">
-                  <Button variant="secondary" size="sm" onClick={onRecordVerdict}>
-                    {t('Update exit verdict')}
-                  </Button>
-                </div>
-              )}
-            </>
-          ) : canManage ? (
-            <div className="mt-2 flex justify-end">
-              <Button size="sm" onClick={onRecordVerdict}>
-                {t('Record exit verdict')}
-              </Button>
-            </div>
-          ) : (
-            <p className="mt-1.5 text-[11px] text-charcoal-400">{t('No verdict has been recorded yet.')}</p>
-          )}
-        </div>
+        <ExitVerdictForm separation={separation} canManage={canManage} />
       )}
 
       {editable && (

@@ -72,6 +72,13 @@ namespace DomainLayer.Models.EmployeeModule
 
         public string? InterviewNotes { get; set; }
 
+        /// <summary>
+        /// JSON question set of the exit interview: [{ id, label, kind, options, answer }].
+        /// Lets HR rename/add/remove questions and keep their answers per case.
+        /// Null = the canonical defaults built from the columns above.
+        /// </summary>
+        public string? ExitInterviewQuestions { get; set; }
+
         // ------------------------------------------------------------------
         // Clearance / final settlement (the last step before Former Employees).
         // ------------------------------------------------------------------

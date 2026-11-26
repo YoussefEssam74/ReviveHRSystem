@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Check, Eye, Star, Trash2, X } from 'lucide-react'
+import { CalendarPlus, Check, Eye, Star, Trash2, X } from 'lucide-react'
 import { Avatar } from '../../../components/ui/avatar'
 import { StatusBadge } from '../../../components/ui/badge'
 import { formatDate, formatMoney, formatTime, initialsOf } from '../../../lib/format'
@@ -86,11 +86,6 @@ function RatingCell({ value }: { value: number | null | undefined }) {
   )
 }
 
-function InterviewTypeRoom({ block }: { block: CandidateInterview | null }) {
-  const value = [block?.type, block?.room].filter(Boolean).join(' · ')
-  return <span className="text-xs text-charcoal-700">{value || '—'}</span>
-}
-
 function Dash() {
   return <span className="text-xs text-charcoal-300">—</span>
 }
@@ -137,7 +132,7 @@ export function VacancyRequestsTable({
       <thead>
         <tr>
           <th>{t('Position')}</th>
-          <th>{t('Branch')}</th>
+          <th>{t('Location')}</th>
           <th>{t('Headcount')}</th>
           <th>{t('Urgency')}</th>
           <th>{t('Requested by')}</th>
@@ -240,7 +235,7 @@ export function ApplicantsTable({
       <thead>
         <tr>
           <th>{t('Applicant')}</th>
-          <th>{t('Branch')}</th>
+          <th>{t('Location')}</th>
           <th>{t('Position')}</th>
           <th>{t('Applied')}</th>
           <th>{t('Phone')}</th>
@@ -327,14 +322,87 @@ export interface CandidateTableProps {
   onOpen?: (id: number) => void
   /** Stage-specific row actions (advance / schedule / hire / restore). */
   actions?: (candidate: CandidateCard) => ReactNode
+  /** Applied mode only: a separate interview-booking cell before the actions. */
+  interviewBooking?: (candidate: CandidateCard) => ReactNode
+}
+
+export type InterviewRound = 'First Interview' | 'Second Interview'
+
+const INTERVIEW_ROUNDS: { key: InterviewRound; short: string }[] = [
+  { key: 'First Interview', short: '1st' },
+  { key: 'Second Interview', short: '2nd' },
+]
+
+export interface InterviewBookingCellProps {
+  iv1: CandidateInterview | null
+  iv2: CandidateInterview | null
+  /** Rounds to render, top to bottom — defaults to both. */
+  rounds?: InterviewRound[]
+  /** Opens the schedule/reschedule dialog for "First Interview" | "Second Interview". */
+  onBook: (round: InterviewRound) => void
+}
+
+/**
+ * Interview rounds as separate pill actions — a dashed "book" pill while
+ * unscheduled, a soft green pill with the booked date after.
+ */
+export function InterviewBookingCell({ iv1, iv2, rounds, onBook }: InterviewBookingCellProps) {
+  const { t } = useTranslation()
+  const visibleRounds = INTERVIEW_ROUNDS.filter((round) => !rounds || rounds.includes(round.key)).map((round) => ({
+    ...round,
+    date: (round.key === 'First Interview' ? iv1?.date : iv2?.date) ?? null,
+  }))
+
+  return (
+    <div className="flex w-[172px] flex-col gap-1">
+      {visibleRounds.map((round) => {
+        const booked = Boolean(round.date)
+        const roundLabel = round.key === 'First Interview' ? t('1st interview') : t('2nd interview')
+        const actionLabel = booked
+          ? t('Reschedule {{round}}', { round: roundLabel })
+          : t('Schedule {{round}}', { round: roundLabel })
+        return (
+          <button
+            key={round.key}
+            type="button"
+            onClick={() => onBook(round.key)}
+            title={actionLabel}
+            aria-label={actionLabel}
+            className={cn(
+              'group flex items-center gap-1.5 rounded-full border py-1 ps-1 pe-2.5 text-[10px] leading-none transition-all hover:-translate-y-px hover:shadow-sm',
+              booked
+                ? 'border-brand-200 bg-brand-50 text-brand-800 hover:border-brand-300 hover:bg-brand-100'
+                : 'border-dashed border-charcoal-300 bg-charcoal-50 text-charcoal-500 hover:border-brand-300 hover:bg-brand-50 hover:text-brand-800',
+            )}
+          >
+            <span
+              className={cn(
+                'flex h-5 w-5 shrink-0 items-center justify-center rounded-full',
+                booked
+                  ? 'bg-brand-600 text-white'
+                  : 'bg-white text-charcoal-400 ring-1 ring-charcoal-200 group-hover:text-brand-700',
+              )}
+            >
+              {booked ? <Check className="h-3 w-3" aria-hidden="true" /> : <CalendarPlus className="h-3 w-3" aria-hidden="true" />}
+            </span>
+            <span className="font-semibold">{t(round.short)}</span>
+            <span className="ms-auto truncate text-[9px] font-medium opacity-80">
+              {booked ? formatDate(round.date) : t('Book')}
+            </span>
+          </button>
+        )
+      })}
+    </div>
+  )
 }
 
 /**
  * One candidate table for every lifecycle tab. The shared columns are name,
- * branch, position and rating; the mode picks the attributes that belong to
- * that stage (interview slot, missed round, decision, rejection, block).
+ * location, position and rating; the mode picks the attributes that belong to
+ * that stage (interview date + interviewer, missed round, decision, rejection,
+ * block).
  */
-export function CandidateTable({ candidates, mode, onOpen, actions }: CandidateTableProps) {
+export function CandidateTable({ candidates, mode, onOpen, actions, interviewBooking }: CandidateTableProps) {
   const { t } = useTranslation()
 
   return (
@@ -342,7 +410,7 @@ export function CandidateTable({ candidates, mode, onOpen, actions }: CandidateT
       <thead>
         <tr>
           <th>{t('Candidate')}</th>
-          <th>{t('Branch')}</th>
+          <th>{t('Location')}</th>
           <th>{t('Position')}</th>
           {mode === 'applied' && (
             <>
@@ -353,8 +421,8 @@ export function CandidateTable({ candidates, mode, onOpen, actions }: CandidateT
           )}
           {(mode === 'first' || mode === 'second') && (
             <>
-              <th>{mode === 'first' ? t('First interview') : t('Second interview')}</th>
-              <th>{t('Type / room')}</th>
+              <th>{mode === 'first' ? t('First Interview Date') : t('Second Interview Date')}</th>
+              <th>{t('Interviewer')}</th>
               <th>{t('Rating')}</th>
               <th>{t('Verdict')}</th>
             </>
@@ -363,8 +431,6 @@ export function CandidateTable({ candidates, mode, onOpen, actions }: CandidateT
             <>
               <th>{t('Missed round')}</th>
               <th>{t('Scheduled')}</th>
-              <th>{t('Type / room')}</th>
-              <th>{t('Rating')}</th>
               <th>{t('Overdue')}</th>
             </>
           )}
@@ -390,6 +456,7 @@ export function CandidateTable({ candidates, mode, onOpen, actions }: CandidateT
               <th>{t('Block reason')}</th>
             </>
           )}
+          {mode === 'applied' && interviewBooking && <th>{t('Interviews')}</th>}
           {actions && <th>{t('Actions')}</th>}
         </tr>
       </thead>
@@ -424,9 +491,7 @@ export function CandidateTable({ candidates, mode, onOpen, actions }: CandidateT
               {(mode === 'first' || mode === 'second') && (
                 <>
                   <td className="text-xs whitespace-nowrap">{formatWhen(interview?.date)}</td>
-                  <td>
-                    <InterviewTypeRoom block={interview} />
-                  </td>
+                  <td className="text-xs whitespace-nowrap">{interview?.by || <Dash />}</td>
                   <td>
                     <RatingCell value={candidate.rating} />
                   </td>
@@ -445,12 +510,6 @@ export function CandidateTable({ candidates, mode, onOpen, actions }: CandidateT
                     )}
                   </td>
                   <td className="text-xs whitespace-nowrap">{formatWhen(candidate.missed?.scheduledDate)}</td>
-                  <td className="text-xs">
-                    {[candidate.missed?.type, candidate.missed?.room].filter(Boolean).join(' · ') || '—'}
-                  </td>
-                  <td>
-                    <RatingCell value={candidate.rating} />
-                  </td>
                   <td>
                     {(() => {
                       const late = daysSince(candidate.missed?.scheduledDate)
@@ -505,6 +564,8 @@ export function CandidateTable({ candidates, mode, onOpen, actions }: CandidateT
                 </>
               )}
 
+              {mode === 'applied' && interviewBooking && <td>{interviewBooking(candidate)}</td>}
+
               {actions && <td className="whitespace-nowrap">{rowActions}</td>}
             </tr>
           )
@@ -524,7 +585,7 @@ export interface WaitingListTableProps {
   onRemove: (item: WaitingListItem) => void
 }
 
-/** Parked candidates with pool age, skills, branch matches and the assign action. */
+/** Parked candidates with pool age, skills, location matches and the assign action. */
 export function WaitingListTable({
   items,
   canManage,
@@ -539,7 +600,7 @@ export function WaitingListTable({
       <thead>
         <tr>
           <th>{t('Candidate')}</th>
-          <th>{t('Branch')}</th>
+          <th>{t('Location')}</th>
           <th>{t('Position')}</th>
           <th>{t('In pool since')}</th>
           <th>{t('Rating')}</th>

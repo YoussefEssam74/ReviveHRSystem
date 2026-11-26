@@ -23,6 +23,8 @@ namespace Shared.DataTransferObject.Recruitment
         /// <summary>"Name — Position" select value from the mock; resolved when CandidateId is absent.</summary>
         public string? Candidate { get; set; }
         public string? Position { get; set; }
+        /// <summary>First Interview | Second Interview — defaults to the next round when omitted.</summary>
+        public string? Stage { get; set; }
         public string? Date { get; set; }
         public string? Time { get; set; }
         /// <summary>On-site | Video | Trial | Panel.</summary>

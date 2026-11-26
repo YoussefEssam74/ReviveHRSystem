@@ -203,8 +203,25 @@ export const workflows: Record<string, string> = {
 
   // Recruitment — lifecycle table columns and actions
   Applicant: 'المتقدّم',
+  Location: 'الموقع',
   Rating: 'التقييم',
   Verdict: 'النتيجة',
+  'First Interview Date': 'تاريخ المقابلة الأولى',
+  'Second Interview Date': 'تاريخ المقابلة الثانية',
+  Interviews: 'المقابلات',
+  '1st': 'الأولى',
+  '2nd': 'الثانية',
+  '1st interview': 'المقابلة الأولى',
+  '2nd interview': 'المقابلة الثانية',
+  Book: 'احجز',
+  'Schedule {{round}}': 'جدولة {{round}}',
+  'Reschedule {{round}}': 'إعادة جدولة {{round}}',
+  'Move to First Interview unlocks once the 1st interview date is booked.':
+    'يُفتح زر النقل إلى المقابلة الأولى بعد حجز تاريخ المقابلة الأولى.',
+  'Move to Second Interview unlocks once the 2nd interview date is booked.':
+    'يُفتح زر النقل إلى المقابلة الثانية بعد حجز تاريخ المقابلة الثانية.',
+  'Pick the location the employee will work in.': 'اختر الموقع الذي سيعمل فيه الموظف.',
+  'Select a location': 'اختر موقعًا',
   'Type / room': 'النوع / القاعة',
   Skills: 'المهارات',
   'In pool since': 'في قائمة الانتظار منذ',
@@ -260,6 +277,16 @@ export const workflows: Record<string, string> = {
     'مقابلات مجدولة انقضى موعدها دون ملاحظات أو نتيجة — لم يحضر المرشح. أعد حجز الجولة أو انقل المرشح إلى تبويب المرفوضين.',
 
   // Terminations
+  Exits: 'حالات الخروج',
+  Manage: 'إدارة',
+  'Requested / last day': 'تاريخ الطلب / آخر يوم',
+  'Exit interview': 'مقابلة الخروج',
+  'Search by employee name…': 'ابحث باسم الموظف…',
+  'No exits': 'لا توجد حالات خروج',
+  'No exits match these filters.': 'لا توجد حالات خروج مطابقة لعوامل التصفية.',
+  'Termination requests and offboarding cases appear here.':
+    'تظهر هنا طلبات إنهاء الخدمة وحالات الإنهاء.',
+  '{{done}}/{{total}} exit steps': '{{done}}/{{total}} خطوات الخروج',
   'Termination Requests': 'طلبات إنهاء الخدمة',
   'Exit Interviews': 'مقابلات الخروج',
   'Exit Interview': 'مقابلة الخروج',
@@ -274,6 +301,7 @@ export const workflows: Record<string, string> = {
   All: 'الكل',
   'Branch Manager request → HR approval → exit interview': 'طلب مدير الفرع ← موافقة الموارد البشرية ← مقابلة الخروج',
   'No termination requests': 'لا توجد طلبات إنهاء خدمة',
+  'No termination requests match these filters.': 'لا توجد طلبات إنهاء خدمة مطابقة لعوامل التصفية.',
   'No requests are waiting for an HR decision.': 'لا توجد طلبات بانتظار قرار الموارد البشرية.',
   'There are no termination requests in this view.': 'لا توجد طلبات إنهاء خدمة في هذا العرض.',
   'Request date': 'تاريخ الطلب',

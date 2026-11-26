@@ -15,13 +15,15 @@ export interface InitiateOffboardingDialogProps {
   onClose: () => void
   /** Opens the freshly created case straight away. */
   onCreated?: (separationId: number) => void
+  /** Pre-selects (and locks) the employee when opened from their own file. */
+  employee?: EmployeeOption
 }
 
 /** E19 — HR starts an exit directly; the case begins in Notice Period. */
-export function InitiateOffboardingDialog({ onClose, onCreated }: InitiateOffboardingDialogProps) {
+export function InitiateOffboardingDialog({ onClose, onCreated, employee }: InitiateOffboardingDialogProps) {
   const { t } = useTranslation()
   const offboard = useOffboardEmployee()
-  const [selected, setSelected] = useState<EmployeeOption | null>(null)
+  const [selected, setSelected] = useState<EmployeeOption | null>(employee ?? null)
   const [lastDay, setLastDay] = useState('')
   const [reason, setReason] = useState<string>(OFFBOARDING_REASONS[0])
   const [notes, setNotes] = useState('')
@@ -75,7 +77,16 @@ export function InitiateOffboardingDialog({ onClose, onCreated }: InitiateOffboa
 
         <div>
           <Label htmlFor="offboard-employee">{t('Employee')}</Label>
-          <EmployeePicker value={selected} onChange={setSelected} inputId="offboard-employee" />
+          {employee ? (
+            <div className="rounded-lg border border-charcoal-200 bg-charcoal-50 px-3 py-2">
+              <p className="truncate text-sm font-medium text-charcoal-900">{employee.name}</p>
+              <p className="truncate text-xs text-charcoal-500">
+                {employee.position} · {employee.gym}
+              </p>
+            </div>
+          ) : (
+            <EmployeePicker value={selected} onChange={setSelected} inputId="offboard-employee" />
+          )}
         </div>
 
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">

@@ -1,7 +1,7 @@
 import { useTranslation } from 'react-i18next'
 import { Search } from 'lucide-react'
-import { Input } from '../../../components/ui/input'
 import { NO_NAME_DATE_FILTER, isFilterActive, type NameDateFilter } from '../lib/name-date-filter'
+import { Input } from './ui/input'
 
 export interface NameDateFilterBarProps {
   filter: NameDateFilter
@@ -12,7 +12,7 @@ export interface NameDateFilterBarProps {
   total: number
 }
 
-/** Name search plus From/To day window — one bar per recruitment tab. */
+/** Name search plus From/To day window — one bar per list tab. */
 export function NameDateFilterBar({ filter, onChange, placeholder, shown, total }: NameDateFilterBarProps) {
   const { t } = useTranslation()
   const active = isFilterActive(filter)

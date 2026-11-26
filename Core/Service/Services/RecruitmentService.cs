@@ -673,10 +673,10 @@ namespace Service.Services
             // clock time as UTC (the same convention as the stored event timestamps).
             var scheduledAt = DateTime.SpecifyKind(date.ToDateTime(time), DateTimeKind.Utc);
 
-            // Default to the next interview round the application has not reached yet.
-            var stage = application.Interviews.Any(i => i.Stage == PipelineStageType.FirstInterview)
-                ? PipelineStageType.SecondInterview
-                : PipelineStageType.FirstInterview;
+            // The client may book a specific round (both are offered from the
+            // Applied tab); otherwise default to the next round the application
+            // has not reached yet.
+            var stage = ResolveInterviewStage(request.Stage, application);
 
             var (conductedBy, interviewerName) = await ResolveInterviewerAsync(request.Interviewer, cancellationToken);
 
@@ -1809,13 +1809,15 @@ namespace Service.Services
                 .Where(s => s.Stage == PipelineStageType.Screening)
                 .OrderByDescending(s => s.EnteredDate)
                 .FirstOrDefault();
+            // The newest booking of each round wins: a reschedule appends a new
+            // Interview row, and the card must show the slot that is current.
             var iv1 = application.Interviews?
                 .Where(i => i.Stage == PipelineStageType.FirstInterview)
-                .OrderBy(i => i.Id)
+                .OrderByDescending(i => i.Id)
                 .FirstOrDefault();
             var iv2 = application.Interviews?
                 .Where(i => i.Stage == PipelineStageType.SecondInterview)
-                .OrderBy(i => i.Id)
+                .OrderByDescending(i => i.Id)
                 .FirstOrDefault();
             var missed = FindMissedInterview(application);
 
@@ -1906,7 +1908,7 @@ namespace Service.Services
         private static CandidateStageBlock BuildStageBlock(Interview interview) => new()
         {
             Date = interview.CompletedAt ?? interview.ScheduledDate,
-            By = interview.ConductedBy?.ToString(),
+            By = interview.ConductedBy?.ToString() ?? interview.InterviewerName,
             Verdict = interview.Verdict ?? interview.Outcome.ToString(),
             Eval = interview.Evaluation,
             Type = interview.Type,
@@ -1995,6 +1997,25 @@ namespace Service.Services
             PipelineStageType.SecondInterview => "Second Interview",
             _ => stage.ToString(),
         };
+
+        /// <summary>
+        /// The round a new interview belongs to: an explicit First/Second wins,
+        /// otherwise the next round the application has not reached yet.
+        /// </summary>
+        private static PipelineStageType ResolveInterviewStage(string? requestedStage, Application application)
+        {
+            if (NullIfBlank(requestedStage) is not null)
+            {
+                var parsed = ParseStageOrNull(requestedStage);
+                return parsed is PipelineStageType.FirstInterview or PipelineStageType.SecondInterview
+                    ? parsed.Value
+                    : throw new BadRequestException("Stage must be First Interview or Second Interview.");
+            }
+
+            return application.Interviews.Any(i => i.Stage == PipelineStageType.FirstInterview)
+                ? PipelineStageType.SecondInterview
+                : PipelineStageType.FirstInterview;
+        }
 
         private static PipelineStageType? ParseStageOrNull(string? value)
         {

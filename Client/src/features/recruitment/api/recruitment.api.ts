@@ -419,6 +419,8 @@ export function getInterviews(params: InterviewListParams = {}, signal?: AbortSi
 export interface CreateInterviewBody {
   candidateId: number
   position?: string
+  /** First Interview | Second Interview — defaults to the next unbooked round. */
+  stage?: string
   /** YYYY-MM-DD. */
   date: string
   /** HH:mm. */

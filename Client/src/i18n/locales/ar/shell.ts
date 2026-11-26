@@ -37,6 +37,7 @@ export const shell: Record<string, string> = {
   Attendance: 'الحضور',
   'Branch Queue': 'قائمة الفرع',
   Payroll: 'الرواتب',
+  'Create Form': 'إنشاء نموذج',
   Evaluations: 'التقييمات',
   'Reports & Analytics': 'التقارير والتحليلات',
   'Positions & Levels': 'المناصب والمستويات',

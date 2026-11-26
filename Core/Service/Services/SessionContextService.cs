@@ -1,4 +1,5 @@
 using AutoMapper;
+using DomainLayer.Constants;
 using DomainLayer.Contracts;
 using DomainLayer.Exceptions;
 using DomainLayer.Models.OrganizationModule;
@@ -23,6 +24,7 @@ namespace Service.Services
         ITeamScopeService teamScopeService,
         IEmployeeAccessService employeeAccessService,
         ITokenService tokenService,
+        ISubscriptionService subscriptionService,
         IMapper mapper) : ISessionContextService
     {
         public async Task<MeResponse> GetMeAsync(int userId, int? activeGymId, CancellationToken cancellationToken = default)
@@ -64,6 +66,12 @@ namespace Service.Services
             if (gym is null || gym.Status != GymStatus.Active || !await userAccess.HasGymAccessAsync(user.Id, gymId, cancellationToken))
             {
                 throw new UnAuthorizedException("You do not have access to the selected gym.");
+            }
+
+            if (user.UserType != UserType.TopManagement
+                && !await subscriptionService.IsGymAccessAllowedAsync(gymId, cancellationToken))
+            {
+                throw new UnAuthorizedException(SubscriptionMessages.SuspensionMessage);
             }
 
             var gymAccess = await userAccess.GetGymAccessAsync(user.Id, cancellationToken);

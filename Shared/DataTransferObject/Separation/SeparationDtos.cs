@@ -95,6 +95,29 @@ namespace Shared.DataTransferObject.Separation
         public string? Notes { get; set; }
         public bool? RehireEligible { get; set; }
         public string? RehireNote { get; set; }
+        /// <summary>The interview's question set (editable labels/options) with the recorded answers.</summary>
+        public List<ExitInterviewQuestion> Questions { get; set; } = [];
+    }
+
+    /// <summary>One exit-interview question and the answer HR recorded for it.</summary>
+    public class ExitInterviewQuestion
+    {
+        /// <summary>Stable key; the seeded defaults reuse "reason"/"job"/"recommend"… for legacy sync.</summary>
+        [StringLength(50)]
+        public string Id { get; set; } = string.Empty;
+
+        [StringLength(300)]
+        public string Label { get; set; } = string.Empty;
+
+        /// <summary>"text" | "select" | "checkbox" | "multi" | "rating".</summary>
+        [StringLength(20)]
+        public string Kind { get; set; } = "text";
+
+        /// <summary>Answer choices for select/multi questions.</summary>
+        public List<string> Options { get; set; } = [];
+
+        [StringLength(2000)]
+        public string? Answer { get; set; }
     }
 
     /// <summary>Clearance / final-settlement state of the exit.</summary>
@@ -332,6 +355,12 @@ namespace Shared.DataTransferObject.Separation
 
         /// <summary>Marks the exit interview Completed when true.</summary>
         public bool Complete { get; init; }
+
+        /// <summary>
+        /// Editable question set. When omitted the legacy fixed fields above are used;
+        /// when present the answers also sync back to those fields for known ids.
+        /// </summary>
+        public List<ExitInterviewQuestion>? Questions { get; init; }
     }
 
     /// <summary>PUT /api/separations/{id}/clearance — asset/uniform returns and final settlement.</summary>

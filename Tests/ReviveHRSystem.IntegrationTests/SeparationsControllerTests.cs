@@ -1,5 +1,6 @@
 using System.Net;
 using System.Text.Json;
+using DomainLayer.Models.EmployeeModule;
 using DomainLayer.Models.EmployeeModule.Enums;
 using DomainLayer.Models.UserModule.Enums;
 using Microsoft.EntityFrameworkCore;
@@ -185,6 +186,36 @@ namespace ReviveHRSystem.IntegrationTests
             Assert.Equal(EmployeeStatus.NoticePeriod, employee.Status);
             Assert.True(await Db.AuditLogs.AnyAsync(a =>
                 a.Action == "Offboarding Initiated" && a.UserId == scene.Hr.UserId));
+        }
+
+        [Fact]
+        public async Task Detail_LegacyCaseWithoutChecklist_GetsCanonicalExitSteps()
+        {
+            var scene = await CreateSceneAsync("employees.view", "employees.offboard");
+
+            // Cases seeded before the checklist existed have no exit steps at all.
+            var legacy = new OffboardingCase
+            {
+                EmployeeId = scene.Employee.EmployeeId,
+                LastWorkingDate = Days(10),
+                Reason = "Family relocation",
+                Status = "Notice Period",
+                SeparationType = "Resignation",
+                InitiatedBy = scene.Hr.UserId,
+                InitiatedAt = DateTime.UtcNow,
+            };
+            Db.OffboardingCases.Add(legacy);
+            await Db.SaveChangesAsync();
+
+            var detail = (await GetAsync($"/api/separations/{legacy.Id}", scene.Token)).GetProperty("data");
+            var checklist = detail.GetProperty("checklist").EnumerateArray().ToList();
+
+            Assert.Equal(5, checklist.Count);
+            Assert.Equal("Exit interview scheduled", checklist[0][0].GetString());
+            Assert.Equal("Final settlement", checklist[4][0].GetString());
+            Assert.All(checklist, entry => Assert.False(entry[1].GetBoolean()));
+            Assert.Equal(0, detail.GetProperty("progress").GetInt32());
+            Assert.Equal(5, await Db.OffboardingChecklistItems.CountAsync(i => i.OffboardingCaseId == legacy.Id));
         }
 
         [Fact]
@@ -409,8 +440,100 @@ namespace ReviveHRSystem.IntegrationTests
         }
 
         [Fact]
-        public async Task ExitInterview_FormRequiresInterviewerAndRehireDecision()
+        public async Task ExitInterview_ExposesSeededQuestions_WhenNoneSavedYet()
         {
+            var scene = await CreateSceneAsync("employees.view", "employees.offboard");
+            var separationId = await RequestPendingTerminationAsync(scene);
+            await SendAsync(HttpMethod.Put, $"/api/separations/{separationId}/approval",
+                new { decision = "Approved" }, scene.Token);
+
+            var form = (await DetailAsync(scene, separationId)).GetProperty("exitInterview");
+            var questions = form.GetProperty("questions").EnumerateArray().ToList();
+
+            Assert.Equal(9, questions.Count);
+            Assert.Equal("reason", questions[0].GetProperty("id").GetString());
+            Assert.Equal("text", questions[0].GetProperty("kind").GetString());
+            Assert.Contains(questions, q => q.GetProperty("kind").GetString() == "rating");
+            Assert.Contains(questions, q => q.GetProperty("kind").GetString() == "checkbox");
+        }
+
+        [Fact]
+        public async Task ExitInterview_CustomQuestions_RoundTrip_AndSyncLegacyFields()
+        {
+            var scene = await CreateSceneAsync("employees.view", "employees.offboard");
+            var separationId = await RequestPendingTerminationAsync(scene);
+            await SendAsync(HttpMethod.Put, $"/api/separations/{separationId}/approval",
+                new { decision = "Approved" }, scene.Token);
+
+            var save = await SendAsync(HttpMethod.Put, $"/api/separations/{separationId}/exit-interview", new
+            {
+                interviewer = "Mona Adel",
+                interviewDate = "2026-12-01",
+                rehireEligible = true,
+                complete = false,
+                questions = new object[]
+                {
+                    new { id = "reason", label = "Why are you leaving?", kind = "select", options = new[] { "Better pay", "Relocation" }, answer = "Better pay" },
+                    new { id = "tools", label = "Which tools did you use?", kind = "multi", options = new[] { "CRM", "POS" }, answer = "CRM | POS" },
+                    new { id = "recommend", label = "Would you recommend us?", kind = "checkbox", answer = "true" },
+                    new { id = "custom", label = "Anything else?", kind = "text", answer = "Thanks" },
+                },
+            }, scene.Token);
+            Assert.Equal(HttpStatusCode.OK, save.StatusCode);
+
+            var form = (await DetailAsync(scene, separationId)).GetProperty("exitInterview");
+            var questions = form.GetProperty("questions").EnumerateArray().ToList();
+
+            Assert.Equal(4, questions.Count);
+            Assert.Equal("Why are you leaving?", questions[0].GetProperty("label").GetString());
+            Assert.Equal("select", questions[0].GetProperty("kind").GetString());
+            Assert.Equal(2, questions[0].GetProperty("options").GetArrayLength());
+            Assert.Equal("Better pay", questions[0].GetProperty("answer").GetString());
+            Assert.Equal("CRM | POS", questions[1].GetProperty("answer").GetString());
+            Assert.Equal("true", questions[2].GetProperty("answer").GetString());
+
+            // Known default ids still feed the legacy columns other features read.
+            Assert.Equal("Better pay", form.GetProperty("reasonForLeaving").GetString());
+            Assert.True(form.GetProperty("wouldRecommend").GetBoolean());
+        }
+
+        [Fact]
+        public async Task ExitInterview_AdminCustomQuestionShapes_AreSanitized()
+        {
+            var scene = await CreateSceneAsync("employees.view", "employees.offboard");
+            var separationId = await RequestPendingTerminationAsync(scene);
+            await SendAsync(HttpMethod.Put, $"/api/separations/{separationId}/approval",
+                new { decision = "Approved" }, scene.Token);
+
+            var save = await SendAsync(HttpMethod.Put, $"/api/separations/{separationId}/exit-interview", new
+            {
+                interviewer = "Mona Adel",
+                interviewDate = "2026-12-01",
+                rehireEligible = true,
+                complete = false,
+                questions = new object[]
+                {
+                    // No options → degrades to text.
+                    new { id = "empty-select", label = "Pick one", kind = "select", options = Array.Empty<string>(), answer = "x" },
+                    // Rating outside 1–5 → clamped.
+                    new { id = "job", label = "Job satisfaction", kind = "rating", answer = "9" },
+                    // Blank label → dropped.
+                    new { id = "blank", label = "   ", kind = "text", answer = "ignored" },
+                },
+            }, scene.Token);
+            Assert.Equal(HttpStatusCode.OK, save.StatusCode);
+
+            var form = (await DetailAsync(scene, separationId)).GetProperty("exitInterview");
+            var questions = form.GetProperty("questions").EnumerateArray().ToList();
+
+            Assert.Equal(2, questions.Count);
+            Assert.Equal("text", questions[0].GetProperty("kind").GetString());
+            Assert.Equal("5", questions[1].GetProperty("answer").GetString());
+            Assert.Equal(5, form.GetProperty("jobSatisfaction").GetInt32());
+        }
+
+        [Fact]
+        public async Task ExitInterview_FormRequiresInterviewerAndRehireDecision()        {
             var scene = await CreateSceneAsync("employees.view", "employees.offboard");
             var separationId = await RequestPendingTerminationAsync(scene);
             await SendAsync(HttpMethod.Put, $"/api/separations/{separationId}/approval",

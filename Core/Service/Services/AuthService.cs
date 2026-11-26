@@ -1,4 +1,5 @@
 using AutoMapper;
+using DomainLayer.Constants;
 using DomainLayer.Contracts;
 using DomainLayer.Exceptions;
 using DomainLayer.Models.EmployeeModule.Enums;
@@ -26,6 +27,7 @@ namespace Service.Services
         IPasswordHasher passwordHasher,
         ITokenService tokenService,
         IUserSessionService sessionService,
+        ISubscriptionService subscriptionService,
         SecurityLockoutOptions lockoutOptions,
         IMapper mapper) : IAuthService
     {
@@ -71,6 +73,25 @@ namespace Service.Services
             user.LockoutEnd = null;
 
             var gymAccess = await userAccess.GetGymAccessAsync(user.Id, cancellationToken);
+
+            // Subscription gate: gyms whose billing is suspended drop out of the
+            // session entirely. With every gym blocked the sign-in answers with the
+            // explicit suspension message instead of a generic failure.
+            if (user.UserType != UserType.TopManagement && gymAccess.Count > 0)
+            {
+                var blockedGymIds = await subscriptionService.GetBlockedGymIdsAsync(
+                    gymAccess.Select(access => access.GymId).ToList(), cancellationToken);
+                if (blockedGymIds.Count > 0)
+                {
+                    gymAccess = gymAccess
+                        .Where(access => !blockedGymIds.Contains(access.GymId))
+                        .ToList();
+                    if (gymAccess.Count == 0)
+                    {
+                        throw new UnAuthorizedException(SubscriptionMessages.SuspensionMessage);
+                    }
+                }
+            }
 
             if (user.UserType == UserType.Employee && gymAccess.Count == 0)
             {
@@ -120,6 +141,12 @@ namespace Service.Services
                 throw new UnAuthorizedException("The selected gym is unavailable.");
             }
 
+            if (user.UserType != UserType.TopManagement
+                && !await subscriptionService.IsGymAccessAllowedAsync(request.GymId, cancellationToken))
+            {
+                throw new UnAuthorizedException(SubscriptionMessages.SuspensionMessage);
+            }
+
             user.LastLoginAt = DateTime.UtcNow;
             await unitOfWork.SaveChangesAsync(cancellationToken);
 
@@ -163,6 +190,16 @@ namespace Service.Services
             if (user is null || !await sessionService.IsSessionAllowedAsync(user.Id, cancellationToken))
             {
                 throw new UnAuthorizedException("Your session is invalid. Please sign in again.");
+            }
+
+            // A suspended gym's session cannot be silently renewed: the refresh is
+            // refused (and the credential is not rotated) so access really ends when
+            // the grace window closes.
+            if (stored.ScopedGymId is { } scopedGymForAccess
+                && user.UserType != UserType.TopManagement
+                && !await subscriptionService.IsGymAccessAllowedAsync(scopedGymForAccess, cancellationToken))
+            {
+                throw new UnAuthorizedException(SubscriptionMessages.SuspensionMessage);
             }
 
             // Rotate: claim the presented token first, then issue its replacement.
@@ -309,6 +346,15 @@ namespace Service.Services
                 // Single-gym users (any type) get a token scoped to that gym; users with
                 // more than one gym select one via select-gym or switch-gym.
                 scopedGymId = gymAccess[0].GymId;
+            }
+
+            // Defensive re-check: the gym may have been suspended between the
+            // caller's filter and token issuance.
+            if (scopedGymId is { } gateGymId
+                && user.UserType != UserType.TopManagement
+                && !await subscriptionService.IsGymAccessAllowedAsync(gateGymId, cancellationToken))
+            {
+                throw new UnAuthorizedException(SubscriptionMessages.SuspensionMessage);
             }
 
             // The token's keys follow its gym: single-gym users and select-gym

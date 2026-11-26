@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using Presistence.Data;
 using DomainLayer.Models.OrganizationModule.Enums;
 using DomainLayer.Models.UserModule;
+using DomainLayer.Models.UserModule.Enums;
 using Shared.Authorization;
 
 namespace Presistence.Repository
@@ -226,5 +227,42 @@ namespace Presistence.Repository
             // resolution, permission grants — without touching referencing rows.
             _dbContext.Entry(role).Property("IsDeleted").CurrentValue = true;
         }
+
+        /// <inheritdoc />
+        public async Task<IReadOnlyList<int>> GetGymNotificationRecipientUserIdsAsync(int gymId, CancellationToken cancellationToken = default)
+        {
+            string[] managementRoles =
+                [RoleNames.BranchManager, RoleNames.Hr, RoleNames.HrManager, RoleNames.SuperAdmin];
+
+            var managers = await (
+                from ugr in _dbContext.UserGymRoles.AsNoTracking()
+                where ugr.GymId == gymId
+                join user in _dbContext.Users.AsNoTracking() on ugr.UserId equals user.Id
+                where user.IsActive && managementRoles.Contains(ugr.Role.Name)
+                select ugr.UserId
+            ).Distinct().ToListAsync(cancellationToken);
+
+            if (managers.Count > 0)
+            {
+                return managers;
+            }
+
+            // No management role assigned in this gym: fall back to every active
+            // account with access so an operational notice is never silently lost.
+            return await (
+                from uga in _dbContext.UserGymAccesses.AsNoTracking()
+                where uga.GymId == gymId
+                join user in _dbContext.Users.AsNoTracking() on uga.UserId equals user.Id
+                where user.IsActive
+                select uga.UserId
+            ).Distinct().ToListAsync(cancellationToken);
+        }
+
+        /// <inheritdoc />
+        public async Task<IReadOnlyList<int>> GetTopManagementUserIdsAsync(CancellationToken cancellationToken = default) =>
+            await _dbContext.Users.AsNoTracking()
+                .Where(u => u.IsActive && u.UserType == UserType.TopManagement)
+                .Select(u => u.Id)
+                .ToListAsync(cancellationToken);
     }
 }

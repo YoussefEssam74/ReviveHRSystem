@@ -55,8 +55,13 @@ function NavItemLink({ item, onNavigate }: { item: NavItem; onNavigate?: () => v
 
 function NavSection({ title, items, onNavigate }: { title?: string; items: NavItem[]; onNavigate?: () => void }) {
   const { t } = useTranslation()
-  const { can } = useMe()
-  const visible = items.filter((item) => !item.feature || can(item.feature))
+  const { can, me } = useMe()
+  const isGymAdmin = me?.roleInActiveGym === 'Branch Manager' || me?.roleInActiveGym === 'Super Admin'
+  const visible = items.filter((item) =>
+    item.gymAdminOrTopManagement
+      ? me?.userType === 'TopManagement' || isGymAdmin
+      : !item.feature || can(item.feature),
+  )
   if (visible.length === 0) return null
   return (
     <div className="space-y-1">

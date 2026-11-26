@@ -38,7 +38,8 @@ namespace ReviveHRSystem.Web.Authentication
         IOptionsMonitor<AuthenticationSchemeOptions> options,
         ILoggerFactory logger,
         UrlEncoder encoder,
-        IStationSessionService stationSessions)
+        IStationSessionService stationSessions,
+        ISubscriptionService subscriptions)
         : AuthenticationHandler<AuthenticationSchemeOptions>(options, logger, encoder)
     {
         protected override async Task<AuthenticateResult> HandleAuthenticateAsync()
@@ -111,6 +112,15 @@ namespace ReviveHRSystem.Web.Authentication
                     new Claim("purpose", StationSessionAuthentication.StationPurpose),
                 },
                 Scheme.Name);
+
+            // A suspended gym's attendance station is part of its HR system access:
+            // the validated session stops resolving so the kiosk falls back to the
+            // enrollment screen until the subscription is settled.
+            if (!await subscriptions.IsGymAccessAllowedAsync(session.GymId, Context.RequestAborted))
+            {
+                return AuthenticateResult.Fail(
+                    "This gym's HR system access is suspended due to an outstanding subscription payment.");
+            }
 
             return AuthenticateResult.Success(
                 new AuthenticationTicket(new ClaimsPrincipal(identity), Scheme.Name));

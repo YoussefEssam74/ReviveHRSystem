@@ -958,7 +958,7 @@ Page tabs: **Candidates · Summary · Interviews · New Comers · Vacancies · W
 
 **`POST /api/interviews`** — NEW
 - Auth: JWT + `recruitment.candidates.manage`.
-- Body (from `openNewInterview` form): `{ candidate, position, date, time, type: "On-site"|"Video", interviewer, room }` (Location/Link input maps to `room`; `candidate` is `"Name — Position"` in the select, backend should resolve to candidateId).
+- Body (from `openNewInterview` form): `{ candidate, position, stage, date, time, type: "On-site"|"Video", interviewer, room }` (Location/Link input maps to `room`; `candidate` is `"Name — Position"` in the select, backend should resolve to candidateId; optional `stage` = `"First Interview"` | `"Second Interview"` books that round explicitly — otherwise the next round the application has not reached is used).
 - Response `201 { data: { id, candidate, position, gym, date, time, type, interviewer, status: "Scheduled", room } }`.
 - Used by: "Schedule" button on Interviews tab.
 

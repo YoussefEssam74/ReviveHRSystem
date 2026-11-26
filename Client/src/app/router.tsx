@@ -29,6 +29,7 @@ const PayrollPage = lazy(() => import('../features/payroll/pages/PayrollPage'))
 const EvaluationsPage = lazy(() => import('../features/evaluations/pages/EvaluationsPage'))
 const EventsPage = lazy(() => import('../features/events/pages/EventsPage'))
 const HrTeamPage = lazy(() => import('../features/hr-team/pages/HrTeamPage'))
+const SubscriptionsPage = lazy(() => import('../features/subscriptions/pages/SubscriptionsPage'))
 
 // Employee portal pages (Mock UI/Employee) — built per phase.
 const EmployeeDashboardPage = lazy(() => import('../features/portal/pages/EmployeeDashboardPage'))
@@ -133,6 +134,7 @@ export const router = createBrowserRouter([
       { path: 'station-code', element: <Page><StationCodePage /></Page> },
       { path: 'events', element: <Page><EventsPage /></Page> },
       { path: 'hr-team', element: <Page><HrTeamPage /></Page> },
+      { path: 'subscriptions', element: <Page><SubscriptionsPage /></Page> },
       { path: 'settings', element: <Page><SettingsPage /></Page> },
       // Fallback for any unknown console sub-path.
       { path: '*', element: <ConsolePlaceholder /> },

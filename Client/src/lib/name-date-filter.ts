@@ -1,4 +1,4 @@
-/** Name + date-window filter shared by every recruitment lifecycle tab. */
+/** Name + date-window filter shared by the list tabs that need both. */
 
 export interface NameDateFilter {
   name: string

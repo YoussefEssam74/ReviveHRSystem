@@ -11,6 +11,8 @@ import { TBody, TD, TH, THead, TR, Table } from '../../../components/ui/table'
 import { StatusBadge } from '../../../components/ui/badge'
 import { describeApiError } from '../../../lib/api-client'
 import { formatDate } from '../../../lib/format'
+import { NameDateFilterBar } from '../../../components/name-date-filter-bar'
+import { NO_NAME_DATE_FILTER, matchesName, withinDateRange, type NameDateFilter } from '../../../lib/name-date-filter'
 import { useDecideTermination } from '../hooks/useTerminations'
 import type { Separation } from '../api/terminations.api'
 import { EmployeeCell, FilterPill } from './termination-ui'
@@ -30,6 +32,7 @@ export interface TerminationRequestsTabProps {
 export function TerminationRequestsTab({ cases, canManage, onOpenInterviews }: TerminationRequestsTabProps) {
   const { t } = useTranslation()
   const [filter, setFilter] = useState<RequestFilter>('Pending')
+  const [nameDate, setNameDate] = useState<NameDateFilter>(NO_NAME_DATE_FILTER)
   const [approving, setApproving] = useState<Separation | null>(null)
   const [rejecting, setRejecting] = useState<Separation | null>(null)
   const [rejectNote, setRejectNote] = useState('')
@@ -43,10 +46,22 @@ export function TerminationRequestsTab({ cases, canManage, onOpenInterviews }: T
     return { All: cases.length, Pending: pending, Approved: approved, Rejected: rejected } as Record<RequestFilter, number>
   }, [cases])
 
-  const visible = useMemo(
+  const byApproval = useMemo(
     () => (filter === 'All' ? cases : cases.filter((c) => c.approvalStatus === filter)),
     [cases, filter],
   )
+
+  const visible = useMemo(
+    () =>
+      byApproval.filter(
+        (separation) =>
+          matchesName(separation.employee, nameDate.name) &&
+          withinDateRange(separation.submittedDate, nameDate.from, nameDate.to),
+      ),
+    [byApproval, nameDate],
+  )
+
+  const filtered = nameDate.name.trim() !== '' || nameDate.from !== '' || nameDate.to !== ''
 
   const runDecision = async (separation: Separation, decision: 'Approved' | 'Rejected', note?: string) => {
     setActionError(null)
@@ -76,6 +91,14 @@ export function TerminationRequestsTab({ cases, canManage, onOpenInterviews }: T
         </span>
       </div>
 
+      <NameDateFilterBar
+        filter={nameDate}
+        onChange={setNameDate}
+        placeholder={t('Search by employee name…')}
+        shown={visible.length}
+        total={byApproval.length}
+      />
+
       {actionError && (
         <p role="alert" className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
           {actionError}
@@ -88,9 +111,11 @@ export function TerminationRequestsTab({ cases, canManage, onOpenInterviews }: T
             icon={FileText}
             title={t('No termination requests')}
             message={
-              filter === 'Pending'
-                ? t('No requests are waiting for an HR decision.')
-                : t('There are no termination requests in this view.')
+              filtered
+                ? t('No termination requests match these filters.')
+                : filter === 'Pending'
+                  ? t('No requests are waiting for an HR decision.')
+                  : t('There are no termination requests in this view.')
             }
           />
         ) : (

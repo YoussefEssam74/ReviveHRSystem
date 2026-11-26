@@ -11,6 +11,7 @@ import {
   Sparkles,
   ShieldCheck,
   Smartphone,
+  CreditCard,
   type LucideIcon,
 } from 'lucide-react'
 import type { FeatureCode } from '../../lib/permissions'
@@ -22,6 +23,8 @@ export interface NavItem {
   icon: LucideIcon
   /** Feature required at View level; omitted = always visible (e.g. Station Code). */
   feature?: FeatureCode
+  /** Platform-owner or gym-management surface (subscription billing). */
+  gymAdminOrTopManagement?: boolean
 }
 
 /** Primary work-queue navigation (mirrors the mock's main nav). */
@@ -34,7 +37,7 @@ export const MAIN_NAV: NavItem[] = [
   { to: '/console/requests', label: 'Requests', icon: FileText, feature: 'requests' },
   { to: '/console/branch-queue', label: 'Branch Queue', icon: Inbox, feature: 'requests' },
   { to: '/console/payroll', label: 'Payroll', icon: Wallet, feature: 'payroll' },
-  { to: '/console/evaluations', label: 'Evaluations', icon: ClipboardCheck, feature: 'evaluations' },
+  { to: '/console/evaluations', label: 'Create Form', icon: ClipboardCheck, feature: 'evaluations' },
 ]
 
 /** Administration navigation (mirrors the mock's secondary nav). */
@@ -42,4 +45,6 @@ export const ADMIN_NAV: NavItem[] = [
   { to: '/console/station-code', label: 'Station Code', icon: Smartphone },
   { to: '/console/events', label: 'Events', icon: Sparkles, feature: 'announcements' },
   { to: '/console/hr-team', label: 'HR Team Management', icon: ShieldCheck },
+  // Revive Admin sees every gym; a gym's Branch Manager/Super Admin sees its own.
+  { to: '/console/subscriptions', label: 'Subscriptions & Billing', icon: CreditCard, gymAdminOrTopManagement: true },
 ]

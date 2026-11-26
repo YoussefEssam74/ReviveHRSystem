@@ -66,6 +66,7 @@ unless noted. Errors return `{ statusCode, errorMessage, errors }`.
 | [12-notifications-events.md](12-notifications-events.md) | Inbox, announcements compose/retract, events queue + resolve/decide |
 | [13-audit-my-access.md](13-audit-my-access.md) | Audit log filters, My Access card |
 | [14-hr-team.md](14-hr-team.md) | HR Team wizard: members list, roles CRUD, permissions, user role/permission/gym assignment |
+| [15-subscriptions.md](15-subscriptions.md) | Subscription plans catalog, gym self-service view, renewal/upgrade requests, payment recording, grace/suspension automation, manual suspend/reactivate, platform settings |
 
 ## Conventions used in the case tables
 

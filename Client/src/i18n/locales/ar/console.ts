@@ -433,6 +433,7 @@ export const console: Record<string, string> = {
   Recognition: 'تكريم',
 
   // ---------------------------------------------------------------- terminations
+  'Exit Pipeline': 'مسار الخروج',
   '{{count}} exits across all gyms': '{{count}} حالة خروج في جميع الصالات',
   '1 exit across all gyms': 'حالة خروج واحدة في جميع الصالات',
   '{{count}} exits · {{gym}}': '{{count}} حالة خروج · {{gym}}',
@@ -488,6 +489,12 @@ export const console: Record<string, string> = {
     'سبب مغادرة الموظف والتسوية النهائية وأهلية إعادة التعيين.',
   'Update exit verdict': 'تحديث قرار الخروج',
   'Record exit verdict': 'تسجيل قرار الخروج',
+  'Why {{name}} left': 'لماذا غادر {{name}}',
+  Settlement: 'التسوية',
+  Rehire: 'إعادة التعيين',
+  Recorded: 'مسجَّل',
+  'Exit verdict saved.': 'تم حفظ قرار الخروج.',
+  'Exit verdict recorded by HR.': 'سجّلت الموارد البشرية قرار الخروج.',
   'No verdict has been recorded yet.': 'لم يُسجَّل قرار بعد.',
   'Complete remaining exit steps to finalize.': 'أكمل خطوات الخروج المتبقية للإتمام.',
   'Record the exit verdict to finalize.': 'سجّل قرار الخروج للإتمام.',
@@ -534,6 +541,30 @@ export const console: Record<string, string> = {
   'The employee moves to Notice Period and the five-step exit checklist opens.':
     'ينتقل الموظف إلى فترة الإشعار وتُفتح قائمة الخروج من خمس خطوات.',
   'Search by name, email or employee number…': 'ابحث بالاسم أو البريد أو رقم الموظف…',
+  'Interview schedule': 'موعد المقابلة',
+  'Book the slot with the employee, or move it when they need another time.':
+    'احجز الموعد مع الموظف، أو انقله إذا احتاج وقتًا آخر.',
+  'Scheduled slot': 'الموعد المحجوز',
+  'Completed at': 'أُكملت في',
+  'Reschedule': 'إعادة جدولة',
+  'Schedule interview': 'جدولة المقابلة',
+  'Interview questions': 'أسئلة المقابلة',
+  'Answer the questions with the employee during the exit interview.':
+    'أجب على الأسئلة مع الموظف أثناء مقابلة الخروج.',
+  'Edit the question text, the answer type and the dropdown choices, then save the interview.':
+    'عدّل نص السؤال ونوع الإجابة وخيارات القائمة المنسدلة، ثم احفظ المقابلة.',
+  'Edit questions': 'تعديل الأسئلة',
+  'Done editing': 'إنهاء التعديل',
+  'Free text': 'نص حر',
+  Dropdown: 'قائمة منسدلة',
+  'Checkboxes (choose many)': 'مربعات اختيار (اختيار متعدد)',
+  'Checkbox (yes / no)': 'مربع اختيار (نعم / لا)',
+  'Select an answer…': 'اختر إجابة…',
+  'Answer…': 'الإجابة…',
+  'Question {{number}}': 'السؤال {{number}}',
+  'This interview has no questions yet. Reload the case to get the default set.':
+    'لا توجد أسئلة لهذه المقابلة بعد. أعد تحميل الحالة للحصول على المجموعة الافتراضية.',
+  Yes: 'نعم',
   'Searching…': 'جارٍ البحث…',
   'No matching employees.': 'لا يوجد موظفون مطابقون.',
   Change: 'تغيير',

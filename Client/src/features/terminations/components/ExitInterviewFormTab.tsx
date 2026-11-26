@@ -1,14 +1,45 @@
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { ClipboardCheck, ShieldAlert } from 'lucide-react'
+import { CalendarClock, ClipboardCheck, Pencil, Plus, ShieldAlert, X } from 'lucide-react'
+import { StatusBadge } from '../../../components/ui/badge'
 import { Button } from '../../../components/ui/button'
 import { EmptyState } from '../../../components/ui/empty-state'
 import { Input, Select, Textarea } from '../../../components/ui/field'
 import { Label } from '../../../components/ui/label'
 import { describeApiError } from '../../../lib/api-client'
+import { formatDateTime } from '../../../lib/format'
 import { useSaveClearance, useSaveExitInterview, useSeparation } from '../hooks/useTerminations'
-import type { Separation } from '../api/terminations.api'
+import type {
+  ExitInterviewQuestion,
+  ExitInterviewQuestionKind,
+  Separation,
+} from '../api/terminations.api'
 import { EmployeeSummary, FormSection } from './termination-ui'
+import { ScheduleInterviewDialog } from './ScheduleInterviewDialog'
+
+const KIND_OPTIONS: { value: ExitInterviewQuestionKind; label: string }[] = [
+  { value: 'text', label: 'Free text' },
+  { value: 'select', label: 'Dropdown' },
+  { value: 'multi', label: 'Checkboxes (choose many)' },
+  { value: 'checkbox', label: 'Checkbox (yes / no)' },
+  { value: 'rating', label: 'Rating (1–5)' },
+]
+
+const MULTI_SEPARATOR = ' | '
+
+/** Multi answers are stored as "A | B" so the string stays portable. */
+function splitMulti(answer: string | null | undefined): string[] {
+  return (answer ?? '')
+    .split('|')
+    .map((value) => value.trim())
+    .filter(Boolean)
+}
+
+function newQuestionId(): string {
+  return typeof crypto !== 'undefined' && 'randomUUID' in crypto
+    ? crypto.randomUUID()
+    : `q-${Date.now()}-${Math.round(Math.random() * 1e6)}`
+}
 
 export interface ExitInterviewFormTabProps {
   separationId: number | null
@@ -35,17 +66,11 @@ export function ExitInterviewFormTab({
   const clearance = separation?.clearance
   const [interviewer, setInterviewer] = useState('')
   const [interviewDate, setInterviewDate] = useState('')
-  const [reason, setReason] = useState('')
-  const [liked, setLiked] = useState('')
-  const [improve, setImprove] = useState('')
-  const [jobSatisfaction, setJobSatisfaction] = useState('3')
-  const [managementRating, setManagementRating] = useState('3')
-  const [environmentRating, setEnvironmentRating] = useState('3')
-  const [compensationRating, setCompensationRating] = useState('3')
-  const [wouldRecommend, setWouldRecommend] = useState('true')
+  const [questions, setQuestions] = useState<ExitInterviewQuestion[]>([])
+  const [editingQuestions, setEditingQuestions] = useState(false)
+  const [scheduling, setScheduling] = useState(false)
   const [rehireEligible, setRehireEligible] = useState('true')
   const [rehireNote, setRehireNote] = useState('')
-  const [notes, setNotes] = useState('')
   const [blacklisted, setBlacklisted] = useState(false)
   const [blacklistReason, setBlacklistReason] = useState('')
 
@@ -61,17 +86,10 @@ export function ExitInterviewFormTab({
     if (!separation) return
     setInterviewer(interview?.interviewer ?? '')
     setInterviewDate(interview?.interviewDate ?? '')
-    setReason(interview?.reasonForLeaving ?? separation.reason ?? '')
-    setLiked(interview?.whatLikedMost ?? '')
-    setImprove(interview?.whatToImprove ?? '')
-    setJobSatisfaction(String(interview?.jobSatisfaction ?? 3))
-    setManagementRating(String(interview?.managementRating ?? 3))
-    setEnvironmentRating(String(interview?.workEnvironmentRating ?? 3))
-    setCompensationRating(String(interview?.compensationRating ?? 3))
-    setWouldRecommend(interview?.wouldRecommend == null ? 'true' : String(interview.wouldRecommend))
+    setQuestions(Array.isArray(interview?.questions) ? interview.questions : [])
+    setEditingQuestions(false)
     setRehireEligible(interview?.rehireEligible == null ? 'true' : String(interview.rehireEligible))
     setRehireNote(interview?.rehireNote ?? '')
-    setNotes(interview?.notes ?? '')
     setBlacklisted(separation.blacklisted)
     setBlacklistReason(separation.blacklistReason ?? '')
     setUniformReturned(clearance?.uniformReturned ?? false)
@@ -101,6 +119,67 @@ export function ExitInterviewFormTab({
   const isClosed = separation.status === 'Completed' || separation.clearance?.completed === true
   const editable = canManage && !isClosed
 
+  const updateQuestion = (index: number, patch: Partial<ExitInterviewQuestion>) => {
+    setQuestions((current) => current.map((question, i) => (i === index ? { ...question, ...patch } : question)))
+  }
+
+  const changeKind = (index: number, kind: ExitInterviewQuestionKind) => {
+    const question = questions[index]
+    const needsOptions = kind === 'select' || kind === 'multi'
+    const options = needsOptions
+      ? question.options.length > 0
+        ? question.options
+        : ['', '']
+      : []
+    updateQuestion(index, { kind, options, answer: null })
+  }
+
+  const changeOption = (index: number, optionIndex: number, value: string) => {
+    updateQuestion(index, {
+      options: questions[index].options.map((option, i) => (i === optionIndex ? value : option)),
+    })
+  }
+
+  const addOption = (index: number) => {
+    updateQuestion(index, { options: [...questions[index].options, ''] })
+  }
+
+  const removeOption = (index: number, optionIndex: number) => {
+    const question = questions[index]
+    const removed = question.options[optionIndex]?.trim()
+    const selected = splitMulti(question.answer)
+    updateQuestion(index, {
+      options: question.options.filter((_, i) => i !== optionIndex),
+      answer:
+        removed && selected.includes(removed)
+          ? selected.filter((value) => value !== removed).join(MULTI_SEPARATOR) || null
+          : question.answer,
+    })
+  }
+
+  const addQuestion = () => {
+    setQuestions((current) => [
+      ...current,
+      { id: newQuestionId(), label: '', kind: 'text', options: [], answer: null },
+    ])
+  }
+
+  const removeQuestion = (index: number) => {
+    setQuestions((current) => current.filter((_, i) => i !== index))
+  }
+
+  const toggleMultiAnswer = (index: number, option: string) => {
+    const question = questions[index]
+    const selected = splitMulti(question.answer)
+    const next = selected.includes(option)
+      ? selected.filter((value) => value !== option)
+      : [...selected, option]
+    const ordered = question.options
+      .map((value) => value.trim())
+      .filter((value) => value.length > 0 && next.includes(value))
+    updateQuestion(index, { answer: ordered.join(MULTI_SEPARATOR) || null })
+  }
+
   const saveInterviewForm = async (complete: boolean) => {
     setActionError(null)
     try {
@@ -109,22 +188,23 @@ export function ExitInterviewFormTab({
         body: {
           interviewer: interviewer.trim() || undefined,
           interviewDate: interviewDate || undefined,
-          reasonForLeaving: reason.trim() || undefined,
-          whatLikedMost: liked.trim() || undefined,
-          whatToImprove: improve.trim() || undefined,
-          jobSatisfaction: Number(jobSatisfaction),
-          managementRating: Number(managementRating),
-          workEnvironmentRating: Number(environmentRating),
-          compensationRating: Number(compensationRating),
-          wouldRecommend: wouldRecommend === 'true',
-          notes: notes.trim() || undefined,
           rehireEligible: rehireEligible === 'true',
           rehireNote: rehireNote.trim() || undefined,
           blacklisted,
           blacklistReason: blacklisted ? blacklistReason.trim() || undefined : undefined,
           complete,
+          questions: questions
+            .filter((question) => question.label.trim().length > 0)
+            .map((question) => ({
+              id: question.id,
+              label: question.label.trim(),
+              kind: question.kind,
+              options: question.options.map((option) => option.trim()).filter(Boolean),
+              answer: question.answer,
+            })),
         },
       })
+      setEditingQuestions(false)
     } catch (err) {
       setActionError(describeApiError(err))
     }
@@ -161,6 +241,10 @@ export function ExitInterviewFormTab({
     </>
   )
 
+  const scheduledLabel = separation.exitInterviewScheduledAt
+    ? formatDateTime(separation.exitInterviewScheduledAt)
+    : null
+
   return (
     <div className="space-y-2.5">
       {actionError && (
@@ -172,30 +256,50 @@ export function ExitInterviewFormTab({
       <EmployeeSummary separation={separation} />
 
       <FormSection
-        title={t('Employee information')}
-        description={t('Basic employee details for the exit interview record.')}
+        title={t('Interview schedule')}
+        description={t('Book the slot with the employee, or move it when they need another time.')}
+        action={
+          editable ? (
+            <Button variant="secondary" size="sm" onClick={() => setScheduling(true)}>
+              <CalendarClock className="h-3.5 w-3.5" aria-hidden="true" />
+              {scheduledLabel ? t('Reschedule') : t('Schedule interview')}
+            </Button>
+          ) : undefined
+        }
       >
-        <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-3">
+        <div className="grid grid-cols-1 gap-2.5 text-xs sm:grid-cols-3">
           <div>
-            <Label>{t('Employee number')}</Label>
-            <Input value={separation.employeeNumber ?? '—'} disabled />
+            <p className="text-[10px] uppercase tracking-wide text-charcoal-400">{t('Scheduled slot')}</p>
+            <p className="mt-0.5 font-semibold text-charcoal-800">
+              {scheduledLabel ?? t('Not scheduled')}
+            </p>
           </div>
           <div>
-            <Label>{t('Position')}</Label>
-            <Input value={separation.position} disabled />
+            <p className="text-[10px] uppercase tracking-wide text-charcoal-400">{t('Interview status')}</p>
+            <p className="mt-0.5">
+              <StatusBadge status={separation.exitInterviewStatus ?? 'Not scheduled'} />
+            </p>
           </div>
           <div>
-            <Label>{t('Branch')}</Label>
-            <Input value={separation.gym} disabled />
+            <p className="text-[10px] uppercase tracking-wide text-charcoal-400">{t('Completed at')}</p>
+            <p className="mt-0.5 font-semibold text-charcoal-800">
+              {separation.exitInterviewCompletedAt
+                ? formatDateTime(separation.exitInterviewCompletedAt)
+                : '—'}
+            </p>
           </div>
         </div>
+
+        {scheduling && (
+          <ScheduleInterviewDialog separation={separation} onClose={() => setScheduling(false)} />
+        )}
       </FormSection>
 
       <FormSection
         title={t('Interview details')}
-        description={t('Document who conducted the interview, when it happened and why the employee is leaving.')}
+        description={t('Document who conducted the interview and when it happened.')}
       >
-        <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-3">
+        <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
           <div>
             <Label htmlFor="exit-interviewer">{t('Interviewer')}</Label>
             <Input
@@ -216,87 +320,219 @@ export function ExitInterviewFormTab({
               disabled={!editable}
             />
           </div>
-          <div>
-            <Label htmlFor="reason-for-leaving">{t('Reason for leaving')}</Label>
-            <Input
-              id="reason-for-leaving"
-              value={reason}
-              onChange={(event) => setReason(event.target.value)}
-              disabled={!editable}
-            />
-          </div>
-        </div>
-
-        <div className="mt-2.5 grid grid-cols-1 gap-2.5 sm:grid-cols-2">
-          <div>
-            <Label htmlFor="liked-most">{t('What did the employee value most?')}</Label>
-            <Textarea
-              id="liked-most"
-              rows={3}
-              value={liked}
-              onChange={(event) => setLiked(event.target.value)}
-              disabled={!editable}
-              placeholder={t('Positive experience, culture, colleagues, management…')}
-            />
-          </div>
-          <div>
-            <Label htmlFor="improve">{t('What should the organization improve?')}</Label>
-            <Textarea
-              id="improve"
-              rows={3}
-              value={improve}
-              onChange={(event) => setImprove(event.target.value)}
-              disabled={!editable}
-              placeholder={t('Policy, workload, pay, training, leadership…')}
-            />
-          </div>
-        </div>
-
-        <div className="mt-2.5 grid grid-cols-2 gap-2.5 sm:grid-cols-4">
-          {[
-            [t('Job satisfaction'), jobSatisfaction, setJobSatisfaction],
-            [t('Management'), managementRating, setManagementRating],
-            [t('Work environment'), environmentRating, setEnvironmentRating],
-            [t('Compensation'), compensationRating, setCompensationRating],
-          ].map(([label, value, setter]) => (
-            <div key={String(label)}>
-              <Label>{String(label)}</Label>
-              <Select
-                value={String(value)}
-                onChange={(event) => (setter as (value: string) => void)(event.target.value)}
-                disabled={!editable}
-              >
-                {ratingOptions}
-              </Select>
-            </div>
-          ))}
-        </div>
-
-        <div className="mt-2.5 grid grid-cols-1 gap-2.5 sm:grid-cols-2">
-          <div>
-            <Label htmlFor="would-recommend">{t('Would recommend the company?')}</Label>
-            <Select
-              id="would-recommend"
-              value={wouldRecommend}
-              onChange={(event) => setWouldRecommend(event.target.value)}
-              disabled={!editable}
-            >
-              <option value="true">{t('Yes')}</option>
-              <option value="false">{t('No')}</option>
-            </Select>
-          </div>
-          <div>
-            <Label htmlFor="interview-notes">{t('Additional interview notes')}</Label>
-            <Textarea
-              id="interview-notes"
-              rows={2}
-              value={notes}
-              onChange={(event) => setNotes(event.target.value)}
-              disabled={!editable}
-            />
-          </div>
         </div>
       </FormSection>
+
+      <FormSection
+        title={t('Interview questions')}
+        description={
+          editingQuestions
+            ? t('Edit the question text, the answer type and the dropdown choices, then save the interview.')
+            : t('Answer the questions with the employee during the exit interview.')
+        }
+        action={
+          editable ? (
+            <Button variant="ghost" size="sm" onClick={() => setEditingQuestions((value) => !value)}>
+              <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
+              {editingQuestions ? t('Done editing') : t('Edit questions')}
+            </Button>
+          ) : undefined
+        }
+      >
+        {questions.length === 0 ? (
+          <p className="text-[11px] text-charcoal-400">
+            {t('This interview has no questions yet. Reload the case to get the default set.')}
+          </p>
+        ) : (
+          <ol className="space-y-2">
+            {questions.map((question, index) => {
+              const options = question.options.filter((option) => option.trim().length > 0)
+              return (
+                <li key={question.id} className="rounded-lg border border-charcoal-200 p-2.5">
+                  {editingQuestions ? (
+                    <>
+                      <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                        <Select
+                          value={question.kind}
+                          onChange={(event) =>
+                            changeKind(index, event.target.value as ExitInterviewQuestionKind)
+                          }
+                          className="sm:w-52"
+                          aria-label={t('Question {{number}} type', { number: index + 1 })}
+                        >
+                          {KIND_OPTIONS.map((option) => (
+                            <option key={option.value} value={option.value}>
+                              {t(option.label)}
+                            </option>
+                          ))}
+                        </Select>
+                        <Input
+                          value={question.label}
+                          onChange={(event) => updateQuestion(index, { label: event.target.value })}
+                          placeholder={t('Question {{number}}', { number: index + 1 })}
+                          aria-label={t('Question {{number}} text', { number: index + 1 })}
+                          className="flex-1"
+                        />
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => removeQuestion(index)}
+                          aria-label={t('Remove question {{number}}', { number: index + 1 })}
+                        >
+                          <X className="h-4 w-4 text-red-500" aria-hidden="true" />
+                        </Button>
+                      </div>
+
+                      {(question.kind === 'select' || question.kind === 'multi') && (
+                        <div className="mt-2 space-y-1.5">
+                          {question.options.map((option, optionIndex) => (
+                            <div key={optionIndex} className="flex items-center gap-2">
+                              <Input
+                                value={option}
+                                onChange={(event) => changeOption(index, optionIndex, event.target.value)}
+                                placeholder={t('Option {{number}}', { number: optionIndex + 1 })}
+                                aria-label={t('Question {{question}} option {{option}}', {
+                                  question: index + 1,
+                                  option: optionIndex + 1,
+                                })}
+                              />
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => removeOption(index, optionIndex)}
+                                aria-label={t('Remove option {{number}}', { number: optionIndex + 1 })}
+                              >
+                                <X className="h-4 w-4 text-charcoal-400" aria-hidden="true" />
+                              </Button>
+                            </div>
+                          ))}
+                          <Button variant="ghost" size="sm" onClick={() => addOption(index)}>
+                            <Plus className="h-3.5 w-3.5" aria-hidden="true" />
+                            {t('Add option')}
+                          </Button>
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <>
+                      <p className="text-xs font-medium text-charcoal-800">{question.label}</p>
+
+                      {question.kind === 'text' && (
+                        <Textarea
+                          rows={2}
+                          value={question.answer ?? ''}
+                          onChange={(event) => updateQuestion(index, { answer: event.target.value })}
+                          disabled={!editable}
+                          placeholder={t('Answer…')}
+                          aria-label={question.label}
+                          className="mt-1.5"
+                        />
+                      )}
+
+                      {question.kind === 'select' && (
+                        <Select
+                          value={question.answer ?? ''}
+                          onChange={(event) => updateQuestion(index, { answer: event.target.value || null })}
+                          disabled={!editable}
+                          aria-label={question.label}
+                          className="mt-1.5"
+                        >
+                          <option value="">{t('Select an answer…')}</option>
+                          {options.map((option) => (
+                            <option key={option} value={option.trim()}>
+                              {option}
+                            </option>
+                          ))}
+                        </Select>
+                      )}
+
+                      {question.kind === 'rating' && (
+                        <Select
+                          value={question.answer ?? ''}
+                          onChange={(event) => updateQuestion(index, { answer: event.target.value || null })}
+                          disabled={!editable}
+                          aria-label={question.label}
+                          className="mt-1.5"
+                        >
+                          <option value="">—</option>
+                          {ratingOptions}
+                        </Select>
+                      )}
+
+                      {question.kind === 'checkbox' && (
+                        <label className="mt-1.5 flex items-center gap-2 text-xs text-charcoal-700">
+                          <input
+                            type="checkbox"
+                            checked={question.answer === 'true'}
+                            onChange={(event) =>
+                              updateQuestion(index, { answer: event.target.checked ? 'true' : 'false' })
+                            }
+                            disabled={!editable}
+                            className="h-4 w-4 accent-brand-600"
+                          />
+                          {t('Yes')}
+                        </label>
+                      )}
+
+                      {question.kind === 'multi' && (
+                        <div className="mt-1.5 flex flex-wrap gap-2">
+                          {options.map((option) => {
+                            const value = option.trim()
+                            return (
+                              <label
+                                key={value}
+                                className="flex items-center gap-2 rounded-lg bg-charcoal-50 px-2.5 py-1.5 text-xs text-charcoal-700"
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={splitMulti(question.answer).includes(value)}
+                                  onChange={() => toggleMultiAnswer(index, value)}
+                                  disabled={!editable}
+                                  className="h-4 w-4 accent-brand-600"
+                                />
+                                {value}
+                              </label>
+                            )
+                          })}
+                        </div>
+                      )}
+                    </>
+                  )}
+                </li>
+              )
+            })}
+          </ol>
+        )}
+
+        {editingQuestions && (
+          <div className="mt-2 flex justify-end">
+            <Button variant="secondary" size="sm" onClick={addQuestion}>
+              <Plus className="h-3.5 w-3.5" aria-hidden="true" />
+              {t('Add question')}
+            </Button>
+          </div>
+        )}
+      </FormSection>
+
+      {editable && (
+        <div className="flex flex-wrap justify-end gap-2">
+          <Button
+            variant="secondary"
+            onClick={() => void saveInterviewForm(false)}
+            loading={saveInterview.isPending}
+          >
+            {t('Save interview')}
+          </Button>
+          <Button
+            onClick={() => void saveInterviewForm(true)}
+            loading={saveInterview.isPending}
+            disabled={!interviewer.trim() || !interviewDate}
+          >
+            <ClipboardCheck className="h-4 w-4" aria-hidden="true" />
+            {t('Complete exit interview')}
+          </Button>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 gap-2.5 lg:grid-cols-2">
         <FormSection
@@ -361,25 +597,6 @@ export function ExitInterviewFormTab({
           )}
         </FormSection>
       </div>
-
-      {editable && (
-        <div className="flex flex-wrap justify-end gap-2">
-          <Button
-            variant="secondary"
-            onClick={() => void saveInterviewForm(false)}
-            loading={saveInterview.isPending}
-          >
-            {t('Save interview')}
-          </Button>
-          <Button
-            onClick={() => void saveInterviewForm(true)}
-            loading={saveInterview.isPending}
-          >
-            <ClipboardCheck className="h-4 w-4" aria-hidden="true" />
-            {t('Complete exit interview')}
-          </Button>
-        </div>
-      )}
 
       <FormSection
         title={t('Clearance & final settlement')}

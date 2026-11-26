@@ -39,16 +39,17 @@ import {
   LifecycleEmpty,
   SectionLabel,
 } from '../components/recruitment-ui'
-import { NameDateFilterBar } from '../components/recruitment-filter'
+import { NameDateFilterBar } from '../../../components/name-date-filter-bar'
 import {
   NO_NAME_DATE_FILTER,
   matchesName,
   withinDateRange,
   type NameDateFilter,
-} from '../lib/name-date-filter'
+} from '../../../lib/name-date-filter'
 import {
   ApplicantsTable,
   CandidateTable,
+  InterviewBookingCell,
   VacancyRequestsTable,
   WaitingListTable,
 } from '../components/recruitment-tables'
@@ -595,6 +596,9 @@ function AppliedTab({ canManage, onOpenCandidate }: { canManage: boolean; onOpen
   const [busyId, setBusyId] = useState<number | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
   const [filter, setFilter] = useState<NameDateFilter>(NO_NAME_DATE_FILTER)
+  // Both interview rounds can be booked (or rebooked) straight from Applied.
+  const [scheduling, setScheduling] = useState<{ candidate: CandidateCard; round: string } | null>(null)
+  const firstRoundHint = t('Move to First Interview unlocks once the 1st interview date is booked.')
 
   const all = applications.data?.items ?? []
   const openApplications = all.filter(
@@ -717,6 +721,18 @@ function AppliedTab({ canManage, onOpenCandidate }: { canManage: boolean; onOpen
             candidates={visibleCandidates}
             mode="applied"
             onOpen={onOpenCandidate}
+            interviewBooking={
+              canManage
+                ? (candidate) => (
+                    <InterviewBookingCell
+                      iv1={candidate.iv1}
+                      iv2={candidate.iv2}
+                      rounds={['First Interview']}
+                      onBook={(round) => setScheduling({ candidate, round })}
+                    />
+                  )
+                : undefined
+            }
             actions={
               canManage
                 ? (candidate) => (
@@ -725,6 +741,8 @@ function AppliedTab({ canManage, onOpenCandidate }: { canManage: boolean; onOpen
                         candidate={candidate}
                         nextStage="First Interview"
                         nextLabel={t('Move to First Interview →')}
+                        disabled={!candidate.iv1?.date}
+                        disabledHint={firstRoundHint}
                       />
                     </div>
                   )
@@ -732,9 +750,20 @@ function AppliedTab({ canManage, onOpenCandidate }: { canManage: boolean; onOpen
             }
           />
         )}
+        {canManage && visibleCandidates.some((candidate) => !candidate.iv1?.date) && (
+          <p className="mt-1 text-[9px] text-charcoal-400">{firstRoundHint}</p>
+        )}
       </div>
 
       {viewing && <ApplicantAnswersDialog application={viewing} onClose={() => setViewing(null)} />}
+
+      {scheduling && (
+        <ScheduleInterviewDialog
+          candidate={scheduling.candidate}
+          round={scheduling.round}
+          onClose={() => setScheduling(null)}
+        />
+      )}
 
       <Dialog
         open={rejecting != null}
@@ -783,10 +812,11 @@ function FirstInterviewTab({
   const { t } = useTranslation()
   const candidates = useCandidates({ stage: 'First Interview', page: 1, pageSize: 50 })
   const move = useMoveCandidateStage()
-  const [scheduling, setScheduling] = useState<CandidateCard | null>(null)
+  const [scheduling, setScheduling] = useState<{ candidate: CandidateCard; round: string } | null>(null)
   const [rejecting, setRejecting] = useState<CandidateCard | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
   const [filter, setFilter] = useState<NameDateFilter>(NO_NAME_DATE_FILTER)
+  const secondRoundHint = t('Move to Second Interview unlocks once the 2nd interview date is booked.')
 
   const list = candidates.data?.items ?? []
   const visible = list.filter(
@@ -844,7 +874,7 @@ function FirstInterviewTab({
       ) : (
         <>
           <p className="-mt-1 text-[9px] text-charcoal-400">
-            {t('On-site or by video · the verdict decides who moves on')}
+            {t('The verdict decides who moves on')}
           </p>
           <CandidateTable
             candidates={visible}
@@ -853,20 +883,19 @@ function FirstInterviewTab({
             actions={
               canManage
                 ? (candidate) => {
-                    const scheduled = Boolean(candidate.iv1?.date)
+                    const secondBooked = Boolean(candidate.iv2?.date)
                     return (
                       <div className="flex items-center gap-1">
-                        <button
-                          type="button"
-                          onClick={() => setScheduling(candidate)}
-                          className={cn('btn btn-sm', scheduled ? 'btn-secondary' : 'btn-primary')}
-                        >
-                          {scheduled ? t('Reschedule 1st interview') : t('Schedule 1st interview')}
-                        </button>
+                        <InterviewBookingCell
+                          iv1={candidate.iv1}
+                          iv2={candidate.iv2}
+                          onBook={(round) => setScheduling({ candidate, round })}
+                        />
                         <button
                           type="button"
                           onClick={() => void advance(candidate)}
-                          disabled={!candidate.applicationId}
+                          disabled={!candidate.applicationId || !secondBooked}
+                          title={!secondBooked ? secondRoundHint : undefined}
                           className="btn btn-sm btn-success"
                         >
                           {t('Move to Second Interview →')}
@@ -884,11 +913,18 @@ function FirstInterviewTab({
                 : undefined
             }
           />
+          {canManage && visible.some((candidate) => !candidate.iv2?.date) && (
+            <p className="mt-1 text-[9px] text-charcoal-400">{secondRoundHint}</p>
+          )}
         </>
       )}
 
       {scheduling && (
-        <ScheduleInterviewDialog candidate={scheduling} round="First Interview" onClose={() => setScheduling(null)} />
+        <ScheduleInterviewDialog
+          candidate={scheduling.candidate}
+          round={scheduling.round}
+          onClose={() => setScheduling(null)}
+        />
       )}
       {rejecting && <RejectCandidateDialog candidate={rejecting} onClose={() => setRejecting(null)} />}
     </div>
@@ -1079,35 +1115,31 @@ function SecondInterviewTab({
             onOpen={onOpenCandidate}
             actions={
               canManage
-                ? (candidate) => {
-                    const scheduled = Boolean(candidate.iv2?.date)
-                    return (
-                      <div className="flex items-center gap-1">
-                        <button
-                          type="button"
-                          onClick={() => setScheduling(candidate)}
-                          className={cn('btn btn-sm', scheduled ? 'btn-secondary' : 'btn-primary')}
-                        >
-                          {scheduled ? t('Reschedule 2nd interview') : t('Schedule 2nd interview')}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => void accept(candidate)}
-                          disabled={!candidate.applicationId}
-                          className="btn btn-sm btn-success"
-                        >
-                          {t('Accept → hire')}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setRejecting(candidate)}
-                          className="btn btn-sm btn-danger-outline"
-                        >
-                          {t('Reject')}
-                        </button>
-                      </div>
-                    )
-                  }
+                ? (candidate) => (
+                    <div className="flex items-center gap-1">
+                      <InterviewBookingCell
+                        iv1={candidate.iv1}
+                        iv2={candidate.iv2}
+                        rounds={['Second Interview']}
+                        onBook={() => setScheduling(candidate)}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => void accept(candidate)}
+                        disabled={!candidate.applicationId}
+                        className="btn btn-sm btn-success"
+                      >
+                        {t('Accept → hire')}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setRejecting(candidate)}
+                        className="btn btn-sm btn-danger-outline"
+                      >
+                        {t('Reject')}
+                      </button>
+                    </div>
+                  )
                 : undefined
             }
           />
@@ -1470,10 +1502,15 @@ function AdvanceActions({
   candidate,
   nextStage,
   nextLabel,
+  disabled = false,
+  disabledHint,
 }: {
   candidate: CandidateCard
   nextStage: string
   nextLabel: string
+  /** Locked until the round that gates the move is booked. */
+  disabled?: boolean
+  disabledHint?: string
 }) {
   const { t } = useTranslation()
   const move = useMoveCandidateStage()
@@ -1485,7 +1522,8 @@ function AdvanceActions({
         onClick={() =>
           candidate.applicationId && void move.mutateAsync({ applicationId: candidate.applicationId, stage: nextStage })
         }
-        disabled={!candidate.applicationId || move.isPending}
+        disabled={!candidate.applicationId || move.isPending || disabled}
+        title={disabled ? disabledHint : undefined}
         className="btn btn-sm btn-primary flex-1"
       >
         {nextLabel}

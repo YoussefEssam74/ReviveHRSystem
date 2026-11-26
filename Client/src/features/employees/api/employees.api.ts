@@ -180,6 +180,45 @@ export function postRoleChange(id: number, body: RoleChangeBody, signal?: AbortS
   return apiRequest<{ message: string }>(`/api/employees/${id}/role-change`, { method: 'POST', body, signal })
 }
 
+/** POST /api/employees/{id}/transfer — moves the employee to another gym. */
+export interface TransferBody {
+  /** Destination gym id (must differ from the current home gym). */
+  toGym: number
+  /** DateOnly "yyyy-MM-dd". */
+  effectiveDate: string
+  reason: string
+}
+
+export function postTransfer(id: number, body: TransferBody, signal?: AbortSignal): Promise<{ message: string }> {
+  return apiRequest<{ message: string }>(`/api/employees/${id}/transfer`, { method: 'POST', body, signal })
+}
+
+/** POST /api/employees/{id}/position-change — new position/level in the same gym. */
+export interface PositionChangeBody {
+  /** Omitted keeps the employee's current title. */
+  position?: string
+  level: string
+}
+
+export function postPositionChange(
+  id: number,
+  body: PositionChangeBody,
+  signal?: AbortSignal,
+): Promise<{ message: string }> {
+  return apiRequest<{ message: string }>(`/api/employees/${id}/position-change`, { method: 'POST', body, signal })
+}
+
+/** POST /api/employees/{id}/compensation — records a salary change. */
+export interface CompensationBody {
+  salary: number
+  /** DateOnly "yyyy-MM-dd". */
+  effectiveDate: string
+}
+
+export function postCompensation(id: number, body: CompensationBody, signal?: AbortSignal): Promise<{ message: string }> {
+  return apiRequest<{ message: string }>(`/api/employees/${id}/compensation`, { method: 'POST', body, signal })
+}
+
 // ---------------------------------------------------------------------------
 // Employee file tabs — the HR console's /console/employees/:id sections.
 // ---------------------------------------------------------------------------
