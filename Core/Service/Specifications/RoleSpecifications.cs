@@ -91,7 +91,7 @@ namespace Service.Specifications
     /// </summary>
     public sealed class UserListSpec : BaseSpecification<User, int>
     {
-        public UserListSpec(int[]? gymIds, string? type, string? search, bool? isActive, int skip, int take)
+        public UserListSpec(int[]? gymIds, string? type, string? search, bool? isActive, int skip, int take, int? roleId = null)
         {
             var term = string.IsNullOrWhiteSpace(search) ? null : search.Trim().ToLower();
             var isAll = string.Equals(type?.Trim(), "all", StringComparison.OrdinalIgnoreCase);
@@ -114,6 +114,7 @@ namespace Service.Specifications
             // null locals are captured as parameters (constant conditions).
             Criteria = u =>
                 (gymIds == null || gymIds.Length == 0 || u.UserGymAccesses.Any(ug => gymIds.Contains(ug.GymId))) &&
+                (roleId == null || u.UserRoles.Any(ur => ur.Role.Id == roleId)) &&
                 (userType == null || u.UserType == userType) &&
                 (!staffOnly || u.UserType != UserType.Employee) &&
                 (term == null

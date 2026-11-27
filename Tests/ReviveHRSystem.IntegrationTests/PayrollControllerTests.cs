@@ -564,6 +564,78 @@ namespace ReviveHRSystem.IntegrationTests
             Assert.Equal(HttpStatusCode.OK, (await _fixture.Client.SendAsync(publishAgain)).StatusCode);
         }
 
+        /// <summary>
+        /// HR decides every request before the sheet closes — otherwise a late approval
+        /// would change the days behind the exit's leave encashment after it was priced.
+        /// </summary>
+        [Fact]
+        public async Task CloseEntry_WithPendingRequest_Returns400()
+        {
+            var (_, employee, periodId, _) = await SetupSheetAsync();
+            var builder = NewBuilder();
+            await builder.CreateLeaveRequestAsync(employee.EmployeeId, "Annual Leave",
+                new DateOnly(2031, 8, 10), new DateOnly(2031, 8, 11),
+                DomainLayer.Models.RequestModule.Enums.RequestStatus.Pending);
+            var admin = await _fixture.GetAdminTokenAsync();
+
+            var response = await _fixture.Client.SendAsync(_fixture.AuthorizedRequest(HttpMethod.Post,
+                $"/api/payroll-periods/{periodId}/entries/{employee.EmployeeId}/close", null, admin));
+
+            var message = await AssertErrorAsync(response, HttpStatusCode.BadRequest);
+            Assert.Contains("waiting for a decision", message);
+        }
+
+        /// <summary>
+        /// Closing re-prices the exit's annual leave from the now-final balance and
+        /// carries it into the sheet's gross.
+        /// </summary>
+        [Fact]
+        public async Task CloseEntry_PricesTheExitLeaveEncashment()
+        {
+            var (_, employee, periodId, entryId) = await SetupSheetAsync(baseSalary: 17600m);
+            var lastDay = new DateOnly(2031, 8, 15);
+            var hire = lastDay.AddYears(-3);
+
+            using (var scope = _fixture.Services.CreateScope())
+            {
+                var db = scope.ServiceProvider.GetRequiredService<ReviveHrDbContext>();
+                var row = await db.Employees.SingleAsync(e => e.Id == employee.EmployeeId);
+                row.HireDate = hire;
+                row.ContractStartDate = hire;
+                db.Compensations.Add(new DomainLayer.Models.EmployeeModule.Compensation
+                {
+                    EmployeeId = employee.EmployeeId,
+                    Amount = 31000m, // August has 31 days -> exactly 1000 a day
+                    EffectiveDate = hire,
+                    ChangedBy = employee.UserId,
+                });
+                db.OffboardingCases.Add(new DomainLayer.Models.EmployeeModule.OffboardingCase
+                {
+                    EmployeeId = employee.EmployeeId,
+                    LastWorkingDate = lastDay,
+                    Reason = "Relocation",
+                    Status = "Under Review",
+                    SeparationType = "Resignation",
+                    InitiatedBy = employee.UserId,
+                });
+                await db.SaveChangesAsync();
+            }
+
+            var admin = await _fixture.GetAdminTokenAsync();
+            var response = await _fixture.Client.SendAsync(_fixture.AuthorizedRequest(HttpMethod.Post,
+                $"/api/payroll-periods/{periodId}/entries/{employee.EmployeeId}/close", null, admin));
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+            using var check = _fixture.Services.CreateScope();
+            var checkDb = check.ServiceProvider.GetRequiredService<ReviveHrDbContext>();
+            var entry = await checkDb.PayrollEntries.AsNoTracking().SingleAsync(e => e.Id == entryId);
+
+            // Hired years ago -> January..August = 8 earned days, none used.
+            Assert.Equal(8m, entry.LeaveEncashmentDays);
+            Assert.Equal(8000m, entry.LeaveEncashment);
+            Assert.Equal(25600m, entry.NetPay);
+        }
+
         [Fact]
         public async Task CloseAndReopen_RoundTrip()
         {

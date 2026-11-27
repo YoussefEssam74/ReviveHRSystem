@@ -167,9 +167,20 @@ namespace Service.Services
                 .GetAllAsync(new PayrollEntriesByPeriodSpec(period.Id, withEmployee: false), cancellationToken);
             var covered = entrants.Select(e => e.EmployeeId).ToHashSet();
 
+            // Exits whose last working day lands in this period need a final sheet even
+            // though the employee is no longer Active, and that sheet carries their
+            // annual-leave encashment.
+            var exitingCases = await _unitOfWork.GetRepository<OffboardingCase, int>()
+                .GetAllAsync(new OffboardingCasesEndingInGymRangeSpec(gymId, start, end), cancellationToken);
+            var exitingByEmployee = exitingCases
+                .Where(c => c.LeaveEncashmentAmount is not null)
+                .GroupBy(c => c.EmployeeId)
+                .ToDictionary(g => g.Key, g => g.OrderByDescending(c => c.LastWorkingDate).First());
+            var exitingIds = exitingByEmployee.Keys.ToHashSet();
+
             var employees = (await _unitOfWork.GetRepository<Employee, int>()
                     .GetAllAsync(new EmployeesByGymSpec(gymId), cancellationToken))
-                .Where(e => e.Status == EmployeeStatus.Active && !covered.Contains(e.Id))
+                .Where(e => (e.Status == EmployeeStatus.Active || exitingIds.Contains(e.Id)) && !covered.Contains(e.Id))
                 .ToList();
 
             if (employees.Count == 0)
@@ -206,6 +217,13 @@ namespace Service.Services
                     TotalBonuses = 0m,
                     Status = "Draft",
                 };
+
+                if (exitingByEmployee.TryGetValue(employee.Id, out var exitCase))
+                {
+                    entry.LeaveEncashment = exitCase.LeaveEncashmentAmount ?? 0m;
+                    entry.LeaveEncashmentDays = exitCase.LeaveEncashmentDays ?? 0m;
+                }
+
                 SyncTotals(entry);
                 await _unitOfWork.GetRepository<PayrollEntry, int>().AddAsync(entry, cancellationToken);
                 added++;
@@ -602,6 +620,28 @@ namespace Service.Services
             var (_, entry) = await LoadEntryAsync(actor, periodId, employeeId, requireOpen: true, cancellationToken);
             var period = await _unitOfWork.GetRepository<PayrollPeriod, int>().GetByIdAsync(periodId, cancellationToken)
                 ?? throw new NotFoundException("Payroll period not found.");
+
+            // HR decides every request before the sheet is closed: a late approval would
+            // change the days behind the annual-leave encashment after it was priced.
+            var pendingRequests = await _unitOfWork.GetRepository<EmployeeRequest, int>()
+                .GetAllAsync(new PendingRequestsByEmployeeSpec(entry.EmployeeId), cancellationToken);
+            var pendingCount = pendingRequests.Count();
+            if (pendingCount > 0)
+            {
+                throw new BadRequestException(
+                    $"{pendingCount} request(s) are still waiting for a decision — approve or reject them before closing this payroll.");
+            }
+
+            // Re-price the exit encashment now that the leave balance is final.
+            var exitCase = await _unitOfWork.GetRepository<OffboardingCase, int>()
+                .GetByIdAsync(new OpenOffboardingCaseForEmployeeSpec(entry.EmployeeId), cancellationToken);
+            if (exitCase is not null)
+            {
+                await LeaveEncashmentPricing.ApplyAsync(_unitOfWork, exitCase, cancellationToken);
+                entry.LeaveEncashment = exitCase.LeaveEncashmentAmount ?? 0m;
+                entry.LeaveEncashmentDays = exitCase.LeaveEncashmentDays ?? 0m;
+                _unitOfWork.GetRepository<OffboardingCase, int>().Update(exitCase);
+            }
 
             // Reconcile first through the one attendance → deduction path: the same
             // sweep the branch tab and dashboards run, so a month closed without
@@ -1842,6 +1882,8 @@ namespace Service.Services
                 CoverPay = CoverPay(entry, coverDays),
                 BaseSalary = entry.BaseSalary,
                 Bonus = entry.TotalBonuses,
+                LeaveEncashment = entry.LeaveEncashment,
+                LeaveEncashmentDays = entry.LeaveEncashmentDays,
                 Gross = gross,
                 Deductions = approved,
                 Net = gross - approved,
@@ -1928,12 +1970,12 @@ namespace Service.Services
                 : Math.Round(entry.BaseSalary / 176m * 1.5m * entry.OvertimeHours, 2);
 
         /// <summary>
-        /// Gross = base + bonuses + overtime. The annual raise is NOT added here: it is a
-        /// once-a-year step that folds into the base salary (see <see cref="BaseWithRaises"/>),
-        /// so a month never shows a raise slice of its own.
+        /// Gross = base + bonuses + overtime + annual-leave encashment. The annual raise
+        /// is NOT added here: it is a once-a-year step that folds into the base salary
+        /// (see <see cref="BaseWithRaises"/>), so a month never shows a raise slice.
         /// </summary>
         internal static decimal GrossOf(PayrollEntry entry) =>
-            entry.BaseSalary + entry.TotalBonuses + OvertimePay(entry);
+            entry.BaseSalary + entry.TotalBonuses + OvertimePay(entry) + entry.LeaveEncashment;
 
         /// <summary>
         /// True when the payroll period contains a work anniversary. The raise is a

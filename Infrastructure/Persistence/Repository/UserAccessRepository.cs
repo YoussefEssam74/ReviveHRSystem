@@ -90,6 +90,20 @@ namespace Presistence.Repository
                 .Distinct()
                 .ToListAsync(cancellationToken);
 
+        public async Task<IReadOnlyList<GymAccessEntry>> GetGymsForRoleAsync(
+            int userId, string roleName, CancellationToken cancellationToken = default) =>
+            await _dbContext.UserRoles.AsNoTracking()
+                .Where(ur => ur.UserId == userId && ur.GymId != null && ur.RoleName == roleName)
+                .Join(
+                    _dbContext.Gyms.AsNoTracking(),
+                    ur => ur.GymId,
+                    g => g.Id,
+                    (ur, g) => g)
+                .Where(g => g.Status == GymStatus.Active)
+                .Select(g => new GymAccessEntry { GymId = g.Id, GymName = g.Name, Branch = g.Location })
+                .OrderBy(e => e.GymId)
+                .ToListAsync(cancellationToken);
+
         /// <inheritdoc />
         public async Task<bool> HasActiveGymDeskAsync(int gymId, int excludeUserId, CancellationToken cancellationToken = default)
         {

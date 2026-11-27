@@ -15,7 +15,20 @@ namespace Shared.DataTransferObject.Permission
     {
         public required List<PermissionCatalogItem> Items { get; init; }
         public required List<PermissionModuleGroup> Modules { get; init; }
+
+        /// <summary>The same keys grouped by portal page (Employee / HR / Super Admin).</summary>
+        public List<PermissionPageGroup> Pages { get; init; } = [];
+
         public int TotalTracked { get; init; }
+    }
+
+    public class PermissionPageGroup
+    {
+        /// <summary>"Employee portal" | "HR portal" | "Super Admin portal".</summary>
+        public required string Portal { get; init; }
+        public required string Page { get; init; }
+        public required string Label { get; init; }
+        public required List<string> Permissions { get; init; }
     }
 
     public class PermissionCatalogItem

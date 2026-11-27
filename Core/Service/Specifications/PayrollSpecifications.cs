@@ -55,6 +55,21 @@ namespace Service.Specifications
     }
 
     /// <summary>One entry for its (period, employee) with everything the sheet needs.</summary>
+    /// <summary>
+    /// The employee's sheets that carry a salary (newest period first). The exit
+    /// encashment falls back to these when no compensation grant is on file — the same
+    /// source order the deduction pricing uses.
+    /// </summary>
+    public sealed class PayrollEntriesForSalarySpec : BaseSpecification<PayrollEntry, int>
+    {
+        public PayrollEntriesForSalarySpec(int employeeId)
+        {
+            Criteria = e => e.EmployeeId == employeeId && e.BaseSalary > 0;
+            AddInclude(e => e.PayrollPeriod);
+            OrderByDescending = e => e.PayrollPeriod.EndDate;
+        }
+    }
+
     public sealed class PayrollEntryForEmployeeSpec : BaseSpecification<PayrollEntry, int>
     {
         public PayrollEntryForEmployeeSpec(int periodId, int employeeId)

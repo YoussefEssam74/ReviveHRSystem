@@ -2,14 +2,20 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   getGyms,
   getPermissionCatalog,
+  getRoleMember,
   getRoles,
   getTeamMembers,
   getUserAccessProfile,
+  postCreateRole,
   postCreateUser,
   postResetPassword,
+  putUserAutoApproval,
+  putUserGymAccess,
+  putUserPermissions,
   putRolePermissions,
   putUserStatus,
   type ChangeUserStatusBody,
+  type CreateRoleBody,
   type CreateUserBody,
   type RoleListParams,
   type TeamListParams,
@@ -30,6 +36,49 @@ export function useUserAccessProfile(id: number, enabled: boolean = true) {
     queryKey: ['team-user-access', id],
     queryFn: ({ signal }) => getUserAccessProfile(id, signal),
     enabled: enabled && Number.isFinite(id) && id > 0,
+  })
+}
+
+export function useSaveUserPermissions(id: number) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (permissions: string[]) => putUserPermissions(id, permissions),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['team-user-access', id] })
+      queryClient.invalidateQueries({ queryKey: ['team-members'] })
+    },
+  })
+}
+
+/** One person's access through a single role — role-scoped gyms + auto-approval. */
+export function useRoleMember(roleId: number, userId: number) {
+  return useQuery({
+    queryKey: ['team-role-member', roleId, userId],
+    queryFn: ({ signal }) => getRoleMember(roleId, userId, signal),
+    enabled: Number.isFinite(roleId) && roleId > 0 && Number.isFinite(userId) && userId > 0,
+  })
+}
+
+/** HR's per-person, per-type final-approval grant for one desk account. */
+export function useSaveUserAutoApproval(userId: number) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (requestTypes: Record<string, boolean>) => putUserAutoApproval(userId, requestTypes),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['team-role-member'] })
+      queryClient.invalidateQueries({ queryKey: ['team-user-access', userId] })
+    },
+  })
+}
+
+export function useSaveUserGymAccess(id: number) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (gymIds: number[]) => putUserGymAccess(id, gymIds),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['team-user-access', id] })
+      queryClient.invalidateQueries({ queryKey: ['team-members'] })
+    },
   })
 }
 
@@ -105,6 +154,18 @@ export function useSetRolePermissions(id: number) {
       // Permission counters show up on both the roles list and the member rows.
       queryClient.invalidateQueries({ queryKey: ['team-roles'] })
       queryClient.invalidateQueries({ queryKey: ['team-members'] })
+    },
+  })
+}
+
+/** POST /api/roles — creates a custom role and its initial permissions. */
+export function useCreateRole() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (body: CreateRoleBody) => postCreateRole(body),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['team-roles'] })
+      queryClient.invalidateQueries({ queryKey: ['platform', 'roles'] })
     },
   })
 }

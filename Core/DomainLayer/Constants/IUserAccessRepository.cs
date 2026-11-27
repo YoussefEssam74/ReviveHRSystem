@@ -47,6 +47,13 @@ namespace DomainLayer.Contracts
         /// <summary>Names of the roles assigned to the user for one gym.</summary>
         Task<IReadOnlyList<string>> GetGymRoleNamesAsync(int userId, int gymId, CancellationToken cancellationToken = default);
 
+        /// <summary>
+        /// Gyms where the user holds the named role (UserRoles rows with a GymId). The
+        /// role-member page shows gym access for the selected role only, so a Branch
+        /// Manager in gym A and Team Leader in gym B does not list both under one role.
+        /// </summary>
+        Task<IReadOnlyList<GymAccessEntry>> GetGymsForRoleAsync(int userId, string roleName, CancellationToken cancellationToken = default);
+
         /// <summary>Role ids assigned to a user.</summary>
         Task<IReadOnlyList<int>> GetUserRoleIdsAsync(int userId, CancellationToken cancellationToken = default);
 

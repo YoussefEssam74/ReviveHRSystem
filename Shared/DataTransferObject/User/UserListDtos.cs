@@ -19,6 +19,9 @@ namespace Shared.DataTransferObject.User
         /// <summary>"Active" | "Suspended" — omitted returns every member.</summary>
         public string? Status { get; init; }
 
+        /// <summary>Filter to users assigned to this role id.</summary>
+        public int? RoleId { get; init; }
+
         public int Page { get; init; } = 1;
 
         public int PageSize { get; init; } = 20;

@@ -223,7 +223,11 @@ namespace Shared.DataTransferObject.Payroll
         public decimal CoverPay { get; set; }
         public decimal BaseSalary { get; set; }
         public decimal Bonus { get; set; }
-        /// <summary>base + bonus + OT pay ((base/176)×1.5×overtime).</summary>
+        /// <summary>Annual-leave encashment carried from the exit settlement.</summary>
+        public decimal LeaveEncashment { get; set; }
+        /// <summary>Unused annual days behind <see cref="LeaveEncashment"/>.</summary>
+        public decimal LeaveEncashmentDays { get; set; }
+        /// <summary>base + bonus + OT pay ((base/176)×1.5×overtime) + leave encashment.</summary>
         public decimal Gross { get; set; }
         /// <summary>Sum of Accepted|Approved lines (Pending excluded).</summary>
         public decimal Deductions { get; set; }

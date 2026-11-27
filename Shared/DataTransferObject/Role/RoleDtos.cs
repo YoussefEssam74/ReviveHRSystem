@@ -1,5 +1,7 @@
 namespace Shared.DataTransferObject.Role
 {
+    using Shared.DataTransferObject.User;
+
     /// <summary>
     /// One role row of the Roles &amp; Permissions admin page (GET /api/roles):
     /// identity, description, display status, and the counters/cards render
@@ -44,6 +46,41 @@ namespace Shared.DataTransferObject.Role
     public class RoleDataResponse
     {
         public required RoleListItem Data { get; init; }
+    }
+
+    /// <summary>One person's access through a single role ({ data }).</summary>
+    public class RoleMemberDataResponse
+    {
+        public required RoleMemberData Data { get; init; }
+    }
+
+    public class RoleMemberData
+    {
+        public int UserId { get; init; }
+        public required string Name { get; init; }
+        public required string Email { get; init; }
+        public int RoleId { get; init; }
+        public required string RoleName { get; init; }
+
+        /// <summary>Direct (user-level) permission keys.</summary>
+        public required IReadOnlyList<string> Permissions { get; init; }
+
+        /// <summary>Direct ∪ role permissions.</summary>
+        public required IReadOnlyList<string> EffectivePermissions { get; init; }
+
+        /// <summary>Only the gyms where this role is held (a person can hold it in some gyms only).</summary>
+        public required IReadOnlyList<UserAccessGymItem> Gyms { get; init; }
+
+        /// <summary>HR's per-request-type final-approval grants for this account.</summary>
+        public required IReadOnlyList<AutoApprovalTypeItem> AutoApproveRequestTypes { get; init; }
+    }
+
+    /// <summary>One request type with this account's auto-approval state.</summary>
+    public class AutoApprovalTypeItem
+    {
+        public required string Id { get; init; }
+        public required string Label { get; init; }
+        public bool Enabled { get; init; }
     }
 
     /// <summary>

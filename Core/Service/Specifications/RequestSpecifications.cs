@@ -23,6 +23,20 @@ namespace Service.Specifications
     }
 
     /// <summary>
+    /// Requests still waiting on a decision (stage 1 or HR final). Payroll closing is
+    /// blocked while any remain: a late approval would change the days behind the
+    /// employee's leave balance and the exit encashment priced from it.
+    /// </summary>
+    public sealed class PendingRequestsByEmployeeSpec : BaseSpecification<EmployeeRequest, int>
+    {
+        public PendingRequestsByEmployeeSpec(int employeeId)
+        {
+            Criteria = r => r.EmployeeId == employeeId
+                && (r.Status == RequestStatus.Pending || r.Status == RequestStatus.PendingHRReview);
+        }
+    }
+
+    /// <summary>
     /// One request with its employee, gym, decision trail and shift-swap subject —
     /// the id-routed loader shared by the self-service detail and every workflow action.
     /// </summary>

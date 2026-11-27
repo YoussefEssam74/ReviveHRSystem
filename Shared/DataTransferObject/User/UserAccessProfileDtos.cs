@@ -27,6 +27,9 @@ namespace Shared.DataTransferObject.User
         /// <summary>Permission-summary counters (granted vs tracked catalog size).</summary>
         public int GrantedCount { get; set; }
         public int TrackedCount { get; set; }
+
+        /// <summary>HR's per-request-type final-approval grants for this account.</summary>
+        public Dictionary<string, bool> AutoApproveRequestTypes { get; set; } = [];
     }
 
     /// <summary>One assigned gym: `{ id, name, branch }`.</summary>

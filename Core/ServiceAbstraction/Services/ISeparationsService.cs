@@ -17,6 +17,9 @@ namespace ServiceAbstraction.Services
         /// <summary>T1 detail — GET /api/separations/{id} (employees.view, gym-gated).</summary>
         Task<SeparationDataResponse> GetSeparationAsync(int? actorUserId, int separationId, CancellationToken cancellationToken = default);
 
+        /// <summary>T5 preview: the annual-leave encashment priced without saving it.</summary>
+        Task<SeparationLeaveEncashmentDataResponse> GetLeaveEncashmentAsync(int? actorUserId, int separationId, CancellationToken cancellationToken = default);
+
         /// <summary>T2 — POST /api/separations: Branch-Manager termination request (closed reason vocabulary).</summary>
         Task<SeparationDataResponse> RequestSeparationAsync(int? actorUserId, CreateSeparationRequest request, CancellationToken cancellationToken = default);
 

@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { fetchAllPages } from '../../../lib/paged'
 import {
   getEmployeeOptions,
+  getLeaveEncashment,
   getSeparation,
   getSeparations,
   postFinalize,
@@ -52,6 +53,15 @@ export function useSeparation(id: number) {
   return useQuery({
     queryKey: ['separations', 'detail', id],
     queryFn: ({ signal }) => getSeparation(id, signal),
+    enabled: Number.isFinite(id) && id > 0,
+  })
+}
+
+/** Annual-leave encashment priced for this exit (read-only preview). */
+export function useLeaveEncashment(id: number) {
+  return useQuery({
+    queryKey: ['separations', 'leave-encashment', id],
+    queryFn: ({ signal }) => getLeaveEncashment(id, signal),
     enabled: Number.isFinite(id) && id > 0,
   })
 }

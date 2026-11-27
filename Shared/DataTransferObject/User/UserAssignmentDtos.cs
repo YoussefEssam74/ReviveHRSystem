@@ -46,4 +46,11 @@ namespace Shared.DataTransferObject.User
         public int Count { get; init; }
         public required List<int> GymIds { get; init; }
     }
+
+    /// <summary>PUT /api/users/{id}/auto-approval body — HR's per-person, per-type desk-final grant.</summary>
+    public class UserAutoApprovalRequest
+    {
+        /// <summary>Request-type id → whether this account's approval is final for it.</summary>
+        public required Dictionary<string, bool> RequestTypes { get; init; }
+    }
 }

@@ -7,7 +7,7 @@ import { Label } from '../../../components/ui/label'
 import { Select } from '../../../components/ui/select'
 import { Textarea } from '../../../components/ui/textarea'
 import { describeApiError } from '../../../lib/api-client'
-import { useSaveVerdict } from '../hooks/useTerminations'
+import { useLeaveEncashment, useSaveVerdict } from '../hooks/useTerminations'
 import type {
   RehireStatus,
   Separation,
@@ -25,6 +25,10 @@ const REHIRE_OPTIONS: { value: RehireStatus; label: string }[] = [
   { value: 'Eligible', label: 'Eligible for rehire' },
   { value: 'Banned', label: 'Banned from rehire' },
 ]
+
+/** Daily rates and prorated money keep their cents — a rounded rate would break the equation. */
+const egp2 = (value: number) =>
+  `EGP ${value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 
 export interface ExitVerdictFormProps {
   separation: Separation
@@ -96,6 +100,13 @@ function VerdictFields({
   const [actionError, setActionError] = useState<string | null>(null)
   const [saved, setSaved] = useState(false)
 
+  // Priced on the server so the payout is visible before the verdict is saved; the
+  // two override inputs stay empty unless HR deliberately replaces a figure.
+  const encashment = useLeaveEncashment(separationId)
+  const preview = encashment.data
+  const [encashmentOverride, setEncashmentOverride] = useState('')
+  const [unpaidOverride, setUnpaidOverride] = useState('')
+
   const needsAmount = direction !== 'none'
   const canSubmit = finalReason.trim().length > 0 && (!needsAmount || amount.trim().length > 0)
 
@@ -109,6 +120,8 @@ function VerdictFields({
           direction,
           amount: Number(amount) || 0,
           ...(settlementNote.trim() ? { note: settlementNote.trim() } : {}),
+          ...(encashmentOverride.trim() ? { leaveEncashmentAmount: Number(encashmentOverride) } : {}),
+          ...(unpaidOverride.trim() ? { unpaidLeaveAmount: Number(unpaidOverride) } : {}),
         },
         rehire: {
           status: rehireStatus,
@@ -190,6 +203,81 @@ function VerdictFields({
             }}
             placeholder={t('Context for the settlement…')}
           />
+        </div>
+
+        <div className="rounded-lg border border-charcoal-200 bg-charcoal-50 p-2.5">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-charcoal-700">
+              {t('Annual leave at exit')}
+            </p>
+            {encashment.isPending && (
+              <span className="text-[10px] text-charcoal-400">{t('Calculating…')}</span>
+            )}
+          </div>
+
+          {preview && (
+            <>
+              <p className="mt-1 text-[11px] text-charcoal-600">
+                {preview.belowQualifyingPeriod
+                  ? t('No annual days earned yet — the six-month qualifying period is not complete.')
+                  : t('Earned {{earned}} day(s) this year · {{used}} used · {{unused}} encashed', {
+                      earned: preview.earnedDaysThisYear,
+                      used: preview.usedDays,
+                      unused: preview.unusedDays,
+                    })}
+              </p>
+
+              <div className="mt-1.5 space-y-1 text-[11px]">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-charcoal-600">{t('Unused leave — owed to employee')}</span>
+                  <span className="whitespace-nowrap font-medium text-charcoal-900">
+                    {preview.unusedDays} × {egp2(preview.dailyRate)} = {egp2(preview.encashmentAmount)}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-charcoal-600">{t('Unpaid leave — employee owes')}</span>
+                  <span className="whitespace-nowrap font-medium text-charcoal-900">
+                    {preview.deficitDays} × {egp2(preview.dailyRate)} = {egp2(preview.debtAmount)}
+                  </span>
+                </div>
+              </div>
+
+              <p className="mt-1 text-[10px] text-charcoal-400">
+                {t('Daily rate = base salary ÷ calendar days in the exit month. Saved on the final payroll sheet.')}
+              </p>
+            </>
+          )}
+
+          <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
+            <div>
+              <Label htmlFor="exit-verdict-encashment">{t('Encashment override (EGP)')}</Label>
+              <Input
+                id="exit-verdict-encashment"
+                type="number"
+                min={0}
+                value={encashmentOverride}
+                onChange={(event) => {
+                  setEncashmentOverride(event.target.value)
+                  setSaved(false)
+                }}
+                placeholder={preview ? String(preview.encashmentAmount) : '0'}
+              />
+            </div>
+            <div>
+              <Label htmlFor="exit-verdict-unpaid-leave">{t('Unpaid leave override (EGP)')}</Label>
+              <Input
+                id="exit-verdict-unpaid-leave"
+                type="number"
+                min={0}
+                value={unpaidOverride}
+                onChange={(event) => {
+                  setUnpaidOverride(event.target.value)
+                  setSaved(false)
+                }}
+                placeholder={preview ? String(preview.debtAmount) : '0'}
+              />
+            </div>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">

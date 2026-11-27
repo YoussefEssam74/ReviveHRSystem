@@ -38,6 +38,35 @@ namespace Service.Services
     }
 
     /// <summary>
+    /// HR's per-person, per-request-type grant: when enabled for a type, this desk
+    /// user's (Branch Manager or Team Leader) approval is final for that type instead
+    /// of being forwarded to HR. Missing values keep the desk → HR flow.
+    /// </summary>
+    internal static class RequestAutoApprovalSettings
+    {
+        private const string Prefix = "requests.autoApproval.";
+
+        public static string Key(int userId, string typeId) => $"{Prefix}{userId}.{typeId}";
+
+        /// <summary>True when this account may finalize a request of <paramref name="type"/> at the desk.</summary>
+        public static bool IsEnabled(
+            IReadOnlyDictionary<string, PlatformSettingRow> settings, int userId, string? type)
+        {
+            var typeId = RequestTypeCatalog.Find(type)?.Id ?? type;
+            return !string.IsNullOrWhiteSpace(typeId)
+                && PlatformSettingsStore.ReadBool(settings, Key(userId, typeId), false);
+        }
+
+        /// <summary>Every catalog type with the grant state for one account.</summary>
+        public static IReadOnlyDictionary<string, bool> ReadAll(
+            IReadOnlyDictionary<string, PlatformSettingRow> settings, int userId) =>
+            RequestTypeCatalog.All.ToDictionary(
+                type => type.Id,
+                type => PlatformSettingsStore.ReadBool(settings, Key(userId, type.Id), false),
+                StringComparer.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
     /// Reads and writes <see cref="PlatformSetting"/> rows.
     ///
     /// Stored rows are treated as overrides: a key with no row falls back to the default the

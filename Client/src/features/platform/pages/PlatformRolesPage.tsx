@@ -1,8 +1,10 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useQuery } from '@tanstack/react-query'
-import { Search, ShieldCheck } from 'lucide-react'
+import { Link, useNavigate } from 'react-router-dom'
+import { Plus, Search, ShieldCheck } from 'lucide-react'
 import { Badge } from '../../../components/ui/badge'
+import { Button } from '../../../components/ui/button'
 import { describeApiError } from '../../../lib/api-client'
 import { formatNumber } from '../../../lib/format'
 import {
@@ -24,17 +26,15 @@ import {
   TableWrap,
 } from '../components/platform-ui'
 import { getRoles } from '../../hr-team/api/hr-team.api'
+import { CreateRoleModal } from '../components/CreateRoleModal'
 
-/**
- * Read-only view of the role catalogue across the platform.
- *
- * Role authoring stays in the HR console (`/console/hr-team`) — the platform
- * surface only needs to show which roles exist and how far each one reaches.
- */
+/** Platform-wide role catalogue and custom role creation. */
 export default function PlatformRolesPage() {
   const { t } = useTranslation()
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(1)
+  const [createOpen, setCreateOpen] = useState(false)
+  const navigate = useNavigate()
 
   const roles = useQuery({
     queryKey: ['platform', 'roles', search, page],
@@ -46,6 +46,12 @@ export default function PlatformRolesPage() {
       <PlatformPageHeader
         title={t('Roles & permissions')}
         subtitle={t('Every role defined on the platform and the reach of each one')}
+        actions={
+          <Button size="sm" onClick={() => setCreateOpen(true)}>
+            <Plus className="h-3.5 w-3.5" aria-hidden="true" />
+            {t('Create role')}
+          </Button>
+        }
       />
 
       <Panel grow>
@@ -94,9 +100,14 @@ export default function PlatformRolesPage() {
                 </PThead>
                 <PTbody>
                   {roles.data.items.map((role) => (
-                    <PTr key={role.id}>
+                    <PTr key={role.id} onClick={() => navigate(`/platform/roles/${role.id}`)}>
                       <PTd>
-                        <span className="block text-xs font-semibold leading-tight text-charcoal-800">{role.name}</span>
+                        <Link
+                          to={`/platform/roles/${role.id}`}
+                          className="block text-xs font-semibold leading-tight text-brand-700 hover:underline"
+                        >
+                          {role.name}
+                        </Link>
                         {role.description && (
                           <span className="block truncate text-[10px] leading-tight text-charcoal-500">
                             {role.description}
@@ -132,6 +143,14 @@ export default function PlatformRolesPage() {
           </>
         )}
       </Panel>
+      <CreateRoleModal
+        open={createOpen}
+        onClose={() => setCreateOpen(false)}
+        onCreated={() => {
+          setSearch('')
+          setPage(1)
+        }}
+      />
     </PlatformPage>
   )
 }

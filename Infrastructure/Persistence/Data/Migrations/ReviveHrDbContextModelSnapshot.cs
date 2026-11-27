@@ -1485,6 +1485,18 @@ namespace Persistence.Data.Migrations
                     b.Property<DateOnly>("LastWorkingDate")
                         .HasColumnType("date");
 
+                    b.Property<decimal?>("LeaveEarnedDaysThisYear")
+                        .HasColumnType("numeric");
+
+                    b.Property<decimal?>("LeaveEncashmentAmount")
+                        .HasColumnType("numeric");
+
+                    b.Property<decimal?>("LeaveEncashmentDailyRate")
+                        .HasColumnType("numeric");
+
+                    b.Property<decimal?>("LeaveEncashmentDays")
+                        .HasColumnType("numeric");
+
                     b.Property<int?>("ManagementRating")
                         .HasColumnType("integer");
 
@@ -1535,6 +1547,12 @@ namespace Persistence.Data.Migrations
 
                     b.Property<bool>("UniformReturned")
                         .HasColumnType("boolean");
+
+                    b.Property<decimal?>("UnpaidLeaveAmount")
+                        .HasColumnType("numeric");
+
+                    b.Property<decimal?>("UnpaidLeaveDays")
+                        .HasColumnType("numeric");
 
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
@@ -3043,6 +3061,12 @@ namespace Persistence.Data.Migrations
 
                     b.Property<int?>("LateArrivalsOverride")
                         .HasColumnType("integer");
+
+                    b.Property<decimal>("LeaveEncashment")
+                        .HasColumnType("numeric");
+
+                    b.Property<decimal>("LeaveEncashmentDays")
+                        .HasColumnType("numeric");
 
                     b.Property<decimal>("NetPay")
                         .HasPrecision(18, 2)

@@ -8,6 +8,7 @@ using DomainLayer.Models.UserModule;
 using DomainLayer.Models.UserModule.Enums;
 using Service.Specifications;
 using ServiceAbstraction.Services;
+using Shared.Authorization;
 using Shared.DataTransferObject.Employee;
 using Shared.DataTransferObject.Permission;
 using Shared.DataTransferObject.Role;
@@ -69,6 +70,120 @@ namespace Service.Services
                 Total = total,
                 TotalPages = (int)Math.Ceiling(total / (double)pageSize),
             };
+        }
+
+        public async Task<RoleDataResponse> GetRoleAsync(int? actorUserId, int roleId, CancellationToken cancellationToken = default)
+        {
+            var actor = await ResolveActorAsync(actorUserId, cancellationToken);
+            await _accessControl.EnsurePermissionAsync(actor.Id, "team.view", cancellationToken);
+            var role = await GetRoleAsync(roleId, cancellationToken);
+            var keyById = await LoadPermissionKeysAsync(cancellationToken);
+            var usersCount = await _userAccess.CountUsersWithRoleAsync(role.Id, cancellationToken);
+            return new RoleDataResponse { Data = BuildItem(role, ResolveKeys(role, keyById), usersCount) };
+        }
+
+        /// <summary>
+        /// One person's access seen through a single role: direct permissions, the
+        /// effective set, the gyms where THIS role is held (not every gym he can reach)
+        /// and whether HR cleared him for auto-approval.
+        /// </summary>
+        public async Task<RoleMemberDataResponse> GetRoleMemberAsync(
+            int? actorUserId, int roleId, int userId, CancellationToken cancellationToken = default)
+        {
+            var actor = await ResolveActorAsync(actorUserId, cancellationToken);
+            await _accessControl.EnsurePermissionAsync(actor.Id, "team.view", cancellationToken);
+
+            var role = await GetRoleAsync(roleId, cancellationToken);
+            var target = (await _unitOfWork.GetRepository<User, int>()
+                    .GetAllAsync(new UsersByIdsWithProfileSpec([userId]), cancellationToken))
+                .FirstOrDefault()
+                ?? throw new NotFoundException("User not found.");
+
+            var directKeys = (await _userAccess.GetUserDirectPermissionKeysAsync(userId, cancellationToken))
+                .OrderBy(key => key, StringComparer.Ordinal)
+                .ToList();
+            var effectiveKeys = (await _userAccess.GetPermissionKeysAsync(userId, cancellationToken))
+                .OrderBy(key => key, StringComparer.Ordinal)
+                .ToList();
+            var gyms = (await _userAccess.GetGymsForRoleAsync(userId, role.Name, cancellationToken))
+                .Select(entry => new UserAccessGymItem
+                {
+                    Id = entry.GymId,
+                    Name = entry.GymName,
+                    Branch = entry.Branch,
+                })
+                .ToList();
+            var storedSettings = await PlatformSettingsStore.ReadAsync(_unitOfWork, cancellationToken);
+
+            var name = !string.IsNullOrWhiteSpace(target.EmployeeProfile?.FullName)
+                ? target.EmployeeProfile.FullName
+                : target.UserName;
+
+            return new RoleMemberDataResponse
+            {
+                Data = new RoleMemberData
+                {
+                    UserId = target.Id,
+                    Name = name,
+                    Email = target.Email,
+                    RoleId = role.Id,
+                    RoleName = role.Name,
+                    Permissions = directKeys,
+                    EffectivePermissions = effectiveKeys,
+                    Gyms = gyms,
+                    AutoApproveRequestTypes = RequestTypeCatalog.All
+                        .Select(type => new AutoApprovalTypeItem
+                        {
+                            Id = type.Id,
+                            Label = type.Label,
+                            Enabled = RequestAutoApprovalSettings.IsEnabled(storedSettings, userId, type.Id),
+                        })
+                        .ToList(),
+                },
+            };
+        }
+
+        /// <summary>
+        /// HR's per-person, per-type grant: when enabled for a request type, this
+        /// Branch Manager / Team Leader's approval is final for it instead of being
+        /// forwarded to HR.
+        /// </summary>
+        public async Task<MessageResponse> SetUserAutoApprovalAsync(
+            int? actorUserId, int userId, IReadOnlyDictionary<string, bool> requestTypes,
+            CancellationToken cancellationToken = default)
+        {
+            var actor = await ResolveActorAsync(actorUserId, cancellationToken);
+            await _accessControl.EnsurePermissionAsync(actor.Id, "team.manage", cancellationToken);
+
+            var target = await _unitOfWork.GetRepository<User, int>().GetByIdAsync(userId, cancellationToken)
+                ?? throw new NotFoundException("User not found.");
+
+            var knownTypes = RequestTypeCatalog.All.ToDictionary(type => type.Id, StringComparer.OrdinalIgnoreCase);
+            var updates = new Dictionary<string, string>(StringComparer.Ordinal);
+            foreach (var (typeId, enabled) in requestTypes)
+            {
+                if (!knownTypes.ContainsKey(typeId))
+                {
+                    throw new BadRequestException($"Unknown request type '{typeId}'.");
+                }
+
+                updates[RequestAutoApprovalSettings.Key(userId, typeId)] = enabled.ToString();
+            }
+
+            if (updates.Count == 0)
+            {
+                return new MessageResponse { Message = "No auto-approval changes." };
+            }
+
+            await PlatformSettingsStore.WriteAsync(_unitOfWork, actor.Id, updates, cancellationToken);
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+            await AuditAsync(actor, "User Auto-Approval Updated", nameof(User), target.Id, null,
+                new { target = target.UserName, requestTypes },
+                cancellationToken);
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+            return new MessageResponse { Message = "Auto-approval updated." };
         }
 
         public async Task<RoleDataResponse> CreateRoleAsync(int? actorUserId, CreateRoleRequest request, CancellationToken cancellationToken = default)
@@ -246,12 +361,27 @@ namespace Service.Services
                 })
                 .ToList();
 
+            // Page view of the same keys: only keys that actually exist are listed, so
+            // a catalog entry renamed in the database never shows a phantom checkbox.
+            var tracked = items.Select(p => p.Key).ToHashSet(StringComparer.Ordinal);
+            var pages = PortalPageCatalog.Pages
+                .Select(page => new PermissionPageGroup
+                {
+                    Portal = page.Portal,
+                    Page = page.Page,
+                    Label = page.Label,
+                    Permissions = page.Permissions.Where(tracked.Contains).ToList(),
+                })
+                .Where(page => page.Permissions.Count > 0)
+                .ToList();
+
             return new PermissionCatalogResponse
             {
                 Data = new PermissionCatalogData
                 {
                     Items = items,
                     Modules = modules,
+                    Pages = pages,
                     TotalTracked = items.Count,
                 },
             };
@@ -408,6 +538,7 @@ namespace Service.Services
                 .ToList();
 
             var trackedCount = (await LoadPermissionKeysAsync(cancellationToken)).Count;
+            var storedSettings = await PlatformSettingsStore.ReadAsync(_unitOfWork, cancellationToken);
 
             return new UserAccessProfileResponse
             {
@@ -421,6 +552,8 @@ namespace Service.Services
                     EffectivePermissions = effectiveKeys,
                     GrantedCount = effectiveKeys.Count,
                     TrackedCount = trackedCount,
+                    AutoApproveRequestTypes = RequestAutoApprovalSettings.ReadAll(storedSettings, userId)
+                        .ToDictionary(entry => entry.Key, entry => entry.Value, StringComparer.OrdinalIgnoreCase),
                 },
             };
         }
@@ -452,8 +585,8 @@ namespace Service.Services
 
             var repository = _unitOfWork.GetRepository<User, int>();
             var users = (await repository.GetAllAsync(
-                new UserListSpec(scope, query.Type, search, isActive, (page - 1) * pageSize, pageSize), cancellationToken)).ToList();
-            var total = await repository.CountAsync(new UserListSpec(scope, query.Type, search, isActive, 0, 0), cancellationToken);
+                new UserListSpec(scope, query.Type, search, isActive, (page - 1) * pageSize, pageSize, query.RoleId), cancellationToken)).ToList();
+            var total = await repository.CountAsync(new UserListSpec(scope, query.Type, search, isActive, 0, 0, query.RoleId), cancellationToken);
 
             var items = new List<UserListItem>(users.Count);
             foreach (var user in users)

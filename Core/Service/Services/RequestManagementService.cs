@@ -27,7 +27,8 @@ namespace Service.Services
         ITeamScopeService teamScopeService,
         IUserAccessRepository userAccess,
         IMapper mapper,
-        TimeZoneInfo attendanceTimeZone) : IRequestManagementService
+        TimeZoneInfo attendanceTimeZone,
+        IRequestService requestService) : IRequestManagementService
     {
         public async Task<PaginationResult<EmployeeRequestDto>> GetInboxAsync(
             int actorUserId, int? activeGymId, RequestQueryParams query, CancellationToken cancellationToken = default)
@@ -89,6 +90,34 @@ namespace Service.Services
 
             var outcome = ParseDecision(decision.Decision);
             var stage = ParseStage(decision.Stage);
+
+            // When configured for this request type, a Branch Manager's approval is
+            // the final decision. The HR request service applies the same balance,
+            // attendance, payroll and employment side effects as an HR decision.
+            var gymRoles = await userAccess.GetGymRoleNamesAsync(actorUserId, gymId, cancellationToken);
+            var isDesk = gymRoles.Contains(Shared.Authorization.RoleNames.BranchManager, StringComparer.Ordinal)
+                || gymRoles.Contains(Shared.Authorization.RoleNames.TeamLeader, StringComparer.Ordinal);
+            if (request.Status == RequestStatus.Pending
+                && outcome == DecisionOutcome.Approved
+                && isDesk)
+            {
+                // HR grants auto-approval per person (Branch Manager OR Team Leader), so
+                // only a cleared account closes the request itself; everyone else keeps
+                // forwarding it to HR.
+                var storedSettings = await PlatformSettingsStore.ReadAsync(unitOfWork, cancellationToken);
+                if (RequestAutoApprovalSettings.IsEnabled(storedSettings, actorUserId, request.Type))
+                {
+                    await requestService.FinalizeRequestByDeskAsync(actorUserId, requestId,
+                        new Shared.DataTransferObject.Request.DecideRequestRequest
+                        {
+                            Stage = "BranchManager",
+                            Decision = "Approved",
+                            Comment = decision.Comment,
+                            CalculatedDays = decision.CalculatedDays,
+                        }, cancellationToken);
+                    return;
+                }
+            }
 
             // A request already forwarded to HR can no longer be approved again at
             // the desk — but the desk can still pull it back with a rejection.

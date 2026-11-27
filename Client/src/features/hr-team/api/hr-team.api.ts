@@ -43,6 +43,7 @@ export interface TeamListParams {
   search?: string
   /** "Active" | "Suspended" — omitted returns every member. */
   status?: string
+  roleId?: number
   page?: number
   pageSize?: number
 }
@@ -54,6 +55,7 @@ export function getTeamMembers(params: TeamListParams = {}, signal?: AbortSignal
   if (params.type) query.set('type', params.type)
   if (params.search) query.set('search', params.search)
   if (params.status) query.set('status', params.status)
+  if (params.roleId) query.set('roleId', String(params.roleId))
   if (params.page) query.set('page', String(params.page))
   if (params.pageSize) query.set('pageSize', String(params.pageSize))
   const qs = query.toString()
@@ -73,11 +75,67 @@ export interface UserAccessProfile {
   effectivePermissions: string[]
   grantedCount: number
   trackedCount: number
+  /** HR's per-request-type final-approval grants for this account. */
+  autoApproveRequestTypes: Record<string, boolean>
 }
 
 /** Your own id is always allowed; another user's requires team.view. */
 export function getUserAccessProfile(id: number, signal?: AbortSignal): Promise<UserAccessProfile> {
   return apiRequest<Wrapped<UserAccessProfile>>(`/api/users/${id}`, { signal }).then((r) => r.data)
+}
+
+export function putUserPermissions(id: number, permissions: string[]) {
+  return apiRequest<Wrapped<UserAssignmentData>>(`/api/users/${id}/permissions`, {
+    method: 'PUT', body: { permissions },
+  }).then((r) => r.data)
+}
+
+export function putUserGymAccess(id: number, gymIds: number[]) {
+  return apiRequest<Wrapped<UserAssignmentData>>(`/api/users/${id}/gym-access`, {
+    method: 'PUT', body: { gymIds },
+  }).then((r) => r.data)
+}
+
+/** PUT /api/users/{id}/auto-approval — HR's per-person, per-type final-approval grant. */
+export function putUserAutoApproval(id: number, requestTypes: Record<string, boolean>) {
+  return apiRequest<{ message: string }>(`/api/users/${id}/auto-approval`, {
+    method: 'PUT', body: { requestTypes },
+  }).then((r) => r.message)
+}
+
+/** One request type with this account's auto-approval state. */
+export interface AutoApprovalTypeItem {
+  id: string
+  label: string
+  enabled: boolean
+}
+
+/** One person's access through a single role (GET /api/roles/{id}/members/{userId}). */
+export interface RoleMemberDetail {
+  userId: number
+  name: string
+  email: string
+  roleId: number
+  roleName: string
+  permissions: string[]
+  effectivePermissions: string[]
+  /** Only the gyms where this role is held. */
+  gyms: { id: number; name: string; branch: string }[]
+  autoApproveRequestTypes: AutoApprovalTypeItem[]
+}
+
+export function getRoleMember(roleId: number, userId: number, signal?: AbortSignal): Promise<RoleMemberDetail> {
+  return apiRequest<Wrapped<RoleMemberDetail>>(`/api/roles/${roleId}/members/${userId}`, { signal }).then((r) => r.data)
+}
+
+export interface UserAssignmentData {
+  userId: number
+  roleId: number | null
+  rolePreset: string | null
+  permissions: string[]
+  effectivePermissions: string[]
+  count: number
+  gymIds: number[]
 }
 
 /** POST /api/users body — the create-HR-account wizard's final submit. */
@@ -148,6 +206,22 @@ export function getRoles(params: RoleListParams = {}, signal?: AbortSignal): Pro
   return apiRequest<Paged<Role>>(`/api/roles${qs ? '?' + qs : ''}`, { signal })
 }
 
+/** GET /api/roles/{id} â€” one role plus its permissions. */
+export function getRole(id: number, signal?: AbortSignal): Promise<Role> {
+  return apiRequest<Wrapped<Role>>(`/api/roles/${id}`, { signal }).then((r) => r.data)
+}
+
+export interface CreateRoleBody {
+  name: string
+  description?: string | null
+  permissions: string[]
+}
+
+/** POST /api/roles — creates a custom role with its initial permission set (team.manage). */
+export function postCreateRole(body: CreateRoleBody): Promise<Role> {
+  return apiRequest<Wrapped<Role>>('/api/roles', { method: 'POST', body }).then((r) => r.data)
+}
+
 /** PUT /api/roles/{id}/permissions — replaces the set wholesale (team.manage). */
 export function putRolePermissions(id: number, permissions: string[]): Promise<{ id: number; permissions: string[] }> {
   return apiRequest<Wrapped<{ id: number; permissions: string[] }>>(`/api/roles/${id}/permissions`, {
@@ -169,9 +243,19 @@ export interface PermissionModule {
   permissions: string[]
 }
 
+export interface PermissionPage {
+  /** "Employee portal" | "HR portal" | "Super Admin portal". */
+  portal: string
+  page: string
+  label: string
+  permissions: string[]
+}
+
 export interface PermissionCatalog {
   items: PermissionCatalogItem[]
   modules: PermissionModule[]
+  /** The same keys grouped by portal page — the assignment table's layout. */
+  pages: PermissionPage[]
   totalTracked: number
 }
 

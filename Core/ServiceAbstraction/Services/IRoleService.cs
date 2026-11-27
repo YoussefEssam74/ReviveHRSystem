@@ -15,6 +15,13 @@ namespace ServiceAbstraction.Services
     {
         /// <summary>Paged roles list with permission/user counters (team.view).</summary>
         Task<RolesListResponse> GetRolesAsync(int? actorUserId, RoleListQuery query, CancellationToken cancellationToken = default);
+        Task<RoleDataResponse> GetRoleAsync(int? actorUserId, int roleId, CancellationToken cancellationToken = default);
+
+        /// <summary>One person's access through this role — role-scoped gyms + auto-approval (team.view).</summary>
+        Task<RoleMemberDataResponse> GetRoleMemberAsync(int? actorUserId, int roleId, int userId, CancellationToken cancellationToken = default);
+
+        /// <summary>HR grants/revokes this account's final approval per request type (team.manage).</summary>
+        Task<MessageResponse> SetUserAutoApprovalAsync(int? actorUserId, int userId, IReadOnlyDictionary<string, bool> requestTypes, CancellationToken cancellationToken = default);
 
         /// <summary>Creates a role, optionally cloning the permission set from another role (team.manage).</summary>
         Task<RoleDataResponse> CreateRoleAsync(int? actorUserId, CreateRoleRequest request, CancellationToken cancellationToken = default);

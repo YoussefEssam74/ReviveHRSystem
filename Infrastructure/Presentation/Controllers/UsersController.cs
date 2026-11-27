@@ -74,6 +74,14 @@ namespace Presentation.Controllers
             return Ok(result);
         }
 
+        /// <summary>PUT /api/users/{id}/auto-approval — HR lets this desk account finalize requests (team.manage).</summary>
+        [HttpPut("{id:int}/auto-approval")]
+        public async Task<ActionResult<MessageResponse>> SetAutoApproval(int id, [FromBody] UserAutoApprovalRequest request, CancellationToken cancellationToken)
+        {
+            var result = await _service.SetUserAutoApprovalAsync(GetActorUserId(), id, request.RequestTypes, cancellationToken);
+            return Ok(result);
+        }
+
         /// <summary>POST /api/users/{id}/reset-password — admin sets a known new password; never echoed back (D12, team.manage).</summary>
         [HttpPost("{id:int}/reset-password")]
         public async Task<ActionResult<MessageResponse>> ResetUserPassword(int id, [FromBody] ResetPasswordRequest request, CancellationToken cancellationToken)

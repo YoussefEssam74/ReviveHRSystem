@@ -460,7 +460,6 @@ namespace ReviveHRSystem.Web
 
             app.UseMiddleware<CustomExceptionMiddleWare>();
             app.UseMiddleware<SecurityHeadersMiddleware>();
-            app.UseMiddleware<ReviveHRSystem.Web.Middleware.BrowserCsrfMiddleware>();
 
             if (app.Environment.IsDevelopment())
             {
@@ -475,6 +474,10 @@ namespace ReviveHRSystem.Web
             app.UseRateLimiter();
             app.UseCors();
             app.UseAuthentication();
+            // Antiforgery tokens are bound to the authenticated identity, so validation
+            // must run after authentication — validating before it treats every
+            // post-login write as an anonymous request and rejects it.
+            app.UseMiddleware<ReviveHRSystem.Web.Middleware.BrowserCsrfMiddleware>();
             // Must sit between authentication and authorization: it needs the validated
             // principal's act claims, and it must answer before any controller runs.
             app.UseMiddleware<ReviveHRSystem.Web.Middleware.ImpersonationGuardMiddleware>();

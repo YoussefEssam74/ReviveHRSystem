@@ -18,7 +18,41 @@ namespace ReviveHRSystem.IntegrationTests
     {
         private readonly ApiTestFixture _fixture;
 
+        private static readonly byte[] TinyPng =
+        [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A];
+
         public GymsControllerTests(ApiTestFixture fixture) => _fixture = fixture;
+
+        [Fact]
+        public async Task Logo_UploadThenRead_RoundTripsTheBytes()
+        {
+            var token = await _fixture.GetAdminTokenAsync();
+            using var scope = _fixture.Services.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<ReviveHrDbContext>();
+            var gymId = await db.Gyms.Where(g => g.Name == "Revive Main Gym")
+                .Select(g => g.Id)
+                .SingleAsync();
+
+            using var form = new MultipartFormDataContent();
+            using var file = new ByteArrayContent(TinyPng);
+            form.Add(file, "file", "branch.png");
+            using var upload = new HttpRequestMessage(HttpMethod.Put, $"/api/gyms/{gymId}/logo")
+            {
+                Content = form
+            };
+            upload.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+
+            var uploadResponse = await _fixture.Client.SendAsync(upload);
+            Assert.Equal(HttpStatusCode.OK, uploadResponse.StatusCode);
+            var uploadBody = await uploadResponse.Content.ReadFromJsonAsync<JsonElement>();
+            Assert.Equal($"/api/gyms/{gymId}/logo", uploadBody.GetProperty("logoUrl").GetString());
+
+            var read = _fixture.AuthorizedRequest(HttpMethod.Get, $"/api/gyms/{gymId}/logo", null, token);
+            var readResponse = await _fixture.Client.SendAsync(read);
+            Assert.Equal(HttpStatusCode.OK, readResponse.StatusCode);
+            Assert.Equal("image/png", readResponse.Content.Headers.ContentType?.MediaType);
+            Assert.Equal(TinyPng, await readResponse.Content.ReadAsByteArrayAsync());
+        }
 
         [Fact]
         public async Task Get_Anonymous_Returns401()

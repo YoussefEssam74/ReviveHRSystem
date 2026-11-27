@@ -259,6 +259,8 @@ namespace Service.Services
             //   • anyone else → it waits for the desk like a self-service submission.
             var filedByHr = actor.UserType is UserType.HR or UserType.HRManager or UserType.TopManagement;
             var gymRoles = await _userAccess.GetGymRoleNamesAsync(actor.Id, employee.GymId, cancellationToken);
+            var filedByBranchManager = gymRoles.Contains(RoleNames.BranchManager, StringComparer.Ordinal);
+            var filedByTeamLeader = gymRoles.Contains(RoleNames.TeamLeader, StringComparer.Ordinal);
             var filedByDesk = gymRoles.Contains(RoleNames.BranchManager, StringComparer.Ordinal)
                 || gymRoles.Contains(RoleNames.TeamLeader, StringComparer.Ordinal)
                 || gymRoles.Contains(RoleNames.SuperAdmin, StringComparer.Ordinal);
@@ -276,7 +278,13 @@ namespace Service.Services
                     DecidedAt = filedAt,
                 });
 
-                if (filedByHr)
+                var storedSettings = (filedByBranchManager || filedByTeamLeader) && !filedByHr
+                    ? await PlatformSettingsStore.ReadAsync(_unitOfWork, cancellationToken)
+                    : null;
+                var deskFinal = storedSettings is not null
+                    && RequestAutoApprovalSettings.IsEnabled(storedSettings, actor.Id, entity.Type);
+
+                if (filedByHr || deskFinal)
                 {
                     entity.Status = RequestStatus.Approved;
                     // A balance type consumes its days exactly once here, because filing
@@ -285,15 +293,18 @@ namespace Service.Services
                         ? await ResolvePaymentAsync(entity, null, cancellationToken)
                         : null;
                     entity.Payment = payment;
-                    entity.Decisions.Add(new RequestDecision
+                    if (filedByHr)
                     {
-                        RequestId = entity.Id,
-                        Stage = ApprovalStage.HR,
-                        Decision = DecisionOutcome.Approved,
-                        Comment = FiledOnBehalfComment,
-                        DecidedBy = actor.Id,
-                        DecidedAt = filedAt,
-                    });
+                        entity.Decisions.Add(new RequestDecision
+                        {
+                            RequestId = entity.Id,
+                            Stage = ApprovalStage.HR,
+                            Decision = DecisionOutcome.Approved,
+                            Comment = FiledOnBehalfComment,
+                            DecidedBy = actor.Id,
+                            DecidedAt = filedAt,
+                        });
+                    }
 
                     if (IsBalanceType(entity.Type))
                     {
@@ -332,18 +343,58 @@ namespace Service.Services
         // R3 / A6 — the HR decision stage
         // ------------------------------------------------------------------
 
-        public async Task<RequestDecisionResponse> DecideRequestAsync(int? actorUserId, int requestId, DecideRequestRequest request, CancellationToken cancellationToken = default)
+        public Task<RequestDecisionResponse> DecideRequestAsync(int? actorUserId, int requestId, DecideRequestRequest request, CancellationToken cancellationToken = default) =>
+            DecideRequestAsyncInternal(actorUserId, requestId, request, branchManagerFinal: false, cancellationToken);
+
+        public async Task<RequestDecisionResponse> FinalizeRequestByDeskAsync(
+            int actorUserId, int requestId, DecideRequestRequest request, CancellationToken cancellationToken = default)
+        {
+            var entity = await _unitOfWork.GetRepository<EmployeeRequest, int>()
+                .GetByIdAsync(new RequestByIdSpec(requestId), cancellationToken)
+                ?? throw new NotFoundException("Request not found.");
+            var roles = await _userAccess.GetGymRoleNamesAsync(actorUserId, entity.Employee.GymId, cancellationToken);
+            if (!roles.Contains(RoleNames.BranchManager, StringComparer.Ordinal)
+                && !roles.Contains(RoleNames.TeamLeader, StringComparer.Ordinal))
+            {
+                throw new UnAuthorizedException("Only a Branch Manager or Team Leader can finalize this request.");
+            }
+
+            var settings = await PlatformSettingsStore.ReadAsync(_unitOfWork, cancellationToken);
+            if (!RequestAutoApprovalSettings.IsEnabled(settings, actorUserId, entity.Type))
+            {
+                throw new BadRequestException("This account does not have auto-approval for this request type — HR must decide it.");
+            }
+
+            return await DecideRequestAsyncInternal(actorUserId, requestId, request, branchManagerFinal: true, cancellationToken);
+        }
+
+        private async Task<RequestDecisionResponse> DecideRequestAsyncInternal(
+            int? actorUserId, int requestId, DecideRequestRequest request, bool branchManagerFinal, CancellationToken cancellationToken)
         {
             var actor = await ResolveActorAsync(actorUserId, cancellationToken);
             var entity = await _unitOfWork.GetRepository<EmployeeRequest, int>()
                 .GetByIdAsync(new RequestByIdSpec(requestId), cancellationToken)
                 ?? throw new NotFoundException("Request not found.");
 
-            await _accessControl.EnsurePermissionForGymAsync(actor.Id, "requests.approve", entity.Employee.GymId, cancellationToken);
-
-            if (!string.Equals((request.Stage ?? "HR").Trim(), "HR", StringComparison.OrdinalIgnoreCase))
+            if (branchManagerFinal)
             {
-                throw new BadRequestException("This endpoint records the HR stage decision only.");
+                var roles = await _userAccess.GetGymRoleNamesAsync(actor.Id, entity.Employee.GymId, cancellationToken);
+                if (!roles.Contains(RoleNames.BranchManager, StringComparer.Ordinal))
+                {
+                    throw new UnAuthorizedException("Only a Branch Manager can finalize this request.");
+                }
+            }
+            else
+            {
+                await _accessControl.EnsurePermissionForGymAsync(actor.Id, "requests.approve", entity.Employee.GymId, cancellationToken);
+            }
+
+            var requiredStage = branchManagerFinal ? "BranchManager" : "HR";
+            if (!string.Equals((request.Stage ?? "HR").Trim(), requiredStage, StringComparison.OrdinalIgnoreCase))
+            {
+                throw new BadRequestException(branchManagerFinal
+                    ? "This decision must be recorded at the Branch Manager stage."
+                    : "This endpoint records the HR stage decision only.");
             }
 
             switch (entity.Status)
@@ -388,7 +439,7 @@ namespace Service.Services
 
             // Record the manager stage when it never happened, so the timeline explains
             // how a stage-1 request reached its final decision.
-            if (!hadManagerDecision)
+            if (!hadManagerDecision && !branchManagerFinal)
             {
                 entity.Decisions.Add(new RequestDecision
                 {
@@ -472,7 +523,7 @@ namespace Service.Services
             entity.Decisions.Add(new RequestDecision
             {
                 RequestId = entity.Id,
-                Stage = ApprovalStage.HR,
+                Stage = branchManagerFinal ? ApprovalStage.BranchManager : ApprovalStage.HR,
                 Decision = decision,
                 Comment = comment,
                 DecidedBy = actor.Id,

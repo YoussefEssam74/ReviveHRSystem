@@ -25,6 +25,11 @@ namespace Presentation.Controllers
         public async Task<ActionResult<SeparationDataResponse>> GetSeparation(int id, CancellationToken cancellationToken)
             => Ok(await _service.GetSeparationAsync(GetActorUserId(), id, cancellationToken));
 
+        /// <summary>T5 preview — GET /api/separations/{id}/leave-encashment: priced, not saved (employees.view).</summary>
+        [HttpGet("{id:int}/leave-encashment")]
+        public async Task<ActionResult<SeparationLeaveEncashmentDataResponse>> GetLeaveEncashment(int id, CancellationToken cancellationToken)
+            => Ok(await _service.GetLeaveEncashmentAsync(GetActorUserId(), id, cancellationToken));
+
         /// <summary>T2 — POST /api/separations: Branch-Manager termination request (closed reason vocabulary).</summary>
         [HttpPost]
         public async Task<ActionResult<SeparationDataResponse>> RequestSeparation([FromBody] CreateSeparationRequest request, CancellationToken cancellationToken)

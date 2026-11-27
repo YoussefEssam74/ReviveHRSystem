@@ -45,6 +45,8 @@ const PlatformBillingPage = lazy(() => import('../features/platform/pages/Platfo
 const PlatformRevenuePage = lazy(() => import('../features/platform/pages/PlatformRevenuePage'))
 const PlatformRevenueDetailPage = lazy(() => import('../features/platform/pages/PlatformRevenueDetailPage'))
 const PlatformRolesPage = lazy(() => import('../features/platform/pages/PlatformRolesPage'))
+const PlatformRoleDetailPage = lazy(() => import('../features/platform/pages/PlatformRoleDetailPage'))
+const PlatformRoleMemberPage = lazy(() => import('../features/platform/pages/PlatformRoleMemberPage'))
 const PlatformSettingsPage = lazy(() => import('../features/platform/pages/PlatformSettingsPage'))
 
 // Employee portal pages (Mock UI/Employee) — built per phase.
@@ -184,6 +186,8 @@ export const router = createBrowserRouter([
       // stays as a deep-link so bookmarks keep working.
       { path: 'plans', element: <Navigate to="/platform/billing" replace /> },
       { path: 'roles', element: <Page><PlatformRolesPage /></Page> },
+      { path: 'roles/:id', element: <Page><PlatformRoleDetailPage /></Page> },
+      { path: 'roles/:id/members/:userId', element: <Page><PlatformRoleMemberPage /></Page> },
       { path: 'settings', element: <Page><PlatformSettingsPage /></Page> },
       { path: '*', element: <Navigate to="/platform/dashboard" replace /> },
     ],

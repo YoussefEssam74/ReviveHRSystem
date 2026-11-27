@@ -25,6 +25,22 @@ namespace Presentation.Controllers
             return Ok(result);
         }
 
+        /// <summary>GET /api/roles/{id} — role detail for the member assignment view (team.view).</summary>
+        [HttpGet("{id:int}")]
+        public async Task<ActionResult<RoleDataResponse>> GetRole(int id, CancellationToken cancellationToken)
+        {
+            var result = await _service.GetRoleAsync(GetActorUserId(), id, cancellationToken);
+            return Ok(result);
+        }
+
+        /// <summary>GET /api/roles/{id}/members/{userId} — that person's access through this role (team.view).</summary>
+        [HttpGet("{id:int}/members/{userId:int}")]
+        public async Task<ActionResult<RoleMemberDataResponse>> GetRoleMember(int id, int userId, CancellationToken cancellationToken)
+        {
+            var result = await _service.GetRoleMemberAsync(GetActorUserId(), id, userId, cancellationToken);
+            return Ok(result);
+        }
+
         /// <summary>POST /api/roles — creates a role, optionally cloning a permission set (team.manage) → 201 { data }.</summary>
         [HttpPost]
         public async Task<ActionResult<RoleDataResponse>> CreateRole([FromBody] CreateRoleRequest request, CancellationToken cancellationToken)
