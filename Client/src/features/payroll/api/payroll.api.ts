@@ -186,10 +186,16 @@ export interface PayrollEntry {
   coverPay: number
   baseSalary: number
   bonus: number
+  /** Unused annual leave settled in cash when the employee exits (folded into `gross`). */
+  leaveEncashment: number
+  /** Days behind `leaveEncashment`. */
+  leaveEncashmentDays: number
   gross: number
   /** Sum of Accepted|Approved lines (Pending excluded). */
   deductions: number
   net: number
+  /** Manual earnings added in the Bonuses tab (reason + amount each). */
+  bonusLines: BonusLine[]
   /** Draft | Reviewed | Locked. */
   status: PayrollEntryStatus
   reviewed: boolean
@@ -284,6 +290,38 @@ export interface RemovedDeduction {
   entry: EntrySummary
 }
 
+/** POST …/bonuses body: a named cash earning. */
+export interface CreateBonusBody {
+  reason: string
+  amount: number
+}
+
+/** POST …/bonuses → 201 `{ data: { …line, entry } }`. */
+export function postEntryBonus(
+  periodId: number,
+  employeeId: number,
+  body: CreateBonusBody,
+  signal?: AbortSignal,
+): Promise<CreatedDeductionLine> {
+  return apiRequest<Wrapped<CreatedDeductionLine>>(
+    `/api/payroll-periods/${periodId}/entries/${employeeId}/bonuses`,
+    { method: 'POST', body, signal },
+  ).then((r) => r.data)
+}
+
+/** DELETE …/bonuses/{lineId} → `{ data: { id, entry } }` (open periods only). */
+export function deleteEntryBonus(
+  periodId: number,
+  employeeId: number,
+  lineId: number,
+  signal?: AbortSignal,
+): Promise<RemovedDeduction> {
+  return apiRequest<Wrapped<RemovedDeduction>>(
+    `/api/payroll-periods/${periodId}/entries/${employeeId}/bonuses/${lineId}`,
+    { method: 'DELETE', signal },
+  ).then((r) => r.data)
+}
+
 export function deleteEntryDeduction(
   periodId: number,
   employeeId: number,
@@ -346,6 +384,16 @@ export function postPeriodApprove(id: number, gym: string, signal?: AbortSignal)
 }
 
 /** GET …/payslips/{employeeId} — the payslip preview. */
+
+/** One manual bonus line on a sheet: reason + cash amount. */
+export interface BonusLine {
+  id: number
+  date: string
+  reason: string
+  amount: number
+  status: string
+}
+
 export interface PayslipDeduction {
   label: string
   reason: string | null
@@ -363,6 +411,10 @@ export interface Payslip {
   overtime: number
   overtimePay: number
   bonus: number
+  /** Unused annual leave paid out on exit (folded into `gross`). */
+  leaveEncashment: number
+  /** Days behind `leaveEncashment`. */
+  leaveEncashmentDays: number
   gross: number
   /** All lines with statuses — net only counts Accepted|Approved. */
   deductions: PayslipDeduction[]

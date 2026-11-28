@@ -39,6 +39,12 @@ namespace ServiceAbstraction.Services
         /// <summary>Removes one deduction line from an open sheet (payroll.edit) — the exit-settlement ✕.</summary>
         Task<RemoveDeductionResponse> RemoveDeductionAsync(int? actorUserId, int periodId, int employeeId, int lineId, CancellationToken cancellationToken = default);
 
+        /// <summary>Adds a named cash bonus line to an open sheet (payroll.edit) → 201.</summary>
+        Task<CreateDeductionResponse> AddBonusAsync(int? actorUserId, int periodId, int employeeId, CreateBonusRequest request, CancellationToken cancellationToken = default);
+
+        /// <summary>Removes one bonus line from an open sheet (payroll.edit).</summary>
+        Task<RemoveDeductionResponse> RemoveBonusAsync(int? actorUserId, int periodId, int employeeId, int lineId, CancellationToken cancellationToken = default);
+
         /// <summary>Closes &amp; settles one sheet — refuses while lines are pending (payroll.edit).</summary>
         Task<CloseEntryResponse> CloseEntryAsync(int? actorUserId, int periodId, int employeeId, CancellationToken cancellationToken = default);
 

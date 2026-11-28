@@ -1560,7 +1560,17 @@ namespace Service.Services
             }
             else
             {
-                throw new BadRequestException("Gym is required.");
+                // Single-gym operators write into the gym they work in, without the
+                // client having to repeat it on every payload.
+                var assigned = await _userAccess.GetGymAccessAsync(actor.Id, cancellationToken);
+                if (assigned.Count == 1)
+                {
+                    gym = await _unitOfWork.GetRepository<Gym, int>().GetByIdAsync(assigned[0].GymId, cancellationToken);
+                }
+                else
+                {
+                    throw new BadRequestException("Gym is required.");
+                }
             }
 
             if (gym is null)

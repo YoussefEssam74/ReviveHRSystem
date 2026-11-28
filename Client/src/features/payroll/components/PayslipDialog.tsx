@@ -57,6 +57,12 @@ export default function PayslipDialog({ periodId, employeeId, employeeName, onCl
               })}`}
             />
             <PayslipRow label={t('Cover pay')} value={formatMoney(data.coverPay)} />
+            {(data.leaveEncashment ?? 0) > 0 && (
+              <PayslipRow
+                label={t('Leave encashment ({{days}} days)', { days: data.leaveEncashmentDays ?? 0 })}
+                value={formatMoney(data.leaveEncashment)}
+              />
+            )}
             <PayslipRow label={t('Bonus')} value={formatMoney(data.bonus)} />
             <PayslipRow label={t('Gross')} value={formatMoney(data.gross)} />
           </dl>

@@ -74,6 +74,18 @@ namespace Service.Specifications
             AddInclude(t => t.Members);
             AddInclude(t => t.TeamLeaders);
         }
+
+        /// <summary>Every team of one gym with its members, leaders and gym name.</summary>
+        public TeamWithMembersSpec(int gymId, bool byGym)
+        {
+            _ = byGym;
+            Criteria = t => t.GymId == gymId;
+            AddInclude(t => t.Members);
+            AddInclude(t => t.TeamLeaders);
+            AddInclude(t => t.Gym!);
+            AddInclude(t => t.TeamLeaders);
+            OrderBy = t => t.Name;
+        }
     }
 
     /// <summary>

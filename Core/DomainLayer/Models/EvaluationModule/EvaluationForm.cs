@@ -20,6 +20,15 @@ namespace DomainLayer.Models.EvaluationModule
         /// <summary>Form-builder lifecycle: "Active" | "Completed" | "Inactive" (kept in sync with IsActive on write).</summary>
         public string Status { get; set; } = "Active";
 
+        /// <summary>Builder tab it belongs to: "Evaluation" | "FirstInterview" | "ExitInterview".</summary>
+        public string Kind { get; set; } = "Evaluation";
+
+        /// <summary>Optional reference document uploaded with the form (relative storage path).</summary>
+        public string? AttachmentPath { get; set; }
+
+        /// <summary>Original file name of <see cref="AttachmentPath"/>, shown in the builder.</summary>
+        public string? AttachmentName { get; set; }
+
         /// <summary>Target position title as chosen in the form builder ("Trainer", …, "All").</summary>
         public string? Target { get; set; }
 

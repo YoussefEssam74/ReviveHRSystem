@@ -278,7 +278,15 @@ namespace Service.Services
         {
             var actor = await ResolveActorAsync(actorUserId, cancellationToken);
             await _accessControl.EnsurePermissionAsync(actor.Id, "team.manage", cancellationToken);
-            await EnsureUserAsync(userId, cancellationToken);
+            var target = await EnsureUserAsync(userId, cancellationToken);
+
+            // Role changes never reach above the HR console: a Super Admin's roles are
+            // a platform concern.
+            if (target.UserType == UserType.TopManagement && actor.UserType != UserType.TopManagement)
+            {
+                throw new BadRequestException(
+                    "A Super Admin's role cannot be changed from the HR console. Ask the platform team.");
+            }
 
             var roleIds = new List<int>();
             if (request.RoleId is int roleId)
@@ -615,6 +623,14 @@ namespace Service.Services
                 throw new BadRequestException("You cannot suspend your own account.");
             }
 
+            // A Super Admin outranks every HR-console role: suspending one is a
+            // platform decision, not an HR one.
+            if (!activate && user.UserType == UserType.TopManagement && actor.UserType != UserType.TopManagement)
+            {
+                throw new BadRequestException(
+                    "A Super Admin account cannot be suspended from the HR console. Ask the platform team.");
+            }
+
             if (user.IsActive != activate)
             {
                 user.IsActive = activate;
@@ -698,9 +714,9 @@ namespace Service.Services
             await _unitOfWork.GetRepository<Role, int>().GetByIdAsync(new RoleByIdSpec(roleId), cancellationToken)
             ?? throw new NotFoundException("Role not found.");
 
-        private async Task EnsureUserAsync(int userId, CancellationToken cancellationToken)
+        private async Task<User> EnsureUserAsync(int userId, CancellationToken cancellationToken)
         {
-            _ = await _unitOfWork.GetRepository<User, int>().GetByIdAsync(userId, cancellationToken)
+            return await _unitOfWork.GetRepository<User, int>().GetByIdAsync(userId, cancellationToken)
                 ?? throw new NotFoundException("User not found.");
         }
 

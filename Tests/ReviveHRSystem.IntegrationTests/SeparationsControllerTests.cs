@@ -83,6 +83,55 @@ namespace ReviveHRSystem.IntegrationTests
 
         private static string Iso(DateOnly date) => date.ToString("yyyy-MM-dd");
 
+        /// <summary>Backdates the hire and records the salary the encashment is priced from.</summary>
+        private async Task SeedHireAndSalaryAsync(Scene scene, DateOnly hireDate, decimal amount)
+        {
+            using var scope = _fixture.Services.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<ReviveHrDbContext>();
+            var employee = await db.Employees.SingleAsync(e => e.Id == scene.Employee.EmployeeId);
+            employee.HireDate = hireDate;
+            employee.ContractStartDate = hireDate;
+            db.Compensations.Add(new Compensation
+            {
+                EmployeeId = employee.Id,
+                Amount = amount,
+                EffectiveDate = hireDate,
+                ChangedBy = scene.Hr.UserId,
+            });
+            await db.SaveChangesAsync();
+        }
+
+        /// <summary>Records annual days already consumed this year.</summary>
+        private async Task SeedAnnualUsedAsync(Scene scene, decimal usedDays)
+        {
+            using var scope = _fixture.Services.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<ReviveHrDbContext>();
+            db.LeaveBalances.Add(new LeaveBalance
+            {
+                EmployeeId = scene.Employee.EmployeeId,
+                LeaveType = LeaveType.Annual,
+                Year = DateTime.UtcNow.Year,
+                TotalEntitlement = 0m,
+                UsedDays = usedDays,
+            });
+            await db.SaveChangesAsync();
+        }
+
+        private async Task<JsonElement> SaveVerdictAsync(
+            Scene scene, int separationId, object settlement, string finalReason = "Relocation")
+        {
+            var response = await SendAsync(HttpMethod.Put, $"/api/separations/{separationId}/verdict",
+                new
+                {
+                    finalReason,
+                    settlement,
+                    rehire = new { status = "Eligible" },
+                }, scene.Token);
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            return (await GetAsync($"/api/separations/{separationId}", scene.Token))
+                .GetProperty("data").GetProperty("verdict").GetProperty("settlement");
+        }
+
         private async Task<int> OffboardAsync(Scene scene, TestEmployee employee, object body)
         {
             var response = await SendAsync(HttpMethod.Post, $"/api/employees/{employee.EmployeeId}/offboard", body, scene.Token);
@@ -816,6 +865,120 @@ namespace ReviveHRSystem.IntegrationTests
             Assert.Equal("owedToEmployee", verdict.GetProperty("settlement").GetProperty("direction").GetString());
             Assert.Equal(1500.5m, verdict.GetProperty("settlement").GetProperty("amount").GetDecimal());
             Assert.Equal("Eligible", verdict.GetProperty("rehire").GetProperty("status").GetString());
+        }
+
+        [Fact]
+        public async Task Verdict_PricesUnusedAnnualLeave_ProRatedToTheExitYear()
+        {
+            var scene = await CreateSceneAsync("employees.view", "employees.offboard");
+            var today = DateOnly.FromDateTime(DateTime.UtcNow);
+            await SeedHireAndSalaryAsync(scene, today.AddYears(-3), 3000m);
+
+            var separationId = await OffboardAsync(scene, scene.Employee,
+                new { lastDay = Iso(today), reason = "Relocation" });
+
+            var settlement = await SaveVerdictAsync(scene, separationId,
+                new { direction = "owedToEmployee", amount = 0 });
+
+            // Hired years ago: the exit year is Jan..exit month, capped at the yearly 12 —
+            // leaving in April pays four days, not twelve.
+            var expectedDays = Math.Min(12, today.Month);
+            var rate = Math.Round(3000m / DateTime.DaysInMonth(today.Year, today.Month), 2);
+
+            Assert.Equal(expectedDays, settlement.GetProperty("leaveEarnedDaysThisYear").GetDecimal());
+            Assert.Equal(expectedDays, settlement.GetProperty("leaveEncashmentDays").GetDecimal());
+            Assert.Equal(rate, settlement.GetProperty("leaveEncashmentDailyRate").GetDecimal());
+            Assert.Equal(Math.Round(expectedDays * rate, 2), settlement.GetProperty("leaveEncashmentAmount").GetDecimal());
+            Assert.Equal(0m, settlement.GetProperty("unpaidLeaveDays").GetDecimal());
+            Assert.Equal(0m, settlement.GetProperty("unpaidLeaveAmount").GetDecimal());
+        }
+
+        [Fact]
+        public async Task Verdict_BelowQualifyingPeriod_PaysNoEncashment()
+        {
+            var scene = await CreateSceneAsync("employees.view", "employees.offboard");
+            var separationId = await OffboardAsync(scene, scene.Employee,
+                new { lastDay = Iso(Days(6)), reason = "Relocation" });
+
+            // The default test employee is hired 7 days ago — short of the six months.
+            var settlement = await SaveVerdictAsync(scene, separationId,
+                new { direction = "owedToEmployee", amount = 0 });
+
+            Assert.Equal(0m, settlement.GetProperty("leaveEarnedDaysThisYear").GetDecimal());
+            Assert.Equal(0m, settlement.GetProperty("leaveEncashmentAmount").GetDecimal());
+        }
+
+        [Fact]
+        public async Task Verdict_UnpaidDeficit_IsReportedSeparatelyFromEncashment()
+        {
+            var scene = await CreateSceneAsync("employees.view", "employees.offboard");
+            var today = DateOnly.FromDateTime(DateTime.UtcNow);
+            await SeedHireAndSalaryAsync(scene, today.AddYears(-3), 2000m);
+
+            // Two days taken beyond the earned balance.
+            await SeedAnnualUsedAsync(scene, Math.Min(12, today.Month) + 2);
+
+            var separationId = await OffboardAsync(scene, scene.Employee,
+                new { lastDay = Iso(today), reason = "Relocation" });
+            var settlement = await SaveVerdictAsync(scene, separationId,
+                new { direction = "employeeOwes", amount = 0 });
+
+            var rate = Math.Round(2000m / DateTime.DaysInMonth(today.Year, today.Month), 2);
+            Assert.Equal(0m, settlement.GetProperty("leaveEncashmentDays").GetDecimal());
+            Assert.Equal(0m, settlement.GetProperty("leaveEncashmentAmount").GetDecimal());
+            Assert.Equal(2m, settlement.GetProperty("unpaidLeaveDays").GetDecimal());
+            Assert.Equal(Math.Round(2m * rate, 2), settlement.GetProperty("unpaidLeaveAmount").GetDecimal());
+        }
+
+        [Fact]
+        public async Task Verdict_HrOverrides_ReplaceTheComputedAmounts()
+        {
+            var scene = await CreateSceneAsync("employees.view", "employees.offboard");
+            var today = DateOnly.FromDateTime(DateTime.UtcNow);
+            await SeedHireAndSalaryAsync(scene, today.AddYears(-3), 3000m);
+
+            var separationId = await OffboardAsync(scene, scene.Employee,
+                new { lastDay = Iso(today), reason = "Relocation" });
+            var settlement = await SaveVerdictAsync(scene, separationId,
+                new
+                {
+                    direction = "owedToEmployee",
+                    amount = 0,
+                    leaveEncashmentAmount = 123.45m,
+                    unpaidLeaveAmount = 6.5m,
+                });
+
+            Assert.Equal(123.45m, settlement.GetProperty("leaveEncashmentAmount").GetDecimal());
+            Assert.Equal(6.5m, settlement.GetProperty("unpaidLeaveAmount").GetDecimal());
+        }
+
+        [Fact]
+        public async Task Verdict_OpenPayrollEntry_CarriesTheEncashmentIntoGross()
+        {
+            var scene = await CreateSceneAsync("employees.view", "employees.offboard");
+            var today = DateOnly.FromDateTime(DateTime.UtcNow);
+            await SeedHireAndSalaryAsync(scene, today.AddYears(-3), 3000m);
+
+            var monthStart = new DateOnly(today.Year, today.Month, 1);
+            var monthEnd = new DateOnly(today.Year, today.Month, DateTime.DaysInMonth(today.Year, today.Month));
+            var periodId = await scene.Builder.CreatePayrollPeriodAsync(scene.Gym.GymId, monthStart, monthEnd);
+            var entryId = await scene.Builder.CreatePayrollEntryAsync(periodId, scene.Employee.EmployeeId, 3000m);
+
+            var separationId = await OffboardAsync(scene, scene.Employee,
+                new { lastDay = Iso(today), reason = "Relocation" });
+            await SaveVerdictAsync(scene, separationId, new { direction = "owedToEmployee", amount = 0 });
+
+            using var scope = _fixture.Services.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<ReviveHrDbContext>();
+            var entry = await db.PayrollEntries.AsNoTracking().SingleAsync(e => e.Id == entryId);
+
+            var expectedDays = Math.Min(12, today.Month);
+            var rate = Math.Round(3000m / DateTime.DaysInMonth(today.Year, today.Month), 2);
+            var expectedAmount = Math.Round(expectedDays * rate, 2);
+
+            Assert.Equal(expectedDays, entry.LeaveEncashmentDays);
+            Assert.Equal(expectedAmount, entry.LeaveEncashment);
+            Assert.Equal(3000m + expectedAmount, entry.NetPay);
         }
 
         // ------------------------------------------------------------------

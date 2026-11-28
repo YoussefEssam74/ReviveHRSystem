@@ -19,8 +19,20 @@ namespace DomainLayer.Models.RecruitmentModule
         /// <summary>Target position title ("Trainer", "Receptionist", …); null/blank = any position.</summary>
         public string? Position { get; set; }
 
+        /// <summary>
+        /// Public job description shown on the careers page and above the application
+        /// form — responsibilities, requirements, working hours. Null/blank = hidden.
+        /// </summary>
+        public string? Description { get; set; }
+
         /// <summary>"Open" (accepting submissions, listed publicly) | "Closed".</summary>
         public string Status { get; set; } = "Open";
+
+        /// <summary>Optional reference document uploaded with the form (relative storage path).</summary>
+        public string? AttachmentPath { get; set; }
+
+        /// <summary>Original file name of <see cref="AttachmentPath"/>, shown in the builder.</summary>
+        public string? AttachmentName { get; set; }
 
         /// <summary>JSON array of question blocks — see class summary.</summary>
         public string QuestionsJson { get; set; } = "[]";

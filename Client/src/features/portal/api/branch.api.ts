@@ -351,12 +351,16 @@ export function listDeductionReviewQueue(
   return apiRequest<DeductionCandidateRow[]>(withQuery('/api/deduction-candidates/review', { status }), { signal })
 }
 
-/** POST /api/deduction-candidates/{id}/review — HR approves/waives (optionally re-sizing). */
+/**
+ * POST /api/deduction-candidates/{id}/hr-review — HR approves/waives a branch-raised
+ * candidate (optionally re-sizing). Not the payroll-line review, which keeps
+ * POST /api/deduction-candidates/{id}/review for payroll entry line items.
+ */
 export function reviewDeductionCandidate(
   id: number,
   fields: { decision: 'approve' | 'reject'; unit?: DeductionUnit; value?: number },
 ): Promise<DeductionCandidateRow> {
-  return apiRequest<DeductionCandidateRow>(`/api/deduction-candidates/${id}/review`, {
+  return apiRequest<DeductionCandidateRow>(`/api/deduction-candidates/${id}/hr-review`, {
     method: 'POST',
     body: fields,
   })

@@ -67,10 +67,12 @@ namespace ReviveHRSystem.IntegrationTests
             return doc.RootElement.GetProperty("errorMessage").GetString() ?? string.Empty;
         }
 
-        private static object HiringFormBody(string name, string position, string gym = "All", string status = "Open") => new
+        private static object HiringFormBody(
+            string name, string position, string gym = "All", string status = "Open", string? description = null) => new
         {
             name,
             position,
+            description,
             gym,
             status,
             questionList = new object[]
@@ -178,6 +180,31 @@ namespace ReviveHRSystem.IntegrationTests
 
             var missingResponse = await _fixture.Client.GetAsync("/api/hiring-forms/2147483000");
             await AssertErrorAsync(missingResponse, HttpStatusCode.NotFound);
+        }
+
+        [Fact]
+        public async Task PublicDetail_EchoesJobDescription()
+        {
+            var admin = await _fixture.GetAdminTokenAsync();
+            var position = $"Description Role {UniqueSuffix()}";
+            var description = "Coach members, design safe training programs, and keep the floor welcoming.";
+
+            var id = await CreateHiringFormIdAsync(admin,
+                HiringFormBody($"Description Form {UniqueSuffix()}", position, description: description));
+
+            // The public detail and the public catalogue both carry the job description.
+            var detail = await GetAnonymousJsonAsync($"/api/hiring-forms/{id}");
+            Assert.Equal(description, detail.GetProperty("data").GetProperty("description").GetString());
+
+            var list = await GetAnonymousJsonAsync($"/api/hiring-forms?position={Uri.EscapeDataString(position)}");
+            var item = list.GetProperty("items").EnumerateArray().Single(i => i.GetProperty("id").GetInt32() == id);
+            Assert.Equal(description, item.GetProperty("description").GetString());
+
+            // A blank description is stored as "no description", never an empty string.
+            var blankId = await CreateHiringFormIdAsync(admin,
+                HiringFormBody($"Blank Description {UniqueSuffix()}", $"{position} Blank", description: "   "));
+            var blankDetail = await GetAnonymousJsonAsync($"/api/hiring-forms/{blankId}");
+            Assert.Equal(JsonValueKind.Null, blankDetail.GetProperty("data").GetProperty("description").ValueKind);
         }
 
         // ------------------------------------------------------------------

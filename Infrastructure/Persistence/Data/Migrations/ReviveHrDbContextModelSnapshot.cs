@@ -1485,6 +1485,18 @@ namespace Persistence.Data.Migrations
                     b.Property<DateOnly>("LastWorkingDate")
                         .HasColumnType("date");
 
+                    b.Property<decimal?>("LeaveEarnedDaysThisYear")
+                        .HasColumnType("numeric");
+
+                    b.Property<decimal?>("LeaveEncashmentAmount")
+                        .HasColumnType("numeric");
+
+                    b.Property<decimal?>("LeaveEncashmentDailyRate")
+                        .HasColumnType("numeric");
+
+                    b.Property<decimal?>("LeaveEncashmentDays")
+                        .HasColumnType("numeric");
+
                     b.Property<int?>("ManagementRating")
                         .HasColumnType("integer");
 
@@ -1535,6 +1547,12 @@ namespace Persistence.Data.Migrations
 
                     b.Property<bool>("UniformReturned")
                         .HasColumnType("boolean");
+
+                    b.Property<decimal?>("UnpaidLeaveAmount")
+                        .HasColumnType("numeric");
+
+                    b.Property<decimal?>("UnpaidLeaveDays")
+                        .HasColumnType("numeric");
 
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
@@ -2008,6 +2026,12 @@ namespace Persistence.Data.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
+                    b.Property<string>("AttachmentName")
+                        .HasColumnType("text");
+
+                    b.Property<string>("AttachmentPath")
+                        .HasColumnType("text");
+
                     b.Property<DateTime>("CreatedAt")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("timestamp with time zone")
@@ -2029,6 +2053,10 @@ namespace Persistence.Data.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("boolean")
                         .HasDefaultValue(false);
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasColumnType("text");
 
                     b.Property<DateTime?>("LastUsedAt")
                         .HasColumnType("timestamp with time zone");
@@ -2070,6 +2098,12 @@ namespace Persistence.Data.Migrations
                         .HasColumnType("integer");
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("AttachmentName")
+                        .HasColumnType("text");
+
+                    b.Property<string>("AttachmentPath")
+                        .HasColumnType("text");
 
                     b.Property<DateTime>("CreatedAt")
                         .ValueGeneratedOnAdd()
@@ -3044,6 +3078,12 @@ namespace Persistence.Data.Migrations
                     b.Property<int?>("LateArrivalsOverride")
                         .HasColumnType("integer");
 
+                    b.Property<decimal>("LeaveEncashment")
+                        .HasColumnType("numeric");
+
+                    b.Property<decimal>("LeaveEncashmentDays")
+                        .HasColumnType("numeric");
+
                     b.Property<decimal>("NetPay")
                         .HasPrecision(18, 2)
                         .HasColumnType("numeric(18,2)");
@@ -3833,6 +3873,12 @@ namespace Persistence.Data.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
+                    b.Property<string>("AttachmentName")
+                        .HasColumnType("text");
+
+                    b.Property<string>("AttachmentPath")
+                        .HasColumnType("text");
+
                     b.Property<DateTime>("CreatedAt")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("timestamp with time zone")
@@ -3845,6 +3891,10 @@ namespace Persistence.Data.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("timestamp with time zone")
                         .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(4000)
+                        .HasColumnType("character varying(4000)");
 
                     b.Property<int?>("GymId")
                         .HasColumnType("integer");

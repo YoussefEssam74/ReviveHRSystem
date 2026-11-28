@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Plus } from 'lucide-react'
+import { Plus, ExternalLink } from 'lucide-react'
 import { Button } from '../../../components/ui/button'
 import { useToast } from '../../../components/ui/toast'
 import { ErrorState, LoadingState } from '../../../components/async-state'
@@ -9,7 +9,8 @@ import { useMe } from '../../../contexts/MeContext'
 import { describeApiError } from '../../../lib/api-client'
 import { cn } from '../../../lib/utils'
 import { EDIT, VIEW } from '../../../lib/permissions'
-import type { FormKind } from '../components/FormDialog'
+import type { FormKind } from '../components/FormBuilder'
+import FormBuilder from '../components/FormBuilder'
 import { FormCard, RunningFormCard } from '../components/FormCards'
 import { FormDetailView } from '../components/FormDetailView'
 import { EvaluationRunView } from '../components/EvaluationRunView'
@@ -33,16 +34,24 @@ import type {
   HiringForm,
 } from '../api/evaluations.api'
 
-type EvaluationsTab = 'evaluation' | 'hiring'
+type EvaluationsTab = 'evaluation' | 'firstInterview' | 'exitInterview' | 'hiring'
+
+/** Tab to the evaluation kind it lists (hiring is a separate resource). */
+const KIND_BY_TAB: Record<Exclude<EvaluationsTab, 'hiring'>, string> = {
+  evaluation: 'Evaluation',
+  firstInterview: 'FirstInterview',
+  exitInterview: 'ExitInterview',
+}
 
 type View =
   | { name: 'list' }
+  | { name: 'builder'; kind: FormKind; formKind: string; form: FormCardModel | null }
   | { name: 'detail'; kind: FormKind; form: EvaluationForm | HiringForm }
   | { name: 'run'; formId: number | null; assignment: DispatchAssignment | null }
   | { name: 'history' }
 
 /**
- * Evaluations (Mock UI/HR `renderEvaluations`): the merged one-page board —
+ * Evaluations (Mock UI/HR `renderEvaluations`): the merged one-page board -
  * Evaluation / Hiring pill tabs, current running forms, old forms, plus the
  * run view, form detail (responses/applicants) and History & Trends.
  */
@@ -56,13 +65,13 @@ export default function EvaluationsPage() {
 
   const [tab, setTab] = useState<EvaluationsTab>('evaluation')
   const [view, setView] = useState<View>({ name: 'list' })
-
-  const [dialog, setDialog] = useState<{ kind: FormKind; form: FormCardModel | null } | null>(null)
   const [deleting, setDeleting] = useState<{ kind: FormKind; id: number; name: string } | null>(null)
   const [dispatching, setDispatching] = useState<EvaluationForm | null>(null)
   const [selectedResponse, setSelectedResponse] = useState<EvaluationResponseRow | null>(null)
 
-  const forms = useEvaluationForms({ page: 1, pageSize: 100 }, canView)
+  const forms = useEvaluationForms({ page: 1, pageSize: 100, kind: KIND_BY_TAB.evaluation }, canView)
+  const firstInterviews = useEvaluationForms({ page: 1, pageSize: 100, kind: KIND_BY_TAB.firstInterview }, canView)
+  const exitInterviews = useEvaluationForms({ page: 1, pageSize: 100, kind: KIND_BY_TAB.exitInterview }, canView)
   const hiring = useHiringForms({ page: 1, pageSize: 100 }, canView)
   const inProgress = useEvaluationResponses({ status: 'In Progress', page: 1, pageSize: 100 }, canView)
 
@@ -71,7 +80,8 @@ export default function EvaluationsPage() {
   const dispatch = useDispatchEvaluationForm()
   const deletingPending = deleteEvaluation.isPending || deleteHiring.isPending
 
-  const evaluationForms = useMemo(() => forms.data?.items ?? [], [forms.data])
+  const activeForms = tab === 'firstInterview' ? firstInterviews : tab === 'exitInterview' ? exitInterviews : forms
+  const evaluationForms = useMemo(() => activeForms.data?.items ?? [], [activeForms.data])
   const hiringForms = hiring.data?.items ?? []
   const runningForms = useMemo(() => evaluationForms.filter((form) => form.status === 'Active'), [evaluationForms])
   const oldForms = useMemo(() => evaluationForms.filter((form) => form.status !== 'Active'), [evaluationForms])
@@ -85,15 +95,27 @@ export default function EvaluationsPage() {
     return map
   }, [inProgress.data])
 
-  const openCreate = (kind: FormKind) => setDialog({ kind, form: null })
-  const openEdit = (kind: FormKind, form: FormCardModel) => setDialog({ kind, form })
+  const openCreate = () =>
+    setView({
+      name: 'builder',
+      kind: tab === 'hiring' ? 'hiring' : 'evaluation',
+      formKind: tab === 'hiring' ? 'Hiring' : KIND_BY_TAB[tab],
+      form: null,
+    })
+  const openEdit = (kind: FormKind, form: FormCardModel) =>
+    setView({
+      name: 'builder',
+      kind,
+      formKind: kind === 'hiring' ? 'Hiring' : ((form as EvaluationForm).kind ?? 'Evaluation'),
+      form,
+    })
 
   const onDeleteConfirm = async () => {
     if (!deleting) return
     try {
       if (deleting.kind === 'evaluation') await deleteEvaluation.mutateAsync(deleting.id)
       else await deleteHiring.mutateAsync(deleting.id)
-      toast(t('“{{name}}” deleted.', { name: deleting.name }))
+      toast(t('&quot;{{name}}&quot; deleted.', { name: deleting.name }))
       setDeleting(null)
       setView({ name: 'list' })
     } catch (err) {
@@ -107,8 +129,8 @@ export default function EvaluationsPage() {
       const result = await dispatch.mutateAsync(dispatching.id)
       toast(
         result.createdAssignments.length === 0
-          ? t('“{{name}}” was already routed — no new assignments were created.', { name: dispatching.name })
-          : t('“{{name}}” routed to {{evaluators}} evaluator(s) · {{evaluations}} evaluation(s) assigned.', {
+          ? t('&quot;{{name}}&quot; was already routed - no new assignments were created.', { name: dispatching.name })
+          : t('&quot;{{name}}&quot; routed to {{evaluators}} evaluator(s) | {{evaluations}} evaluation(s) assigned.', {
               name: dispatching.name,
               evaluators: result.routedEvaluators,
               evaluations: result.evaluationsAssigned,
@@ -130,6 +152,21 @@ export default function EvaluationsPage() {
           )}
         />
       </div>
+    )
+  }
+
+  if (view.name === 'builder') {
+    return (
+      <FormBuilder
+        kind={view.kind}
+        formKind={view.formKind}
+        form={view.form}
+        onBack={() => setView({ name: 'list' })}
+        onSaved={(message) => {
+          toast(message)
+          setView({ name: 'list' })
+        }}
+      />
     )
   }
 
@@ -179,12 +216,6 @@ export default function EvaluationsPage() {
           onViewResponse={setSelectedResponse}
         />
         <EvaluationsDialogs
-          dialog={dialog}
-          onCloseDialog={() => setDialog(null)}
-          onSaved={(message) => {
-            setDialog(null)
-            toast(message)
-          }}
           deleting={deleting}
           onCloseDeleting={() => setDeleting(null)}
           onDeleteConfirm={onDeleteConfirm}
@@ -200,7 +231,7 @@ export default function EvaluationsPage() {
     )
   }
 
-  const loadError = forms.error ?? hiring.error
+  const loadError = forms.error ?? firstInterviews.error ?? exitInterviews.error ?? hiring.error
 
   return (
     <div className="space-y-4">
@@ -208,11 +239,11 @@ export default function EvaluationsPage() {
         <div>
           <h1 className="text-base font-bold text-charcoal-900">{t('Create Form')}</h1>
           <p className="mt-0.5 text-xs text-charcoal-500">
-            {t('Dispatch forms to evaluators, fill your assigned evaluations, and review every response — all in one place')}
+            {t('Dispatch forms to evaluators, fill your assigned evaluations, and review every response - all in one place')}
           </p>
         </div>
         {canEdit && (
-          <Button onClick={() => openCreate(tab)}>
+          <Button onClick={() => openCreate()}>
             <Plus className="h-4 w-4" aria-hidden="true" />
             {t('Create New Form')}
           </Button>
@@ -245,9 +276,34 @@ export default function EvaluationsPage() {
               tab === 'evaluation' ? 'bg-white/20 text-white' : 'badge badge-brand',
             )}
           >
-            {forms.data?.total ?? 0}
+            {activeForms.data?.total ?? 0}
           </span>
         </button>
+        {(['firstInterview', 'exitInterview'] as const).map((option) => (
+          <button
+            key={option}
+            type="button"
+            role="tab"
+            aria-selected={tab === option}
+            onClick={() => setTab(option)}
+            className={cn(
+              'inline-flex items-center gap-1.5 rounded-lg border px-3.5 py-1.5 text-[11px] font-semibold transition-all',
+              tab === option
+                ? 'border-brand-600 bg-brand-600 text-white shadow-sm'
+                : 'border-transparent text-charcoal-600 hover:bg-charcoal-200/70 hover:text-charcoal-800',
+            )}
+          >
+            {t(option === 'firstInterview' ? 'First Interview' : 'Exit Interview')}
+            <span
+              className={cn(
+                'rounded-full px-1.5 text-[9px] font-semibold',
+                tab === option ? 'bg-white/20 text-white' : 'badge badge-brand',
+              )}
+            >
+              {(option === 'firstInterview' ? firstInterviews : exitInterviews).data?.total ?? 0}
+            </span>
+          </button>
+        ))}
         <button
           type="button"
           role="tab"
@@ -288,8 +344,8 @@ export default function EvaluationsPage() {
               )}
             </div>
 
-            {forms.isLoading || !forms.data ? (
-              <LoadingState label={t('Loading evaluation forms…')} />
+            {activeForms.isLoading || !activeForms.data ? (
+              <LoadingState label={t('Loading evaluation forms...')} />
             ) : runningForms.length === 0 ? (
               <EmptyPanel
                 title={t('No form is running right now')}
@@ -327,12 +383,12 @@ export default function EvaluationsPage() {
                 </span>
               </div>
               <Button size="sm" variant="ghost" onClick={() => setView({ name: 'history' })}>
-                {t('History & Trends →')}
+                {t('History & Trends ->')}
               </Button>
             </div>
 
-            {forms.isLoading || !forms.data ? (
-              <LoadingState label={t('Loading evaluation forms…')} />
+            {activeForms.isLoading || !activeForms.data ? (
+              <LoadingState label={t('Loading evaluation forms...')} />
             ) : oldForms.length === 0 ? (
               <EmptyPanel
                 title={t('No forms here')}
@@ -359,10 +415,24 @@ export default function EvaluationsPage() {
           <div className="mb-2 flex flex-wrap items-center gap-2">
             <SectionLabel count={hiringForms.length}>{t('HIRING FORMS')}</SectionLabel>
             <span className="text-[10px] text-charcoal-400">{t('Click a form to see who applied & their answers')}</span>
+            {hiringForms.length > 0 && (
+              <Button
+                size="sm"
+                variant="ghost"
+                className="ms-auto"
+                onClick={() => {
+                  const url = `${window.location.origin}/apply`
+                  void navigator.clipboard?.writeText(url).then(() => toast(t('Careers page link copied: {{url}}', { url })))
+                }}
+              >
+                <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
+                {t('Careers page')}
+              </Button>
+            )}
           </div>
 
           {hiring.isLoading || !hiring.data ? (
-            <LoadingState label={t('Loading hiring forms…')} />
+            <LoadingState label={t('Loading hiring forms...')} />
           ) : hiringForms.length === 0 ? (
             <EmptyPanel
               title={t('No hiring forms yet')}
@@ -380,6 +450,7 @@ export default function EvaluationsPage() {
                   kind="hiring"
                   form={form}
                   onOpen={() => setView({ name: 'detail', kind: 'hiring', form })}
+                  onShared={(url) => toast(t('Public link copied: {{url}}', { url }))}
                 />
               ))}
             </div>
@@ -388,12 +459,6 @@ export default function EvaluationsPage() {
       )}
 
       <EvaluationsDialogs
-        dialog={dialog}
-        onCloseDialog={() => setDialog(null)}
-        onSaved={(message) => {
-          setDialog(null)
-          toast(message)
-        }}
         deleting={deleting}
         onCloseDeleting={() => setDeleting(null)}
         onDeleteConfirm={onDeleteConfirm}

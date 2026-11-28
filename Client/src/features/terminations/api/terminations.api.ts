@@ -45,6 +45,18 @@ export interface SeparationVerdict {
     direction: 'none' | 'owedToEmployee' | 'employeeOwes'
     amount: number | null
     note: string | null
+    /** Pro-rated annual days earned in the exit calendar year. */
+    leaveEarnedDaysThisYear: number
+    /** Earned days never taken — the days paid out. */
+    leaveEncashmentDays: number
+    /** Base salary ÷ the exit month's calendar days. */
+    leaveEncashmentDailyRate: number
+    /** Encashment days × the daily rate (owed to the employee). */
+    leaveEncashmentAmount: number
+    /** Days taken beyond the earned balance, plus days settled unpaid. */
+    unpaidLeaveDays: number
+    /** Unpaid-leave days × the daily rate (owed by the employee). */
+    unpaidLeaveAmount: number
   } | null
   rehire: {
     status: 'Eligible' | 'Banned'
@@ -208,7 +220,15 @@ export type RehireStatus = 'Eligible' | 'Banned'
 
 export interface VerdictBody {
   finalReason: string
-  settlement: { direction: SettlementDirection; amount: number; note?: string }
+  settlement: {
+    direction: SettlementDirection
+    amount: number
+    note?: string
+    /** Optional HR override of the computed encashment (omitted = use the computed figure). */
+    leaveEncashmentAmount?: number
+    /** Optional HR override of the computed unpaid-leave debt. */
+    unpaidLeaveAmount?: number
+  }
   rehire: { status: RehireStatus; note?: string }
 }
 
@@ -216,6 +236,27 @@ export interface VerdictBody {
 export function putVerdict(id: number, body: VerdictBody, signal?: AbortSignal): Promise<string> {
   return apiRequest<{ message: string }>(`/api/separations/${id}/verdict`, { method: 'PUT', body, signal }).then(
     (r) => r.message,
+  )
+}
+
+/** Annual-leave encashment priced for one exit, computed but not saved. */
+export interface LeaveEncashmentPreview {
+  lastWorkingDay: string
+  usedDays: number
+  earnedDaysThisYear: number
+  unusedDays: number
+  deficitDays: number
+  baseSalary: number
+  dailyRate: number
+  encashmentAmount: number
+  debtAmount: number
+  belowQualifyingPeriod: boolean
+}
+
+/** GET /api/separations/{id}/leave-encashment — preview shown before saving the verdict. */
+export function getLeaveEncashment(id: number, signal?: AbortSignal): Promise<LeaveEncashmentPreview> {
+  return apiRequest<{ data: LeaveEncashmentPreview }>(`/api/separations/${id}/leave-encashment`, { signal }).then(
+    (r) => r.data,
   )
 }
 

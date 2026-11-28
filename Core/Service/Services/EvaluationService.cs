@@ -18,9 +18,9 @@ using Shared.DataTransferObject.Evaluation;
 namespace Service.Services
 {
     /// <summary>
-    /// Evaluations + form builder (api-spec-from-ui.md §5.3/§5.4). Forms come in two
-    /// kinds — evaluation templates (question rows) and hiring forms (question JSON,
-    /// published publicly by §5.2) — dispatch fans a running form out to every
+    /// Evaluations + form builder (api-spec-from-ui.md Ãƒâ€šÃ‚Â§5.3/Ãƒâ€šÃ‚Â§5.4). Forms come in two
+    /// kinds ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â evaluation templates (question rows) and hiring forms (question JSON,
+    /// published publicly by Ãƒâ€šÃ‚Â§5.2) ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â dispatch fans a running form out to every
     /// eligible evaluator as per (form, evaluator, subject) assignment rows, and the
     /// inbox/history endpoints read those rows back grouped per card. Statuses are
     /// the mock's display vocabulary throughout.
@@ -29,14 +29,15 @@ namespace Service.Services
         IUnitOfWork _unitOfWork,
         IAccessControlService _accessControl,
         IUserAccessRepository _userAccess,
-        ITeamScopeService _teamScope) : IEvaluationService
+        ITeamScopeService _teamScope,
+        IFileStorage _storage) : IEvaluationService
     {
         /// <summary>Keys that make a user an eligible evaluator / inbox holder.</summary>
         private static readonly string[] EvaluatorKeys =
             ["evaluations.manage", "evaluations.manage.team", "evaluations.view.team", "team.manage"];
 
         // ==================================================================
-        // Form builder (§5.3) — evaluation forms
+        // Form builder (Ãƒâ€šÃ‚Â§5.3) ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â evaluation forms
         // ==================================================================
 
         public async Task<EvaluationFormListResponse> GetFormsAsync(int? actorUserId, EvaluationFormListQuery query, CancellationToken cancellationToken = default)
@@ -48,10 +49,10 @@ namespace Service.Services
             var page = Math.Max(query.Page, 1);
             var pageSize = HrPortalHelpers.NormalizePageSize(query.PageSize);
 
-            var countSpec = new EvaluationFormListSpec(scope, query.Gym, query.Status, query.Position, 0, 0);
+            var countSpec = new EvaluationFormListSpec(scope, query.Gym, query.Status, query.Position, 0, 0, query.Kind);
             var total = await _unitOfWork.GetRepository<EvaluationForm, int>().CountAsync(countSpec, cancellationToken);
             var rows = await _unitOfWork.GetRepository<EvaluationForm, int>()
-                .GetAllAsync(new EvaluationFormListSpec(scope, query.Gym, query.Status, query.Position, (page - 1) * pageSize, pageSize), cancellationToken);
+                .GetAllAsync(new EvaluationFormListSpec(scope, query.Gym, query.Status, query.Position, (page - 1) * pageSize, pageSize, query.Kind), cancellationToken);
 
             return new EvaluationFormListResponse
             {
@@ -91,22 +92,67 @@ namespace Service.Services
                 Name = name,
                 Status = status,
                 IsActive = status == "Active",
+                Kind = NormalizeKind(request.Kind),
                 Target = target,
                 GymId = gymId,
                 CreatedDate = DateTime.UtcNow,
             };
-            foreach (var (type, text, options) in questions)
+            foreach (var (type, text, options, attachmentPath, attachmentName) in questions)
             {
                 form.Questions.Add(new EvaluationQuestion
                 {
                     QuestionText = text,
                     QuestionType = type,
                     OptionsJson = options.Count == 0 ? null : JsonSerializer.Serialize(options),
+                    AttachmentPath = attachmentPath,
+                    AttachmentName = attachmentName,
                     SortOrder = form.Questions.Count,
                 });
             }
 
             await _unitOfWork.GetRepository<EvaluationForm, int>().AddAsync(form, cancellationToken);
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+            return new EvaluationFormResponse { Data = MapForm(form) };
+        }
+
+        public async Task<FormAttachmentResponse> UploadFormAttachmentAsync(int? actorUserId, Stream content, string fileName, CancellationToken cancellationToken = default)
+        {
+            var actor = await HrPortalHelpers.ResolveActorAsync(_unitOfWork, actorUserId, cancellationToken);
+            await _accessControl.EnsurePermissionAsync(actor.Id, "evaluations.forms.manage", cancellationToken);
+
+            var stored = await _storage.SaveAsync("hr-documents", fileName, content, cancellationToken);
+            return new FormAttachmentResponse
+            {
+                Data = new FormAttachmentItem
+                {
+                    Path = stored.RelativePath,
+                    Name = Path.GetFileName(fileName),
+                },
+            };
+        }
+
+        public async Task<EvaluationFormResponse> SetFormAttachmentAsync(int? actorUserId, int formId, Stream content, string fileName, CancellationToken cancellationToken = default)
+        {
+            var actor = await HrPortalHelpers.ResolveActorAsync(_unitOfWork, actorUserId, cancellationToken);
+            await _accessControl.EnsurePermissionAsync(actor.Id, "evaluations.forms.manage", cancellationToken);
+
+            var form = await _unitOfWork.GetRepository<EvaluationForm, int>()
+                .GetByIdAsync(new EvaluationFormByIdSpec(formId), cancellationToken);
+            if (form is null)
+            {
+                throw new NotFoundException("Evaluation form not found.");
+            }
+
+            var stored = await _storage.SaveAsync("hr-documents", fileName, content, cancellationToken);
+            if (!string.IsNullOrWhiteSpace(form.AttachmentPath))
+            {
+                _storage.Delete(form.AttachmentPath);
+            }
+
+            form.AttachmentPath = stored.RelativePath;
+            form.AttachmentName = Path.GetFileName(fileName);
+            _unitOfWork.GetRepository<EvaluationForm, int>().Update(form);
             await _unitOfWork.SaveChangesAsync(cancellationToken);
 
             return new EvaluationFormResponse { Data = MapForm(form) };
@@ -138,15 +184,18 @@ namespace Service.Services
             form.Name = name;
             form.Status = status;
             form.IsActive = status == "Active";
+            form.Kind = NormalizeKind(request.Kind ?? form.Kind);
             form.Target = target;
             form.GymId = gymId;
-            foreach (var (type, text, options) in questions)
+            foreach (var (type, text, options, attachmentPath, attachmentName) in questions)
             {
                 form.Questions.Add(new EvaluationQuestion
                 {
                     QuestionText = text,
                     QuestionType = type,
                     OptionsJson = options.Count == 0 ? null : JsonSerializer.Serialize(options),
+                    AttachmentPath = attachmentPath,
+                    AttachmentName = attachmentName,
                     SortOrder = form.Questions.Count,
                 });
             }
@@ -171,7 +220,7 @@ namespace Service.Services
 
             if (form.Responses.Count > 0)
             {
-                throw new BadRequestException("This form has submitted evaluations — set its status to Inactive instead.");
+                throw new BadRequestException("This form has submitted evaluations ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â set its status to Inactive instead.");
             }
 
             foreach (var assignment in form.Assignments.ToList())
@@ -191,7 +240,7 @@ namespace Service.Services
         }
 
         // ==================================================================
-        // Form builder (§5.3) — hiring forms
+        // Form builder (Ãƒâ€šÃ‚Â§5.3) ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â hiring forms
         // ==================================================================
 
         public async Task<HiringFormListResponse> GetHiringFormsAsync(int? actorUserId, HiringFormListQuery query, CancellationToken cancellationToken = default)
@@ -208,7 +257,7 @@ namespace Service.Services
 
             if (actorUserId is null)
             {
-                // Public careers view (§5.2): open forms only, no access scope, gym
+                // Public careers view (Ãƒâ€šÃ‚Â§5.2): open forms only, no access scope, gym
                 // matched by branch name or id.
                 scope = [];
                 status = "Open";
@@ -292,7 +341,7 @@ namespace Service.Services
             return new HiringFormResponse { Data = MapHiringForm(form, applicants.GetValueOrDefault(formId)) };
         }
 
-        /// <summary>Branch name → gym id without an access check (public filters + admin name filters).</summary>
+        /// <summary>Branch name ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ gym id without an access check (public filters + admin name filters).</summary>
         private async Task<int?> LookupGymIdByNameAsync(string name, CancellationToken cancellationToken)
         {
             var gym = await _unitOfWork.GetRepository<Gym, int>()
@@ -305,7 +354,7 @@ namespace Service.Services
             var actor = await HrPortalHelpers.ResolveActorAsync(_unitOfWork, actorUserId, cancellationToken);
             await _accessControl.EnsurePermissionAsync(actor.Id, "evaluations.forms.manage", cancellationToken);
 
-            var (name, status, position, gymId) = await ValidateHiringFormAsync(actor, request, cancellationToken);
+            var (name, status, position, gymId, description) = await ValidateHiringFormAsync(actor, request, cancellationToken);
             var questions = NormalizeQuestionInputs(request.QuestionList);
 
             var form = new HiringForm
@@ -313,6 +362,7 @@ namespace Service.Services
                 Name = name,
                 Status = status,
                 Position = position,
+                Description = description,
                 GymId = gymId,
                 QuestionsJson = SerializeHiringQuestions(questions),
                 CreatedBy = actor.Id,
@@ -337,12 +387,13 @@ namespace Service.Services
                 throw new NotFoundException("Hiring form not found.");
             }
 
-            var (name, status, position, gymId) = await ValidateHiringFormAsync(actor, request, cancellationToken);
+            var (name, status, position, gymId, description) = await ValidateHiringFormAsync(actor, request, cancellationToken);
             var questions = NormalizeQuestionInputs(request.QuestionList);
 
             form.Name = name;
             form.Status = status;
             form.Position = position;
+            form.Description = description;
             form.GymId = gymId;
             form.QuestionsJson = SerializeHiringQuestions(questions);
 
@@ -369,7 +420,7 @@ namespace Service.Services
                 .CountAsync(new ApplicationsByFormsSpec([formId]), cancellationToken);
             if (applications > 0)
             {
-                throw new BadRequestException("This form has received applications — close it instead of deleting it.");
+                throw new BadRequestException("This form has received applications ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â close it instead of deleting it.");
             }
 
             _unitOfWork.GetRepository<HiringForm, int>().Remove(form);
@@ -377,7 +428,7 @@ namespace Service.Services
         }
 
         // ==================================================================
-        // Dispatch + assignments (§5.4)
+        // Dispatch + assignments (Ãƒâ€šÃ‚Â§5.4)
         // ==================================================================
 
         public async Task<DispatchResponse> DispatchAsync(int? actorUserId, int formId, CancellationToken cancellationToken = default)
@@ -560,7 +611,7 @@ namespace Service.Services
         }
 
         // ==================================================================
-        // Submit + launch cycle (§5.4)
+        // Submit + launch cycle (Ãƒâ€šÃ‚Â§5.4)
         // ==================================================================
 
         public async Task<SubmitEvaluationResponse> SubmitResponseAsync(int? actorUserId, int formId, SubmitEvaluationRequest request, CancellationToken cancellationToken = default)
@@ -731,7 +782,7 @@ namespace Service.Services
                 started++;
             }
 
-            // One cycle chip per label — relaunching an open label adds no duplicate chips.
+            // One cycle chip per label ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â relaunching an open label adds no duplicate chips.
             var cycles = (await _unitOfWork.GetRepository<PerformanceCycle, int>().GetAllAsync(cancellationToken)).ToList();
             var cycle = cycles.FirstOrDefault(c => string.Equals(c.Name, period, StringComparison.OrdinalIgnoreCase));
             if (cycle is null)
@@ -761,7 +812,7 @@ namespace Service.Services
         }
 
         // ==================================================================
-        // History reads (§5.4)
+        // History reads (Ãƒâ€šÃ‚Â§5.4)
         // ==================================================================
 
         public async Task<EvaluationResponseListResponse> GetResponsesAsync(int? actorUserId, EvaluationResponseListQuery query, CancellationToken cancellationToken = default)
@@ -821,9 +872,9 @@ namespace Service.Services
                 throw new NotFoundException("Employee not found.");
             }
 
-            // Own evaluations are self-service (mock §11); other readers need
-            // evaluations.view for the employee's gym — the security matrix grants
-            // HR/HRM user keys and TL/BM carry it in their per-gym role bundles —
+            // Own evaluations are self-service (mock Ãƒâ€šÃ‚Â§11); other readers need
+            // evaluations.view for the employee's gym ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â the security matrix grants
+            // HR/HRM user keys and TL/BM carry it in their per-gym role bundles ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â
             // and a team-scoped Team Leader only ever sees his team members (F3).
             if (!await IsOwnEmployeeAsync(actor.Id, employeeId, cancellationToken))
             {
@@ -902,7 +953,7 @@ namespace Service.Services
         }
 
         // ==================================================================
-        // Goals (§5.4)
+        // Goals (Ãƒâ€šÃ‚Â§5.4)
         // ==================================================================
 
         public async Task<GoalListResponse> GetGoalsAsync(int? actorUserId, GoalListQuery query, CancellationToken cancellationToken = default)
@@ -946,7 +997,7 @@ namespace Service.Services
                 due = parsedDue;
             }
 
-            // The editor types a display name — resolve it when exactly one employee matches.
+            // The editor types a display name ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â resolve it when exactly one employee matches.
             var employeeName = HrPortalHelpers.NullIfBlank(request.Employee) ?? string.Empty;
             int? employeeId = null;
             if (employeeName.Length > 0)
@@ -999,7 +1050,7 @@ namespace Service.Services
             return (name, status, target, gymId);
         }
 
-        private async Task<(string Name, string Status, string? Position, int? GymId)> ValidateHiringFormAsync(
+        private async Task<(string Name, string Status, string? Position, int? GymId, string? Description)> ValidateHiringFormAsync(
             User actor, UpsertHiringFormRequest request, CancellationToken cancellationToken)
         {
             var name = HrPortalHelpers.NullIfBlank(request.Name)
@@ -1012,8 +1063,14 @@ namespace Service.Services
                 position = null;
             }
 
+            var description = HrPortalHelpers.NullIfBlank(request.Description);
+            if (description is { Length: > 4000 })
+            {
+                throw new BadRequestException("The job description must be 4000 characters or fewer.");
+            }
+
             var gymId = await ResolveOptionalGymAsync(actor, request.GymId, request.Gym, cancellationToken);
-            return (name, status, position, gymId);
+            return (name, status, position, gymId, description);
         }
 
         private async Task<int?> ResolveOptionalGymAsync(User actor, int? gymId, string? gymName, CancellationToken cancellationToken)
@@ -1032,22 +1089,22 @@ namespace Service.Services
             return (await HrPortalHelpers.ResolveGymAsync(_unitOfWork, _userAccess, actor, null, name, cancellationToken)).Id;
         }
 
-        /// <summary>Editor validation: ≥ 1 question, choice questions ≥ 2 options, known types.</summary>
-        private static List<(EvaluationQuestionType Type, string Text, List<string> Options)> NormalizeQuestionInputs(List<FormQuestionInput>? inputs)
+        /// <summary>Editor validation: ÃƒÂ¢Ã¢â‚¬Â°Ã‚Â¥ 1 question, choice questions ÃƒÂ¢Ã¢â‚¬Â°Ã‚Â¥ 2 options, known types.</summary>
+        private static List<(EvaluationQuestionType Type, string Text, List<string> Options, string? AttachmentPath, string? AttachmentName)> NormalizeQuestionInputs(List<FormQuestionInput>? inputs)
         {
             if (inputs is null || inputs.Count == 0)
             {
                 throw new BadRequestException("Add at least one question.");
             }
 
-            var normalized = new List<(EvaluationQuestionType, string, List<string>)>();
+            var normalized = new List<(EvaluationQuestionType, string, List<string>, string?, string?)>();
             foreach (var input in inputs)
             {
                 var type = ParseUiQuestionType(input.Type);
                 var text = HrPortalHelpers.NullIfBlank(input.Text)
                     ?? throw new BadRequestException("Each question needs its text.");
                 var options = new List<string>();
-                if (type != EvaluationQuestionType.Rating5)
+                if (type is not (EvaluationQuestionType.Rating5 or EvaluationQuestionType.FileUpload))
                 {
                     options = (input.Options ?? [])
                         .Select(o => (o ?? string.Empty).Trim())
@@ -1060,26 +1117,28 @@ namespace Service.Services
                     }
                 }
 
-                normalized.Add((type, text, options));
+                normalized.Add((type, text, options, HrPortalHelpers.NullIfBlank(input.AttachmentPath), HrPortalHelpers.NullIfBlank(input.AttachmentName)));
             }
 
             return normalized;
         }
 
-        /// <summary>UI vocabulary → stored question type (text = rating, no options).</summary>
+        /// <summary>UI vocabulary ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ stored question type (text = rating, no options).</summary>
         private static EvaluationQuestionType ParseUiQuestionType(string? type) =>
             (type ?? "text").Trim().ToLowerInvariant() switch
             {
                 "" or "text" => EvaluationQuestionType.Rating5,
                 "choose" => EvaluationQuestionType.MultipleChoice,
                 "checkbox" => EvaluationQuestionType.Checkbox,
-                _ => throw new BadRequestException("Unknown question type — use text, choose, or checkbox."),
+                "file" or "fileupload" => EvaluationQuestionType.FileUpload,
+                _ => throw new BadRequestException("Unknown question type - use text, choose, checkbox, or file."),
             };
 
         private static string ToUiQuestionType(EvaluationQuestionType type) => type switch
         {
             EvaluationQuestionType.MultipleChoice => "choose",
             EvaluationQuestionType.Checkbox => "checkbox",
+            EvaluationQuestionType.FileUpload => "file",
             _ => "text",
         };
 
@@ -1134,7 +1193,7 @@ namespace Service.Services
                     case 0:
                         throw new BadRequestException($"No active employee named \"{name}\" was found.");
                     case > 1:
-                        throw new BadRequestException($"Multiple employees are named \"{name}\" — send the employee id instead.");
+                        throw new BadRequestException($"Multiple employees are named \"{name}\" ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â send the employee id instead.");
                     default:
                         subject = matches[0];
                         break;
@@ -1213,6 +1272,14 @@ namespace Service.Services
             };
         }
 
+        /// <summary>Builder tab the form belongs to; unknown values fall back to the Evaluation tab.</summary>
+        private static string NormalizeKind(string? kind) => kind?.Trim() switch
+        {
+            "FirstInterview" => "FirstInterview",
+            "ExitInterview" => "ExitInterview",
+            _ => "Evaluation",
+        };
+
         private static EvaluationFormItem MapForm(EvaluationForm form) => new()
         {
             Id = form.Id,
@@ -1221,6 +1288,8 @@ namespace Service.Services
             Target = form.Target,
             Gym = form.Gym?.Name ?? "All",
             Status = form.Status,
+            Kind = form.Kind,
+            AttachmentName = form.AttachmentName,
             Questions = form.Questions?.Count ?? 0,
             QuestionList = (form.Questions ?? [])
                 .OrderBy(q => q.SortOrder)
@@ -1229,6 +1298,8 @@ namespace Service.Services
                     Type = ToUiQuestionType(q.QuestionType),
                     Text = q.QuestionText,
                     Options = ParseOptionsJson(q.OptionsJson),
+                    AttachmentName = q.AttachmentName,
+                    AttachmentPath = q.AttachmentPath,
                 }).ToList(),
             CreatedDate = form.CreatedDate,
             LastUsed = form.LastUsedAt,
@@ -1243,6 +1314,7 @@ namespace Service.Services
                 Id = form.Id,
                 Name = form.Name,
                 Position = form.Position,
+                Description = form.Description,
                 Gym = form.Gym?.Name ?? "All",
                 Status = form.Status,
                 Questions = questionList.Count,
@@ -1280,18 +1352,20 @@ namespace Service.Services
             Owner = goal.Owner,
         };
 
-        /// <summary>≥ 60 → Pass, below → Below Target, no score yet → Pending.</summary>
+        /// <summary>ÃƒÂ¢Ã¢â‚¬Â°Ã‚Â¥ 60 ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ Pass, below ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ Below Target, no score yet ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ Pending.</summary>
         private static string DeriveResult(decimal? score, string status) =>
             score is null
-                ? (status == "Completed" ? "—" : "Pending")
+                ? (status == "Completed" ? "ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â" : "Pending")
                 : score >= 60 ? "Pass" : "Below Target";
 
-        private static string SerializeHiringQuestions(List<(EvaluationQuestionType Type, string Text, List<string> Options)> questions) =>
+        private static string SerializeHiringQuestions(List<(EvaluationQuestionType Type, string Text, List<string> Options, string? AttachmentPath, string? AttachmentName)> questions) =>
             JsonSerializer.Serialize(questions.Select(q => new
             {
                 type = ToUiQuestionType(q.Type),
                 text = q.Text,
                 options = q.Options,
+                attachmentPath = q.AttachmentPath,
+                attachmentName = q.AttachmentName,
             }));
 
         private static List<string> ParseOptionsJson(string? json)
@@ -1329,7 +1403,7 @@ namespace Service.Services
             }
         }
 
-        /// <summary>Answers live in a jsonb column — quoted on write, unwrapped on read.</summary>
+        /// <summary>Answers live in a jsonb column ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â quoted on write, unwrapped on read.</summary>
         private static string DecodeAnswer(string json)
         {
             if (string.IsNullOrWhiteSpace(json))
@@ -1350,7 +1424,7 @@ namespace Service.Services
             }
         }
 
-        /// <summary>permission key A **or** B **or** … (the inbox allows any of the four).</summary>
+        /// <summary>permission key A **or** B **or** ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ (the inbox allows any of the four).</summary>
         private async Task EnsureAnyPermissionAsync(User actor, string[] keys, CancellationToken cancellationToken)
         {
             foreach (var key in keys)

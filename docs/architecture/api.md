@@ -248,9 +248,9 @@ Body: { employeeId (in-scope), unit? (hours | days), value? (the size), amount (
 
 Query: `unit` (`hours` | `days`) and `value`. Returns both rates of the punished month plus the money that size costs: `{ candidateId, dailyRate, hourlyRate, hourlyRateReady, assignedHours, monthDays, deductionUnit, deductionValue, amount, days, pendingReason }`. `amount` is 0 with a `pendingReason` while the needed rate is unknown (no salary on file, or the hourly rate before the roster is complete). Feature: attendance Edit.
 
-### GET /api/deduction-candidates/review · POST /api/deduction-candidates/{id}/review
+### GET /api/deduction-candidates/review · POST /api/deduction-candidates/{id}/hr-review
 
-The HR side of the deduction flow, surfaced as the **Deductions** tab of the HR Requests page. GET takes `status` (`review` [default], `approved`, `rejected`, `all`) and follows the caller's gym scope; requires `payroll.view` or `payroll.edit`. Returns the candidate rows with their size and both rates. POST body: { decision (`approve` | `reject`), unit?, value?, amount? } — HR may re-size through the same rates, then approve (the payroll sheet carries it as an accepted line) or waive it (final).
+The HR side of the deduction flow, surfaced as the **Deductions** tab of the HR Requests page. GET takes `status` (`review` [default], `approved`, `rejected`, `all`) and follows the caller's gym scope; requires `payroll.view` or `payroll.edit`. Returns the candidate rows with their size and both rates. POST body: { decision (`approve` | `reject`), unit?, value?, amount? } — HR may re-size through the same rates, then approve (the payroll sheet carries it as an accepted line) or waive it (final). The route is `hr-review` (mirroring `branch-review`) because `POST /api/deduction-candidates/{id}/review` — see the payroll section — reviews a **payroll entry line item**, a different table with its own id space.
 
 ### POST /api/deduction-candidates/{id}/branch-review
 
@@ -895,7 +895,7 @@ Permission: `evaluations.forms.manage`. Returns 204. Blocked with 400 once any e
 
 ### GET /api/hiring-forms
 
-Dual-mode (§5.2 public careers view). **Authenticated** (`evaluations.view`): the admin card list as before, gym scope per ADR-003. **Anonymous** (no token): Open forms only (the `status` query is forced to `Open` — `status=Closed` cannot opt in), unscoped, `gym` matched by branch name or id (unknown gym = empty list, no error). Query: `gym` (id or name), `status` (Open | Closed — admin only), `position` (exact, case-insensitive), `page`, `pageSize`. Returns 200 `{ items: [{ id, name, position, gym, status, questions, questionList[], createdDate, lastUsed?, applicants }], … }` — `applicants` counts rows in `HiringFormApplications`. Errors: 401 (authenticated without the permission).
+Dual-mode (§5.2 public careers view). **Authenticated** (`evaluations.view`): the admin card list as before, gym scope per ADR-003. **Anonymous** (no token): Open forms only (the `status` query is forced to `Open` — `status=Closed` cannot opt in), unscoped, `gym` matched by branch name or id (unknown gym = empty list, no error). Query: `gym` (id or name), `status` (Open | Closed — admin only), `position` (exact, case-insensitive), `page`, `pageSize`. Returns 200 `{ items: [{ id, name, position, description?, gym, status, questions, questionList[], createdDate, lastUsed?, applicants }], … }` — `description` is the HR-written job description (null when empty) and `applicants` counts rows in `HiringFormApplications`. Errors: 401 (authenticated without the permission).
 
 ### GET /api/hiring-forms/{id}
 
@@ -903,7 +903,7 @@ Same dual mode: anonymous visitors only ever see **Open** forms (404 otherwise);
 
 ### POST /api/hiring-forms · PUT /api/hiring-forms/{id}
 
-Permission: `evaluations.forms.manage`. Body: `{ name (required), position?, gym?, status? ("Open" default), questionList (≥ 1, same validation as evaluation forms) }`. Returns 201 `{ data: { … } }` / 200 `{ data: { … } }`. Errors: 400, 401, 404 (PUT).
+Permission: `evaluations.forms.manage`. Body: `{ name (required), position?, description? (job description, ≤ 4000 chars, shown on the public careers page), gym?, status? ("Open" default), questionList (≥ 1, same validation as evaluation forms) }`. Returns 201 `{ data: { … } }` / 200 `{ data: { … } }`. Errors: 400, 401, 404 (PUT).
 
 ### DELETE /api/hiring-forms/{id}
 

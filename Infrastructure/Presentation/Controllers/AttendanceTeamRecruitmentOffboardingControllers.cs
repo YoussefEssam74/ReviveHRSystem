@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using ServiceAbstraction.Services;
 using Shared;
@@ -39,6 +40,21 @@ namespace Presentation.Controllers
             var count = await teamOverviewService.GetUnscheduledCountAsync(
                 GetActorUserId(), teamId, GetGymIdFromToken(), cancellationToken);
             return Ok(new { count });
+        }
+
+        /// <summary>GET /api/teams — every team of the active gym with its leader.</summary>
+        [HttpGet]
+        public async Task<ActionResult<IReadOnlyList<TeamListItem>>> GetTeams(CancellationToken cancellationToken)
+            => Ok(await teamOverviewService.GetGymTeamsAsync(GetActorUserId(), GetGymIdFromToken(), cancellationToken));
+
+        /// <summary>POST /api/teams — create a team for a Team Leader with its employees.</summary>
+        [HttpPost]
+        public async Task<ActionResult<TeamListItem>> CreateTeam(
+            [FromBody] CreateTeamRequest request, CancellationToken cancellationToken)
+        {
+            var created = await teamOverviewService.CreateTeamAsync(
+                GetActorUserId(), GetGymIdFromToken(), request, cancellationToken);
+            return StatusCode(StatusCodes.Status201Created, created);
         }
     }
 

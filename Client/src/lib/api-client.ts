@@ -1,5 +1,5 @@
 import { translate as t } from '../i18n'
-import { clearSession, loadStoredSession, saveSession } from './session-store'
+import { clearSession, loadStoredSession, saveSession, SESSION_CHANGED_EVENT } from './session-store'
 import type { StoredSession } from './session-store'
 
 /**
@@ -10,6 +10,25 @@ import type { StoredSession } from './session-store'
 const BASE_URL = (import.meta.env.VITE_API_URL as string | undefined) ?? ''
 
 const REQUEST_TIMEOUT_MS = 15_000
+
+/**
+ * Gym the operator chose at login (or in the header switcher). Every read is
+ * scoped to it unless the caller explicitly names a gym, so a page never mixes
+ * branches the user happened to switch through. Set from MeContext.
+ */
+let requestGymId: number | null = null
+
+export function setRequestGymScope(gymId: number | null) {
+  requestGymId = gymId
+}
+
+/** Appends the active gym to GET list reads that did not ask for a scope. */
+function scopedPath(path: string, method: string): string {
+  if (requestGymId == null || method !== 'GET' || !path.startsWith('/api/')) return path
+  // `gym=` (including `gym=all`) means the caller decided the scope.
+  if (/[?&]gym=/.test(path)) return path
+  return `${path}${path.includes('?') ? '&' : '?'}gym=${requestGymId}`
+}
 
 export interface ApiFieldError {
   field: string
@@ -49,6 +68,8 @@ export interface RequestOptions {
   stationAuth?: boolean
   /** Internal guard against retrying a request more than once after refresh. */
   retried?: boolean
+  /** Internal guard against replaying a request more than once with a fresh antiforgery token. */
+  csrfRetried?: boolean
 }
 
 const STATUS_FALLBACK_MESSAGES: Record<number, string> = {
@@ -192,7 +213,7 @@ async function refreshOnce(initial: StoredSession, controller: AbortController):
     return { kind: 'refreshed', session: storedAtLock }
   }
 
-  const csrfToken = await getCsrfToken()
+  const csrfToken = await mintCsrfToken()
 
   const response = await fetch(BASE_URL + '/api/auth/refresh', {
     method: 'POST',
@@ -302,28 +323,81 @@ async function renewCookieSession(session: StoredSession): Promise<RenewalResult
 
 const AuthCsrfHeader = 'X-CSRF-TOKEN'
 let csrfToken: string | null = null
-let csrfPromise: Promise<string> | null = null
+let csrfPromise: Promise<{ token: string; sessionKey: string }> | null = null
+/** Session snapshot the cached antiforgery token was minted under (see getCsrfToken). */
+let csrfSessionKey: string | null = null
 
-async function getCsrfToken(): Promise<string> {
-  if (csrfToken) return csrfToken
-  if (!csrfPromise) {
-    csrfPromise = fetch(BASE_URL + '/api/auth/csrf', {
-      method: 'GET',
-      headers: { Accept: 'application/json' },
-      credentials: 'include',
-    }).then(async (response) => {
-      if (!response.ok) throw new ApiError(response.status, 'CSRF_TOKEN_UNAVAILABLE', fallbackMessage(response.status))
-      const body = (await response.json()) as { requestToken?: string }
-      if (!body.requestToken) throw new ApiError(400, 'CSRF_TOKEN_UNAVAILABLE', t('Could not verify this browser session. Refresh and try again.'))
-      csrfToken = body.requestToken
-      return body.requestToken
-    }).finally(() => { csrfPromise = null })
-  }
-  return csrfPromise
+function currentSessionKey(): string {
+  return loadStoredSession()?.sessionKey ?? 'anonymous'
 }
 
+/**
+ * Antiforgery request tokens carry the claims identity that minted them, and the
+ * API refuses one that belongs to a different identity ("meant for a different
+ * claims-based user"). A token cached past an identity change therefore fails
+ * every unsafe request — including the login itself — until the page reloads,
+ * which is exactly what the sign-in page's anonymous token did once the login
+ * established a user. Drop it whenever the stored session changes identity.
+ */
+export function resetCsrfToken() {
+  csrfToken = null
+  csrfSessionKey = null
+}
+
+// Sign-in, gym switch and sign-out all rewrite the stored session. Compare keys
+// rather than clearing blindly: a silent refresh stores the same session and must
+// not cost an extra token round trip.
+window.addEventListener(SESSION_CHANGED_EVENT, () => {
+  if (csrfSessionKey !== null && csrfSessionKey !== currentSessionKey()) resetCsrfToken()
+})
+
+function mintCsrfToken(): Promise<string> {
+  return fetch(BASE_URL + '/api/auth/csrf', {
+    method: 'GET',
+    headers: { Accept: 'application/json' },
+    credentials: 'include',
+  }).then(async (response) => {
+    if (!response.ok) throw new ApiError(response.status, 'CSRF_TOKEN_UNAVAILABLE', fallbackMessage(response.status))
+    const body = (await response.json()) as { requestToken?: string }
+    if (!body.requestToken) throw new ApiError(400, 'CSRF_TOKEN_UNAVAILABLE', t('Could not verify this browser session. Refresh and try again.'))
+    return body.requestToken
+  })
+}
+
+async function getCsrfToken(): Promise<string> {
+  const sessionKey = currentSessionKey()
+  if (csrfToken && csrfSessionKey === sessionKey) return csrfToken
+  if (!csrfPromise) {
+    csrfPromise = mintCsrfToken()
+      .then((token) => ({ token, sessionKey: currentSessionKey() }))
+      .finally(() => { csrfPromise = null })
+  }
+  const minted = await csrfPromise
+  csrfToken = minted.token
+  csrfSessionKey = minted.sessionKey
+  // The identity can change while the mint is in flight (a login completing in
+  // this tab); that token belongs to the previous one and would be refused.
+  return minted.sessionKey === currentSessionKey() ? minted.token : getCsrfToken()
+}
+
+/**
+ * Sign-in, gym selection, silent renewal and sign-out all run before — or without —
+ * a live access token, so the principal the server resolves for them is whatever the
+ * cookies currently say, and it is ANONYMOUS once the access token has expired. A
+ * token cached under the previous identity is refused there ("meant for a different
+ * claims-based user"), which is what broke silent renewal and sign-out: the cached
+ * token outlived the identity it was minted for. These calls therefore mint a token
+ * for the identity the server will actually see, and never reuse the cache.
+ */
+const FRESH_CSRF_PATHS = new Set([
+  '/api/auth/login',
+  '/api/auth/login/select-gym',
+  '/api/auth/refresh',
+  '/api/auth/logout',
+])
+
 export async function apiRequest<T>(path: string, options: RequestOptions & { form?: FormData } = {}): Promise<T> {
-  const { method = 'GET', body, form, signal, stationToken, stationAuth, retried } = options
+  const { method = 'GET', body, form, signal, stationToken, stationAuth, retried, csrfRetried } = options
   const session = loadStoredSession()
   const controller = new AbortController()
   let timedOut = false
@@ -346,13 +420,13 @@ export async function apiRequest<T>(path: string, options: RequestOptions & { fo
     ...(stationToken ? { 'X-Station-Token': stationToken } : {}),
   }
   if (!['GET', 'HEAD', 'OPTIONS'].includes(method)) {
-    headers[AuthCsrfHeader] = await getCsrfToken()
+    headers[AuthCsrfHeader] = FRESH_CSRF_PATHS.has(path) ? await mintCsrfToken() : await getCsrfToken()
   }
   const payload: BodyInit | undefined = form ?? (body === undefined ? undefined : JSON.stringify(body))
 
   let response: Response
   try {
-    response = await fetch(BASE_URL + path, {
+    response = await fetch(BASE_URL + scopedPath(path, method), {
       method,
       headers,
       body: payload,
@@ -376,6 +450,15 @@ export async function apiRequest<T>(path: string, options: RequestOptions & { fo
   const json: unknown = text ? safeJsonParse(text) : null
 
   if (!response.ok) {
+    // The antiforgery token can be stale while the session is perfectly live —
+    // another tab signed in as a different user, or the API rotated the data
+    // protection keys behind the cookie. Mint a fresh pair and replay once.
+    if (!csrfRetried && !stationToken && !stationAuth
+        && toApiError(response.status, json).code === 'CSRF_VALIDATION_FAILED') {
+      resetCsrfToken()
+      return apiRequest<T>(path, { ...options, csrfRetried: true })
+    }
+
     // Access-token expired? Try a silent refresh once, then retry the original request.
     let renewalRejected = false
     if (response.status === 401 && !retried && !stationToken && !stationAuth

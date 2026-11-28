@@ -167,9 +167,20 @@ namespace Service.Services
                 .GetAllAsync(new PayrollEntriesByPeriodSpec(period.Id, withEmployee: false), cancellationToken);
             var covered = entrants.Select(e => e.EmployeeId).ToHashSet();
 
+            // Exits whose last working day lands in this period need a final sheet even
+            // though the employee is no longer Active, and that sheet carries their
+            // annual-leave encashment.
+            var exitingCases = await _unitOfWork.GetRepository<OffboardingCase, int>()
+                .GetAllAsync(new OffboardingCasesEndingInGymRangeSpec(gymId, start, end), cancellationToken);
+            var exitingByEmployee = exitingCases
+                .Where(c => c.LeaveEncashmentAmount is not null)
+                .GroupBy(c => c.EmployeeId)
+                .ToDictionary(g => g.Key, g => g.OrderByDescending(c => c.LastWorkingDate).First());
+            var exitingIds = exitingByEmployee.Keys.ToHashSet();
+
             var employees = (await _unitOfWork.GetRepository<Employee, int>()
                     .GetAllAsync(new EmployeesByGymSpec(gymId), cancellationToken))
-                .Where(e => e.Status == EmployeeStatus.Active && !covered.Contains(e.Id))
+                .Where(e => (e.Status == EmployeeStatus.Active || exitingIds.Contains(e.Id)) && !covered.Contains(e.Id))
                 .ToList();
 
             if (employees.Count == 0)
@@ -206,6 +217,13 @@ namespace Service.Services
                     TotalBonuses = 0m,
                     Status = "Draft",
                 };
+
+                if (exitingByEmployee.TryGetValue(employee.Id, out var exitCase))
+                {
+                    entry.LeaveEncashment = exitCase.LeaveEncashmentAmount ?? 0m;
+                    entry.LeaveEncashmentDays = exitCase.LeaveEncashmentDays ?? 0m;
+                }
+
                 SyncTotals(entry);
                 await _unitOfWork.GetRepository<PayrollEntry, int>().AddAsync(entry, cancellationToken);
                 added++;
@@ -214,6 +232,40 @@ namespace Service.Services
             await _unitOfWork.SaveChangesAsync(cancellationToken);
             response.EntriesAdded = added;
             return response;
+        }
+
+        /// <summary>
+        /// Creates and persists the sheet for one employee in a period that has none.
+        /// Shared with the exit-verdict path so a settlement always has somewhere to
+        /// land, even in a month whose payroll was never generated.
+        /// </summary>
+        internal static async Task<PayrollEntry> EnsureEntryAsync(
+            IUnitOfWork unitOfWork, PayrollPeriod period, Employee employee, CancellationToken cancellationToken)
+        {
+            var gym = await unitOfWork.GetRepository<Gym, int>().GetByIdAsync(employee.GymId, cancellationToken);
+            var compensation = await unitOfWork.GetRepository<Compensation, int>()
+                .GetByIdAsync(new LatestCompensationSpec(employee.Id), cancellationToken);
+            var attendance = await unitOfWork.GetRepository<AttendanceRecord, int>()
+                .GetAllAsync(new AttendanceByEmployeesRangeSpec([employee.Id], period.StartDate, period.EndDate), cancellationToken);
+
+            var entry = new PayrollEntry
+            {
+                PayrollPeriodId = period.Id,
+                EmployeeId = employee.Id,
+                BaseSalary = BaseWithRaises(
+                    compensation?.Amount ?? 0m,
+                    employee.HireDate,
+                    period.EndDate,
+                    gym?.AnnualIncreasePercent),
+                DaysWorked = attendance.Count(r => r.CheckInTime is not null),
+                OvertimeHours = 0m,
+                TotalBonuses = 0m,
+                Status = "Draft",
+            };
+
+            SyncTotals(entry);
+            await unitOfWork.GetRepository<PayrollEntry, int>().AddAsync(entry, cancellationToken);
+            return entry;
         }
 
         // ==================================================================
@@ -341,6 +393,85 @@ namespace Service.Services
                     Status = mapped.Status,
                     AttendanceRef = mapped.AttendanceRef,
                     RequestId = mapped.RequestId,
+                    Entry = BuildEntrySummary(entry),
+                },
+            };
+        }
+
+        public async Task<CreateDeductionResponse> AddBonusAsync(int? actorUserId, int periodId, int employeeId, CreateBonusRequest request, CancellationToken cancellationToken = default)
+        {
+            var actor = await HrPortalHelpers.ResolveActorAsync(_unitOfWork, actorUserId, cancellationToken);
+            await _accessControl.EnsurePermissionAsync(actor.Id, "payroll.edit", cancellationToken);
+            var (_, entry) = await LoadEntryAsync(actor, periodId, employeeId, requireOpen: true, cancellationToken);
+
+            var reason = HrPortalHelpers.NullIfBlank(request.Reason)
+                ?? throw new BadRequestException("Reason is required.");
+            if (request.Amount is not decimal amount || amount <= 0)
+            {
+                throw new BadRequestException("Amount must be greater than zero.");
+            }
+
+            var line = new PayrollEntryLineItem
+            {
+                PayrollEntryId = entry.Id,
+                Type = "Bonus",
+                Label = reason,
+                EffectiveDate = DateOnly.FromDateTime(DateTime.UtcNow),
+                Amount = amount,
+                Reason = reason,
+                Source = "manual",
+                Status = "Approved",
+            };
+            await _unitOfWork.GetRepository<PayrollEntryLineItem, int>().AddAsync(line, cancellationToken);
+
+            // TotalBonuses stays the authoritative figure the gross formula reads; the
+            // line is the audit trail behind it.
+            entry.TotalBonuses += amount;
+            SyncTotals(entry);
+            _unitOfWork.GetRepository<PayrollEntry, int>().Update(entry);
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+            var mapped = MapBonus(line);
+            return new CreateDeductionResponse
+            {
+                Data = new CreateDeductionData
+                {
+                    Id = mapped.Id,
+                    Date = mapped.Date,
+                    Label = mapped.Reason,
+                    Reason = mapped.Reason,
+                    Source = "bonus",
+                    Amount = mapped.Amount,
+                    Status = mapped.Status,
+                    AttendanceRef = string.Empty,
+                    RequestId = null,
+                    Entry = BuildEntrySummary(entry),
+                },
+            };
+        }
+
+        public async Task<RemoveDeductionResponse> RemoveBonusAsync(int? actorUserId, int periodId, int employeeId, int lineId, CancellationToken cancellationToken = default)
+        {
+            var actor = await HrPortalHelpers.ResolveActorAsync(_unitOfWork, actorUserId, cancellationToken);
+            await _accessControl.EnsurePermissionAsync(actor.Id, "payroll.edit", cancellationToken);
+            var (_, entry) = await LoadEntryAsync(actor, periodId, employeeId, requireOpen: true, cancellationToken);
+
+            var line = entry.LineItems.FirstOrDefault(l =>
+                    l.Id == lineId && l.Type.Equals("Bonus", StringComparison.OrdinalIgnoreCase))
+                ?? throw new BadRequestException("Bonus line not found on this sheet.");
+
+            _unitOfWork.GetRepository<PayrollEntryLineItem, int>().Remove(line);
+            entry.LineItems.Remove(line);
+            entry.TotalBonuses = Math.Max(0m, entry.TotalBonuses - line.Amount);
+            SyncTotals(entry);
+            _unitOfWork.GetRepository<PayrollEntry, int>().Update(entry);
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+            return new RemoveDeductionResponse
+            {
+                Data = new RemoveDeductionData
+                {
+                    Id = lineId,
                     Entry = BuildEntrySummary(entry),
                 },
             };
@@ -602,6 +733,17 @@ namespace Service.Services
             var (_, entry) = await LoadEntryAsync(actor, periodId, employeeId, requireOpen: true, cancellationToken);
             var period = await _unitOfWork.GetRepository<PayrollPeriod, int>().GetByIdAsync(periodId, cancellationToken)
                 ?? throw new NotFoundException("Payroll period not found.");
+
+            // Re-price the exit encashment now that the leave balance is final.
+            var exitCase = await _unitOfWork.GetRepository<OffboardingCase, int>()
+                .GetByIdAsync(new OpenOffboardingCaseForEmployeeSpec(entry.EmployeeId), cancellationToken);
+            if (exitCase is not null)
+            {
+                await LeaveEncashmentPricing.ApplyAsync(_unitOfWork, exitCase, cancellationToken);
+                entry.LeaveEncashment = exitCase.LeaveEncashmentAmount ?? 0m;
+                entry.LeaveEncashmentDays = exitCase.LeaveEncashmentDays ?? 0m;
+                _unitOfWork.GetRepository<OffboardingCase, int>().Update(exitCase);
+            }
 
             // Reconcile first through the one attendance → deduction path: the same
             // sweep the branch tab and dashboards run, so a month closed without
@@ -1842,6 +1984,8 @@ namespace Service.Services
                 CoverPay = CoverPay(entry, coverDays),
                 BaseSalary = entry.BaseSalary,
                 Bonus = entry.TotalBonuses,
+                LeaveEncashment = entry.LeaveEncashment,
+                LeaveEncashmentDays = entry.LeaveEncashmentDays,
                 Gross = gross,
                 Deductions = approved,
                 Net = gross - approved,
@@ -1859,13 +2003,27 @@ namespace Service.Services
                     .ThenBy(l => l.Id)
                     .Select(line => MapLine(line, candidateDays))
                     .ToList(),
+                BonusLines = entry.LineItems
+                    .Where(l => l.Type.Equals("Bonus", StringComparison.OrdinalIgnoreCase))
+                    .OrderBy(l => l.EffectiveDate)
+                    .ThenBy(l => l.Id)
+                    .Select(MapBonus)
+                    .ToList(),
                 Attendance = attendance,
                 Period = periodLabel,
             };
         }
 
-        private static DeductionLineItem MapLine(
-            PayrollEntryLineItem line, IReadOnlyDictionary<int, decimal>? candidateDays = null)
+        private static BonusLineItem MapBonus(PayrollEntryLineItem line) => new()
+        {
+            Id = line.Id,
+            Date = line.EffectiveDate,
+            Reason = string.IsNullOrWhiteSpace(line.Reason) ? line.Label : line.Reason,
+            Amount = line.Amount,
+            Status = line.Status,
+        };
+
+        private static DeductionLineItem MapLine(            PayrollEntryLineItem line, IReadOnlyDictionary<int, decimal>? candidateDays = null)
         {
             var source = UiSource(line.Source);
             return new DeductionLineItem
@@ -1928,12 +2086,12 @@ namespace Service.Services
                 : Math.Round(entry.BaseSalary / 176m * 1.5m * entry.OvertimeHours, 2);
 
         /// <summary>
-        /// Gross = base + bonuses + overtime. The annual raise is NOT added here: it is a
-        /// once-a-year step that folds into the base salary (see <see cref="BaseWithRaises"/>),
-        /// so a month never shows a raise slice of its own.
+        /// Gross = base + bonuses + overtime + annual-leave encashment. The annual raise
+        /// is NOT added here: it is a once-a-year step that folds into the base salary
+        /// (see <see cref="BaseWithRaises"/>), so a month never shows a raise slice.
         /// </summary>
         internal static decimal GrossOf(PayrollEntry entry) =>
-            entry.BaseSalary + entry.TotalBonuses + OvertimePay(entry);
+            entry.BaseSalary + entry.TotalBonuses + OvertimePay(entry) + entry.LeaveEncashment;
 
         /// <summary>
         /// True when the payroll period contains a work anniversary. The raise is a

@@ -7,6 +7,7 @@ using DomainLayer.Models.OrganizationModule;
 using DomainLayer.Models.RecruitmentModule;
 using DomainLayer.Models.RecruitmentModule.Enums;
 using DomainLayer.Models.RequestModule.Enums;
+using DomainLayer.Models.UserModule;
 using Service.Specifications;
 using ServiceAbstraction.Services;
 using Shared;
@@ -16,8 +17,8 @@ using Shared.DataTransferObject.QueryParams;
 namespace Service.Services
 {
     /// <summary>
-    /// Team overview (mock §13 My Team): the teams the caller leads in the active
-    /// gym — a leader-only surface; a member without a led team answers NotFound —
+    /// Team overview (mock Â§13 My Team): the teams the caller leads in the active
+    /// gym â€” a leader-only surface; a member without a led team answers NotFound â€”
     /// and a team-day view with per-member status and shift.
     /// </summary>
     public class TeamOverviewService(
@@ -175,6 +176,126 @@ namespace Service.Services
             return memberIds.Count(id => !scheduledIds.Contains(id));
         }
 
+        public async Task<IReadOnlyList<TeamListItem>> GetGymTeamsAsync(
+            int actorUserId, int? activeGymId, CancellationToken cancellationToken = default)
+        {
+            var gymId = RequireGym(activeGymId);
+            _ = actorUserId;
+
+            var teams = await unitOfWork.GetRepository<Team, int>()
+                .GetAllAsync(new TeamWithMembersSpec(gymId, byGym: true), cancellationToken);
+
+            // TeamLeaders rows are loaded with the team; resolve the employee names in
+            // one lookup instead of relying on a deep navigation include.
+            var leaderIds = teams
+                .SelectMany(team => team.TeamLeaders.Select(leader => leader.EmployeeId))
+                .Distinct()
+                .ToArray();
+            var leaders = leaderIds.Length == 0
+                ? new Dictionary<int, Employee>()
+                : (await unitOfWork.GetRepository<Employee, int>()
+                        .GetAllAsync(new EmployeesByIdsSpec(leaderIds, gymId), cancellationToken))
+                    .ToDictionary(employee => employee.Id);
+
+            var result = new List<TeamListItem>();
+            foreach (var team in teams)
+            {
+                var leader = team.TeamLeaders
+                    .Select(row => leaders.GetValueOrDefault(row.EmployeeId))
+                    .FirstOrDefault(employee => employee is not null);
+                result.Add(new TeamListItem
+                {
+                    Id = team.Id,
+                    Name = team.Name,
+                    GymId = team.GymId,
+                    Gym = team.Gym?.Name ?? string.Empty,
+                    LeaderUserId = leader?.UserId,
+                    LeaderName = leader?.FullName,
+                    MemberCount = team.Members.Count,
+                });
+            }
+
+            return result;
+        }
+
+        public async Task<TeamListItem> CreateTeamAsync(
+            int actorUserId, int? activeGymId, CreateTeamRequest request, CancellationToken cancellationToken = default)
+        {
+            var gymId = RequireGym(activeGymId);
+
+                        
+            var name = request.Name?.Trim();
+            if (string.IsNullOrWhiteSpace(name))
+            {
+                throw new BadRequestException("Team name is required.");
+            }
+
+            var gym = await unitOfWork.GetRepository<Gym, int>().GetByIdAsync(gymId, cancellationToken)
+                ?? throw new NotFoundException("Gym not found.");
+
+            var team = new Team { GymId = gymId, Name = name };
+            await unitOfWork.GetRepository<Team, int>().AddAsync(team, cancellationToken);
+
+            if (request.LeaderUserId is int leaderUserId)
+            {
+                var leader = await unitOfWork.GetRepository<Employee, int>()
+                    .GetByIdAsync(new EmployeeByUserIdSpec(leaderUserId), cancellationToken);
+                if (leader is null || leader.GymId != gymId)
+                {
+                    throw new BadRequestException("The team leader has no employee record in this gym.");
+                }
+
+                team.TeamLeaders.Add(new TeamLeader { TeamId = team.Id, EmployeeId = leader.Id });
+                leader.TeamId = null; // a leader is not a member of their own team
+                unitOfWork.GetRepository<Employee, int>().Update(leader);
+            }
+            else if (request.LeaderEmployeeId is int leaderEmployeeId)
+            {
+                var leader = await unitOfWork.GetRepository<Employee, int>()
+                    .GetByIdAsync(leaderEmployeeId, cancellationToken);
+                if (leader is null || leader.GymId != gymId)
+                {
+                    throw new BadRequestException("The team leader has no employee record in this gym.");
+                }
+
+                team.TeamLeaders.Add(new TeamLeader { TeamId = team.Id, EmployeeId = leader.Id });
+                leader.TeamId = null;
+                unitOfWork.GetRepository<Employee, int>().Update(leader);
+            }
+
+            var memberIds = request.MemberEmployeeIds.Distinct().Where(id => id > 0).ToList();
+            if (memberIds.Count > 0)
+            {
+                var employees = await unitOfWork.GetRepository<Employee, int>()
+                    .GetAllAsync(new EmployeesByIdsSpec([.. memberIds], gymId), cancellationToken);
+                foreach (var employee in employees)
+                {
+                    employee.TeamId = team.Id;
+                    unitOfWork.GetRepository<Employee, int>().Update(employee);
+                }
+            }
+
+            await unitOfWork.SaveChangesAsync(cancellationToken);
+
+            var leaderEmployee = request.LeaderUserId is int userId
+                ? await unitOfWork.GetRepository<Employee, int>()
+                    .GetByIdAsync(new EmployeeByUserIdSpec(userId), cancellationToken)
+                : null;
+
+            return new TeamListItem
+            {
+                Id = team.Id,
+                Name = team.Name,
+                GymId = team.GymId,
+                Gym = gym.Name,
+                LeaderUserId = leaderEmployee?.UserId,
+                LeaderName = leaderEmployee is null
+                    ? null
+                    : leaderEmployee.FullName,
+                MemberCount = memberIds.Count,
+            };
+        }
+
         private async Task<Employee> OwnEmployeeAsync(int actorUserId, CancellationToken cancellationToken) =>            await unitOfWork.GetRepository<Employee, int>()
                 .GetByIdAsync(new EmployeeByUserIdSpec(actorUserId), cancellationToken)
             ?? throw new UnAuthorizedException("This account has no employee profile.");
@@ -187,7 +308,7 @@ namespace Service.Services
     }
 
     /// <summary>
-    /// Vacancy requests (mock §23). Requests are branch artifacts: the list is
+    /// Vacancy requests (mock Â§23). Requests are branch artifacts: the list is
     /// gym-scoped even for team leaders (their capability is equal, the artifact is
     /// the gym's), and creation is gated by the recruitment feature.
     /// </summary>
@@ -275,7 +396,7 @@ namespace Service.Services
     }
 
     /// <summary>
-    /// Employee leaving / offboarding (mock §24). Cases are gym-scoped; initiation
+    /// Employee leaving / offboarding (mock Â§24). Cases are gym-scoped; initiation
     /// targets an in-scope employee and records the case plus an employment-history
     /// event so the timeline preserves the change. Callers must be acting managers
     /// in the gym (Team Leader within his team, Branch Manager gym-wide).
@@ -428,7 +549,7 @@ namespace Service.Services
             offboardingCase.Status = "Cancelled";
 
             // When the employment standing had been parked in Notice Period
-            // (HR-initiated path) it returns to Active — the person stays
+            // (HR-initiated path) it returns to Active â€” the person stays
             // employed, mirroring how the parking was recorded on the timeline.
             var employee = await unitOfWork.GetRepository<Employee, int>()
                 .GetByIdAsync(new EmployeeProfileByIdSpec(offboardingCase.EmployeeId), cancellationToken);
@@ -443,7 +564,7 @@ namespace Service.Services
                     NewValueJson = System.Text.Json.JsonSerializer.Serialize("Active"),
                     EffectiveDate = DateOnly.FromDateTime(DateTime.UtcNow),
                     ChangedBy = actorUserId,
-                    Reason = "Leaving process closed — employment continues."
+                    Reason = "Leaving process closed â€” employment continues."
                 }, cancellationToken);
             }
 
@@ -499,7 +620,7 @@ namespace Service.Services
                 ? await unitOfWork.GetRepository<Employee, int>().GetAllAsync(new EmployeesByTeamSpec(ledTeamId.Value), cancellationToken)
                 : await unitOfWork.GetRepository<Employee, int>().GetAllAsync(new EmployeesByGymSpec(gymId), cancellationToken);
 
-            // Exclude the actor's own employee record — a BM or TL must not appear
+            // Exclude the actor's own employee record â€” a BM or TL must not appear
             // in lists they manage (offboarding, attendance, team operations).
             var ownEmployee = await unitOfWork.GetRepository<Employee, int>()
                 .GetByIdAsync(new EmployeeByUserIdSpec(actorUserId), cancellationToken);

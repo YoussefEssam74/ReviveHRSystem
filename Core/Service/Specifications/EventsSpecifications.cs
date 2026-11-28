@@ -269,6 +269,31 @@ namespace Service.Specifications
         }
     }
 
+    /// <summary>Exits in one gym whose last working day falls inside a payroll period.</summary>
+    public sealed class OffboardingCasesEndingInGymRangeSpec : BaseSpecification<OffboardingCase, int>
+    {
+        public OffboardingCasesEndingInGymRangeSpec(int gymId, DateOnly start, DateOnly end)
+        {
+            Criteria = c => c.Employee.GymId == gymId
+                && c.LastWorkingDate >= start
+                && c.LastWorkingDate <= end
+                && c.Status != "Cancelled";
+        }
+    }
+
+    /// <summary>The employee's live exit case (newest), re-priced when their payroll closes.</summary>
+    public sealed class OpenOffboardingCaseForEmployeeSpec : BaseSpecification<OffboardingCase, int>
+    {
+        public OpenOffboardingCaseForEmployeeSpec(int employeeId)
+        {
+            Criteria = c => c.EmployeeId == employeeId
+                && c.Status != "Cancelled"
+                && c.Status != "Completed";
+            OrderByDescending = c => c.LastWorkingDate;
+            ApplyPaging(0, 1);
+        }
+    }
+
     /// <summary>Current-year leave balances for a page of employees (T1 leaveTaken).</summary>
     public sealed class LeaveBalancesForEmployeesSpec : BaseSpecification<LeaveBalance, int>
     {

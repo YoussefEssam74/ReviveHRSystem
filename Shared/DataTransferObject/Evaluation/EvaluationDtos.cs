@@ -4,13 +4,17 @@ namespace Shared.DataTransferObject.Evaluation
     // Form builder (api-spec-from-ui.md §5.3) + Evaluations page (§5.4)
     // ------------------------------------------------------------------
 
-    /// <summary>One question as the editor writes it: `{ type: "text"|"checkbox"|"choose", text, options[] }`.</summary>
+    /// <summary>One question as the editor writes it: `{ type: "text"|"checkbox"|"choose", text, options[], attachmentName }`.</summary>
     public class FormQuestionInput
     {
         /// <summary>text (rating, no options) | choose (single) | checkbox (multi).</summary>
         public string? Type { get; set; }
         public string? Text { get; set; }
         public List<string>? Options { get; set; }
+        /// <summary>Display name of a document attached to this question (staged upload).</summary>
+        public string? AttachmentName { get; set; }
+        /// <summary>Relative storage path returned by the staging upload.</summary>
+        public string? AttachmentPath { get; set; }
     }
 
     /// <summary>Stored question echo (same shape as the input).</summary>
@@ -19,6 +23,22 @@ namespace Shared.DataTransferObject.Evaluation
         public string Type { get; set; } = "text";
         public string Text { get; set; } = string.Empty;
         public List<string> Options { get; set; } = [];
+        /// <summary>Attached document name, when the builder uploaded one for this question.</summary>
+        public string? AttachmentName { get; set; }
+        /// <summary>Relative storage path behind <see cref="AttachmentName"/>.</summary>
+        public string? AttachmentPath { get; set; }
+    }
+
+    /// <summary>POST /api/evaluation-forms/{id}/attachments → the stored path + display name.</summary>
+    public class FormAttachmentItem
+    {
+        public string Path { get; set; } = string.Empty;
+        public string Name { get; set; } = string.Empty;
+    }
+
+    public class FormAttachmentResponse
+    {
+        public FormAttachmentItem Data { get; set; } = null!;
     }
 
     /// <summary>POST/PUT /api/evaluation-forms body (the form-builder editor draft).</summary>
@@ -34,6 +54,8 @@ namespace Shared.DataTransferObject.Evaluation
         public int? GymId { get; set; }
         /// <summary>Active | Completed | Inactive (defaults to Active).</summary>
         public string? Status { get; set; }
+        /// <summary>Evaluation | FirstInterview | ExitInterview (defaults to Evaluation).</summary>
+        public string? Kind { get; set; }
         public List<FormQuestionInput>? QuestionList { get; set; }
     }
 
@@ -49,6 +71,10 @@ namespace Shared.DataTransferObject.Evaluation
         public string Gym { get; set; } = "All";
         /// <summary>Active | Completed | Inactive.</summary>
         public string Status { get; set; } = "Active";
+        /// <summary>Evaluation | FirstInterview | ExitInterview.</summary>
+        public string Kind { get; set; } = "Evaluation";
+        /// <summary>Uploaded reference document, when one was attached.</summary>
+        public string? AttachmentName { get; set; }
         public int Questions { get; set; }
         public List<FormQuestionItem> QuestionList { get; set; } = [];
         public DateTime CreatedDate { get; set; }
@@ -67,6 +93,8 @@ namespace Shared.DataTransferObject.Evaluation
     {
         /// <summary>Active | Completed | Inactive (blank = all).</summary>
         public string? Status { get; set; }
+        /// <summary>Evaluation | FirstInterview | ExitInterview (blank = all).</summary>
+        public string? Kind { get; set; }
         public int? Gym { get; set; }
         /// <summary>Target-role filter (blank = all).</summary>
         public string? Position { get; set; }
@@ -93,6 +121,8 @@ namespace Shared.DataTransferObject.Evaluation
         public string? Name { get; set; }
         /// <summary>Target position title; null/blank = any.</summary>
         public string? Position { get; set; }
+        /// <summary>Public job description shown on the careers page (null/blank = hidden).</summary>
+        public string? Description { get; set; }
         /// <summary>Gym branch name, or "All" for every branch.</summary>
         public string? Gym { get; set; }
         public int? GymId { get; set; }
@@ -107,6 +137,8 @@ namespace Shared.DataTransferObject.Evaluation
         public int Id { get; set; }
         public string Name { get; set; } = string.Empty;
         public string? Position { get; set; }
+        /// <summary>Public job description (careers page + application form); null when empty.</summary>
+        public string? Description { get; set; }
         public string Gym { get; set; } = "All";
         /// <summary>Open | Closed.</summary>
         public string Status { get; set; } = "Open";

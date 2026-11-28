@@ -23,6 +23,15 @@ namespace ServiceAbstraction.Services
         /// <summary>Creates an evaluation form + question rows (evaluations.forms.manage) → 201.</summary>
         Task<EvaluationFormResponse> CreateFormAsync(int? actorUserId, UpsertEvaluationFormRequest request, CancellationToken cancellationToken = default);
 
+        /// <summary>Uploads (or replaces) the reference document attached to a form.</summary>
+        Task<EvaluationFormResponse> SetFormAttachmentAsync(int? actorUserId, int formId, Stream content, string fileName, CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// Stores a question's reference document and returns its path + display name;
+        /// the builder then sends both back with the question list on save.
+        /// </summary>
+        Task<FormAttachmentResponse> UploadFormAttachmentAsync(int? actorUserId, Stream content, string fileName, CancellationToken cancellationToken = default);
+
         /// <summary>Replaces an evaluation form's fields and questions (evaluations.forms.manage).</summary>
         Task<EvaluationFormResponse> UpdateFormAsync(int? actorUserId, int formId, UpsertEvaluationFormRequest request, CancellationToken cancellationToken = default);
 

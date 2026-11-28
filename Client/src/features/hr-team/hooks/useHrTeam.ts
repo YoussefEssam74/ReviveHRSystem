@@ -4,12 +4,16 @@ import {
   getPermissionCatalog,
   getRoles,
   getTeamMembers,
+  getTeams,
   getUserAccessProfile,
   postCreateUser,
   postResetPassword,
+  postTeam,
   putRolePermissions,
+  putUserRole,
   putUserStatus,
   type ChangeUserStatusBody,
+  type CreateTeamBody,
   type CreateUserBody,
   type RoleListParams,
   type TeamListParams,
@@ -69,6 +73,40 @@ export function useCreateUser() {
       // Member rows and the role's user count both change.
       queryClient.invalidateQueries({ queryKey: ['team-members'] })
       queryClient.invalidateQueries({ queryKey: ['team-roles'] })
+    },
+  })
+}
+
+/** PUT /api/users/{id}/roles — assign a role preset to an existing member (team.manage). */
+export function useAssignRole() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, rolePreset }: { id: number; rolePreset: string }) => putUserRole(id, { rolePreset }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['team-members'] })
+      queryClient.invalidateQueries({ queryKey: ['team-roles'] })
+    },
+  })
+}
+
+/** Teams of the active gym — the Team Leader wizard's assignment target. */
+export function useTeams(enabled: boolean = true) {
+  return useQuery({
+    queryKey: ['team-list'],
+    queryFn: ({ signal }) => getTeams(signal),
+    enabled,
+  })
+}
+
+/** POST /api/teams — creates the leader's team with the chosen employees. */
+export function useCreateTeam() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (body: CreateTeamBody) => postTeam(body),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['team-list'] })
+      queryClient.invalidateQueries({ queryKey: ['team-members'] })
+      queryClient.invalidateQueries({ queryKey: ['portal'] })
     },
   })
 }

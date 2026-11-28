@@ -39,6 +39,32 @@ namespace Presentation.Controllers
         public async Task<ActionResult<EvaluationFormResponse>> UpdateForm(int id, [FromBody] UpsertEvaluationFormRequest request, CancellationToken ct)
             => Ok(await _service.UpdateFormAsync(GetActorUserId(), id, request, ct));
 
+        /// <summary>POST /api/evaluation-forms/attachments — stages a question document (upload, then save the form).</summary>
+        [HttpPost("attachments")]
+        public async Task<ActionResult<FormAttachmentResponse>> UploadQuestionAttachment(IFormFile file, CancellationToken ct)
+        {
+            if (file is null || file.Length == 0)
+            {
+                return BadRequest(new { message = "A document is required." });
+            }
+
+            await using var stream = file.OpenReadStream();
+            return Ok(await _service.UploadFormAttachmentAsync(GetActorUserId(), stream, file.FileName, ct));
+        }
+
+        /// <summary>POST /api/evaluation-forms/{id}/attachment — upload/replace the builder's reference document.</summary>
+        [HttpPost("{id:int}/attachment")]
+        public async Task<ActionResult<EvaluationFormResponse>> UploadAttachment(int id, IFormFile file, CancellationToken ct)
+        {
+            if (file is null || file.Length == 0)
+            {
+                return BadRequest(new { message = "A document is required." });
+            }
+
+            await using var stream = file.OpenReadStream();
+            return Ok(await _service.SetFormAttachmentAsync(GetActorUserId(), id, stream, file.FileName, ct));
+        }
+
         /// <summary>DELETE /api/evaluation-forms/{id} — no submissions → 204 (evaluations.forms.manage).</summary>
         [HttpDelete("{id:int}")]
         public async Task<IActionResult> DeleteForm(int id, CancellationToken ct)

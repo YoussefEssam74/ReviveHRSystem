@@ -8,8 +8,9 @@ import { Input } from '../../../components/ui/input'
 import { Label } from '../../../components/ui/label'
 import { Select } from '../../../components/ui/select'
 import { getGyms } from '../../console/api/console.api'
-import { getRoles } from '../../hr-team/api/hr-team.api'
+import { getRoles, postTeam } from '../../hr-team/api/hr-team.api'
 import { useCreateEmployee } from '../../employees/hooks/useEmployees'
+import { getEmployees } from '../../employees/api/employees.api'
 import { getLeaveDefaults, postRoleChange, uploadEmployeePhoto } from '../../employees/api/employees.api'
 import { useDashboardFaceEnroll } from '../hooks/useDashboard'
 import { describeApiError } from '../../../lib/api-client'
@@ -41,7 +42,7 @@ function splitName(fullName: string): { firstName: string; lastName: string } | 
 }
 
 function emailFromName(fullName: string): string {
-  // "Flow Check 1211 " → "flow.check" (collapse spaces, drop non-letters, trim dots).
+  // "Flow Check 1211 " â†’ "flow.check" (collapse spaces, drop non-letters, trim dots).
   const slug = fullName
     .trim()
     .toLowerCase()
@@ -136,6 +137,9 @@ export default function CreateEmployeeDialog({ onClose, toast }: CreateEmployeeD
   const [salary, setSalary] = useState('')
   const [gymId, setGymId] = useState<number | null>(null)
   const [role, setRole] = useState('Emp')
+  /** Team assignment shown when the System Role is Team Leader. */
+  const [teamName, setTeamName] = useState('')
+  const [teamMemberIds, setTeamMemberIds] = useState<number[]>([])
   const [employmentType, setEmploymentType] = useState('FullTime')
   const [annualLeave, setAnnualLeave] = useState('')
   const [sickLeave, setSickLeave] = useState('')
@@ -156,6 +160,17 @@ export default function CreateEmployeeDialog({ onClose, toast }: CreateEmployeeD
   } | null>(null)
 
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  // The Team Leader section lists the chosen branch's existing employees.
+  const teamRosterQuery = useQuery({
+    queryKey: ['dashboard', 'create-employee', 'team-roster', gymId],
+    queryFn: ({ signal }) => getEmployees({ gym: gymId ?? undefined, status: 'Active', page: 1, pageSize: 100 }, signal),
+    enabled: role === 'Team Leader' && gymId != null,
+    staleTime: 60_000,
+  })
+  const teamRoster = teamRosterQuery.data?.items ?? []
+  const toggleTeamMember = (id: number) =>
+    setTeamMemberIds((current) => (current.includes(id) ? current.filter((memberId) => memberId !== id) : [...current, id]))
 
   // Object URLs back the local preview only; the server copy arrives after save.
   useEffect(() => {
@@ -315,6 +330,23 @@ export default function CreateEmployeeDialog({ onClose, toast }: CreateEmployeeD
         }
       }
 
+      // A Team Leader leaves the wizard with the team they run.
+      if (role === 'Team Leader' && teamName.trim()) {
+        try {
+          await postTeam({
+            name: teamName.trim(),
+            leaderEmployeeId: profile.id,
+            memberEmployeeIds: teamMemberIds,
+          })
+        } catch (teamError) {
+          warnings.push(
+            t('The team could not be created: {{error}}', { error: describeApiError(teamError) }),
+          )
+        }
+      } else if (role === 'Team Leader') {
+        warnings.push(t('No team name was given, so the Team Leader has no team yet.'))
+      }
+
       if (photo) {
         try {
           await uploadEmployeePhoto(profile.id, photo)
@@ -394,7 +426,7 @@ export default function CreateEmployeeDialog({ onClose, toast }: CreateEmployeeD
               <img src={photoPreview} alt={created.name} className="h-10 w-10 rounded-full object-cover" />
             ) : (
               <span className="flex h-8 w-8 items-center justify-center rounded-full bg-brand-100 text-xs font-bold text-brand-700">
-                ✓
+                âœ“
               </span>
             )}
             <div className="min-w-0">
@@ -445,7 +477,7 @@ export default function CreateEmployeeDialog({ onClose, toast }: CreateEmployeeD
           {created.warnings.length > 0 && (
             <ul className="space-y-1 rounded-lg border border-amber-200 bg-amber-50 p-2.5 text-[10px] text-amber-800">
               {created.warnings.map((warning) => (
-                <li key={warning}>⚠ {warning}</li>
+                <li key={warning}>âš  {warning}</li>
               ))}
             </ul>
           )}
@@ -767,6 +799,70 @@ export default function CreateEmployeeDialog({ onClose, toast }: CreateEmployeeD
                   onChange={(e) => setSalary(e.target.value)}
                 />
               </Field>
+
+              {role === 'Team Leader' && (
+                <div className="rounded-xl border border-brand-200 bg-brand-50/40 p-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className="text-[11px] font-bold uppercase tracking-wide text-charcoal-700">
+                      {t('Team for this leader')}
+                    </p>
+                    <span className="rounded-full bg-brand-100 px-1.5 py-0.5 text-[10px] font-bold text-brand-800">
+                      {teamMemberIds.length} {t('selected')}
+                    </span>
+                  </div>
+                  <div className="mt-2 space-y-2">
+                    <Field id="acc-team-name" label={t('Team name')}>
+                      <Input
+                        id="acc-team-name"
+                        className="h-8 text-xs"
+                        placeholder={t('e.g. Morning Shift Floor Team')}
+                        value={teamName}
+                        onChange={(e) => setTeamName(e.target.value)}
+                      />
+                    </Field>
+                    <div>
+                      <p className="mb-1 text-[10px] font-semibold text-charcoal-600">
+                        {t('Employees to assign')}
+                        <span className="ms-1 font-normal text-charcoal-400">
+                          {t('({{gym}} roster)', { gym: gyms.find((gym) => gym.id === gymId)?.name ?? t('branch') })}
+                        </span>
+                      </p>
+                      {gymId == null ? (
+                        <p className="text-[10px] text-amber-600">{t('Pick the home branch first.')}</p>
+                      ) : (
+                        <ul className="grid max-h-36 grid-cols-1 gap-1 overflow-y-auto rounded-lg border border-charcoal-200 bg-white p-1.5 sm:grid-cols-2">
+                          {teamRoster.map((employee) => {
+                            const checked = teamMemberIds.includes(employee.id)
+                            return (
+                              <li key={employee.id}>
+                                <label className="flex cursor-pointer items-center gap-2 rounded-md px-1.5 py-1 text-[11px] text-charcoal-700 hover:bg-charcoal-50">
+                                  <input
+                                    type="checkbox"
+                                    checked={checked}
+                                    onChange={() => toggleTeamMember(employee.id)}
+                                    className="h-3.5 w-3.5 rounded border-charcoal-300 accent-brand-600"
+                                  />
+                                  <span className="min-w-0">
+                                    <span className="block truncate font-medium">{employee.name}</span>
+                                    <span className="block truncate text-[9px] text-charcoal-400">
+                                      {employee.employeeNumber} Â· {employee.position}
+                                    </span>
+                                  </span>
+                                </label>
+                              </li>
+                            )
+                          })}
+                          {teamRoster.length === 0 && (
+                            <li className="px-2 py-2 text-[10px] text-charcoal-500">
+                              {t('No other employees in this branch yet.')}
+                            </li>
+                          )}
+                        </ul>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="space-y-2 rounded-xl border border-charcoal-200 p-3">
@@ -796,7 +892,7 @@ export default function CreateEmployeeDialog({ onClose, toast }: CreateEmployeeD
                       />
                       <span>
                         {gym.branch ?? gym.name}
-                        <span className="text-charcoal-400"> · {gym.name}</span>
+                        <span className="text-charcoal-400"> Â· {gym.name}</span>
                       </span>
                     </label>
                   ))}

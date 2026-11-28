@@ -202,6 +202,7 @@ namespace Presistence.Data.Configurations
 
             builder.Property(hf => hf.Name).IsRequired().HasMaxLength(200);
             builder.Property(hf => hf.Position).HasMaxLength(200);
+            builder.Property(hf => hf.Description).HasMaxLength(4000);
             builder.Property(hf => hf.Status).IsRequired().HasMaxLength(20);
             builder.Property(hf => hf.QuestionsJson).IsRequired().HasColumnType("jsonb");
             builder.Property(hf => hf.CreatedDate).HasDefaultValueSql("CURRENT_TIMESTAMP");

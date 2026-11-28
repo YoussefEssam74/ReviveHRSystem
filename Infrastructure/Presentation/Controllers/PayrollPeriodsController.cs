@@ -61,6 +61,19 @@ namespace Presentation.Controllers
         public async Task<ActionResult<RemoveDeductionResponse>> RemoveDeduction(int periodId, int employeeId, int lineId, CancellationToken ct)
             => Ok(await _service.RemoveDeductionAsync(GetActorUserId(), periodId, employeeId, lineId, ct));
 
+        /// <summary>POST /api/payroll-periods/{periodId}/entries/{employeeId}/bonuses — named cash bonus (payroll.edit) → 201.</summary>
+        [HttpPost("{periodId:int}/entries/{employeeId:int}/bonuses")]
+        public async Task<ActionResult<CreateDeductionResponse>> AddBonus(int periodId, int employeeId, [FromBody] CreateBonusRequest request, CancellationToken ct)
+        {
+            var response = await _service.AddBonusAsync(GetActorUserId(), periodId, employeeId, request, ct);
+            return StatusCode(StatusCodes.Status201Created, response);
+        }
+
+        /// <summary>DELETE /api/payroll-periods/{periodId}/entries/{employeeId}/bonuses/{lineId} — removes one bonus line (payroll.edit).</summary>
+        [HttpDelete("{periodId:int}/entries/{employeeId:int}/bonuses/{lineId:int}")]
+        public async Task<ActionResult<RemoveDeductionResponse>> RemoveBonus(int periodId, int employeeId, int lineId, CancellationToken ct)
+            => Ok(await _service.RemoveBonusAsync(GetActorUserId(), periodId, employeeId, lineId, ct));
+
         /// <summary>POST /api/payroll-periods/{periodId}/entries/{employeeId}/close — settle &amp; close the sheet (payroll.edit).</summary>
         [HttpPost("{periodId:int}/entries/{employeeId:int}/close")]
         public async Task<ActionResult<CloseEntryResponse>> CloseEntry(int periodId, int employeeId, CancellationToken ct)

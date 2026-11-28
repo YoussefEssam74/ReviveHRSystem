@@ -17,7 +17,6 @@ import { ExitInterviewFormTab } from '../components/ExitInterviewFormTab'
 import { FormerEmployeesTab } from '../components/FormerEmployeesTab'
 import { ExitsTab } from '../components/ExitsTab'
 import { SeparationDetailDialog } from '../components/SeparationDetailDialog'
-import { FilterPill } from '../components/termination-ui'
 import { SEPARATION_STATUSES, type Separation } from '../api/terminations.api'
 
 type TerminationsTab = 'exits' | 'requests' | 'interviews' | 'formerEmployees'
@@ -25,8 +24,7 @@ type TerminationsTab = 'exits' | 'requests' | 'interviews' | 'formerEmployees'
 export default function TerminationsPage() {
   const { t } = useTranslation()
   const { can, me } = useMe()
-  const [gym, setGym] = useState('all')
-  const [tab, setTab] = useState<TerminationsTab>('exits')
+  const [tab, setTab] = useState<TerminationsTab>('requests')
   const [requesting, setRequesting] = useState(false)
   const [offboardingOpen, setOffboardingOpen] = useState(false)
   const [selectedCaseId, setSelectedCaseId] = useState<number | null>(null)
@@ -36,15 +34,12 @@ export default function TerminationsPage() {
   const [actionError, setActionError] = useState<string | null>(null)
 
   const canManage = can('offboarding', EDIT)
-  const gymOptions = me?.gyms ?? []
-  const activeGymName =
-    gym === 'all'
-      ? null
-      : gymOptions.find((option) => String(option.gymId) === gym)?.gymName
+  // Every console page follows the gym chosen at login (header switcher re-issues
+  // the token), so there is no "all gyms" view to filter.
+  const activeGymId = me?.activeGym?.gymId
+  const activeGymName = me?.activeGym?.gymName
 
-  const { data: cases, isLoading, error, refetch } = useAllSeparations({
-    gym: gym === 'all' ? undefined : Number(gym),
-  })
+  const { data: cases, isLoading, error, refetch } = useAllSeparations({ gym: activeGymId })
 
   const moveStage = useMoveStage()
   const decide = useDecideTermination()
@@ -74,13 +69,10 @@ export default function TerminationsPage() {
     [allCases],
   )
 
-  const countText = activeGymName
-    ? boardCases.length === 1
-      ? t('1 exit · {{gym}}', { gym: activeGymName })
-      : t('{{count}} exits · {{gym}}', { count: boardCases.length, gym: activeGymName })
-    : boardCases.length === 1
-      ? t('1 exit across all gyms')
-      : t('{{count}} exits across all gyms', { count: boardCases.length })
+  const countText =
+    boardCases.length === 1
+      ? t('1 exit · {{gym}}', { gym: activeGymName ?? t('Active gym') })
+      : t('{{count}} exits · {{gym}}', { count: boardCases.length, gym: activeGymName ?? t('Active gym') })
 
   const changeTab = (nextTab: TerminationsTab) => {
     setTab(nextTab)
@@ -153,11 +145,6 @@ export default function TerminationsPage() {
 
   const tabItems: TabItem<TerminationsTab>[] = [
     {
-      value: 'exits',
-      label: t('Exits'),
-      count: boardCases.length,
-    },
-    {
       value: 'requests',
       label: t('Termination Requests'),
       count: requests.length,
@@ -166,6 +153,11 @@ export default function TerminationsPage() {
       value: 'interviews',
       label: t('Exit Interviews'),
       count: approvedExits.length,
+    },
+    {
+      value: 'exits',
+      label: t('Exits'),
+      count: boardCases.length,
     },
     {
       value: 'formerEmployees',
@@ -179,9 +171,7 @@ export default function TerminationsPage() {
       <div className="flex flex-col justify-between gap-2 sm:flex-row sm:items-center">
         <div className="min-w-0">
           <h1 className="text-xl font-bold text-charcoal-900">{t('Terminations')}</h1>
-          <p className="mt-0.5 text-xs text-charcoal-500">
-            {countText} · {t('from the Branch Manager → HR follows up → verdict.')}
-          </p>
+          <p className="mt-0.5 text-xs text-charcoal-500">{countText}</p>
         </div>
         {canManage && (
           <div className="flex shrink-0 flex-wrap items-center gap-1.5">
@@ -195,25 +185,7 @@ export default function TerminationsPage() {
         )}
       </div>
 
-      <Tabs items={tabItems} value={tab} onChange={changeTab} variant="compact" className="w-full" />
-
-      <div className="flex flex-wrap items-center gap-1.5 rounded-lg border border-charcoal-200 bg-white px-2 py-1.5">
-        <span className="me-1 text-[10px] font-semibold uppercase tracking-wide text-charcoal-400">
-          {t('Gym')}
-        </span>
-        <FilterPill active={gym === 'all'} onClick={() => setGym('all')}>
-          {t('All Gyms')}
-        </FilterPill>
-        {gymOptions.map((option) => (
-          <FilterPill
-            key={option.gymId}
-            active={gym === String(option.gymId)}
-            onClick={() => setGym(String(option.gymId))}
-          >
-            {option.gymName}
-          </FilterPill>
-        ))}
-      </div>
+      <Tabs items={tabItems} value={tab} onChange={changeTab} variant="compact" />
 
       {actionError && (
         <p role="alert" className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">

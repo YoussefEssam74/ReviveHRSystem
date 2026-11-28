@@ -316,6 +316,7 @@ Summary of how the shell behaves:
 | `/console/*` (HR) | Fixed sidebar becomes an overlay drawer (`max-w-[85vw]`), opened from the header | Bottom nav absent — console is data-dense |
 | `/employee/*` (portal) | Sidebar becomes a drawer **and** a 4-item fixed bottom nav | Bottom nav uses `.safe-bottom` |
 | `/`, `/login`, `/enrollment`, `/station-code`, `/dashboard` | Header nav scrolls horizontally (`.no-scrollbar`), sign-out collapses to an icon | — |
+| `/apply`, `/apply/:formId` (public careers) | `CareersLayout`: brand header with language/theme toggles only — no staff nav, sign-out or station tools; sidebar stacks under the form | `/careers` redirects to the landing |
 | `/attendance` (kiosk) | **Desktop only** — designed for a 1080p station terminal | `100vh`, no scroll, no mobile layout |
 
 Shell-level requirements:

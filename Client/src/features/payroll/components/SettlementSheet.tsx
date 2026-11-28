@@ -15,8 +15,10 @@ import {
 } from '../../requests/api/requests.api'
 import type { ToastTone } from '../../dashboard/hooks/useMockToast'
 import {
+  useAddBonus,
   useAddDeduction,
   useCloseEntry,
+  useRemoveBonus,
   useReopenEntry,
   useReviewCandidate,
   useUpdateBonus,
@@ -271,6 +273,9 @@ export default function SettlementSheet({
   const closed = entry ? isEntryClosed(entry) : false
 
   const [addingLine, setAddingLine] = useState(false)
+  const [addingBonus, setAddingBonus] = useState(false)
+  const [bonusReason, setBonusReason] = useState('')
+  const [bonusAmountInput, setBonusAmountInput] = useState('')
   const [source, setSource] = useState<DeductionSource>('manager')
   const [reason, setReason] = useState('')
   const [amount, setAmount] = useState('')
@@ -282,6 +287,8 @@ export default function SettlementSheet({
   const [detailRow, setDetailRow] = useState<EmployeeRequestRow | null>(null)
 
   const updateBonus = useUpdateBonus(period.id)
+  const addBonus = useAddBonus(period.id)
+  const removeBonus = useRemoveBonus(period.id)
   const updateAttendance = useUpdateEntryAttendance(period.id)
   const addDeduction = useAddDeduction(period.id)
   const closeEntry = useCloseEntry(period.id)
@@ -289,7 +296,7 @@ export default function SettlementSheet({
   const review = useReviewCandidate()
 
   const queryClient = useQueryClient()
-  const [panel, setPanel] = useState<'schedule' | 'requests' | 'deductions'>('schedule')
+  const [panel, setPanel] = useState<'schedule' | 'bonuses' | 'requests' | 'deductions'>('schedule')
   const [deductionsFocus, setDeductionsFocus] = useState(false)
   const panelRef = useRef<HTMLDivElement | null>(null)
 
@@ -352,6 +359,21 @@ export default function SettlementSheet({
     : 30
   const dailyRate = base > 0 ? base / daysInPeriod : 0
   const bonusDays = dailyRate > 0 ? Math.round((entry.bonus / dailyRate) * 100) / 100 : 0
+
+  // Additions to base salary. Leave encashment is the only one that originates
+  // from a balance (the annual-leave ledger at exit), so it is called out.
+  const leaveEncashmentDays = entry.leaveEncashmentDays ?? 0
+  const leaveEncashmentAmount = entry.leaveEncashment ?? 0
+  // Manual bonus lines (reason + amount) plus whatever the sheet still carries as a
+  // days-based adjustment from earlier edits.
+  const bonusLines = entry.bonusLines ?? []
+  const manualBonusTotal = bonusLines.reduce((sum, line) => sum + line.amount, 0)
+  const legacyBonus = Math.max(0, Math.round((entry.bonus - manualBonusTotal) * 100) / 100)
+  const bonusLineCount =
+    (legacyBonus > 0 ? 1 : 0) +
+    (bonusLines.length > 0 ? bonusLines.length : 0) +
+    (overtimePayOf(entry) > 0 ? 1 : 0) +
+    (leaveEncashmentAmount > 0 ? 1 : 0)
   const bonusValue = bonusDraft ?? String(bonusDays)
   const bonusAmount = bonusDraft != null
     ? Math.round((Number(bonusDraft) || 0) * dailyRate * 100) / 100
@@ -505,6 +527,12 @@ export default function SettlementSheet({
   const openDeductions = () => {
     setPanel('deductions')
     setDeductionsFocus(true)
+    panelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+  }
+
+  /** Jumps from the summary's additions total to the bonuses table. */
+  const openBonuses = () => {
+    setPanel('bonuses')
     panelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
   }
 
@@ -680,37 +708,33 @@ export default function SettlementSheet({
                 </div>
               )}
 
-              <label
-                className={cn('flex cursor-pointer items-center justify-between gap-2 py-1', (locked || closed || !canEdit) && 'cursor-not-allowed')}
-                title={closed ? 'Reopen the sheet to change the bonus' : 'Give the bonus in days — the amount follows'}
-              >
-                <span className="min-w-0">
-                  <span className="text-charcoal-500">Bonus</span>
-                  <span className="ms-1 text-[9px] text-charcoal-400">
-                    {closed || locked ? '(sheet closed)' : canEdit ? '(in days)' : '(read-only)'}
+              {bonusLineCount > 0 && (
+                <button
+                  type="button"
+                  onClick={openBonuses}
+                  title="Show the additions layered on the base salary and their sources"
+                  className="group -mx-1 flex w-[calc(100%+0.5rem)] items-center justify-between gap-2 rounded px-1 py-1 text-left transition-colors hover:bg-charcoal-50 focus-visible:ring-2 focus-visible:ring-brand-300 focus-visible:outline-none"
+                >
+                  <span className="flex items-center gap-1 text-charcoal-500 group-hover:text-brand-700">
+                    Bonuses &amp; additions ({bonusLineCount})
+                    <ChevronRight
+                      className="h-3 w-3 flex-shrink-0 text-charcoal-300 transition-colors group-hover:text-brand-600"
+                      aria-hidden="true"
+                    />
                   </span>
-                </span>
-                <span className="flex items-center gap-1.5">
-                  <input
-                    type="number"
-                    min={0}
-                    step={1}
-                    value={bonusValue}
-                    disabled={locked || closed || !canEdit || bonusSaving}
-                    onChange={(event) => setBonusDraft(event.target.value)}
-                    onBlur={(event) => commitBonus(event.target.value)}
-                    onKeyDown={(event) => {
-                      if (event.key === 'Enter') event.currentTarget.blur()
-                    }}
-                    className="h-5 w-14 rounded border border-brand-300 bg-white px-1 py-0 text-right text-[11px] font-bold text-charcoal-900 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-300 disabled:opacity-60"
-                    aria-label="Bonus days"
-                  />
-                  <span className="text-[10px] font-semibold text-charcoal-500">day{Number(bonusValue) === 1 ? '' : 's'}</span>
-                  <span className={cn('w-20 text-right text-[11px] font-bold', bonusAmount > 0 ? 'text-emerald-600' : 'text-charcoal-400')}>
-                    {bonusAmount > 0 ? `+ ${formatEGP(bonusAmount)}` : formatEGP(0)}
+                  <span className="font-bold text-emerald-600">
+                    + {formatEGP(entry.bonus + otPay + leaveEncashmentAmount)}
                   </span>
-                </span>
-              </label>
+                </button>
+              )}
+
+              {otPay > 0 && (
+                <div className="flex items-center justify-between gap-2 py-1">
+                  <span className="text-charcoal-500">Overtime ({entry.overtime}h)</span>
+                  <span className="font-bold text-emerald-600">+ {formatEGP(otPay)}</span>
+                </div>
+              )}
+
             </div>
 
             {/* The card is the month's summary: what is earned, what is taken, the total. */}
@@ -732,6 +756,11 @@ export default function SettlementSheet({
                   key: 'schedule' as const,
                   label: 'Month Schedule',
                   title: 'Attendance and day log for this month',
+                },
+                {
+                  key: 'bonuses' as const,
+                  label: `Bonuses (${bonusLineCount})`,
+                  title: 'Every addition layered on the base salary, with the source it came from',
                 },
                 {
                   key: 'requests' as const,
@@ -884,6 +913,243 @@ export default function SettlementSheet({
                   </div>
                 </>
               )}
+            </div>
+          )}
+
+          {panel === 'bonuses' && (
+            <div className="flex min-h-0 flex-1 flex-col rounded-lg border border-charcoal-200 bg-white p-2.5">
+              <div className="mb-2 flex flex-wrap items-center justify-between gap-2 border-b border-charcoal-200 pb-1.5">
+                <div className="flex items-center gap-2">
+                  <h3 className="text-[11px] font-bold uppercase tracking-wide text-charcoal-900">
+                    3. Bonuses &amp; Additions
+                  </h3>
+                  <Badge color={bonusLineCount > 0 ? 'green' : 'gray'} className="text-[9px] font-bold">
+                    + {formatEGP(entry.bonus + otPay + leaveEncashmentAmount)}
+                  </Badge>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-semibold text-charcoal-400">{period.period}</span>
+                  {canEdit && (
+                    <button
+                      type="button"
+                      onClick={() => setAddingBonus((open) => !open)}
+                      disabled={locked || closed}
+                      className="flex items-center gap-0.5 text-[10px] font-bold text-brand-600 hover:text-brand-800 disabled:opacity-40"
+                    >
+                      <Plus className="h-3 w-3" aria-hidden="true" />
+                      {addingBonus ? 'Close Form' : 'Add bonus'}
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {addingBonus && canEdit && (
+                <div className="mb-2 flex flex-wrap items-end gap-1.5 rounded border border-charcoal-200 bg-charcoal-50 p-2">
+                  <label className="min-w-[220px] flex-1 text-[10px] font-semibold text-charcoal-600">
+                    Reason
+                    <input
+                      value={bonusReason}
+                      onChange={(event) => setBonusReason(event.target.value)}
+                      placeholder="e.g. Peak-season performance"
+                      aria-label="Bonus reason"
+                      className="mt-0.5 block h-6 w-full rounded border border-charcoal-300 px-1.5 text-[11px] font-medium text-charcoal-900"
+                    />
+                  </label>
+                  <label className="text-[10px] font-semibold text-charcoal-600">
+                    Amount (EGP)
+                    <input
+                      type="number"
+                      min={0}
+                      step={50}
+                      value={bonusAmountInput}
+                      onChange={(event) => setBonusAmountInput(event.target.value)}
+                      placeholder="e.g. 500"
+                      aria-label="Bonus amount"
+                      className="mt-0.5 block h-6 w-28 rounded border border-charcoal-300 px-1.5 text-right text-[11px] font-bold text-charcoal-900"
+                    />
+                  </label>
+                  <Button
+                    size="sm"
+                    className="h-6 px-2 text-[10px]"
+                    loading={addBonus.isPending}
+                    onClick={() => {
+                      const amount = Number(bonusAmountInput)
+                      if (bonusReason.trim().length === 0) {
+                        onToast('A reason is required for the bonus.', 'error')
+                        return
+                      }
+                      if (!Number.isFinite(amount) || amount <= 0) {
+                        onToast('Enter a bonus amount greater than zero.', 'error')
+                        return
+                      }
+                      void addBonus
+                        .mutateAsync({
+                          employeeId: entry.employeeId,
+                          body: { reason: bonusReason.trim(), amount },
+                        })
+                        .then(() => {
+                          onToast(`Bonus ${formatEGP(amount)} added — net pay recalculated.`)
+                          setBonusReason('')
+                          setBonusAmountInput('')
+                          setAddingBonus(false)
+                        })
+                        .catch((error) => onToast(describeApiError(error), 'error'))
+                    }}
+                  >
+                    Add
+                  </Button>
+                </div>
+              )}
+
+              <div className="min-h-0 flex-1 overflow-auto rounded border border-charcoal-200">
+                <table className="w-full min-w-[560px] border-collapse text-[11px]">
+                  <thead className="sticky top-0 bg-charcoal-50">
+                    <tr className="border-b border-charcoal-200 text-start">
+                      <th className="px-2 py-1 text-[9px] font-bold uppercase tracking-wide text-charcoal-500">Bonus</th>
+                      <th className="px-2 py-1 text-[9px] font-bold uppercase tracking-wide text-charcoal-500">Source</th>
+                      <th className="px-2 py-1 text-end text-[9px] font-bold uppercase tracking-wide text-charcoal-500">Units</th>
+                      <th className="px-2 py-1 text-end text-[9px] font-bold uppercase tracking-wide text-charcoal-500">Amount</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-charcoal-100">
+                    {leaveEncashmentAmount > 0 && (
+                      <tr className="bg-brand-50/50">
+                        <td className="px-2 py-1.5 font-bold text-charcoal-900">
+                          Leave encashment
+                          {leaveEncashmentDays > 0 && dailyRate > 0 && (
+                            <p className="text-[9px] font-normal text-charcoal-500">
+                              {leaveEncashmentDays} × {formatEGP(Math.round((leaveEncashmentAmount / leaveEncashmentDays) * 100) / 100)}
+                            </p>
+                          )}
+                        </td>
+                        <td className="px-2 py-1.5">
+                          <span className="inline-block rounded-full bg-brand-100 px-1.5 py-0.5 text-[9px] font-bold text-brand-800">
+                            Annual leave balance
+                          </span>
+                        </td>
+                        <td className="whitespace-nowrap px-2 py-1.5 text-end text-charcoal-600">
+                          {leaveEncashmentDays} day{leaveEncashmentDays === 1 ? '' : 's'}
+                        </td>
+                        <td className="whitespace-nowrap px-2 py-1.5 text-end font-bold text-emerald-600">
+                          + {formatEGP(leaveEncashmentAmount)}
+                        </td>
+                      </tr>
+                    )}
+
+                    {otPay > 0 && (
+                      <tr>
+                        <td className="px-2 py-1.5 font-bold text-charcoal-900">Overtime</td>
+                        <td className="px-2 py-1.5">
+                          <span className="inline-block rounded-full bg-charcoal-200 px-1.5 py-0.5 text-[9px] font-bold text-charcoal-700">
+                            Attendance overtime log
+                          </span>
+                        </td>
+                        <td className="whitespace-nowrap px-2 py-1.5 text-end text-charcoal-600">{entry.overtime} h</td>
+                        <td className="whitespace-nowrap px-2 py-1.5 text-end font-bold text-emerald-600">
+                          + {formatEGP(otPay)}
+                        </td>
+                      </tr>
+                    )}
+
+                    {entry.bonusLines.map((line) => (
+                      <tr key={`bonus-${line.id}`}>
+                        <td className="px-2 py-1.5">
+                          <p className="font-bold text-charcoal-900">{line.reason}</p>
+                          <p className="text-[9px] text-charcoal-400">{formatDate(line.date)}</p>
+                        </td>
+                        <td className="px-2 py-1.5">
+                          <span className="inline-block rounded-full bg-charcoal-200 px-1.5 py-0.5 text-[9px] font-bold text-charcoal-700">
+                            HR bonus · manual
+                          </span>
+                        </td>
+                        <td className="px-2 py-1.5 text-end text-charcoal-600">—</td>
+                        <td className="whitespace-nowrap px-2 py-1.5 text-end">
+                          <span className="inline-flex items-center gap-1.5">
+                            <span className="font-bold text-emerald-600">+ {formatEGP(line.amount)}</span>
+                            {canEdit && !locked && !closed && (
+                              <button
+                                type="button"
+                                disabled={removeBonus.isPending}
+                                onClick={() =>
+                                  void removeBonus
+                                    .mutateAsync({ employeeId: entry.employeeId, lineId: line.id })
+                                    .then(() => onToast(`Bonus “${line.reason}” removed.`))
+                                    .catch((error) => onToast(describeApiError(error), 'error'))
+                                }
+                                aria-label={`Remove bonus ${line.reason}`}
+                                title="Remove this bonus"
+                                className="text-charcoal-300 transition-colors hover:text-red-600 disabled:opacity-40"
+                              >
+                                <X className="h-3.5 w-3.5" aria-hidden="true" />
+                              </button>
+                            )}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+
+                    {legacyBonus > 0 && (
+                      <tr>
+                        <td className="px-2 py-1.5 font-bold text-charcoal-900">Bonus days</td>
+                        <td className="px-2 py-1.5">
+                          <span className="inline-block rounded-full bg-charcoal-200 px-1.5 py-0.5 text-[9px] font-bold text-charcoal-700">
+                            HR performance bonus
+                          </span>
+                        </td>
+                        <td className="whitespace-nowrap px-2 py-1.5 text-end">
+                          {locked || closed || !canEdit ? (
+                            <span className="text-charcoal-600">
+                              {bonusDays} day{bonusDays === 1 ? '' : 's'}
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1">
+                              <input
+                                type="number"
+                                min={0}
+                                step={1}
+                                value={bonusValue}
+                                disabled={bonusSaving}
+                                onChange={(event) => setBonusDraft(event.target.value)}
+                                onBlur={(event) => void commitBonus(event.target.value)}
+                                onKeyDown={(event) => {
+                                  if (event.key === 'Enter') event.currentTarget.blur()
+                                }}
+                                className="h-5 w-14 rounded border border-brand-300 bg-white px-1 text-right text-[11px] font-bold text-charcoal-900 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-300 disabled:opacity-60"
+                                aria-label="Bonus days"
+                              />
+                              <span className="text-[10px] font-semibold text-charcoal-500">days</span>
+                            </span>
+                          )}
+                        </td>
+                        <td className="whitespace-nowrap px-2 py-1.5 text-end font-bold text-emerald-600">
+                          + {formatEGP(bonusAmount)}
+                        </td>
+                      </tr>
+                    )}
+
+                    {bonusLineCount === 0 && (
+                      <tr>
+                        <td colSpan={4} className="px-2 py-6 text-center text-charcoal-400">
+                          No bonuses or additions on this sheet — the employee is paid the base salary only.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                  <tfoot>
+                    <tr className="border-t border-charcoal-200 bg-charcoal-50 font-bold">
+                      <td className="px-2 py-1.5 text-charcoal-700" colSpan={3}>
+                        Base salary {formatEGP(base)} + additions
+                      </td>
+                      <td className="whitespace-nowrap px-2 py-1.5 text-end text-charcoal-900">Gross {formatEGP(gross)}</td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+
+              <p className="mt-1.5 text-[9px] text-charcoal-500">
+                Leave encashment comes from the annual-leave balance written by the exit verdict. Annual leave is
+                settled pro-rata, so days taken beyond the accrual are withheld as unpaid leave (see Deductions).
+              </p>
             </div>
           )}
 

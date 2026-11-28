@@ -7,9 +7,10 @@ import { EmptyState } from '../../../components/ui/empty-state'
 import { TBody, TD, TH, THead, TR, Table } from '../../../components/ui/table'
 import { describeApiError } from '../../../lib/api-client'
 import { formatDate, formatDateTime } from '../../../lib/format'
+import { matchesName } from '../../../lib/name-date-filter'
 import { useUpdateExitInterviewStatus } from '../hooks/useTerminations'
 import type { Separation } from '../api/terminations.api'
-import { EmployeeCell, FilterPill } from './termination-ui'
+import { EmployeeCell, ListToolbar, ToolbarSearch, ToolbarSelect } from './termination-ui'
 import { ScheduleInterviewDialog } from './ScheduleInterviewDialog'
 import { GymPill } from './separation-ui'
 
@@ -30,6 +31,7 @@ export interface ExitInterviewsTabProps {
 export function ExitInterviewsTab({ cases, canManage, onOpenForm }: ExitInterviewsTabProps) {
   const { t } = useTranslation()
   const [filter, setFilter] = useState<InterviewFilter>('All')
+  const [search, setSearch] = useState('')
   const [scheduling, setScheduling] = useState<Separation | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
   const updateStatus = useUpdateExitInterviewStatus()
@@ -48,8 +50,11 @@ export function ExitInterviewsTab({ cases, canManage, onOpenForm }: ExitIntervie
   }, [cases])
 
   const visible = useMemo(
-    () => (filter === 'All' ? cases : cases.filter((item) => interviewFilterOf(item) === filter)),
-    [cases, filter],
+    () =>
+      cases
+        .filter((item) => filter === 'All' || interviewFilterOf(item) === filter)
+        .filter((item) => matchesName(item.employee, search)),
+    [cases, filter, search],
   )
 
   const markNoShow = async (separation: Separation) => {
@@ -63,26 +68,39 @@ export function ExitInterviewsTab({ cases, canManage, onOpenForm }: ExitIntervie
 
   return (
     <div className="space-y-2.5">
-      <div className="flex flex-wrap items-center gap-1.5 rounded-lg border border-charcoal-200 bg-white px-2 py-1.5">
-        <span className="me-1 text-[10px] font-semibold uppercase tracking-wide text-charcoal-400">
-          {t('Interview status')}
-        </span>
-        {(['All', 'Not scheduled', 'Scheduled', 'Rescheduled', 'No Show', 'Completed'] as InterviewFilter[]).map(
-          (option) => (
-            <FilterPill key={option} active={filter === option} onClick={() => setFilter(option)}>
-              {t(option)} ({counts[option]})
-            </FilterPill>
-          ),
-        )}
-      </div>
-
       {actionError && (
         <p role="alert" className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
           {actionError}
         </p>
       )}
 
-      <div className="rounded-xl border border-charcoal-200 bg-white">
+      <div className="overflow-hidden rounded-xl border border-charcoal-200 bg-white">
+        <ListToolbar>
+          <ToolbarSearch
+            value={search}
+            onChange={setSearch}
+            placeholder={t('Search by employee name…')}
+            className="sm:max-w-72"
+          />
+          <ToolbarSelect
+            value={filter}
+            onChange={(next) => setFilter(next as InterviewFilter)}
+            label={t('Interview status')}
+            className="w-full sm:w-44"
+          >
+            {(['All', 'Not scheduled', 'Scheduled', 'Rescheduled', 'No Show', 'Completed'] as InterviewFilter[]).map(
+              (option) => (
+                <option key={option} value={option}>
+                  {option === 'All' ? t('All statuses') : t(option)} ({counts[option]})
+                </option>
+              ),
+            )}
+          </ToolbarSelect>
+          <span className="ms-auto text-[11px] text-charcoal-400">
+            {t('{{shown}} of {{total}}', { shown: visible.length, total: cases.length })}
+          </span>
+        </ListToolbar>
+
         {visible.length === 0 ? (
           <EmptyState
             icon={CalendarClock}
@@ -92,11 +110,11 @@ export function ExitInterviewsTab({ cases, canManage, onOpenForm }: ExitIntervie
         ) : (
           <Table>
             <THead>
-              <TH>{t('Employee')}</TH>
-              <TH>{t('Branch')}</TH>
-              <TH>{t('Interview date & time')}</TH>
-              <TH>{t('Status')}</TH>
-              <TH>{t('Clearance')}</TH>
+              <TH className="text-start">{t('Employee')}</TH>
+              <TH className="hidden text-start xl:table-cell">{t('Branch')}</TH>
+              <TH className="text-start">{t('Interview date & time')}</TH>
+              <TH className="text-start">{t('Status')}</TH>
+              <TH className="hidden text-start xl:table-cell">{t('Clearance')}</TH>
               <TH className="text-end">{t('Actions')}</TH>
             </THead>
             <TBody>
@@ -106,9 +124,12 @@ export function ExitInterviewsTab({ cases, canManage, onOpenForm }: ExitIntervie
                 return (
                   <TR key={separation.id}>
                     <TD>
-                      <EmployeeCell separation={separation} />
+                      <EmployeeCell
+                        separation={separation}
+                        extra={<GymPill gym={separation.gym} className="mt-1 xl:hidden" />}
+                      />
                     </TD>
-                    <TD>
+                    <TD className="hidden xl:table-cell">
                       <GymPill gym={separation.gym} />
                       <p className="mt-1 text-[10px] text-charcoal-400">
                         {t('Last day {{date}}', { date: formatDate(separation.lastDay, { withYear: 'always' }) })}
@@ -124,7 +145,7 @@ export function ExitInterviewsTab({ cases, canManage, onOpenForm }: ExitIntervie
                     <TD>
                       <StatusBadge status={status ?? 'Not scheduled'} />
                     </TD>
-                    <TD>
+                    <TD className="hidden xl:table-cell">
                       {clearanceDone ? (
                         <Badge color="green">{t('Closed')}</Badge>
                       ) : status === 'Completed' ? (

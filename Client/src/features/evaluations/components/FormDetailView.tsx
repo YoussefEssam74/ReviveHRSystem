@@ -105,8 +105,7 @@ export function FormDetailView({
           <p className="text-sm font-bold text-charcoal-900">{current.name}</p>
           <span className={cn('badge text-[9px]', formStatusClass(current.status))}>{t(current.status)}</span>
         </div>
-        <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-[10px] text-charcoal-500">
-          <span>
+        <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-[10px] text-charcoal-500">          <span>
             {t('Target:')}{' '}
             <span className="font-semibold text-charcoal-700">
               {current.position && current.position !== 'All'
@@ -131,6 +130,15 @@ export function FormDetailView({
             <span className="font-semibold text-charcoal-700">{isEvaluation ? submissionCount : applicantCount}</span>
           </span>
         </div>
+
+        {!isEvaluation && current.description && (
+          <div className="mt-2.5 rounded-lg border border-charcoal-100 bg-charcoal-50 p-2.5">
+            <p className="bento-label text-charcoal-500">{t('JOB DESCRIPTION')}</p>
+            <p className="mt-1 whitespace-pre-line text-[11px] leading-relaxed text-charcoal-700">
+              {current.description}
+            </p>
+          </div>
+        )}
       </div>
 
       <div className="rounded-xl border border-charcoal-200 bg-white p-3">

@@ -1,21 +1,21 @@
 import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { FileText, ThumbsDown, ThumbsUp } from 'lucide-react'
+import { CalendarRange, FileText, ThumbsDown, ThumbsUp } from 'lucide-react'
 import { Button } from '../../../components/ui/button'
 import { EmptyState } from '../../../components/ui/empty-state'
 import { Dialog } from '../../../components/ui/dialog'
 import { Textarea } from '../../../components/ui/field'
+import { Input } from '../../../components/ui/input'
 import { Label } from '../../../components/ui/label'
 import { ConfirmDialog } from '../../../components/ui/modal'
 import { TBody, TD, TH, THead, TR, Table } from '../../../components/ui/table'
 import { StatusBadge } from '../../../components/ui/badge'
 import { describeApiError } from '../../../lib/api-client'
 import { formatDate } from '../../../lib/format'
-import { NameDateFilterBar } from '../../../components/name-date-filter-bar'
 import { NO_NAME_DATE_FILTER, matchesName, withinDateRange, type NameDateFilter } from '../../../lib/name-date-filter'
 import { useDecideTermination } from '../hooks/useTerminations'
 import type { Separation } from '../api/terminations.api'
-import { EmployeeCell, FilterPill } from './termination-ui'
+import { EmployeeCell, ListToolbar, ToolbarSearch, ToolbarSelect } from './termination-ui'
 import { GymPill } from './separation-ui'
 import { requesterLabel } from './separation-utils'
 
@@ -31,8 +31,9 @@ export interface TerminationRequestsTabProps {
 /** Tab 1 — the Branch Manager's termination requests and the HR decision. */
 export function TerminationRequestsTab({ cases, canManage, onOpenInterviews }: TerminationRequestsTabProps) {
   const { t } = useTranslation()
-  const [filter, setFilter] = useState<RequestFilter>('Pending')
+  const [filter, setFilter] = useState<RequestFilter>('All')
   const [nameDate, setNameDate] = useState<NameDateFilter>(NO_NAME_DATE_FILTER)
+  const [datesOpen, setDatesOpen] = useState(false)
   const [approving, setApproving] = useState<Separation | null>(null)
   const [rejecting, setRejecting] = useState<Separation | null>(null)
   const [rejectNote, setRejectNote] = useState('')
@@ -62,6 +63,7 @@ export function TerminationRequestsTab({ cases, canManage, onOpenInterviews }: T
   )
 
   const filtered = nameDate.name.trim() !== '' || nameDate.from !== '' || nameDate.to !== ''
+  const datesActive = nameDate.from !== '' || nameDate.to !== ''
 
   const runDecision = async (separation: Separation, decision: 'Approved' | 'Rejected', note?: string) => {
     setActionError(null)
@@ -77,35 +79,81 @@ export function TerminationRequestsTab({ cases, canManage, onOpenInterviews }: T
 
   return (
     <div className="space-y-2.5">
-      <div className="flex flex-wrap items-center gap-1.5 rounded-lg border border-charcoal-200 bg-white px-2 py-1.5">
-        <span className="me-1 text-[10px] font-semibold uppercase tracking-wide text-charcoal-400">
-          {t('Approval status')}
-        </span>
-        {(['All', 'Pending', 'Approved', 'Rejected'] as RequestFilter[]).map((option) => (
-          <FilterPill key={option} active={filter === option} onClick={() => setFilter(option)}>
-            {t(option)} ({counts[option]})
-          </FilterPill>
-        ))}
-        <span className="ms-auto text-[11px] text-charcoal-500">
-          {t('Branch Manager request → HR approval → exit interview')}
-        </span>
-      </div>
-
-      <NameDateFilterBar
-        filter={nameDate}
-        onChange={setNameDate}
-        placeholder={t('Search by employee name…')}
-        shown={visible.length}
-        total={byApproval.length}
-      />
-
       {actionError && (
         <p role="alert" className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
           {actionError}
         </p>
       )}
 
-      <div className="rounded-xl border border-charcoal-200 bg-white">
+      <div className="overflow-hidden rounded-xl border border-charcoal-200 bg-white">
+        <ListToolbar>
+          <ToolbarSearch
+            value={nameDate.name}
+            onChange={(name) => setNameDate((current) => ({ ...current, name }))}
+            placeholder={t('Search by employee name…')}
+            className="sm:max-w-72"
+          />
+          <ToolbarSelect
+            value={filter}
+            onChange={(next) => setFilter(next as RequestFilter)}
+            label={t('Approval status')}
+            className="w-full sm:w-44"
+          >
+            {(['All', 'Pending', 'Approved', 'Rejected'] as RequestFilter[]).map((option) => (
+              <option key={option} value={option}>
+                {t(option)} ({counts[option]})
+              </option>
+            ))}
+          </ToolbarSelect>
+          <Button
+            size="sm"
+            variant={datesActive ? 'secondary' : 'ghost'}
+            onClick={() => setDatesOpen((open) => !open)}
+            aria-expanded={datesOpen}
+            aria-label={t('Filter by request date')}
+          >
+            <CalendarRange className="h-3.5 w-3.5" aria-hidden="true" />
+            <span className="hidden sm:inline">{t('Request date')}</span>
+          </Button>
+          <span className="ms-auto text-[11px] text-charcoal-400">
+            {t('{{shown}} of {{total}}', { shown: visible.length, total: cases.length })}
+          </span>
+        </ListToolbar>
+
+        {datesOpen && (
+          <div className="flex flex-wrap items-center gap-2 border-b border-charcoal-100 bg-charcoal-50/60 px-3 py-2">
+            <label className="flex items-center gap-1.5 text-[11px] font-medium text-charcoal-500">
+              {t('From')}
+              <Input
+                type="date"
+                value={nameDate.from}
+                onChange={(event) => setNameDate((current) => ({ ...current, from: event.target.value }))}
+                aria-label={t('From date')}
+                className="h-8 w-[140px] text-xs"
+              />
+            </label>
+            <label className="flex items-center gap-1.5 text-[11px] font-medium text-charcoal-500">
+              {t('To')}
+              <Input
+                type="date"
+                value={nameDate.to}
+                onChange={(event) => setNameDate((current) => ({ ...current, to: event.target.value }))}
+                aria-label={t('To date')}
+                className="h-8 w-[140px] text-xs"
+              />
+            </label>
+            {datesActive && (
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => setNameDate((current) => ({ ...current, from: '', to: '' }))}
+              >
+                {t('Clear filters')}
+              </Button>
+            )}
+          </div>
+        )}
+
         {visible.length === 0 ? (
           <EmptyState
             icon={FileText}
@@ -121,12 +169,12 @@ export function TerminationRequestsTab({ cases, canManage, onOpenInterviews }: T
         ) : (
           <Table>
             <THead>
-              <TH>{t('Employee')}</TH>
-              <TH>{t('Branch')}</TH>
-              <TH>{t('Reason')}</TH>
-              <TH>{t('Notes')}</TH>
-              <TH>{t('Request date')}</TH>
-              <TH>{t('Status')}</TH>
+              <TH className="text-start">{t('Employee')}</TH>
+              <TH className="hidden text-start xl:table-cell">{t('Branch')}</TH>
+              <TH className="text-start">{t('Reason')}</TH>
+              <TH className="hidden text-start 2xl:table-cell">{t('Notes')}</TH>
+              <TH className="hidden text-start xl:table-cell">{t('Request date')}</TH>
+              <TH className="text-start">{t('Status')}</TH>
               <TH className="text-end">{t('Actions')}</TH>
             </THead>
             <TBody>
@@ -136,24 +184,31 @@ export function TerminationRequestsTab({ cases, canManage, onOpenInterviews }: T
                 return (
                   <TR key={separation.id}>
                     <TD>
-                      <EmployeeCell separation={separation} />
+                      <EmployeeCell
+                        separation={separation}
+                        extra={<GymPill gym={separation.gym} className="mt-1 xl:hidden" />}
+                      />
                     </TD>
-                    <TD>
+                    <TD className="hidden xl:table-cell">
                       <GymPill gym={separation.gym} />
-                      <p className="mt-1 text-[10px] text-charcoal-400">{requesterLabel(separation)}</p>
+                      {separation.requestedBy === 'Branch Manager' && (
+                        <p className="mt-1 text-[10px] text-charcoal-400">{requesterLabel(separation)}</p>
+                      )}
                     </TD>
                     <TD className="max-w-48">
-                      <p className="truncate font-medium text-charcoal-800" title={separation.reason ?? undefined}>
+                      <p className="truncate text-xs font-medium text-charcoal-800" title={separation.reason ?? undefined}>
                         {separation.reason ?? '—'}
                       </p>
                       <p className="text-[10px] text-charcoal-400">{t(separation.separationType)}</p>
                     </TD>
-                    <TD className="max-w-56">
+                    <TD className="hidden 2xl:table-cell">
                       <p className="truncate text-[11px] text-charcoal-600" title={separation.notes ?? undefined}>
                         {separation.notes || '—'}
                       </p>
                     </TD>
-                    <TD className="whitespace-nowrap">{formatDate(separation.submittedDate, { withYear: 'always' })}</TD>
+                    <TD className="hidden whitespace-nowrap xl:table-cell">
+                      {formatDate(separation.submittedDate, { withYear: 'always' })}
+                    </TD>
                     <TD>
                       <StatusBadge status={separation.approvalStatus} />
                       {separation.approvedBy && (

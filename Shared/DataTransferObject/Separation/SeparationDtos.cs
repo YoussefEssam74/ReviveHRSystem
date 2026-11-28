@@ -21,6 +21,24 @@ namespace Shared.DataTransferObject.Separation
         public string Direction { get; set; } = "none";
         public decimal Amount { get; set; }
         public string? Note { get; set; }
+
+        /// <summary>Annual days earned in the exit calendar year (pro-rated).</summary>
+        public decimal LeaveEarnedDaysThisYear { get; set; }
+
+        /// <summary>Earned days never taken — the days encashed.</summary>
+        public decimal LeaveEncashmentDays { get; set; }
+
+        /// <summary>Base salary ÷ the exit month's calendar days.</summary>
+        public decimal LeaveEncashmentDailyRate { get; set; }
+
+        /// <summary>Encashment days × the daily rate (owed to the employee).</summary>
+        public decimal LeaveEncashmentAmount { get; set; }
+
+        /// <summary>Days taken beyond the earned balance, plus days settled unpaid.</summary>
+        public decimal UnpaidLeaveDays { get; set; }
+
+        /// <summary>Unpaid-leave days × the daily rate (owed by the employee).</summary>
+        public decimal UnpaidLeaveAmount { get; set; }
     }
 
     /// <summary>Rehire verdict vocabulary: Eligible | Banned.</summary>
@@ -165,6 +183,42 @@ namespace Shared.DataTransferObject.Separation
         public SeparationItem Data { get; set; } = new();
     }
 
+    /// <summary>
+    /// T5 preview — annual-leave encashment for one exit, computed but never stored.
+    /// </summary>
+    public class SeparationLeaveEncashmentDataResponse
+    {
+        public SeparationLeaveEncashment Data { get; set; } = new();
+    }
+
+    public class SeparationLeaveEncashment
+    {
+        public DateOnly LastWorkingDay { get; set; }
+
+        /// <summary>Annual days already consumed this year.</summary>
+        public decimal UsedDays { get; set; }
+
+        /// <summary>Annual days the exit year earns (pro-rated to the calendar year, capped at 12).</summary>
+        public decimal EarnedDaysThisYear { get; set; }
+
+        /// <summary>Earned days never taken — the days paid out.</summary>
+        public decimal UnusedDays { get; set; }
+
+        /// <summary>Days taken beyond the earned balance, plus days settled unpaid.</summary>
+        public decimal DeficitDays { get; set; }
+
+        public decimal BaseSalary { get; set; }
+
+        public decimal DailyRate { get; set; }
+
+        public decimal EncashmentAmount { get; set; }
+
+        public decimal DebtAmount { get; set; }
+
+        /// <summary>True while the six-month qualifying period has not been served.</summary>
+        public bool BelowQualifyingPeriod { get; set; }
+    }
+
     /// <summary>E19 offboard response payload: <c>{ separationId }</c>.</summary>
     public class OffboardResponse
     {
@@ -260,6 +314,20 @@ namespace Shared.DataTransferObject.Separation
 
         [StringLength(1000)]
         public string? Note { get; init; }
+
+        /// <summary>
+        /// Optional HR override of the computed encashment. Null = price the unused
+        /// annual days the calculator worked out.
+        /// </summary>
+        [Range(typeof(decimal), "0", "100000000")]
+        public decimal? LeaveEncashmentAmount { get; init; }
+
+        /// <summary>
+        /// Optional HR override of the computed unpaid-leave debt. Null = keep the
+        /// calculator's figure. Never netted against the encashment.
+        /// </summary>
+        [Range(typeof(decimal), "0", "100000000")]
+        public decimal? UnpaidLeaveAmount { get; init; }
     }
 
     public class SeparationRehireInput

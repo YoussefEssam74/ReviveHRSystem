@@ -83,6 +83,17 @@ namespace Shared.DataTransferObject.Payroll
         public int? RequestId { get; set; }
     }
 
+    /// <summary>One manual bonus line: `{ id, date, reason, amount, status }`.</summary>
+    public class BonusLineItem
+    {
+        public int Id { get; set; }
+        public DateOnly Date { get; set; }
+        public string Reason { get; set; } = string.Empty;
+        public decimal Amount { get; set; }
+        /// <summary>Approved | Pending.</summary>
+        public string Status { get; set; } = "Approved";
+    }
+
     /// <summary>One punch the settlement sheet's evidence column renders.</summary>
     public class PayrollPunchItem
     {
@@ -223,7 +234,11 @@ namespace Shared.DataTransferObject.Payroll
         public decimal CoverPay { get; set; }
         public decimal BaseSalary { get; set; }
         public decimal Bonus { get; set; }
-        /// <summary>base + bonus + OT pay ((base/176)×1.5×overtime).</summary>
+        /// <summary>Annual-leave encashment carried from the exit settlement.</summary>
+        public decimal LeaveEncashment { get; set; }
+        /// <summary>Unused annual days behind <see cref="LeaveEncashment"/>.</summary>
+        public decimal LeaveEncashmentDays { get; set; }
+        /// <summary>base + bonus + OT pay ((base/176)×1.5×overtime) + leave encashment.</summary>
         public decimal Gross { get; set; }
         /// <summary>Sum of Accepted|Approved lines (Pending excluded).</summary>
         public decimal Deductions { get; set; }
@@ -234,6 +249,8 @@ namespace Shared.DataTransferObject.Payroll
         public bool Reviewed { get; set; }
         public List<int> RelatedRequestIds { get; set; } = [];
         public List<DeductionLineItem> DeductionLines { get; set; } = [];
+        /// <summary>Manual earnings added in the Bonuses tab (reason + amount each).</summary>
+        public List<BonusLineItem> BonusLines { get; set; } = [];
         /// <summary>
         /// Work-days ledger + punch proof. Populated by the period detail (the
         /// settlement sheet); null on the per-employee history list.
@@ -315,6 +332,15 @@ namespace Shared.DataTransferObject.Payroll
     public class RemoveDeductionResponse
     {
         public RemoveDeductionData Data { get; set; } = null!;
+    }
+
+    /// <summary>POST …/entries/{employeeId}/bonuses body: a named earning in cash.</summary>
+    public class CreateBonusRequest
+    {
+        /// <summary>Why the bonus is given (required).</summary>
+        public string? Reason { get; set; }
+        /// <summary>Cash amount in EGP (required, &gt; 0).</summary>
+        public decimal? Amount { get; set; }
     }
 
     /// <summary>POST …/entries/{employeeId}/close → `{ data: { employeeId, status, reviewed, reviewedAt, gross, deductions, net } }`.</summary>

@@ -25,6 +25,12 @@ namespace DomainLayer.Models.PayrollModule
         /// <summary>Overtime hours logged in the period (OT pay = (base/176)×1.5×hours).</summary>
         public decimal OvertimeHours { get; set; }
 
+        /// <summary>Annual-leave encashment carried from the exit settlement (an earning).</summary>
+        public decimal LeaveEncashment { get; set; }
+
+        /// <summary>Unused annual days behind <see cref="LeaveEncashment"/>.</summary>
+        public decimal LeaveEncashmentDays { get; set; }
+
         // --- Attendance reconciliation corrections ---------------------------------
         // DaysWorked and OvertimeHours above are edited in place; the four counters
         // below are derived from attendance records, so a manual correction is stored

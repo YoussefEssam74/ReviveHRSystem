@@ -103,6 +103,14 @@ namespace Service.Specifications
             AddInclude(e => e.Position);
             AddInclude(e => e.Gym);
         }
+
+        /// <summary>The same set, restricted to one gym (team assignment guard).</summary>
+        public EmployeesByIdsSpec(int[] ids, int gymId)
+        {
+            Criteria = e => ids.Contains(e.Id) && e.GymId == gymId;
+            AddInclude(e => e.Position);
+            AddInclude(e => e.Gym);
+        }
     }
 
     /// <summary>

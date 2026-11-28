@@ -2,6 +2,7 @@ import { lazy, Suspense, type ReactNode } from 'react'
 import { createBrowserRouter, Navigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { AppLayout } from '../components/layout/AppLayout'
+import { CareersLayout } from '../components/layout/CareersLayout'
 import { KioskLayout } from '../components/layout/KioskLayout'
 import { ConsoleLayout } from '../features/console/components/ConsoleLayout'
 import { PortalRoot } from '../components/layout/PortalRoot'
@@ -11,6 +12,8 @@ import { useAuthSession } from '../contexts/AuthSessionContext'
 
 const HomePage = lazy(() => import('../features/home/pages/HomePage'))
 const LoginPage = lazy(() => import('../features/auth/pages/LoginPage'))
+const ApplyPage = lazy(() => import('../features/public/ApplyPage').then((m) => ({ default: m.ApplyRoute })))
+const CareersLandingPage = lazy(() => import('../features/public/CareersLandingPage'))
 const AttendancePage = lazy(() => import('../features/attendance/pages/AttendancePage'))
 const EnrollmentPage = lazy(() => import('../features/attendance/pages/EnrollmentPage'))
 const StationCodePage = lazy(() => import('../features/attendance/pages/StationCodePage'))
@@ -106,6 +109,20 @@ export const router = createBrowserRouter([
       { path: '*', element: <Navigate to="/attendance" replace /> },
     ],
   },
+  {
+    // Public careers site: the landing lists every Open hiring form and each
+    // form is filled in on its own page. It renders its own shell so no staff
+    // navigation (dashboard, sign out, station tools) can appear here.
+    path: '/apply',
+    element: <CareersLayout />,
+    children: [
+      { index: true, element: <Page><CareersLandingPage /></Page> },
+      { path: ':formId', element: <ApplyPage /> },
+      { path: '*', element: <Navigate to="/apply" replace /> },
+    ],
+  },
+  // Friendly alias for the careers landing (e.g. /careers in a job posting).
+  { path: '/careers', element: <Navigate to="/apply" replace /> },
   {
     element: <AppLayout />,
     children: [

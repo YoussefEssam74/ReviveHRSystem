@@ -5,6 +5,10 @@ using DomainLayer.Exceptions;
 using DomainLayer.Models.AuditModule;
 using DomainLayer.Models.EmployeeModule;
 using DomainLayer.Models.EmployeeModule.Enums;
+using DomainLayer.Models.PayrollModule;
+using DomainLayer.Models.PayrollModule.Enums;
+using DomainLayer.Models.RequestModule;
+using DomainLayer.Models.RequestModule.Enums;
 using DomainLayer.Models.UserModule;
 using DomainLayer.Models.UserModule.Enums;
 using Service.Specifications;
@@ -312,6 +316,19 @@ namespace Service.Services
             kase.RehireStatus = rehire;
             kase.RehireNote = HrPortalHelpers.NullIfBlank(request.Rehire?.Note);
 
+            // Annual-leave encashment: price the days earned in the exit year but never
+            // taken, then let HR override either money line (they are never netted).
+            await LeaveEncashmentPricing.ApplyAsync(_unitOfWork, kase, cancellationToken);
+            if (request.Settlement?.LeaveEncashmentAmount is decimal encashmentOverride)
+            {
+                kase.LeaveEncashmentAmount = Math.Round(encashmentOverride, 2);
+            }
+
+            if (request.Settlement?.UnpaidLeaveAmount is decimal unpaidOverride)
+            {
+                kase.UnpaidLeaveAmount = Math.Round(unpaidOverride, 2);
+            }
+
             // Spec: verdict moves the case to Under Review (a completed case stays completed).
             if (kase.Status != "Completed")
             {
@@ -319,9 +336,46 @@ namespace Service.Services
             }
 
             _unitOfWork.GetRepository<OffboardingCase, int>().Update(kase);
+            await LeaveEncashmentPricing.SyncToPayrollAsync(_unitOfWork, kase, cancellationToken);
             await _unitOfWork.SaveChangesAsync(cancellationToken);
 
             return new MessageResponse { Message = "Exit verdict saved." };
+        }
+
+        /// <summary>
+        /// T5 preview — GET /api/separations/{id}/leave-encashment: prices the annual
+        /// leave earned in the exit calendar year but never taken, plus the unpaid
+        /// deficit, without saving anything. Lets HR see the payout before the verdict.
+        /// </summary>
+        public async Task<SeparationLeaveEncashmentDataResponse> GetLeaveEncashmentAsync(
+            int? actorUserId, int separationId, CancellationToken cancellationToken = default)
+        {
+            var actor = await HrPortalHelpers.ResolveActorAsync(_unitOfWork, actorUserId, cancellationToken);
+            var kase = await _unitOfWork.GetRepository<OffboardingCase, int>()
+                .GetByIdAsync(new SeparationByIdSpec(separationId), cancellationToken)
+                ?? throw new NotFoundException("Separation not found.");
+            await _accessControl.EnsurePermissionForGymAsync(
+                actor.Id, "employees.view", kase.Employee.GymId, cancellationToken);
+
+            var quote = await LeaveEncashmentPricing.QuoteAsync(_unitOfWork, kase, cancellationToken);
+            var result = quote.Result;
+
+            return new SeparationLeaveEncashmentDataResponse
+            {
+                Data = new SeparationLeaveEncashment
+                {
+                    LastWorkingDay = kase.LastWorkingDate,
+                    UsedDays = quote.UsedDays,
+                    EarnedDaysThisYear = result.EarnedDaysThisYear,
+                    UnusedDays = result.UnusedDays,
+                    DeficitDays = result.DeficitDays,
+                    BaseSalary = quote.BaseSalary,
+                    DailyRate = result.DailyRate,
+                    EncashmentAmount = result.EncashmentAmount,
+                    DebtAmount = result.DebtAmount,
+                    BelowQualifyingPeriod = quote.BelowQualifyingPeriod,
+                },
+            };
         }
 
         // ==================================================================
@@ -768,19 +822,25 @@ namespace Service.Services
             var completed = kase.Status == "Completed";
             var completedAt = completed ? kase.CompletedAt ?? DateTime.UtcNow : (DateTime?)null;
             var order = 0;
+            var items = _unitOfWork.GetRepository<OffboardingChecklistItem, int>();
             foreach (var label in ExitChecklistLabels)
             {
-                kase.ChecklistItems.Add(new OffboardingChecklistItem
+                var item = new OffboardingChecklistItem
                 {
+                    OffboardingCaseId = kase.Id,
                     Title = label,
                     SortOrder = order++,
                     IsCompleted = completed,
                     CompletedAt = completedAt,
                     CompletedBy = completed ? actorId : (int?)null,
-                });
+                };
+
+                // Update(kase) would attach the whole no-tracking graph and clash with the
+                // already-tracked actor; insert the rows directly instead.
+                kase.ChecklistItems.Add(item);
+                await items.AddAsync(item, cancellationToken);
             }
 
-            _unitOfWork.GetRepository<OffboardingCase, int>().Update(kase);
             await _unitOfWork.SaveChangesAsync(cancellationToken);
         }
 
@@ -1105,6 +1165,12 @@ namespace Service.Services
                         Direction = c.SettlementDirection,
                         Amount = c.SettlementAmount ?? 0,
                         Note = c.SettlementNote,
+                        LeaveEarnedDaysThisYear = c.LeaveEarnedDaysThisYear ?? 0,
+                        LeaveEncashmentDays = c.LeaveEncashmentDays ?? 0,
+                        LeaveEncashmentDailyRate = c.LeaveEncashmentDailyRate ?? 0,
+                        LeaveEncashmentAmount = c.LeaveEncashmentAmount ?? 0,
+                        UnpaidLeaveDays = c.UnpaidLeaveDays ?? 0,
+                        UnpaidLeaveAmount = c.UnpaidLeaveAmount ?? 0,
                     },
                 Rehire = c.RehireStatus is null
                     ? null

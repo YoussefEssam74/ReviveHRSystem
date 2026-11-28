@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query'
 import {
+  deleteEntryBonus,
   deleteEntryDeduction,
   downloadPeriodCsv,
   getAttendanceRef,
@@ -9,12 +10,14 @@ import {
   getPayslip,
   postCandidateReview,
   postEnsureCurrentPeriod,
+  postEntryBonus,
   postEntryClose,
   postEntryDeduction,
   postEntryReopen,
   postPeriodApprove,
   putEntryAttendance,
   putEntryBonus,
+  type CreateBonusBody,
   type CreateDeductionBody,
   type DeductionCandidateParams,
   type PayrollPeriodListParams,
@@ -118,6 +121,26 @@ export function useRemoveDeduction(periodId: number) {
   return useMutation({
     mutationFn: ({ employeeId, lineId }: { employeeId: number; lineId: number }) =>
       deleteEntryDeduction(periodId, employeeId, lineId),
+    onSuccess: () => invalidatePayroll(queryClient),
+  })
+}
+
+/** POST …/bonuses — add a named cash bonus (reason + amount). */
+export function useAddBonus(periodId: number) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ employeeId, body }: { employeeId: number; body: CreateBonusBody }) =>
+      postEntryBonus(periodId, employeeId, body),
+    onSuccess: () => invalidatePayroll(queryClient),
+  })
+}
+
+/** DELETE …/bonuses/{lineId} — remove one bonus line. */
+export function useRemoveBonus(periodId: number) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ employeeId, lineId }: { employeeId: number; lineId: number }) =>
+      deleteEntryBonus(periodId, employeeId, lineId),
     onSuccess: () => invalidatePayroll(queryClient),
   })
 }

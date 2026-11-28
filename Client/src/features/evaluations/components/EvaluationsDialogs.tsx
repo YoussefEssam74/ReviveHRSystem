@@ -1,17 +1,14 @@
 import { useTranslation } from 'react-i18next'
+import { AnswerValue } from '../../../components/ui/answer-value'
 import { Button } from '../../../components/ui/button'
 import { Dialog } from '../../../components/ui/dialog'
 import { formatDate, formatDateTime } from '../../../lib/format'
 import { cn } from '../../../lib/utils'
-import type { EvaluationForm, EvaluationResponseRow, FormCard as FormCardModel } from '../api/evaluations.api'
-import FormDialog, { type FormKind } from './FormDialog'
+import type { EvaluationForm, EvaluationResponseRow } from '../api/evaluations.api'
+import type { FormKind } from './FormBuilder'
 import { scoreTone } from './evaluation-format'
 
 export interface EvaluationsDialogsProps {
-  dialog: { kind: FormKind; form: FormCardModel | null } | null
-  onCloseDialog: () => void
-  onSaved: (message: string) => void
-
   deleting: { kind: FormKind; id: number; name: string } | null
   onCloseDeleting: () => void
   onDeleteConfirm: () => void
@@ -27,13 +24,10 @@ export interface EvaluationsDialogsProps {
 }
 
 /**
- * Builder / delete / dispatch / answers dialogs. Kept outside the page's view
- * switch so the detail view can open them too (edit, delete, view answers).
+ * Delete / dispatch / answers dialogs. Kept outside the page's view switch so the
+ * detail view can open them too (delete, view answers).
  */
 export function EvaluationsDialogs({
-  dialog,
-  onCloseDialog,
-  onSaved,
   deleting,
   onCloseDeleting,
   onDeleteConfirm,
@@ -49,7 +43,7 @@ export function EvaluationsDialogs({
 
   return (
     <>
-      {dialog && <FormDialog kind={dialog.kind} form={dialog.form} onClose={onCloseDialog} onSaved={onSaved} />}
+
 
       <Dialog
         open={deleting != null}
@@ -161,7 +155,9 @@ export function EvaluationsDialogs({
                   {selectedResponse.answers.map((answer, index) => (
                     <li key={`${answer.question}-${index}`} className="px-3 py-2 text-sm">
                       <p className="font-medium text-charcoal-800">{answer.question}</p>
-                      <p className="mt-0.5 text-charcoal-600">{answer.answer || '—'}</p>
+                      <div className="mt-0.5 text-charcoal-600">
+                        <AnswerValue answer={answer.answer} className="text-sm text-charcoal-600" />
+                      </div>
                     </li>
                   ))}
                 </ul>

@@ -11,15 +11,18 @@ export interface Paged<T> {
 
 /**
  * Builder question kinds as the API accepts and echoes them:
- * `text` (rating, no options) | `choose` (single choice) | `checkbox` (multi).
+ * `text` (rating, no options) | `choose` (single choice) | `checkbox` (multi) |
+ * `file` (the respondent attaches a document — a CV, a certificate, …).
  */
-export type QuestionKind = 'text' | 'choose' | 'checkbox'
+export type QuestionKind = 'text' | 'choose' | 'checkbox' | 'file'
 
 /** One question as stored/echoed by the API (`type` is the builder's word). */
 export interface FormQuestion {
   type: string
   text: string
   options: string[]
+  attachmentName?: string | null
+  attachmentPath?: string | null
 }
 
 /** A question inside the editor draft (type normalized to the builder's words). */
@@ -27,17 +30,28 @@ export interface QuestionDraft {
   kind: QuestionKind
   text: string
   options: string[]
+  /** Reference document staged for this question (relative path + display name). */
+  attachmentPath?: string | null
+  attachmentName?: string | null
 }
 
 /** Maps any stored question type (API words or legacy tokens) onto the editor. */
 export function toQuestionDraft(question: FormQuestion): QuestionDraft {
   const type = question.type.toLowerCase()
   const kind: QuestionKind =
-    type === 'choose' || type === 'multiplechoice' ? 'choose' : type === 'checkbox' ? 'checkbox' : 'text'
+    type === 'choose' || type === 'multiplechoice'
+      ? 'choose'
+      : type === 'checkbox'
+        ? 'checkbox'
+        : type === 'file' || type === 'fileupload'
+          ? 'file'
+          : 'text'
   return {
     kind,
     text: question.text,
-    options: kind === 'text' ? [] : [...question.options],
+    options: kind === 'text' || kind === 'file' ? [] : [...question.options],
+    attachmentPath: question.attachmentPath ?? null,
+    attachmentName: question.attachmentName ?? null,
   }
 }
 
@@ -46,6 +60,18 @@ export interface QuestionInput {
   type: QuestionKind
   text: string
   options: string[]
+  attachmentPath?: string | null
+  attachmentName?: string | null
+}
+
+/** POST multipart — stages a question's document; the path rides with the save. */
+export function uploadFormAttachment(file: File): Promise<{ path: string; name: string }> {
+  const form = new FormData()
+  form.append('file', file)
+  return apiRequest<Wrapped<{ path: string; name: string }>>('/api/evaluation-forms/attachments', {
+    method: 'POST',
+    form,
+  }).then((r) => r.data)
 }
 
 /** Common card shape shared by evaluation forms and hiring forms. */
@@ -55,6 +81,12 @@ export interface FormCard {
   position: string | null
   gym: string
   status: string
+  /** Evaluation | FirstInterview | ExitInterview (evaluation cards only). */
+  kind?: string
+  /** Reference document uploaded in the builder, when any. */
+  attachmentName?: string | null
+  /** Hiring forms only: public job description shown on the careers page. */
+  description?: string | null
   questions: number
   questionList: FormQuestion[]
   /** ISO timestamp. */
@@ -69,6 +101,10 @@ export interface EvaluationForm extends FormCard {
   target: string | null
   /** Active | Completed | Inactive. */
   status: string
+  /** Evaluation | FirstInterview | ExitInterview (builder tab). */
+  kind: string
+  /** Reference document attached in the builder, when any. */
+  attachmentName: string | null
   /** Submitted responses through this form. */
   submissions: number
 }
@@ -77,6 +113,8 @@ export interface EvaluationFormListParams {
   gym?: number
   status?: string
   position?: string
+  /** Evaluation | FirstInterview | ExitInterview (blank = every tab). */
+  kind?: string
   page?: number
   pageSize?: number
 }
@@ -89,6 +127,7 @@ export function getEvaluationForms(
   if (params.gym != null) query.set('gym', String(params.gym))
   if (params.status) query.set('status', params.status)
   if (params.position) query.set('position', params.position)
+  if (params.kind) query.set('kind', params.kind)
   if (params.page) query.set('page', String(params.page))
   if (params.pageSize) query.set('pageSize', String(params.pageSize))
   const qs = query.toString()
@@ -112,11 +151,22 @@ export interface UpsertEvaluationFormBody {
   gym?: string
   /** Active | Completed | Inactive. */
   status?: string
+  /** Evaluation | FirstInterview | ExitInterview. */
+  kind?: string
   questionList: QuestionInput[]
 }
 
 export function postEvaluationForm(body: UpsertEvaluationFormBody, signal?: AbortSignal): Promise<EvaluationForm> {
   return apiRequest<Wrapped<EvaluationForm>>('/api/evaluation-forms', { method: 'POST', body, signal }).then(
+    (r) => r.data,
+  )
+}
+
+/** POST multipart — attaches (or replaces) the form's reference document. */
+export function uploadEvaluationFormAttachment(id: number, file: File): Promise<EvaluationForm> {
+  const form = new FormData()
+  form.append('file', file)
+  return apiRequest<Wrapped<EvaluationForm>>(`/api/evaluation-forms/${id}/attachment`, { method: 'POST', form }).then(
     (r) => r.data,
   )
 }
@@ -193,6 +243,8 @@ export function postEvaluationLaunchCycle(id: number, body: LaunchCycleBody, sig
 export interface HiringForm extends FormCard {
   /** Open | Closed. */
   status: string
+  /** Public job description shown on the careers page; null when empty. */
+  description?: string | null
   /** Received applications. */
   applicants: number
 }
@@ -225,6 +277,8 @@ export function getHiringForm(id: number, signal?: AbortSignal): Promise<HiringF
 export interface UpsertHiringFormBody {
   name: string
   position?: string
+  /** Public job description shown on the careers page (max 4000 characters). */
+  description?: string
   gym?: string
   /** Open (accepting submissions) | Closed. */
   status?: string

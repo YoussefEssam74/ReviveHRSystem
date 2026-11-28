@@ -659,4 +659,7 @@ export const workflows: Record<string, string> = {
   'Reason for declining': 'سبب الرفض',
   'e.g. Amount exceeds branch budget — resubmit with area manager approval':
     'مثال: المبلغ يتجاوز ميزانية الفرع — أعد التقديم بموافقة مدير المنطقة',
+  // Terminations list toolbars (visible label for the date filter)
+  Dates: 'التواريخ',
+  'Filter by request date': 'تصفية حسب تاريخ الطلب',
 }

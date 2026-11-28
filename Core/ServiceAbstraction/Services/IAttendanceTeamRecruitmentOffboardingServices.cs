@@ -16,6 +16,17 @@ namespace ServiceAbstraction.Services
         /// <summary>Members with no published shift assignment in the active gym.</summary>
         Task<int> GetUnscheduledCountAsync(
             int actorUserId, int teamId, int? activeGymId, CancellationToken cancellationToken = default);
+
+        /// <summary>Every team in the active gym with its leader and member count.</summary>
+        Task<IReadOnlyList<TeamListItem>> GetGymTeamsAsync(
+            int actorUserId, int? activeGymId, CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// Creates a team in the active gym led by the given user, with the chosen
+        /// employees as members (team.manage).
+        /// </summary>
+        Task<TeamListItem> CreateTeamAsync(
+            int actorUserId, int? activeGymId, CreateTeamRequest request, CancellationToken cancellationToken = default);
     }
 
     /// <summary>Vacancy requests raised by the branch (mock §23 Recruitment).</summary>

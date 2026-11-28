@@ -17,6 +17,12 @@ namespace DomainLayer.Models.EvaluationModule
         // JSONB string for options (used for MultipleChoice and Checkbox)
         public string? OptionsJson { get; set; }
 
+        /// <summary>Optional reference document uploaded for this question (relative storage path).</summary>
+        public string? AttachmentPath { get; set; }
+
+        /// <summary>Original file name of <see cref="AttachmentPath"/>, shown in the builder.</summary>
+        public string? AttachmentName { get; set; }
+
         public int SortOrder { get; set; }
     }
 }

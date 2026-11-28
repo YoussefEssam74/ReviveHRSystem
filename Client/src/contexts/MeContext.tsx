@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { getMe, postSwitchGym, type MeResponse } from '../features/console/api/console.api'
-import { ApiError } from '../lib/api-client'
+import { ApiError, setRequestGymScope } from '../lib/api-client'
 import { useAuthSession } from './AuthSessionContext'
 import { can, type FeatureCode, type FeatureLevels } from '../lib/permissions'
 
@@ -41,10 +41,20 @@ export function MeProvider({ children }: { children: ReactNode }) {
 
   // Drop cached me data whenever the user signs out (or the session is cleared).
   useEffect(() => {
-    if (!authenticated) queryClient.removeQueries({ queryKey: ['me'] })
+    if (!authenticated) {
+      queryClient.removeQueries({ queryKey: ['me'] })
+      setRequestGymScope(null)
+    }
   }, [authenticated, queryClient])
 
   const me = query.data ?? null
+
+  // Every read follows the gym chosen at login / in the header switcher.
+  const activeGymId = me?.activeGym?.gymId ?? null
+  useEffect(() => {
+    setRequestGymScope(activeGymId)
+  }, [activeGymId])
+
   // Memoize so the object identity is stable across renders (featureLevels is a
   // fresh object literal otherwise, which defeats downstream memoization).
   const featureLevels = useMemo(() => me?.featureLevels ?? {}, [me])

@@ -84,10 +84,13 @@ namespace Presentation.Controllers
                 GetActorUserId(), status, cancellationToken));
 
         /// <summary>
-        /// POST /api/deduction-candidates/{id}/review - the HR sign-off on a branch-sized
-        /// deduction: approve (payroll applies it), waive it, or re-size it in hours/days.
+        /// POST /api/deduction-candidates/{id}/hr-review - the HR sign-off on a branch-sized
+        /// deduction candidate: approve (payroll applies it), waive it, or re-size it in
+        /// hours/days. Distinct from POST /api/deduction-candidates/{id}/review, which
+        /// reviews a payroll entry line item (PayrollService) — the two ids live in
+        /// different tables, so they cannot share a route.
         /// </summary>
-        [HttpPost("{id}/review")]
+        [HttpPost("{id}/hr-review")]
         public async Task<ActionResult<DeductionCandidateDto>> Review(
             int id, BranchDeductionReviewRequest request, CancellationToken cancellationToken)
             => Ok(await branchActionsService.ReviewDeductionCandidateAsync(

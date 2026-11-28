@@ -10,6 +10,7 @@ import { gaps } from './ar/gaps'
 import { branchActions } from './ar/branch-actions'
 import { teamRequests } from './ar/team-requests'
 import { teamSchedule } from './ar/team-schedule'
+import { careers } from './ar/careers'
 
 /**
  * Arabic resource bundle. Keys are the English source copy (see
@@ -28,5 +29,6 @@ export const ar: Record<string, string> = {
   ...branchActions,
   ...teamRequests,
   ...teamSchedule,
+  ...careers,
   ...gaps,
 }

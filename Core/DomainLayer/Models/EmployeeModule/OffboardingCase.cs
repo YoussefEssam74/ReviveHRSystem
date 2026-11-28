@@ -80,6 +80,30 @@ namespace DomainLayer.Models.EmployeeModule
         public string? ExitInterviewQuestions { get; set; }
 
         // ------------------------------------------------------------------
+        // Annual-leave encashment at exit: the days earned in the exit calendar
+        // year that were never taken, priced at the exit month's daily rate. The
+        // unpaid deficit is kept as its own line, never netted.
+        // ------------------------------------------------------------------
+
+        /// <summary>Annual days the employee earned in the exit calendar year.</summary>
+        public decimal? LeaveEarnedDaysThisYear { get; set; }
+
+        /// <summary>Earned days never taken — the days being paid out.</summary>
+        public decimal? LeaveEncashmentDays { get; set; }
+
+        /// <summary>Base salary ÷ the exit month's calendar days.</summary>
+        public decimal? LeaveEncashmentDailyRate { get; set; }
+
+        /// <summary>Encashment days × the daily rate — owed to the employee.</summary>
+        public decimal? LeaveEncashmentAmount { get; set; }
+
+        /// <summary>Days taken beyond the earned balance, plus days settled unpaid.</summary>
+        public decimal? UnpaidLeaveDays { get; set; }
+
+        /// <summary>Unpaid-leave days × the daily rate — owed by the employee.</summary>
+        public decimal? UnpaidLeaveAmount { get; set; }
+
+        // ------------------------------------------------------------------
         // Clearance / final settlement (the last step before Former Employees).
         // ------------------------------------------------------------------
 

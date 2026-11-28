@@ -1,10 +1,11 @@
 import { useTranslation } from 'react-i18next'
 import { CalendarDays, Mail, Phone } from 'lucide-react'
+import { AnswerValue } from '../../../components/ui/answer-value'
 import { Button } from '../../../components/ui/button'
 import { Dialog } from '../../../components/ui/dialog'
 import { formatDate } from '../../../lib/format'
 import { cn } from '../../../lib/utils'
-import type { FormApplication, FormApplicationAnswer } from '../api/recruitment.api'
+import type { FormApplication } from '../api/recruitment.api'
 
 const STATUS_TONE: Record<string, string> = {
   New: 'badge-blue',
@@ -12,29 +13,6 @@ const STATUS_TONE: Record<string, string> = {
   Shortlisted: 'badge-purple',
   Rejected: 'badge-red',
   'Moved to Pipeline': 'badge-success',
-}
-
-/** Renders one stored answer — plain text, or chips for checkbox selections. */
-function AnswerValue({ answer }: { answer: FormApplicationAnswer['answer'] }) {
-  const { t } = useTranslation()
-
-  if (answer == null || answer === '' || (Array.isArray(answer) && answer.length === 0)) {
-    return <span className="text-xs text-charcoal-400">{t('Not answered')}</span>
-  }
-
-  if (Array.isArray(answer)) {
-    return (
-      <ul className="flex flex-wrap gap-1">
-        {answer.map((item, index) => (
-          <li key={`${item}-${index}`} className="badge badge-gray text-[10px]">
-            {String(item)}
-          </li>
-        ))}
-      </ul>
-    )
-  }
-
-  return <p className="whitespace-pre-wrap text-xs text-charcoal-800">{String(answer)}</p>
 }
 
 export interface ApplicantAnswersDialogProps {

@@ -13,9 +13,11 @@ import { Pagination } from '../../../components/ui/pagination'
 import { Table, TBody, TD, TH, THead, TR } from '../../../components/ui/table'
 import { describeApiError } from '../../../lib/api-client'
 import { formatDateTime } from '../../../lib/format'
+import { useToast } from '../../../components/ui/toast'
 import { useTeamMembers } from '../hooks/useHrTeam'
 import type { TeamMember } from '../api/hr-team.api'
-import { CreateUserDialog } from './CreateUserDialog'
+import { useMe } from '../../../contexts/MeContext'
+import { AssignRoleDialog } from './AssignRoleDialog'
 import { ResetPasswordDialog } from './ResetPasswordDialog'
 import { UserStatusDialog } from './UserStatusDialog'
 
@@ -29,6 +31,7 @@ interface MembersTabProps {
 /** Members — paged user list with create / status / reset-password actions (team.manage writes). */
 export function MembersTab({ canManage }: MembersTabProps) {
   const { t } = useTranslation()
+  const { toast } = useToast()
   const [search, setSearch] = useState('')
   const [status, setStatus] = useState('')
   const [page, setPage] = useState(1)
@@ -54,6 +57,16 @@ export function MembersTab({ canManage }: MembersTabProps) {
   }
 
   const statusLabel = (member: TeamMember) => (member.status === 'Active' ? t('Suspend') : t('Reactivate'))
+  // A Super Admin outranks the HR console: its account state and role are managed
+  // by the platform team, not from this page.
+  const isSuperAdmin = (member: TeamMember) =>
+    [member.role, ...member.roles].some((role) => {
+      const value = (role ?? '').toLowerCase()
+      return value.includes('super admin') || value === 'topmanagement' || value === 'top management'
+    })
+  const { me } = useMe()
+  const viewerIsSuperAdmin = me?.userType === 'TopManagement' || (me?.roleInActiveGym ?? '').toLowerCase() === 'super admin'
+  const canTouch = (member: TeamMember) => canManage && (viewerIsSuperAdmin || !isSuperAdmin(member))
 
   return (
     <Card>
@@ -80,7 +93,7 @@ export function MembersTab({ canManage }: MembersTabProps) {
         {canManage && (
           <Button size="sm" className="sm:ms-auto" onClick={() => setCreating(true)}>
             <UserPlus className="h-4 w-4" aria-hidden="true" />
-            {t('Add member')}
+            {t('Assign role')}
           </Button>
         )}
       </div>
@@ -149,7 +162,7 @@ export function MembersTab({ canManage }: MembersTabProps) {
                     </TD>
                     <TD className="text-slate-500">{formatDateTime(member.lastLoginAt)}</TD>
                     <TD className="text-end">
-                      {canManage ? (
+                      {canTouch(member) ? (
                         <div className="flex justify-end gap-2">
                           <Button variant="outline" size="sm" onClick={() => setStatusTarget(member)}>
                             {statusLabel(member)}
@@ -159,7 +172,16 @@ export function MembersTab({ canManage }: MembersTabProps) {
                           </Button>
                         </div>
                       ) : (
-                        <span className="text-xs text-slate-400">{t('View only')}</span>
+                        <span
+                          className="text-xs text-slate-400"
+                          title={
+                            isSuperAdmin(member)
+                              ? t('Super Admin accounts are managed by the platform team')
+                              : t('View only')
+                          }
+                        >
+                          {isSuperAdmin(member) ? t('Protected') : t('View only')}
+                        </span>
                       )}
                     </TD>
                   </TR>
@@ -195,7 +217,7 @@ export function MembersTab({ canManage }: MembersTabProps) {
                     {member.gyms.length > 3 && <Badge>+{member.gyms.length - 3}</Badge>}
                   </div>
                 )}
-                {canManage && (
+                {canTouch(member) && (
                   <div className="flex gap-2">
                     <Button variant="outline" size="sm" onClick={() => setStatusTarget(member)}>
                       {statusLabel(member)}
@@ -220,7 +242,17 @@ export function MembersTab({ canManage }: MembersTabProps) {
         </>
       )}
 
-      {creating && <CreateUserDialog open onClose={() => setCreating(false)} />}
+      {creating && (
+        <AssignRoleDialog
+          open
+          onClose={() => setCreating(false)}
+          onTeamCreated={(name, members) =>
+            toast(
+              t('Team “{{name}}” created with {{count}} employee(s).', { name, count: members }),
+            )
+          }
+        />
+      )}
       {statusTarget && <UserStatusDialog member={statusTarget} onClose={() => setStatusTarget(null)} />}
       {resetTarget && <ResetPasswordDialog member={resetTarget} onClose={() => setResetTarget(null)} />}
     </Card>

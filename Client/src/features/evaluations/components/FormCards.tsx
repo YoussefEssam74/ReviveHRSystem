@@ -1,3 +1,4 @@
+import { Link2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Button } from '../../../components/ui/button'
 import { formatDate } from '../../../lib/format'
@@ -92,10 +93,13 @@ export function FormCard({
   kind,
   form,
   onOpen,
+  onShared,
 }: {
   kind: 'evaluation' | 'hiring'
   form: EvaluationForm | HiringForm
   onOpen: () => void
+  /** Called with the copied public URL (hiring forms only). */
+  onShared?: (url: string) => void
 }) {
   const { t } = useTranslation()
   const questions = form.questionList
@@ -135,7 +139,7 @@ export function FormCard({
         )}
       </div>
 
-      <div className="mt-3 flex w-full items-center justify-between border-t border-charcoal-100 pt-2">
+      <div className="mt-3 flex w-full items-center justify-between gap-2 border-t border-charcoal-100 pt-2">
         <p className="text-[10px] text-charcoal-500">
           {kind === 'evaluation'
             ? count === 1
@@ -145,7 +149,35 @@ export function FormCard({
               ? t('1 applicant')
               : t('{{count}} applicants', { count })}
         </p>
-        <p className="text-[10px] font-semibold text-brand-600">{t('Open →')}</p>
+        <div className="flex items-center gap-2">
+          {kind === 'hiring' && (
+            <span
+              role="button"
+              tabIndex={0}
+              onClick={(event) => {
+                // The card itself opens the form; this copies the shareable link instead.
+                event.stopPropagation()
+                const url = `${window.location.origin}/apply/${form.id}`
+                void navigator.clipboard
+                  ?.writeText(url)
+                  .then(() => onShared?.(url))
+              }}
+              onKeyDown={(event) => {
+                if (event.key !== 'Enter' && event.key !== ' ') return
+                event.preventDefault()
+                event.stopPropagation()
+                const url = `${window.location.origin}/apply/${form.id}`
+                void navigator.clipboard?.writeText(url).then(() => onShared?.(url))
+              }}
+              title={t('Copy the public application link')}
+              className="flex items-center gap-1 rounded-md px-1.5 py-1 text-[10px] font-semibold text-charcoal-500 hover:bg-charcoal-100 hover:text-charcoal-800"
+            >
+              <Link2 className="h-3 w-3" aria-hidden="true" />
+              {t('Public link')}
+            </span>
+          )}
+          <p className="text-[10px] font-semibold text-brand-600">{t('Open →')}</p>
+        </div>
       </div>
     </button>
   )

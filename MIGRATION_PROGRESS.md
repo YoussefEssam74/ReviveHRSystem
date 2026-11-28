@@ -71,7 +71,7 @@ Super Admin pages, Attendance Station kiosk — queued after the HR console.
 | KPIs / decision cards / branch rows | `GET /api/dashboard/hr` (unchanged) |
 | Request card Approve/Decline | `POST /api/requests/{id}/decide` (stage HR) — added |
 | Vacancy card Approve/Decline (+ reason) | `PUT /api/vacancy-requests/{id}/decide` |
-| Branch deduction/warning/bonus cards | `POST /api/deduction-candidates/{id}/review`, `/api/warning-notices/{id}/review`, `/api/bonus-proposals/{id}/review` |
+| Branch deduction/warning/bonus cards | `POST /api/deduction-candidates/{id}/hr-review` (candidate sign-off; `/review` reviews a payroll line item), `/api/warning-notices/{id}/review`, `/api/bonus-proposals/{id}/review` |
 | Contract cards | `POST /api/employees/{id}/contract` (level/salary/effective date) |
 | Payroll card | navigate → `/console/payroll` |
 | Create Account fast action | `POST /api/employees` (+ optional `POST /api/employees/{id}/role-change`, `POST /api/employees/face/enroll`) |

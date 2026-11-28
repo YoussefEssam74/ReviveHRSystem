@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { Paperclip } from 'lucide-react'
 import { Button } from '../../../components/ui/button'
 import { LoadingState } from '../../../components/async-state'
 import { describeApiError } from '../../../lib/api-client'
@@ -374,6 +375,41 @@ export function EvaluationRunView({
                             </label>
                           )
                         })}
+                      </div>
+                    ) : question.type === 'file' ? (
+                      <div className="mt-2 flex flex-wrap items-center gap-2">
+                        <label className="btn btn-secondary btn-sm cursor-pointer">
+                          <Paperclip className="h-3.5 w-3.5" aria-hidden="true" />
+                          {typeof answers[index] === 'string' && answers[index] ? t('Replace document') : t('Upload document')}
+                          <input
+                            type="file"
+                            className="sr-only"
+                            accept=".pdf,.doc,.docx,.png,.jpg,.jpeg"
+                            onChange={async (event) => {
+                              const file = event.target.files?.[0]
+                              event.target.value = ''
+                              if (!file) return
+                              if (file.size > 2 * 1024 * 1024) {
+                                setError(t('That document is larger than 2 MB.'))
+                                return
+                              }
+                              const dataUrl = await new Promise<string>((resolve, reject) => {
+                                const reader = new FileReader()
+                                reader.onload = () => resolve(String(reader.result ?? ''))
+                                reader.onerror = () => reject(reader.error)
+                                reader.readAsDataURL(file)
+                              }).catch(() => '')
+                              if (!dataUrl) return
+                              setError(null)
+                              setAnswers((current) => ({ ...current, [index]: `${file.name}|${dataUrl}` }))
+                            }}
+                          />
+                        </label>
+                        {typeof answers[index] === 'string' && answers[index] && (
+                          <span className="max-w-[16rem] truncate text-[11px] font-medium text-charcoal-700">
+                            {String(answers[index]).split('|data:')[0]}
+                          </span>
+                        )}
                       </div>
                     ) : (
                       <textarea

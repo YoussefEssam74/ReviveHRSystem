@@ -26,7 +26,7 @@ export interface TeamMember {
   roles: string[]
   /** Assigned gym names (portal-wide, not gym-scoped). */
   gyms: string[]
-  /** Effective (direct ∪ role) permission count. */
+  /** Effective (direct âˆª role) permission count. */
   permissionsCount: number
   permissions: string[]
   /** "Active" | "Suspended". */
@@ -41,13 +41,13 @@ export interface TeamListParams {
   type?: string
   /** Case-insensitive substring of name, email or username. */
   search?: string
-  /** "Active" | "Suspended" — omitted returns every member. */
+  /** "Active" | "Suspended" â€” omitted returns every member. */
   status?: string
   page?: number
   pageSize?: number
 }
 
-/** GET /api/users — paged HR Team member list (team.view). */
+/** GET /api/users â€” paged HR Team member list (team.view). */
 export function getTeamMembers(params: TeamListParams = {}, signal?: AbortSignal): Promise<Paged<TeamMember>> {
   const query = new URLSearchParams()
   if (params.gym) query.set('gym', params.gym)
@@ -69,7 +69,7 @@ export interface UserAccessProfile {
   /** Direct (user-level) permission keys. */
   permissions: string[]
   gyms: { id: number; name: string; branch: string }[]
-  /** Direct ∪ role permissions — what the matrix is computed from. */
+  /** Direct âˆª role permissions â€” what the matrix is computed from. */
   effectivePermissions: string[]
   grantedCount: number
   trackedCount: number
@@ -80,7 +80,7 @@ export function getUserAccessProfile(id: number, signal?: AbortSignal): Promise<
   return apiRequest<Wrapped<UserAccessProfile>>(`/api/users/${id}`, { signal }).then((r) => r.data)
 }
 
-/** POST /api/users body — the create-HR-account wizard's final submit. */
+/** POST /api/users body â€” the create-HR-account wizard's final submit. */
 export interface CreateUserBody {
   fullName: string
   email: string
@@ -92,23 +92,33 @@ export interface CreateUserBody {
   rolePreset?: string
 }
 
-/** POST /api/users → 201 { data }. The temporary password is set server-side and never echoed. */
+/** POST /api/users â†’ 201 { data }. The temporary password is set server-side and never echoed. */
 export function postCreateUser(body: CreateUserBody): Promise<TeamMember> {
   return apiRequest<Wrapped<TeamMember>>('/api/users', { method: 'POST', body }).then((r) => r.data)
 }
 
-/** PUT /api/users/{id}/status body — suspend/reactivate; reason is required. */
+/** PUT /api/users/{id}/roles body — assigns one role by preset name (team.manage). */
+export interface AssignRoleBody {
+  rolePreset: string
+}
+
+/** PUT /api/users/{id}/roles — assigns the role to an existing member. */
+export function putUserRole(id: number, body: AssignRoleBody): Promise<unknown> {
+  return apiRequest<unknown>(`/api/users/${id}/roles`, { method: 'PUT', body })
+}
+
+/** PUT /api/users/{id}/status body â€” suspend/reactivate; reason is required. */
 export interface ChangeUserStatusBody {
   status: 'Active' | 'Suspended'
   reason: string
 }
 
-/** PUT /api/users/{id}/status → { message }. Self-suspend is refused server-side. */
+/** PUT /api/users/{id}/status â†’ { message }. Self-suspend is refused server-side. */
 export function putUserStatus(id: number, body: ChangeUserStatusBody): Promise<{ message: string }> {
   return apiRequest<{ message: string }>(`/api/users/${id}/status`, { method: 'PUT', body })
 }
 
-/** POST /api/users/{id}/reset-password → { message }. The plaintext is never echoed. */
+/** POST /api/users/{id}/reset-password â†’ { message }. The plaintext is never echoed. */
 export function postResetPassword(id: number, newPassword: string): Promise<{ message: string }> {
   return apiRequest<{ message: string }>(`/api/users/${id}/reset-password`, {
     method: 'POST',
@@ -138,7 +148,7 @@ export interface RoleListParams {
   pageSize?: number
 }
 
-/** GET /api/roles — paged roles with permission/user counters (team.view). */
+/** GET /api/roles â€” paged roles with permission/user counters (team.view). */
 export function getRoles(params: RoleListParams = {}, signal?: AbortSignal): Promise<Paged<Role>> {
   const query = new URLSearchParams()
   if (params.search) query.set('search', params.search)
@@ -148,7 +158,7 @@ export function getRoles(params: RoleListParams = {}, signal?: AbortSignal): Pro
   return apiRequest<Paged<Role>>(`/api/roles${qs ? '?' + qs : ''}`, { signal })
 }
 
-/** PUT /api/roles/{id}/permissions — replaces the set wholesale (team.manage). */
+/** PUT /api/roles/{id}/permissions â€” replaces the set wholesale (team.manage). */
 export function putRolePermissions(id: number, permissions: string[]): Promise<{ id: number; permissions: string[] }> {
   return apiRequest<Wrapped<{ id: number; permissions: string[] }>>(`/api/roles/${id}/permissions`, {
     method: 'PUT',
@@ -163,7 +173,7 @@ export interface PermissionCatalogItem {
   description: string | null
 }
 
-/** The catalog grouped by area — the My Access / admin matrix source. */
+/** The catalog grouped by area â€” the My Access / admin matrix source. */
 export interface PermissionModule {
   name: string
   permissions: string[]
@@ -175,7 +185,7 @@ export interface PermissionCatalog {
   totalTracked: number
 }
 
-/** GET /api/permissions — flat items + area-grouped modules + totalTracked (team.view). */
+/** GET /api/permissions â€” flat items + area-grouped modules + totalTracked (team.view). */
 export function getPermissionCatalog(signal?: AbortSignal): Promise<PermissionCatalog> {
   return apiRequest<Wrapped<PermissionCatalog>>('/api/permissions', { signal }).then((r) => r.data)
 }
@@ -188,7 +198,37 @@ export interface GymOption {
   employees: number
 }
 
-/** GET /api/gyms — the gyms visible to the signed-in user (gym-access picker). */
+/** GET /api/gyms â€” the gyms visible to the signed-in user (gym-access picker). */
 export function getGyms(signal?: AbortSignal): Promise<GymOption[]> {
   return apiRequest<GymOption[]>('/api/gyms', { signal })
+}
+
+/** One team of the active gym (GET /api/teams). */
+export interface TeamListItem {
+  id: number
+  name: string
+  gymId: number
+  gym: string
+  leaderUserId: number | null
+  leaderName: string | null
+  memberCount: number
+}
+
+/** GET /api/teams - every team of the active gym with its leader. */
+export function getTeams(signal?: AbortSignal): Promise<TeamListItem[]> {
+  return apiRequest<TeamListItem[]>('/api/teams', { signal })
+}
+
+/** POST /api/teams body - the Team Leader wizard's team assignment. */
+export interface CreateTeamBody {
+  name: string
+  leaderUserId?: number
+  /** Employee id of the leader (hire wizard, before a user id is known). */
+  leaderEmployeeId?: number
+  memberEmployeeIds: number[]
+}
+
+/** POST /api/teams - creates the team led by the new user with the chosen employees. */
+export function postTeam(body: CreateTeamBody): Promise<TeamListItem> {
+  return apiRequest<TeamListItem>('/api/teams', { method: 'POST', body })
 }

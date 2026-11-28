@@ -82,6 +82,17 @@ namespace Service.Services
         /// <summary>Resolves a gym by id or name, enforcing the actor's assignment (writes).</summary>
         internal static async Task<Gym> ResolveGymAsync(IUnitOfWork unitOfWork, IUserAccessRepository userAccess, User actor, int? gymId, string? gymName, CancellationToken cancellationToken = default)
         {
+            // No gym on a write: an operator who only works in one gym always means
+            // that gym, so the console never asks for something it already knows.
+            if (gymId is null && NullIfBlank(gymName) is null)
+            {
+                var assigned = await userAccess.GetGymAccessAsync(actor.Id, cancellationToken);
+                if (assigned.Count == 1)
+                {
+                    gymId = assigned[0].GymId;
+                }
+            }
+
             if (gymId is null && NullIfBlank(gymName) is null)
             {
                 throw new BadRequestException("Gym is required.");

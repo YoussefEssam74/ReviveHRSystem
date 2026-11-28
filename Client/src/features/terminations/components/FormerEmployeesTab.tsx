@@ -1,11 +1,10 @@
 import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Search, UserMinus } from 'lucide-react'
+import { UserMinus } from 'lucide-react'
 import { Badge } from '../../../components/ui/badge'
 import { EmptyState } from '../../../components/ui/empty-state'
-import { Input } from '../../../components/ui/field'
 import { TBody, TD, TH, THead, TR, Table } from '../../../components/ui/table'
-import { fullDate } from './termination-ui'
+import { fullDate, ListFootnote, ListToolbar, ToolbarSearch } from './termination-ui'
 import type { Separation } from '../api/terminations.api'
 
 function rehireVerdict(separation: Separation): boolean | null {
@@ -32,28 +31,21 @@ export function FormerEmployeesTab({ cases }: { cases: Separation[] }) {
 
   return (
     <div className="space-y-2.5">
-      <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-charcoal-200 bg-white px-2 py-1.5">
-        <div className="relative w-full sm:w-72">
-          <Search
-            className="pointer-events-none absolute start-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-charcoal-400"
-            aria-hidden="true"
-          />
-          <Input
+      <div className="overflow-hidden rounded-xl border border-charcoal-200 bg-white">
+        <ListToolbar>
+          <ToolbarSearch
             value={search}
-            onChange={(event) => setSearch(event.target.value)}
+            onChange={setSearch}
             placeholder={t('Search former employees…')}
-            className="h-8 ps-8 text-xs"
-            aria-label={t('Search former employees…')}
+            className="sm:max-w-72"
           />
-        </div>
-        <span className="text-[11px] text-charcoal-500">
-          {visible.length === 1
-            ? t('1 former employee')
-            : t('{{count}} former employees', { count: visible.length })}
-        </span>
-      </div>
+          <span className="ms-auto text-[11px] text-charcoal-400">
+            {visible.length === 1
+              ? t('1 former employee')
+              : t('{{count}} former employees', { count: visible.length })}
+          </span>
+        </ListToolbar>
 
-      <div className="rounded-xl border border-charcoal-200 bg-white">
         {visible.length === 0 ? (
           <EmptyState
             icon={UserMinus}
@@ -67,14 +59,14 @@ export function FormerEmployeesTab({ cases }: { cases: Separation[] }) {
         ) : (
           <Table className="rounded-xl">
             <THead>
-              <TH>{t('Employee name')}</TH>
-              <TH>{t('Branch')}</TH>
-              <TH>{t('Position')}</TH>
-              <TH>{t('Hire date')}</TH>
-              <TH>{t('Termination date')}</TH>
-              <TH>{t('Termination reason')}</TH>
-              <TH>{t('Eligible for rehire')}</TH>
-              <TH>{t('Blacklisted')}</TH>
+              <TH className="text-start">{t('Employee name')}</TH>
+              <TH className="hidden text-start xl:table-cell">{t('Branch')}</TH>
+              <TH className="hidden text-start xl:table-cell">{t('Position')}</TH>
+              <TH className="hidden text-start xl:table-cell">{t('Hire date')}</TH>
+              <TH className="text-start">{t('Termination date')}</TH>
+              <TH className="text-start">{t('Reason')}</TH>
+              <TH className="text-start">{t('Rehire')}</TH>
+              <TH className="text-start">{t('Blacklisted')}</TH>
             </THead>
             <TBody>
               {visible.map((separation) => {
@@ -86,14 +78,17 @@ export function FormerEmployeesTab({ cases }: { cases: Separation[] }) {
                       {separation.employeeNumber && (
                         <p className="text-[10px] text-charcoal-400">{separation.employeeNumber}</p>
                       )}
+                      <p className="text-[10px] text-charcoal-400 xl:hidden">
+                        {separation.gym} · {separation.position}
+                      </p>
                     </TD>
-                    <TD>{separation.gym}</TD>
-                    <TD>{separation.position}</TD>
-                    <TD className="whitespace-nowrap">{fullDate(separation.hireDate)}</TD>
+                    <TD className="hidden xl:table-cell">{separation.gym}</TD>
+                    <TD className="hidden xl:table-cell">{separation.position}</TD>
+                    <TD className="hidden whitespace-nowrap xl:table-cell">{fullDate(separation.hireDate)}</TD>
                     <TD className="whitespace-nowrap">
                       {fullDate(separation.terminationDate ?? separation.lastDay)}
                     </TD>
-                    <TD className="max-w-64">
+                    <TD className="max-w-48">
                       <p
                         className="truncate text-charcoal-700"
                         title={separation.verdict?.finalReason ?? separation.reason ?? undefined}
@@ -125,11 +120,11 @@ export function FormerEmployeesTab({ cases }: { cases: Separation[] }) {
             </TBody>
           </Table>
         )}
-      </div>
 
-      <p className="text-[11px] text-charcoal-400">
-        {t('Former employees are archived automatically when the exit interview and clearance are completed.')}
-      </p>
+        <ListFootnote>
+          {t('Former employees are archived automatically when the exit interview and clearance are completed.')}
+        </ListFootnote>
+      </div>
     </div>
   )
 }

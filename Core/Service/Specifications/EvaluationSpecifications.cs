@@ -14,15 +14,17 @@ namespace Service.Specifications
     /// </summary>
     public sealed class EvaluationFormListSpec : BaseSpecification<EvaluationForm, int>
     {
-        public EvaluationFormListSpec(int[]? gymIds, int? gym, string? status, string? position, int skip, int take)
+        public EvaluationFormListSpec(int[]? gymIds, int? gym, string? status, string? position, int skip, int take, string? kind = null)
         {
             var cleanStatus = string.IsNullOrWhiteSpace(status) ? null : status.Trim();
             var cleanPosition = string.IsNullOrWhiteSpace(position) ? null : position.Trim();
+            var cleanKind = string.IsNullOrWhiteSpace(kind) ? null : kind.Trim();
 
             Criteria = f =>
                 (gymIds == null || gymIds.Length == 0 || f.GymId == null || gymIds.Contains(f.GymId.Value)) &&
                 (gym == null || f.GymId == null || f.GymId == gym) &&
                 (cleanStatus == null || f.Status == cleanStatus) &&
+                (cleanKind == null || f.Kind == cleanKind) &&
                 (cleanPosition == null ||
                     (f.Target != null && f.Target.ToLower() == cleanPosition.ToLower()) ||
                     (f.Position != null && f.Position.Title.ToLower() == cleanPosition.ToLower()));

@@ -1,11 +1,13 @@
 import type { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
+import { ChevronDown, Search } from 'lucide-react'
+import { Input } from '../../../components/ui/input'
 import { formatDate, initialsOf } from '../../../lib/format'
 import { cn } from '../../../lib/utils'
 import type { Separation } from '../api/terminations.api'
 
 /** Employee avatar + name + position, shared by every workflow table. */
-export function EmployeeCell({ separation }: { separation: Separation }) {
+export function EmployeeCell({ separation, extra }: { separation: Separation; extra?: ReactNode }) {
   return (
     <div className="flex items-center gap-2.5">
       <span
@@ -20,33 +22,92 @@ export function EmployeeCell({ separation }: { separation: Separation }) {
           {separation.employeeNumber ? `${separation.employeeNumber} · ` : ''}
           {separation.position}
         </p>
+        {extra}
       </div>
     </div>
   )
 }
 
-/** Filter chip used above the workflow tables. */
-export function FilterPill({
-  active,
-  onClick,
-  children,
+/**
+ * One toolbar row that replaces the stacked filter bars above the workflow
+ * tables: search on the start side, compact dropdowns on the end side.
+ */
+export function ListToolbar({ children, className }: { children: ReactNode; className?: string }) {
+  return (
+    <div className={cn('flex flex-wrap items-center gap-2 border-b border-charcoal-100 px-3 py-2.5', className)}>
+      {children}
+    </div>
+  )
+}
+
+/** Search box sized for a toolbar row. */
+export function ToolbarSearch({
+  value,
+  onChange,
+  placeholder,
+  className,
 }: {
-  active: boolean
-  onClick: () => void
-  children: ReactNode
+  value: string
+  onChange: (next: string) => void
+  placeholder: string
+  className?: string
 }) {
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-pressed={active}
-      className={cn(
-        'rounded-md px-2 py-1 text-[11px] font-medium transition-colors',
-        active ? 'bg-charcoal-900 text-white' : 'bg-charcoal-50 text-charcoal-600 hover:bg-charcoal-100',
-      )}
-    >
+    <div className={cn('relative min-w-[180px] flex-1', className)}>
+      <Search
+        className="pointer-events-none absolute inset-y-0 start-2.5 my-auto h-3.5 w-3.5 text-charcoal-400"
+        aria-hidden="true"
+      />
+      <Input
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        placeholder={placeholder}
+        aria-label={placeholder}
+        className="h-8 ps-8 text-xs"
+      />
+    </div>
+  )
+}
+
+/** Compact native select for a toolbar row (counts live in the option labels). */
+export function ToolbarSelect({
+  value,
+  onChange,
+  label,
+  children,
+  className,
+}: {
+  value: string
+  onChange: (next: string) => void
+  /** Accessible name — the toolbar shows no visible label. */
+  label: string
+  children: ReactNode
+  className?: string
+}) {
+  return (
+    <div className={cn('relative shrink-0', className)}>
+      <select
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        aria-label={label}
+        className="h-8 w-full appearance-none rounded-lg border border-charcoal-200 bg-white ps-2.5 pe-7 text-xs font-medium text-charcoal-700 transition-colors hover:border-charcoal-300 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+      >
+        {children}
+      </select>
+      <ChevronDown
+        className="pointer-events-none absolute end-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-charcoal-400"
+        aria-hidden="true"
+      />
+    </div>
+  )
+}
+
+/** Muted footnote shown at the bottom of a workflow table card. */
+export function ListFootnote({ children }: { children: ReactNode }) {
+  return (
+    <p className="border-t border-charcoal-100 bg-charcoal-50/40 px-3 py-2 text-[11px] leading-relaxed text-charcoal-500">
       {children}
-    </button>
+    </p>
   )
 }
 
